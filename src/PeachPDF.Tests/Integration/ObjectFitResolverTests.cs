@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -95,7 +96,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> AnyBox()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<!DOCTYPE html><html><body></body></html>", null);
             var size = new Size(595, 842);

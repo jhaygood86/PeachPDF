@@ -1,4 +1,4 @@
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
 {
@@ -187,13 +187,13 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var dict = new PdfDictionary();
             doc.Internals.AddObject(dict);
 
-            Assert.Same(dict.Reference, PeachPDF.PDF.Advanced.PdfInternals.GetReference(dict));
+            Assert.Same(dict.Reference, PeachDrawing.PDF.Engine.Advanced.PdfInternals.GetReference(dict));
         }
 
         [Fact]
         public void StaticGetReference_Null_Throws()
         {
-            Assert.Throws<ArgumentNullException>(() => PeachPDF.PDF.Advanced.PdfInternals.GetReference(null!));
+            Assert.Throws<ArgumentNullException>(() => PeachDrawing.PDF.Engine.Advanced.PdfInternals.GetReference(null!));
         }
 
         [Fact]
@@ -203,7 +203,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var dict = new PdfDictionary();
             doc.Internals.AddObject(dict);
 
-            Assert.Equal(dict.ObjectId, PeachPDF.PDF.Advanced.PdfInternals.GetObjectId(dict));
+            Assert.Equal(dict.ObjectId, PeachDrawing.PDF.Engine.Advanced.PdfInternals.GetObjectId(dict));
         }
 
         [Fact]
@@ -213,7 +213,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var dict = new PdfDictionary();
             doc.Internals.AddObject(dict);
 
-            Assert.Equal(dict.ObjectNumber, PeachPDF.PDF.Advanced.PdfInternals.GetObjectNumber(dict));
+            Assert.Equal(dict.ObjectNumber, PeachDrawing.PDF.Engine.Advanced.PdfInternals.GetObjectNumber(dict));
         }
 
         [Fact]
@@ -223,7 +223,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             var dict = new PdfDictionary();
             doc.Internals.AddObject(dict);
 
-            Assert.Equal(dict.GenerationNumber, PeachPDF.PDF.Advanced.PdfInternals.GenerationNumber(dict));
+            Assert.Equal(dict.GenerationNumber, PeachDrawing.PDF.Engine.Advanced.PdfInternals.GenerationNumber(dict));
         }
 
         [Fact]

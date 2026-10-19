@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
@@ -32,7 +33,7 @@ public class OverflowBoxInLayoutEngineTests
         List<string> painted = [];
         for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
         {
-            using var graphics = new RecordingGraphics(new PdfRenderContext());
+            using var graphics = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, graphics, page);
             painted.AddRange(graphics.DrawnStrings.Select(s => s.Text).Where(t => t != " "));
         }

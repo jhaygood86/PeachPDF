@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -177,7 +178,7 @@ namespace PeachPDF.Tests.Integration
         // layout engine against synthetic structures it wasn't otherwise being exercised against.
         private static async Task<CssBox> BuildOnly(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -188,7 +189,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

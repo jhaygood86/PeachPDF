@@ -1,10 +1,11 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -192,7 +193,7 @@ body { margin: 0; }
             var fillBox = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fillBox);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, fillBox!, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -216,7 +217,7 @@ body { margin: 0; }
                 "<div id='clipper' style='overflow:hidden;border-radius:999pt;width:100pt;height:6pt;'>" +
                 "<div id='hoisted' style='opacity:0.99;width:65%;height:100%;'></div></div>"));
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -240,7 +241,7 @@ body { margin: 0; }
                 $"<div style='overflow:hidden;{wrapperStyle}width:60pt;height:5pt'>" +
                 "<div style='position:absolute;z-index:1;top:0;left:0;width:80pt;height:40pt;background:red'></div></div></div>"));
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             var activeClips = new List<Rect>();
@@ -300,7 +301,7 @@ body { margin: 0; }
             var picBox = LayoutHarness.FindById(root, "pic");
             Assert.NotNull(picBox);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, picBox!, recording);
 
             var curveIndex = recording.Log.FindIndex(op => op.Kind == PaintOpKind.PushClipPath);
@@ -320,7 +321,7 @@ body { margin: 0; }
             var fillBox = LayoutHarness.FindById(root, "fill");
             Assert.NotNull(fillBox);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, fillBox!, recording);
 
             Assert.DoesNotContain(recording.Log, op => op.Kind == PaintOpKind.PushClipPath);
@@ -365,7 +366,7 @@ td { padding: 3px; overflow: hidden; }
 
         private static async Task<CssBox> GetRootBox(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Xml.Linq;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgQuotedUrlReferenceTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgDocument Build(string rule, string element)
         {
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Svg
                 + "<clipPath id=\"c\"><rect width=\"5\" height=\"5\"/></clipPath><mask id=\"m\"><rect width=\"5\" height=\"5\" fill=\"white\"/></mask></defs>"
                 + element + "</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 

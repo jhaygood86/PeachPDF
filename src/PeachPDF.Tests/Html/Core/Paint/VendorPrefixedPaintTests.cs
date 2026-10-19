@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Paint
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         private static async Task<RasterCanvas> Paint(string body, int width = 120, int height = 100)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
-            var page = new RasterCanvas(new PdfRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }

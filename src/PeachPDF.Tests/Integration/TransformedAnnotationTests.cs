@@ -1,10 +1,10 @@
 using System.Numerics;
 using PeachPDF.Html.Core.Handlers;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
-using PeachPDF.PDF.AcroForms;
-using PeachPDF.PDF.Advanced;
-using PeachPDF.PDF.Annotations;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.AcroForms;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Annotations;
 
 namespace PeachPDF.Tests.Integration
 {

@@ -1,8 +1,8 @@
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.Text;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;

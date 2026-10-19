@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -197,7 +198,7 @@ namespace PeachPDF.Tests.Integration
                 "<p id=\"p\">x<span id=\"sup\" style=\"font-variant-position:super\">S</span>" +
                 "<span id=\"sub\" style=\"font-variant-position:sub\">B</span></p>");
 
-            var recorder = new RecordingGraphics(new PdfRenderContext());
+            var recorder = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recorder);
 
             var baseline = recorder.DrawnStrings.Single(d => d.Text == "x").Y;
@@ -227,7 +228,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> LayoutAsync(string fontBase64, string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(fontBase64, body), null);
 

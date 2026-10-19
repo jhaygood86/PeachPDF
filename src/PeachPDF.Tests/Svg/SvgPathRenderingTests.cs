@@ -1,6 +1,7 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.Svg
                     stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new HtmlRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));
@@ -44,7 +45,7 @@ namespace PeachPDF.Tests.Svg
                   <path d="M50 10 A40 40 0 0 0 50 90" fill="none" stroke="black"/>
                 </svg>
                 """).Root!;
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new PdfRenderContext());
+            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root), new HtmlRenderContext());
             var graphics = new RealPathRecordingGraphics();
 
             SvgRenderer.RenderInto(graphics, document, new Rect(0, 0, 100, 100));

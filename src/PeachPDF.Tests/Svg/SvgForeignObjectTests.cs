@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Svg
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.Svg
     public class SvgForeignObjectTests
     {
         private static RasterCanvas NewPage(int width, int height) =>
-            new(new PdfRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            new(new HtmlRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
 

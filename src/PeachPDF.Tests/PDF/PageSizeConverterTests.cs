@@ -1,4 +1,4 @@
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 
 namespace PeachPDF.Tests.PdfEngineTests
 {
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.PdfEngineTests
         [InlineData(PageSize.Tabloid, 792, 1224)]
         public void ToSize_KnownPageSize_ReturnsExpectedPointDimensions(PageSize pageSize, double expectedWidth, double expectedHeight)
         {
-            var size = PageSizeConverter.ToSize(pageSize);
+            var size = PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(pageSize));
 
             Assert.Equal(expectedWidth, size.Width);
             Assert.Equal(expectedHeight, size.Height);
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.PdfEngineTests
         [Fact]
         public void ToSize_ScalesByDpi()
         {
-            var size = PageSizeConverter.ToSize(PageSize.A4, dpi: 144);
+            var size = PageSizeConverter.ToSize(PeachDrawing.PDF.Engine.PageSize.A4, dpi: 144);
 
             Assert.Equal(595 * 2.0, size.Width);
             Assert.Equal(842 * 2.0, size.Height);
@@ -30,7 +30,7 @@ namespace PeachPDF.Tests.PdfEngineTests
         [Fact]
         public void ToSize_Undefined_Throws()
         {
-            Assert.Throws<ArgumentException>(() => PageSizeConverter.ToSize(PageSize.Undefined));
+            Assert.Throws<ArgumentException>(() => PageSizeConverter.ToSize(PeachDrawing.PDF.Engine.PageSize.Undefined));
         }
     }
 }

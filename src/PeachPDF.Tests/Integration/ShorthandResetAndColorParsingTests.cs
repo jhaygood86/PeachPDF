@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -33,14 +34,14 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void IsColorValid_Transparent_ReturnsTrue()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             Assert.True(parser.IsColorValid("transparent"));
         }
 
         [Fact]
         public void GetActualColor_Transparent_ResolvesToZeroAlpha()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("transparent");
             Assert.Equal(0, color.A);
         }
@@ -50,7 +51,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Rgb_SpaceSeparated_SlashPercentAlpha_FullyOpaque()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgb(0 0 0 / 100%)");
             Assert.Equal(255, color.A);
             Assert.Equal(0, color.R);
@@ -61,7 +62,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Rgba_SpaceSeparated_SlashPercentAlpha_HalfAlpha()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgba(255 0 0 / 50%)");
             Assert.Equal(255, color.R);
             Assert.Equal(0, color.G);
@@ -73,7 +74,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Rgb_SpaceSeparated_SlashNumberAlpha_HalfAlpha()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgb(10 20 30 / 0.5)");
             Assert.Equal(10, color.R);
             Assert.Equal(20, color.G);
@@ -84,7 +85,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Rgb_SpaceSeparated_ThreeValues_NoAlpha_IsOpaque()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgb(245 245 245)");
             Assert.Equal(255, color.A);
             Assert.Equal(245, color.R);
@@ -96,7 +97,7 @@ namespace PeachPDF.Tests.Integration
         public void Rgba_LegacyCommaForm_StillParses()
         {
             // Regression guard: the legacy comma form with a decimal alpha must keep working.
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgba(240, 50, 50, 0.75)");
             Assert.Equal(240, color.R);
             Assert.Equal(50, color.G);
@@ -108,7 +109,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Rgb_LegacyCommaForm_NoAlpha_IsOpaque()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
             var color = parser.GetActualColor("rgb(255, 0, 0)");
             Assert.Equal(255, color.A);
             Assert.Equal(255, color.R);
@@ -156,7 +157,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> FindByClassAsync(string html, string className)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

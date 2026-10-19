@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Diagnostics;
 using System.Text;
 
@@ -58,7 +59,7 @@ public class SiblingIndexTests
 
     private static async Task<CssBox> Build(string html)
     {
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml(html, null);
 
@@ -284,7 +285,7 @@ public class SiblingIndexTests
         for (var i = 0; i < rows; i++) sb.Append("<tr><td>a</td><td>b</td></tr>");
         sb.Append("</tbody></table></body></html>");
 
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
 
         var watch = Stopwatch.StartNew();

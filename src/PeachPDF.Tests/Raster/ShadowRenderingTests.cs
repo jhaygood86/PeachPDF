@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachDrawing;
@@ -55,7 +56,7 @@ namespace PeachPDF.Tests.Raster
         private static RasterCanvas NewGraphics(int w, int h)
         {
             var surface = new RasterSurface(w, h, 0, 0, 1, 1);
-            return new RasterCanvas(new PdfRenderContext(), surface, 1);
+            return new RasterCanvas(new HtmlRenderContext(), surface, 1);
         }
 
         private static byte[] Pixel(RasterCanvas g, int x, int y) => g.Surface.Row(y).Slice(x * 4, 4).ToArray();
@@ -309,12 +310,12 @@ namespace PeachPDF.Tests.Raster
         {
             var (_, hardContainer) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<div style=\"font:20pt Arial;text-shadow:3pt 3pt 0 #f00\">Hi</div>"), margin: 0);
-            var hard = new RecordingGraphics(new PdfRenderContext());
+            var hard = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(hardContainer, hard);
 
             var (_, blurContainer) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<div style=\"font:20pt Arial;text-shadow:3pt 3pt 6pt #f00\">Hi</div>"), margin: 0);
-            var blurred = new RecordingGraphics(new PdfRenderContext());
+            var blurred = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(blurContainer, blurred);
 
             Assert.Equal(2, hard.DrawnStrings.Count);

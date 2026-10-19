@@ -1,0 +1,234 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+using PeachDrawing.PDF.Engine.Internal;
+using PeachDrawing.PDF.Engine.IO;
+using System;
+
+namespace PeachDrawing.PDF.Engine.Annotations;
+
+/// <summary>
+/// Represents a link annotation.
+/// </summary>
+internal sealed class PdfLinkAnnotation : PdfAnnotation
+{
+    // Just a hack to make MigraDoc work with this code.
+    enum LinkType
+    {
+        None, Document, NamedDestination, Web, File
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfLinkAnnotation"/> class.
+    /// </summary>
+    public PdfLinkAnnotation()
+    {
+        _linkType = LinkType.None;
+        Elements.SetName(PdfAnnotation.Keys.Subtype, "/Link");
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfLinkAnnotation"/> class.
+    /// </summary>
+    public PdfLinkAnnotation(PdfDocument document)
+        : base(document)
+    {
+        _linkType = LinkType.None;
+        Elements.SetName(PdfAnnotation.Keys.Subtype, "/Link");
+    }
+
+    /// <summary>
+    /// Creates a link within the current document.
+    /// </summary>
+    /// <param name="rect">The link area in default page coordinates.</param>
+    /// <param name="destinationPage">The one-based destination page number.</param>
+    public static PdfLinkAnnotation CreateDocumentLink(PdfRectangle rect, int destinationPage)
+    {
+        if (destinationPage < 1)
+            throw new ArgumentException("Invalid destination page in call to CreateDocumentLink: page number is one-based and must be 1 or higher.", "destinationPage");
+
+        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        link._linkType = LinkType.Document;
+        link.Rectangle = rect;
+        link._destPage = destinationPage;
+        return link;
+    }
+    int _destPage;
+    LinkType _linkType;
+    string _url = null!;
+
+    /// <summary>
+    /// Creates a link within the current document using a named destination.
+    /// </summary>
+    /// <param name="rect">The link area in default page coordinates.</param>
+    /// <param name="destinationName">The named destination's name.</param>
+    public static PdfLinkAnnotation CreateDocumentLink(PdfRectangle rect, string destinationName)
+    {
+        var action = new PdfDictionary();
+        action.Elements.SetName("/Type", "/Action");
+        action.Elements.SetName("/S", "/GoTo");
+        action.Elements.SetString("/D", destinationName);
+
+        var link = new PdfLinkAnnotation
+        {
+            _linkType = LinkType.NamedDestination,
+            Rectangle = rect,
+            _action = action
+        };
+        return link;
+    }
+
+    PdfDictionary _action = default!;
+
+    /// <summary>
+    /// Sets the quadrilateral the link is active in (<c>/QuadPoints</c>), for a link whose area is not the axis-aligned
+    /// <see cref="PdfAnnotation.Rectangle"/> that bounds it. The corners are in default user space.
+    /// </summary>
+    public void SetQuadPoints(System.Collections.Generic.IReadOnlyList<PeachDrawing.Core.PaintPoint> corners)
+    {
+        var array = new PdfArray(Owner);
+        foreach (var corner in corners)
+        {
+            array.Elements.Add(new PdfReal(corner.X));
+            array.Elements.Add(new PdfReal(corner.Y));
+        }
+
+        Elements.SetObject(Keys.QuadPoints, array);
+    }
+
+    /// <summary>
+    /// Creates a link to the web.
+    /// </summary>
+    public static PdfLinkAnnotation CreateWebLink(PdfRectangle rect, string url)
+    {
+        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        link._linkType = PdfLinkAnnotation.LinkType.Web;
+        link.Rectangle = rect;
+        link._url = url;
+        return link;
+    }
+
+    /// <summary>
+    /// Creates a link to a file.
+    /// </summary>
+    public static PdfLinkAnnotation CreateFileLink(PdfRectangle rect, string fileName)
+    {
+        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        link._linkType = LinkType.File;
+        // TODO: Adjust bleed box here (if possible)
+        link.Rectangle = rect;
+        link._url = fileName;
+        return link;
+    }
+
+    internal override void WriteObject(PdfWriter writer)
+    {
+        PdfPage? dest = null;
+        //pdf.AppendFormat(CultureInfo.InvariantCulture,
+        //  "{0} 0 obj\n<<\n/Type/Annot\n/Subtype/Link\n" +
+        //  "/Rect[{1} {2} {3} {4}]\n/BS<</Type/Border>>\n/Border[0 0 0]\n/C[0 0 0]\n",
+        //  ObjectId.ObjectNumber, rect.X1, rect.Y1, rect.X2, rect.Y2);
+
+        // Older Adobe Reader versions uses a border width of 0 as default value if neither Border nor BS are present.
+        // But the PDF Reference specifies:
+        // "If neither the Border nor the BS entry is present, the border is drawn as a solid line with a width of 1 point."
+        // After this issue was fixed in newer Reader versions older PDFsharp created documents show an ugly solid border.
+        // The following hack fixes this by specifying a 0 width border.
+        if (Elements[PdfAnnotation.Keys.BS] is null)
+            Elements[PdfAnnotation.Keys.BS] = new PdfLiteral("<</Type/Border/W 0>>");
+
+        // May be superfluous. See comment above.
+        if (Elements[PdfAnnotation.Keys.Border] is null)
+            Elements[PdfAnnotation.Keys.Border] = new PdfLiteral("[0 0 0]");
+
+        switch (_linkType)
+        {
+            case LinkType.None:
+                break;
+
+            case LinkType.Document:
+                // destIndex > Owner.PageCount can happen when rendering pages using PDFsharp directly.
+                int destIndex = _destPage;
+                if (destIndex > Owner.PageCount)
+                    destIndex = Owner.PageCount;
+                destIndex--;
+                dest = Owner.Pages[destIndex];
+                //pdf.AppendFormat("/Dest[{0} 0 R/XYZ null null 0]\n", dest.ObjectId);
+                Elements[Keys.Dest] = new PdfLiteral("[{0} 0 R/XYZ null null 0]", dest.ObjectNumber);
+                break;
+
+            case LinkType.NamedDestination:
+                Elements[PdfAnnotation.Keys.A] = _action;
+                break;
+
+            case LinkType.Web:
+                Elements[PdfAnnotation.Keys.A] = new PdfLiteral("<</S/URI/URI{0}>>",
+                    PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding));
+                break;
+
+            case LinkType.File:
+                Elements[PdfAnnotation.Keys.A] = new PdfLiteral("<</Type/Action/S/Launch/F<</Type/Filespec/F{0}>> >>",
+                    PdfEncoders.ToStringLiteral(_url, PdfStringEncoding.WinAnsiEncoding));
+                break;
+        }
+        base.WriteObject(writer);
+    }
+
+    /// <summary>
+    /// Predefined keys of this dictionary.
+    /// </summary>
+    internal new class Keys : PdfAnnotation.Keys
+    {
+        //  /// <summary>
+        //  /// (Required) The type of annotation that this dictionary describes;
+        //  /// must be Link for a link annotation.
+        //  /// </summary>
+        // inherited from base class
+
+        /// <summary>
+        /// (Optional; not permitted if an A entry is present) A destination to be displayed
+        /// when the annotation is activated.
+        /// </summary>
+        [PdfKey(PdfKeyType.ArrayOrNameOrString | PdfKeyType.Optional)]
+        public const string Dest = "/Dest";
+
+        /// <summary>
+        /// (Optional; PDF 1.2) The annotation's highlighting mode, the visual effect to be
+        /// used when the mouse button is pressed or held down inside its active area:
+        /// N (None) No highlighting.
+        /// I (Invert) Invert the contents of the annotation rectangle.
+        /// O (Outline) Invert the annotation's border.
+        /// P (Push) Display the annotation as if it were being pushed below the surface of the page.
+        /// Default value: I.
+        /// Note: In PDF 1.1, highlighting is always done by inverting colors inside the annotation rectangle.
+        /// </summary>
+        [PdfKey("1.2", PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string H = "/H";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A URI action formerly associated with this annotation. When Web 
+        /// Capture changes and annotation from a URI to a go-to action, it uses this entry to save 
+        /// the data from the original URI action so that it can be changed back in case the target page for 
+        /// the go-to action is subsequently deleted.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string PA = "/PA";
+
+        /// <summary>
+        /// (Optional; PDF 1.6) An array of 8 x n numbers specifying the coordinates of n quadrilaterals in default
+        /// user space that comprise the region in which the link should be activated, so a link over a rotated or
+        /// skewed shape is not the whole of its bounding box.
+        /// </summary>
+        [PdfKey("1.6", PdfKeyType.Array | PdfKeyType.Optional)]
+        public const string QuadPoints = "/QuadPoints";
+
+        /// <summary>
+        /// Gets the KeysMeta for these keys.
+        /// </summary>
+        public static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
+    }
+
+    /// <summary>
+    /// Gets the KeysMeta of this dictionary type.
+    /// </summary>
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
+}

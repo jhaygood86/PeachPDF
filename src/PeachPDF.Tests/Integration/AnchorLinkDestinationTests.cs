@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Text.RegularExpressions;
 
 namespace PeachPDF.Tests.Integration
@@ -82,7 +83,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task PublicGetLinksNoArgOverload_StillReturnsLinkData()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainer(renderContext);
             await container.SetHtml("<html><body><a href='https://example.com'>go</a></body></html>");
             container.MaxSize = new Size(600, 0);

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Svg;
 using PeachPDF.Tests.TestSupport;
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>Whitespace handling in SVG text: default collapsing, <c>xml:space="preserve"</c>, and <c>white-space</c> with <c>tab-size</c>.</summary>
     public class SvgTextWhitespaceTests
     {
-        private static readonly PdfRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
+        private static readonly HtmlRenderContext RenderContext = new() { PixelsPerPoint = 1.0 };
 
         private static string Painted(string textAttrs, string content, string svgAttrs = "")
         {

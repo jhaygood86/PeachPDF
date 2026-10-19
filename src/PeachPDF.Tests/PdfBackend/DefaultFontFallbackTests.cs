@@ -1,6 +1,7 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.PdfBackendTests
 {
@@ -19,9 +20,9 @@ namespace PeachPDF.Tests.PdfBackendTests
     {
         private const string UnresolvableDefault = "PeachPDF Test Default That Is Not Installed";
 
-        private static PdfRenderContext RenderContextWithRegisteredFamily(string familyName)
+        private static HtmlRenderContext RenderContextWithRegisteredFamily(string familyName)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.AddFontFamily(new PdfCanvasFontFamily(familyName));
             return renderContext;
         }

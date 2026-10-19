@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Threading.Tasks;
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Svg
         internal static async Task<SvgDocument> BuildAsync(string css, string svgBody, double? progress, string svgAttributes = "width=\"200\" height=\"100\"")
         {
             var html = $"<!DOCTYPE html><html><head><style>{css}</style></head><body><svg {svgAttributes}>{svgBody}</svg></body></html>";
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext) { AnimationProgress = progress };
             await container.SetHtml(html, null);
 
@@ -61,10 +62,10 @@ namespace PeachPDF.Tests.Svg
             // No container, no progress: the keyframes in its own <style> are never sampled.
             var markup = "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"20\" height=\"20\"><style>@keyframes k { from { fill: #ff0000 } to { fill: #0000ff } } rect { animation: k 1s linear }</style><rect width=\"10\" height=\"10\" fill=\"#00ff00\"/></svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
 
             var node = new XElementSvgSourceNode(root, root, cssData, "print");
-            var document = SvgTreeBuilder.Build(node, new PdfRenderContext());
+            var document = SvgTreeBuilder.Build(node, new HtmlRenderContext());
 
             Assert.Equal(PaintColor.FromArgb(255, 0, 255, 0), document.Children[0].Fill.PaintColor);
 

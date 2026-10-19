@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -324,9 +325,9 @@ namespace PeachPDF.Tests.Integration
             Assert.Same(first, second);
         }
 
-        private static async Task<(PdfRenderContext renderContext, HtmlContainerInt container)> NewContainer()
+        private static async Task<(HtmlRenderContext renderContext, HtmlContainerInt container)> NewContainer()
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml("<html><body><p>content</p></body></html>", null);
 

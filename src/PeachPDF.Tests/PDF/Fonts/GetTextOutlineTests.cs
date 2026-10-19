@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 using PeachDrawing.Text;
@@ -27,7 +28,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Fonts
             var family = TypefaceFixtures.FamilyNameOf(fontPath);
             // Keep the adapter's PixelsPerPoint equal to the PdfCanvas's (as the real pipeline
             // always does) so font size and outline scale stay in the same 1:1 unit space.
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             await using (var stream = File.OpenRead(fontPath))
                 await renderContext.AddFont(stream, family);
 

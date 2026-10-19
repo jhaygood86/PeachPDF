@@ -3,9 +3,9 @@ using PeachDrawing.Core;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF.Rendering;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine.Rendering;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 
 using System.Globalization;

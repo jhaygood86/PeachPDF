@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core.Fragmentation
 
         private static HtmlContainerInt CreateContainer(double bandHeight = BandHeight)
         {
-            var container = new HtmlContainerInt(new PdfRenderContext())
+            var container = new HtmlContainerInt(new HtmlRenderContext())
             {
                 PageSize = new Size(500, bandHeight),
                 MarginTop = MarginTop,

@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.IO;
 using System.Linq;
@@ -78,7 +79,7 @@ body {{ font-family: 'SS3EastAsian'; width: 400px; }}
 
         private static async Task<CssBox> FindWordsBox(string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body), null);
 

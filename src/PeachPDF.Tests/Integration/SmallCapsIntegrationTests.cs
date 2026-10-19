@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -211,7 +212,7 @@ namespace PeachPDF.Tests.Integration
                 "<b id=\"w\" style=\"font-variant:small-caps\">Hello</b>");
             var elementBox = FindById(container.Root!, "w")!;
 
-            var recorder = new RecordingGraphics(new PdfRenderContext());
+            var recorder = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintBox(container, elementBox, recorder);
 
             Assert.Equal(2, recorder.DrawStringCalls.Count);
@@ -244,7 +245,7 @@ body {{ font-family: 'SCP'; width: 400px; }}
 
         private static async Task<HtmlContainerInt> LayoutHtml(string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body), null);
 
@@ -262,7 +263,7 @@ body {{ font-family: 'SCP'; width: 400px; }}
 
         private static PdfCanvas MeasureGraphics()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var size = new Size(595, 842);
             var measure = PdfGraphics.CreateMeasureContext(size);
             return new PdfCanvas(renderContext, measure, 1.0);

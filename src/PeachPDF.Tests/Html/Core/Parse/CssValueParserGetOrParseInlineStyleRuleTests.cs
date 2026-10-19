@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Parse;
 
 namespace PeachPDF.Tests.Html.Core.Parse
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [Fact]
         public void SameAttributeText_ReturnsCachedInstance()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
 
             var first = parser.GetOrParseInlineStyleRule("color: red; font-size: 12pt");
             var second = parser.GetOrParseInlineStyleRule("color: red; font-size: 12pt");
@@ -24,7 +25,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [Fact]
         public void DifferentAttributeText_ReturnsDistinctInstancesWithCorrectDeclarations()
         {
-            var parser = new CssValueParser(new PdfRenderContext());
+            var parser = new CssValueParser(new HtmlRenderContext());
 
             var red = parser.GetOrParseInlineStyleRule("color: red");
             var blue = parser.GetOrParseInlineStyleRule("color: blue");
@@ -37,8 +38,8 @@ namespace PeachPDF.Tests.Html.Core.Parse
         [Fact]
         public void SeparateParserInstances_DoNotShareCache()
         {
-            var first = new CssValueParser(new PdfRenderContext());
-            var second = new CssValueParser(new PdfRenderContext());
+            var first = new CssValueParser(new HtmlRenderContext());
+            var second = new CssValueParser(new HtmlRenderContext());
 
             var firstRule = first.GetOrParseInlineStyleRule("color: red");
             var secondRule = second.GetOrParseInlineStyleRule("color: red");

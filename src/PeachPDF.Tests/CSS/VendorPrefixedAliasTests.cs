@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -176,7 +177,7 @@ namespace PeachPDF.Tests.CSS
             var sheet = ParseStyleSheet("@supports (-webkit-box-shadow: 0 0 2px black) { }");
             var supports = (SupportsRule)sheet.Rules[0];
 
-            Assert.True(supports.Condition.Check(new PeachPDF.PdfBackend.PdfRenderContext()));
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         // --- Box layer: the cascade sees only the standard name, so ordering and var() behave uniformly. ---
@@ -299,7 +300,7 @@ namespace PeachPDF.Tests.CSS
 
         private static async Task<CssBox> FindDivBox(string css)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(
                 $"<!DOCTYPE html><html><head><style>div {{ width: 200px; height: 100px; {css} }}</style></head><body><div>Text</div></body></html>",
@@ -319,7 +320,7 @@ namespace PeachPDF.Tests.CSS
 
         private static async Task<CssBox> FindTextBox(string css, string text)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(
                 $"<!DOCTYPE html><html><head><style>div {{ font: 10pt Arial; margin:0; {css} }}</style></head><body style=\"margin:0\"><div>{text}</div></body></html>",

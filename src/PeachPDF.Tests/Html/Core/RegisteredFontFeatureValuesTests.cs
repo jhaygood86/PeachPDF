@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Parse;
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.Html.Core
     {
         private static CssData Data(string css)
         {
-            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+            var data = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
             return data;
         }
@@ -108,7 +109,7 @@ namespace PeachPDF.Tests.Html.Core
 
             var sheet = new Stylesheet(parser);
             sheet.Rules.Add(outerRule);
-            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+            var data = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
             data.Stylesheets.Add(sheet);
 
             var registry = RegisteredFontFeatureValues.BuildRegistry(data);

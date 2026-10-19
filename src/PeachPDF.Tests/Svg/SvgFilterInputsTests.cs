@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Svg;
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgFilterInputsTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static SvgDocument Build(string body)
         {

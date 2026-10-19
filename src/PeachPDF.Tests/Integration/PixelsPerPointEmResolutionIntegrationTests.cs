@@ -1,8 +1,9 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
@@ -10,7 +11,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Issue #631: two call sites read <see cref="CssBox.GetEmHeight"/>/<see cref="CssBox.GetRemHeight"/>
-    /// as if the result were already true CSS points. It is not - <c>PdfRenderContext.CreateFontInt</c>
+    /// as if the result were already true CSS points. It is not - <c>HtmlRenderContext.CreateFontInt</c>
     /// divides a requested size by <c>PixelsPerPoint</c> once to reach the adapter's device-scaled
     /// font-measurement space, so undoing that division (multiplying back by <c>PixelsPerPoint</c>) is
     /// required before treating either as a true-point em/rem basis - exactly the correction
@@ -165,7 +166,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>";
 
-            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

@@ -1,11 +1,12 @@
-﻿using PeachPDF.PdfBackend;
+﻿using PeachDrawing.PDF;
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -430,7 +431,7 @@ namespace PeachPDF.Tests.Integration
             // resolved this" from "resolution was skipped entirely and the fallback papered over it".
             // Picking an installed family that ISN'T the platform default keeps this test meaningful
             // across the CI matrix (Windows/macOS/Linux each resolve a different default).
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var alternativeFont = DefaultFontResolver.GetInstalledFontFamilyNames()
                 .First(f => !f.Equals(DefaultFontResolver.DefaultFont, StringComparison.OrdinalIgnoreCase) && renderContext.IsFontExists(f));
 
@@ -463,7 +464,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Handlers;
 using PeachPDF.PdfFeatures;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -116,11 +117,11 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             var element = builder.TryGetStructureElement(box);
             Assert.NotNull(element);
 
-            var kids = PeachPDF.PDF.Structure.PdfStructureElement.GetKids(element!.Elements).ToList();
+            var kids = PeachDrawing.PDF.Engine.Structure.PdfStructureElement.GetKids(element!.Elements).ToList();
             // Both kids are bare MCID integers (not further struct elements), so GetKids (which
             // only surfaces dictionary kids) reports none - assert via the raw /K array instead.
             Assert.Empty(kids);
-            var array = element.Elements.GetArray(PeachPDF.PDF.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PeachDrawing.PDF.Engine.Structure.PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
         }
@@ -146,11 +147,11 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             Assert.NotNull(element);
             Assert.Same(page1, element!.Page);
 
-            var array = element.Elements.GetArray(PeachPDF.PDF.Structure.PdfStructureElement.Keys.K);
+            var array = element.Elements.GetArray(PeachDrawing.PDF.Engine.Structure.PdfStructureElement.Keys.K);
             Assert.NotNull(array);
             Assert.Equal(2, array!.Elements.Count);
-            Assert.IsType<PeachPDF.PDF.Structure.PdfMarkedContentReference>(
-                ((PeachPDF.PDF.Advanced.PdfReference)array.Elements[1]).Value);
+            Assert.IsType<PeachDrawing.PDF.Engine.Structure.PdfMarkedContentReference>(
+                ((PeachDrawing.PDF.Engine.Advanced.PdfReference)array.Elements[1]).Value);
         }
 
         sealed class RecordingGraphics : Canvas
@@ -159,7 +160,7 @@ namespace PeachPDF.Tests.Html.Core.Handlers
             public List<string> Log { get; } = [];
 
             public RecordingGraphics(bool isOffscreenTile)
-                : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue))
+                : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue))
             {
                 _isOffscreenTile = isOffscreenTile;
             }

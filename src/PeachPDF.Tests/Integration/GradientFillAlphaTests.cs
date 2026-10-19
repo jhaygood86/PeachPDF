@@ -1,4 +1,4 @@
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using System;
 using System.IO;
 using System.Text;
@@ -11,7 +11,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Regression coverage for a real bug found while verifying issue #1117
     /// (<c>background-clip: text</c>) by rendering and rasterizing the feature's own repro, not by any
-    /// unit test: <see cref="PeachPDF.PDF.Rendering.PdfGraphicsState.RealizeBrush"/>'s
+    /// unit test: <see cref="PeachDrawing.PDF.Engine.Rendering.PdfGraphicsState.RealizeBrush"/>'s
     /// gradient/pattern-brush branch never realized its own fill alpha (<c>/ca</c>) - unlike a solid
     /// color fill, which always does via <c>RealizeFillColor</c>. A gradient/pattern fill with no
     /// semi-transparent stops of its own therefore silently inherited whatever <c>/ca</c> the *previous*

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -17,7 +18,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<int[]> FillOrderAsync(string body, params double[] fillHeights)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             FragmentPaintHarness.PaintPage(container, recording);
 
             var fills = recording.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();

@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// Verifies <c>::first-letter</c> - previously parsed (see <c>PseudoElementSelectorFactory</c>)
     /// but never matched anything (<c>CssData.DoesSelectorMatch(PseudoElementSelector, ...)</c> only
     /// handled <c>before</c>/<c>after</c>/<c>marker</c>), and had no box-splitting logic at all. Uses
-    /// real layout via <see cref="HtmlContainerInt"/>/<see cref="PdfRenderContext"/> and asserts on the
+    /// real layout via <see cref="HtmlContainerInt"/>/<see cref="HtmlRenderContext"/> and asserts on the
     /// resulting box tree - see <c>DomParser.ApplyFirstLetterPseudoElements</c> for the implementation.
     /// </summary>
     public class FirstLetterPseudoElementIntegrationTests
@@ -119,7 +120,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

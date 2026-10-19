@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Phase B of the CMYK/ICC epic (jhaygood86/PeachPDF#1090) - <see cref="ColorOptions.ConversionMode"/>,
     /// backed by PeachImage 0.4.4's <c>IccColorProfile.ConvertTo</c> device-to-device primitive
-    /// (<see cref="PeachPDF.PDF.Advanced.PdfColorConversionGuard"/>). The synthetic CMYK
+    /// (<see cref="PeachDrawing.PDF.Engine.Advanced.PdfColorConversionGuard"/>). The synthetic CMYK
     /// profile fixture's CLUT is zeroed (see <see cref="IccProfileFixture.BuildCmykProfile"/>'s own doc
     /// comment - colorimetric accuracy isn't the point there), so these tests verify the *structural*
     /// result (an RGB-authored color reaches the PDF as a real CMYK operator - the space actually changed,

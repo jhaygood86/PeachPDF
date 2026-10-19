@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing;
 using PeachPDF.Svg;
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgContextPaintTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static readonly (byte R, byte G, byte B) Red = (255, 0, 0);
         private static readonly (byte R, byte G, byte B) Blue = (0, 0, 255);
@@ -25,7 +26,7 @@ namespace PeachPDF.Tests.Svg
         private static SvgDocument Build(string markup, SvgPaint? contextFill = null, SvgPaint? contextStroke = null)
         {
             var root = XDocument.Parse(markup).Root!;
-            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.PdfBackend.PdfRenderContext());
+            var css = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, css, "print"), RenderContext, null, null, contextFill, contextStroke);
         }
 

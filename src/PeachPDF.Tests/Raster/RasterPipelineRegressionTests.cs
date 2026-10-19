@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.CSS;
@@ -12,7 +13,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Regressions for defects a review of the raster backend found: each pins the behaviour that was wrong.</summary>
     public class RasterPipelineRegressionTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         [Theory]
         [InlineData(false, new byte[] { 0, 0, 0, 255 })]

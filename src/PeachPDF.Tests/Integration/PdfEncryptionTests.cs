@@ -1,4 +1,4 @@
-using PeachPDF.PDF.Security;
+using PeachDrawing.PDF.Engine.Security;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -88,12 +88,12 @@ namespace PeachPDF.Tests.Integration
         [InlineData(PdfPermissions.AllowPrint, -3900)]
         [InlineData(PdfPermissions.ReadOnly, -1324)]
         public void PermissionWord_SetsTheReservedBitsAndTheFlags(PdfPermissions permissions, int expected) =>
-            Assert.Equal(expected, PdfAes256SecurityHandler.ToPermissionWord(permissions));
+            Assert.Equal(expected, PdfAes256SecurityHandler.ToPermissionWord(PeachPDF.Rendering.EngineOptions.ToEngine(permissions)));
 
         [Fact]
         public void Handler_UserAndOwnerPasswords_UnwrapTheSameFileKey_AndWrongOnesAreRejected()
         {
-            var options = new PdfEncryptionOptions { UserPassword = "user", OwnerPassword = "owner" };
+            var options = new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "user", OwnerPassword = "owner" };
             var handler = new PdfAes256SecurityHandler(options);
             var pdf = "x /Encrypt<< " + string.Join(" ", new[] { ("/U", handler.U), ("/UE", handler.UE), ("/O", handler.O), ("/OE", handler.OE) }
                 .Select(p => $"{p.Item1} <{Convert.ToHexString(p.Item2)}>")) + ">>";
@@ -107,16 +107,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Handler_Perms_DecryptsToTheWordTheFlagsAndTheAdbMarker()
         {
-            var handler = new PdfAes256SecurityHandler(new PdfEncryptionOptions
+            var handler = new PdfAes256SecurityHandler(new PeachDrawing.PDF.Engine.PdfEncryptionOptions
             {
-                UserPassword = "u", OwnerPassword = "o", Permissions = PdfPermissions.ReadOnly, EncryptMetadata = false,
+                UserPassword = "u", OwnerPassword = "o", Permissions = PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly, EncryptMetadata = false,
             });
 
             using var aes = Aes.Create();
             aes.Key = handler.FileKey;
             var block = aes.DecryptEcb(handler.Perms, PaddingMode.None);
 
-            Assert.Equal(PdfAes256SecurityHandler.ToPermissionWord(PdfPermissions.ReadOnly), BitConverter.ToInt32(block, 0));
+            Assert.Equal(PdfAes256SecurityHandler.ToPermissionWord(PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly), BitConverter.ToInt32(block, 0));
             Assert.Equal([0xFF, 0xFF, 0xFF, 0xFF], block[4..8]);
             Assert.Equal("Fadb", Encoding.ASCII.GetString(block, 8, 4));
         }
@@ -124,7 +124,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Handler_FreshKeyPerInstance()
         {
-            var options = new PdfEncryptionOptions { UserPassword = "u" };
+            var options = new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "u" };
 
             Assert.NotEqual(new PdfAes256SecurityHandler(options).FileKey, new PdfAes256SecurityHandler(options).FileKey);
         }
@@ -132,7 +132,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Handler_WithoutAnOwnerPassword_NothingUnlocksTheOwnerEntries()
         {
-            var handler = new PdfAes256SecurityHandler(new PdfEncryptionOptions { UserPassword = "u" });
+            var handler = new PdfAes256SecurityHandler(new PeachDrawing.PDF.Engine.PdfEncryptionOptions { UserPassword = "u" });
             var pdf = $"/Encrypt<< /U <{Convert.ToHexString(handler.U)}> /O <{Convert.ToHexString(handler.O)}> /OE <{Convert.ToHexString(handler.OE)}> >>";
 
             Assert.Null(RecoverFileKey(pdf, "", owner: true));

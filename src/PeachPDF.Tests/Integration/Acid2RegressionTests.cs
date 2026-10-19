@@ -1,14 +1,15 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Paint;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -878,7 +879,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -887,7 +888,7 @@ namespace PeachPDF.Tests.Integration
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
 
-            var measure = PeachPDF.PDF.Drawing.PdfGraphics.CreateMeasureContext(
+            var measure = PeachDrawing.PDF.Engine.Drawing.PdfGraphics.CreateMeasureContext(
                 size);
             using var graphics = new PdfCanvas(renderContext, measure, 1.0);
             await container.PerformLayout(graphics);
@@ -933,7 +934,7 @@ namespace PeachPDF.Tests.Integration
         {
             public int DrawImageCallCount { get; private set; }
 
-            public RecordingGraphics() : base(new PdfRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
+            public RecordingGraphics() : base(new HtmlRenderContext(), new Rect(0, 0, double.MaxValue, double.MaxValue)) { }
 
             public override void DrawImage(Image image, Rect destRect, Rect srcRect) => DrawImageCallCount++;
             public override void DrawImage(Image image, Rect destRect) => DrawImageCallCount++;

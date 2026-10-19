@@ -6,7 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 using PeachDrawing.Text;

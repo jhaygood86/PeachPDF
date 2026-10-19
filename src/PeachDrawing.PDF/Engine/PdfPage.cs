@@ -1,0 +1,769 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+using PeachDrawing.Core;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Annotations;
+using PeachDrawing.PDF.Engine.IO;
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Globalization;
+
+namespace PeachDrawing.PDF.Engine;
+
+/// <summary>
+/// Represents a page in a PDF document.
+/// </summary>
+internal sealed class PdfPage : PdfDictionary, IContentStream
+{
+    /// <summary>
+    /// Initializes a new page. The page must be added to a document before it can be used.
+    /// Depending of the IsMetric property of the current region the page size is set to 
+    /// A4 or Letter respectively. If this size is not appropriate it should be changed before
+    /// any drawing operations are performed on the page.
+    /// </summary>
+    public PdfPage()
+    {
+        Elements.SetName(Keys.Type, "/Page");
+        Initialize();
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfPage"/> class.
+    /// </summary>
+    /// <param name="document">The document.</param>
+    public PdfPage(PdfDocument document)
+        : base(document)
+    {
+        Elements.SetName(Keys.Type, "/Page");
+        Elements[Keys.Parent] = document.Pages.RequiredReference;
+        Initialize();
+    }
+
+    internal PdfPage(PdfDictionary dict)
+        : base(dict)
+    {
+        // Set Orientation depending on /Rotate.
+        int rotate = Elements.GetInteger(InheritablePageKeys.Rotate);
+        if (Math.Abs((rotate / 90)) % 2 == 1)
+            _orientation = PageOrientation.Landscape;
+    }
+
+    void Initialize()
+    {
+
+        try
+        {
+            Size = RegionInfo.CurrentRegion.IsMetric ? PageSize.A4 : PageSize.Letter;
+        }
+        catch (System.NotImplementedException)
+        {
+            // https://github.com/ststeiger/PdfSharpCore/issues/46
+            // { System.NotImplementedException: Neutral region info
+            // at System.Globalization.RegionInfo..ctor
+            Size = PageSize.A4;
+        }
+
+#pragma warning disable 168
+        // Force creation of MediaBox object by invoking property
+        PdfRectangle rect = MediaBox;
+#pragma warning restore 168
+    }
+
+    /// <summary>
+    /// Gets or sets a user defined object that contains arbitrary information associated with this PDF page.
+    /// The tag is not used by PeachDrawing.PDF.Engine.
+    /// </summary>
+    public object Tag
+    {
+        get => _tag;
+        set => _tag = value;
+    }
+    object _tag = null!;
+
+    /// <summary>
+    /// Closes the page. A closes page cannot be modified anymore and it is not possible to
+    /// get an PdfGraphics object for a closed page. Closing a page is not required, but may saves
+    /// resources if the document has many pages. 
+    /// </summary>
+    public void Close()
+    {
+        //// Close renderer, if any
+        //if (_content.pdfRenderer != null)
+        //  _content.pdfRenderer.endp.Close();
+        _closed = true;
+    }
+    bool _closed;
+
+    /// <summary>
+    /// Gets a value indicating whether the page is closed.
+    /// </summary>
+    internal bool IsClosed => _closed;
+
+    /// <summary>
+    /// Gets or sets the PdfDocument this page belongs to.
+    /// </summary>
+    internal override PdfDocument Document
+    {
+        set
+        {
+            if (!ReferenceEquals(_document, value))
+            {
+                if (_document is not null)
+                    throw new InvalidOperationException("Cannot change document.");
+                _document = value;
+                if (Reference is not null)
+                    Reference.Document = value;
+                Elements[Keys.Parent] = _document.Pages.RequiredReference;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the orientation of the page. The default value PageOrientation.Portrait.
+    /// If an imported page has a /Rotate value that matches the formula 90 + n * 180 the 
+    /// orientation is set to PageOrientation.Landscape.
+    /// </summary>
+    public PageOrientation Orientation
+    {
+        get => _orientation;
+        set => _orientation = value;
+    }
+    PageOrientation _orientation;
+
+    /// <summary>
+    /// Gets or sets one of the predefined standard sizes like.
+    /// </summary>
+    public PageSize Size
+    {
+        get => _pageSize;
+        set
+        {
+            if (!Enum.IsDefined(typeof(PageSize), value))
+                throw new InvalidEnumArgumentException("value", (int)value, typeof(PageSize));
+
+            Size size = PageSizeConverter.ToSize(value);
+            // MediaBox is always in Portrait mode (see Height, Width).
+            // So take Orientation NOT into account.
+            MediaBox = new PdfRectangle(0, 0, size.Width, size.Height);
+            _pageSize = value;
+        }
+    }
+    PageSize _pageSize;
+
+    /// <summary>
+    /// Gets or sets the media box directly. XGrahics is not prepared to work with a media box
+    /// with an origin other than (0,0).
+    /// </summary>
+    public PdfRectangle MediaBox
+    {
+        get => Elements.GetRectangle(Keys.MediaBox, true);
+        set { Elements.SetRectangle(Keys.MediaBox, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the crop box.
+    /// </summary>
+    public PdfRectangle CropBox
+    {
+        get => Elements.GetRectangle(Keys.CropBox, true);
+        set { Elements.SetRectangle(Keys.CropBox, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the bleed box.
+    /// </summary>
+    public PdfRectangle BleedBox
+    {
+        get => Elements.GetRectangle(Keys.BleedBox, true);
+        set { Elements.SetRectangle(Keys.BleedBox, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the art box.
+    /// </summary>
+    public PdfRectangle ArtBox
+    {
+        get => Elements.GetRectangle(Keys.ArtBox, true);
+        set { Elements.SetRectangle(Keys.ArtBox, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the trim box.
+    /// </summary>
+    public PdfRectangle TrimBox
+    {
+        get => Elements.GetRectangle(Keys.TrimBox, true);
+        set { Elements.SetRectangle(Keys.TrimBox, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the height of the page. If orientation is Landscape, this function applies to
+    /// the width.
+    /// </summary>
+    public double Height
+    {
+        get
+        {
+            PdfRectangle rect = MediaBox;
+            return _orientation == PageOrientation.Portrait ? rect.Height : rect.Width;
+        }
+        set
+        {
+            PdfRectangle rect = MediaBox;
+            if (_orientation == PageOrientation.Portrait)
+                MediaBox = new PdfRectangle(rect.X1, 0, rect.X2, value);
+            else
+                MediaBox = new PdfRectangle(0, rect.Y1, value, rect.Y2);
+            _pageSize = PageSize.Undefined;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the width of the page. If orientation is Landscape, this function applies to
+    /// the height.
+    /// </summary>
+    public double Width
+    {
+        get
+        {
+            PdfRectangle rect = MediaBox;
+            return _orientation == PageOrientation.Portrait ? rect.Width : rect.Height;
+        }
+        set
+        {
+            PdfRectangle rect = MediaBox;
+            if (_orientation == PageOrientation.Portrait)
+                MediaBox = new PdfRectangle(0, rect.Y1, value, rect.Y2);
+            else
+                MediaBox = new PdfRectangle(rect.X1, 0, rect.X2, value);
+            _pageSize = PageSize.Undefined;
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the /Rotate entry of the PDF page. The value is the number of degrees by which the page 
+    /// should be rotated clockwise when displayed or printed. The value must be a multiple of 90.
+    /// TODO: Next statement is not correct: 
+    /// PDFsharp does not set this value, but for imported pages this value can be set and must be taken
+    /// into account when adding graphic to such a page.
+    /// </summary>
+    public int Rotate
+    {
+        get => _elements.GetInteger(InheritablePageKeys.Rotate);
+        set
+        {
+            if (value / 90 * 90 != value)
+                throw new ArgumentException("Value must be a multiple of 90.");
+            _elements.SetInteger(InheritablePageKeys.Rotate, value);
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the /StructParents entry of the PDF page: the integer key of this page's
+    /// entry in the document's structural parent tree (/StructTreeRoot/ParentTree). Only
+    /// meaningful when the page contains tagged marked-content sequences.
+    /// </summary>
+    internal int StructParents
+    {
+        get => _elements.GetInteger(Keys.StructParents);
+        set { _elements.SetInteger(Keys.StructParents, value); }
+    }
+
+    /// <summary>
+    /// Gets or sets the /Tabs entry of the PDF page: the tab order for the page's
+    /// annotations ("R"/"C"/"S" - row/column/structure order). Set to "/S" once a page gains
+    /// an annotation linked into the structure tree (see StructureTagBuilder.
+    /// LinkAnnotationToStructureElement), per PDF/UA's requirement that tab order follow
+    /// structure order on such pages.
+    /// </summary>
+    internal string Tabs
+    {
+        get => _elements.GetName(Keys.Tabs);
+        set { _elements.SetName(Keys.Tabs, value); }
+    }
+
+    // TODO: PdfAnnotations
+    // TODO: PdfActions
+    // TODO: PdfPageTransition
+
+    /// <summary>
+    /// The content stream currently used by an PdfGraphics object for rendering.
+    /// </summary>
+    internal PdfContent RenderContent = null!;
+
+    /// <summary>
+    /// Gets the array of content streams of the page.
+    /// </summary>
+    public PdfContents Contents
+    {
+        get
+        {
+            if (_contents is null)
+            {
+                _contents = new PdfContents(Owner);
+                Debug.Assert(_contents.Reference is null);
+                Elements[Keys.Contents] = _contents;
+            }
+            return _contents;
+        }
+    }
+    PdfContents _contents = null!;
+
+    /// <summary>
+    /// Gets the annotations array of this page.
+    /// </summary>
+    public bool HasAnnotations
+    {
+        get
+        {
+            if (_annotations is null)
+            {
+                // Get annotations array if exists.
+                _annotations = (PdfAnnotations?)Elements.GetValue(Keys.Annots);
+                if (_annotations is not null)
+                    _annotations.Page = this;
+            }
+            return _annotations is not null;
+        }
+    }
+
+    /// <summary>
+    /// Gets the annotations array of this page.
+    /// </summary>
+    public PdfAnnotations Annotations
+    {
+        get
+        {
+            if (_annotations is null)
+            {
+                // Get or create annotations array.
+                _annotations = Elements.GetOrCreate<PdfAnnotations>(Keys.Annots, ValueCreationFlags.Create);
+                _annotations.Page = this;
+            }
+            return _annotations;
+        }
+    }
+    PdfAnnotations? _annotations;
+
+    /// <summary>
+    /// Adds an intra document link.
+    /// </summary>
+    /// <param name="rect">The rect.</param>
+    /// <param name="destinationPage">The destination page.</param>
+    public PdfLinkAnnotation AddDocumentLink(PdfRectangle rect, int destinationPage)
+    {
+        PdfLinkAnnotation annotation = PdfLinkAnnotation.CreateDocumentLink(rect, destinationPage);
+        Annotations.Add(annotation);
+        return annotation;
+    }
+
+    /// <summary>
+    /// Adds an internal document link.
+    /// </summary>
+    /// <param name="rect">The link area in default page coordinates.</param>
+    /// <param name="destinationName">The Named Destination's name.</param>
+    public PdfLinkAnnotation AddDocumentLink(PdfRectangle rect, string destinationName)
+    {
+        var annotation = PdfLinkAnnotation.CreateDocumentLink(rect, destinationName);
+        Annotations.Add(annotation);
+        return annotation;
+    }
+
+    /// <summary>
+    /// Adds a link to the Web.
+    /// </summary>
+    /// <param name="rect">The rect.</param>
+    /// <param name="url">The URL.</param>
+    public PdfLinkAnnotation AddWebLink(PdfRectangle rect, string url)
+    {
+        PdfLinkAnnotation annotation = PdfLinkAnnotation.CreateWebLink(rect, url);
+        Annotations.Add(annotation);
+        return annotation;
+    }
+
+    /// <summary>
+    /// Adds a link to a file.
+    /// </summary>
+    /// <param name="rect">The rect.</param>
+    /// <param name="fileName">Name of the file.</param>
+    public PdfLinkAnnotation AddFileLink(PdfRectangle rect, string fileName)
+    {
+        PdfLinkAnnotation annotation = PdfLinkAnnotation.CreateFileLink(rect, fileName);
+        Annotations.Add(annotation);
+        return annotation;
+    }
+
+    /// <summary>
+    /// Gets the PdfResources object of this page.
+    /// </summary>
+    public PdfResources Resources
+    {
+        get
+        {
+            if (_resources is null)
+                _resources = Elements.GetOrCreate<PdfResources>(Keys.Resources, ValueCreationFlags.Create); //ValueCreationFlags.CreateIndirect
+            return _resources;
+        }
+    }
+    PdfResources _resources = null!;
+
+    /// <summary>
+    /// Implements the interface because the primary function is internal.
+    /// </summary>
+    PdfResources IContentStream.Resources
+    {
+        get => Resources;
+    }
+
+    /// <summary>
+    /// Gets the resource name of the specified font within this page.
+    /// </summary>
+    internal string GetFontName(TypefaceFont font, out PdfFont pdfFont)
+    {
+        pdfFont = _document.FontTable.GetFont(font);
+        Debug.Assert(pdfFont is not null);
+        string name = Resources.AddFont(pdfFont);
+        return name;
+    }
+
+    string IContentStream.GetFontName(TypefaceFont font, out PdfFont pdfFont)
+    {
+        return GetFontName(font, out pdfFont);
+    }
+
+    /// <summary>
+    /// Gets the resource name of the specified image within this page.
+    /// </summary>
+    internal string GetImageName(PdfRasterImage image, double width, double height)
+    {
+        global::PeachDrawing.PDF.Engine.Advanced.PdfImage pdfImage = _document.ImageTable.GetImage(image, width, height);
+        Debug.Assert(pdfImage is not null);
+        string name = Resources.AddImage(pdfImage);
+        return name;
+    }
+
+    /// <summary>
+    /// Implements the interface because the primary function is internal.
+    /// </summary>
+    string IContentStream.GetImageName(PdfRasterImage image, double width, double height)
+    {
+        return GetImageName(image, width, height);
+    }
+
+    /// <summary>
+    /// Gets the resource name of the specified form within this page.
+    /// </summary>
+    internal string GetFormName(PdfForm form)
+    {
+        PdfFormXObject pdfForm = _document.FormTable.GetForm(form);
+        Debug.Assert(pdfForm is not null);
+        string name = Resources.AddForm(pdfForm);
+        return name;
+    }
+
+    /// <summary>
+    /// Implements the interface because the primary function is internal.
+    /// </summary>
+    string IContentStream.GetFormName(PdfForm form)
+    {
+        return GetFormName(form);
+    }
+
+    internal override void WriteObject(PdfWriter writer)
+    {
+        // HACK: temporarily flip media box if Landscape
+        PdfRectangle mediaBox = MediaBox;
+        if (_orientation == PageOrientation.Landscape && Math.Abs(Rotate / 90) % 2 == 0)
+            MediaBox = new PdfRectangle(mediaBox.X1, mediaBox.Y1, mediaBox.Y2, mediaBox.X2);
+
+        // Add transparency group to prevent rendering problems of Adobe viewer.
+        // TransparencyUsed is set incrementally during painting by whichever content actually
+        // required a transparency group (opacity < 1, a semi-transparent fill/stroke/gradient
+        // stop, or an SVG <mask> - see PdfGraphicsState/PdfGraphicsRenderer's calls into
+        // PdfATransparencyGuard), not forced unconditionally as it used to be - a page with none
+        // of those doesn't carry an unnecessary /Group, and PDF/A-1 (which forbids transparency
+        // groups) becomes reachable for documents that genuinely don't use any of them.
+        //
+        // Undefined is now PdfGenerator's own document-wide default (a mixed-color-space document:
+        // each color writes in whichever space it actually carries - RGB or, for a CSS device-cmyk()
+        // -authored color, real CMYK - see PdfGenerator.RenderPagesCore), not an opt-out of this
+        // feature the way an older PDFsharp version used it - so it no longer skips the group here;
+        // the /CS fallback below already resolves to /DeviceRGB for anything but the whole-document
+        // -forced PdfColorMode.Cmyk (never set under Undefined).
+        if (TransparencyUsed && !Elements.ContainsKey(Keys.Group))
+        {
+            PdfDictionary group = new PdfDictionary();
+            _elements["/Group"] = group;
+            if (_document.Options.ColorMode != PdfColorMode.Cmyk)
+                group.Elements.SetName("/CS", "/DeviceRGB");
+            else
+                group.Elements.SetName("/CS", "/DeviceCMYK");
+            group.Elements.SetName("/S", "/Transparency");
+            //False is default: group.Elements["/I"] = new PdfBoolean(false);
+            //False is default: group.Elements["/K"] = new PdfBoolean(false);
+        }
+
+        base.WriteObject(writer);
+
+        if (_orientation == PageOrientation.Landscape)
+            MediaBox = mediaBox;
+    }
+
+    /// <summary>
+    /// Hack to indicate that a page-level transparency group must be created.
+    /// </summary>
+    internal bool TransparencyUsed;
+
+    /// <summary>
+    /// Predefined keys of this dictionary.
+    /// </summary>
+    internal sealed class Keys : InheritablePageKeys
+    {
+        /// <summary>
+        /// (Required) The type of PDF object that this dictionary describes;
+        /// must be Page for a page object.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Required, FixedValue = "Page")]
+        public const string Type = "/Type";
+
+        /// <summary>
+        /// (Required; must be an indirect reference)
+        /// The page tree node that is the immediate parent of this page object.
+        /// </summary>
+        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required | PdfKeyType.MustBeIndirect)]
+        public const string Parent = "/Parent";
+
+        /// <summary>
+        /// (Required if PieceInfo is present; optional otherwise; PDF 1.3) The date and time
+        /// when the page's contents were most recently modified. If a page-piece dictionary
+        /// (PieceInfo) is present, the modification date is used to ascertain which of the 
+        /// application data dictionaries that it contains correspond to the current content
+        /// of the page.
+        /// </summary>
+        [PdfKey(PdfKeyType.Date)]
+        public const string LastModified = "/LastModified";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A rectangle, expressed in default user space units, defining the 
+        /// region to which the contents of the page should be clipped when output in a production
+        /// environment. Default value: the value of CropBox.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
+        public const string BleedBox = "/BleedBox";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A rectangle, expressed in default user space units, defining the
+        /// intended dimensions of the finished page after trimming. Default value: the value of 
+        /// CropBox.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
+        public const string TrimBox = "/TrimBox";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A rectangle, expressed in default user space units, defining the
+        /// extent of the page's meaningful content (including potential white space) as intended
+        /// by the page's creator. Default value: the value of CropBox.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Rectangle | PdfKeyType.Optional)]
+        public const string ArtBox = "/ArtBox";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) A box color information dictionary specifying the colors and other 
+        /// visual characteristics to be used in displaying guidelines on the screen for the various
+        /// page boundaries. If this entry is absent, the application should use its own current 
+        /// default settings.
+        /// </summary>
+        [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string BoxColorInfo = "/BoxColorInfo";
+
+        /// <summary>
+        /// (Optional) A content stream describing the contents of this page. If this entry is absent, 
+        /// the page is empty. The value may be either a single stream or an array of streams. If the 
+        /// value is an array, the effect is as if all of the streams in the array were concatenated,
+        /// in order, to form a single stream. This allows PDF producers to create image objects and
+        /// other resources as they occur, even though they interrupt the content stream. The division
+        /// between streams may occur only at the boundaries between lexical tokens but is unrelated
+        /// to the page's logical content or organization. Applications that consume or produce PDF 
+        /// files are not required to preserve the existing structure of the Contents array.
+        /// </summary>
+        [PdfKey(PdfKeyType.Array | PdfKeyType.Stream | PdfKeyType.Optional)]
+        public const string Contents = "/Contents";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) A group attributes dictionary specifying the attributes of the page's 
+        /// page group for use in the transparent imaging model.
+        /// </summary>
+        [PdfKey("1.4", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string Group = "/Group";
+
+        /// <summary>
+        /// (Optional) A stream object defining the page's thumbnail image.
+        /// </summary>
+        [PdfKey(PdfKeyType.Stream | PdfKeyType.Optional)]
+        public const string Thumb = "/Thumb";
+
+        /// <summary>
+        /// (Optional; PDF 1.1; recommended if the page contains article beads) An array of indirect
+        /// references to article beads appearing on the page. The beads are listed in the array in 
+        /// natural reading order.
+        /// </summary>
+        [PdfKey("1.1", PdfKeyType.Array | PdfKeyType.Optional)]
+        public const string B = "/B";
+
+        /// <summary>
+        /// (Optional; PDF 1.1) The page's display duration (also called its advance timing): the 
+        /// maximum length of time, in seconds, that the page is displayed during presentations before
+        /// the viewer application automatically advances to the next page. By default, the viewer does 
+        /// not advance automatically.
+        /// </summary>
+        [PdfKey("1.1", PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string Dur = "/Dur";
+
+        /// <summary>
+        /// (Optional; PDF 1.1) A transition dictionary describing the transition effect to be used 
+        /// when displaying the page during presentations.
+        /// </summary>
+        [PdfKey("1.1", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string Trans = "/Trans";
+
+        /// <summary>
+        /// (Optional) An array of annotation dictionaries representing annotations associated with 
+        /// the page.
+        /// </summary>
+        [PdfKey(PdfKeyType.Array | PdfKeyType.Optional, typeof(PdfAnnotations))]
+        public const string Annots = "/Annots";
+
+        /// <summary>
+        /// (Optional; PDF 1.2) An additional-actions dictionary defining actions to be performed 
+        /// when the page is opened or closed.
+        /// </summary>
+        [PdfKey("1.2", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string AA = "/AA";
+
+        /// <summary>
+        /// (Optional; PDF 1.4) A metadata stream containing metadata for the page.
+        /// </summary>
+        [PdfKey("1.4", PdfKeyType.Stream | PdfKeyType.Optional)]
+        public const string Metadata = "/Metadata";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A page-piece dictionary associated with the page.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string PieceInfo = "/PieceInfo";
+
+        /// <summary>
+        /// (Required if the page contains structural content items; PDF 1.3)
+        /// The integer key of the page's entry in the structural parent tree.
+        /// </summary>
+        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        public const string StructParents = "/StructParents";
+
+        /// <summary>
+        /// (Optional; PDF 1.3; indirect reference preferred) The digital identifier of
+        /// the page's parent Web Capture content set.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.String | PdfKeyType.Optional)]
+        public const string ID = "/ID";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) The page's preferred zoom (magnification) factor: the factor 
+        /// by which it should be scaled to achieve the natural display magnification.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string PZ = "/PZ";
+
+        /// <summary>
+        /// (Optional; PDF 1.3) A separation dictionary containing information needed
+        /// to generate color separations for the page.
+        /// </summary>
+        [PdfKey("1.3", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string SeparationInfo = "/SeparationInfo";
+
+        /// <summary>
+        /// (Optional; PDF 1.5) A name specifying the tab order to be used for annotations
+        /// on the page. The possible values are R (row order), C (column order),
+        /// and S (structure order).
+        /// </summary>
+        [PdfKey("1.5", PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string Tabs = "/Tabs";
+
+        /// <summary>
+        /// (Required if this page was created from a named page object; PDF 1.5)
+        /// The name of the originating page object.
+        /// </summary>
+        [PdfKey(PdfKeyType.Name | PdfKeyType.Optional)]
+        public const string TemplateInstantiated = "/TemplateInstantiated";
+
+        /// <summary>
+        /// (Optional; PDF 1.5) A navigation node dictionary representing the first node
+        /// on the page.
+        /// </summary>
+        [PdfKey("1.5", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string PresSteps = "/PresSteps";
+
+        /// <summary>
+        /// (Optional; PDF 1.6) A positive number giving the size of default user space units,
+        /// in multiples of 1/72 inch. The range of supported values is implementation-dependent.
+        /// </summary>
+        [PdfKey("1.6", PdfKeyType.Real | PdfKeyType.Optional)]
+        public const string UserUnit = "/UserUnit";
+
+        /// <summary>
+        /// (Optional; PDF 1.6) An array of viewport dictionaries specifying rectangular regions 
+        /// of the page.
+        /// </summary>
+        [PdfKey("1.6", PdfKeyType.Dictionary | PdfKeyType.Optional)]
+        public const string VP = "/VP";
+
+        /// <summary>
+        /// Gets the KeysMeta for these keys.
+        /// </summary>
+        internal static PdfDictionaryMetadata Meta { get; } = CreateMeta(typeof(Keys));
+    }
+
+    /// <summary>
+    /// Gets the KeysMeta of this dictionary type.
+    /// </summary>
+    internal override PdfDictionaryMetadata Meta => Keys.Meta;
+
+    /// <summary>
+    /// Predefined keys common to PdfPage and PdfPages.
+    /// </summary>
+    internal class InheritablePageKeys : KeysBase
+    {
+        /// <summary>
+        /// (Required; inheritable) A dictionary containing any resources required by the page. 
+        /// If the page requires no resources, the value of this entry should be an empty dictionary.
+        /// Omitting the entry entirely indicates that the resources are to be inherited from an 
+        /// ancestor node in the page tree.
+        /// </summary>
+        [PdfKey(PdfKeyType.Dictionary | PdfKeyType.Required | PdfKeyType.Inheritable, typeof(PdfResources))]
+        public const string Resources = "/Resources";
+
+        /// <summary>
+        /// (Required; inheritable) A rectangle, expressed in default user space units, defining the 
+        /// boundaries of the physical medium on which the page is intended to be displayed or printed.
+        /// </summary>
+        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Required | PdfKeyType.Inheritable)]
+        public const string MediaBox = "/MediaBox";
+
+        /// <summary>
+        /// (Optional; inheritable) A rectangle, expressed in default user space units, defining the 
+        /// visible region of default user space. When the page is displayed or printed, its contents 
+        /// are to be clipped (cropped) to this rectangle and then imposed on the output medium in some
+        /// implementation defined manner. Default value: the value of MediaBox.
+        /// </summary>
+        [PdfKey(PdfKeyType.Rectangle | PdfKeyType.Optional | PdfKeyType.Inheritable)]
+        public const string CropBox = "/CropBox";
+
+        /// <summary>
+        /// (Optional; inheritable) The number of degrees by which the page should be rotated clockwise 
+        /// when displayed or printed. The value must be a multiple of 90. Default value: 0.
+        /// </summary>
+        [PdfKey(PdfKeyType.Integer | PdfKeyType.Optional)]
+        public const string Rotate = "/Rotate";
+    }
+}

@@ -1,6 +1,6 @@
 using System.Text;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.PdfEngineTests.Fonts;

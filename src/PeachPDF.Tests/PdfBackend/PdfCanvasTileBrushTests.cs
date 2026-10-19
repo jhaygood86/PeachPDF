@@ -1,8 +1,9 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF.Engine;
 using System;
 using System.IO;
 using System.Numerics;
@@ -20,13 +21,13 @@ namespace PeachPDF.Tests.PdfBackendTests
         private const string Png4X4 =
             "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGM8YWTEAANMcBZeDgA8MgE0GRiVCQAAAABJRU5ErkJggg==";
 
-        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, PdfRenderContext RenderContext) NewPage()
+        private static (PdfDocument Document, PdfGraphics PageGfx, PdfCanvas Graphics, HtmlRenderContext RenderContext) NewPage()
         {
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var page = document.AddPage();
             var pageGfx = PdfGraphics.FromPdfPage(page);
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             return (document, pageGfx, new PdfCanvas(renderContext, pageGfx, 1.0), renderContext);
         }
 
@@ -70,7 +71,7 @@ namespace PeachPDF.Tests.PdfBackendTests
             var document = new PdfDocument();
             document.Options.CompressContentStreams = false;
             var pageGfx = PdfGraphics.FromPdfPage(document.AddPage());
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var graphics = new PdfCanvas(renderContext, pageGfx, 2.0);
             var brush = new TileBrush(NewTile(graphics, renderContext, 40), 40, 40);
 

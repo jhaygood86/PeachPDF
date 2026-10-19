@@ -1,6 +1,6 @@
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
-using PeachPDF.PDF.Structure;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Structure;
 using System.Text;
 
 namespace PeachPDF.Tests.PdfEngineTests.ObjectModel

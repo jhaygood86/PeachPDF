@@ -1,5 +1,5 @@
-using PeachPDF.PDF;
-using PeachPDF.PDF.Structure;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Structure;
 using System.Linq;
 
 namespace PeachPDF.Tests.PdfEngineTests.Structure

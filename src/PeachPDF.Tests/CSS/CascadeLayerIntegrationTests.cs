@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.CSS;
 
@@ -239,7 +240,7 @@ public class CascadeLayerIntegrationTests
 
     private static async Task<CssBox> BuildRoot(string html)
     {
-        var renderContext = new PdfRenderContext();
+        var renderContext = new HtmlRenderContext();
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml(html, null);
 

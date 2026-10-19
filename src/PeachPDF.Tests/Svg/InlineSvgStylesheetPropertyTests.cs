@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF;
 using PeachPDF.Svg;
 using System.Linq;
 using System.Threading.Tasks;
@@ -19,7 +20,7 @@ namespace PeachPDF.Tests.Svg
         private static async Task<SvgDocument> BuildAsync(string css, string svgBody)
         {
             var html = $"<!DOCTYPE html><html><head><style>{css}</style></head><body><svg width=\"200\" height=\"100\">{svgBody}</svg></body></html>";
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

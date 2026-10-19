@@ -1,10 +1,11 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Parse;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -16,7 +17,7 @@ namespace PeachPDF.Tests.Integration
     /// </summary>
     public class ModernColorParsingTests
     {
-        private static PaintColor Parse(string value) => new CssValueParser(new PdfRenderContext()).GetActualColor(value);
+        private static PaintColor Parse(string value) => new CssValueParser(new HtmlRenderContext()).GetActualColor(value);
 
         // ── hsl()/hwb() as solid colors (previously stack-overflowed at resolve time) ──
 
@@ -242,13 +243,13 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual("transparent", box.BackgroundColor);
             Assert.False(string.IsNullOrEmpty(box.BackgroundColor));
             // And the carried value resolves to a real (reddish) color, not black.
-            var resolved = new CssValueParser(new PdfRenderContext()).GetActualColor(box.BackgroundColor);
+            var resolved = new CssValueParser(new HtmlRenderContext()).GetActualColor(box.BackgroundColor);
             Assert.True(resolved.R > resolved.G && resolved.R > resolved.B, $"expected reddish, got {resolved.R},{resolved.G},{resolved.B}");
         }
 
         private static async Task<CssBox> BuildBox(string html, string tag)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
@@ -266,7 +267,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Oklch_Color_ResolvesOnElement_NotBlack()
         {
             var html = "<!DOCTYPE html><html><head><style>p { color: oklch(0.63 0.26 29); }</style></head><body><p>x</p></body></html>";
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, 842);
@@ -324,7 +325,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void NamedColor_InvalidIdentifier_StillRejected()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var parser = new CssValueParser(renderContext);
             Assert.False(parser.IsColorValid("notacolor"));
         }
@@ -336,7 +337,7 @@ namespace PeachPDF.Tests.Integration
             // (it's a separate "current-color" cssDataType handled elsewhere in the union for the real
             // "color" property) - the fast path's dictionary miss must fall through to the existing
             // tokenizer route unchanged, which also returns false here, both before and after this change.
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var parser = new CssValueParser(renderContext);
             Assert.False(parser.IsColorValid("currentcolor"));
         }

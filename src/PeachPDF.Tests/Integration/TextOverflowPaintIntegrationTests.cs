@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -29,7 +30,7 @@ namespace PeachPDF.Tests.Integration
         private const string Alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 
         /// <summary>A recording mock whose MeasureString is a deterministic, non-zero, length-proportional stand-in for real glyph shaping - needed so text-overflow's own visibility guard (a zero-extent rect reads as clipped away) doesn't suppress every draw under the shared mock's real default of a flat (0, 12).</summary>
-        private static RecordingGraphics NewRecording() => new(new PdfRenderContext())
+        private static RecordingGraphics NewRecording() => new(new HtmlRenderContext())
         {
             MeasureStringOverride = (str, _, _) => new Size((str?.Length ?? 0) * 6.0, 12)
         };

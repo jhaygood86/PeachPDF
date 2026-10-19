@@ -4829,7 +4829,7 @@ namespace PeachPDF.Html.Core
         /// box's own wider containing block (the page box, margins included, per CSS2.1 §10.1): a
         /// <c>position: fixed</c> box's own paint reaches past this via
         /// <c>Canvas.SuspendClipping</c>, which always unwinds the whole clip stack down to the single
-        /// unconditionally-infinite clip <see cref="PeachPDF.PdfBackend.PdfCanvas"/>'s constructor
+        /// unconditionally-infinite clip <see cref="PeachDrawing.PDF.PdfCanvas"/>'s constructor
         /// establishes before this is ever pushed - so this is the only page-level clip that needs to
         /// exist, provided it is pushed through <c>Canvas.PushClip</c> and not intersected directly on
         /// the raw graphics object (see <c>FragmentPainter.Paint</c>'s own remarks, and issue #880).

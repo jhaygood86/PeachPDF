@@ -1,8 +1,9 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -98,7 +99,7 @@ namespace PeachPDF.Tests.Integration
         {
             var html = $"<!DOCTYPE html><html><head></head><body>{bodyHtml}</body></html>";
 
-            var renderContext = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

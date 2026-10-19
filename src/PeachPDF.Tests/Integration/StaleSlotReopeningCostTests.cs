@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PdfBackend;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
 namespace PeachPDF.Tests.Integration;
@@ -43,7 +44,7 @@ public class StaleSlotReopeningCostTests
 
     private static async Task<(CssBox Root, HtmlContainerInt Container)> Layout(string html)
     {
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext);
         await container.SetHtml(html, null);
 

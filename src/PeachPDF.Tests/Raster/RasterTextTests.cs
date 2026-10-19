@@ -1,7 +1,8 @@
 ﻿using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text;
@@ -17,11 +18,11 @@ namespace PeachPDF.Tests.Raster
     {
         private const string Family = "RasterTextTestSans";
 
-        private sealed record Fixture(PdfRenderContext RenderContext, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
+        private sealed record Fixture(HtmlRenderContext RenderContext, RasterCanvas Graphics, Func<PaintFontStyle, Font> Font);
 
         private static async Task<Fixture> NewFixture(int width = 300, int height = 80)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, Family);
 
             var surface = new RasterSurface(width, height, 0, 0, 1, 1);
@@ -208,7 +209,7 @@ namespace PeachPDF.Tests.Raster
         {
             var f = await NewFixture();
             var font = f.Font(PaintFontStyle.Regular);
-            var pdf = new PDF.Drawing.PdfGraphicsMeasureProbe(font).Width("measure me");
+            var pdf = new PeachDrawing.PDF.Engine.Drawing.PdfGraphicsMeasureProbe(font).Width("measure me");
 
             Assert.Equal(pdf, f.Graphics.MeasureString("measure me", font).Width, 6);
             Assert.Equal("measure me".Length, f.Graphics.CountShapedGlyphs("measure me", font));
@@ -217,14 +218,14 @@ namespace PeachPDF.Tests.Raster
     }
 }
 
-namespace PeachPDF.PDF.Drawing
+namespace PeachDrawing.PDF.Engine.Drawing
 {
     /// <summary>Test-only: measures with the same routine <c>PdfCanvas</c> uses (an <c>PdfGraphics</c> measure context).</summary>
     internal sealed class PdfGraphicsMeasureProbe(PeachDrawing.Core.Font font)
     {
         public double Width(string text)
         {
-            var real = ((PeachPDF.PdfBackend.PdfCanvasFont)font).Font;
+            var real = ((PeachDrawing.PDF.PdfCanvasFont)font).Font;
             var size = FontHelper.MeasureString(text, real, PdfStringFormats.Default, PeachDrawing.Text.Shaping.ShapeSettings.Default);
             return size.Width;
         }

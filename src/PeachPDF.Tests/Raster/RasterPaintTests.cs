@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing;
 using System.Numerics;
@@ -8,7 +9,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Gradients, pen styles, clips and images drawn through <see cref="RasterCanvas"/>.</summary>
     public class RasterPaintTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height)
         {

@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -43,13 +44,13 @@ namespace PeachPDF.Tests.Integration
             var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
             var boxDefault = LayoutHarness.FindById(rootDefault, "box");
             Assert.NotNull(boxDefault);
-            var recordingDefault = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 1.0 };
+            var recordingDefault = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, boxDefault!, recordingDefault);
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var boxScaled = LayoutHarness.FindById(rootScaled, "box");
             Assert.NotNull(boxScaled);
-            var recordingScaled = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var recordingScaled = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, boxScaled!, recordingScaled);
 
             Assert.NotEmpty(recordingDefault.StrokedPenWidths);
@@ -76,7 +77,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var recording = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
             Assert.NotEmpty(recording.StrokedPaths);
@@ -153,13 +154,13 @@ namespace PeachPDF.Tests.Integration
             var (rootDefault, containerDefault) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html));
             var boxDefault = LayoutHarness.FindById(rootDefault, "box");
             Assert.NotNull(boxDefault);
-            var recordingDefault = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 1.0 };
+            var recordingDefault = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 1.0 };
             FragmentPaintHarness.PaintBox(containerDefault, boxDefault!, recordingDefault);
 
             var (rootScaled, containerScaled) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), pixelsPerPoint: 2.0);
             var boxScaled = LayoutHarness.FindById(rootScaled, "box");
             Assert.NotNull(boxScaled);
-            var recordingScaled = new RecordingGraphics(new PdfRenderContext()) { PixelsPerPointOverride = 2.0 };
+            var recordingScaled = new RecordingGraphics(new HtmlRenderContext()) { PixelsPerPointOverride = 2.0 };
             FragmentPaintHarness.PaintBox(containerScaled, boxScaled!, recordingScaled);
 
             return (recordingDefault.StrokedPaths, recordingScaled.StrokedPaths);

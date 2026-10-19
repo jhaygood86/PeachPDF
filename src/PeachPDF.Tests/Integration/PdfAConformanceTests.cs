@@ -1,4 +1,4 @@
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -318,13 +318,13 @@ namespace PeachPDF.Tests.Integration
             };
             var result = await new PdfGenerator().GeneratePdf(html, config);
 
-            var documentElement = PeachPDF.PDF.Structure.PdfStructureElement
+            var documentElement = PeachDrawing.PDF.Engine.Structure.PdfStructureElement
                 .GetKids(result.PdfDocument.Catalog.StructureTreeRoot.Elements)
-                .Cast<PeachPDF.PDF.Structure.PdfStructureElement>()
+                .Cast<PeachDrawing.PDF.Engine.Structure.PdfStructureElement>()
                 .Single();
-            var figure = PeachPDF.PDF.Structure.PdfStructureElement
+            var figure = PeachDrawing.PDF.Engine.Structure.PdfStructureElement
                 .GetKids(documentElement.Elements)
-                .Cast<PeachPDF.PDF.Structure.PdfStructureElement>()
+                .Cast<PeachDrawing.PDF.Engine.Structure.PdfStructureElement>()
                 .Single();
 
             Assert.Equal("/Figure", figure.StructureType);

@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(CapsMode.AllPetiteCaps, box.ActualFontVariantCaps);
 
-            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
             var shaped = Shaper.Shape(typeface, text, box.ActualTextShapingFeatures).Glyphs;
             Assert.Equal(PcapPassGlyph, (int)shaped[0].GlyphIndex);
             Assert.Equal(C2pcPassGlyph, (int)shaped[1].GlyphIndex);
@@ -164,7 +165,7 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxWithGsubFont(
                 $"<b id=\"w\" style='font-feature-settings:\"salt\" 0'>{SaltAlt1}</b>");
 
-            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
             Assert.True(typeface.TryMapRune(new System.Text.Rune(0xE301), out var unshaped));
             Assert.Equal(unshaped, ShapeSingleGlyph(box, SaltAlt1));
             Assert.NotEqual(SaltPassGlyph, unshaped);
@@ -180,14 +181,14 @@ namespace PeachPDF.Tests.Integration
             var box = await FindWordsBoxWithGsubFont(
                 $"<b id=\"w\" style='font-feature-settings:\"pcap\" 1'>{PcapAlt1}</b>");
 
-            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
             Assert.True(typeface.TryMapRune(new System.Text.Rune(0xE2BD), out var unshaped));
             Assert.Equal(unshaped, ShapeSingleGlyph(box, PcapAlt1));
         }
 
         private static int ShapeSingleGlyph(CssBox box, string text)
         {
-            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
             return Shaper.Shape(typeface, text, box.ActualTextShapingFeatures).Glyphs[0].GlyphIndex;
         }
 
@@ -211,7 +212,7 @@ body {{ font-family: '{family}'; width: 400px; }}
         private static async Task<HtmlContainerInt> LayoutHtml(string body, string fontPath, string format, string family)
         {
             var fontBase64 = Convert.ToBase64String(File.ReadAllBytes(fontPath));
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body, fontBase64, format, family), null);
 

@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -37,7 +38,7 @@ namespace PeachPDF.Tests.Integration
         {
             // The default DataUriNetworkLoader has no BaseUri of its own, so the working directory is what
             // relative references have historically resolved against.
-            var renderContext = new PdfRenderContext { AllowLocalFileAccess = true };
+            var renderContext = new HtmlRenderContext { AllowLocalFileAccess = true };
 
             Assert.NotNull(renderContext.BaseUri);
             Assert.Equal("file", renderContext.BaseUri!.Scheme);
@@ -46,7 +47,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void BaseUri_WhenDenied_IsNull()
         {
-            var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
+            var renderContext = new HtmlRenderContext { AllowLocalFileAccess = false };
 
             Assert.Null(renderContext.BaseUri);
         }
@@ -57,7 +58,7 @@ namespace PeachPDF.Tests.Integration
             // The flag suppresses only the working-directory fallback. A loader that supplies its own base -
             // a zip or archive loader in a sandboxed host, say - keeps it, which is what lets such a host
             // resolve relative references without any file system at all.
-            var renderContext = new PdfRenderContext
+            var renderContext = new HtmlRenderContext
             {
                 AllowLocalFileAccess = false,
                 NetworkLoader = new StubLoader(new RUri("https://example.invalid/doc/"))
@@ -77,7 +78,7 @@ namespace PeachPDF.Tests.Integration
                 var path = Path.Combine(dir, "pic.png");
                 File.WriteAllBytes(path, Convert.FromBase64String(PngBase64));
 
-                var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
+                var renderContext = new HtmlRenderContext { AllowLocalFileAccess = false };
 
                 Assert.Null(await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri)));
             }
@@ -97,7 +98,7 @@ namespace PeachPDF.Tests.Integration
                 var path = Path.Combine(dir, "pic.png");
                 File.WriteAllBytes(path, Convert.FromBase64String(PngBase64));
 
-                var renderContext = new PdfRenderContext { AllowLocalFileAccess = true };
+                var renderContext = new HtmlRenderContext { AllowLocalFileAccess = true };
 
                 var response = await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri));
 
@@ -121,7 +122,7 @@ namespace PeachPDF.Tests.Integration
             // reference survives resolution still relative. Every loader has only ever been handed absolute
             // URIs - RUri.Scheme throws on a relative one, and DataUriNetworkLoader reads it unguarded - so
             // the adapter has to answer for this case itself rather than passing it on.
-            var renderContext = new PdfRenderContext { AllowLocalFileAccess = false };
+            var renderContext = new HtmlRenderContext { AllowLocalFileAccess = false };
 
             Assert.Null(await renderContext.GetResourceStream(new RUri("logo.png", UriKind.Relative)));
         }

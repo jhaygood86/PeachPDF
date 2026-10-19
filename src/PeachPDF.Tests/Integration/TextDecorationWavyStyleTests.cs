@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -174,7 +175,7 @@ namespace PeachPDF.Tests.Integration
                 configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "SkipInkWavyTestFont"));
             var s = LayoutHarness.FindById(root, "s")!;
 
-            using var g = new InkAwareRecordingGraphics((PdfRenderContext)container.RenderContext);
+            using var g = new InkAwareRecordingGraphics((HtmlRenderContext)container.RenderContext);
             FragmentPaintHarness.PaintBox(container, s, g);
 
             var paths = Paths(g);

@@ -1,11 +1,12 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -285,10 +286,10 @@ namespace PeachPDF.Tests.Integration
         private static async Task<(CssBox? heading, CssBox? table, double pageHeight)> GetHeadingTableAndPageHeight(string html)
         {
             // Matches PdfGenerator's own setup (PixelsPerPoint = config.PixelsPerInch / 72d, i.e. 1.0
-            // at the default 72 DPI) - PdfRenderContext's bare default of 72 double-applies the
+            // at the default 72 DPI) - HtmlRenderContext's bare default of 72 double-applies the
             // pt<->internal-pixel-space conversion in font resolution (CreateFontInt divides by
             // PixelsPerPoint), producing a font ~72x too small with this harness's 1:1 PageSize scale.
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

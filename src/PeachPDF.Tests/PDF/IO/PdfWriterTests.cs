@@ -1,6 +1,6 @@
 using System.Text;
-using PeachPDF.PDF;
-using PeachPDF.PDF.IO;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.IO;
 
 namespace PeachPDF.Tests.PdfEngineTests.IO
 {

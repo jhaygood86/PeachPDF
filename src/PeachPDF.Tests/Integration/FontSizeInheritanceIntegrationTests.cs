@@ -1,10 +1,11 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -16,14 +17,14 @@ namespace PeachPDF.Tests.Integration
     /// <item>
     /// <b>Magnitude</b>: <see cref="DerivedStyle.ActualFont"/>'s <c>parentSize</c>/<c>remSize</c> inputs
     /// (read from <c>parentBox.ActualFont.Size</c>/<c>GetRemHeight()</c>) are in the adapter's
-    /// device-scaled font-measurement space, not true CSS points - <c>PdfRenderContext.CreateFontInt</c>
+    /// device-scaled font-measurement space, not true CSS points - <c>HtmlRenderContext.CreateFontInt</c>
     /// divides a requested size by <c>PixelsPerPoint</c> once to get there. Feeding that already-divided
     /// value back in as a relative-resolution reference, whose own result is then divided by
     /// <c>PixelsPerPoint</c> *again* when its font is created, produces a font roughly
     /// <c>PixelsPerPoint</c> times too small - invisible only because most of this suite (and the
     /// library's own default <see cref="PeachPDF.PdfGenerateConfig"/>) happens to use a
     /// <c>PixelsPerPoint</c> of <c>1.0</c>. These tests deliberately build through a bare
-    /// <see cref="PdfRenderContext"/> (default <c>PixelsPerPoint</c> of 72) to actually exercise the
+    /// <see cref="HtmlRenderContext"/> (default <c>PixelsPerPoint</c> of 72) to actually exercise the
     /// scaling.
     /// </item>
     /// <item>
@@ -259,7 +260,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> BuildBoxTree(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

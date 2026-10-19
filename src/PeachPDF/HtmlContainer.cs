@@ -10,14 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Entities;
 using PeachPDF.Network;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Utilities;
 using System;
 using System.Collections.Generic;
@@ -35,7 +36,7 @@ namespace PeachPDF
         /// <summary>
         /// Init.
         /// </summary>
-        internal HtmlContainer(PdfRenderContext renderContext)
+        internal HtmlContainer(HtmlRenderContext renderContext)
         {
             HtmlContainerInt = new HtmlContainerInt(renderContext);
         }
@@ -153,7 +154,7 @@ namespace PeachPDF
             }
         }
 
-        internal double PixelsPerPoint => ((PdfRenderContext)HtmlContainerInt.RenderContext).PixelsPerPoint;
+        internal double PixelsPerPoint => ((HtmlRenderContext)HtmlContainerInt.RenderContext).PixelsPerPoint;
 
         internal HtmlDocumentMetadata? DocumentMetadata => HtmlContainerInt.DocumentMetadata;
 

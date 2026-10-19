@@ -1,7 +1,8 @@
+using PeachPDF.Rendering;
 using PeachImage;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
@@ -10,7 +11,7 @@ namespace PeachPDF.Tests.Raster
     /// <summary>Decoded images drawn into a raster surface: every source kind the PDF embedder distinguishes has to yield pixels.</summary>
     public class RasterImageTests
     {
-        private static readonly PdfRenderContext RenderContext = new();
+        private static readonly HtmlRenderContext RenderContext = new();
 
         private static RasterCanvas NewGraphics(int width, int height)
         {

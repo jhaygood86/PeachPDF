@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
-using PeachPDF.PDF.Internal;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.Internal;
 
 namespace PeachPDF.Tests.PdfEngineTests.Encodings
 {

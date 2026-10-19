@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Tests.TestSupport;
@@ -8,7 +9,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Issue #814: <c>PdfGenerateConfig.PixelsPerInch</c> sets <c>PdfRenderContext.PixelsPerPoint</c>
+    /// Issue #814: <c>PdfGenerateConfig.PixelsPerInch</c> sets <c>HtmlRenderContext.PixelsPerPoint</c>
     /// (<c>PixelsPerInch / 72</c>), which the public <c>HtmlContainer</c> wrapper uses to inflate
     /// <c>HtmlContainerInt</c>'s whole internal layout coordinate space relative to true PDF points
     /// (see <c>HtmlContainer.PageSize</c>/<c>Location</c>/margin properties). Percentage/content-relative
@@ -44,7 +45,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var img = FindById(root, "i")!;
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
             // A bare <img> (default display: inline, the only body content - not flex-blockified the
             // way FlexReplacedElementIntegrationTests's items are) carries its resolved size on its own
@@ -77,7 +78,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var svg = (CssBoxSvg)FindById(root, "s")!;
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
             // See ImgWidthHeight_...'s identical comment: a bare, non-flex-blockified <svg> carries its
             // resolved size on its own phantom word (SvgWord), not on ActualBoxSizingWidth/Height.
@@ -113,7 +114,7 @@ namespace PeachPDF.Tests.Integration
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var img = FindById(root, "i")!;
             var svg = FindById(root, "s")!;
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
             Assert.Equal(25.5, img.ActualBoxSizingWidth / ppp, 3);
             Assert.Equal(25.5, img.ActualBoxSizingHeight / ppp, 3);
@@ -146,7 +147,7 @@ namespace PeachPDF.Tests.Integration
                 """;
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
             Assert.True(ppp > 1.0, "fixture must exercise a non-default PixelsPerPoint");
 
             var g = new RecordingGraphics(container.RenderContext) { PixelsPerPointOverride = ppp };
@@ -205,7 +206,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var div = FindById(root, "d")!;
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
             // 100px * 0.75 = 75pt; 50px * 0.75 = 37.5pt.
             Assert.Equal(75.0, div.ActualBoxSizingWidth / ppp, 3);
@@ -233,7 +234,7 @@ namespace PeachPDF.Tests.Integration
 
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, config);
             var inner = FindById(root, "inner")!;
-            var ppp = ((PdfRenderContext)container.RenderContext).PixelsPerPoint;
+            var ppp = ((HtmlRenderContext)container.RenderContext).PixelsPerPoint;
 
             Assert.Equal(75.0, inner.ActualBoxSizingWidth / ppp, 3);
         }

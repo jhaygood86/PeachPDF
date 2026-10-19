@@ -1,9 +1,10 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -26,7 +27,7 @@ namespace PeachPDF.Tests.Html.Core
         private const string EmojiSelector = "&#xFE0F;";
         private const string ThumbsUp = "&#x1F44D;";
 
-        private sealed record Layout(PdfRenderContext RenderContext, CssBox Root)
+        private sealed record Layout(HtmlRenderContext RenderContext, CssBox Root)
         {
             public string ColourName => FontName("ColourFam");
             public string TextName => FontName("TextFam");
@@ -64,7 +65,7 @@ namespace PeachPDF.Tests.Html.Core
 
         private static async Task<Layout> LayoutAsync(string css, string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.ColorEmoji, "ColourFam");
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "TextFam");
 
@@ -235,7 +236,7 @@ namespace PeachPDF.Tests.Html.Core
         {
             // U+1F44D THUMBS UP SIGN has Emoji_Presentation=Yes and is a participant (it has a variation
             // sequence); Noto Color Emoji and Source Sans 3 do not both cover it, so use the mono Noto Emoji.
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.ColorEmoji, "ColourFam");
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Emoji, "OutlineEmojiFam");
 

@@ -1,4 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
+using PeachPDF.Rendering;
 using System.Collections.Generic;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
@@ -17,7 +18,7 @@ namespace PeachPDF.Tests.Html.Core
     {
         private static IReadOnlyDictionary<(string, FontFeatureValueBlockKind, string), RegisteredFontFeatureValues> RegistryFor(string css)
         {
-            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+            var data = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(css));
             return RegisteredFontFeatureValues.BuildRegistry(data);
         }

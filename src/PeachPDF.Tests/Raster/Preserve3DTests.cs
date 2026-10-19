@@ -1,5 +1,6 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core.Utils;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
@@ -21,7 +22,7 @@ namespace PeachPDF.Tests.Raster
         private static async Task<RasterCanvas> Paint(string body, int width = 220, int height = 180)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), margin: 0);
-            var page = new RasterCanvas(new PdfRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(width, height, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }
@@ -318,7 +319,7 @@ namespace PeachPDF.Tests.Raster
         [InlineData("transform-style", "sideways", false)]
         public void TheProperty_IsRecognised(string property, string value, bool valid)
         {
-            Assert.Equal(valid, CssPropertyRegistry.SupportsDeclaration(new PeachPDF.PdfBackend.PdfRenderContext(), property, value));
+            Assert.Equal(valid, CssPropertyRegistry.SupportsDeclaration(new PeachPDF.Rendering.HtmlRenderContext(), property, value));
         }
 
         // ---- Nothing to resolve stays vector; a real context is a bitmap -------------------------------------------------
@@ -362,7 +363,7 @@ namespace PeachPDF.Tests.Raster
         public async Task WithoutRasterSupport_TheContextFallsBackToPaintingItsBoxesOneAtATime()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(Cube("transform:rotateY(25deg)")), margin: 0);
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
 
             FragmentPaintHarness.PaintPage(container, recording);
 

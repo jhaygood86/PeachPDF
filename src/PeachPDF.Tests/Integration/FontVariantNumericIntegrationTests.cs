@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.IO;
 using System.Linq;
@@ -31,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             // well-designed font's oldstyle figures aren't guaranteed to differ in advance width from
             // the default ones.
             var box = await FindWordsBox("<b id=\"w\" style=\"font-variant-numeric:oldstyle-nums\">0123456789</b>");
-            var typeface = ((PeachPDF.PdfBackend.PdfCanvasFont)box.ActualFont).Font.Typeface;
+            var typeface = ((PeachDrawing.PDF.PdfCanvasFont)box.ActualFont).Font.Typeface;
 
             var defaultShaped = Shaper.Shape(typeface, "0123456789", ShapeSettings.Default);
             var oldstyleShaped = Shaper.Shape(typeface, "0123456789", box.ActualTextShapingFeatures);
@@ -91,7 +92,7 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
 
         private static async Task<CssBox> FindWordsBox(string body)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(Wrap(body), null);
 
@@ -127,7 +128,7 @@ body {{ font-family: 'SS3Num'; width: 400px; }}
 
         private static PdfCanvas MeasureGraphics()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var size = new Size(595, 842);
             var measure = PdfGraphics.CreateMeasureContext(size);
             return new PdfCanvas(renderContext, measure, 1.0);

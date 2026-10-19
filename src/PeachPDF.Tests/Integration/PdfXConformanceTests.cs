@@ -247,7 +247,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task RepeatedAddPdfPages_SameConformance_Succeeds()
         {
-            var document = new PeachPdfDocument(new PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             var generator = new PdfGenerator();
             await generator.AddPdfPages(document, SimpleHtml, X1aConfig());
             await generator.AddPdfPages(document, SimpleHtml, X1aConfig());
@@ -259,7 +259,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task RepeatedAddPdfPages_DifferentConformance_Throws()
         {
-            var document = new PeachPdfDocument(new PDF.PdfDocument());
+            var document = new PeachPdfDocument(new PeachDrawing.PDF.Engine.PdfDocument());
             var generator = new PdfGenerator();
             await generator.AddPdfPages(document, SimpleHtml, X1aConfig());
 

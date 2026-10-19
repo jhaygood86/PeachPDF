@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -26,7 +27,7 @@ namespace PeachPDF.Tests.Html.Core
         private static HtmlContainerInt CreateContainer(string pageRulesCss)
         {
             var rules = new StylesheetParser().Parse(pageRulesCss).Rules.OfType<PageRule>().ToList();
-            var container = new HtmlContainerInt(new PdfRenderContext())
+            var container = new HtmlContainerInt(new HtmlRenderContext())
             {
                 MarginLeft = BaseMargin,
                 MarginTop = BaseMargin,

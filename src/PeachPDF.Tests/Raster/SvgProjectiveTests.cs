@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Raster
@@ -20,7 +21,7 @@ namespace PeachPDF.Tests.Raster
             // One user unit is one point, so a pixel of the 220 x 180 surface is a user unit.
             var html = $"""<svg viewBox="0 0 220 180" style="display:block;width:220pt;height:180pt">{svgBody}</svg>""";
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(html), margin: 0);
-            var page = new RasterCanvas(new PdfRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
+            var page = new RasterCanvas(new HtmlRenderContext(), new RasterSurface(220, 180, 0, 0, 1, 1), 1);
             FragmentPaintHarness.PaintPage(container, page);
             return page;
         }

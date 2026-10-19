@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Structure;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Structure;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.IO;
@@ -957,7 +958,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Declarative_ContentsOnTheRoot_IsBlockAndNotDropped()
         {
             var stylesheet = await new PdfGenerator().ParseStyleSheet("#root { display: contents }");
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
             var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Id("root").Text("hello")), properties);
@@ -987,7 +988,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Declarative_ATopLevelFragmentShell_StillReachesTheRealTree()
         {
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext { PixelsPerPoint = 1.0 };
             var properties = new PeachPDF.Html.Core.Utils.CssPropertyFactory(renderContext);
             var page = PeachPDF.Layout.DocumentBuilder.BuildPage(
                 p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")), properties);

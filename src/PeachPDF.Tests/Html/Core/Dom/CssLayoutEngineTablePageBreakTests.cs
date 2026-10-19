@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Html.Core.Dom
@@ -456,7 +457,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 </body>
 </html>";
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "TablePageBreakBottomsTestFont");
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
@@ -602,7 +603,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             Assert.True(lastPageIndex >= 1, "Table should span at least 2 pages for this test to be meaningful.");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
 
             // Page 0 is an intermediate page - the footer should repeat here.
             var page0Recording = new RecordingGraphics(renderContext);
@@ -642,7 +643,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
 </body>
 </html>";
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
             var size = new Size(595, pageHeight);
@@ -718,7 +719,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             _output.WriteLine($"PageBreakBottoms[0]={pageBreakBottom0}, Table.ActualBottom={table.ActualBottom}");
 
             // Paint page 0 using the recording graphics adapter (page 0's local Y equals absolute Y).
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording);
 
@@ -776,7 +777,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var pageBreakBottom1 = table.PageBreakBottoms![1];
             _output.WriteLine($"PageBreakBottoms[1]={pageBreakBottom1}, Table.ActualBottom={table.ActualBottom}");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording, page: 1);
 
@@ -841,7 +842,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
                 expectedBottomBorderY = Math.Min(expectedBottomBorderY, pageBreakBottom - tableFragment.OriginY);
             _output.WriteLine($"Expected bottom border near Y={expectedBottomBorderY}");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording, lastPageIndex);
 
@@ -895,7 +896,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
 
             // Page 0: the header's true DOM/visual neighbor (row 1's huge red border) drives the
             // boundary - a thick (>=8pt) roughly-horizontal segment must appear somewhere on this page.
@@ -963,7 +964,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
 
             // 5px resolves to 3.75pt - between the 0.75pt ordinary borders and the header's own outer
             // 1px (0.75pt) edges, so this threshold catches only the header's own internal line.
@@ -1084,7 +1085,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var lastPageIndex = container.FragmentTree!.Fragmentainers.Count - 1;
             Assert.True(lastPageIndex >= 2, "Table should span at least 3 pages for this test to be meaningful.");
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
 
             // The last page: the footer's true DOM/visual neighbor (the last row's huge red border)
             // drives the boundary - a thick (>=4pt) roughly-horizontal segment must appear.
@@ -1132,7 +1133,7 @@ namespace PeachPDF.Tests.Html.Core.Dom
             var table = FindTableBox(rootBox);
             Assert.NotNull(table);
 
-            var renderContext = new PeachPDF.PdfBackend.PdfRenderContext();
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
             var recording = new RecordingGraphics(renderContext);
             FragmentPaintHarness.PaintPage(container, recording, 0);
 
@@ -1152,9 +1153,9 @@ namespace PeachPDF.Tests.Html.Core.Dom
             double pageHeight = 842,
             double marginTop = 20,
             double marginBottom = 20,
-            Func<PdfRenderContext, Task>? configureRenderContext = null)
+            Func<HtmlRenderContext, Task>? configureRenderContext = null)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             if (configureRenderContext is not null)
                 await configureRenderContext(renderContext);
 

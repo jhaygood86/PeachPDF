@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Advanced;
-using PeachPDF.PDF.AcroForms;
-using PeachPDF.PDF.Annotations;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.AcroForms;
+using PeachDrawing.PDF.Engine.Annotations;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Threading.Tasks;

@@ -57,11 +57,8 @@
 	<ItemGroup>
 		<ProjectReference Include="..\PeachDrawing\PeachDrawing.csproj" />
 		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+		<ProjectReference Include="..\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
 		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
-	</ItemGroup>
-	<ItemGroup>
-		<None Remove="PDF\Resources\ColorProfiles\sRGB2014.icc" />
-		<EmbeddedResource Include="PDF\Resources\ColorProfiles\sRGB2014.icc" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />

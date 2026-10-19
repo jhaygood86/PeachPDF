@@ -1,4 +1,5 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
@@ -29,7 +30,7 @@ namespace PeachPDF.Tests.Integration
             List<string> painted = [];
             for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
             {
-                using var graphics = new RecordingGraphics(new PdfRenderContext());
+                using var graphics = new RecordingGraphics(new HtmlRenderContext());
                 FragmentPaintHarness.PaintPage(container, graphics, page);
                 painted.AddRange(graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString).Select(op => op.Text!));
             }

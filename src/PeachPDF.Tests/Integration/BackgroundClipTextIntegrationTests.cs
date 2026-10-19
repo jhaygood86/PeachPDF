@@ -1,7 +1,8 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Fragments;
-using PeachPDF.PDF;
+using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
@@ -42,7 +43,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
@@ -63,7 +64,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
@@ -87,7 +88,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
@@ -109,7 +110,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext())
+            var recording = new RecordingGraphics(new HtmlRenderContext())
             {
                 GetTextOutlineOverride = (_, _, _, _, _) => null
             };
@@ -134,7 +135,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
 
@@ -210,7 +211,7 @@ namespace PeachPDF.Tests.Integration
 
             var wordRect = FindWordRect(FragmentPaintHarness.FragmentOf(container, box));
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (_, _, _, _, _) => OversizedOutline(recording, wordRect);
 
             FragmentPaintHarness.PaintBox(container, box, recording);
@@ -246,7 +247,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext())
+            var recording = new RecordingGraphics(new HtmlRenderContext())
             {
                 GetTextOutlineOverride = (_, _, _, _, _) => null
             };
@@ -271,7 +272,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
@@ -301,7 +302,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (_, _, _, _, _) => OriginRelativeOutline(recording, 20, 10);
 
             FragmentPaintHarness.PaintBox(container, box!, recording);
@@ -364,7 +365,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext())
+            var recording = new RecordingGraphics(new HtmlRenderContext())
             {
                 GetTextOutlineOverride = (_, _, _, _, _) => null
             };
@@ -387,7 +388,7 @@ namespace PeachPDF.Tests.Integration
             var box = LayoutHarness.FindById(root, "box");
             Assert.NotNull(box);
 
-            var recording = new RecordingGraphics(new PdfRenderContext());
+            var recording = new RecordingGraphics(new HtmlRenderContext());
             recording.GetTextOutlineOverride = (text, _, origin, _, _) => FakeOutline(recording, text, origin);
 
             var exception = Record.Exception(() => FragmentPaintHarness.PaintBox(container, box!, recording));

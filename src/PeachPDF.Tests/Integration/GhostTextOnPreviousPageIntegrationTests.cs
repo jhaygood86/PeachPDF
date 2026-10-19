@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
@@ -33,7 +34,7 @@ namespace PeachPDF.Tests.Integration
             // Mirrors ShrinkToFit's own effect: AddPdfPages recomputes PixelsPerPoint away from 1.0
             // whenever actual content width differs even slightly from the nominal page width - here
             // simulated directly so the test doesn't depend on triggering that heuristic exactly.
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.5 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.5 };
             using var container = new HtmlContainer(renderContext);
             await container.SetHtml(html, null);
 
@@ -57,12 +58,12 @@ namespace PeachPDF.Tests.Integration
 
             // One container with PixelsPerPoint left at its default (1.0), one forced away from it -
             // both must derive the identical true-points page-content-band height.
-            var renderContextDefault = new PdfRenderContext();
+            var renderContextDefault = new HtmlRenderContext();
             using var containerDefault = new HtmlContainer(renderContextDefault);
-            var orgPageSize = PeachPDF.PDF.PageSizeConverter.ToSize(config.PageSize);
+            var orgPageSize = PeachDrawing.PDF.Engine.PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize));
             await PdfGenerator.SetContent(containerDefault, config, html, null, orgPageSize);
 
-            var renderContextScaled = new PdfRenderContext { PixelsPerPoint = 1.5 };
+            var renderContextScaled = new HtmlRenderContext { PixelsPerPoint = 1.5 };
             using var containerScaled = new HtmlContainer(renderContextScaled);
             await PdfGenerator.SetContent(containerScaled, config, html, null, orgPageSize);
 
@@ -94,11 +95,11 @@ namespace PeachPDF.Tests.Integration
             // resolve meaningfully once PageSize carries a real page width, not its unset 0 default).
             var pageSize = new PeachDrawing.Core.Size(595, 842);
 
-            var renderContextDefault = new PdfRenderContext();
+            var renderContextDefault = new HtmlRenderContext();
             using var containerDefault = new HtmlContainer(renderContextDefault) { PageSize = pageSize };
             await containerDefault.SetHtml(html, null);
 
-            var renderContextScaled = new PdfRenderContext { PixelsPerPoint = 1.5 };
+            var renderContextScaled = new HtmlRenderContext { PixelsPerPoint = 1.5 };
             using var containerScaled = new HtmlContainer(renderContextScaled) { PageSize = pageSize };
             await containerScaled.SetHtml(html, null);
 
@@ -203,7 +204,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<HtmlContainerInt> BuildLayoutAsync(string html)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Tests.Integration
@@ -11,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     /// Layout-level tests for <c>leader()</c> (css-content-3 §6) - asserts <see cref="CssRectLeader"/>/
     /// neighboring-word <c>Left</c>/<c>Width</c> after real layout, per this repo's layout-engine testing
     /// convention (assert box/rect properties, not just "layout completes"). Uses the same lightweight
-    /// <c>HtmlContainerInt</c> + <c>PdfRenderContext</c> harness as <c>FlexboxIntegrationTests</c>/
+    /// <c>HtmlContainerInt</c> + <c>HtmlRenderContext</c> harness as <c>FlexboxIntegrationTests</c>/
     /// <c>MulticolLayoutIntegrationTests</c> - real layout, no full PDF generation needed. Plain HTML text
     /// content (e.g. "Chapter One"/"12") lives on an anonymous child text box, not the element's own
     /// <see cref="CssBox.Words"/> - <see cref="CssBox.FirstWordOccurence"/> (the same helper
@@ -150,7 +151,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

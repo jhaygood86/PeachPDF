@@ -1,0 +1,346 @@
+// Derived from PDFsharp (MIT) - see LICENSE.md
+
+using PeachDrawing.Core;
+using PeachDrawing.PDF.Engine.Drawing;
+using PeachDrawing.PDF;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Engine.IO;
+using System;
+using System.Diagnostics;
+using System.IO;
+using static PeachDrawing.PDF.Engine.Drawing.ImageSource;
+
+namespace PeachDrawing.PDF.Engine.Drawing;
+
+[Flags]
+internal enum PdfImageState
+{
+    UsedInDrawingContext = 0x00000001,
+
+    StateMask = 0x0000FFFF,
+}
+
+/// <summary>
+/// Defines an object used to draw image files (bmp, png, jpeg, gif) and PDF forms.
+/// An abstract base class that provides functionality for the Bitmap and Metafile descended classes.
+/// </summary>
+internal class PdfRasterImage : IDisposable
+{
+    // The hierarchy is adapted to WPF/Silverlight/WinRT
+    //
+    // PdfRasterImage                           <-- ImageSource
+    //   PdfForm
+    //   PdfForm
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="PdfRasterImage"/> class.
+    /// </summary>
+    protected PdfRasterImage()
+    { }
+
+    // Useful stuff here: http://stackoverflow.com/questions/350027/setting-wpf-image-source-in-code
+    PdfRasterImage(string path)
+    {
+        ImageSource.ImageSourceImpl ??= CreateDefaultImageSourceImpl();
+        _source = ImageSource.FromFile(path);
+        Initialize();
+    }
+
+    PdfRasterImage(IImageSource imageSource)
+    {
+        _source = imageSource;
+        _path = _source.Name;
+        Initialize();
+    }
+
+    PdfRasterImage(Func<Stream> stream)
+    {
+        // Create a dummy unique path.
+        _path = "*" + Guid.NewGuid().ToString("B");
+        ImageSource.ImageSourceImpl ??= CreateDefaultImageSourceImpl();
+        _source = ImageSource.FromStream(_path, stream);
+        Initialize();
+    }
+
+    PdfRasterImage(Func<byte[]> data)
+    {
+        // Create a dummy unique path.
+        _path = "*" + Guid.NewGuid().ToString("B");
+        _source = ImageSource.FromBinary(_path, data);
+        Initialize();
+    }
+
+    /// <summary>
+    /// The built-in raster image source used when no caller has set <see cref="ImageSource.ImageSourceImpl"/>.
+    /// See PeachImageSource.cs.
+    /// </summary>
+    private static ImageSource CreateDefaultImageSourceImpl() => new PeachImageSource();
+
+    /// <summary>
+    /// Creates an image from the specified file.
+    /// Requires that an instance of an implementation of <see cref="T:PeachDrawing.PDF.Engine.Drawing.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
+    /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
+    /// </summary>
+    /// <param name="path">The path to a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, or JPEG XL file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
+    public static PdfRasterImage FromFile(string path)
+    {
+        return new PdfRasterImage(path);
+    }
+
+    /// <summary>
+    /// Creates an image from the specified stream.<br/>
+    /// For non-pdf files, this requires that an instance of an implementation of <see cref="T:PeachDrawing.PDF.Engine.Drawing.ImageSource"/> be set on the `ImageSource.ImageSourceImpl` property.
+    /// If this property is null at this point, the built-in default is used (see <see cref="CreateDefaultImageSourceImpl"/>).
+    /// </summary>
+    /// <param name="stream">The stream containing a BMP, PNG, JPEG, GIF, WebP, AVIF, TIFF, JPEG XL, or PDF file (TGA/PSD/HDR are not supported - see docs/html-css-support.md).</param>
+    public static PdfRasterImage FromStream(Func<Stream> stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        // TODO: Check PDF stream.
+        //if (PdfReader.TestPdfFile(path) > 0)
+        //  return new PdfForm(path);
+        return new PdfRasterImage(stream);
+    }
+
+    public static PdfRasterImage FromImageSource(IImageSource imageSouce)
+    {
+        return new PdfRasterImage(imageSouce);
+    }
+
+    internal PdfImageState PdfImageState
+    {
+        get => _xImageState;
+        set => _xImageState = value;
+    }
+    PdfImageState _xImageState;
+
+    internal void Initialize()
+    {
+        if (_source is not null)
+        {
+            //We always get a jpeg from an image source
+            if (_source.JpegPassthrough is not null)
+            {
+                // A CMYK/YCCK or ICC-carrying RGB/Gray JPEG source is never Transparent (no
+                // Cmyk+alpha PixelFormat exists, and pass-through is JPEG-only), so it always
+                // resolves to Jpeg here - the same format any other non-alpha JPEG resolves to.
+                // PdfImage.InitializeJpeg's own JpegPassthrough fast path handles it correctly
+                // without needing a dedicated PdfImageFormat/Initialize method: this check being
+                // non-null already guarantees that fast path's own `_targetWidth is null &&
+                // JpegPassthrough is {}` condition holds (a JpegPassthrough source is never resized
+                // - see IsCmyk's own remarks below for the CMYK case; an ICC-carrying RGB/Gray source
+                // forfeits pass-through instead of Format when it *is* resized, handled inside
+                // InitializeJpeg itself, not here).
+                _format = PdfImageFormat.Jpeg;
+            }
+            else if (_source.IsCmyk)
+            {
+                // A CMYK source with no JpegPassthrough (TIFF today - see CmykRaster's own remarks;
+                // the only other CMYK-capable PeachImage codec) routes through PdfImage's ordinary
+                // non-Jpeg dispatch, which checks IsCmyk itself (InitializeNonJpeg) before falling
+                // into the RGB-only bitmap path - so any of the "convert to a PDF bitmap" format
+                // GUIDs works here; Tiff is simply the accurate one.
+                _format = PdfImageFormat.Tiff;
+            }
+            else
+            {
+                _format = _source.Transparent ? PdfImageFormat.Png : PdfImageFormat.Jpeg;
+            }
+        }
+    }
+
+    /// <summary>
+    /// True if this image's source is CMYK (a CMYK/YCCK JPEG) - see <see cref="IImageSource.IsCmyk"/>.
+    /// Consulted by <see cref="PeachDrawing.PDF.Engine.Advanced.PdfImageTable"/> to skip resizing
+    /// entirely for a CMYK image (see its <c>ComputeTargetPixelSize</c> remarks) - the only place
+    /// CMYK-ness needs to be visible outside <see cref="JpegPassthrough"/> itself, since
+    /// <see cref="PeachDrawing.PDF.Engine.Advanced.PdfImage"/>'s PDF/A ICC-profile gate is keyed off
+    /// <see cref="JpegPassthroughColorSpace.Cmyk"/> instead (see <c>EmbedJpegPassthrough</c>).
+    /// </summary>
+    internal bool IsCmyk => _source.IsCmyk;
+
+    /// <summary>The Exif Orientation (1 to 8, 1 = upright) stored in the file; see <see cref="IImageSource.ExifOrientation"/>. 1 for a form or any non-raster image.</summary>
+    internal int ExifOrientation => _source?.ExifOrientation ?? 1;
+
+    /// <summary>
+    /// Non-null when this image should be embedded via byte-for-byte JPEG pass-through - see
+    /// <see cref="IImageSource.JpegPassthrough"/>.
+    /// </summary>
+    internal JpegPassthroughData? JpegPassthrough => _source.JpegPassthrough;
+
+    /// <summary>
+    /// Non-null when this image is CMYK with no JPEG pass-through available (TIFF - issue #1096) and
+    /// should be embedded via a raw <c>/FlateDecode</c> CMYK stream instead - see
+    /// <see cref="IImageSource.CmykRaster"/>.
+    /// </summary>
+    internal CmykRasterData? CmykRaster => _source.CmykRaster;
+
+    /// <summary>
+    /// Non-null when this image should be embedded via byte-for-byte PNG pass-through - see
+    /// <see cref="IImageSource.PngPassthrough"/>. An eligible PNG is never <c>Transparent</c> (only
+    /// alpha-free color types qualify), so it already resolves to <see cref="PdfImageFormat.Jpeg"/>
+    /// above without needing its own branch - <see cref="PdfImage"/>'s own JPEG-dispatch
+    /// fast path checks this before falling into its lossy re-encode, mirroring
+    /// <see cref="JpegPassthrough"/>'s.
+    /// </summary>
+    internal PngPassthroughData? PngPassthrough => _source.PngPassthrough;
+
+    /// <summary>
+    /// Non-null when this image should be embedded via GIF <c>/LZWDecode</c> pass-through - see
+    /// <see cref="IImageSource.GifPassthrough"/>. Same reasoning as <see cref="PngPassthrough"/>: an
+    /// eligible GIF is never <c>Transparent</c>, so it already resolves to <see cref="PdfImageFormat.Jpeg"/>
+    /// above without needing its own branch.
+    /// </summary>
+    internal GifPassthroughData? GifPassthrough => _source.GifPassthrough;
+
+    /// <summary>
+    /// The original JPEG XL bytes when this source is eligible for the experimental <c>/JXLDecode</c> embed - see
+    /// <see cref="IImageSource.JxlPassthrough"/>. An eligible source is opaque, so it already resolves to
+    /// <see cref="PdfImageFormat.Jpeg"/> above and reaches <see cref="PdfImage"/>'s JPEG initializer.
+    /// </summary>
+    internal JxlPassthroughData? JxlPassthrough => _source.JxlPassthrough;
+
+    /// <summary>
+    /// True when this image's source format has no lossy encoding mode at all (PNG/BMP/GIF) - see
+    /// <see cref="IImageSource.IsLosslessSourceFormat"/>. Consulted by <see cref="PdfImage"/>'s
+    /// JPEG-dispatch fast path to decide whether <see cref="ImageCompression.Auto"/>/
+    /// <see cref="ImageCompression.Lossless"/> should avoid its lossy JPEG fallback for this
+    /// source.
+    /// </summary>
+    internal bool IsLosslessSourceFormat => _source.IsLosslessSourceFormat;
+
+    /// <summary>
+    /// A usable embedded ICC profile's raw bytes for a WebP or AVIF source (issue #1106), or
+    /// <see langword="null"/> - see <see cref="IImageSource.RgbIccProfile"/>.
+    /// </summary>
+    internal byte[]? RgbIccProfile => _source.RgbIccProfile;
+
+    /// <summary>
+    /// True when this image's source is single-channel grayscale - see
+    /// <see cref="IImageSource.IsGrayscale"/>. Consulted by <see cref="PeachDrawing.PDF.Engine.Advanced.PdfImage"/>'s
+    /// JPEG resize-fallback path to write a matching <c>/ColorSpace</c>.
+    /// </summary>
+    internal bool IsGrayscale => _source.IsGrayscale;
+
+    /// <summary>
+    /// True for an image produced by the raster backend (see <c>Canvas.DrawRaster</c>), whose pixel
+    /// dimensions were chosen on purpose to give a stated physical resolution. The PDF embedder must
+    /// keep such an image at its own size: <see cref="PdfImageTable"/> would otherwise resample it down
+    /// to its on-page display size and discard exactly the resolution the raster was rendered at.
+    /// </summary>
+    internal bool IsRasterOutput { get; set; }
+
+    /// <summary>
+    /// Decodes this image to straight-alpha RGBA8 for the raster backend, or returns false when the
+    /// source cannot supply an RGB rendition (a CMYK image) or does not expose pixels.
+    /// </summary>
+    internal bool TryGetRgba(out int width, out int height, out byte[] rgba)
+    {
+        if (_source is IRgbaPixelProvider provider)
+            return provider.TryGetRgba(out width, out height, out rgba);
+
+        width = height = 0;
+        rgba = [];
+        return false;
+    }
+
+    public MemoryStream AsJpeg(int? targetWidth = null, int? targetHeight = null, int? qualityOverride = null)
+    {
+        var ms = new MemoryStream();
+        _source.SaveAsJpeg(ms, targetWidth, targetHeight, qualityOverride);
+        ms.Position = 0;
+        return ms;
+    }
+
+    public MemoryStream AsBitmap(int? targetWidth = null, int? targetHeight = null)
+    {
+        var ms = new MemoryStream();
+        _source.SaveAsPdfBitmap(ms, targetWidth, targetHeight);
+        ms.Position = 0;
+        return ms;
+    }
+
+    /// <summary>
+    /// Does nothing: the decoded pixels belong to the image source, which is disposed on its own.
+    /// </summary>
+    public void Dispose()
+    {
+    }
+
+    /// <summary>
+    /// Gets the width of the image in point.
+    /// </summary>
+    public virtual double PointWidth => _source.Width * 72 / 96.0;
+
+    /// <summary>
+    /// Gets the height of the image in point.
+    /// </summary>
+    public virtual double PointHeight => _source.Height * 72 / 96.0;
+
+    /// <summary>
+    /// Gets the width of the image in pixels.
+    /// </summary>
+    public virtual int PixelWidth => _source.Width;
+
+    /// <summary>
+    /// Gets the height of the image in pixels.
+    /// </summary>
+    public virtual int PixelHeight => _source.Height;
+
+    /// <summary>
+    /// Gets the size in point of the image.
+    /// </summary>
+    public virtual Size Size => new Size(PointWidth, PointHeight);
+
+    /// <summary>
+    /// Gets the horizontal resolution of the image.
+    /// </summary>
+    public virtual double HorizontalResolution => 96;
+
+    /// <summary>
+    /// Gets the vertical resolution of the image.
+    /// </summary>
+    public virtual double VerticalResolution => 96;
+
+    /// <summary>
+    /// Gets or sets a flag indicating whether image interpolation is to be performed. 
+    /// </summary>
+    public virtual bool Interpolate
+    {
+        get => _interpolate;
+        set => _interpolate = value;
+    }
+    bool _interpolate = true;
+
+    /// <summary>
+    /// Gets the format of the image.
+    /// </summary>
+    public PdfImageFormat Format => _format;
+    PdfImageFormat _format = null!;
+
+    /// <summary>
+    /// If path starts with '*' the image is created from a stream and the path is a GUID.
+    /// </summary>
+    internal string _path = null!;
+
+    /// <summary>
+    /// Cache PdfImageTable.ImageSelector to speed up finding the right PdfImage
+    /// if this image is used more than once. Valid only when no resize applies (see
+    /// PdfImageTable.GetImage) - a resize target makes the selector depend on display size too, so
+    /// that case is cached separately below.
+    /// </summary>
+    internal PdfImageTable.ImageSelector _selector = null!;
+
+    /// <summary>
+    /// Caches the selector PdfImageTable.GetImage computed for the immediately preceding call, keyed
+    /// by the display size (in PDF points) it was computed for - e.g. a logo redrawn identically
+    /// across a repeating header/footer - so a resized image reused unchanged doesn't pay a fresh
+    /// ComputeTargetPixelSize call and ImageSelector allocation on every single draw.
+    /// </summary>
+    internal PdfImageTable.ImageSelector _lastSizedSelector = null!;
+    internal double _lastSizedSelectorWidthPt;
+    internal double _lastSizedSelectorHeightPt;
+
+    private IImageSource _source = null!;
+}

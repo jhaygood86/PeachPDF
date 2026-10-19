@@ -1,10 +1,11 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
 using PeachPDF.Html.Core.Utils;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 
 namespace PeachPDF.Tests.CSS;
@@ -32,7 +33,7 @@ public class CascadeLayerAtRuleCollectionTests
             "  @page { size: 20mm 30mm; } }" +
             "@layer wrap { @media print { @page { margin: 5mm; } } }";
 
-        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new HtmlRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Single(all.OfType<IFontFaceRule>());
@@ -64,7 +65,7 @@ public class CascadeLayerAtRuleCollectionTests
             "@supports (display: flex) { @font-face { font-family: L; src: url(a.woff2); } " +
             "  @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
 
-        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new HtmlRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Single(all.OfType<IFontFaceRule>());
@@ -80,7 +81,7 @@ public class CascadeLayerAtRuleCollectionTests
         const string css =
             "@supports (transition-duration: 1s) { @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
 
-        var cssData = await CssData.Parse(new PdfRenderContext(), css, combineWithDefault: false);
+        var cssData = await CssData.Parse(new HtmlRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
 
         Assert.Empty(all.OfType<IPropertyRule>());
@@ -116,7 +117,7 @@ public class CascadeLayerAtRuleCollectionTests
 
     private static async Task<HtmlContainerInt> BuildContainer(string html)
     {
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext);
 
         var size = new Size(595, 842);

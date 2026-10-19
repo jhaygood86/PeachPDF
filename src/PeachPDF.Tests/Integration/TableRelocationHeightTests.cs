@@ -1,8 +1,9 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration;
 
@@ -27,7 +28,7 @@ public class TableRelocationHeightTests
                    $"<h2>Heading</h2><table id='t1'><tr>{Cell("a")}{Cell("b")}</tr></table>" +
                    $"<table id='t2'><tr>{Cell("c")}{Cell("d")}</tr></table></body></html>";
 
-        var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+        var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
         var container = new HtmlContainerInt(renderContext) { MarginTop = 0, MarginLeft = 0, MarginRight = 0, MarginBottom = 0 };
         await container.SetHtml(html, null);
 

@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachPDF;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
@@ -93,7 +94,7 @@ namespace PeachPDF.Tests.Integration
         public async Task BaseHrefFileUri_UnderDefaultLoader_RoutesFileResourcesThroughAdapter()
         {
             // No FileUriNetworkLoader is configured (the default DataUriNetworkLoader is used); the file:
-            // image still loads because PdfRenderContext.GetResourceStream routes file: URIs internally,
+            // image still loads because HtmlRenderContext.GetResourceStream routes file: URIs internally,
             // the same way it always has for data: URIs.
             var dir = CreateTempDir();
 

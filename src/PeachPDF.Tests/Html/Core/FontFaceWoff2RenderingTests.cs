@@ -1,15 +1,16 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Html.Core
 {
     /// <summary>
     /// HTML-layer regression test verifying that a real WOFF2 font (Inter-Medium.woff2) declared
     /// via @font-face is loaded and resolved during HTML/CSS layout -- i.e. the DomParser's
-    /// async font-face handling (AddFontFamilyFromUrl -> PdfRenderContext.AddFont ->
+    /// async font-face handling (AddFontFamilyFromUrl -> HtmlRenderContext.AddFont ->
     /// FontFormatConverter.ToOpenType -> Woff2Converter.Convert) completes and the box tree ends
     /// up using the custom family rather than silently falling back to the default font.
     /// </summary>
@@ -45,7 +46,7 @@ p {{ width: 300px; }}
 <body><p>Hello WOFF2</p></body>
 </html>";
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

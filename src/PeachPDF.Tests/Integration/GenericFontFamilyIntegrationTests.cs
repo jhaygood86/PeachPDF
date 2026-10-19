@@ -1,10 +1,11 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// End-to-end regression test for the platform-aware generic-family mapping
     /// (<see cref="PeachPDF.Html.Core.Utils.GenericFontFamilyResolver"/>) actually wired into
-    /// <see cref="PdfRenderContext"/>'s generic-family mappings, not just the pure resolver function.
+    /// <see cref="HtmlRenderContext"/>'s generic-family mappings, not just the pure resolver function.
     /// Windows is the only platform this test can assert a specific resolved family on regardless of
     /// which CI/dev machine runs it, since Consolas is a font every real Windows installation ships -
     /// no-ops (rather than skipping, matching this test project's existing convention for host-dependent
@@ -27,7 +28,7 @@ namespace PeachPDF.Tests.Integration
         {
             if (!OperatingSystem.IsWindows()) return;
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var font = renderContext.GetFont("monospace", 12, PaintFontStyle.Regular) as PdfCanvasFont;
 
             Assert.NotNull(font);
@@ -41,13 +42,13 @@ namespace PeachPDF.Tests.Integration
         [InlineData("system-ui")]   // resolved through fontconfig like the three above
         public void Generic_OnLinux_ResolvesToARealInstalledFontconfigFamily(string generic)
         {
-            // Linux delegates to fontconfig at PdfRenderContext construction time rather than a hardcoded
+            // Linux delegates to fontconfig at HtmlRenderContext construction time rather than a hardcoded
             // table - confirms the resolved mapping is both non-trivial (differs from the bare generic
             // name FontsHandler would otherwise treat as a literal, almost-certainly-uninstalled family)
             // and actually installed (IsFontExists), on a real Linux CI/dev machine.
             if (!OperatingSystem.IsLinux() || OperatingSystem.IsAndroid()) return;
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
 
             Assert.True(renderContext.IsFontExists(generic));
         }
@@ -61,7 +62,7 @@ namespace PeachPDF.Tests.Integration
             if (!OperatingSystem.IsWindows() || !System.IO.File.Exists(cambria))
                 return;
 
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             if (renderContext.IsFontExists("Latin Modern Math"))
                 return;
 
@@ -76,7 +77,7 @@ namespace PeachPDF.Tests.Integration
         {
             // Whichever math font the host has, or the platform default when it has none, the generic must
             // never be left as an unknown family name.
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
 
             Assert.True(renderContext.IsFontExists("math"));
         }
@@ -91,7 +92,7 @@ namespace PeachPDF.Tests.Integration
         /// </summary>
         private static async Task<(string Paragraph, string Math)> ResolvedFamiliesAsync(string css)
         {
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             await BundledFonts.RegisterFont(renderContext, BundledFonts.Math, MathFamily);
             renderContext.AddFontFamilyMapping("math", MathFamily);
 

@@ -2,8 +2,8 @@ using System.Globalization;
 using System.Numerics;
 using System.Text;
 using PeachDrawing.Core;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Internal;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Internal;
 
 namespace PeachPDF.Tests.PdfEngineTests.Encodings;
 

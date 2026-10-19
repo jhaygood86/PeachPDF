@@ -1,6 +1,7 @@
+using PeachPDF.Rendering;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
@@ -15,7 +16,7 @@ namespace PeachPDF.Tests.Html.Core
     /// </summary>
     public class RegisteredFontPaletteTests
     {
-        private static readonly CssValueParser ValueParser = new(new PdfRenderContext());
+        private static readonly CssValueParser ValueParser = new(new HtmlRenderContext());
 
         private static RegisteredFontPalette? Register(string body)
         {
@@ -101,7 +102,7 @@ namespace PeachPDF.Tests.Html.Core
         [Fact]
         public void BuildRegistry_KeysByNameAndFamily_CaseInsensitiveFamily()
         {
-            var data = new CssData(new PeachPDF.PdfBackend.PdfRenderContext());
+            var data = new CssData(new PeachPDF.Rendering.HtmlRenderContext());
             data.Stylesheets.Add(CssParser.ParseStyleSheet(
                 "@font-palette-values --a { font-family: Nabla; base-palette: 1; }" +
                 "@font-palette-values --b { font-family: Other; base-palette: 2; }"));

@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.Text.Unicode;
 using System.Linq;
 using System.Threading.Tasks;
@@ -104,7 +105,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData("<html>", null)]
         public async Task DocumentLanguage_ReflectsHtmlLangAttribute(string htmlOpenTag, string? expected)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml($"{htmlOpenTag}<body><p>text</p></body></html>", null);
 
@@ -116,7 +117,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_FillsInOnlyWhenDocumentDeclaresNone()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
@@ -128,7 +129,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_DoesNotOverrideDocumentsOwnLang()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig { DefaultLanguage = "en-US" };
 
@@ -140,7 +141,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task DefaultLanguage_Unset_LeavesLanguageNull_WhenDocumentDeclaresNone()
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             var container = new HtmlContainer(renderContext);
             var config = new PdfGenerateConfig();
 
@@ -171,7 +172,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<CssBox> FindWordsBoxAsync(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

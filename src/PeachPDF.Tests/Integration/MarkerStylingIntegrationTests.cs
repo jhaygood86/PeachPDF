@@ -1,9 +1,10 @@
-using PeachPDF.PdfBackend;
+using PeachPDF.Rendering;
+using PeachDrawing.PDF;
 using PeachPDF.CSS;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
 using PeachPDF.Html.Core.Dom;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Verifies that author-set properties on <c>::marker</c> (color, font, content, direction) are
     /// actually read by the marker box itself and take visible effect - the gap this feature closes.
-    /// Layout runs through the real <see cref="PdfRenderContext"/>/<see cref="PdfCanvas"/> (for
+    /// Layout runs through the real <see cref="HtmlRenderContext"/>/<see cref="PdfCanvas"/> (for
     /// accurate font metrics, matching real usage); paint verification for color/text assertions runs
     /// through <see cref="TestRecordingGraphics"/> instead, since it's the only way to introspect the
     /// exact <see cref="PaintColor"/> a brush/pen was created with (see its doc comment).
@@ -218,7 +219,7 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {
-            var renderContext = new PdfRenderContext();
+            var renderContext = new HtmlRenderContext();
             renderContext.PixelsPerPoint = 1.0;
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);

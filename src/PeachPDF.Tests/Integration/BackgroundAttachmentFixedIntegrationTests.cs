@@ -1,9 +1,10 @@
+using PeachPDF.Rendering;
 using PeachPDF;
-using PeachPDF.PdfBackend;
+using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core;
-using PeachPDF.PDF;
-using PeachPDF.PDF.Drawing;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
@@ -92,7 +93,7 @@ namespace PeachPDF.Tests.Integration
                 + "background-attachment:fixed;background-position:100% 100%;background-size:10pt 10pt;\">"
                 + "</div></body></html>";
 
-            var renderContext = new PdfRenderContext { PixelsPerPoint = 1.0 };
+            var renderContext = new HtmlRenderContext { PixelsPerPoint = 1.0 };
             var container = new HtmlContainerInt(renderContext);
             await container.SetHtml(html, null);
 

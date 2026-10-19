@@ -1,4 +1,5 @@
 ﻿using PeachDrawing.Text.Shaping;
+using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Core;
@@ -15,7 +16,7 @@ namespace PeachPDF.Tests.TestSupport
 {
     /// <summary>
     /// A minimal, non-sealed <see cref="RenderContext"/> for tests. The only concrete adapter in the
-    /// product, <c>PdfRenderContext</c>, is <c>sealed</c>, so a document that needs its own <see cref="RenderContext"/>
+    /// product, <c>HtmlRenderContext</c>, is <c>sealed</c>, so a document that needs its own <see cref="RenderContext"/>
     /// (e.g. to control resource loading) needs a real, separate one like this one. Brush/pen creation
     /// needs no stub of its own any more - <see cref="Brush"/>'s subtypes (<see cref="SolidBrush"/>,
     /// <see cref="LinearGradientBrush"/>, etc.) and <see cref="Pen"/> are plain data now, so

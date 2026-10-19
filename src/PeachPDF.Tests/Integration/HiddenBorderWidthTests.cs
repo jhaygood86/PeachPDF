@@ -1,3 +1,4 @@
+using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Html.Core.Utils;
 using PeachPDF.Tests.TestSupport;
@@ -113,7 +114,7 @@ namespace PeachPDF.Tests.Integration
                 + "</body></html>");
 
             var box = LayoutHarness.FindById(root, "box")!;
-            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.PdfBackend.PdfRenderContext());
+            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.Rendering.HtmlRenderContext());
 
             _ = box.ActualOutlineWidth;
             CssUtils.SetPropertyValue(parser, box, "outline-style", after);
@@ -142,7 +143,7 @@ namespace PeachPDF.Tests.Integration
                 + "</body></html>");
 
             var box = LayoutHarness.FindById(root, "box")!;
-            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.PdfBackend.PdfRenderContext());
+            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.Rendering.HtmlRenderContext());
 
             // Force every side's width into the cache before the style changes underneath it.
             _ = (box.ActualBorderTopWidth, box.ActualBorderRightWidth,
@@ -234,7 +235,7 @@ namespace PeachPDF.Tests.Integration
                 + "<div style='height: 40pt'></div><div style='height: 40pt'></div></div>"));
 
             var cols = LayoutHarness.FindById(root, "cols")!;
-            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.PdfBackend.PdfRenderContext());
+            var parser = new PeachPDF.Html.Core.Parse.CssValueParser(new PeachPDF.Rendering.HtmlRenderContext());
 
             Assert.NotEmpty(cols.ColumnRuleSegments!);
             Assert.Equal(16d, cols.ActualColumnRuleWidth, 3);   // prime the cache from a drawn rule
