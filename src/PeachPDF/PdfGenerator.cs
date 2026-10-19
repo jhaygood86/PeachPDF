@@ -1618,9 +1618,9 @@ namespace PeachPDF
 
                 // The same source box can legitimately gain more than one annotation (once per page its running element was selected
                 // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
-                if (structureTagBuilder != null && link.Source != null)
+                if (structureTagBuilder != null && link.Source is { } source)
                 {
-                    structureTagBuilder.LinkAnnotationToStructureElement(link.Source, page, annotation);
+                    structureTagBuilder.LinkAnnotationToStructureElement(source, page, annotation);
                 }
             }
         }

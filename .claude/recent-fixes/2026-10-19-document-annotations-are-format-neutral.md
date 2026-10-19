@@ -16,8 +16,11 @@ works out the links and bookmarks of a laid-out document - page, rectangle, quad
   `FormFieldAppearance` is the old `FormFieldAppearanceBuilder` minus its PDF form creation; `FormFieldBuilder` now only makes the AcroForm
   objects and appearance streams (`CreateForm` + `PdfCanvas`). The appearance transform is y-down in the model; the PDF consumer mirrors
   it (`m12`, `m21` negated). `HtmlContainerInt.FormFieldBuilder` became the `InteractiveForms` flag - the painter only ever tested it for null.
-- Not done yet: `StructureTagBuilder` still reads `CssBox` and writes the PDF structure tree directly; `FormFieldClassification` is
-  still built from `CssBox` by `FormFieldMapper` inside the collector (fine, it runs in the HTML core). Tags need a public element
-  handle (tag, attributes, text) before `StructureTagBuilder` can move out.
+- **Tags use an opaque `StructureNode`.** `StructureTagBuilder` only ever used a `CssBox` as an identity key (plus one `StructureTagMapper.Classify`
+  call), so `IStructureTagSink` now takes `StructureNode` (reference identity, implicit from `CssBox`) and the painter classifies
+  `display: contents` ancestors itself, passing `PhantomAncestor(node, structureType)`. `PageLink.Source` is a `StructureNode?`.
+  `PdfFeatures/` (`StructureTagBuilder`, `FormFieldBuilder`, `BookmarkOutlineBuilder`) no longer mention `CssBox` at all.
+- **`Layout/` stays with PeachPDF.** `PageDescriptorBuilder`'s use of `PageSizeConverter` is not a seam to cut: the declarative builder is part of
+  PeachPDF's own public API (it takes `PageSize`, feeds `PdfGenerator`), not of the HTML core.
 - Evidence: full `PeachPDF.Tests` net8.0 run unchanged (18249 passed), including the link pagination, transform, running-element and
   bookmark outline suites.

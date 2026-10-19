@@ -48,7 +48,7 @@ namespace PeachPDF.Html.Core.Annotations
         public PagePosition? Destination { get; init; }
 
         /// <summary>The element the link was collected from, when it has one (a link inside an SVG image has none).</summary>
-        public CssBox? Source { get; init; }
+        public StructureNode? Source { get; init; }
     }
 
     /// <summary>

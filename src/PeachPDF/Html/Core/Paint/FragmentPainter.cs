@@ -738,6 +738,25 @@ namespace PeachPDF.Html.Core.Paint
         /// <summary>
         /// <see cref="PaintTagged"/>'s structure-tree bookkeeping around one fragment's content.
         /// </summary>
+        /// <summary>
+        /// Opens the structure elements of the <c>display: contents</c> ancestors <paramref name="lifted"/> a box was lifted out of; only
+        /// those that map to a grouping element have one.
+        /// </summary>
+        private static IDisposable? OpenPhantomAncestors(IStructureTagSink builder, IReadOnlyList<CssBox> lifted)
+        {
+            List<PhantomAncestor>? ancestors = null;
+
+            foreach (var ancestor in lifted)
+            {
+                var classification = StructureTagMapper.Classify(ancestor);
+                if (classification.Kind != StructureTagKind.Grouping) continue;
+
+                (ancestors ??= []).Add(new PhantomAncestor(ancestor, classification.StructureType!));
+            }
+
+            return ancestors is null ? null : builder.OpenPhantomAncestors(ancestors);
+        }
+
         private void PaintTaggedContent(Canvas g, BoxFragment fragment, IStructureTagSink? builder)
         {
             var box = fragment.Box;
@@ -750,7 +769,7 @@ namespace PeachPDF.Html.Core.Paint
             // The display: contents elements this box was lifted out of still have structure elements of
             // their own, and this box's must nest inside them.
             using var phantomAncestors = box.DisplayContentsAncestors is { Count: > 0 } lifted
-                ? builder.OpenPhantomAncestors(lifted)
+                ? OpenPhantomAncestors(builder, lifted)
                 : null;
 
             var classification = StructureTagMapper.Classify(box);

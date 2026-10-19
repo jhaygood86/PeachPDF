@@ -85,11 +85,11 @@ namespace PeachPDF.Html.Core.Annotations
                     {
                         if (ResolveAnchorTarget(anchorId) is not { } destination) continue;
 
-                        links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Anchor = anchorId, Destination = destination, Source = link.SourceBox });
+                        links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Anchor = anchorId, Destination = destination, Source = ToNode(link.SourceBox) });
                     }
                     else
                     {
-                        links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Uri = href, Source = link.SourceBox });
+                        links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Uri = href, Source = ToNode(link.SourceBox) });
                     }
                 }
             }
@@ -222,13 +222,13 @@ namespace PeachPDF.Html.Core.Annotations
                             var anchorId = href[1..];
                             if (resolveAnchorTarget(anchorId) is not { } destination) continue;
 
-                            links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Anchor = anchorId, Destination = destination, Source = box });
+                            links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Anchor = anchorId, Destination = destination, Source = ToNode(box) });
                         }
                         else
                         {
                             // Read once per external link per page (a running element's link is re-resolved for every page it was
                             // selected onto), so the document base is memoized - see HtmlContainerInt.DocumentBaseUri.
-                            links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Uri = ResolveHref(container, href), Source = box });
+                            links.Add(new PageLink { PageIndex = pageIndex, Bounds = bounds, Quad = quad, Uri = ResolveHref(container, href), Source = ToNode(box) });
                         }
                     }
                 }
@@ -280,6 +280,8 @@ namespace PeachPDF.Html.Core.Annotations
             var r = container.GetElementRectangle(elementId);
             return r.HasValue ? Utilities.Utils.ToPoints(r.Value, ppp) : null;
         }
+
+        private static StructureNode? ToNode(CssBox? box) => box is null ? (StructureNode?)null : new StructureNode(box);
 
         private static PagePosition ToPosition((int PageIndex, double TopPt) resolved) => new(resolved.PageIndex, resolved.TopPt);
 

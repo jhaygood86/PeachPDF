@@ -25,12 +25,12 @@ namespace PeachPDF.PdfFeatures
         readonly PdfDocument _document;
         readonly PdfStructureTreeRoot _root;
         readonly PdfStructureElement _documentElement;
-        readonly Dictionary<CssBox, PdfStructureElement> _elementsByBox = new();
+        readonly Dictionary<StructureNode, PdfStructureElement> _elementsByBox = new();
 
         // A tagged <li> box needs TWO distinct structure elements of its own ("/LI" itself and its
-        // "/LBody" - see OpenListItemBodyElement) - a second cache, keyed by the same CssBox, avoids
+        // "/LBody" - see OpenListItemBodyElement) - a second cache, keyed by the same node, avoids
         // colliding with the box's "/LI" entry in _elementsByBox.
-        readonly Dictionary<CssBox, PdfStructureElement> _lbodyElementsByBox = new();
+        readonly Dictionary<StructureNode, PdfStructureElement> _lbodyElementsByBox = new();
 
         readonly Stack<PdfStructureElement> _parentStack = new();
 
@@ -38,7 +38,7 @@ namespace PeachPDF.PdfFeatures
         // OpenContentElement's own element cache already returns the same PdfStructureElement for a
         // box painted again (e.g. a formula whose line spans a page break via CssRectMath's own
         // /MCR handling), but nothing else stops this method's own caller from running per-occurrence.
-        readonly HashSet<CssBox> _mathMlAttached = new();
+        readonly HashSet<StructureNode> _mathMlAttached = new();
 
         // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID.
         readonly List<List<PdfItem>> _parentTreeEntriesByKey = new();
@@ -97,7 +97,7 @@ namespace PeachPDF.PdfFeatures
         /// parent for any nested Open* calls until disposed. No MCID, no marked content - matches
         /// upstream's GroupingItem, which never opens a marked-content sequence of its own.
         /// </summary>
-        public IDisposable OpenGroupingElement(CssBox box, string structureType)
+        public IDisposable OpenGroupingElement(StructureNode box, string structureType)
         {
             var element = GetOrCreateElement(_elementsByBox, box, structureType);
             _parentStack.Push(element);
@@ -111,21 +111,18 @@ namespace PeachPDF.PdfFeatures
         /// (CSS Display 3 §2.5) - the document's semantics, and so its structure, are not. The elements
         /// are cached by box like any other, so lifted siblings share one <c>/Sect</c> or <c>/L</c>.
         /// </summary>
-        public IDisposable OpenPhantomAncestors(IReadOnlyList<CssBox> ancestors)
+        public IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors)
         {
             var opened = 0;
 
             foreach (var ancestor in ancestors)
             {
-                var classification = StructureTagMapper.Classify(ancestor);
-                if (classification.Kind != StructureTagKind.Grouping) continue;
-
-                _parentStack.Push(GetOrCreateElement(_elementsByBox, ancestor, classification.StructureType!));
+                _parentStack.Push(GetOrCreateElement(_elementsByBox, ancestor.Node, ancestor.StructureType));
                 opened++;
 
-                if (classification.StructureType == Keywords.Li)
+                if (ancestor.StructureType == Keywords.Li)
                 {
-                    _parentStack.Push(GetOrCreateElement(_lbodyElementsByBox, ancestor, "LBody"));
+                    _parentStack.Push(GetOrCreateElement(_lbodyElementsByBox, ancestor.Node, "LBody"));
                     opened++;
                 }
             }
@@ -139,7 +136,7 @@ namespace PeachPDF.PdfFeatures
         /// <see cref="OpenGroupingElement"/>) because the same <paramref name="box"/> (the &lt;li&gt;
         /// itself) already owns a distinct "/LI" element in <see cref="_elementsByBox"/>.
         /// </summary>
-        public IDisposable OpenListItemBodyElement(CssBox box)
+        public IDisposable OpenListItemBodyElement(StructureNode box)
         {
             var element = GetOrCreateElement(_lbodyElementsByBox, box, "LBody");
             _parentStack.Push(element);
@@ -155,7 +152,7 @@ namespace PeachPDF.PdfFeatures
         /// leaves in this engine (see StructureTagMapper for why real elements' own text is always
         /// carried by an anonymous child box, never the element's own box).
         /// </summary>
-        public IDisposable OpenContentElement(Canvas g, CssBox box, string structureType, string? altText = null)
+        public IDisposable OpenContentElement(Canvas g, StructureNode box, string structureType, string? altText = null)
         {
             var element = GetOrCreateElement(_elementsByBox, box, structureType);
 
@@ -195,7 +192,7 @@ namespace PeachPDF.PdfFeatures
         /// off), or if this box's source has already been attached (a formula spanning a page break
         /// paints more than once).
         /// </summary>
-        public void AttachMathMlSource(CssBox box, string mathMlSource)
+        public void AttachMathMlSource(StructureNode box, string mathMlSource)
         {
             if (!_mathMlAttached.Add(box))
                 return;
@@ -240,7 +237,7 @@ namespace PeachPDF.PdfFeatures
         /// <c>PdfGenerator.HandleLinks</c> to attach an "/OBJR" from a Link annotation back to its
         /// owning structure element.
         /// </summary>
-        public PdfStructureElement? TryGetStructureElement(CssBox box)
+        public PdfStructureElement? TryGetStructureElement(StructureNode box)
         {
             return _elementsByBox.TryGetValue(box, out var element) ? element : null;
         }
@@ -260,7 +257,7 @@ namespace PeachPDF.PdfFeatures
         /// tagged "/Link" (tagging disabled, or the box's classification resolved to something
         /// else, e.g. an author suppressed it with <c>-peachpdf-pdf-tag-type: none</c>).
         /// </summary>
-        public void LinkAnnotationToStructureElement(CssBox box, PdfPage page, PdfAnnotation annotation)
+        public void LinkAnnotationToStructureElement(StructureNode box, PdfPage page, PdfAnnotation annotation)
         {
             var element = TryGetStructureElement(box);
             if (element == null)
@@ -308,7 +305,7 @@ namespace PeachPDF.PdfFeatures
                 _document.Catalog.ViewerPreferences.DisplayDocTitle = true;
         }
 
-        PdfStructureElement GetOrCreateElement(Dictionary<CssBox, PdfStructureElement> cache, CssBox box, string structureType)
+        PdfStructureElement GetOrCreateElement(Dictionary<StructureNode, PdfStructureElement> cache, StructureNode box, string structureType)
         {
             if (cache.TryGetValue(box, out var existing))
                 return existing;
