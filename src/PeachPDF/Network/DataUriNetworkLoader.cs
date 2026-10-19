@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 namespace PeachPDF.Network
 {
     /// <summary>
-    /// The default <see cref="RNetworkLoader"/> used when <see cref="PeachPDF.PdfGenerateConfig.NetworkLoader"/>
+    /// The default <see cref="RNetworkLoader"/> used when <c>PeachPDF.PdfGenerateConfig.NetworkLoader</c>
     /// is left unset. Resolves only <c>data:</c> URIs; any other resource URI (remote stylesheets, remote
     /// images, HTTP(S) sources) is silently skipped. This is the safest default for server-side environments
     /// where network access must be opted into explicitly rather than assumed.

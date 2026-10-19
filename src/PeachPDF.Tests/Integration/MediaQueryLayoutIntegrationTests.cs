@@ -157,7 +157,7 @@ namespace PeachPDF.Tests.Integration
             // during SetHtml from these values (as PdfGenerator.SetContent does).
             container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
             container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.PreferredColorScheme = scheme;
+            container.PreferredColorScheme = scheme == PdfColorScheme.Dark ? PeachPDF.Html.Core.ColorSchemePreference.Dark : PeachPDF.Html.Core.ColorSchemePreference.Light;
 
             await container.SetHtml(html, null);
 

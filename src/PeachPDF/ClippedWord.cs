@@ -67,11 +67,11 @@ public sealed class ClipReport
     public IReadOnlyList<ClippedWord> ClippedWords => Words;
 
     /// <summary>
-    /// Appends <paramref name="other"/>'s words to this report, preserving paint order. Used by
+    /// Appends <paramref name="words"/> to this report, preserving paint order. Used by
     /// <c>PdfGenerator.AddPdfPages</c> so a document built over several calls carries every call's
     /// findings rather than only the last one's.
     /// </summary>
-    internal void Append(ClipReport other) => Words.AddRange(other.Words);
+    internal void Append(IEnumerable<ClippedWord> words) => Words.AddRange(words);
 
     /// <summary>How many characters were carried by words that were truncated.</summary>
     /// <remarks>

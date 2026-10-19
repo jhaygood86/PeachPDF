@@ -857,7 +857,8 @@ namespace PeachPDF
             // findings of every earlier call. PeachPdfDocument.PageCount accumulates across the same
             // calls via the underlying PdfDocument; a report whose whole purpose is not to lose
             // information quietly should not be the one member that does.
-            document.ClipReport.Append(container.HtmlContainerInt.ClipReport);
+            document.ClipReport.Append(container.HtmlContainerInt.ClipReport.Words.Select(w =>
+                new ClippedWord(w.Text, w.DrawnWidth, w.VisibleWidth, w.DrawnHeight, w.VisibleHeight)));
 
             // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
             // enabled, appends further annotation-keyed entries to the same tree - see
@@ -977,7 +978,7 @@ namespace PeachPDF
             // into that generation: Media selects which @media rules match, IgnoreAuthorStyleSheets gates
             // whether the document's own <style>/<link> author sheets are collected at all.
             container.HtmlContainerInt.Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media;
-            container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme;
+            container.HtmlContainerInt.PreferredColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light;
             container.HtmlContainerInt.IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets;
             container.HtmlContainerInt.SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels;
             container.HtmlContainerInt.SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels;
@@ -1035,7 +1036,7 @@ namespace PeachPDF
         /// free through <c>PaintFragment</c> above - what doesn't is the margin-box RULE's own
         /// background/border (e.g. <c>@top-center { content: element(chapter-title); background-color:
         /// #ccc; }</c>), painted here via <see cref="MarginBoxRenderer.PaintBackgroundAndBorder"/> at the
-        /// same rect <see cref="HtmlContainerInt.LayoutMarginBoxes"/> derived for layout, recomputed
+        /// same rect <c>HtmlContainerInt.LayoutMarginBoxes</c> derived for layout, recomputed
         /// (<see cref="MarginBoxRenderer.FindMargin"/> by <see cref="MarginBoxFragment.BoxName"/>) since
         /// it isn't retained on <see cref="MarginBoxFragment"/> itself - the same recomputation-not-
         /// caching convention <see cref="MarginBoxRenderer.Render"/>'s own text path already follows.

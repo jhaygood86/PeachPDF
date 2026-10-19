@@ -51,7 +51,7 @@ Portions of this software are copyright © 1996-2026 The FreeType Project (https
 
 | Functionality | Origin | License |
 |---|---|---|
-| CSS engine (parsing, CSS-OM) | Fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) (Tyler Brinks) | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/CSS/license.txt) |
+| CSS engine (parsing, CSS-OM) | Fork of [ExCSS](https://github.com/TylerBrinks/ExCSS) (Tyler Brinks) | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachBrackets/CSS/license.txt) |
 | PDF engine (document model, PDF writing) | Fork of [PDFsharp](https://github.com/empira/PDFsharp) (empira Software GmbH) | [MIT](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachDrawing.PDF/Engine/LICENSE.md) |
 | Core HTML rendering engine lineage | Derived from [HtmlRenderer](https://github.com/ArthurHub/HTML-Renderer) (José Manuel Menéndez Poo, Arthur Teplitzki) | BSD 3-Clause (the license above) |
 | Hyphenation pattern data (`hyphens: auto`) | CTAN's [hyph-utf8](https://ctan.org/pkg/hyph-utf8) package | A mix of permissive licenses including MIT and LPPL, plus BSD-style and public-domain patterns. Pattern files under copyleft (GPL/LGPL) or missing license terms are deliberately **not** shipped — see [`hyphens: auto` language coverage](html-css-support.md#hyphens-auto-language-coverage) |

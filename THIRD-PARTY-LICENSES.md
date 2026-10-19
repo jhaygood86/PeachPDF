@@ -39,8 +39,8 @@ DEALINGS IN THE SOFTWARE.
 
 ## ExCSS (CSS parser, adapted in-tree)
 
-- **Location:** [`src/PeachPDF/CSS/`](src/PeachPDF/CSS/)
-- **License file:** [`src/PeachPDF/CSS/license.txt`](src/PeachPDF/CSS/license.txt)
+- **Location:** [`src/PeachBrackets/CSS/`](src/PeachBrackets/CSS/)
+- **License file:** [`src/PeachBrackets/CSS/license.txt`](src/PeachBrackets/CSS/license.txt)
 - **License:** MIT
 
 ```
