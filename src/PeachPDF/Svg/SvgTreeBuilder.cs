@@ -1417,12 +1417,8 @@ namespace PeachPDF.Svg
             var clipPathAttr = Attr("clip-path");
             if (!string.IsNullOrWhiteSpace(clipPathAttr))
             {
-                var hashIndex = clipPathAttr.IndexOf('#');
-                var closeIndex = clipPathAttr.IndexOf(')');
-
-                if (hashIndex >= 0 && closeIndex > hashIndex)
+                if (SvgValueParsers.TryParseUrlFragment(clipPathAttr) is { } clipId)
                 {
-                    var clipId = clipPathAttr[(hashIndex + 1)..closeIndex].Trim();
                     element.ClipPathRef = clipId;
 
                     if (!_contextOnly)

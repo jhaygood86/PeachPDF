@@ -451,12 +451,9 @@ namespace PeachPDF.Svg
 
             if (trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
             {
-                var hashIndex = trimmed.IndexOf('#');
-                var closeIndex = trimmed.IndexOf(')');
-
-                if (hashIndex >= 0 && closeIndex > hashIndex)
+                if (TryParseUrlFragment(trimmed) is { } referenceId)
                 {
-                    paint = SvgPaint.GradientRef(trimmed[(hashIndex + 1)..closeIndex].Trim());
+                    paint = SvgPaint.GradientRef(referenceId);
                     return true;
                 }
 
@@ -591,10 +588,24 @@ namespace PeachPDF.Svg
             if (!trimmed.StartsWith("url(", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var hashIndex = trimmed.IndexOf('#');
-            var closeIndex = trimmed.IndexOf(')');
+            return TryParseUrlFragment(trimmed);
+        }
 
-            return hashIndex >= 0 && closeIndex > hashIndex ? trimmed[(hashIndex + 1)..closeIndex].Trim() : null;
+        /// <summary>
+        /// The fragment id of a leading <c>url(#id)</c> reference, or null when it has none. The reference may be written with
+        /// quotes (<c>url("#id")</c>, which is how the CSS-OM serialises one that came from a stylesheet or a <c>style=""</c>
+        /// declaration) or as an absolute URL ending in the fragment; the quotes are not part of the id.
+        /// </summary>
+        public static string? TryParseUrlFragment(string value)
+        {
+            var closeIndex = value.IndexOf(')');
+            var hashIndex = value.IndexOf('#');
+
+            if (hashIndex < 0 || closeIndex <= hashIndex)
+                return null;
+
+            var id = value[(hashIndex + 1)..closeIndex].Trim().Trim('"', '\'').Trim();
+            return id.Length > 0 ? id : null;
         }
     }
 }
