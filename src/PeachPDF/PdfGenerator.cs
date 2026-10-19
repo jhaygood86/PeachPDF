@@ -561,7 +561,7 @@ namespace PeachPDF
             // default. An accessible PdfAConformance level forces this on even if EnableTaggedPdf was
             // left false - config itself is never mutated.
             var structureTagBuilder = (config.EnableTaggedPdf || isAccessibleConformance)
-                ? new StructureTagBuilder(document.PdfDocument, requireAltText: isAccessibleConformance)
+                ? new StructureTagBuilder(document.Composer.CreateTagRecorder(requireAlternateText: isAccessibleConformance))
                 : null;
             container.HtmlContainerInt.StructureTagBuilder = structureTagBuilder;
 
@@ -569,7 +569,7 @@ namespace PeachPDF
             // enabled - FragmentContentPainters.For and HandleFormFields (below) both check
             // HtmlContainerInt.FormFieldBuilder for null and skip all classification/bookkeeping when
             // it's not set, so this is the single point that gates the whole feature off by default.
-            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.PdfDocument, container.HtmlContainerInt.RenderContext) : null;
+            var formFieldBuilder = config.EnableInteractivePdfForms ? new FormFieldBuilder(document.Composer.CreateFormBuilder(_renderContext, "PeachPDFField")) : null;
             container.HtmlContainerInt.InteractiveForms = formFieldBuilder != null;
 
             // Per CSS2.1 §14.2 the "canvas" (here: every page) is filled with body's background if it
@@ -644,7 +644,7 @@ namespace PeachPDF
                 // `size` for this slot, so every existing (non-mixed-size) document is unaffected.
                 var page = document.Composer.AddPage(geom.SheetWidthPt, geom.SheetHeightPt);
 
-                structureTagBuilder?.BeginPage(page.Page);
+                structureTagBuilder?.BeginPage(page);
 
                 var sheetRect = new Rect(0, 0,
                     page.WidthPoints * _renderContext.PixelsPerPoint, page.HeightPoints * _renderContext.PixelsPerPoint);
@@ -871,7 +871,7 @@ namespace PeachPDF
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.PdfDocument, annotations, formFieldBuilder);
+                HandleFormFields(document.Composer, annotations, formFieldBuilder);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
@@ -1195,7 +1195,7 @@ namespace PeachPDF
                 // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
                 if (structureTagBuilder != null && link.Source is { } source)
                 {
-                    structureTagBuilder.LinkAnnotationToStructureElement(source, pdfLink.Page.Page, pdfLink.Annotation);
+                    structureTagBuilder.LinkAnnotationToStructureElement(source, pdfLink);
                 }
             }
         }
@@ -1203,23 +1203,14 @@ namespace PeachPDF
         /// <summary>
         /// Creates AcroForm fields/widgets for the collected form controls, one per page.
         /// </summary>
-        private static void HandleFormFields(PdfDocument document, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
+        private static void HandleFormFields(PdfComposer composer, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
         {
             foreach (var field in annotations.FormFields)
             {
-                if (field.PageIndex >= document.Pages.Count)
+                if (field.PageIndex >= composer.Pages.Count)
                     continue;
 
-                var page = document.Pages[field.PageIndex];
-
-                // The collected geometry is measured down from the page's top-left corner; a PDF rect counts from the page bottom.
-                var bounds = field.Bounds;
-                var rect = new Rect(bounds.X, page.Height - (bounds.Y + bounds.Height), bounds.Width, bounds.Height);
-
-                // The appearance stream's own space is y up too, so the y-down map is mirrored across the x axis.
-                Matrix3x2? appearanceMatrix = field.AppearanceTransform is { } m ? new Matrix3x2(m.M11, -m.M12, -m.M21, m.M22, 0, 0) : null;
-
-                formFieldBuilder.AddField(page, new PdfRectangle(rect), field, appearanceMatrix);
+                formFieldBuilder.AddField(composer.Pages[field.PageIndex], field);
             }
         }
 

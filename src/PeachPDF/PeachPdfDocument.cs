@@ -1,5 +1,4 @@
 using PeachDrawing.PDF;
-using PeachDrawing.PDF.Engine;
 using System.IO;
 
 namespace PeachPDF;
@@ -19,8 +18,6 @@ public class PeachPdfDocument
 
     internal PdfComposer Composer => _composer;
 
-    internal PdfDocument PdfDocument => _composer.Document;
-
     /// <summary>
     /// The number of pages currently in the document.
     /// </summary>
@@ -37,8 +34,6 @@ public class PeachPdfDocument
     /// this is the one fact only the engine holds, so it has to be handed over rather than inferred.
     /// </remarks>
     public ClipReport ClipReport { get; internal set; } = new();
-
-    internal PdfPages Pages => PdfDocument.Pages;
 
     /// <summary>
     /// Writes the completed PDF to the given stream.

@@ -85,6 +85,36 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// Starts recording the document's logical structure, which makes the file a tagged PDF. A recorder replaces the structure tree
+        /// any earlier one wrote.
+        /// </summary>
+        /// <param name="requireAlternateText">
+        /// whether a figure with no alternative text gets an empty one (which marks it decorative) instead of none: required by the
+        /// accessible PDF/A levels
+        /// </param>
+        /// <returns>the recorder to open structure elements with while pages are drawn</returns>
+        public PdfTagRecorder CreateTagRecorder(bool requireAlternateText = false)
+        {
+            EnsureConfigured();
+            return new PdfTagRecorder(_document, requireAlternateText);
+        }
+
+        /// <summary>
+        /// Starts adding interactive form fields to the document's pages.
+        /// </summary>
+        /// <param name="renderContext">the context whose fonts and images the fields' appearances are drawn with</param>
+        /// <param name="generatedNamePrefix">the prefix of the names generated for fields that have none</param>
+        /// <returns>the builder to add fields with</returns>
+        public PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, string generatedNamePrefix = "Field")
+        {
+            ArgumentNullException.ThrowIfNull(renderContext);
+            ArgumentNullException.ThrowIfNull(generatedNamePrefix);
+
+            EnsureConfigured();
+            return new PdfFormBuilder(_document, renderContext, generatedNamePrefix);
+        }
+
+        /// <summary>
         /// Names a place in the document, so links (<see cref="PdfComposerPage.AddDestinationLink"/>) and readers can jump to it. The reader
         /// scrolls to put the place at the top of the window, at the width of the page.
         /// </summary>

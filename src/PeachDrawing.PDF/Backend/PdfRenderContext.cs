@@ -90,7 +90,16 @@ namespace PeachDrawing.PDF
             await AddFont(stream, fontFamilyName, default);
         }
 
-        internal async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        /// <summary>
+        /// Adds a font to the context like <see cref="AddFont(Stream, string?)"/>, restricting which weights, widths and styles it is
+        /// matched for and which characters it supplies.
+        /// </summary>
+        /// <param name="stream">the font file; it is read to the end, and not closed</param>
+        /// <param name="fontFamilyName">the family name to register it under, or <see langword="null"/> to take the name from the font file</param>
+        /// <param name="descriptors">the weight, width, slant and style ranges the font is declared for</param>
+        /// <param name="unicodeRanges">the characters the font supplies, or <see langword="null"/> for all it has</param>
+        /// <returns>a task that completes when the font has been added</returns>
+        public async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             using var memoryStream = new MemoryStream();
             await stream.CopyToAsync(memoryStream);
