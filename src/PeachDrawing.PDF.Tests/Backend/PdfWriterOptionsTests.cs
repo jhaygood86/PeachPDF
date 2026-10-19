@@ -1,11 +1,10 @@
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Rendering;
 
 namespace PeachPDF.Tests.PdfBackendTests
 {
     /// <summary>
-    /// The small pieces of the PDF writer PeachPDF drives through its internals bridge: the layout-unit conversions, the encryption options'
+    /// The small pieces of the PDF writer PeachPDF drives: the layout-unit conversions, the encryption options'
     /// copy and comparison, and the context hook a host overrides.
     /// </summary>
     public class PdfWriterOptionsTests
@@ -40,22 +39,22 @@ namespace PeachPDF.Tests.PdfBackendTests
         [Fact]
         public void ReadOnlyEncryptionOptions_ForbidEditingAndKeepThePasswords()
         {
-            var options = PeachDrawing.PDF.Engine.PdfEncryptionOptions.ReadOnly("user", "owner");
+            var options = PdfEncryptionOptions.ReadOnly("user", "owner");
 
             Assert.Equal("user", options.UserPassword);
             Assert.Equal("owner", options.OwnerPassword);
-            Assert.Equal(PeachDrawing.PDF.Engine.PdfPermissions.ReadOnly, options.Permissions);
+            Assert.Equal(PdfPermissions.ReadOnly, options.Permissions);
             Assert.True(options.EncryptMetadata);
         }
 
         [Fact]
         public void EncryptionOptions_CloneIsAnIndependentCopy_AndSameAsComparesEveryProperty()
         {
-            var original = new PeachDrawing.PDF.Engine.PdfEncryptionOptions
+            var original = new PdfEncryptionOptions
             {
                 UserPassword = "u",
                 OwnerPassword = "o",
-                Permissions = PeachDrawing.PDF.Engine.PdfPermissions.AllowPrint,
+                Permissions = PdfPermissions.AllowPrint,
                 EncryptMetadata = false,
             };
 
@@ -69,10 +68,10 @@ namespace PeachPDF.Tests.PdfBackendTests
             original.UserPassword = "u";
             Assert.True(original.SameAs(copy));
 
-            foreach (var change in new Action<PeachDrawing.PDF.Engine.PdfEncryptionOptions>[]
+            foreach (var change in new Action<PdfEncryptionOptions>[]
             {
                 o => o.OwnerPassword = "x",
-                o => o.Permissions = PeachDrawing.PDF.Engine.PdfPermissions.All,
+                o => o.Permissions = PdfPermissions.All,
                 o => o.EncryptMetadata = true,
             })
             {
@@ -80,13 +79,6 @@ namespace PeachPDF.Tests.PdfBackendTests
                 change(other);
                 Assert.False(original.SameAs(other));
             }
-        }
-
-        [Fact]
-        public void TheOptionConversions_CoverPageOrientationToo()
-        {
-            Assert.Equal(PeachDrawing.PDF.Engine.PageOrientation.Landscape, PeachPDF.PageOrientation.Landscape.ToEngine());
-            Assert.Equal(PeachDrawing.PDF.Engine.PageOrientation.Portrait, PeachPDF.PageOrientation.Portrait.ToEngine());
         }
 
         [Fact]
