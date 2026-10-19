@@ -342,6 +342,7 @@ namespace PeachPDF.Html.Core.Dom
             // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
             // (defaulting to justify-items/align-items, then to stretch). A subgrid child is given the adopted
             // track geometry for its subgridded axes so its own items snap to the parent lines.
+            var inlineBaselineItems = new List<(Placement Placement, bool Last)>();
             foreach (var p in placements)
             {
                 var cellX = columns[p.ColStart].Position;
@@ -350,6 +351,17 @@ namespace PeachPDF.Html.Core.Dom
                 var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
                 var justify = ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString());
                 var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
+
+                // Inline-axis baseline (css-align-3 §9.3): in a horizontal writing mode an item's baseline is
+                // synthesized from its border box, so a first baseline is the start edge and a last baseline the
+                // end edge. The item is placed at that edge here; AlignColumnBaselines then lines up the group
+                // sharing its column.
+                if (p.ColSpan == 1 && IsBaselineAlign(justify))
+                {
+                    var last = justify.IndexOf("last", StringComparison.OrdinalIgnoreCase) >= 0;
+                    inlineBaselineItems.Add((p, last));
+                    justify = last ? Keywords.End : Keywords.Start;
+                }
 
                 var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
                 p.Box.SubgridContext = context;
@@ -367,6 +379,7 @@ namespace PeachPDF.Html.Core.Dom
             // block-axis alignment is `baseline` were placed start-aligned above; shift each down so all
             // baseline items in the row share a common first baseline.
             AlignRowBaselines(placements);
+            AlignColumnBaselines(inlineBaselineItems);
 
             // ── Container size when auto.
             var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
@@ -1281,6 +1294,7 @@ namespace PeachPDF.Html.Core.Dom
             // border along with its margin), or its full outer footprint for border-box (subtract only
             // its margin - ActualBoxSizeIncludedWidth is already 0 there).
             var cssWidth = Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth);
+            var restorePercentages = ResolveAreaPercentages(box, Math.Max(0, columnWidth - box.ActualMarginLeft - box.ActualMarginRight - box.ActualBoxSizeIncludedWidth));
             var savedWidth = box.Width;
 
             // A replaced item that keeps its natural width (see PlaceItemInCell) is measured at that size, not
@@ -1293,6 +1307,13 @@ namespace PeachPDF.Html.Core.Dom
                     ResolveSelfAlignment(box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
             if (!measuredAtNaturalSize)
                 box.Width = FormatLayoutUnits(cssWidth, box);
+            else if (natural is { DefaultSize: { } pinned })
+                box.Width = FormatLayoutUnits(pinned.Width, box);
+
+            // A box with only a default size (a video with no poster) has no height of its own to measure.
+            var savedHeight = box.Height;
+            if (natural is { DefaultSize: { } pinnedSize } && box.Height == Keywords.Auto)
+                box.Height = FormatLayoutUnits(pinnedSize.Height, box);
 
             box.Location = new PaintPoint(_gridBox.ClientLeft, _gridBox.ClientTop);
             box.ActualBottom = box.Location.Y;
@@ -1300,6 +1321,8 @@ namespace PeachPDF.Html.Core.Dom
             await PerformLayoutBlockified(g, box);
 
             box.Width = savedWidth;
+            box.Height = savedHeight;
+            restorePercentages();
             return box.ActualBoxSizingHeight + box.ActualMarginTop + box.ActualMarginBottom;
         }
 
@@ -1310,6 +1333,8 @@ namespace PeachPDF.Html.Core.Dom
         private async ValueTask PlaceItemInCell(Canvas g, CssBox box, double cellX, double cellY,
             double cellWidth, double cellHeight, string justify, string align)
         {
+            // A percentage size of an item resolves against its grid area (css-grid-2 §6.2), not the container.
+            var cellContentWidth0 = Math.Max(0, cellWidth - HorizontalMarginBorderPadding(box));
             var autoWidth = box.Width == Keywords.Auto;
             var autoHeight = box.Height == Keywords.Auto;
 
@@ -1325,6 +1350,7 @@ namespace PeachPDF.Html.Core.Dom
                 && (natural is { } replacedSize ? ReplacedStretchesWidth(replacedSize, justify) : IsStretch(justify));
             var stretchHeight = autoHeight && IsStretch(align)
                 && !(align.Isi(Keywords.Normal) && natural is { Height: true });
+            var restorePercentages = ResolveAreaPercentages(box, cellContentWidth0);
             var savedWidth = box.Width;
             var savedHeight = box.Height;
 
@@ -1347,19 +1373,28 @@ namespace PeachPDF.Html.Core.Dom
                 var ownPaddingBorder = HorizontalMarginBorderPadding(box) - box.ActualMarginLeft - box.ActualMarginRight;
 
                 // An item with a natural size whose height is explicitly stretched takes its width from that
-                // height through its aspect ratio, clamped to its area: a 2:1 image stretched to 80pt in a
-                // 100pt-wide area is 100pt wide, not left at its natural width with a distorted height.
+                // height through its aspect ratio: a 2:1 image stretched to 80pt is 160pt wide, not left at its
+                // natural width with a distorted height.
                 var ratioWidth = stretchHeight && natural is { Width: true, Ratio: > 0 } naturalSize
                     ? Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight) * naturalSize.Ratio!.Value
                     : (double?)null;
 
+                // Not clamped to the area: a browser lets it overflow unless the page sets a max-width, which
+                // (resolved against the area, see ResolveAreaPercentages) layout applies to the pinned width.
                 var used = stretchWidth
                     ? cellContentWidth
                     : ratioWidth is { } fromHeight
-                        ? Math.Min(fromHeight, cellContentWidth)
-                        : await CssLayoutEngine.GetFitContentWidth(g, box, cellContentWidth);
+                        ? fromHeight
+                        : natural is { DefaultSize: { } defaultSize }
+                            ? defaultSize.Width
+                            : await CssLayoutEngine.GetFitContentWidth(g, box,
+                                // A replaced item keeps its natural width even where that overflows its area.
+                                natural is { Width: true } ? double.MaxValue / 4 : cellContentWidth);
                 box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth), box);
             }
+            // A box with only a default size (a video with no poster) is given it where it does not stretch.
+            var pinHeight = autoHeight && !stretchHeight && natural is { DefaultSize: not null };
+            if (pinHeight) box.Height = FormatLayoutUnits(natural!.Value.DefaultSize!.Value.Height, box);
             if (stretchHeight)
             {
                 var usedHeight = Math.Max(0, cellHeight - box.ActualMarginTop - box.ActualMarginBottom - box.ActualBoxSizeIncludedHeight);
@@ -1379,7 +1414,8 @@ namespace PeachPDF.Html.Core.Dom
             await PerformLayoutBlockified(g, box);
 
             if (autoWidth) box.Width = savedWidth;
-            if (stretchHeight) box.Height = savedHeight;
+            if (stretchHeight || pinHeight) box.Height = savedHeight;
+            restorePercentages();
 
             // Position the item's margin box within the cell along each axis per the alignment keyword.
             var outerWidth = box.ActualBoxSizingWidth + box.ActualMarginLeft + box.ActualMarginRight;
@@ -1417,13 +1453,41 @@ namespace PeachPDF.Html.Core.Dom
 
         /// <summary>A replaced item's natural size: whether it has one in each axis (an aspect ratio alone is
         /// not one), and its aspect ratio.</summary>
-        private readonly record struct ReplacedNaturalSize(bool Width, bool Height, double? Ratio);
+        private readonly record struct ReplacedNaturalSize(bool Width, bool Height, double? Ratio,
+            (double Width, double Height)? DefaultSize = null);
 
         /// <summary>The natural size of an image or inline svg, or null for any other box. The item's words
         /// are measured first, which is what loads an image and builds an inline svg - until then neither
         /// knows its size - and that leaves the word at the size its own <c>width</c>/<c>height</c> give it,
         /// so callers ask while the box is still <c>auto</c> sized and before they pin anything.</summary>
         private static async ValueTask<ReplacedNaturalSize?> GetReplacedNaturalSizeAsync(Canvas g, CssBox box)
+        {
+            if (box is CssBoxFrame frame)
+            {
+                // An iframe has the default object size when it has no still image of its own (its word was
+                // measured at that size by CssBoxFrame), and a ratio from that word.
+                await box.MeasureWordsSize(g);
+                var word = frame.ImageWord;
+                return new ReplacedNaturalSize(true, true, word.Image is null ? null : word.Height > 0 ? word.Width / word.Height : null);
+            }
+
+            if (box is CssBoxVideo)
+            {
+                // A video with no poster is not replaced here (it is a container for its fallback content),
+                // but a browser sizes it as 300x150 CSS px all the same.
+                await box.MeasureWordsSize(g);
+                if (((CssBoxVideo)box).IsReplaced) return null;
+                var ppp = (box.HtmlContainer?.RenderContext as PdfRenderContext)?.PixelsPerPoint ?? 1.0;
+                var unit = Length.PointsPerPx * ppp;
+                return new ReplacedNaturalSize(true, true,
+                    CssLayoutEngine.DefaultObjectWidth / CssLayoutEngine.DefaultObjectHeight,
+                    (CssLayoutEngine.DefaultObjectWidth * unit, CssLayoutEngine.DefaultObjectHeight * unit));
+            }
+
+            return await GetImageNaturalSizeAsync(g, box);
+        }
+
+        private static async ValueTask<ReplacedNaturalSize?> GetImageNaturalSizeAsync(Canvas g, CssBox box)
         {
             if (box is not (CssBoxImage or CssBoxSvg)) return null;
 
@@ -1437,11 +1501,38 @@ namespace PeachPDF.Html.Core.Dom
             }
 
             var document = box is CssBoxImage svgImage ? svgImage.SvgDocument : ((CssBoxSvg)box).Document;
-            var (width, height) = SvgIntrinsicSize.Resolve(document);
+            var (width, height, hasRatio) = SvgIntrinsicSize.ResolveForBox(document);
             return new ReplacedNaturalSize(
                 SvgIntrinsicSize.HasNaturalSize(document, horizontal: true),
                 SvgIntrinsicSize.HasNaturalSize(document, horizontal: false),
-                width is > 0 && height is > 0 ? width / height : null);
+                hasRatio && width is > 0 && height is > 0 ? width / height : null);
+        }
+
+        /// <summary>Replaces an item's percentage <c>width</c>, <c>min-width</c> and <c>max-width</c> with the
+        /// lengths they resolve to against its grid area's content width (css-grid-2 §6.2: an item's
+        /// containing block is its grid area; the box tree would resolve them against the grid container).
+        /// Returns the action that puts the declared values back.</summary>
+        private static Action ResolveAreaPercentages(CssBox box, double areaContentWidth)
+        {
+            var width = box.Width;
+            var minWidth = box.MinWidth;
+            var maxWidth = box.MaxWidth;
+
+            string Resolve(string value) =>
+                value.Contains('%') && CssValueParser.IsValidLength(value)
+                    ? FormatLayoutUnits(CssValueParser.ParseLength(value, areaContentWidth, box), box)
+                    : value;
+
+            box.Width = Resolve(width);
+            box.MinWidth = Resolve(minWidth);
+            box.MaxWidth = Resolve(maxWidth);
+
+            return () =>
+            {
+                box.Width = width;
+                box.MinWidth = minWidth;
+                box.MaxWidth = maxWidth;
+            };
         }
 
         private static bool IsStretch(string value) =>
@@ -1486,6 +1577,35 @@ namespace PeachPDF.Html.Core.Dom
                 {
                     var dy = maxBaseline - offset;
                     if (dy > 0.01) box.OffsetTop(dy);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Aligns the single-column items of each column whose used <c>justify-self</c>/<c>justify-items</c> is
+        /// <c>baseline</c> (css-align-3 §9.3, inline axis in a horizontal writing mode): the group shares a first
+        /// baseline at the largest start margin edge among them, so their border boxes' start edges line up,
+        /// and a <c>last baseline</c> group likewise shares the end edge. <see cref="PlaceItemInCell"/> already
+        /// put each item at its own start (or end) edge, so this only moves an item inwards by the difference.
+        /// </summary>
+        private static void AlignColumnBaselines(List<(Placement Placement, bool Last)> items)
+        {
+            foreach (var group in items.GroupBy(i => (i.Placement.ColStart, i.Last)))
+            {
+                var boxes = group.Select(i => i.Placement.Box).ToList();
+                if (boxes.Count < 2) continue;   // a lone item already sits on its own baseline
+
+                if (group.Key.Last)
+                {
+                    var margin = boxes.Max(b => b.ActualMarginRight);
+                    foreach (var b in boxes)
+                        if (margin - b.ActualMarginRight is > 0.01 and var dx) b.OffsetLeft(-dx);
+                }
+                else
+                {
+                    var margin = boxes.Max(b => b.ActualMarginLeft);
+                    foreach (var b in boxes)
+                        if (margin - b.ActualMarginLeft is > 0.01 and var dx) b.OffsetLeft(dx);
                 }
             }
         }

@@ -48,6 +48,10 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private const double LineFitTolerance = 0.01;
 
+        /// <summary>The default object size, 300x150 CSS px, of replaced content with no size of its own (an
+        /// iframe, a video with no poster, an svg with no size in an axis).</summary>
+        internal const double DefaultObjectWidth = 300, DefaultObjectHeight = 150;
+
         /// <summary>
         /// Measure image box size by the width\height set on the box and the actual rendered image size.<br/>
         /// If no image exists for the box error icon will be set.
@@ -72,9 +76,11 @@ namespace PeachPDF.Html.Core.Dom
         /// intrinsic size (null components mean "unknown", e.g. an image that failed to load, or an
         /// SVG with no viewBox/width/height). Shared by <see cref="MeasureImageSize"/> (backed by an
         /// <see cref="Image"/>'s pixel size) and <c>CssBoxSvg</c>/<c>CssBoxImage</c>'s SVG-source
-        /// sizing (backed by an <c>SvgDocument</c>'s viewBox/width/height).
+        /// sizing (backed by an <c>SvgDocument</c>'s viewBox/width/height). A size with no ratio
+        /// (<paramref name="hasIntrinsicRatio"/> false - the 300x150px default of an iframe) leaves the other axis alone
+        /// when only one is set.
         /// </summary>
-        public static void MeasureIntrinsicSize(CssRect word, double? intrinsicWidth, double? intrinsicHeight)
+        public static void MeasureIntrinsicSize(CssRect word, double? intrinsicWidth, double? intrinsicHeight, bool hasIntrinsicRatio = true)
         {
             ArgumentNullException.ThrowIfNull(word);
             ArgumentNullException.ThrowIfNull(word.OwnerBox);
@@ -103,7 +109,7 @@ namespace PeachPDF.Html.Core.Dom
             // bare `<ratio>` overrides the natural ratio, `auto <ratio>` prefers the natural ratio and falls
             // back to the specified one, and `auto`/no `aspect-ratio` uses the natural ratio alone. Null when
             // there is neither a natural ratio nor a usable specified one (the pre-existing behavior).
-            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
+            double? intrinsicRatio = hasIntrinsicRatio && intrinsicWidth is > 0 && intrinsicHeight is > 0
                 ? intrinsicWidth.Value / intrinsicHeight.Value
                 : null;
             var effectiveRatio = ResolveReplacedRatio(word.OwnerBox.AspectRatio, intrinsicRatio);
@@ -4996,7 +5002,7 @@ namespace PeachPDF.Html.Core.Dom
             // A replaced flex/grid item is its own block container (the cascade blockifies it and
             // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and
             // no text a strut could serve: the same bookkeeping-only line as the wrapper's.
-            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg
+            var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame
                 ? default
                 : ExtentOf(strutStyle);
 

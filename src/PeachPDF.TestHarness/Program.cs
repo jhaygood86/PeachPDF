@@ -4478,6 +4478,33 @@ await SaveShowcaseAsync("stretch_sizing", "Layout", "Stretch Sizing",
     </body></html>
     """, pdfConfig);
 
+// ─── replaced grid items showcase ───────────────────────────────────────────
+
+await SaveShowcaseAsync("grid_replaced_items", "Layout", "Replaced Grid Items",
+    "Replaced content as grid items: images keep their size or stretch by their ratio (clamped by max-width against the grid area), percentage widths resolve against the area, iframes and one-sided SVGs take the 300x150px default size, and justify-self: baseline lines items of a column up.",
+    """
+    <html><body style="font-family: sans-serif; font-size: 8pt;">
+      <p>Stretched 2:1 image, 80pt row: overflows its 100pt area, then clamped by max-width: 100%, then width: 50% of the area.</p>
+      <div style="display:grid; grid-template-columns:100pt 100pt 100pt; grid-template-rows:80pt; gap:10pt; width:340pt; border:1px solid #999;">
+        <img style="align-self:stretch; background:#fc9" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%23e74c3c'/%3E%3C/svg%3E">
+        <img style="align-self:stretch; max-width:100%" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%2327ae60'/%3E%3C/svg%3E">
+        <img style="width:50%" src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%232980b9'/%3E%3C/svg%3E">
+      </div>
+      <p>Default object size: an svg with only a width, an svg with only a height, and an iframe.</p>
+      <div style="display:grid; grid-template-columns:100pt 100pt 100pt; gap:10pt; width:340pt; border:1px solid #999; align-items:start;">
+        <svg width="96"><rect width="96" height="40" fill="#e74c3c"/></svg>
+        <svg height="48"><rect width="96" height="48" fill="#27ae60"/></svg>
+        <iframe style="border:1px solid #999"></iframe>
+      </div>
+      <p>justify-self: baseline lines the column's items up on the largest start margin.</p>
+      <div style="display:grid; grid-template-columns:150pt 150pt; width:320pt; border:1px solid #999;">
+        <div style="justify-self:baseline; width:60pt; height:20pt; background:#fc9">a</div>
+        <div style="justify-self:start; width:60pt; height:20pt; background:#cdf">b</div>
+        <div style="justify-self:baseline; width:60pt; height:20pt; margin-left:30pt; background:#9c9">c</div>
+      </div>
+    </body></html>
+    """, pdfConfig);
+
 // ─── CSS Custom Properties (var()) showcase ─────────────────────────────────
 
 static string VarSwatch(string desc, string boxCss, string valueLabel, string cssLabel) =>
