@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
@@ -45,7 +45,7 @@ namespace PeachPDF.Tests.Integration
             Assert.True(box.FontWeight.Value is { IsKeyword: true, Keyword: FontWeightKeyword.Lighter });
         }
 
-        private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetFontWeightBoxAsync(string authored)
+        private static async Task<PeachBrackets.Html.Dom.CssBox> GetFontWeightBoxAsync(string authored)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div id='t' style='font-weight:{authored}'></div>"));

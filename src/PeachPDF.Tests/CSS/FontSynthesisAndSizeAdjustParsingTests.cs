@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     /// <summary>CSS-OM parsing of <c>font-synthesis</c> (shorthand and longhands) and the CSS Fonts 5 <c>font-size-adjust</c> grammar.</summary>

@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
 namespace PeachPDF.Tests.Html.Core.Parse
 {
@@ -48,7 +48,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
             // Font-size px used the 72/96 factor before the unification (via the old fontAdjust
             // flag) — the same input must keep resolving to the same value now that the factor is
             // unconditional: 16px -> 12pt.
-            var resolved = PeachPDF.Html.Core.Utils.FontSizeResolver.Resolve("16px", 11, 11);
+            var resolved = PeachBrackets.Html.Utils.FontSizeResolver.Resolve("16px", 11, 11);
             Assert.Equal(12.0, resolved, 3);
         }
     }

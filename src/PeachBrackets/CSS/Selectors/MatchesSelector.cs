@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The ":matches(S)"/":is(S)"/":where(S)" pseudo-class - matches an element that matches ANY

@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachPDF.Utilities;
+using PeachBrackets.Utilities;
 
 namespace PeachPDF.Tests.Integration
 {

@@ -1,6 +1,6 @@
 #nullable enable
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// One eligible <c>@container</c> query container's resolved size geometry for the current layout

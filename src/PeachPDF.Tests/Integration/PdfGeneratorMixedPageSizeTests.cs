@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Layer G of mixed page orientation/size support: <see cref="PdfGenerator.AddPdfPages"/> now reads
     /// each page's own resolved physical size (<c>fragmentainer.Geometry.SheetWidthPt/SheetHeightPt</c>,
-    /// resolved by <see cref="Html.Core.PageGeometryTable"/> from a named <c>@page</c> rule's own
+    /// resolved by <see cref="Html.PageGeometryTable"/> from a named <c>@page</c> rule's own
     /// <c>size</c>) instead of the single document-wide <c>orgPageSize</c> for every page - the layer
     /// that actually makes a mixed-orientation document produce a real, differently-sized PDF page
     /// rather than just correct internal geometry. Full end-to-end pipeline (real

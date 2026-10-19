@@ -10,19 +10,19 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Utility class for traversing DOM structure and execution stuff on it.
@@ -1497,7 +1497,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         internal static bool AnyBoxEstablishesSizeContainer(CssBox box)
         {
-            if (box.ContainerType.Value is PeachPDF.CSS.ContainerType.Size or PeachPDF.CSS.ContainerType.InlineSize) return true;
+            if (box.ContainerType.Value is PeachBrackets.Css.ContainerType.Size or PeachBrackets.Css.ContainerType.InlineSize) return true;
 
             foreach (var child in box.Boxes)
             {
@@ -1665,7 +1665,7 @@ namespace PeachPDF.Html.Core.Utils
         /// </summary>
         public static bool EstablishesPreserve3d(CssBox box) =>
             box.IsPreserve3dRequested
-            && box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            && box.Overflow.Value == PeachBrackets.Css.Overflow.Visible
             && box.IsOpaque
             && box.ActualMixBlendMode == BlendMode.Normal
             && box.ActualFilterFunctions.Count == 0

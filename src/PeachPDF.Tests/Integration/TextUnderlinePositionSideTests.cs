@@ -225,8 +225,8 @@ namespace PeachPDF.Tests.Integration
             _ = container;
             var child = LayoutHarness.FindById(root, "child")!;
 
-            Assert.Equal(global::PeachPDF.CSS.TextUnderlinePosition.Under, child.TextUnderlinePosition.Value);
-            Assert.Equal(global::PeachPDF.CSS.TextUnderlineSide.Left, child.TextUnderlineSide.Value);
+            Assert.Equal(global::PeachBrackets.Css.TextUnderlinePosition.Under, child.TextUnderlinePosition.Value);
+            Assert.Equal(global::PeachBrackets.Css.TextUnderlineSide.Left, child.TextUnderlineSide.Value);
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

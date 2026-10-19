@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The value side of a keyword-or-value length property whose grammar accepts <c>calc()</c> (e.g.
@@ -18,7 +18,7 @@ namespace PeachPDF.CSS
     /// The "exactly one is set" invariant is enforced by the constructor, mirroring
     /// <see cref="CssKeywordOrValue{TEnum,TValue}"/> - <c>default(LengthOrCalc)</c> (both null) bypasses it
     /// the same way, but the only construction site, <c>CssValueParser.TryParseLengthOrCalc</c>
-    /// (namespace <c>PeachPDF.Html.Core.Parse</c>), always goes through this constructor.
+    /// (namespace <c>PeachBrackets.Html.Parse</c>), always goes through this constructor.
     /// </para>
     /// </summary>
     internal readonly record struct LengthOrCalc

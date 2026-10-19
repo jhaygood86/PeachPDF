@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
@@ -169,7 +169,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetFontSizeBoxAsync(string authored)
+        private static async Task<PeachBrackets.Html.Dom.CssBox> GetFontSizeBoxAsync(string authored)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div id='t' style='font-size:{authored}'></div>"));

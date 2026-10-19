@@ -3,7 +3,7 @@ using System;
 using System.Globalization;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Reads where a line may end inside one box's text, from the Unicode line breaking algorithm (UAX #14) tailored the way
@@ -22,8 +22,8 @@ namespace PeachPDF.Html.Core.Utils
         /// is the BCP 47 language of the text, or <see langword="null"/> when it has none: the breaks CSS Text 3 allows for
         /// <c>line-break</c> only in Chinese and Japanese text apply to those languages alone.
         /// </summary>
-        internal static LineBreakOpportunity[] Find(string text, PeachPDF.CSS.WordBreak wordBreak, int precedingRegionalIndicators = 0,
-            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto, string? language = null)
+        internal static LineBreakOpportunity[] Find(string text, PeachBrackets.Css.WordBreak wordBreak, int precedingRegionalIndicators = 0,
+            PeachBrackets.Css.LineBreak lineBreak = PeachBrackets.Css.LineBreak.Auto, string? language = null)
         {
             if (text.Length == 0)
             {
@@ -34,16 +34,16 @@ namespace PeachPDF.Html.Core.Utils
             {
                 WordBreak = wordBreak switch
                 {
-                    PeachPDF.CSS.WordBreak.BreakAll => WordBreakMode.BreakAll,
-                    PeachPDF.CSS.WordBreak.KeepAll => WordBreakMode.KeepAll,
+                    PeachBrackets.Css.WordBreak.BreakAll => WordBreakMode.BreakAll,
+                    PeachBrackets.Css.WordBreak.KeepAll => WordBreakMode.KeepAll,
                     _ => WordBreakMode.Normal,
                 },
                 Strictness = lineBreak switch
                 {
-                    PeachPDF.CSS.LineBreak.Loose => LineBreakStrictness.Loose,
-                    PeachPDF.CSS.LineBreak.Normal => LineBreakStrictness.Normal,
-                    PeachPDF.CSS.LineBreak.Strict => LineBreakStrictness.Strict,
-                    PeachPDF.CSS.LineBreak.Anywhere => LineBreakStrictness.Anywhere,
+                    PeachBrackets.Css.LineBreak.Loose => LineBreakStrictness.Loose,
+                    PeachBrackets.Css.LineBreak.Normal => LineBreakStrictness.Normal,
+                    PeachBrackets.Css.LineBreak.Strict => LineBreakStrictness.Strict,
+                    PeachBrackets.Css.LineBreak.Anywhere => LineBreakStrictness.Anywhere,
                     _ => LineBreakStrictness.Auto,
                 },
                 Language = language,

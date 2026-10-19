@@ -2,8 +2,8 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Numerics;
 using PeachPDF.Tests.TestSupport;
@@ -590,7 +590,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindByTag(container.Root!, "span")!;
             var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
 
-            var (x, y, z) = PeachPDF.Html.Core.Parse.CssValueParser.ParseTransformOriginPublic("", box);
+            var (x, y, z) = PeachBrackets.Html.Parse.CssValueParser.ParseTransformOriginPublic("", box);
 
             Assert.Equal(rect.Width / 2, x, 1);
             Assert.Equal(rect.Height / 2, y, 1);
@@ -615,7 +615,7 @@ namespace PeachPDF.Tests.Integration
             var box = FindByTag(container.Root!, "span")!;
             var rect = FragmentPaintHarness.FragmentOf(container, box).WholeBoxRect;
 
-            var (x, y, _) = PeachPDF.Html.Core.Parse.CssValueParser.ParseTransformOriginPublic(origin, box);
+            var (x, y, _) = PeachBrackets.Html.Parse.CssValueParser.ParseTransformOriginPublic(origin, box);
 
             Assert.Equal(fractionX * rect.Width, x, 1);
             Assert.Equal(fractionY * rect.Height, y, 1);
@@ -748,7 +748,7 @@ namespace PeachPDF.Tests.Integration
         {
             var spy = new SpyGraphics();
 
-            Assert.True(PeachPDF.Html.Core.Paint.FragmentPainter.TryPushTransform(spy, matrix));
+            Assert.True(PeachBrackets.Html.Paint.FragmentPainter.TryPushTransform(spy, matrix));
             Assert.Equal(matrix, spy.LastPushedTransform);
         }
 
@@ -758,7 +758,7 @@ namespace PeachPDF.Tests.Integration
         {
             var spy = new SpyGraphics();
 
-            Assert.False(PeachPDF.Html.Core.Paint.FragmentPainter.TryPushTransform(spy, matrix));
+            Assert.False(PeachBrackets.Html.Paint.FragmentPainter.TryPushTransform(spy, matrix));
             Assert.Null(spy.LastPushedTransform);
         }
 
@@ -853,7 +853,7 @@ namespace PeachPDF.Tests.Integration
         {
             var matrix = new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, 0, 0);
 
-            Assert.Equal(expected, PeachPDF.Html.Core.Paint.FragmentPainter.HasVisibleThickness(matrix, width, height));
+            Assert.Equal(expected, PeachBrackets.Html.Paint.FragmentPainter.HasVisibleThickness(matrix, width, height));
         }
 
         private const string PaintedBoxHtml =
@@ -867,7 +867,7 @@ namespace PeachPDF.Tests.Integration
             var matrix = Matrix3x2.CreateScale(0.5f);
 
             var spy = new SpyGraphics();
-            new PeachPDF.Html.Core.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, matrix);
+            new PeachBrackets.Html.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, matrix);
 
             Assert.Equal(matrix, spy.LastPushedTransform);
             Assert.True(spy.FilledRectangles > 0);
@@ -881,7 +881,7 @@ namespace PeachPDF.Tests.Integration
             var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
 
             var spy = new SpyGraphics();
-            new PeachPDF.Html.Core.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, Matrix3x2.CreateScale(0f));
+            new PeachBrackets.Html.Paint.FragmentPainter(container).PaintUnderTransform(spy, fragment, Matrix3x2.CreateScale(0f));
 
             Assert.Null(spy.LastPushedTransform);
             Assert.Equal(0, spy.FilledRectangles);
@@ -895,7 +895,7 @@ namespace PeachPDF.Tests.Integration
             var fragment = FragmentPaintHarness.FragmentOf(container, FindByTag(container.Root!, "div")!);
 
             var spy = new SpyGraphics();
-            new PeachPDF.Html.Core.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, PeachDrawing.Homography.Identity);
+            new PeachBrackets.Html.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, PeachDrawing.Homography.Identity);
 
             Assert.NotNull(spy.LastPushedTransform);
             Assert.Equal(1, spy.PopTransformCount);
@@ -911,7 +911,7 @@ namespace PeachPDF.Tests.Integration
             var edgeOn = new PeachDrawing.Homography(1, 0, 0, 0, 0, 0, 0, 0, 1);
 
             var spy = new SpyGraphics();
-            new PeachPDF.Html.Core.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, edgeOn);
+            new PeachBrackets.Html.Paint.FragmentPainter(container).SupplyWarpedText(spy, fragment, edgeOn);
 
             Assert.Null(spy.LastPushedTransform);
             Assert.Equal(0, spy.PopTransformCount);
@@ -1001,8 +1001,8 @@ div {{ width: 200pt; height: 100pt; {css} }}
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

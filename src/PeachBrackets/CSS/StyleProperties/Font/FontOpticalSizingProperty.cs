@@ -1,4 +1,4 @@
-﻿namespace PeachPDF.CSS
+﻿namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>auto | none</c> - whether a variable font's <c>opsz</c> axis follows the font size (<c>auto</c>, the initial value) or stays at

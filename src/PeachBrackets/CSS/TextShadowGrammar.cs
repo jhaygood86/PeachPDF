@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared, layer-agnostic grammar for the CSS <c>text-shadow</c> value (CSS Text Decoration Level 3 §4.1): the

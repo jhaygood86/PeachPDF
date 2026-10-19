@@ -10,15 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Provides some drawing functionality

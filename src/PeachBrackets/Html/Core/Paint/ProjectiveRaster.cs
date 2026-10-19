@@ -3,7 +3,7 @@ using PeachDrawing.Core;
 using System;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// One member of a 3D rendering context (CSS Transforms 2 section 4.1.2): a flat piece of artwork with the 4x4 matrix that carries it into the picture.

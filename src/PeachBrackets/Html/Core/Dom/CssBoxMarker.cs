@@ -10,15 +10,15 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.CounterStyles;
+using PeachBrackets.Css;
+using PeachBrackets.Html.CounterStyles;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for a synthesized <c>::marker</c> pseudo-element. Owns its own content resolution,

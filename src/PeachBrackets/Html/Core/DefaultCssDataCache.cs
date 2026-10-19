@@ -15,7 +15,7 @@
 using PeachDrawing.Core;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Caches the parsed W3 default (user-agent) stylesheet. Lives outside <see cref="RenderContext"/> because

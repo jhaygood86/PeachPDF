@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
@@ -12,10 +12,10 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Issue #820: <see cref="Html.Core.MediaQueryMatcher.CompareLength"/> (shared by <c>@media</c> and
+    /// Issue #820: <see cref="Html.MediaQueryMatcher.CompareLength"/> (shared by <c>@media</c> and
     /// <c>@container</c> size queries) resolved an absolute-unit feature value via the box-less
     /// <c>Length.ToPixels(...)</c> overload - always true CSS points - and compared it directly against
-    /// <see cref="Html.Core.MediaQueryContext.ViewportWidthPt"/>/<see cref="Html.Core.ContainerQueryContext.WidthPt"/>,
+    /// <see cref="Html.MediaQueryContext.ViewportWidthPt"/>/<see cref="Html.ContainerQueryContext.WidthPt"/>,
     /// which despite the <c>Pt</c> naming are PeachPDF's internal, <c>PixelsPerPoint</c>-inflated layout
     /// coordinate space whenever <c>PdfGenerateConfig.PixelsPerInch</c> is non-default (issue #814's
     /// convention). Every fixture here uses a non-default <c>PixelsPerInch</c> so the bug (invisible at
@@ -170,8 +170,8 @@ namespace PeachPDF.Tests.Integration
             // coordinate space is consistently inflated end to end - see
             // PixelsPerPointEmResolutionIntegrationTests.BuildAndLayout's identical rationale.
             var size = new Size(800, 600);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

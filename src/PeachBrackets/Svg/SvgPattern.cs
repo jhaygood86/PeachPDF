@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// A <c>&lt;pattern&gt;</c> definition - never painted directly, only referenced by a shape's

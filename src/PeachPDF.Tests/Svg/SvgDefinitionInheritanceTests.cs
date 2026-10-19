@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 

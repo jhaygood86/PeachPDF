@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Whether a selector gives two elements the same answer when they have the same parent, tag and attributes: the question the

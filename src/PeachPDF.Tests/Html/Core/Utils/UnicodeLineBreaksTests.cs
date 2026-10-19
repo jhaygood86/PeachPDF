@@ -1,5 +1,5 @@
 using PeachDrawing.Text.Unicode;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
@@ -9,8 +9,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
     /// </summary>
     public class UnicodeLineBreaksTests
     {
-        private static LineBreakOpportunity[] Find(string text, int precedingRegionalIndicators = 0, PeachPDF.CSS.WordBreak wordBreak = PeachPDF.CSS.WordBreak.Normal,
-            PeachPDF.CSS.LineBreak lineBreak = PeachPDF.CSS.LineBreak.Auto) =>
+        private static LineBreakOpportunity[] Find(string text, int precedingRegionalIndicators = 0, PeachBrackets.Css.WordBreak wordBreak = PeachBrackets.Css.WordBreak.Normal,
+            PeachBrackets.Css.LineBreak lineBreak = PeachBrackets.Css.LineBreak.Auto) =>
             UnicodeLineBreaks.Find(text, wordBreak, precedingRegionalIndicators, lineBreak);
 
         [Theory]
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
         public void ASmallKana_MayStartALine_OnlyWhenTheStrictnessAllowsIt(string lineBreak, int expected)
         {
             // A small kana (U+3083) after a full-size one: only loose lets a small kana start a line; auto, normal and strict keep it off.
-            var strictness = System.Enum.Parse<PeachPDF.CSS.LineBreak>(lineBreak);
+            var strictness = System.Enum.Parse<PeachBrackets.Css.LineBreak>(lineBreak);
             Assert.Equal((LineBreakOpportunity)expected, Find("\u3042\u3083", lineBreak: strictness)[1]);
         }
 
@@ -34,9 +34,9 @@ namespace PeachPDF.Tests.Html.Core.Utils
         public void AWaveDash_MayStartALine_OnlyInChineseOrJapaneseText_WhenTheStrictnessAllowsIt(string? language, string lineBreak, int expected)
         {
             // A wave dash (U+301C) after a kanji: the language is handed to the algorithm along with the CSS tailorings.
-            var strictness = System.Enum.Parse<PeachPDF.CSS.LineBreak>(lineBreak);
+            var strictness = System.Enum.Parse<PeachBrackets.Css.LineBreak>(lineBreak);
             Assert.Equal((LineBreakOpportunity)expected,
-                UnicodeLineBreaks.Find("日〜", PeachPDF.CSS.WordBreak.Normal, 0, strictness, language)[1]);
+                UnicodeLineBreaks.Find("日〜", PeachBrackets.Css.WordBreak.Normal, 0, strictness, language)[1]);
         }
 
         [Fact]
@@ -44,15 +44,15 @@ namespace PeachPDF.Tests.Html.Core.Utils
         {
             // "10" and a fullwidth percent sign: the number rules keep them together unless loose Japanese text says otherwise.
             const string text = "10％";
-            Assert.Equal(LineBreakOpportunity.Allowed, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Loose, "ja")[2]);
-            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Loose, "en")[2]);
-            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachPDF.CSS.WordBreak.Normal, 0, PeachPDF.CSS.LineBreak.Normal, "ja")[2]);
+            Assert.Equal(LineBreakOpportunity.Allowed, UnicodeLineBreaks.Find(text, PeachBrackets.Css.WordBreak.Normal, 0, PeachBrackets.Css.LineBreak.Loose, "ja")[2]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachBrackets.Css.WordBreak.Normal, 0, PeachBrackets.Css.LineBreak.Loose, "en")[2]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, UnicodeLineBreaks.Find(text, PeachBrackets.Css.WordBreak.Normal, 0, PeachBrackets.Css.LineBreak.Normal, "ja")[2]);
         }
 
         [Fact]
         public void LineBreakAnywhere_AllowsABreakAfterEveryCharacterOfAWord()
         {
-            var opportunities = Find("abcd", lineBreak: PeachPDF.CSS.LineBreak.Anywhere);
+            var opportunities = Find("abcd", lineBreak: PeachBrackets.Css.LineBreak.Anywhere);
 
             Assert.All(new[] { 1, 2, 3 }, i => Assert.Equal(LineBreakOpportunity.Allowed, opportunities[i]));
             Assert.Equal(LineBreakOpportunity.Prohibited, Find("abcd")[2]);
@@ -106,8 +106,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
         [Fact]
         public void KeepAllAndBreakAll_ArePassedThrough()
         {
-            Assert.Equal(LineBreakOpportunity.Allowed, Find("ab", wordBreak: PeachPDF.CSS.WordBreak.BreakAll)[1]);
-            Assert.Equal(LineBreakOpportunity.Prohibited, Find("\u4F60\u597D", wordBreak: PeachPDF.CSS.WordBreak.KeepAll)[1]);
+            Assert.Equal(LineBreakOpportunity.Allowed, Find("ab", wordBreak: PeachBrackets.Css.WordBreak.BreakAll)[1]);
+            Assert.Equal(LineBreakOpportunity.Prohibited, Find("\u4F60\u597D", wordBreak: PeachBrackets.Css.WordBreak.KeepAll)[1]);
         }
     }
 }

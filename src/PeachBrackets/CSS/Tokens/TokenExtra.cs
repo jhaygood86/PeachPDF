@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The fields only <see cref="TokenType.String"/>/<see cref="TokenType.Url"/>/

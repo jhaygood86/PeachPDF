@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// AST node for a parsed calc()/min()/max()/clamp() expression. Shared between Layer A (the CSS

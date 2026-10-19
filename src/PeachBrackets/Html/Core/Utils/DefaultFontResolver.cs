@@ -3,12 +3,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves the platform-appropriate default font-size and font-family used when no
     /// CSS <c>font-size</c>/<c>font-family</c> is specified. Not a CSS keyword grammar - see
-    /// <see cref="PeachPDF.CSS.Keywords"/> for those - this is purely a
+    /// <see cref="PeachBrackets.Css.Keywords"/> for those - this is purely a
     /// runtime/platform concern.
     /// </summary>
     internal static class DefaultFontResolver

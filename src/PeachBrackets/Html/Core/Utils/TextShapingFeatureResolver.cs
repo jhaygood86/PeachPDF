@@ -2,9 +2,9 @@ using PeachDrawing.Text.Shaping;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves the CSS Fonts Level 3/4 text-shaping properties (<c>font-variant-ligatures/-caps/

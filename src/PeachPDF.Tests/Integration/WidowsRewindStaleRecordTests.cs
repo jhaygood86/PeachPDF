@@ -1,5 +1,5 @@
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration;

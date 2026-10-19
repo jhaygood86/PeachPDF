@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The case-sensitivity modifier of an attribute selector's value (Selectors 4 §6.3):

@@ -1,11 +1,11 @@
 ﻿using PeachDrawing.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Turns the cascaded <c>font-variation-settings</c> and <c>font-optical-sizing</c> of a box into the one string that travels down the

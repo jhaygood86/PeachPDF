@@ -11,14 +11,14 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Parsers for the plain (non-path, non-transform) SVG attribute value grammars: <c>viewBox</c>,

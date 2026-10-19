@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves a CSS font-weight value (keyword or numeric) to a concrete CSS Fonts numeric weight
@@ -15,7 +15,7 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Overload for a caller with no typed <see cref="CssKeywordOrValue{TEnum,TValue}"/> in hand -
         /// today, only <c>MarginBoxRenderer</c>'s <c>@page</c> margin-box font resolution, which reads the
-        /// CSS-OM <see cref="PeachPDF.CSS.StyleDeclaration"/>'s own raw <c>font-weight</c> string rather
+        /// CSS-OM <see cref="PeachBrackets.Css.StyleDeclaration"/>'s own raw <c>font-weight</c> string rather
         /// than a <c>CssBox</c>'s cascaded value.
         /// </summary>
         /// <param name="fontWeightValue">The raw CSS font-weight value (keyword or numeric string).</param>

@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html.Paint;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Numerics;
@@ -597,7 +597,7 @@ namespace PeachPDF.Tests.Integration
             container.SnapBoxDecorationsToCssPixels = true;
 
             var child = FragmentPaintHarness.FragmentOf(container, LayoutHarness.FindById(root, "c")!);
-            var basis = Assert.IsType<PeachPDF.Html.Core.Fragments.OverflowClipBasis>(child.OverflowClipBasis);
+            var basis = Assert.IsType<PeachBrackets.Html.Fragments.OverflowClipBasis>(child.OverflowClipBasis);
 
             var band = Rect.FromLTRB(0, 0, 1000, 40.1);
             var confined = child with { OverflowClipBasis = basis with { Band = band } };

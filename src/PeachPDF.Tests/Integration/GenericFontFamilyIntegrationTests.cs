@@ -2,9 +2,9 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// End-to-end regression test for the platform-aware generic-family mapping
-    /// (<see cref="PeachPDF.Html.Core.Utils.GenericFontFamilyResolver"/>) actually wired into
+    /// (<see cref="PeachBrackets.Html.Utils.GenericFontFamilyResolver"/>) actually wired into
     /// <see cref="HtmlRenderContext"/>'s generic-family mappings, not just the pure resolver function.
     /// Windows is the only platform this test can assert a specific resolved family on regardless of
     /// which CI/dev machine runs it, since Consolas is a font every real Windows installation ships -
@@ -100,8 +100,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml($"<html><head><style>{css}</style></head><body><p>text</p><math><mi>x</mi></math></body></html>", null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

@@ -1,9 +1,9 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Identifies one element of the document to a structure (tagged-document) recorder, without exposing anything about it.

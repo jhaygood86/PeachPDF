@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Lays a detached <c>float: footnote</c> body out for real against a rect inside its landing page's

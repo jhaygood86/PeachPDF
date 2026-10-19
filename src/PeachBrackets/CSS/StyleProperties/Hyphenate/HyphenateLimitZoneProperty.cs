@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>hyphenate-limit-zone</c> property (CSS Text 4 §6.3.3): <c>&lt;length-percentage&gt;</c>.</summary>
     internal sealed class HyphenateLimitZoneProperty : Property

@@ -10,13 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Parse;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Wraps a <see cref="XElement"/> from a standalone SVG document (fetched for

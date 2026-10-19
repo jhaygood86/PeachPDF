@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A parsed <c>grid-template-areas</c> value (CSS Grid §7.3): a rectangular grid of named cells. Each

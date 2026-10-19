@@ -13,14 +13,14 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using PeachPDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
@@ -30,17 +30,17 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 // CssBox declares a property literally named ContainerType, which shadows the CSS-OM enum type of the
 // same name within this file - alias it so the enum stays referenceable (same trick ComputedStyleAreas
 // uses for WritingMode).
-using ContainerTypeEnum = PeachPDF.CSS.ContainerType;
+using ContainerTypeEnum = PeachBrackets.Css.ContainerType;
 // Same shadowing as ContainerTypeEnum above, for the WritingMode property/enum pair.
-using WritingModeEnum = PeachPDF.CSS.WritingMode;
+using WritingModeEnum = PeachBrackets.Css.WritingMode;
 // Same shadowing as ContainerTypeEnum above, for the TextOrientation property/enum pair.
-using TextOrientationEnum = PeachPDF.CSS.TextOrientation;
+using TextOrientationEnum = PeachBrackets.Css.TextOrientation;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// Represents a CSS Box of text or replaced elements.
@@ -541,7 +541,7 @@ namespace PeachPDF.Html.Core.Dom
         public bool FirstLetterProcessed { get => _rare is null ? default(bool) : _rare.FirstLetterProcessed; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.FirstLetterProcessed = value; } }
 
         /// <summary>
-        /// Set during <see cref="CssData.DoesSelectorMatch(CSS.CompoundSelector, ICssDomNode?)"/> when some
+        /// Set during <see cref="CssData.DoesSelectorMatch(Css.CompoundSelector, ICssDomNode?)"/> when some
         /// rule's <c>*::first-letter</c> selector matches this box. The actual DFS-and-split (see
         /// <c>DomParser.ApplyFirstLetterPseudoElements</c>) is deliberately deferred to a separate
         /// pass run after the whole document's cascade completes, rather than performed immediately
@@ -1845,7 +1845,7 @@ namespace PeachPDF.Html.Core.Dom
                         // with a known document language, Hyphenator's own suggested positions)
                         // is instead recorded as a candidate on the whole word and consulted only when
                         // CssLayoutEngine.FlowBox actually needs to break the line - see AddWord.
-                        var honorSoftHyphen = Hyphens.Value != PeachPDF.CSS.Hyphens.None;
+                        var honorSoftHyphen = Hyphens.Value != PeachBrackets.Css.Hyphens.None;
 
                         // Scan by whole codepoint (Rune), not UTF-16 code unit, so an astral character (an
                         // emoji, a CJK Extension-B ideograph, etc.) is never split across its surrogate pair -
@@ -1921,7 +1921,7 @@ namespace PeachPDF.Html.Core.Dom
                                 cleanWord = rawWord;
                                 cleanOriginalWord = rawOriginalWord;
 
-                                if (Hyphens.Value == PeachPDF.CSS.Hyphens.Auto)
+                                if (Hyphens.Value == PeachBrackets.Css.Hyphens.Auto)
                                 {
                                     var language = Language;
                                     if (!string.IsNullOrEmpty(language))
@@ -5617,7 +5617,7 @@ namespace PeachPDF.Html.Core.Dom
             // size internally regardless of writing-mode).
             if (child.Words.Count == 0
                 && !CssValueParser.IsValidLength(child.Width)
-                && child.WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)
+                && child.WritingMode.Value is not (Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr)
                 && child.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.TableCell
                     or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
             {
@@ -5813,9 +5813,9 @@ namespace PeachPDF.Html.Core.Dom
         private bool IsBlockAxisMarginCollapseThrough(double resolvedBlockExtent, int depth = 0)
         {
             if (depth > 500) return false;
-            if (WritingMode.Value is not (CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr)) return false;
+            if (WritingMode.Value is not (Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr)) return false;
             if (HasDifferentWritingModeFromParent) return false;
-            if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
+            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
             if (Words.Count > 0) return false;
             if (resolvedBlockExtent >= 0.1) return false;
 
@@ -5850,7 +5850,7 @@ namespace PeachPDF.Html.Core.Dom
             if (ParentBox is null || ParentBox.IndexOfChild(this) != ParentBox.Boxes.Count - 1 ||
                 !(ParentBox.BlockEndMargin < 0.1) ||
                 !(BlockEndPadding < 0.1) || !(BlockEndBorderWidth < 0.1) ||
-                Overflow.Value != PeachPDF.CSS.Overflow.Visible ||
+                Overflow.Value != PeachBrackets.Css.Overflow.Visible ||
                 HasDifferentWritingModeFromParent)
             {
                 return;
@@ -6408,7 +6408,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             if (ParentBox is not null
                 && ContainingBlock is { Direction.Value: DirectionMode.Rtl }
-                && ContainingBlock.WritingMode.Value is CSS.WritingMode.HorizontalTb
+                && ContainingBlock.WritingMode.Value is Css.WritingMode.HorizontalTb
                 && CssLayoutEngine.IsInFlowBlockLevel(this))
             {
                 return CssLayoutEngine.ContentRightOf(ContainingBlock, blockTop) - ActualMarginRightAt(blockTop) - ActualBoxSizingWidth;
@@ -6570,7 +6570,7 @@ namespace PeachPDF.Html.Core.Dom
             // own inline size entirely internally, unlike a cell whose own natural width/height genuinely
             // depends on writing-mode.
             var isVerticalTableCell = DerivedStyle.ActualDisplay == Keywords.TableCell
-                && WritingMode.Value is CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr;
+                && WritingMode.Value is Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr;
 
             if (isVerticalTableCell || (DerivedStyle.ActualDisplay != Keywords.TableCell && DerivedStyle.ActualDisplay != Keywords.Table && DerivedStyle.ActualDisplay != Keywords.Flex && DerivedStyle.ActualDisplay != Keywords.InlineFlex && DerivedStyle.ActualDisplay != Keywords.Grid && DerivedStyle.ActualDisplay != Keywords.InlineGrid))
             {
@@ -8683,7 +8683,7 @@ namespace PeachPDF.Html.Core.Dom
         /// </summary>
         private static bool IsFlexRow(CssBox box) =>
             box.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
-            && box.FlexDirection.Value is CSS.FlexDirection.Row or CSS.FlexDirection.RowReverse;
+            && box.FlexDirection.Value is Css.FlexDirection.Row or Css.FlexDirection.RowReverse;
 
         /// <summary>
         /// Whether <paramref name="box"/> is an atomic inline-level box (css-display-3
@@ -8809,7 +8809,7 @@ namespace PeachPDF.Html.Core.Dom
             else if (IsFlexRow(box) && box.Boxes.Count > 0)
             {
                 double rowMax = 0, rowMin = 0;
-                var wraps = box.FlexWrap.Value is not CSS.FlexWrap.NoWrap;
+                var wraps = box.FlexWrap.Value is not Css.FlexWrap.NoWrap;
                 var items = 0;
                 foreach (var item in box.Boxes)
                 {
@@ -8897,14 +8897,14 @@ namespace PeachPDF.Html.Core.Dom
                     // ordinary MeasureWordsSize pass made an inherited body-level `anywhere` reshape and
                     // allocate one temporary word per grapheme even when no intrinsic size was requested.
                     var anywhereAffectsMinContent =
-                        word.OwnerBox.OverflowWrap.Value == PeachPDF.CSS.OverflowWrap.Anywhere
+                        word.OwnerBox.OverflowWrap.Value == PeachBrackets.Css.OverflowWrap.Anywhere
                         && word.OwnerBox.WhiteSpacePermitsWrapping;
                     var wordMinWidth = anywhereAffectsMinContent && word is CssRectWord anywhereWord
                         ? word.OverflowWrapMinWidth ??=
                             CssLayoutEngine.MeasureOverflowWrapMinWidth(g, anywhereWord)
                         : word.Width;
                     var previousAnywhereAffectsMinContent = previousWord is not null
-                        && previousWord.OwnerBox.OverflowWrap.Value == PeachPDF.CSS.OverflowWrap.Anywhere
+                        && previousWord.OwnerBox.OverflowWrap.Value == PeachBrackets.Css.OverflowWrap.Anywhere
                         && previousWord.OwnerBox.WhiteSpacePermitsWrapping;
                     var isGraphemeBoundary = CssLayoutEngine.IsGraphemeBoundaryBefore(
                         previousWord, word, trailingRegionalIndicatorCount, trailingGraphemeContext);
@@ -9527,7 +9527,7 @@ namespace PeachPDF.Html.Core.Dom
             var current = this;
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "stop extending the group" instead of hanging or overflowing the stack.
-            while (chainMembers.Count < 1000 && current.Overflow.Value == PeachPDF.CSS.Overflow.Visible &&
+            while (chainMembers.Count < 1000 && current.Overflow.Value == PeachBrackets.Css.Overflow.Visible &&
                    !current.DerivedStyle.IsFlowRoot &&
                    current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
@@ -9657,7 +9657,7 @@ namespace PeachPDF.Html.Core.Dom
         private bool CollapsesBlockEndMarginWithLastChild() =>
             HasAutoBlockEndHeight()
             && !DomUtils.EstablishesIndependentFormattingContext(this)
-            && Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            && Overflow.Value == PeachBrackets.Css.Overflow.Visible
             && ActualPaddingBottom < 0.1
             && ActualBorderBottomWidth < 0.1
             && (MinHeight == Keywords.Auto
@@ -9829,7 +9829,7 @@ namespace PeachPDF.Html.Core.Dom
             var heightIsAuto = Height == Keywords.Auto ||
                 (CssValueParser.DependsOnPercentage(Height) && !CssLayoutEngine.IsHeightDefinite(ContainingBlock));
             if (!heightIsAuto) return false;
-            if (Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
+            if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;

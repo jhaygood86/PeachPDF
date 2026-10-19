@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Parse;
 
 namespace PeachPDF
 {

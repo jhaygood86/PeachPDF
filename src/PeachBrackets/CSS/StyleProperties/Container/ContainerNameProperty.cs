@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>container-name: none | &lt;custom-ident&gt;+</c> (CSS Containment 3 §2) - a space-separated

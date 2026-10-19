@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Values for the PeachPDF-specific <c>-peachpdf-pdf-tag-type</c> property, which controls

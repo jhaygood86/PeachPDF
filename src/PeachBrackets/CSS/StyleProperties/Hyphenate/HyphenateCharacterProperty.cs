@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>hyphenate-character</c> property (CSS Text 4 §6.3.1): <c>auto | &lt;string&gt;</c>.</summary>
     internal sealed class HyphenateCharacterProperty : Property

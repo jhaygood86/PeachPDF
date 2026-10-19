@@ -1,15 +1,15 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Annotations
+namespace PeachBrackets.Html.Annotations
 {
     /// <summary>
     /// Works out what a reader of the laid-out pages can click or navigate (<see cref="DocumentAnnotations"/>) from the
@@ -47,7 +47,7 @@ namespace PeachPDF.Html.Core.Annotations
             foreach (var link in container.GetLinks(bookmarkBoxes))
             {
                 var href = ResolveHref(container, link.Href);
-                var rectangle = Utilities.Utils.ToPoints(link.Rectangle, ppp);
+                var rectangle = PeachBrackets.Utilities.Utils.ToPoints(link.Rectangle, ppp);
                 var isAnchor = href.Length > 0 && href[0] == '#';
                 var anchorId = isAnchor && href.Length > 1 ? href[1..] : string.Empty;
 
@@ -205,7 +205,7 @@ namespace PeachPDF.Html.Core.Annotations
                         var href = box.HtmlTag?.TryGetAttribute("href") ?? "";
                         if (href.Length == 0) continue;
 
-                        var rectPt = Utilities.Utils.ToPoints(fragment.Rect, ppp);
+                        var rectPt = PeachBrackets.Utilities.Utils.ToPoints(fragment.Rect, ppp);
                         var bounds = new Rect(rectPt.X, rectPt.Y, rectPt.Width, rectPt.Height);
 
                         // A running element's content is laid out in page coordinates, so its frame has no content-box offset to undo.
@@ -278,7 +278,7 @@ namespace PeachPDF.Html.Core.Annotations
         private static Rect? ResolveElementRectangle(HtmlContainerInt container, double ppp, string elementId)
         {
             var r = container.GetElementRectangle(elementId);
-            return r.HasValue ? Utilities.Utils.ToPoints(r.Value, ppp) : null;
+            return r.HasValue ? PeachBrackets.Utilities.Utils.ToPoints(r.Value, ppp) : null;
         }
 
         private static StructureNode? ToNode(CssBox? box) => box is null ? (StructureNode?)null : new StructureNode(box);
@@ -348,7 +348,7 @@ namespace PeachPDF.Html.Core.Annotations
                 // A display:contents element has no geometry of its own: its content's is where it points.
                 var geometryBox = DomUtils.ResolveGeometryBox(box);
                 var ownRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
-                rect = Utilities.Utils.ToPoints(ownRect, ppp);
+                rect = PeachBrackets.Utilities.Utils.ToPoints(ownRect, ppp);
             }
             else if (target.Length > 1 && target[0] == '#')
             {

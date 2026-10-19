@@ -196,7 +196,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
 
             var box = LayoutHarness.FindById(container.Root!, "a");
             Assert.NotNull(box);
-            Assert.True(PeachPDF.Html.Core.Utils.DomUtils.IsStackingContextBox(box!));
+            Assert.True(PeachBrackets.Html.Utils.DomUtils.IsStackingContextBox(box!));
         }
 
         // ---- through the PDF pipeline ---------------------------------------------------------------------

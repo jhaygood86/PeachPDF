@@ -2,13 +2,13 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared grammar for the CSS <c>background-size</c> value (<c>auto</c>, <c>cover</c>,
     /// <c>contain</c>, or a 1-2 token length/percentage/auto form). Used by both
     /// <see cref="Converters.BackgroundSizeConverter"/> (CSS-OM grammar validation/serialization)
-    /// and PeachPDF.Html.Core.Utils.BackgroundLayerResolver (render-time size resolution), so there
+    /// and PeachBrackets.Html.Utils.BackgroundLayerResolver (render-time size resolution), so there
     /// is one parser for this grammar, not two.
     /// </summary>
     internal static class BackgroundSizeGrammar

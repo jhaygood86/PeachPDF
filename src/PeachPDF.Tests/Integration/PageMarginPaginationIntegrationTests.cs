@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration
@@ -200,9 +200,9 @@ namespace PeachPDF.Tests.Integration
             container.MarginRight = 0;
 
             var contentSize = new Size(612, rawPageHeight - marginTop - marginBottom);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(contentSize, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(contentSize, 1.0);
-            container.Location = PeachPDF.Utilities.Utils.ToPixels(new PaintPoint(0, marginTop), 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(contentSize, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(contentSize, 1.0);
+            container.Location = PeachBrackets.Utilities.Utils.ToPixels(new PaintPoint(0, marginTop), 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, new Size(612, rawPageHeight));
             await container.PerformLayout(graphics);

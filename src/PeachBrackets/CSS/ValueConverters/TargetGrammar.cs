@@ -1,6 +1,6 @@
 #nullable disable
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared <c>&lt;target&gt;</c> argument-shape check for <c>target-counter()</c>/<c>target-text()</c>

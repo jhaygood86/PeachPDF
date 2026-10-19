@@ -1,5 +1,5 @@
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -146,7 +146,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(plain.Content.Rect.Width - 10, padded.Content.Rect.Width, 3);
         }
 
-        private static PeachPDF.Html.Core.Fragments.MarginBoxFragment FirstTopCentre(HtmlContainerInt container) =>
+        private static PeachBrackets.Html.Fragments.MarginBoxFragment FirstTopCentre(HtmlContainerInt container) =>
             container.FragmentTree!.Fragmentainers
                 .SelectMany(f => f.MarginBoxes)
                 .First(m => m.BoxName == "top-center");

@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetBoxAsync(string bodyHtml)
+        private static async Task<PeachBrackets.Html.Dom.CssBox> GetBoxAsync(string bodyHtml)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(bodyHtml));
             var box = LayoutHarness.FindById(root, "el");

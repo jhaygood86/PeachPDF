@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.Integration
     /// <c>HtmlContainerInt</c>'s whole internal layout coordinate space relative to true PDF points
     /// (see <c>HtmlContainer.PageSize</c>/<c>Location</c>/margin properties). Percentage/content-relative
     /// sizing and text are already self-consistently scaled in that space, but an absolute CSS length
-    /// (px/pt/in/cm/mm/pc) resolved via <see cref="PeachPDF.Html.Core.Parse.CssValueParser.ParseLength(PeachPDF.CSS.Length, double, CssBox)"/>
+    /// (px/pt/in/cm/mm/pc) resolved via <see cref="PeachBrackets.Html.Parse.CssValueParser.ParseLength(PeachBrackets.Css.Length, double, CssBox)"/>
     /// used to land as if the internal unit were always a true point - correct only at the library's
     /// default <c>PixelsPerInch</c> of 72 (<c>PixelsPerPoint == 1</c>), and silently wrong (scaled by
     /// <c>1/PixelsPerPoint</c>) otherwise. Reported via a replaced element (<c>&lt;img&gt;</c>/<c>&lt;svg&gt;</c>

@@ -12,7 +12,7 @@
 
 using PeachDrawing.Core;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     internal enum SvgPaintKind
     {

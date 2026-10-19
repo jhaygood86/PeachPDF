@@ -1,9 +1,9 @@
 #if DEBUG
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using System;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// Debug-build diagnostic: one line per page and per word the painter visits, saying where the word is on

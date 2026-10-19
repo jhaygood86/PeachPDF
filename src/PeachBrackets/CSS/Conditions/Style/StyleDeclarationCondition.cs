@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A single <c>style(&lt;property&gt;: &lt;value&gt;)</c> leaf (CSS Containment 3 SS7.3): true when

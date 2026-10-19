@@ -1,12 +1,12 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Paints <c>border-image</c> (CSS Backgrounds and Borders Module Level 3 §13) via the standard 9-slice

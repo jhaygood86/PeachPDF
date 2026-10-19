@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     /// <summary>CSS-OM parsing of <c>-webkit-text-stroke</c> (shorthand and longhands), <c>text-rendering</c> and <c>font-language-override</c>.</summary>

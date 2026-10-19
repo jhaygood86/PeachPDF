@@ -1,11 +1,11 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Resolves the basic shapes of <c>shape-inside</c> and <c>shape-subtract</c> (SVG 2 §11.7.2) into flattened polygons in user space, for the wrapped

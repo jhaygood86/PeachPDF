@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Recursive-descent parser for calc()/min()/max()/clamp() expressions, shared by Layer A (which

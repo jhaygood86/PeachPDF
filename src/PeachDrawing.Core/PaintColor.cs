@@ -18,7 +18,7 @@ namespace PeachDrawing.Core
 
         private readonly long _value;
 
-        // CSS Color 5 device-cmyk() carried natively - see PeachPDF.CSS.Color.IsDeviceCmyk for why no
+        // CSS Color 5 device-cmyk() carried natively - see PeachBrackets.Css.Color.IsDeviceCmyk for why no
         // naive RGB<->CMYK approximation is computed for one of these. R/G/B (read from the low 24 bits
         // of _value, which stay 0 for a CMYK-tagged color) must not be read when _isCmyk is true.
         private readonly bool _isCmyk;
@@ -130,7 +130,7 @@ namespace PeachDrawing.Core
         /// </summary>
         public bool IsCmyk => _isCmyk;
 
-        // Named to match PeachPDF.CSS.Color and PaintColor's own C/M/Y/K properties, the same names all the
+        // Named to match PeachBrackets.Css.Color and PaintColor's own C/M/Y/K properties, the same names all the
         // way down the pipeline from CSS parsing to the PDF backend.
         /// <summary>The cyan component, in <c>[0, 1]</c>. Meaningless unless <see cref="IsCmyk"/> is true.</summary>
         public float C => _cyan;

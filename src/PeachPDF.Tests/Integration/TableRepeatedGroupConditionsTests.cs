@@ -1,8 +1,8 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Collections.Generic;
@@ -31,7 +31,7 @@ namespace PeachPDF.Tests.Integration
     /// </para>
     /// <para>
     /// Two kinds of assertion, deliberately. The decision itself is read off
-    /// <see cref="Html.Core.Fragmentation.DetachedRowGroup.Repeats"/>, which is the only way to state a
+    /// <see cref="Html.Fragmentation.DetachedRowGroup.Repeats"/>, which is the only way to state a
     /// threshold exactly; what the decision <i>does</i> is stated over the fragment tree, because a flag
     /// that no longer reaches the layout would satisfy the first on its own.
     /// </para>

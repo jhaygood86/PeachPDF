@@ -2,8 +2,8 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real <c>font-variant: small-caps</c> rendering. Previously this property
-    /// was parsed, cascaded, and inherited (<see cref="PeachPDF.Html.Core.Dom.FontArea.FontVariant"/>) but never
+    /// was parsed, cascaded, and inherited (<see cref="PeachBrackets.Html.Dom.FontArea.FontVariant"/>) but never
     /// consumed anywhere in layout or paint — a full-tree grep found zero non-storage read sites, so the
     /// property was a complete no-op for any spelling, including the standard keyword. PeachPDF has no
     /// OpenType shaping engine to do real <c>smcp</c>/<c>c2sc</c> glyph substitution, so small-caps is
@@ -250,8 +250,8 @@ body {{ font-family: 'SCP'; width: 400px; }}
             await container.SetHtml(Wrap(body), null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

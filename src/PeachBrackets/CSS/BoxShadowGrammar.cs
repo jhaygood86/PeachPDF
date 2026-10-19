@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared, layer-agnostic grammar for the CSS <c>box-shadow</c> value (CSS Backgrounds &amp; Borders
@@ -13,7 +13,7 @@ namespace PeachPDF.CSS
     /// <see cref="BasicShapeGrammar"/> / <see cref="AspectRatioGrammar"/>, it validates the grammar and
     /// captures each layer's structure as <b>raw component strings</b> (never resolved numbers), so both
     /// Layer A (the CSS-OM converter, which only needs to accept/reject and preserve the authored text)
-    /// and Layer B (the paint-time resolver in <c>PeachPDF.Html.Core</c>, which resolves each length
+    /// and Layer B (the paint-time resolver in <c>PeachBrackets.Html</c>, which resolves each length
     /// against the box's own font/size) share a single parser rather than re-implementing the grammar.
     /// </summary>
     internal static class BoxShadowGrammar

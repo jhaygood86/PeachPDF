@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Text.Shaping;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;

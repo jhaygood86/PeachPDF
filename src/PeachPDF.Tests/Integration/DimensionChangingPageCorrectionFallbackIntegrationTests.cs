@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Integration
     /// Layout-level fallback-safety coverage for issue #1041's narrow, relayout-gated correction
     /// (<see cref="HtmlContainerInt.TryApplyDimensionChangingPageCorrection"/>) - the property this
     /// issue's own task cared about most: a wrong "corrected" layout is worse than the honest gap
-    /// <see cref="Html.Core.PageGeometryTable.ResolveForMaterializedPage"/> already leaves in place
+    /// <see cref="Html.PageGeometryTable.ResolveForMaterializedPage"/> already leaves in place
     /// (see <c>.claude/accepted-gaps/left-right-page-geometry-vs-materialized-numbering.md</c>), so
     /// the one extra speculative pass must never be baked in unless it provably left every other
     /// page's content-emptiness and box-to-page assignment untouched. <see cref="LeftRightPageGeometryMaterializedNumberTests"/>

@@ -1,8 +1,8 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>Where one cell sits on the grid and how far it reaches.</summary>
     internal readonly record struct CellSpan(int Row, int Column, int RowSpan, int ColSpan)

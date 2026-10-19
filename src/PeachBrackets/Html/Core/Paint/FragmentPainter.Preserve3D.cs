@@ -1,16 +1,16 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Utils;
 using PeachDrawing;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using System.Runtime.InteropServices;
-using Plane = PeachPDF.Html.Core.Paint.ProjectivePlane<PeachPDF.Html.Core.Fragments.BoxFragment>;
+using Plane = PeachBrackets.Html.Paint.ProjectivePlane<PeachBrackets.Html.Fragments.BoxFragment>;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// <c>transform-style: preserve-3d</c> (CSS Transforms 2 §6.1): a 3D rendering context, in which a box and its descendants share one 3D

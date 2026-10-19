@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Accepts a calc()/min()/max()/clamp() declaration whose resolved type-checking category is within

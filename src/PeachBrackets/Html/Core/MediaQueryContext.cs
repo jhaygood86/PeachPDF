@@ -1,7 +1,7 @@
 #nullable enable
 
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// The resolved "device" a CSS <c>@media</c> query is evaluated against — the media type plus the

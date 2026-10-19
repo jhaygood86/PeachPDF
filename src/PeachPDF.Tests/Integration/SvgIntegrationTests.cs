@@ -2501,11 +2501,11 @@ namespace PeachPDF.Tests.Integration
                   <polyline points="10,10 90,10 50,90" fill="#ff0000" stroke="#0000ff" stroke-width="4"/>
                 </svg>
                 """;
-            var document = PeachPDF.Svg.SvgTreeBuilder.Build(
-                new PeachPDF.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), renderContext);
+            var document = PeachBrackets.Svg.SvgTreeBuilder.Build(
+                new PeachBrackets.Svg.XElementSvgSourceNode(System.Xml.Linq.XDocument.Parse(markup).Root!), renderContext);
             var g = new ClosureSpyGraphics();
 
-            PeachPDF.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));
+            PeachBrackets.Svg.SvgRenderer.RenderInto(g, document, new PeachDrawing.Core.Rect(0, 0, 100, 100));
 
             Assert.Equal([true], g.FillClosed);
             Assert.Equal([false], g.StrokeClosed);

@@ -30,7 +30,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     [Flags]
     internal enum OperatorProperty

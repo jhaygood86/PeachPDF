@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 using Xunit;
 
 namespace PeachPDF.Tests.Integration
@@ -107,12 +107,12 @@ namespace PeachPDF.Tests.Integration
         {
             // PaintColor.ToString() must re-serialize a device-cmyk() color as device-cmyk() (CSS PaintColor 5
             // syntax), not silently drop it or fall back to rgb() - see PaintColor.IsDeviceCmyk/ToDeviceCmykString.
-            var color = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var color = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
 
             var text = color.ToString();
 
             Assert.StartsWith("device-cmyk(", text);
-            Assert.True(PeachPDF.CSS.Color.TryFromHex("000000", out _)); // sanity: hex path untouched
+            Assert.True(PeachBrackets.Css.Color.TryFromHex("000000", out _)); // sanity: hex path untouched
 
             var reparsed = Parser().GetActualColor(text);
             Assert.True(reparsed.IsCmyk);
@@ -125,19 +125,19 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void Equality_ComparesCmykComponents_NotJustAlpha()
         {
-            var a = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var b = PeachPDF.CSS.Color.FromDeviceCmyk(0.1f, 0.5f, 1f, 0.25f);
+            var a = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var b = PeachBrackets.Css.Color.FromDeviceCmyk(0.1f, 0.5f, 1f, 0.25f);
 
             Assert.NotEqual(a, b);
-            Assert.Equal(a, PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f));
+            Assert.Equal(a, PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f));
         }
 
         [Fact]
         public void EqualityOperators_CompareCmykComponents()
         {
-            var a = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var same = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var different = PeachPDF.CSS.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
+            var a = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var same = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var different = PeachBrackets.Css.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
 
             Assert.True(a == same);
             Assert.False(a == different);
@@ -148,10 +148,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void CompareTo_DistinguishesCmykColors()
         {
-            var a = (System.IComparable<PeachPDF.CSS.Color>)PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var same = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var different = PeachPDF.CSS.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
-            var rgb = PeachPDF.CSS.Color.FromRgb(255, 0, 0);
+            var a = (System.IComparable<PeachBrackets.Css.Color>)PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var same = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var different = PeachBrackets.Css.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
+            var rgb = PeachBrackets.Css.Color.FromRgb(255, 0, 0);
 
             Assert.Equal(0, a.CompareTo(same));
             Assert.NotEqual(0, a.CompareTo(different));
@@ -161,8 +161,8 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void GetHashCode_DiffersForDifferentCmykColors()
         {
-            var a = PeachPDF.CSS.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
-            var different = PeachPDF.CSS.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
+            var a = PeachBrackets.Css.Color.FromDeviceCmyk(0f, 0.5f, 1f, 0.25f);
+            var different = PeachBrackets.Css.Color.FromDeviceCmyk(1f, 0.5f, 1f, 0.25f);
 
             Assert.NotEqual(a.GetHashCode(), different.GetHashCode());
         }

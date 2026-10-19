@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The four CSS Fonts Level 4 <c>font-variant-emoji</c> keywords.</summary>
     internal enum FontVariantEmoji : byte

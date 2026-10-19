@@ -1,11 +1,11 @@
 #nullable disable
 
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Shared, layer-agnostic grammar for the CSS <c>&lt;basic-shape&gt;</c> function values used by
@@ -14,7 +14,7 @@ namespace PeachPDF.CSS
     /// <see cref="BackgroundSizeGrammar"/>, it validates the grammar and captures the value's structure
     /// as <b>raw component strings / enums</b> (never resolved numbers), so both Layer A (the CSS-OM
     /// converter, which only needs to accept/reject and preserve the authored text) and Layer B (the
-    /// render-time resolver in <c>PeachPDF.Html.Core</c>, which resolves each component against the
+    /// render-time resolver in <c>PeachBrackets.Html</c>, which resolves each component against the
     /// element's reference box) share a single parser rather than re-implementing the grammar twice.
     /// <c>path()</c> is the one exception to "raw component strings": its argument is itself the SVG
     /// path-data mini-language, not a CSS length/percentage/keyword, so it is fully parsed here (via

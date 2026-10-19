@@ -1,7 +1,7 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
-    using PeachPDF.Html.Core.Parse;
+    using PeachBrackets.Css;
+    using PeachBrackets.Html.Parse;
     using Xunit;
 
     /// <summary>Tests for the shared <see cref="GridTemplateAreasGrammar"/> — the

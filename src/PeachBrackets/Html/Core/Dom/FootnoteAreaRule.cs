@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// css-gcpm-3's <c>@footnote</c> area rule, resolved for one pagination slot: the note area's own box

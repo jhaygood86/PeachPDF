@@ -4,7 +4,7 @@ using System.IO;
 
 // ReSharper disable UnusedMember.Global
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal abstract class Property : StylesheetNode, IProperty
     {

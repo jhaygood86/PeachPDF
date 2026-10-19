@@ -3,7 +3,7 @@
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// How a media feature's stored value constrains the device value, unifying the <c>min-</c>/<c>max-</c>

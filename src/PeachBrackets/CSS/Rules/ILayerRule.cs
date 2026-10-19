@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The block form of the <c>@layer</c> cascade-layer at-rule (<c>@layer name { … }</c>, or an

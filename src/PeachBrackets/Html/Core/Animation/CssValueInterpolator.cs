@@ -4,12 +4,12 @@ using System.Globalization;
 using System.Linq;
 using System.Numerics;
 using System.Text;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>
     /// Mixes two CSS values of the same property at a position between them (CSS Values 4 §10, "Combination of

@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A resolved <see cref="CssProperty{T}"/> value for a property whose grammar is a keyword <b>or</b> a

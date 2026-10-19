@@ -1,5 +1,5 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Paint;
 using System.Collections.Generic;
 using System.Numerics;
 using Xunit;

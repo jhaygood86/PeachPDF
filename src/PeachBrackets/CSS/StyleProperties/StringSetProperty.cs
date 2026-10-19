@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Represents the CSS string-set property from CSS Generated Content for Paged Media Module.

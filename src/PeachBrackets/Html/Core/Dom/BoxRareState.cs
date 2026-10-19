@@ -1,17 +1,17 @@
 ﻿using PeachDrawing.Core;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The per-box state a <see cref="CssBox"/> only has when it takes part in something unusual: a table's collapsed borders, a

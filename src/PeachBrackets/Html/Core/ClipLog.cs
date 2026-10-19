@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>A word that was drawn but not fully visible, with the size it was drawn at and how much of it showed.</summary>
     internal readonly record struct ClippedTextEntry(

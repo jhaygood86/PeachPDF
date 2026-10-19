@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 using System.Numerics;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Handlers;
 using PeachDrawing.PDF.Engine.Drawing;
 
 namespace PeachPDF.Tests.Integration

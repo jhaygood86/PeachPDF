@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>Maps the <c>image-rendering</c> keywords onto how a canvas samples an image.</summary>
     internal static class ImageRenderingResolver

@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The <c>first</c>/<c>start</c>/<c>last</c>/<c>first-except</c> selection rules css-gcpm-3 defines

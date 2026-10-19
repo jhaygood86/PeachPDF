@@ -1,8 +1,8 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#border-conflict-resolution">§17.6.2</see>'s

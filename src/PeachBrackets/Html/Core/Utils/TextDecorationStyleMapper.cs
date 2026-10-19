@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Maps a cascaded <c>text-decoration-style</c> keyword to the <see cref="DashStyle"/> pen style

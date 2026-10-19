@@ -3,7 +3,7 @@
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// An <c>@counter-style</c> at-rule (CSS Counter Styles Level 3 §3): defines a named, reusable counter

@@ -10,27 +10,27 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core.Animation;
-using PeachPDF.Html.Core.CounterStyles;
+using PeachBrackets.Html.Animation;
+using PeachBrackets.Html.CounterStyles;
 using PeachPDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Low level handling of Html Renderer logic.<br/>
@@ -1694,16 +1694,16 @@ namespace PeachPDF.Html.Core
 
             void Walk(CssBox box)
             {
-                if (box.ContainerType.Value is CSS.ContainerType.Size or CSS.ContainerType.InlineSize)
+                if (box.ContainerType.Value is Css.ContainerType.Size or Css.ContainerType.InlineSize)
                 {
-                    var isSize = box.ContainerType.Value == CSS.ContainerType.Size;
+                    var isSize = box.ContainerType.Value == Css.ContainerType.Size;
                     var widthPt = box.ClientRight - box.ClientLeft;
                     var heightPt = box.ClientBottom - box.ClientTop;
 
                     // inline-size/block-size (CSS Writing Modes 4 §7.1) rotate onto the orthogonal
                     // physical axis under a vertical-rl/vertical-lr container - width/height/aspect-ratio/
                     // orientation stay physical regardless (CSS Containment 3 §7.3).
-                    var isVertical = box.WritingMode.Value is CSS.WritingMode.VerticalRl or CSS.WritingMode.VerticalLr;
+                    var isVertical = box.WritingMode.Value is Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr;
 
                     byId[box.Id] = new ContainerQueryContext(
                         WidthPt: widthPt,
@@ -3277,7 +3277,7 @@ namespace PeachPDF.Html.Core
 
             // Content that overflows the box (overflow: visible) is drawn past its border box, on pages the
             // border box does not reach; those have to be re-opened too, or the overflowing lines are lost.
-            var bottom = box.Overflow.Value == PeachPDF.CSS.Overflow.Visible
+            var bottom = box.Overflow.Value == PeachBrackets.Css.Overflow.Visible
                 ? CssBox.GetMaximumBottom(box, box.ActualBottom)
                 : box.ActualBottom;
             var last = SlotEndingAt(Math.Max(bottom, PageBoundaryEpsilon));

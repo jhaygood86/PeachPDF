@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal interface IPropertyValue
     {

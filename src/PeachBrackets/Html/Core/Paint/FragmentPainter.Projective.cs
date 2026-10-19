@@ -1,11 +1,11 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using PeachDrawing;
 using System;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// CSS <c>perspective</c> and 3D transforms (CSS Transforms 2): an element whose <c>transform</c> is not affine once projected onto its own

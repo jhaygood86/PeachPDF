@@ -1,8 +1,8 @@
 using System;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves a CSS font-size value (absolute keyword, <c>smaller</c>/<c>larger</c>, or any length unit
@@ -17,35 +17,35 @@ namespace PeachPDF.Html.Core.Utils
         /// <summary>
         /// Overload for a caller with no typed <see cref="CssKeywordOrValue{TEnum,TValue}"/> in hand -
         /// today, only <c>MarginBoxRenderer</c>'s <c>@page</c> margin-box font resolution, which reads the
-        /// CSS-OM <see cref="PeachPDF.CSS.StyleDeclaration"/>'s own raw <c>font-size</c> string rather than
+        /// CSS-OM <see cref="PeachBrackets.Css.StyleDeclaration"/>'s own raw <c>font-size</c> string rather than
         /// a <c>CssBox</c>'s cascaded value.
         /// </summary>
         /// <param name="fontSizeValue">The raw CSS font-size value (keyword or length).</param>
         /// <param name="parentSize">Reference size for <c>smaller</c>/<c>larger</c>/<c>em</c>.</param>
         /// <param name="remSize">Reference size for <c>rem</c>.</param>
-        /// <param name="containerInlineSizePt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter
+        /// <param name="containerInlineSizePt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter
         /// of the same name - the nearest ancestor <c>@container</c> size query container's content-box
         /// inline size, for <c>cqw</c>/<c>cqi</c>/<c>cqmin</c>/<c>cqmax</c> resolution. <c>null</c> for
         /// callers with no real box in scope (<c>MarginBoxRenderer.BuildFont</c>'s page margin boxes),
         /// which resolves those units to the viewport fallback (or 0 with neither), same as the box-aware
         /// length overload's own fallback.</param>
-        /// <param name="containerBlockSizePt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of
+        /// <param name="containerBlockSizePt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of
         /// the same name.</param>
-        /// <param name="viewportWidthPt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the
+        /// <param name="viewportWidthPt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the
         /// same name - the page box's own width, for <c>vw</c>/etc. resolution. <c>null</c> for callers with
         /// no real box in scope (<c>MarginBoxRenderer.BuildFont</c>'s page margin boxes), which resolves
         /// those units to 0.</param>
-        /// <param name="viewportHeightPt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the
+        /// <param name="viewportHeightPt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the
         /// same name.</param>
-        /// <param name="containerWidthPt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the
+        /// <param name="containerWidthPt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the
         /// same name.</param>
-        /// <param name="containerHeightPt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the
+        /// <param name="containerHeightPt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the
         /// same name.</param>
-        /// <param name="viewportInlineSizePt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of
+        /// <param name="viewportInlineSizePt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of
         /// the same name.</param>
-        /// <param name="viewportBlockSizePt">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of
+        /// <param name="viewportBlockSizePt">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of
         /// the same name.</param>
-        /// <param name="fonts">See <see cref="PeachPDF.CSS.Length.ToPixels"/>'s parameter of the same name -
+        /// <param name="fonts">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the same name -
         /// scoped, for a <c>font-size</c>, to the PARENT's font for <c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c>
         /// (CSS Values 4 §6.1.1). <c>null</c> takes each unit's spec fallback.</param>
         internal static double Resolve(string fontSizeValue, double parentSize, double remSize,

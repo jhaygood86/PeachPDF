@@ -1,6 +1,6 @@
 ﻿using PeachDrawing.Text.Shaping;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     using static Converters;
 

@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Animation;
+using PeachBrackets.Html.Animation;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     internal partial class CssBox
     {

@@ -1,10 +1,10 @@
 ﻿using PeachDrawing.PDF;
 using PeachPDF.Rendering;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -674,8 +674,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using (var measureGraphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size))
                 await container.PerformLayout(measureGraphics);
@@ -740,8 +740,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using (var measureGraphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size))
                 await container.PerformLayout(measureGraphics);
@@ -1119,7 +1119,7 @@ namespace PeachPDF.Tests.Integration
             var g = new TestRecordingGraphics();
             var rect = new Rect(0, 0, 100, 100);
 
-            PeachPDF.Html.Core.Handlers.BackgroundImageDrawHandler.DrawBackgroundImage(
+            PeachBrackets.Html.Handlers.BackgroundImageDrawHandler.DrawBackgroundImage(
                 g, image, "auto", "0% 0%", "repeat", rect, rect, null, box, intrinsicSizeInCssPixels: true);
 
             Assert.Contains(false, image.InterpolateHistory);
@@ -1585,8 +1585,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

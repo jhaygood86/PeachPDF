@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints an <c>&lt;object&gt;</c> (or a <c>&lt;video&gt;</c>'s poster) that resolved to a supported

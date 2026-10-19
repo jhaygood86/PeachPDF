@@ -1,5 +1,5 @@
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using Xunit;
 
 namespace PeachPDF.Tests.Svg

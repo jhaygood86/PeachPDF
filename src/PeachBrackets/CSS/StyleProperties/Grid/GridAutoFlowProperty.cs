@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>grid-auto-flow</c> property (CSS Grid §7.7): the auto-placement direction and packing.</summary>
     internal sealed class GridAutoFlowProperty : Property

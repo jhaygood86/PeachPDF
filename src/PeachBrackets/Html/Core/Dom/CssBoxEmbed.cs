@@ -1,7 +1,7 @@
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using System;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for an <c>&lt;embed&gt;</c> element, a void element whose <c>src</c> is rendered as replaced

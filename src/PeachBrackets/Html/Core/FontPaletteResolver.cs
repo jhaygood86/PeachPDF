@@ -2,11 +2,11 @@
 
 using System;
 using System.Collections.Generic;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// Resolves a computed <c>font-palette</c> value against the used font (CSS Fonts Module Level 4): the

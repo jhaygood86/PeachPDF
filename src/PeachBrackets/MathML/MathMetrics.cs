@@ -1,10 +1,10 @@
 using PeachDrawing.Text.OpenType;
 using System;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>
     /// Scales a resolved math font's <see cref="MathConstantsTable"/> (design units) into the working

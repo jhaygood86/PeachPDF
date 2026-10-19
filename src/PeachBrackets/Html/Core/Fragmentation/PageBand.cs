@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Fragmentation
+namespace PeachBrackets.Html.Fragmentation
 {
     /// <summary>
     /// A fragmentainer's block-axis extent: the coordinates its content may occupy.

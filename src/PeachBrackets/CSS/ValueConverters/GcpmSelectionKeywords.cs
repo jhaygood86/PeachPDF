@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>first</c>/<c>start</c>/<c>last</c>/<c>first-except</c> keyword set css-gcpm-3 defines

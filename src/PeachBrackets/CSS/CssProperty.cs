@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The five CSS-wide keywords (CSS Cascade &amp; Inheritance §7.3) a property value can be.</summary>
     internal enum CssGlobalKeyword

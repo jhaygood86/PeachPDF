@@ -1,4 +1,4 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
@@ -122,7 +122,7 @@ namespace PeachPDF.Tests.Integration
             Assert.NotEqual(1.2 * 20, monoBox.ActualLineHeight, 2);
         }
 
-        private static async Task<PeachPDF.Html.Core.Dom.CssBox?> GetNormalLineHeightBoxAsync(string fontPath, string mimeType)
+        private static async Task<PeachBrackets.Html.Dom.CssBox?> GetNormalLineHeightBoxAsync(string fontPath, string mimeType)
         {
             var html = $@"<!DOCTYPE html><html><head><style>
 {BundledFonts.FontFaceRule(fontPath, "NormalLineHeightTestFont", mimeType)}
@@ -179,7 +179,7 @@ namespace PeachPDF.Tests.Integration
 
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
-        private static async Task<PeachPDF.Html.Core.Dom.CssBox> GetLineHeightBoxAsync(string authored)
+        private static async Task<PeachBrackets.Html.Dom.CssBox> GetLineHeightBoxAsync(string authored)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 $"<div id='t' style='line-height:{authored}'></div>"));

@@ -1,7 +1,7 @@
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Html.Fragmentation;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// One note area on one pagination slot, and the footnote calls routed into it: the page's own area

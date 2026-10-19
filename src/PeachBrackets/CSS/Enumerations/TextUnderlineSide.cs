@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>left</c>/<c>right</c> half of <c>text-underline-position</c>'s compound grammar

@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS 2.1 §17.6.2's border-conflict origin priority, most specific first. A lower value wins a

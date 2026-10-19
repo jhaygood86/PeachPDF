@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Applies the argument ranges css-easing-1 §2 puts on <c>steps()</c> and <c>cubic-bezier()</c>, which the plain

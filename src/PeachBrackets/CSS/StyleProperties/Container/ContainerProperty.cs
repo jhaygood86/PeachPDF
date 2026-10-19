@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>container</c> shorthand (CSS Containment 3 SS2): <c>&lt;'container-name'&gt; [ / &lt;'container-type'&gt; ]?</c>.</summary>
     internal sealed class ContainerProperty : ShorthandProperty

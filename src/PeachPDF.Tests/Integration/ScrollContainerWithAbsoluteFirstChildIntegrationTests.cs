@@ -1,7 +1,7 @@
 using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration;

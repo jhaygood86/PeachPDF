@@ -1,6 +1,6 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Globalization;
@@ -23,7 +23,7 @@ namespace PeachPDF.Tests.Integration
             + "<p>P1</p><p>P2</p><p>P3</p>" + box
             + string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>Q{i}</p>")) + "</body></html>";
 
-        private static async Task<(PeachPDF.Html.Core.Dom.CssBox Root, HtmlContainerInt Container, List<string> Painted)> RenderAsync(string html)
+        private static async Task<(PeachBrackets.Html.Dom.CssBox Root, HtmlContainerInt Container, List<string> Painted)> RenderAsync(string html)
         {
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig());
 

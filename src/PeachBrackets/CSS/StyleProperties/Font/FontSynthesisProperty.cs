@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// CSS Fonts 4 §3.5 <c>font-synthesis</c>: <c>none | [ weight || style || small-caps || position ]</c>. A longhand

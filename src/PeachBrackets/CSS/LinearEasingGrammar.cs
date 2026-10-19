@@ -4,13 +4,13 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The arguments of the <c>linear()</c> easing function (CSS Easing 2 §2.1): a comma-separated list of at least two
     /// stops, each a <c>&lt;number&gt;</c> output with up to two <c>&lt;percentage&gt;</c> input positions, in either order.
     /// Used by both <see cref="Converters.LinearEasingConverter"/> (CSS-OM validation) and
-    /// <c>PeachPDF.Html.Core.Animation.EasingFunction</c> (which turns the stops into the curve), so the two cannot disagree
+    /// <c>PeachBrackets.Html.Animation.EasingFunction</c> (which turns the stops into the curve), so the two cannot disagree
     /// about what is a valid <c>linear()</c> - the same arrangement as <see cref="BackgroundPositionGrammar"/>.
     /// </summary>
     internal static class LinearEasingGrammar

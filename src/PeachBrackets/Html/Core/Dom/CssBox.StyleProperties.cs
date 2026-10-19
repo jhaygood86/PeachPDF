@@ -1,16 +1,16 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
 using PeachPDF;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The cascaded (<see cref="ComputedStyle"/>) and calculated-from-cascade (<see cref="DerivedStyle"/>)
@@ -262,50 +262,50 @@ namespace PeachPDF.Html.Core.Dom
         /// no scroll container, no formatting context and no monolith, which is what every reader of
         /// this value asks. Whether the box still clips is <see cref="ClipsWithoutScrolling"/>.
         /// </summary>
-        internal CssProperty<CSS.Overflow> Overflow
+        internal CssProperty<Css.Overflow> Overflow
         {
             get
             {
                 var x = OverflowX.Value;
                 var y = OverflowY.Value;
 
-                if (x is CSS.Overflow.Visible or CSS.Overflow.Clip && y is CSS.Overflow.Visible or CSS.Overflow.Clip)
+                if (x is Css.Overflow.Visible or Css.Overflow.Clip && y is Css.Overflow.Visible or Css.Overflow.Clip)
                 {
                     return UsedOverflowVisible;
                 }
 
-                if (x is CSS.Overflow.Hidden or CSS.Overflow.Clip || y is CSS.Overflow.Hidden or CSS.Overflow.Clip)
+                if (x is Css.Overflow.Hidden or Css.Overflow.Clip || y is Css.Overflow.Hidden or Css.Overflow.Clip)
                 {
                     return UsedOverflowHidden;
                 }
 
-                return x is CSS.Overflow.Scroll || y is CSS.Overflow.Scroll ? UsedOverflowScroll : UsedOverflowAuto;
+                return x is Css.Overflow.Scroll || y is Css.Overflow.Scroll ? UsedOverflowScroll : UsedOverflowAuto;
             }
         }
 
         // The four answers, built once: this is asked of every box by most of the layout and paint predicates, and a new immutable
         // record per read was the largest allocation under the fragment emitter's clip computation.
-        private static readonly CssProperty<CSS.Overflow> UsedOverflowVisible = CssProperty<CSS.Overflow>.FromValue(Keywords.Visible, CSS.Overflow.Visible);
-        private static readonly CssProperty<CSS.Overflow> UsedOverflowHidden = CssProperty<CSS.Overflow>.FromValue(Keywords.Hidden, CSS.Overflow.Hidden);
-        private static readonly CssProperty<CSS.Overflow> UsedOverflowScroll = CssProperty<CSS.Overflow>.FromValue(Keywords.Scroll, CSS.Overflow.Scroll);
-        private static readonly CssProperty<CSS.Overflow> UsedOverflowAuto = CssProperty<CSS.Overflow>.FromValue(Keywords.Auto, CSS.Overflow.Auto);
+        private static readonly CssProperty<Css.Overflow> UsedOverflowVisible = CssProperty<Css.Overflow>.FromValue(Keywords.Visible, Css.Overflow.Visible);
+        private static readonly CssProperty<Css.Overflow> UsedOverflowHidden = CssProperty<Css.Overflow>.FromValue(Keywords.Hidden, Css.Overflow.Hidden);
+        private static readonly CssProperty<Css.Overflow> UsedOverflowScroll = CssProperty<Css.Overflow>.FromValue(Keywords.Scroll, Css.Overflow.Scroll);
+        private static readonly CssProperty<Css.Overflow> UsedOverflowAuto = CssProperty<Css.Overflow>.FromValue(Keywords.Auto, Css.Overflow.Auto);
 
         /// <summary>
         /// Whether either axis is <c>clip</c> while <see cref="Overflow"/> stays <c>visible</c>: the box
         /// clips its content to the overflow clip edge without becoming a scroll container.
         /// </summary>
         internal bool ClipsWithoutScrolling =>
-            Overflow.Value == CSS.Overflow.Visible && (OverflowX.Value == CSS.Overflow.Clip || OverflowY.Value == CSS.Overflow.Clip);
+            Overflow.Value == Css.Overflow.Visible && (OverflowX.Value == Css.Overflow.Clip || OverflowY.Value == Css.Overflow.Clip);
 
         /// <summary>
         /// Whether the box clips its horizontal axis. Only a box that clips without scrolling can leave an
         /// axis open: a <c>visible</c> axis beside a <c>hidden</c>, <c>scroll</c> or <c>auto</c> one is
         /// <c>auto</c> (css-overflow-3 §3.2), so a scroll container clips both.
         /// </summary>
-        internal bool ClipsOverflowHorizontally => !ClipsWithoutScrolling || OverflowX.Value == CSS.Overflow.Clip;
+        internal bool ClipsOverflowHorizontally => !ClipsWithoutScrolling || OverflowX.Value == Css.Overflow.Clip;
 
         /// <summary>Whether the box clips its vertical axis; see <see cref="ClipsOverflowHorizontally"/>.</summary>
-        internal bool ClipsOverflowVertically => !ClipsWithoutScrolling || OverflowY.Value == CSS.Overflow.Clip;
+        internal bool ClipsOverflowVertically => !ClipsWithoutScrolling || OverflowY.Value == Css.Overflow.Clip;
 
         #endregion
 
@@ -695,7 +695,7 @@ namespace PeachPDF.Html.Core.Dom
         /// (<c>vw</c>/etc.) stay lazy, resolved later by <see cref="DerivedStyle.ActualFont"/> via
         /// <see cref="FontSizeResolver"/>: <c>calc()</c> needs real layout-time container-query information
         /// not available at cascade time (the same reason every other <c>calc()</c>-accepting
-        /// keyword-or-value property defers through <see cref="PeachPDF.CSS.LengthOrCalc"/>), <c>rem</c>
+        /// keyword-or-value property defers through <see cref="PeachBrackets.Css.LengthOrCalc"/>), <c>rem</c>
         /// resolves against a single, non-chained reference so it can't compound across generations
         /// regardless of when it resolves, and a viewport unit isn't parent-relative at all (it resolves
         /// against the page box, not the parent's font), so it has no compounding-across-generations risk

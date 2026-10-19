@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Text;
 using System.Threading.Tasks;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Integration
         private static async Task<double> WidthOfAsync(string body)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
-            return ((PeachPDF.Html.Core.Dom.CssBoxImage)LayoutHarness.FindById(root, "i")!).ReplacedWord.Width;
+            return ((PeachBrackets.Html.Dom.CssBoxImage)LayoutHarness.FindById(root, "i")!).ReplacedWord.Width;
         }
 
         [Fact]

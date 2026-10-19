@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Html.Fragmentation;
 
 namespace PeachPDF.Tests.TestSupport;
 
@@ -65,7 +65,7 @@ internal static partial class PaintedWords
         return (visible.Where(w => WordPattern().IsMatch(w) && w.Length == WordPattern().Match(w).Length)
             .Order().ToList(), fragmentainers.Count);
 
-        static void Collect(global::PeachPDF.Html.Core.Fragments.BoxFragment fragment, Rect band, List<string> into)
+        static void Collect(global::PeachBrackets.Html.Fragments.BoxFragment fragment, Rect band, List<string> into)
         {
             const double tolerance = 0.5;
 
@@ -105,7 +105,7 @@ internal static partial class PaintedWords
 
         return positions;
 
-        static void Collect(global::PeachPDF.Html.Core.Fragments.BoxFragment fragment, int page,
+        static void Collect(global::PeachBrackets.Html.Fragments.BoxFragment fragment, int page,
             Dictionary<string, (int Page, double X, double Y)> into)
         {
             foreach (var word in fragment.Words)

@@ -3,7 +3,7 @@ using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine.Rendering;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Collections.Generic;
 
 namespace PeachPDF.Rendering

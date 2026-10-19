@@ -1,10 +1,10 @@
 using PeachPDF.Rendering;
 using PeachPDF;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -20,8 +20,8 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// A page-margin box's own <c>border</c> (closes #943): painted as four independent edge strokes
-    /// (<see cref="PeachPDF.Html.Core.Dom.MarginBoxRenderer.PaintBorder"/>, via
-    /// <see cref="PeachPDF.Html.Core.Handlers.BordersDrawHandler.DrawCollapsedSegment"/>'s solid-style
+    /// (<see cref="PeachBrackets.Html.Dom.MarginBoxRenderer.PaintBorder"/>, via
+    /// <see cref="PeachBrackets.Html.Handlers.BordersDrawHandler.DrawCollapsedSegment"/>'s solid-style
     /// path, which paints a 4-point polygon fill - <c>X Y m / X Y l / X Y l / X Y l / h f</c> in the raw
     /// content stream). Verified the same content-stream-regex way as the sibling background/canvas
     /// tests: a solid-color polygon fill's exact vertex coordinates are unambiguous proof, confirmed

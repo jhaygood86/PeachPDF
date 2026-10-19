@@ -10,12 +10,12 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Utils;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     internal static class CssDefaults
     {

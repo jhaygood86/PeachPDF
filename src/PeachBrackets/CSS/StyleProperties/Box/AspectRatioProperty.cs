@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>aspect-ratio</c> property (CSS Box Sizing Level 4). The value is validated by the shared

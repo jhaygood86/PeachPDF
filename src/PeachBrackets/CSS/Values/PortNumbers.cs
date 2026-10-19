@@ -3,7 +3,7 @@
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal static class PortNumbers
     {

@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachPDF.Tests.TestSupport;
 using PeachDrawing.PDF;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 

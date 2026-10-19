@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using PeachPDF;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
@@ -18,7 +18,7 @@ namespace PeachPDF.Tests.Integration
     /// §3.9), added to close a documented accepted gap ("no visual effect possible in a static PDF")
     /// that turned out to have a well-defined paginated-media meaning: a fixed-attachment background's
     /// positioning area is the page/viewport box, not the element's own box - exactly the model
-    /// <c>position: fixed</c> already uses (both ignore <see cref="Html.Core.HtmlContainerInt.ScrollOffset"/>).
+    /// <c>position: fixed</c> already uses (both ignore <see cref="Html.HtmlContainerInt.ScrollOffset"/>).
     /// This is directly exercised by several "trap" declarations in the real Acid2 fixture.
     ///
     /// Asserted structurally per this repo's painting-test convention: the <c>cm</c> matrix

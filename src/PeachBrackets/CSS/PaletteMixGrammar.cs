@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>One operand of a <c>palette-mix()</c>: a palette reference and an optional mixing percentage.</summary>
     internal sealed record PaletteMixOperand(string Palette, double? Percentage);

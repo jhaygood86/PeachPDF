@@ -15,7 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Computes an element's local-space bounding box - needed to resolve <c>objectBoundingBox</c>-unit

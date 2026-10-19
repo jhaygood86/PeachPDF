@@ -13,13 +13,13 @@
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.Text.Unicode;
 using MimeKit;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -29,7 +29,7 @@ using System.Numerics;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Builds an <see cref="SvgDocument"/> scene graph from any <see cref="ISvgSourceNode"/> tree, in
@@ -87,7 +87,7 @@ namespace PeachPDF.Svg
         /// The root element's used <c>font-size</c> (the value <c>rem</c> font-sizes resolve against),
         /// captured once in <see cref="BuildDocument"/>. Defaults to the UA initial font size until then.
         /// </summary>
-        private double _rootFontSize = Html.Core.Utils.DefaultFontResolver.FontSize;
+        private double _rootFontSize = Html.Utils.DefaultFontResolver.FontSize;
 
         /// <summary>The root element's resolved font context, and the length basis built on it (what the
         /// root-element units <c>rem</c>/<c>rex</c>/<c>rch</c>/... resolve against). Null until
@@ -254,8 +254,8 @@ namespace PeachPDF.Svg
             string? TextAlign = null)
         {
             public static readonly FontContext Default = new(
-                Html.Core.Utils.DefaultFontResolver.DefaultFont, Html.Core.Utils.DefaultFontResolver.FontSize, false, false,
-                Html.Core.Utils.FontStretchResolver.Normal, 0, 0, TextTransform.None,
+                Html.Utils.DefaultFontResolver.DefaultFont, Html.Utils.DefaultFontResolver.FontSize, false, false,
+                Html.Utils.FontStretchResolver.Normal, 0, 0, TextTransform.None,
                 LigatureSet.Default, CapsMode.None, NumeralSet.None, EastAsianSet.None,
                 [], true);
         }
@@ -1872,7 +1872,7 @@ namespace PeachPDF.Svg
             var stretchAttr = ResolveStyledAttr(node, "font-stretch");
             var stretch = stretchAttr is null || stretchAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Stretch
-                : Html.Core.Utils.FontStretchResolver.Resolve(stretchAttr.Trim());
+                : Html.Utils.FontStretchResolver.Resolve(stretchAttr.Trim());
 
             // letter-spacing/word-spacing's em/ex resolve against THIS element's own font-size (the
             // just-computed `size` above), unlike font-size's own em/ex (which resolve against the
@@ -2427,7 +2427,7 @@ namespace PeachPDF.Svg
         {
             var size = Math.Max(font.Size, 1);
             return GetFontFor(font, font.Family, size)
-                   ?? GetFontFor(font, Html.Core.Utils.DefaultFontResolver.DefaultFont, size);
+                   ?? GetFontFor(font, Html.Utils.DefaultFontResolver.DefaultFont, size);
         }
 
         /// <summary>
@@ -2551,7 +2551,7 @@ namespace PeachPDF.Svg
             var runFont = ComputeFontContext(node, fontContext);
 
             run.Font = GetFontFor(runFont, runFont.Family, runFont.Size)
-                       ?? GetFontFor(runFont, Html.Core.Utils.DefaultFontResolver.DefaultFont, runFont.Size);
+                       ?? GetFontFor(runFont, Html.Utils.DefaultFontResolver.DefaultFont, runFont.Size);
             if (run.Font is { } primaryFont)
                 run.FontFor = CreateFontFallback(runFont, primaryFont);
 
@@ -3440,12 +3440,12 @@ namespace PeachPDF.Svg
             switch (type)
             {
                 case "saturate":
-                    matrix = PeachPDF.Html.Core.Paint.FilterEffectResolver.SaturateMatrix(
+                    matrix = PeachBrackets.Html.Paint.FilterEffectResolver.SaturateMatrix(
                         SvgValueParsers.ParseNumberList(node.GetAttribute("values")) is { Length: > 0 } sat ? sat[0] : 1.0);
                     break;
 
                 case "huerotate":
-                    matrix = PeachPDF.Html.Core.Paint.FilterEffectResolver.HueRotateMatrix(
+                    matrix = PeachBrackets.Html.Paint.FilterEffectResolver.HueRotateMatrix(
                         (SvgValueParsers.ParseNumberList(node.GetAttribute("values")) is { Length: > 0 } hue ? hue[0] : 0.0) * Math.PI / 180.0);
                     break;
 

@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 
 namespace PeachPDF.Tests.Html.Core.Fragmentation
 {

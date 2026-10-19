@@ -2,9 +2,9 @@
 using PeachPDF.Rendering;
 using System.Threading.Tasks;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 using PeachDrawing.Text.Unicode;
 using Xunit;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// End-to-end layout tests for real <c>vertical-rl</c>/<c>vertical-lr</c> layout: both line flow
-    /// (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngine.CreateVerticalLineBoxes"/>) and block-level
+    /// (<see cref="PeachBrackets.Html.Dom.CssLayoutEngine.CreateVerticalLineBoxes"/>) and block-level
     /// child placement (<c>CssBox.LayoutVerticalBlockChildren</c>, issue #760), asserting actual
     /// <c>CssBox</c>/word geometry after layout - not just that layout completes - per this repo's testing
     /// conventions for layout-engine changes.

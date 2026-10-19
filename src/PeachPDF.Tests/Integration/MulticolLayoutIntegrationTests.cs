@@ -2,10 +2,10 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text.Shaping;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Collections.Generic;
 using System.Linq;
@@ -1017,8 +1017,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(400, pageHeight);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize  = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize  = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
@@ -1591,8 +1591,8 @@ namespace PeachPDF.Tests.Integration
             // Every word claimed by exactly one fragmentainer in the emitted tree - not merely laid
             // out somewhere, which the assertion above already covers, but actually painted, since a
             // word can be positioned and still fall outside every emitted fragment's band.
-            var claims = new Dictionary<PeachPDF.Html.Core.Dom.CssRect, int>();
-            void CountClaims(PeachPDF.Html.Core.Fragments.BoxFragment f)
+            var claims = new Dictionary<PeachBrackets.Html.Dom.CssRect, int>();
+            void CountClaims(PeachBrackets.Html.Fragments.BoxFragment f)
             {
                 foreach (var w in f.Words)
                     claims[w.Word] = claims.GetValueOrDefault(w.Word) + 1;
@@ -1633,8 +1633,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(authoredWordsPerContainer, LayoutHarness.Descendants(mc1).SelectMany(b => b.Words).Count());
             Assert.Equal(authoredWordsPerContainer, LayoutHarness.Descendants(mc2).SelectMany(b => b.Words).Count());
 
-            var claims = new Dictionary<PeachPDF.Html.Core.Dom.CssRect, int>();
-            void CountClaims(PeachPDF.Html.Core.Fragments.BoxFragment f)
+            var claims = new Dictionary<PeachBrackets.Html.Dom.CssRect, int>();
+            void CountClaims(PeachBrackets.Html.Fragments.BoxFragment f)
             {
                 foreach (var w in f.Words)
                     claims[w.Word] = claims.GetValueOrDefault(w.Word) + 1;

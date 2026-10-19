@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>stop-color</c> of a gradient <c>&lt;stop&gt;</c> (SVG 2 §13.4): <c>&lt;color&gt;</c> or <c>currentcolor</c>. Not inherited; the SVG gradient builder reads it.

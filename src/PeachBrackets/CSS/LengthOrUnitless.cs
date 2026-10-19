@@ -1,11 +1,11 @@
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The value side of <c>line-height</c>'s <c>normal | &lt;number&gt; | &lt;length-percentage&gt;</c>
     /// grammar (CSS Inline Layout 3 §4) once the keyword (<c>normal</c>) side is factored out by the outer
-    /// <see cref="CssKeywordOrValue{TEnum,TValue}"/>: either a <see cref="CSS.LengthOrCalc"/> (the
+    /// <see cref="CssKeywordOrValue{TEnum,TValue}"/>: either a <see cref="Css.LengthOrCalc"/> (the
     /// <c>&lt;length-percentage&gt;</c> case, itself already a union of a resolved <see cref="Length"/> and
     /// a deferred relative-unit <c>calc()</c> — see its own doc comment), or a bare unitless multiplier
     /// (e.g. <c>line-height: 1.5</c>), which CSS2.1 §10.8.1 defines as the element's own font size scaled
@@ -17,7 +17,7 @@ namespace PeachPDF.CSS
     /// The "exactly one is set" invariant is enforced by the constructor, mirroring
     /// <see cref="LengthOrCalc"/>/<see cref="CssKeywordOrValue{TEnum,TValue}"/> — <c>default(LengthOrUnitless)</c>
     /// (both null) bypasses it the same way, but the only construction site,
-    /// <c>CssValueParser.TryParseLengthOrUnitless</c> (namespace <c>PeachPDF.Html.Core.Parse</c>), always
+    /// <c>CssValueParser.TryParseLengthOrUnitless</c> (namespace <c>PeachBrackets.Html.Parse</c>), always
     /// goes through this constructor.
     /// </para>
     /// </summary>

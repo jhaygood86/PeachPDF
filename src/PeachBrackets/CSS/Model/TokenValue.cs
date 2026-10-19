@@ -5,7 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class TokenValue : StylesheetNode, IReadOnlyList<Token>
     {

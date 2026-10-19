@@ -1,9 +1,9 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Html.Entities;
 using System;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Gradient color-stop interpolation across CSS Color 4 interpolation spaces. The actual color-space

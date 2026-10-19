@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class CompoundSelector : Selectors, ISelector
     {

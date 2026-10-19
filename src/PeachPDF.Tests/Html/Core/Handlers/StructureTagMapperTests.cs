@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Utils;
 
 namespace PeachPDF.Tests.Html.Core.Handlers
 {

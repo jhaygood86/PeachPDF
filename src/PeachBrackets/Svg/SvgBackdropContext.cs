@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>Paints the page content lying behind an inline SVG, for the SVG's <c>BackgroundImage</c>.</summary>
     internal interface ISvgPageBackdrop

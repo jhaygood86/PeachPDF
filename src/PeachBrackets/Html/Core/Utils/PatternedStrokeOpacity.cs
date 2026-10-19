@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Composites overlapping same-colored pattern strokes once, after their opaque shapes have been

@@ -4,7 +4,7 @@ namespace PeachPDF.Tests.CSS
     using System.Text;
     using System.Threading;
     using System.Threading.Tasks;
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using Xunit;
 
     public class CssStreamLoaderTests

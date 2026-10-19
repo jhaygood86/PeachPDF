@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -10,7 +10,7 @@ using static PeachPDF.Tests.TestSupport.TestRecordingGraphics;
 
 namespace PeachPDF.Tests.Html.Core.Utils
 {
-    using DomUtils = PeachPDF.Html.Core.Utils.DomUtils;
+    using DomUtils = PeachBrackets.Html.Utils.DomUtils;
 
     /// <summary>
     /// <see cref="RenderUtils.PushAncestorOverflowClips"/> re-applies an ancestor's <c>overflow: hidden</c>

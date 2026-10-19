@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>stop-opacity</c> of a gradient <c>&lt;stop&gt;</c> (SVG 2 §13.4): a <c>&lt;number&gt;</c> or <c>&lt;percentage&gt;</c>. Not inherited; the SVG gradient builder reads it.

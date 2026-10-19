@@ -4,10 +4,10 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.CounterStyles
+namespace PeachBrackets.Html.CounterStyles
 {
     /// <summary>
     /// Turns a counter value into text with an author-defined <see cref="CounterStyle"/>, following CSS

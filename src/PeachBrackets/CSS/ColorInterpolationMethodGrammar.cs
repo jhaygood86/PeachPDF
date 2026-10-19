@@ -3,7 +3,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The single, shared grammar for a gradient's <c>&lt;color-interpolation-method&gt;</c> prelude

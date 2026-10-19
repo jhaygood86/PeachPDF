@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.Html.Core.Animation
+namespace PeachBrackets.Html.Animation
 {
     /// <summary>The <c>animation-direction</c> keywords (CSS Animations 1 §3.7).</summary>
     internal enum AnimationDirectionKind

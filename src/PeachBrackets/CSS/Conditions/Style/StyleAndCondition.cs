@@ -1,8 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class StyleAndCondition : IStyleQueryCondition
     {

@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// CSS Fonts 4 §6.6 <c>font-language-override</c>: <c>normal | &lt;string&gt;</c>. Inherited. The authored text is kept;
@@ -79,7 +79,7 @@ namespace PeachPDF.CSS
         {
             if (string.IsNullOrWhiteSpace(authored)) return null;
 
-            using var pooled = Html.Core.Parse.CssValueParser.GetCssTokensPooled(authored.Trim());
+            using var pooled = Html.Parse.CssValueParser.GetCssTokensPooled(authored.Trim());
             List<Token> tokens = pooled;
             return TryParse(tokens, out var tag) ? tag : null;
         }

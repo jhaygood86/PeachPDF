@@ -1,7 +1,7 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves a CSS <c>font-stretch</c> value (one of the nine keywords, or a percentage) to the percentage of the normal width it

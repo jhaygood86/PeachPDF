@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Linq;
 using System.Text;
@@ -33,7 +33,7 @@ namespace PeachPDF.Tests.Integration
             string.Concat(Enumerable.Range(1, linesAfter).Select(i => $"<p id='a{i}'>After {i}</p>")) +
             "</div>" + after;
 
-        private static Task<(CssBox Root, PeachPDF.Html.Core.HtmlContainerInt Container)> Lay(string html) =>
+        private static Task<(CssBox Root, PeachBrackets.Html.HtmlContainerInt Container)> Lay(string html) =>
             LayoutAsync(html, pageWidth: 300, pageHeight: PageBottom, margin: 0);
 
         [Fact]

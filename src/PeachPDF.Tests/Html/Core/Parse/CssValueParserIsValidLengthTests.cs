@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 
 namespace PeachPDF.Tests.Html.Core.Parse
 {

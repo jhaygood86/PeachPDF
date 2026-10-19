@@ -1,11 +1,11 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Fragments
+namespace PeachBrackets.Html.Fragments
 {
     /// <summary>
     /// One box subtree's laid-out geometry, captured so the same boxes can be positioned more than

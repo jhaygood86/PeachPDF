@@ -88,7 +88,7 @@ namespace PeachPDF
 
         /// <summary>
         /// Formats this color as a canonical <c>rgb()</c>/<c>rgba()</c> CSS color token - the exact text
-        /// every internal <see cref="Html.Core.Dom.CssBox"/> string-typed color property already accepts
+        /// every internal <c>Html.Dom.CssBox</c> string-typed color property already accepts
         /// and resolves via the real CSS color parser.
         /// </summary>
         internal string ToCssText() => A == 255

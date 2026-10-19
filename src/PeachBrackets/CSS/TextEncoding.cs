@@ -6,7 +6,7 @@ using System.Text;
 
 // ReSharper disable UnusedMember.Global
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal static class TextEncoding
     {

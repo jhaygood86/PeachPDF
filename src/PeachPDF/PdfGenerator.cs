@@ -13,23 +13,23 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Annotations;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Annotations;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
 using PeachPDF.PdfFeatures;
-using PeachPDF.Html.Core.Paint;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Paint;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Linq;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Layout;
 using PeachPDF.Network;
-using PeachPDF.Utilities;
+using PeachBrackets.Utilities;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -539,7 +539,7 @@ namespace PeachPDF
         /// nothing here is specific to how that container's content tree was built, so this is shared
         /// verbatim between the HTML path (<see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>,
         /// after its own <see cref="SetContent"/>/<c>ShrinkToFit</c> setup above) and the declarative
-        /// document-building path that builds a <see cref="Html.Core.Dom.CssBox"/> tree directly instead
+        /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
         private async Task RenderPagesCore(PeachPdfDocument document, HtmlContainer container, PdfGenerateConfig config)

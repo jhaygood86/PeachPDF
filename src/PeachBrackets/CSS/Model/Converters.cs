@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal static class Converters
     {

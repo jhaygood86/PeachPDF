@@ -10,9 +10,9 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// Holds data on link element in HTML.<br/>

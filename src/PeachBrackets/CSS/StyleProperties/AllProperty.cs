@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>all</c> shorthand (CSS Cascade 4 §3.2): resets every property except <c>direction</c>,

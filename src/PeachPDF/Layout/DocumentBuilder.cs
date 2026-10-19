@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 
@@ -31,7 +31,7 @@ namespace PeachPDF.Layout
         }
 
         /// <summary>
-        /// Builds and returns one page descriptor's own root <see cref="Html.Core.Dom.CssBox"/> tree by
+        /// Builds and returns one page descriptor's own root <c>Html.Dom.CssBox</c> tree by
         /// running <paramref name="handler"/> against a fresh <see cref="PageDescriptorBuilder"/>.
         /// </summary>
         internal static PageDescriptorBuilder BuildPage(Action<IPageDescriptor> handler, CssPropertyFactory properties)

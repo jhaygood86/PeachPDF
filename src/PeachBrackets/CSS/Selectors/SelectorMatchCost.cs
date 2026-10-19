@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A static, ascending cost tier per <see cref="ISelector"/> kind, used to evaluate a compound or

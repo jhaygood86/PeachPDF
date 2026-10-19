@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Entities;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// The generic copy-on-write mechanisms shared by <see cref="ComputedStyle"/> and every area record
@@ -99,6 +99,6 @@ namespace PeachPDF.Html.Core.Dom
     internal sealed partial record TextArea
     {
         public CssProperty<TextUnderlineSide> TextUnderlineSide { get; init; } =
-            CssProperty<TextUnderlineSide>.FromValue(Keywords.Auto, CSS.TextUnderlineSide.Auto);
+            CssProperty<TextUnderlineSide>.FromValue(Keywords.Auto, Css.TextUnderlineSide.Auto);
     }
 }

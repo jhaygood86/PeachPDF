@@ -1,8 +1,8 @@
 using System;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS Sizing 3's <c>stretch</c> size (and its legacy <c>-webkit-fill-available</c>/<c>-moz-available</c>
@@ -60,7 +60,7 @@ namespace PeachPDF.Html.Core.Dom
         {
             var parent = ParentBox;
             if (parent is null || parent.DerivedStyle.ActualDisplay != Keywords.Block) return false;
-            if (parent.Overflow.Value != PeachPDF.CSS.Overflow.Visible) return false;
+            if (parent.Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
 
             return start
                 ? parent.ActualBorderTopWidth + parent.ActualPaddingTop == 0

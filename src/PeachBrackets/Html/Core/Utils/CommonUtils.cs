@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System;
 using System.Collections.Frozen;
@@ -18,7 +18,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Utility methods for general stuff.

@@ -1,9 +1,9 @@
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Svg;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// A document-wide index of every SVG <c>&lt;clipPath&gt;</c> element in the HTML document, keyed by

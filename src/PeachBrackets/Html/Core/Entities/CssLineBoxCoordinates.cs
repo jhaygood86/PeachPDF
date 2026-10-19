@@ -1,8 +1,8 @@
-﻿using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragmentation;
+﻿using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 using System.Collections.Generic;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     internal record CssLineBoxCoordinates
     {

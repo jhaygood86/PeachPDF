@@ -1,8 +1,8 @@
 using System.Text;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Reads the measurements the font-relative CSS units are defined by (CSS Values and Units 4 §6.1.1)

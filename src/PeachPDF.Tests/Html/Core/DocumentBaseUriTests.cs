@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Network;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;

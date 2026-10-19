@@ -3,7 +3,7 @@ using System.Collections;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A frozen, case-insensitive keyword-to-value table (the <see cref="Map"/> fields): what a <c>FrozenDictionary&lt;string, T&gt;</c>

@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.Integration
 {
     /// <summary>
     /// End-to-end layout tests for real writing-mode-aware Flexbox
-    /// (<see cref="PeachPDF.Html.Core.Dom.CssLayoutEngineFlex"/>'s <c>_mainAxisIsPhysicalX</c>/
+    /// (<see cref="PeachBrackets.Html.Dom.CssLayoutEngineFlex"/>'s <c>_mainAxisIsPhysicalX</c>/
     /// <c>_mainStartIsAtMax</c>/<c>_crossStartIsAtMax</c> axis mapping), asserting actual post-layout
     /// <c>CssBox</c> geometry - not just that layout completes - per this repo's testing conventions for
     /// layout-engine changes. <c>flex-direction: row</c> always means "main axis = inline axis" (CSS

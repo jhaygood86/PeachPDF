@@ -1,12 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     /// <summary>
-    /// Wraps a live <see cref="CssBox"/> (built for free by <see cref="Html.Core.Parse.HtmlParser"/> out
+    /// Wraps a live <see cref="CssBox"/> (built for free by <see cref="Html.Parse.HtmlParser"/> out
     /// of an inline <c>&lt;math&gt;</c>'s markup) as an <see cref="IMathSourceNode"/>. The wrapped boxes
     /// are read purely as a data source here - they are never laid out or painted through the generic
     /// box pipeline (see <c>CssBoxMath</c>).

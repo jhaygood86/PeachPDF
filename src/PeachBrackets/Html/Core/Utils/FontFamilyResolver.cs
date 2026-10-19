@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.Core;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Resolves a (possibly comma-separated) CSS font-family list to a real <see cref="Font"/>, trying

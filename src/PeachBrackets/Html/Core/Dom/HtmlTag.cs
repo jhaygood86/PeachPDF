@@ -10,13 +10,13 @@
 // - Sun Tsu,
 // "The Art of War"
 
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     internal sealed class HtmlTag
     {

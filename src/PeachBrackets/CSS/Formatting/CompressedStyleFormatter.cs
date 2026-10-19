@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class CompressedStyleFormatter : IStyleFormatter
     {

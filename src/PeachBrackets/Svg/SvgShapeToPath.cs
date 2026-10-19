@@ -12,7 +12,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Converts a basic-shape element (<c>rect</c>/<c>line</c>/<c>polyline</c>/<c>polygon</c>/

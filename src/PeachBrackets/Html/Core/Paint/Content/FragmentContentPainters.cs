@@ -1,7 +1,7 @@
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Handlers;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Resolves a box to the <see cref="IFragmentContentPainter"/> that paints its content, or null for

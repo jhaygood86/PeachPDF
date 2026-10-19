@@ -15,7 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Evaluates a <see cref="SvgFilter"/>'s primitive graph against real PDF tiles (<see cref="Image"/>s

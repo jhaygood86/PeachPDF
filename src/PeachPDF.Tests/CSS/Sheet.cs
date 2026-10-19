@@ -1,6 +1,6 @@
 namespace PeachPDF.Tests.CSS
 {
-    using PeachPDF.CSS;
+    using PeachBrackets.Css;
     using System.IO;
     using System.Linq;
     using Xunit;

@@ -1,11 +1,11 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Utils;
-using PeachPDF.Svg;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for an <c>&lt;object&gt;</c> element, implementing (a static-renderer subset of) the

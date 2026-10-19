@@ -1,16 +1,17 @@
-using PeachPDF.CSS;
+using PeachPDF;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Handlers;
-using PeachPDF.Html.Core.Paint.Content;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Handlers;
+using PeachBrackets.Html.Paint.Content;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace PeachPDF.Html.Core.Paint
+namespace PeachBrackets.Html.Paint
 {
     /// <summary>
     /// The paint phase. Consumes one <see cref="FragmentainerFragment"/> — one page of the immutable
@@ -669,7 +670,7 @@ namespace PeachPDF.Html.Core.Paint
 
         /// <summary>
         /// Maps the CSS-namespace <see cref="BlendMode"/> (the enum-keyword source generator's
-        /// <c>enumType</c> codegen hardcodes <c>PeachPDF.CSS</c> as its namespace, so <c>mix-blend-mode</c>
+        /// <c>enumType</c> codegen hardcodes <c>PeachBrackets.Css</c> as its namespace, so <c>mix-blend-mode</c>
         /// can't bind directly to <see cref="PaintBlendMode"/> despite the two enums being identical in shape)
         /// onto the <see cref="PaintBlendMode"/> the PDF-writing layer actually understands. The one call site
         /// that needs this conversion, per CLAUDE.md's guidance to map at paint time rather than duplicate

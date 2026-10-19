@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>PeachPDF's <c>-peachpdf-pdf-form-field</c> extension - which AcroForm field kind (if any) an element becomes when interactive PDF forms are enabled.</summary>
     internal enum PdfFormFieldKeyword

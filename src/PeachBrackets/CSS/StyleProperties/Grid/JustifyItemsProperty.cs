@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>justify-items</c> property (CSS Box Alignment): default inline-axis alignment of grid items.</summary>
     internal sealed class JustifyItemsProperty : Property

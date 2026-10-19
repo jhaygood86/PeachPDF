@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.Integration
     /// <para>
     /// Since issue #1147, the page box has its own border/padding, so its background positioning area
     /// is no longer always the full physical sheet: <c>background-origin</c>/<c>-clip</c>'s default
-    /// (padding-box, mirroring <see cref="PeachPDF.Html.Core.Dom.MarginBoxRenderer"/>'s own fallback for
+    /// (padding-box, mirroring <see cref="PeachBrackets.Html.Dom.MarginBoxRenderer"/>'s own fallback for
     /// a page-margin box's background) resolves inside this page's own MARGIN - background never
     /// extends into any box's margin, page box included - even with no border/padding declared, which is
     /// why <see cref="PageBackgroundColor_FillsInsideMargin_WhenNoBorderOrPaddingDeclared"/> (previously

@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class OrValueConverter : IValueConverter
     {

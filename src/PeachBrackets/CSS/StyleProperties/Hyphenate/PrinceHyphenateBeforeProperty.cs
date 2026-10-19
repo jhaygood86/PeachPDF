@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Hidden, undocumented compat alias for Prince's own -prince-hyphenate-before spelling - see HyphenateBeforeProperty.</summary>
     internal sealed class PrinceHyphenateBeforeProperty : Property

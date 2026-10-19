@@ -2,9 +2,9 @@
 
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Grammar for the <c>position</c> property's value: a plain keyword (static/relative/absolute/

@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
@@ -229,7 +229,7 @@ namespace PeachPDF.Tests.Integration
             FragmentPaintHarness.PaintBox(container, root, g);
 
             Assert.Equal(transformed, g.Log.Any(op => op is TestRecordingGraphics.PushTransformCall));
-            Assert.Equal(transformed, PeachPDF.Html.Core.Utils.DomUtils.IsStackingContextBox(FindById(root, "s")!));
+            Assert.Equal(transformed, PeachBrackets.Html.Utils.DomUtils.IsStackingContextBox(FindById(root, "s")!));
             Assert.Contains(g.Log, op => op is TestRecordingGraphics.DrawRectCall r && r.PaintColor == PaintColor.FromArgb(231, 111, 81));
         }
 
@@ -434,7 +434,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static CssBox? FindById(CssBox root, string id) =>
-            PeachPDF.Html.Core.Utils.DomUtils.GetBoxById(root, id);
+            PeachBrackets.Html.Utils.DomUtils.GetBoxById(root, id);
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
@@ -447,8 +447,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

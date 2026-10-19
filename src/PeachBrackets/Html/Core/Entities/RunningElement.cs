@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// Tracks one <c>position: running(&lt;custom-ident&gt;)</c> box (css-gcpm-3), so a page margin

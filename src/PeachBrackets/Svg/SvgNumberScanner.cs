@@ -13,7 +13,7 @@
 using System;
 using System.Globalization;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Shared low-level scanner for the number/flag grammar used by SVG's <c>d</c> and <c>points</c>

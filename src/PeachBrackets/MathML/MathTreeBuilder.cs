@@ -20,7 +20,7 @@ using System.Collections.Generic;
 using System.Linq;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     internal static class MathTreeBuilder
     {

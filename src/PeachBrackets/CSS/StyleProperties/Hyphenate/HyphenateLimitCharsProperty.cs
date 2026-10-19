@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>hyphenate-limit-chars</c> property (CSS Text 4 §6.3.4): <c>[ auto | &lt;integer&gt; ]{1,3}</c>.

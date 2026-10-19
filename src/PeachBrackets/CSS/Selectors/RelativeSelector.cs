@@ -1,6 +1,6 @@
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// One alternative of :has()'s forgiving-relative-selector-list argument (CSS Selectors 4 §4.5),

@@ -344,8 +344,8 @@ internal abstract class ImageSource
     /// <remarks>
     /// A decode failure (unrecognized/unsupported format, malformed bytes) must be surfaced as an
     /// <see cref="InvalidOperationException"/> - callers such as
-    /// <c>PeachPDF.Html.Core.Handlers.ImageLoadHandler.LoadImageFromStream</c> and
-    /// <c>PeachPDF.Svg.SvgTreeBuilder.DecodeRasterImage</c> catch exactly that type to treat a
+    /// <c>PeachBrackets.Html.Handlers.ImageLoadHandler.LoadImageFromStream</c> and
+    /// <c>PeachBrackets.Svg.SvgTreeBuilder.DecodeRasterImage</c> catch exactly that type to treat a
     /// broken image as a non-fatal, unresolved replaced element rather than aborting the render.
     /// </remarks>
     protected abstract IImageSource CreateFromFile(string path, int? quality = 75);

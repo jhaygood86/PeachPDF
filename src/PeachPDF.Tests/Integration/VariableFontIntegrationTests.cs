@@ -1,6 +1,6 @@
 using PeachDrawing.Text;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.CSS;
 using PeachPDF.Tests.TestSupport;

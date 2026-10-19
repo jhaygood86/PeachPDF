@@ -3,7 +3,7 @@
 using System.IO;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A <c>@font-palette-values</c> at-rule (CSS Fonts Module Level 4): associates a named palette override

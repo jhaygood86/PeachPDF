@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 // ReSharper disable UnusedMember.Global
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal class StylesheetParser
     {

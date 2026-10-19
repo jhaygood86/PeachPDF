@@ -7,7 +7,7 @@ namespace PeachPDF.SourceGenerators.Emit
     /// The single place a <c>DataTypeKind.KeywordOrValue</c> entry's <c>valueType</c>
     /// ("integer"/"number"/"length"/"length-or-unitless"/"percentage") maps to real C# — the value-side validation clause, the
     /// storage type, and the <c>TryParse</c>-shaped parser to hand to
-    /// <see cref="global::PeachPDF.CSS.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
+    /// <see cref="global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText{TEnum,TValue}"/>.
     /// <see cref="ValidatorExpressionBuilder"/> and <see cref="RegistryEmitter"/> both consult this rather
     /// than each declaring (and separately guarding) their own copy of the valueType switch. An entry's
     /// optional <see cref="DataTypeSpec.Min"/>/<see cref="DataTypeSpec.Max"/> — the same JSON <c>min</c>/
@@ -46,22 +46,22 @@ namespace PeachPDF.SourceGenerators.Emit
             // storage can actually represent, which would let a value pass validation and then silently
             // fall back to the wrong keyword-side value in FromCssText).
             "length" => new Resolved(
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc(value, out _)",
-                "global::PeachPDF.CSS.LengthOrCalc", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrCalc"),
+                "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc(value, out _)",
+                "global::PeachBrackets.Css.LengthOrCalc", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc"),
             // line-height's own non-keyword grammar (<length-percentage> | <number>) - a superset of
             // "length" that also accepts a bare unitless multiplier (CSS Inline Layout 3 §4). See
             // LengthOrUnitless's own doc comment for why the unitless side needs no separate deferred-calc
             // case the way the length side does.
             "length-or-unitless" => new Resolved(
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _)",
-                "global::PeachPDF.CSS.LengthOrUnitless", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseLengthOrUnitless"),
+                "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrUnitless(value, out _)",
+                "global::PeachBrackets.Css.LengthOrUnitless", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrUnitless"),
             // A non-negative <percentage> stored as a double, e.g. font-stretch's 87.5% (the keywords stand for percentages too).
             "percentage" => new Resolved(
-                "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _)",
-                "double", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNonNegativePercentage"),
+                "global::PeachBrackets.Html.Parse.CssValueParser.TryParseNonNegativePercentage(value, out _)",
+                "double", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseNonNegativePercentage"),
             // A plain <number> stored as a double, e.g. font-weight's 350.5; the optional min/max narrow it as they do "integer".
             "number" => new Resolved(
-                BuildNumberValueClause(dt), "double", "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber"),
+                BuildNumberValueClause(dt), "double", "global::PeachBrackets.Html.Parse.CssValueParser.TryParseNumber"),
             _ => throw new NotSupportedException(
                 $"\"{entry.Name}\" declares a keyword-or-value cssDataType with valueType \"{dt.ValueType}\", " +
                 "which KeywordOrValueGrammar does not yet implement."),
@@ -71,7 +71,7 @@ namespace PeachPDF.SourceGenerators.Emit
         // culture, since the generated C# must not depend on the culture the compiler runs in).
         private static string BuildNumberValueClause(DataTypeSpec dt)
         {
-            const string parse = "global::PeachPDF.Html.Core.Parse.CssValueParser.TryParseNumber(value, out ";
+            const string parse = "global::PeachBrackets.Html.Parse.CssValueParser.TryParseNumber(value, out ";
             if (dt.Min is null && dt.Max is null) return parse + "_)";
 
             var clause = parse + "var parsedNumber)";

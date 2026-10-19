@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// One <c>&lt;stop&gt;</c> of a gradient definition.

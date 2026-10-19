@@ -2,7 +2,7 @@
 
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal struct TextPosition : IEquatable<TextPosition>, IComparable<TextPosition>
     {

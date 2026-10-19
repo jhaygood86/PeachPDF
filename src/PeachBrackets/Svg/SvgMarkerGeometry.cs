@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// One vertex a marker can be placed at, plus the tangent angle (degrees, atan2 convention) a

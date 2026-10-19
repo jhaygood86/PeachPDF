@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// <c>background-clip</c>'s own keyword grammar - the three <see cref="BoxModel"/> values plus

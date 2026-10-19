@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.Text.Unicode;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
@@ -12,7 +12,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s Devanagari Universal Shaping Engine (USE) category
     /// resolution/shaping-run wiring (issue #533) - mirrors
-    /// <see cref="PeachPDF.Tests.Html.Core.DevanagariUseCharacterizationTests"/>'s own "prove the
+    /// <see cref="PeachPDF.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove the
     /// wiring reaches real shaping" standard, but for SVG's own independent pipeline
     /// (<c>SvgRenderer.ResolveComplexScriptRuns</c>). Real-font syllable-reordering proof lives in
     /// <see cref="SvgTextDevanagariUseCharacterizationTests"/>.

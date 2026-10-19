@@ -1,8 +1,8 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.MathML;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.MathML;
 
-namespace PeachPDF.Html.Core.Paint.Content
+namespace PeachBrackets.Html.Paint.Content
 {
     /// <summary>
     /// Paints an inline <c>&lt;math&gt;</c> - its presentation tree, laid out once during measurement,

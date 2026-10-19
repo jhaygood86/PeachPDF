@@ -1,8 +1,8 @@
 using PeachDrawing.Text;
 using PeachDrawing.Text.Outlines;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Parse;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -13,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Turns the SVG document a font gives for a glyph (OpenType SVG, the <c>SVG </c> table) into an <see cref="SvgDocument"/> the SVG

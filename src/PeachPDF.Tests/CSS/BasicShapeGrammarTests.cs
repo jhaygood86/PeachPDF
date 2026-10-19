@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Svg;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Svg;
 using System.Linq;
 using Xunit;
 

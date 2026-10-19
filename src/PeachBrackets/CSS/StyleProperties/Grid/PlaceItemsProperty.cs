@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>place-items</c> shorthand (CSS Box Alignment): <c>&lt;align-items&gt; &lt;justify-items&gt;?</c>.</summary>
     internal sealed class PlaceItemsProperty : ShorthandProperty

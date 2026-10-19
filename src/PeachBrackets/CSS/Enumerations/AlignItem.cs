@@ -1,5 +1,5 @@
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal enum AlignItem : byte
     {

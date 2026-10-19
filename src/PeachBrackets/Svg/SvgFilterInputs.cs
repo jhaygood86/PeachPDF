@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// What a raster filter evaluation needs from the renderer beyond the element's own <c>SourceGraphic</c>: the inputs that are painted

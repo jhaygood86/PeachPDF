@@ -4,7 +4,7 @@ namespace PeachPDF.Layout
 {
     /// <summary>
     /// Wraps raw image bytes (<see cref="IContainer.Image(byte[])"/>) as an inline <c>data:</c> URI, so
-    /// they reach <see cref="Html.Core.Handlers.ImageLoadHandler"/>'s existing, already-battle-tested
+    /// they reach <c>Html.Handlers.ImageLoadHandler</c>'s existing, already-battle-tested
     /// inline-base64-image loading path unchanged - the same path a <c>data:</c>-URI <c>&lt;img src&gt;</c>
     /// in HTML already uses.
     /// </summary>

@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary><c>-webkit-text-stroke-width</c> (Compatibility Standard): a <c>&lt;line-width&gt;</c>, <c>0</c> initially. Inherited.</summary>
     internal sealed class WebkitTextStrokeWidthProperty : Property

@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
 using System.Linq;
 
 namespace PeachPDF.Tests.Integration
@@ -137,7 +137,7 @@ namespace PeachPDF.Tests.Integration
             // CssValueParser.ParseLength and DomParser.ParseLengthToPdfPoints must agree for a bare `pt`
             // value, since BuildFont tries the latter first and only falls back to the former for
             // keywords/relative units it can't handle.
-            var direct = PeachPDF.Html.Core.Parse.DomParser.ParseLengthToPdfPoints("14pt");
+            var direct = PeachBrackets.Html.Parse.DomParser.ParseLengthToPdfPoints("14pt");
             var viaSharedTable = FontSizeResolver.Resolve("14pt", DefaultFontResolver.FontSize, DefaultFontResolver.FontSize);
 
             Assert.Equal(direct, viaSharedTable);

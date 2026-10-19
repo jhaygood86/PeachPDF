@@ -315,7 +315,7 @@ public static partial class FilterOps
 
     // ---- component transfer -----------------------------------------------------------------------------
     //
-    // BuildTransferLut moved to PeachPDF.Svg.SvgFilterOps: it takes an SVG-parsed TransferFunction
+    // BuildTransferLut moved to PeachBrackets.Svg.SvgFilterOps: it takes an SVG-parsed TransferFunction
     // descriptor directly, which is genuinely SVG-specific (this package has no SVG concept at all).
 
     /// <summary>Applies four per-channel lookup tables (R, G, B, A) to the straight colour of every pixel.</summary>
@@ -399,7 +399,7 @@ public static partial class FilterOps
 
     // ---- convolution ------------------------------------------------------------------------------------
     //
-    // ConvolveMatrix moved to PeachPDF.Svg.SvgFilterOps: it takes an SVG-parsed FeConvolveMatrix
+    // ConvolveMatrix moved to PeachBrackets.Svg.SvgFilterOps: it takes an SVG-parsed FeConvolveMatrix
     // descriptor directly, which is genuinely SVG-specific (this package has no SVG concept at all).
 
     // ---- displacement -----------------------------------------------------------------------------------

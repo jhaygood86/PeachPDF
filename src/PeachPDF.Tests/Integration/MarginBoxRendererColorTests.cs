@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core;
+using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine;
 using System.IO;
 using System.Text;
@@ -9,7 +9,7 @@ using Xunit;
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
-    /// Direct exercise of <see cref="PeachPDF.Html.Core.Dom.MarginBoxRenderer"/>'s private
+    /// Direct exercise of <see cref="PeachBrackets.Html.Dom.MarginBoxRenderer"/>'s private
     /// <c>ParseColor</c> helper (rgb()/hex value parsing for @page margin-box text color) through full
     /// PDF generation, since it's only reachable via <c>BuildBrush</c>. Mirrors the
     /// <c>MarginBoxRendererImageTests</c> content-stream substring pattern - color is a simple scalar

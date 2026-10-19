@@ -1,6 +1,6 @@
 using PeachDrawing;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Paint;
+using PeachBrackets.Html.Paint;
 using System.Numerics;
 
 namespace PeachPDF.Tests.Raster

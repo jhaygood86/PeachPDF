@@ -1,8 +1,8 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
@@ -13,7 +13,7 @@ namespace PeachPDF.Tests.Integration
     /// Issue #829: a <c>calc()</c> length expression never received the <c>PixelsPerPoint</c> catch-up
     /// multiply (issue #814's convention) that a literal absolute/<c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c>
     /// length now gets (issue #826) - <c>CssValueParser.ParseLength(string,...)</c>'s multiply is gated on
-    /// the whole input parsing as a single <see cref="Html.Core.CSS.Length"/>, which a <c>calc()</c>
+    /// the whole input parsing as a single <see cref="Html.CSS.Length"/>, which a <c>calc()</c>
     /// expression never does, so no leaf inside one (absolute or em/rem/ex/ch, alone or mixed with a
     /// percentage/container/viewport-relative leaf) ever landed in the box's <c>PixelsPerPoint</c>-inflated
     /// internal layout space. Every fixture here uses a non-default <c>PixelsPerInch</c> so the bug
@@ -104,8 +104,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, pixelsPerPoint);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

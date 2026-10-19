@@ -1,4 +1,4 @@
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS box for a <c>&lt;video&gt;</c> element. A static renderer can't play video, so it renders the

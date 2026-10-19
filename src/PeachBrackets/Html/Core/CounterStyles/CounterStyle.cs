@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.CounterStyles
+namespace PeachBrackets.Html.CounterStyles
 {
     /// <summary>
     /// An author-defined counter style (CSS Counter Styles Level 3): either an <c>@counter-style</c> rule or

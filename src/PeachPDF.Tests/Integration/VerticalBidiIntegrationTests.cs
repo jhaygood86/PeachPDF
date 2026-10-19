@@ -1,4 +1,4 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,7 +10,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Unicode Bidi Algorithm reordering inside a vertical-writing-mode (<c>vertical-rl</c>/<c>vertical-lr</c>)
     /// box's own inline-only content (<c>CssLayoutEngine.ApplyVerticalBidiReordering</c>), issue #768 -
-    /// the vertical counterpart of <see cref="Html.Core.CssLayoutEngineBidiTests"/>, asserting word <c>Top</c>
+    /// the vertical counterpart of <see cref="Html.CssLayoutEngineBidiTests"/>, asserting word <c>Top</c>
     /// ordering (the column's own inline axis) instead of <c>Left</c>.
     /// </summary>
     public class VerticalBidiIntegrationTests

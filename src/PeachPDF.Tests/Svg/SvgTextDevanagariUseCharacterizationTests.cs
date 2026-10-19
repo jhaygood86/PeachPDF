@@ -4,7 +4,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine;
-using PeachPDF.Svg;
+using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
@@ -17,7 +17,7 @@ namespace PeachPDF.Tests.Svg
     /// <summary>
     /// Real-font characterization for SVG <c>&lt;text&gt;</c>'s Devanagari Universal Shaping Engine
     /// (USE) syllable reordering (issue #533) - mirrors
-    /// <see cref="PeachPDF.Tests.Html.Core.DevanagariUseCharacterizationTests"/>'s own "prove it isn't
+    /// <see cref="PeachPDF.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove it isn't
     /// a no-op" standard, applied to SVG's independent pipeline. The core USE algorithm itself
     /// (category classification, syllable scanning, glyph reordering) is exhaustively verified against
     /// real HarfBuzz's own output in <c>DevanagariUseShapingCharacterizationTests</c> and

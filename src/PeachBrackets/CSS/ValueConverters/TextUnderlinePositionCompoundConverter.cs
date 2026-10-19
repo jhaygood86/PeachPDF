@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Converter for <c>text-underline-position</c>'s full css-text-decor-4 §2.5 compound grammar

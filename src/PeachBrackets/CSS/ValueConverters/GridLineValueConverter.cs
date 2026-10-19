@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a single grid <c>&lt;grid-line&gt;</c> (<c>grid-column-start</c>/<c>-end</c>,

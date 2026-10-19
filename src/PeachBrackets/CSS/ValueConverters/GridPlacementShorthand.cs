@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Shared helpers for the grid placement shorthands (<c>grid-column</c>/<c>grid-row</c>/
     /// <c>grid-area</c>): splitting a value on <c>/</c> into <c>&lt;grid-line&gt;</c> components, validating

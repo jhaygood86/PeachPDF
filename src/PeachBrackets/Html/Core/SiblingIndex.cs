@@ -1,9 +1,9 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 using System;
 using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
-namespace PeachPDF.Html.Core
+namespace PeachBrackets.Html
 {
     /// <summary>
     /// The element children of one HTML box, indexed once so the structural selectors (<c>:nth-child</c> and its

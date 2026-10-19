@@ -4,7 +4,7 @@ using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The legacy vendor-prefixed (<c>-webkit-</c>, <c>-moz-</c>) and pre-standard spellings of properties PeachPDF

@@ -1,6 +1,6 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Handlers;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Handlers;
 using PeachDrawing.PDF.Engine;
 using System.Globalization;
 using System.IO;

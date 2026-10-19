@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>The <c>writing-mode</c> property (CSS Writing Modes Level 4 §4.1).</summary>
     internal sealed class WritingModeProperty : Property

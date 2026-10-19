@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     // Like UnorderedOptionsConverter (the WithAny combinator), but matches the operands in any order rather
     // than only in declaration order. WithAny matches greedily left-to-right, which fails whenever an

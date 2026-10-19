@@ -1,12 +1,12 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Layout;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
@@ -552,13 +552,13 @@ namespace PeachPDF.Tests.Integration
             });
 
             Assert.True(LayoutHarnessContains(root, hLine!));
-            Assert.Equal(PeachPDF.CSS.LineStyle.Dashed, hLine!.BorderTopStyle.Value);
+            Assert.Equal(PeachBrackets.Css.LineStyle.Dashed, hLine!.BorderTopStyle.Value);
             Assert.InRange(hLine.ActualBorderTopWidth, 2.5, 3.5);
             Assert.Equal(11, hLine.ActualBorderTopColor.R);
             Assert.False(RenderUtils.IsColorVisible(hLine.ActualBackgroundColor));
 
             Assert.True(LayoutHarnessContains(root, vLine!));
-            Assert.Equal(PeachPDF.CSS.LineStyle.Dashed, vLine!.BorderLeftStyle.Value);
+            Assert.Equal(PeachBrackets.Css.LineStyle.Dashed, vLine!.BorderLeftStyle.Value);
             Assert.InRange(vLine.ActualBorderLeftWidth, 3.5, 4.5);
             Assert.Equal(14, vLine.ActualBorderLeftColor.R);
             Assert.False(RenderUtils.IsColorVisible(vLine.ActualBackgroundColor));
@@ -2097,8 +2097,8 @@ namespace PeachPDF.Tests.Integration
                 paragraph = container.Box;
             }));
 
-            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Right, paragraph!.ActualTextAlignAll);
-            Assert.Equal(PeachPDF.CSS.TextAlignLast.Auto, paragraph.ActualTextAlignLast);
+            Assert.Equal(PeachBrackets.Css.HorizontalAlignment.Right, paragraph!.ActualTextAlignAll);
+            Assert.Equal(PeachBrackets.Css.TextAlignLast.Auto, paragraph.ActualTextAlignLast);
             // Recorded as builder-set, so a document-level stylesheet's plain rule cannot override it.
             Assert.Contains("text-align-all", paragraph.BuilderSetProperties!);
         }
@@ -2220,8 +2220,8 @@ namespace PeachPDF.Tests.Integration
 
             var leftWord = LayoutHarnessDescendants(left!).SelectMany(box => box.Words).Single();
             Assert.Equal(left!.Location.X, leftWord.Left, 1.0);
-            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Right, right!.ActualTextAlignAll);
-            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Start, left.ActualTextAlignAll);
+            Assert.Equal(PeachBrackets.Css.HorizontalAlignment.Right, right!.ActualTextAlignAll);
+            Assert.Equal(PeachBrackets.Css.HorizontalAlignment.Start, left.ActualTextAlignAll);
         }
 
         [Fact]
@@ -2244,7 +2244,7 @@ namespace PeachPDF.Tests.Integration
 
             Assert.InRange(item!.Location.X, 299, 301);
             // A plain box alignment, not a text alignment: the text inside keeps its default.
-            Assert.Equal(PeachPDF.CSS.HorizontalAlignment.Start, item.ActualTextAlignAll);
+            Assert.Equal(PeachBrackets.Css.HorizontalAlignment.Start, item.ActualTextAlignAll);
         }
 
         [Theory]

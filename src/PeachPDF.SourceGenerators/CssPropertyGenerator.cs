@@ -84,8 +84,8 @@ namespace PeachPDF.SourceGenerators
 
         private static TargetTypeModel CaptureTargetTypes(Compilation compilation)
         {
-            var cssBoxType = compilation.GetTypeByMetadataName("PeachPDF.Html.Core.Dom.CssBox");
-            var svgElementType = compilation.GetTypeByMetadataName("PeachPDF.Svg.SvgElement");
+            var cssBoxType = compilation.GetTypeByMetadataName("PeachBrackets.Html.Dom.CssBox");
+            var svgElementType = compilation.GetTypeByMetadataName("PeachBrackets.Svg.SvgElement");
 
             return new TargetTypeModel(
                 cssBoxType is not null, CaptureMembers(cssBoxType),

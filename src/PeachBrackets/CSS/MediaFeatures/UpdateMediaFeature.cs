@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>update</c> media feature (Media Queries 4): how frequently the output device can modify the

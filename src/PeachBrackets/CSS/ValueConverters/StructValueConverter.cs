@@ -4,7 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class StructValueConverter<T> : IValueConverter
         where T : struct, IFormattable

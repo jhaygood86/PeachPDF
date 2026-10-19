@@ -13,7 +13,7 @@
 using PeachDrawing.Core;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// A resolved <c>&lt;clipPath&gt;</c> definition - the shapes (or resolved <c>&lt;use&gt;</c>

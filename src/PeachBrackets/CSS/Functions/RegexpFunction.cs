@@ -1,6 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     internal sealed class RegexpFunction : DocumentFunction
     {

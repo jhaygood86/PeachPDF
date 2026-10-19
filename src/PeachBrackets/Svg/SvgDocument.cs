@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// The parsed scene graph of an SVG document (or an inline <c>&lt;svg&gt;</c> subtree), built once

@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary><c>-webkit-text-stroke-color</c> (Compatibility Standard): a <c>&lt;color&gt;</c>, <c>currentcolor</c> initially. Inherited.</summary>
     internal sealed class WebkitTextStrokeColorProperty : Property

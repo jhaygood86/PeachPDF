@@ -5,7 +5,7 @@
     math, filter primitives - pure algorithm tests exercised through the public API and, where a test-double
     is needed, through internals this project is granted (InternalsVisibleTo). Nothing here may reference
     PeachPDF; a test that needs a real PDF render, or PeachPDF's own SVG-filter-primitive glue
-    (PeachPDF.Svg.SvgFilterOps/Lighting), stays in PeachPDF.Tests instead.
+    (PeachBrackets.Svg.SvgFilterOps/Lighting), stays in PeachPDF.Tests instead.
   -->
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>

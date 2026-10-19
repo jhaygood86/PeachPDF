@@ -1,6 +1,6 @@
 using System;
 
-namespace PeachPDF.Html.Core.Entities
+namespace PeachBrackets.Html.Entities
 {
     /// <summary>
     /// How far a line box, or one inline box on it, reaches on each side of the baseline — the pair

@@ -1,10 +1,10 @@
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Fragments;
+using PeachBrackets.Html.Fragments;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Html.Core.Handlers
+namespace PeachBrackets.Html.Handlers
 {
     /// <summary>
     /// Shared rect-to-page/Y resolution used by both <c>PdfGenerator.HandleLinks</c>'s anchor-link
@@ -32,7 +32,7 @@ namespace PeachPDF.Html.Core.Handlers
 
         /// <summary>
         /// Resolves a true-point rect (see <c>HtmlContainer.GetElementRectangle</c>, or a live
-        /// <see cref="Dom.CssBox"/> rect converted via <see cref="Utilities.Utils.ToPoints(PeachDrawing.Core.Rect, double)"/>) to the PDF
+        /// <see cref="Dom.CssBox"/> rect converted via <see cref="PeachBrackets.Utilities.Utils.ToPoints(PeachDrawing.Core.Rect, double)"/>) to the PDF
         /// page it lands on and its true-point Y offset on that page - <paramref name="ppp"/> converts
         /// it back to the internal pixel space <paramref name="inner"/>'s slot geometry operates in,
         /// mirroring how the rest of this pass round-trips point-space rects for slot attribution. A

@@ -10,7 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// The normalized alphabet a parsed SVG <c>d</c> attribute is reduced to - deliberately smaller

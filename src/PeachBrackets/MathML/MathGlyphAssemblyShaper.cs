@@ -15,7 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     internal static class MathGlyphAssemblyShaper
     {

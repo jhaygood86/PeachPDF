@@ -1,14 +1,14 @@
 using System.Collections.Generic;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Html.Core.Dom
+namespace PeachBrackets.Html.Dom
 {
     /// <summary>
     /// CSS Logical Properties and Values Level 1's margin/padding/inset/border longhands
     /// (<c>margin-block-start</c>, <c>border-inline-end-color</c>, etc.) - each cascades into its own
-    /// field here (set by <c>Utils.CssUtils</c>'s string setters, see <c>PeachPDF.CSS.StyleProperties.Logical</c>
+    /// field here (set by <c>Utils.CssUtils</c>'s string setters, see <c>PeachBrackets.Css.StyleProperties.Logical</c>
     /// for the Layer A property classes), independently of its physical sibling. These are resolution
     /// scratch space, not part of <c>ComputedStyleAreas</c>'s copy-on-write model: unlike
     /// margin-top/padding-left/etc. (read repeatedly throughout layout), a logical value is read exactly

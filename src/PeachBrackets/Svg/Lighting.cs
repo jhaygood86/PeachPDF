@@ -2,7 +2,7 @@ using PeachDrawing;
 using PeachDrawing.Core;
 using System;
 
-namespace PeachPDF.Svg;
+namespace PeachBrackets.Svg;
 
 /// <summary>
 /// <c>feDiffuseLighting</c> and <c>feSpecularLighting</c>: the input's alpha channel is a height map, lit by a distant, point

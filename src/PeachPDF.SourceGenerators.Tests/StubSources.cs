@@ -8,7 +8,7 @@ namespace PeachPDF.SourceGenerators.Tests
     internal static class StubSources
     {
         public const string MinimalCssBoxAndSvgElement = """
-            namespace PeachPDF.Html.Core.Dom
+            namespace PeachBrackets.Html.Dom
             {
                 public class CssBox
                 {
@@ -19,7 +19,7 @@ namespace PeachPDF.SourceGenerators.Tests
                 }
             }
 
-            namespace PeachPDF.Svg
+            namespace PeachBrackets.Svg
             {
                 public class SvgElement
                 {
@@ -32,14 +32,14 @@ namespace PeachPDF.SourceGenerators.Tests
 
         /// <summary>A minimal SvgElement whose only member has no setter, for PPG010's "no setter" branch.</summary>
         public const string SvgElementWithReadOnlyMember = """
-            namespace PeachPDF.Html.Core.Dom
+            namespace PeachBrackets.Html.Dom
             {
                 public class CssBox
                 {
                 }
             }
 
-            namespace PeachPDF.Svg
+            namespace PeachBrackets.Svg
             {
                 public class SvgElement
                 {

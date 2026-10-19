@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>Hidden, undocumented compat shorthand for Prince's own -prince-pdf-form-field-settings spelling - see PrincePdfFormFieldSettingsShorthandConverter for the grammar this accepts.</summary>
     internal sealed class PrincePdfFormFieldSettingsProperty : ShorthandProperty

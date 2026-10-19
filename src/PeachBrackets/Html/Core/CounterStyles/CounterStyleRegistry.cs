@@ -3,10 +3,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core.Parse;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Html.Core.CounterStyles
+namespace PeachBrackets.Html.CounterStyles
 {
     /// <summary>
     /// The document's <c>@counter-style</c> rules by name, plus the lookup that turns a counter-style

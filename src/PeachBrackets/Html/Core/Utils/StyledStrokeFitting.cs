@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using System;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Lays a <c>dotted</c>/<c>dashed</c> pattern along one open border/outline edge so it starts

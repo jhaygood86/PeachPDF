@@ -13,7 +13,7 @@
 
 using System;
 
-namespace PeachPDF.Html.Core.Utils
+namespace PeachBrackets.Html.Utils
 {
     /// <summary>
     /// Static class that contains argument-checking methods

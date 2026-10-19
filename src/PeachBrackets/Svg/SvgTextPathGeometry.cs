@@ -14,7 +14,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Core.Geometry;
 using System.Collections.Generic;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Arc-length parameterization of a parsed path, used to lay <c>&lt;textPath&gt;</c> glyphs along a

@@ -2,7 +2,7 @@
 
 using System;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The single home for CSS color-space conversion math (CSS Color 4/5): forward/reverse transforms

@@ -1,6 +1,6 @@
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
@@ -573,8 +573,8 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(authored.OrderBy(w => w), claimed.OrderBy(w => w));
         }
 
-        private static IEnumerable<PeachPDF.Html.Core.Fragments.BoxFragment> FlattenFragments(
-            PeachPDF.Html.Core.Fragments.BoxFragment fragment)
+        private static IEnumerable<PeachBrackets.Html.Fragments.BoxFragment> FlattenFragments(
+            PeachBrackets.Html.Fragments.BoxFragment fragment)
         {
             yield return fragment;
             foreach (var child in fragment.Children)

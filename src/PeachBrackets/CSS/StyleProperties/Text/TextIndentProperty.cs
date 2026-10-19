@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>text-indent</c> property (CSS Text Module Level 3 §3). The value is validated by the

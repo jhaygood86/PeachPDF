@@ -2,7 +2,7 @@
 
 using System.IO;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The block form of <c>@layer</c> (<c>@layer name { rules }</c> or anonymous <c>@layer { rules }</c>).

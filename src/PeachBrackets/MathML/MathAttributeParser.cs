@@ -14,7 +14,7 @@
 using System.Globalization;
 using PeachDrawing.Core;
 
-namespace PeachPDF.MathML
+namespace PeachBrackets.MathML
 {
     internal static class MathAttributeParser
     {
@@ -187,7 +187,7 @@ namespace PeachPDF.MathML
             if (string.IsNullOrWhiteSpace(value) || value.Trim() is "none" or "transparent")
                 return null;
 
-            var parsed = new Html.Core.Parse.CssValueParser(renderContext).GetActualColor(value.Trim());
+            var parsed = new Html.Parse.CssValueParser(renderContext).GetActualColor(value.Trim());
             return parsed.IsEmpty ? null : parsed;
         }
     }

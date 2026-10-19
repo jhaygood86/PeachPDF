@@ -1,9 +1,9 @@
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
@@ -23,8 +23,8 @@ namespace PeachPDF.Tests.Integration
     /// text/counter/string content) rendered nothing - <see cref="MarginBoxRenderer"/> only ever
     /// interpreted <c>content</c> as text/counter/string tokens. Fixed by detecting image content
     /// (mirroring <see cref="CssContentEngine.ApplyContent"/>'s own first-token detection) and
-    /// painting it through the same <see cref="PeachPDF.Html.Core.Handlers.CssImagePainter"/>/
-    /// <see cref="PeachPDF.Html.Core.Handlers.BackgroundImageDrawHandler"/> pipeline already used for
+    /// painting it through the same <see cref="PeachBrackets.Html.Handlers.CssImagePainter"/>/
+    /// <see cref="PeachBrackets.Html.Handlers.BackgroundImageDrawHandler"/> pipeline already used for
     /// in-flow <c>content: url(...)</c> (<c>::before</c>/<c>::after</c>).
     /// </summary>
     public class MarginBoxRendererImageTests
@@ -332,8 +332,8 @@ namespace PeachPDF.Tests.Integration
             await container.SetHtml("<html><body><p>content</p></body></html>", null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

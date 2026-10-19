@@ -1,7 +1,7 @@
 ﻿using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Fragments;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
+using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
@@ -564,7 +564,7 @@ namespace PeachPDF.Tests.Integration
         /// <summary>
         /// Every fragment <paramref name="box"/> produced, in fill order: page first, then column within it.
         /// </summary>
-        private static List<BoxFragment> OrderedFragmentsOf(PeachPDF.Html.Core.HtmlContainerInt container, CssBox box) =>
+        private static List<BoxFragment> OrderedFragmentsOf(PeachBrackets.Html.HtmlContainerInt container, CssBox box) =>
         [
             .. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
@@ -582,7 +582,7 @@ namespace PeachPDF.Tests.Integration
         /// the paint harness for "the box's fragment on this page".
         /// </remarks>
         private static IEnumerable<(BoxFragment Fragment, Rect Fill, List<Rect> Clips)> GradientLayerPerFragment(
-            PeachPDF.Html.Core.HtmlContainerInt container, List<BoxFragment> fragments)
+            PeachBrackets.Html.HtmlContainerInt container, List<BoxFragment> fragments)
         {
             foreach (var page in fragments.Select(f => f.FragmentainerIndex).Distinct())
             {
@@ -603,7 +603,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>How many fragments <paramref name="box"/> produced across the whole document.</summary>
-        private static int FragmentCountOf(PeachPDF.Html.Core.HtmlContainerInt container, CssBox box) =>
+        private static int FragmentCountOf(PeachBrackets.Html.HtmlContainerInt container, CssBox box) =>
             container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .Count(f => ReferenceEquals(f.Box, box));
@@ -628,7 +628,7 @@ namespace PeachPDF.Tests.Integration
         private static IEnumerable<TestRecordingGraphics.DrawPathCall> BlackRings(TestRecordingGraphics g) =>
             RingsOf(g, PaintColor.Black);
 
-        private static int CountBlueRingsAcrossPages(PeachPDF.Html.Core.HtmlContainerInt container)
+        private static int CountBlueRingsAcrossPages(PeachBrackets.Html.HtmlContainerInt container)
         {
             var count = 0;
 
@@ -642,7 +642,7 @@ namespace PeachPDF.Tests.Integration
             return count;
         }
 
-        private static int CountBlueEdges(PeachPDF.Html.Core.HtmlContainerInt container, bool vertical)
+        private static int CountBlueEdges(PeachBrackets.Html.HtmlContainerInt container, bool vertical)
         {
             var blue = PaintColor.FromArgb(0, 0, 255);
             var count = 0;

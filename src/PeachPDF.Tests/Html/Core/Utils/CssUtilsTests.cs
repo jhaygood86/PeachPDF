@@ -1,11 +1,11 @@
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
-using PeachPDF.CSS;
-using PeachPDF.Html.Core;
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Parse;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Collections.Generic;
@@ -468,7 +468,7 @@ namespace PeachPDF.Tests.Html.Core.Utils
 
             CssUtils.SetPropertyValue(parser, box, "outline-style", "auto");
 
-            Assert.Equal(PeachPDF.CSS.OutlineStyle.Auto, box.OutlineStyle.Value);
+            Assert.Equal(PeachBrackets.Css.OutlineStyle.Auto, box.OutlineStyle.Value);
             Assert.Equal("auto", CssUtils.GetPropertyValue(box, "outline-style"));
         }
 
@@ -1306,8 +1306,8 @@ namespace PeachPDF.Tests.Html.Core.Utils
             await container.SetHtml(BuildHtml(css), null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);
@@ -1359,8 +1359,8 @@ div {{ width: 200px; height: 100px; {css} }}
             await container.SetHtml(html, null);
 
             var size = new Size(595, 842);
-            container.PageSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
-            container.MaxSize = PeachPDF.Utilities.Utils.ToPixels(size, 1.0);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
 
             using var graphics = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, size);
             await container.PerformLayout(graphics);

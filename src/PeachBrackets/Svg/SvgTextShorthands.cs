@@ -1,9 +1,9 @@
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Expands the text shorthands (<c>font</c>, <c>font-variant</c>, <c>font-synthesis</c>, <c>-webkit-text-stroke</c>, <c>text-decoration</c>) that SVG text reads from an inline

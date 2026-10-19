@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <see cref="IPropertyValue"/> produced by <see cref="CalcValueConverter"/> for an accepted

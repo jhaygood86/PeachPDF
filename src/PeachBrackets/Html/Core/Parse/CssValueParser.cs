@@ -11,11 +11,11 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Unicode;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
-using PeachPDF.Html.Core.Dom;
-using PeachPDF.Html.Core.Entities;
-using PeachPDF.Html.Core.Utils;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Entities;
+using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -24,7 +24,7 @@ using System.Linq;
 using System.Numerics;
 using System.Text;
 
-namespace PeachPDF.Html.Core.Parse
+namespace PeachBrackets.Html.Parse
 {
     /// <summary>
     /// Parse CSS properties values like numbers, Urls, etc.
@@ -253,7 +253,7 @@ namespace PeachPDF.Html.Core.Parse
         /// not merely typical, precondition, so the short-circuit changes no outcome. This runs on every
         /// length this layer resolves (an ordinary "10px"/"50%"/"auto" value has no calc-family function at
         /// all, so it's the overwhelming majority), and a `dotnet-trace` allocation profile of the full
-        /// showcase corpus found this the single largest contributor to <see cref="PeachPDF.CSS.Pool"/>'s
+        /// showcase corpus found this the single largest contributor to <see cref="PeachBrackets.Css.Pool"/>'s
         /// 2.4-million-call, 99%-miss-rate `NewStringBuilder()` volume - the full CSS-OM tokenizer this
         /// called into (`Lexer`/`TextSource`/its `StringBuilder`) was being constructed fresh just to
         /// discover almost every time that the value wasn't a function at all.
@@ -2541,7 +2541,7 @@ namespace PeachPDF.Html.Core.Parse
         /// <summary>
         /// Get color by CSS named-color keyword (e.g. "red", "transparent", "currentcolor"). Delegates
         /// the actual name table/grammar to the CSS-OM's own <see cref="Converters.ColorConverter"/>
-        /// (shared with every other color-accepting property in <c>PeachPDF.CSS</c>) rather than
+        /// (shared with every other color-accepting property in <c>PeachBrackets.Css</c>) rather than
         /// re-implementing a second, independent color-name lookup here - this is what the previous
         /// adapter-based lookup got wrong for "transparent": it used <c>color.A &gt; 0</c> as its own
         /// "name not found" signal, which incorrectly also rejects any *validly* fully-transparent

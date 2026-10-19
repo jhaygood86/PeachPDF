@@ -3,7 +3,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// Validates a <c>clip-path</c> value: accepts the keyword <c>none</c> or any <c>&lt;basic-shape&gt;</c>

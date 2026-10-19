@@ -1,6 +1,6 @@
-using PeachPDF.Html.Core.Dom;
+using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// A parsed <c>@container style(...)</c> condition tree (CSS Containment 3 SS7). Structurally mirrors

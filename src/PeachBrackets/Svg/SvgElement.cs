@@ -11,17 +11,17 @@
 // "The Art of War"
 
 using PeachDrawing.Text.Shaping;
-using PeachPDF.CSS;
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 
-namespace PeachPDF.Svg
+namespace PeachBrackets.Svg
 {
     /// <summary>
     /// Base class for a paintable node in the SVG scene graph. This is a purely internal model built
-    /// once from a parsed SVG document/subtree - it is not a <see cref="Html.Core.Dom.CssBox"/> and
+    /// once from a parsed SVG document/subtree - it is not a <see cref="Html.Dom.CssBox"/> and
     /// never participates in CSS layout. Properties are mutable only so <see cref="SvgTreeBuilder"/>
     /// can fill in the shared presentation attributes (fill/stroke/opacity/transform/clip) via one
     /// common helper after constructing each element kind's own specific properties; once built, a
@@ -259,8 +259,8 @@ namespace PeachPDF.Svg
 
         /// <summary>The resolved (inherited) <c>writing-mode</c>, parsed through the same
         /// <see cref="Map.WritingModes"/> table the HTML CSS-OM pipeline uses (see
-        /// <c>SvgTreeBuilder.ApplyCommon</c>). <see cref="PeachPDF.CSS.WritingMode.SidewaysRl"/>/
-        /// <see cref="PeachPDF.CSS.WritingMode.SidewaysLr"/> render as <see cref="PeachPDF.CSS.WritingMode.HorizontalTb"/>,
+        /// <c>SvgTreeBuilder.ApplyCommon</c>). <see cref="PeachBrackets.Css.WritingMode.SidewaysRl"/>/
+        /// <see cref="PeachBrackets.Css.WritingMode.SidewaysLr"/> render as <see cref="PeachBrackets.Css.WritingMode.HorizontalTb"/>,
         /// matching the HTML pipeline's own scope (<c>WritingModeFrame.IsVertical</c>).</summary>
         public WritingMode WritingMode { get; set; } = WritingMode.HorizontalTb;
 
@@ -326,7 +326,7 @@ namespace PeachPDF.Svg
         /// <summary>The combined GSUB/GPOS feature request (ligatures/caps/numeric/east-asian/explicit
         /// <c>font-feature-settings</c>/kerning) this run's text should shape with - resolved the same
         /// way HTML text's <c>DerivedStyle.ActualTextShapingFeatures</c> is, via the shared
-        /// <see cref="Html.Core.Utils.TextShapingFeatureResolver"/>.</summary>
+        /// <see cref="Html.Utils.TextShapingFeatureResolver"/>.</summary>
         public ShapeSettings ShapingFeatures { get; set; } = ShapeSettings.Default;
 
         /// <summary>

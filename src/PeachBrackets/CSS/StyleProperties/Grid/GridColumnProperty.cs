@@ -1,4 +1,4 @@
-namespace PeachPDF.CSS
+namespace PeachBrackets.Css
 {
     /// <summary>
     /// The <c>grid-column</c> shorthand (CSS Grid §8.3.1): <c>&lt;grid-line&gt; [ / &lt;grid-line&gt; ]?</c>,

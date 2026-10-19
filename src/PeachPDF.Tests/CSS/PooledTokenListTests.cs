@@ -1,8 +1,8 @@
 namespace PeachPDF.Tests.CSS
 {
     using System.Collections.Generic;
-    using PeachPDF.CSS;
-    using PeachPDF.Html.Core.Parse;
+    using PeachBrackets.Css;
+    using PeachBrackets.Html.Parse;
     using Xunit;
 
     // Coverage for the List<Token> pooling infrastructure (issue #922, part 3d) - Pool.NewTokenList/
