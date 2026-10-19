@@ -253,7 +253,7 @@ namespace PeachPDF
             ValidateAnimationProgress(config);
 
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize.ToEngine()) : new Size(config.ManualPageWidth, config.ManualPageHeight);
+            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
@@ -431,7 +431,7 @@ namespace PeachPDF
 
             var orgPageSize = pageDescriptor.PageSizeOverride
                 ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize.ToEngine())
+                    ? PageSizeConverter.ToSize(config.PageSize)
                     : new Size(config.ManualPageWidth, config.ManualPageHeight));
 
             if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)

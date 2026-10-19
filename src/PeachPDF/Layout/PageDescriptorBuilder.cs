@@ -204,7 +204,7 @@ namespace PeachPDF.Layout
         {
             get
             {
-                if (_pageSize is { } size) return PageSizeConverter.ToSize(size.ToEngine());
+                if (_pageSize is { } size) return PageSizeConverter.ToSize(size);
                 if (_explicitSize is { } explicitSize) return new Size(explicitSize.Width.ToPoints(), explicitSize.Height.ToPoints());
                 return null;
             }

@@ -176,7 +176,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
             // requiring construct PDF/A-1 forbids) - DrawImageBlendedOver must apply the same check,
             // not reject every feBlend call unconditionally regardless of mode.
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
             var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
@@ -190,7 +190,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
         public void DrawImageBlendedOver_NormalBlendMode_AllowedUnderPdfA1()
         {
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
             var top = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
@@ -204,7 +204,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
         public void DrawImageWithColorMatrix_RejectedUnderPdfA1()
         {
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
             var form = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));
@@ -303,7 +303,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
         public void PortableColorFilters_RejectedUnderPdfA1()
         {
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             document.Options.PortableColorFilters = true;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
@@ -317,7 +317,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
         public void PortableColorFilters_AMatrixThatChangesNothing_IsStillRejectedUnderPdfA1()
         {
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             document.Options.PortableColorFilters = true;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
@@ -331,7 +331,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Rendering
         public void DrawImageAlphaMasked_RejectedUnderPdfA1()
         {
             var document = new PdfDocument();
-            document.Options.PdfAConformance = PeachDrawing.PDF.Engine.PdfAConformance.PdfA1B;
+            document.Options.PdfAConformance = PeachDrawing.PDF.PdfAConformance.PdfA1B;
             var page = document.AddPage();
             using var gfx = PdfGraphics.FromPdfPage(page);
             var content = NewTile(document, 50, new SolidBrush(PaintColor.FromArgb(255, 0, 0)));

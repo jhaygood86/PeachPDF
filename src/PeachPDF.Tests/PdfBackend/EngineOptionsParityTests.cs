@@ -1,5 +1,4 @@
 using System.Reflection;
-using PeachDrawing.PDF.Engine;
 using PeachPDF.Rendering;
 
 namespace PeachPDF.Tests.PdfBackendTests
@@ -13,16 +12,14 @@ namespace PeachPDF.Tests.PdfBackendTests
     {
         public static TheoryData<Type, Type> EnumPairs => new()
         {
-            { typeof(PeachPDF.PdfAConformance), typeof(PeachDrawing.PDF.Engine.PdfAConformance) },
-            { typeof(PeachPDF.PdfXConformance), typeof(PeachDrawing.PDF.Engine.PdfXConformance) },
+            { typeof(PeachPDF.PdfAConformance), typeof(PeachDrawing.PDF.PdfAConformance) },
+            { typeof(PeachPDF.PdfXConformance), typeof(PeachDrawing.PDF.PdfXConformance) },
             { typeof(PeachPDF.PdfVersion), typeof(PeachDrawing.PDF.PdfVersion) },
-            { typeof(PeachPDF.ImageCompression), typeof(PeachDrawing.PDF.Engine.ImageCompression) },
-            { typeof(PeachPDF.PageSize), typeof(PeachDrawing.PDF.Engine.PageSize) },
-            { typeof(PeachPDF.PageOrientation), typeof(PeachDrawing.PDF.Engine.PageOrientation) },
+            { typeof(PeachPDF.ImageCompression), typeof(PeachDrawing.PDF.ImageCompression) },
             { typeof(PeachPDF.PdfPermissions), typeof(PeachDrawing.PDF.PdfPermissions) },
-            { typeof(PeachPDF.ColorBlackGeneration), typeof(PeachDrawing.PDF.Engine.ColorBlackGeneration) },
-            { typeof(PeachPDF.ColorConversionMode), typeof(PeachDrawing.PDF.Engine.ColorConversionMode) },
-            { typeof(PeachPDF.ColorRenderingIntent), typeof(PeachDrawing.PDF.Engine.ColorRenderingIntent) },
+            { typeof(PeachPDF.ColorBlackGeneration), typeof(PeachDrawing.PDF.ColorBlackGeneration) },
+            { typeof(PeachPDF.ColorConversionMode), typeof(PeachDrawing.PDF.ColorConversionMode) },
+            { typeof(PeachPDF.ColorRenderingIntent), typeof(PeachDrawing.PDF.ColorRenderingIntent) },
         };
 
         [Theory]
@@ -33,7 +30,7 @@ namespace PeachPDF.Tests.PdfBackendTests
         }
 
         [Theory]
-        [InlineData(typeof(PeachPDF.ColorOptions), typeof(PeachDrawing.PDF.Engine.ColorOptions))]
+        [InlineData(typeof(PeachPDF.ColorOptions), typeof(PeachDrawing.PDF.ColorOptions))]
         [InlineData(typeof(PeachPDF.PdfEncryptionOptions), typeof(PeachDrawing.PDF.PdfEncryptionOptions))]
         public void MirroredOptionClass_HasTheSamePublicProperties(Type original, Type mirror)
         {
@@ -64,11 +61,11 @@ namespace PeachPDF.Tests.PdfBackendTests
 
             Assert.Equal(original.OutputIntentProfile, mapped.OutputIntentProfile);
             Assert.Equal("id", mapped.OutputIntentIdentifier);
-            Assert.Equal(PeachDrawing.PDF.Engine.ColorBlackGeneration.UseRichBlack, mapped.BlackGeneration);
+            Assert.Equal(PeachDrawing.PDF.ColorBlackGeneration.UseRichBlack, mapped.BlackGeneration);
             Assert.Equal(original.FallbackCmykProfile, mapped.FallbackCmykProfile);
-            Assert.Equal(PeachDrawing.PDF.Engine.ColorConversionMode.ConvertToProfile, mapped.ConversionMode);
+            Assert.Equal(PeachDrawing.PDF.ColorConversionMode.ConvertToProfile, mapped.ConversionMode);
             Assert.Equal(original.ConvertToProfile, mapped.ConvertToProfile);
-            Assert.Equal(PeachDrawing.PDF.Engine.ColorRenderingIntent.Perceptual, mapped.RenderingIntent);
+            Assert.Equal(PeachDrawing.PDF.ColorRenderingIntent.Perceptual, mapped.RenderingIntent);
             Assert.False(mapped.UseBlackPointCompensation);
             Assert.Null(((PeachPDF.ColorOptions?)null).ToEngine());
         }

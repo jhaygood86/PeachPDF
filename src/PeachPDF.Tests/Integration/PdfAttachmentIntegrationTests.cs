@@ -342,7 +342,7 @@ namespace PeachPDF.Tests.Integration
 
             var ex = await Assert.ThrowsAsync<InvalidOperationException>(
                 () => generator.AddPdfPages(document, SimpleHtml, A3Config(different)));
-            Assert.Contains("Attachments must be the same", ex.Message);
+            Assert.Contains("EmbeddedFiles must be the same", ex.Message);
         }
 
         [Fact]

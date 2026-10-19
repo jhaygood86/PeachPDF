@@ -60,7 +60,7 @@ namespace PeachPDF.Tests.Integration
             // both must derive the identical true-points page-content-band height.
             var renderContextDefault = new HtmlRenderContext();
             using var containerDefault = new HtmlContainer(renderContextDefault);
-            var orgPageSize = PeachDrawing.PDF.Engine.PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize));
+            var orgPageSize = PeachPDF.PageSizeConverter.ToSize(config.PageSize);
             await PdfGenerator.SetContent(containerDefault, config, html, null, orgPageSize);
 
             var renderContextScaled = new HtmlRenderContext { PixelsPerPoint = 1.5 };

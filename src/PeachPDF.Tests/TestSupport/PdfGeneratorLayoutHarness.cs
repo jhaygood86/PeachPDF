@@ -64,7 +64,7 @@ namespace PeachPDF.Tests.TestSupport
             }
 
             var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
+                ? PageSizeConverter.ToSize(config.PageSize)
                 : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
@@ -103,7 +103,7 @@ namespace PeachPDF.Tests.TestSupport
             var renderContext = new HtmlRenderContext { PixelsPerPoint = config.PixelsPerInch / 72d };
 
             var orgPageSize = config.PageSize != PageSize.Undefined
-                ? PageSizeConverter.ToSize(PeachPDF.Rendering.EngineOptions.ToEngine(config.PageSize))
+                ? PageSizeConverter.ToSize(config.PageSize)
                 : new Size(config.ManualPageWidth, config.ManualPageHeight);
 
             if (config.PageOrientation == PageOrientation.Landscape)
