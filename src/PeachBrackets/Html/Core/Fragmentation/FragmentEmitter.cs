@@ -2200,6 +2200,16 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>The words of floats drawn from live geometry during the walk of the slot in progress: each is drawn once.</summary>
         private readonly HashSet<(CssBox Box, int Word)> _liveFloatWordsThisWalk = [];
 
+        /// <summary>The <c>rowspan</c> cells that have a fragment in the walk of the slot in progress: each is drawn once (#1834).</summary>
+        private readonly HashSet<CssBox> _spanningCellsDrawnThisWalk = [];
+
+        /// <summary>Records that <paramref name="box"/>, if it spans rows, has a fragment in this walk.</summary>
+        private void NoteSpanningCellDrawn(CssBox box, Draft? draft)
+        {
+            if (draft is not null && box.Display.Value == DisplayMode.TableCell && CssLayoutEngineTable.GetRowSpan(box) > 1)
+                _spanningCellsDrawnThisWalk.Add(box);
+        }
+
         /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
         private static bool IsInAFloat(CssBox box)
         {
@@ -2262,6 +2272,7 @@ namespace PeachBrackets.Html.Fragmentation
             _pruningSuspended = wasSuspended || !mayWrite;
 
             _liveFloatWordsThisWalk.Clear();
+            _spanningCellsDrawnThisWalk.Clear();
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -2357,6 +2368,7 @@ namespace PeachBrackets.Html.Fragmentation
             try
             {
                 _liveFloatWordsThisWalk.Clear();
+                _spanningCellsDrawnThisWalk.Clear();
                 full = BuildDraft(root, snapshot: null, slot,
                     capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
@@ -3068,6 +3080,7 @@ namespace PeachBrackets.Html.Fragmentation
                         childBox, snapshot, slot, capture, instance,
                         ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
+                    NoteSpanningCellDrawn(childBox, childDraft);
                     contiguous &= childPrunable;
 
                     if (childDraft is not null)
@@ -3085,6 +3098,7 @@ namespace PeachBrackets.Html.Fragmentation
                         childBox, childSnapshot, slot, childCapture, childInstance,
                         ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
+                    NoteSpanningCellDrawn(childBox, childDraft);
                     contiguous &= childPrunable;
 
                     if (childDraft is not null)
@@ -3629,10 +3643,10 @@ namespace PeachBrackets.Html.Fragmentation
             CssBox box, BoxGeometrySnapshot? snapshot, Slot slot,
             CapturedInstance? capture, int instance)
         {
-            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row.
-            // That cell therefore appears in the tree once per row it spans - the fragments are
-            // distinct objects, so each is painted in its own place.
-            if (box is CssSpacingBox spacing)
+            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row, on a
+            // slot that row did not reach. Where the cell already has a fragment in this walk - through its
+            // own row or an earlier placeholder - another one would paint the same content in the same place.
+            if (box is CssSpacingBox spacing && !_spanningCellsDrawnThisWalk.Contains(spacing.ExtendedBox))
                 yield return (spacing.ExtendedBox, snapshot, capture, instance);
 
             if (_capturedInstances.TryGetValue((box, slot.Index), out var allCaptures) && allCaptures.Count > 0)
