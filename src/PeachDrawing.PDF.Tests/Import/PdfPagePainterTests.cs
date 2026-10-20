@@ -309,5 +309,45 @@ namespace PeachDrawing.PDF.Tests.Import
             var blended = Px(smooth, 47, 25);
             Assert.True(blended.G > 40, $"/Interpolate true smooths across the edge: {blended}");
         }
+
+        [Fact]
+        public void JpegWithASoftMask_HasItsAlphaFromTheMask()
+        {
+            using var rgb = PeachImage.Image.Create(8, 8, PeachImage.PixelFormat.Rgba32);
+            var span = rgb.GetPixelSpan();
+            for (var i = 0; i < span.Length; i += 4) { span[i] = 255; span[i + 1] = 0; span[i + 2] = 0; span[i + 3] = 255; }
+            using var jpeg = new MemoryStream();
+            rgb.Save(jpeg, "jpeg", new PeachImage.Formats.Jpeg.JpegEncoderOptions { Quality = 95 });
+
+            var picture = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 8 /Height 8 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /SMask 6 0 R", TestPdf.Binary(jpeg.ToArray()));
+            var mask = ImageObject("/Width 2 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "FF00");
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: picture + "|||" + mask);
+
+            Render(pdf, 1, 1, out var unsupported);
+            Assert.Empty(unsupported);
+            AssertNear((255, 0, 0, 255), Px(pdf, 20, 50), 24);
+            Assert.InRange(Px(pdf, 80, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void JpegThatIsNotAJpeg_WithAMask_IsReported()
+        {
+            var picture = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /SMask 6 0 R", "not a jpeg");
+            var mask = ImageObject("/Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "FF");
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: picture + "|||" + mask);
+
+            Render(pdf, 1, 1, out var unsupported);
+
+            Assert.Contains("image: image data could not be decoded", unsupported);
+        }
+
+        [Fact]
+        public void JpegStencilMask_IsReported()
+        {
+            var picture = TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /ImageMask true /Filter /DCTDecode", "x");
+            Render(Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: picture), 1, 1, out var unsupported);
+
+            Assert.Contains("image: DCT stencil mask", unsupported);
+        }
     }
 }

@@ -229,7 +229,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Contains("image: image size", WithImage("/Width 0 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "00").Unsupported);
             Assert.Contains("image: bits per component", WithImage("/Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 3", "00").Unsupported);
             Assert.Contains("image: image colour space", WithImage("/Width 1 /Height 1 /ColorSpace /Nope /BitsPerComponent 8", "00").Unsupported);
-            Assert.Contains("image: DCT image with a mask", Draw("100 0 0 100 0 0 cm /Im0 Do", "/XObject << /Im0 5 0 R >>",
+            Assert.Contains("image: image data could not be decoded", Draw("100 0 0 100 0 0 cm /Im0 Do", "/XObject << /Im0 5 0 R >>",
                 TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /DCTDecode /SMask 6 0 R", "x"),
                 Image("/Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "FF")).Unsupported);
         }
