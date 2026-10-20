@@ -23,9 +23,16 @@ block-axis span of that rectangle inside the fragmentainer (`Region`) and inside
 - **Per (cell, rectangle, band), exactly, is wrong too.** That is the reviewer's prototype; on a slot where one copy is
   confined to a band and another at the same rectangle is not, both survive and the text doubles (the first page of a
   tall-first table, and the page a tall second row starts on). Containment of the visible span is what tells a repeat apart.
-- **A continuation shell draws at `ShellRect`, not at the cell's bounds.** The cell's own `Location`/`Size` describe its
-  first fragment; a later fragment is the rectangle layout stated. Comparing bounds made two different shell copies look
-  identical (both empty in the slot) and dropped the one that showed the cell on a page where two tall rows meet.
+- **Leaving a repeat out may not change which boxes hold a draft.** Which boxes hold drafts decides which frozen slots layout
+  re-opens when it moves them (`HoldsFragmentsFor` → `InvalidateFrom`), and a row and its placeholder held a draft on a page
+  only through the cell's copy there. Without it, moving those rows never re-opened a page the emitter had walked while the
+  cell's height was still unsettled (its bounds still its first 18pt), so the `Finish` replay never redrew it: the middle page
+  of a span of 5 with a page-and-two-thirds-tall own row, `vertical-align: top`, under a repeated `<thead>`/`<tfoot>`, lost
+  the whole cell. The box that left a repeat out still gets its draft (`heldARepeat` in `BuildDraftCore`), as it did when the
+  copy was kept. Found by the reviewer; `ARowspanCellOverAPageTallOwnRow_IsDrawnOnTheMiddlePage` pins it.
+- A continuation shell draws at `ShellRect`, not at the cell's bounds, so that is the rectangle compared. An earlier version
+  of this note called it a measured trap; it is not: with both copies' bounds outside the slot their spans share one bottom,
+  and every layout tried gives the same pages without it.
 - The `EmitSlot` reset is no longer observable in output: spans are clipped to the slot's region, so an entry from an earlier
   slot never contains a later copy. It stays to bound the set to one slot. The reset before `VerifyAgainstTheFullWalk`'s
   reference walk is observable, and pinned.
@@ -36,7 +43,10 @@ With a page-tall row in the span under a repeated group, the copy reached throug
 undisplaced place: it can paint the cell over the repeated `<thead>`, run past its last row (a `300pt` row followed by a
 `150pt` one), and, with two page-tall rows, leave the last few points of the cell undrawn on the final page. The second-round
 head and `main` draw the same copies there (`main` draws more on top), so none of this is a regression; the tests use row
-heights that avoid it.
+heights that avoid it. The same class doubles words: where the spanning cell's own content runs down several bands under a
+repeated group, the copy through an undisplaced row draws the words of a displaced band again, unshifted (a `rowspan="2"`
+cell 300pt tall under a `<thead>`: `w1_7`…`w1_10` painted on both page 1 and page 2). Measured identically on the
+third-round head; clipping alone would not remove it from a PDF reader's text, since clipped text is still extracted.
 
 **Row backgrounds now show the table background bug that `main` hid.** A row's background is painted over the row's whole
 rectangle, in tree order, including the part of a cell spanning in from an earlier row; CSS 2.1 §17.5.1 has a row's background
@@ -52,8 +62,15 @@ first, so the cell's `TD` would move under the last row's `TR`. The fix belongs 
 - `TableRowspanCellPaintedOnceTests` (net8.0, Debug): the one-page censuses fail on `main`; the continuation theory (repeated
   `thead`, two-row `thead`, `tfoot`, none; tall row first or second; two and three rows; two page-tall rows; a page-tall
   spanning cell) checks on every continuation page that the cell's fill reaches as far as the rows beside it, that its bottom
-  border strip is drawn on the last page, that no visible strip is drawn twice, and that every word is painted once. 4 of its
-  cases fail on the second-round head (the tall-second-row ones) and 22 of the class's tests fail on `main`.
-- Mutants: dropping the region clip, dropping the band clip, or the reset before the reference walk each fail tests.
-- `PeachBrackets.Engine.Tests`, net8.0, Debug: 16,081 tests, all passing.
-- Diff coverage of the changed library lines: 26/26 (coverlet Cobertura, per changed line).
+  border strip is drawn on the last page, that no visible strip is drawn twice, and that every word is painted once. Its
+  tall-second-row cases fail on the second-round head (66538f1e), the middle-page test fails on the third-round head
+  (2ed05014), and 25 of the class's 31 tests fail on `main`.
+- Mutants that fail tests: removing `heldARepeat`, the fragmentainer-bottom or band-top clip, the top half of "already shows",
+  or the reset before the reference walk. Mutants that survive, each alone: the fragment key or the rectangle in the
+  identity, `ShellRect`, the fragmentainer-top or band-bottom clip, the bottom half of "already shows". No layout tried puts
+  two copies at one rectangle whose spans differ by one of these; `ShowsSomethingNew`'s remarks say why they stay.
+- `ARowspanCellOverAPageTallOwnRow_IsDrawnOnTheMiddlePage` (the reviewer's repro, `<thead>` and `<tfoot>`): the middle page
+  draws no cell on the third-round head; passes here and on `main`.
+- `PeachBrackets.Engine.Tests`, net8.0: 16,086 passing in Debug, 16,072 in Release (Release leaves out DEBUG-only tests).
+- Diff coverage of the changed library lines: 31/32 (coverlet Cobertura, per changed line). The line left is `heldARepeat` in
+  the ordinary-children loop: a cell reached through its own row comes first, so it is never a repeat there.

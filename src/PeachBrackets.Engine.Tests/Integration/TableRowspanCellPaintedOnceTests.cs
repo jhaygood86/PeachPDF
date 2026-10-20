@@ -103,7 +103,8 @@ namespace PeachPDF.Tests.Integration
         /// <c>tfoot</c>) or under none. The group's cells carry no decoration and no <c>w#_#</c> words, so every decoration in
         /// the first column is the spanning cell's and every word in the census is a body cell's.
         /// </summary>
-        private static string SpanningTableBesideTallRows(string group, string heights, string spacing, int cellHeight = 0)
+        private static string SpanningTableBesideTallRows(
+            string group, string heights, string spacing, int cellHeight = 0, string align = "middle", int words = 1)
         {
             var groups = group switch
             {
@@ -117,7 +118,7 @@ namespace PeachPDF.Tests.Integration
             var rows = rowHeights.Select((height, i) =>
             {
                 var spanning = i == 0
-                    ? $"<td id='span' rowspan='{rowHeights.Length}' style='border:2pt solid #36c;border-bottom-color:#c36;background:#fdd'>{(cellHeight > 0 ? $"<div style='height:{cellHeight}pt'>w1_1</div>" : "w1_1")}</td>"
+                    ? $"<td id='span' rowspan='{rowHeights.Length}' style='border:2pt solid #36c;border-bottom-color:#c36;background:#fdd;vertical-align:{align}'>{SpanningCellContent(cellHeight, words)}</td>"
                     : "";
                 var id = i == 0 ? " id='first'" : "";
 
@@ -126,6 +127,19 @@ namespace PeachPDF.Tests.Integration
 
             return $"<table style='border-collapse:separate;border-spacing:{spacing}'>{groups}<tbody>{string.Concat(rows)}</tbody></table>";
         }
+
+        /// <summary>
+        /// The spanning cell's content: one word, alone or at the top of <paramref name="height"/>pt of its own, or
+        /// <paramref name="words"/> words spread evenly down that height, so a part of the cell lost or drawn twice on some
+        /// page shows in the word census.
+        /// </summary>
+        private static string SpanningCellContent(int height, int words) =>
+            (height, words) switch
+            {
+                (<= 0, _) => "w1_1",
+                (_, <= 1) => $"<div style='height:{height}pt'>w1_1</div>",
+                _ => string.Concat(Enumerable.Range(1, words).Select(k => $"<div style='height:{height / words}pt'>w1_{k}</div>")),
+            };
 
         /// <summary>
         /// On every page the spanning cell continues onto, its fill reaches as far down as the rows beside it, its bottom border
@@ -151,9 +165,13 @@ namespace PeachPDF.Tests.Integration
         [InlineData("thead", "15,15,15", "0", 300)]
         [InlineData("none", "15,15", "0", 300)]
         [InlineData("none", "300,300", "0")]
-        public async Task ARowspanCellContinuingOntoLaterPages_IsDecoratedToTheBottomOfItsLastRow(string group, string heights, string spacing, int cellHeight = 0)
+        [InlineData("none", "300,15", "0")]
+        [InlineData("none", "300,15,15", "0", 300, "middle", 10)]
+        [InlineData("thead", "300,15", "0", 180, "middle", 6)]
+        public async Task ARowspanCellContinuingOntoLaterPages_IsDecoratedToTheBottomOfItsLastRow(
+            string group, string heights, string spacing, int cellHeight = 0, string align = "middle", int words = 1)
         {
-            var html = Page(SpanningTableBesideTallRows(group, heights, spacing, cellHeight));
+            var html = Page(SpanningTableBesideTallRows(group, heights, spacing, cellHeight, align, words));
             var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
             var pages = container.FragmentTree!.Fragmentainers.Count;
 
@@ -174,11 +192,14 @@ namespace PeachPDF.Tests.Integration
                 Assert.NotEmpty(spanning);
                 Assert.NotEmpty(beside);
 
-                // The fills of the cells beside it end where the rows do; the spanning cell's fill ends there too, and on the
-                // last page so does its bottom border strip (2pt high, drawn as its own band as its colour differs).
+                // The fills of the cells beside it end where the rows do. The spanning cell's fill reaches at least that far
+                // (on a page before its last it may run on to the foot of the page, past a row that moved to the next one),
+                // and on its last page it ends there, as does its bottom border strip (2pt high, drawn as its own band as
+                // its colour differs).
                 var rowsBottom = beside.Max(r => r.Bottom);
-                Assert.True(Math.Abs(spanning.Max(r => r.Bottom) - rowsBottom) < 0.5,
-                    $"page {page + 1}: the spanning cell is drawn down to {spanning.Max(r => r.Bottom)}, the rows beside it to {rowsBottom}");
+                var spanningBottom = spanning.Max(r => r.Bottom);
+                Assert.True(page == pages - 1 ? Math.Abs(spanningBottom - rowsBottom) < 0.5 : spanningBottom > rowsBottom - 0.5,
+                    $"page {page + 1}: the spanning cell is drawn down to {spanningBottom}, the rows beside it to {rowsBottom}");
                 if (page == pages - 1)
                     Assert.Contains(spanning, r => r.Height <= 2.5 && r.Width > 2.5 && Math.Abs(r.Bottom - rowsBottom) < 0.5);
                 Assert.Equal(strips.Count, strips.Distinct().Count());
@@ -187,6 +208,48 @@ namespace PeachPDF.Tests.Integration
             var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
             var (lost, doubled) = PaintedWords.Diff(html, painted);
             Assert.True(lost.Count == 0 && doubled.Count == 0, $"lost [{string.Join(", ", lost)}], doubled [{string.Join(", ", doubled)}]");
+        }
+
+        /// <summary>
+        /// A cell spanning five rows, whose own row is about a page and two thirds tall, under a repeated <c>&lt;thead&gt;</c> or
+        /// <c>&lt;tfoot&gt;</c>. The page in the middle is walked while the cell's height is not settled yet, so the cell has no
+        /// copy there until layout moves the spanned rows and re-opens that page; it re-opens it only for boxes that hold a
+        /// draft there, which the rows and placeholders did only through the copies left out as repeats. Leaving them out
+        /// without keeping those drafts lost the cell's fill and borders on the middle page.
+        /// </summary>
+        [Theory]
+        [InlineData("<thead><tr><th>H1</th><th>H2</th></tr></thead>")]
+        [InlineData("<tfoot><tr><td>F1</td><td>F2</td></tr></tfoot>")]
+        public async Task ARowspanCellOverAPageTallOwnRow_IsDrawnOnTheMiddlePage(string group)
+        {
+            var rows = string.Concat(Enumerable.Range(1, 4).Select(i =>
+                $"<tr><td>w3_{i}<div style='height:20px'>w4_{i}</div></td></tr>"));
+            var html = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page{size:360px 400px;margin:24px} " +
+                "body{margin:0;font:11px/14px Arial} table{border-collapse:separate;border-spacing:0} td,th{padding:3px;border:1px solid #444}" +
+                $"</style></head><body><table>{group}<tbody><tr><td id='span' rowspan='5' style='border:2px solid #36c;background:#fdd;" +
+                "vertical-align:top'>w1_1</td><td><div style='height:580px'>w2_0</div></td></tr>" + rows + "</tbody></table></body></html>";
+            var (root, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+            var cell = LayoutHarness.FindById(root, "span")!;
+
+            Assert.True(pages >= 3, "the cell has to cross a whole page, or this asserts nothing");
+
+            for (var page = 0; page < pages; page++)
+            {
+                using var graphics = new RecordingGraphics(new HtmlRenderContext());
+                FragmentPaintHarness.PaintPage(container, graphics, page);
+
+                var fill = VisibleDecoration(graphics.Log)
+                    .Where(r => r.Left >= cell.Location.X - 0.5 && r.Right <= cell.ActualRight + 0.5).ToList();
+                // The body's words beside the cell: the repeated group's own cells lie outside the rows the cell spans.
+                var lowestText = graphics.Log
+                    .Where(op => op.Kind == PaintOpKind.DrawString && op.Text!.StartsWith('w') && op.Bounds.Left >= cell.ActualRight - 0.5)
+                    .Max(op => op.Bounds.Bottom);
+
+                Assert.True(fill.Count > 0, $"page {page + 1}: the spanning cell is not drawn");
+                Assert.True(fill.Max(r => r.Bottom) >= lowestText - 0.5,
+                    $"page {page + 1}: the spanning cell is drawn down to {fill.Max(r => r.Bottom)}, the text beside it to {lowestText}");
+            }
         }
 
         /// <summary>

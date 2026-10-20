@@ -2218,6 +2218,13 @@ namespace PeachBrackets.Html.Fragmentation
         /// words again, so it is not kept. A copy that lands elsewhere, or shows a part the earlier ones clip away, is: a run
         /// displaced under a repeated header clips each row's copy to that row's band, so each draws a different part of the
         /// cell.
+        /// <para>
+        /// Not every part of this is reached by a layout the tests build: the fragment key and the rectangle in the identity,
+        /// the shell rectangle, the fragmentainer's top and the band's bottom in the span, and the bottom half of "already
+        /// shows". Removing any one of them alone leaves every tested page as it is. They are kept because the rule they
+        /// complete - a copy is left out only when a copy at the same place already shows all of it - is the one that stays
+        /// safe for a layout the tests do not build.
+        /// </para>
         /// </remarks>
         private bool ShowsSomethingNew(CssBox box, Draft draft)
         {
@@ -3098,6 +3105,14 @@ namespace PeachBrackets.Html.Fragmentation
 
             var children = RentChildren();
 
+            // Whether a child was built here and left out only because it repeats a rowspan cell's copy kept earlier
+            // in this walk (ShowsSomethingNew). This box still holds a draft then, as it did while the copy was kept:
+            // which boxes hold drafts decides which frozen slots layout re-opens when it moves them
+            // (HoldsFragmentsFor), so leaving the repeat out may not change that. Measured as a page in the middle of a
+            // span losing the whole cell: no placeholder held a draft, so moving the rows never re-opened the page
+            // walked while the cell's height was still unsettled.
+            var heldARepeat = false;
+
             // Almost every box is ordinary content: not a rowspan placeholder and holding no captured instance at this slot,
             // so what ChildrenOf would yield is just the shared ordinary walk. Done here as a plain loop, since the iterator
             // costs a state machine and its closure per call, for every box visited, to say that.
@@ -3120,8 +3135,10 @@ namespace PeachBrackets.Html.Fragmentation
 
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null && ShowsSomethingNew(childBox, childDraft))
-                        children.Add(childDraft);
+                    if (childDraft is null) continue;
+
+                    if (ShowsSomethingNew(childBox, childDraft)) children.Add(childDraft);
+                    else heldARepeat = true;
                 }
             }
             else
@@ -3137,8 +3154,10 @@ namespace PeachBrackets.Html.Fragmentation
 
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null && ShowsSomethingNew(childBox, childDraft))
-                        children.Add(childDraft);
+                    if (childDraft is null) continue;
+
+                    if (ShowsSomethingNew(childBox, childDraft)) children.Add(childDraft);
+                    else heldARepeat = true;
                 }
             }
 
@@ -3156,7 +3175,7 @@ namespace PeachBrackets.Html.Fragmentation
             var ownBoundsCoverRegion = usesOwnBounds && !CssBox.NeedsAClaimedWordToEstablishMembership(box)
                 && region.Contains(Displaced(Shifted(BoundsOf(box, snapshot)), shift));
 
-            if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion)
+            if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion && !heldARepeat)
             {
                 // A shell continues a fragment; it never invents one. Requiring the box to already hold a
                 // frozen fragment somewhere is what keeps this from changing _frozen membership, and so
