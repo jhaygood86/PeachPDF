@@ -48,6 +48,9 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   the Encrypt dictionary, objects inside an object stream (the stream is), `/Crypt` Identity streams, metadata when the handler leaves it
   clear. Tests use fixtures written by MuPDF, an independent implementation - and `PdfEncryptionOptions.ReadOnly`'s FIRST argument is
   the user password, so `ReadOnly("owner")` is a file that needs a password.
+- **Type 3 fonts** run each glyph's content stream under `fontMatrix * size * translate(x, rise) * scale(Th) * Tm`; `d1` locks the
+  colour operators (`State.ColorLocked`, popped with the state) so a shape glyph takes the text fill colour, `d0` leaves them free.
+  Widths are glyph space times the font matrix's horizontal scale. Type 3 glyphs have no text map yet.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
