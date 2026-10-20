@@ -63,6 +63,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   (accent offset = composite sbx + adx - asb). `ToCff` re-expresses outlines as Type 2 charstrings (relative moves, width first) in a
   name-keyed CFF with a charset and a custom encoding (glyphs with codes first, since CFF encodings number consecutive glyphs), which
   then follows the CFF path. Hints are dropped. Tests build their own Type 1 fonts byte by byte - there is no Type 1 file in the repo.
+- **ICC profiles** (`PdfColorSpace.FromIccProfile`): a gray/RGB `ICCBased` profile that parses through `PeachImage.IccColorProfile` and
+  matches its component count converts to sRGB (relative colorimetric, black point compensation) - per colour through `ToColor`, and
+  per image through `Bulk`, one call for the whole sample array. Anything else (unreadable, mismatched, CMYK) is read as its device
+  alternate. CMYK images are handed to the canvas as an uncompressed CMYK TIFF so a PDF canvas embeds `/DeviceCMYK`; converting them
+  to RGB ourselves had no CMYK profile to use and drifted from the original (`cmyk_tiff`). The fixture ICC profile has linear curves,
+  which makes "profile applied" observable: 0.5 reads as ~188, not 128. The ICC accepted-gap note is gone with this change.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
