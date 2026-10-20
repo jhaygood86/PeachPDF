@@ -32,10 +32,13 @@ answers from the same entry. Any per-layer longhand the shorthand starts exporti
 
 ## Not done
 
+The deviations from a browser that this left in place (the position grammar, a single box keyword, `inherit`, a `none` layer shifting later layers, a two-value repeat) are recorded in
+[the accepted gap](../accepted-gaps/background-shorthand-and-layer-deviations-from-a-browser.md), each with an issue.
+
 Serialising the shorthand back (`style.cssText` / `Stringify`) still prints only what the layers hold. `background-position` fills `0% 0%` for an omitted layer, which the CSS-OM prints as `0 0`.
 
 ## Evidence
 
-`BackgroundLayerShorthandTests` (21 of its 25 cases fail on the old converter; the other 4 pin that a longhand no layer names, and a colour set by the last layer, are unchanged; every default in `LayerDefaults` is pinned
+`BackgroundLayerShorthandTests` (25 of its 29 cases fail on the old converter; the other 4 pin that a longhand no layer names, and a colour set by the last layer, are unchanged; every default in `LayerDefaults` is pinned
 by a case that fails when it is changed). The render test also compares the page's content streams with the one the equivalent longhands make. The issue's own repro rasterized through PDFium and MuPDF now matches Chrome
 (`(0,13,241)`, `(0,128,127)`, `(0,243,12)` across the box; it was `(255,126,126)` flat), and the `gradients` showcase has a new section with four layered cases that match Chrome in both renderers.
