@@ -54,7 +54,7 @@ jobs:
             - '.github/scripts/Test-PdfConformance.ps1'
 
   # One leg per {OS x suite}, run in parallel; wall time is the slowest leg rather than the sum.
-  #   main   - PeachPDF.Tests, one step per target framework (a multi-targeted `dotnet test` would
+  #   main   - PeachPDF.Tests and PeachBrackets.Engine.Tests, one step per project and target framework (a multi-targeted `dotnet test` would
   #            launch every TFM's test host concurrently; three ~14k-test suites plus Playwright
   #            Chromium contending for a small runner made xUnit's host miss VSTest's health-check
   #            ping and fail the job)
@@ -93,12 +93,16 @@ jobs:
 
     - name: Build
       if: matrix.suite == 'main'
-      run: dotnet build src/PeachPDF.Tests/PeachPDF.Tests.csproj --configuration Release
+      run: |
+        foreach ($p in 'PeachPDF.Tests', 'PeachBrackets.Engine.Tests') {
+          dotnet build "src/$p/$p.csproj" --configuration Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        }
 
     - name: Install Playwright browsers
       if: matrix.suite == 'main'
       run: |
-        $playwrightScript = Get-ChildItem -Path src/PeachPDF.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
+        $playwrightScript = Get-ChildItem -Path src/PeachBrackets.Engine.Tests/bin/Release -Filter playwright.ps1 -Recurse | Select-Object -First 1 -ExpandProperty FullName
         if ($IsLinux) {
           pwsh $playwrightScript install --with-deps chromium
         } else {
@@ -124,13 +128,25 @@ jobs:
       if: matrix.suite == 'main'
       run: dotnet test --project ${{ github.workspace }}/src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename test-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net8.0 --results-directory coverage
 
+    - name: Test HTML engine (net8.0)
+      if: matrix.suite == 'main'
+      run: dotnet test --project ${{ github.workspace }}/src/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename engine-tests-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net8.0 --results-directory coverage
+
     - name: Test (net10.0)
       if: matrix.suite == 'main'
       run: dotnet test --project ${{ github.workspace }}/src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename test-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net10.0 --results-directory coverage
 
+    - name: Test HTML engine (net10.0)
+      if: matrix.suite == 'main'
+      run: dotnet test --project ${{ github.workspace }}/src/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename engine-tests-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net10.0 --results-directory coverage
+
     - name: Test (net11.0)
       if: matrix.suite == 'main' && matrix.os != 'macos-latest'
       run: dotnet test --project ${{ github.workspace }}/src/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename test-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net11.0 --results-directory coverage
+
+    - name: Test HTML engine (net11.0)
+      if: matrix.suite == 'main' && matrix.os != 'macos-latest'
+      run: dotnet test --project ${{ github.workspace }}/src/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename engine-tests-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net11.0 --results-directory coverage
 
     # ---- engine -----------------------------------------------------------------------------
 

@@ -20,5 +20,6 @@
   <Project Path="PeachPDF.Tests/PeachPDF.Tests.csproj" />
   <Project Path="PeachBrackets/PeachBrackets.csproj" />
   <Project Path="PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
+  <Project Path="PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />
 </Solution>

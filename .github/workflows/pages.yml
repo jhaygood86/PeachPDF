@@ -44,8 +44,12 @@ jobs:
           # Ask dotnet test to enumerate the suite (discovery only — no execution, theories expanded) and
           # count the discovered cases, mirroring the version step above: the number is written to
           # docs/_data/tests.yml and consumed via {{ site.data.tests.total }} on the testing page.
-          COUNT=$(dotnet test --project src/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --list-tests \
-            | grep -cE '^[[:space:]]+PeachPDF\.Tests\.')
+          COUNT=0
+          for PROJECT in PeachPDF.Tests PeachBrackets.Engine.Tests; do
+            N=$(dotnet test --project "src/$PROJECT/$PROJECT.csproj" --framework net8.0 --list-tests \
+              | grep -cE '^[[:space:]]+PeachPDF\.Tests\.' || true)
+            COUNT=$((COUNT + N))
+          done
           if [ "$COUNT" -lt 1000 ]; then echo "Unexpected test count: $COUNT" >&2; exit 1; fi
           FORMATTED=$(echo "$COUNT" | sed ':a;s/\B[0-9]\{3\}\>/,&/;ta')
           printf 'total: "%s"\n' "$FORMATTED" > docs/_data/tests.yml

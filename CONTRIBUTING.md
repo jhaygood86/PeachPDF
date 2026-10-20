@@ -13,7 +13,10 @@ The test projects use xunit.v3 4.x on Microsoft.Testing.Platform (opted into by 
 
 ```
 dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
+dotnet test --project PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --framework net8.0
 ```
+
+The HTML/CSS/SVG/MathML engine's internals are tested by `PeachBrackets.Engine.Tests`; PDF output and the public API by `PeachPDF.Tests`.
 
 `PeachPDF.Tests` multi-targets net8.0 and net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which roughly doubles (or triples, with net11.0 active) local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 or net11.0 run if you suspect an issue specific to that target.
 
