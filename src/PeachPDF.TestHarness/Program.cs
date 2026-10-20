@@ -20,6 +20,54 @@ PdfGenerateConfig pdfConfig = new()
 
 PdfGenerator generator = new();
 
+// --import-roundtrip <inputDir> <outputDir>: the acceptance gate of the PDF importer. Every PDF in inputDir (the showcase output) is
+// opened with PdfPageSource, each page is painted onto a fresh PdfComposer page, and the result is saved to outputDir under the same
+// name; report.txt lists, per file, the features the importer could not draw yet. tools/compare-roundtrip.py then rasterizes the original
+// and the round-tripped file with MuPDF and PDFium and compares them.
+if (args.Length >= 3 && args[0] == "--import-roundtrip")
+{
+    Environment.Exit(RunImportRoundTrip(args[1], args[2]));
+}
+
+static int RunImportRoundTrip(string inputDir, string outputDir)
+{
+    Directory.CreateDirectory(outputDir);
+    var report = new StringBuilder();
+    var failures = 0;
+    foreach (var path in Directory.EnumerateFiles(inputDir, "*.pdf").OrderBy(p => p, StringComparer.Ordinal))
+    {
+        var name = Path.GetFileName(path);
+        try
+        {
+            var source = PeachDrawing.PDF.PdfPageSource.Open(File.ReadAllBytes(path));
+            using var composer = new PeachDrawing.PDF.PdfComposer(new PeachDrawing.PDF.PdfRenderContext());
+            var unsupported = new SortedSet<string>(StringComparer.Ordinal);
+            for (var pageIndex = 0; pageIndex < source.PageCount; pageIndex++)
+            {
+                var (width, height) = source.GetPageSize(pageIndex);
+                var page = composer.AddPage(width, height);
+                foreach (var feature in source.Paint(pageIndex, page.Canvas))
+                {
+                    unsupported.Add(feature);
+                }
+            }
+
+            using var output = File.Create(Path.Combine(outputDir, name));
+            composer.Save(output);
+            report.AppendLine($"{name}\tpages={source.PageCount}\tunsupported={string.Join("; ", unsupported)}");
+        }
+        catch (Exception ex)
+        {
+            failures++;
+            report.AppendLine($"{name}\tFAILED\t{ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+        }
+    }
+
+    File.WriteAllText(Path.Combine(outputDir, "report.txt"), report.ToString());
+    Console.WriteLine($"Round-tripped {Directory.EnumerateFiles(inputDir, "*.pdf").Count()} PDFs, {failures} failed. See {Path.Combine(outputDir, "report.txt")}.");
+    return failures == 0 ? 0 : 1;
+}
+
 // --benchmark [--benchmark-iterations N]: instead of writing any output, times and measures
 // allocation for every showcase's render (GeneratePdf + Save, the same two calls a real caller
 // makes), N times each (default 10), and prints a per-showcase report plus totals at the end. A
