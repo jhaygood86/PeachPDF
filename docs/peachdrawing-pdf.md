@@ -213,6 +213,22 @@ A definition has a `Kind` (`Text`, `Checkbox`, `Radio`, `Select`), a `Name`, a `
 look of each state is drawn by your `IPdfFormAppearance`, which receives a `Canvas` the size of the control, so a field looks like the
 rest of your page. Radio buttons that share a `Name` are one field.
 
+## Drawing a page of an existing PDF
+
+`PdfPageSource` opens an existing PDF and paints its pages onto any `Canvas` - a `PdfCanvas` to stamp a page over or under a document you are writing, a raster canvas to render it:
+
+```csharp
+var source = PdfPageSource.Open(File.ReadAllBytes("letterhead.pdf"));
+var (width, height) = source.GetPageSize(0);          // points, after the page's rotation
+
+var page = composer.AddPage(width, height);
+var notDrawn = source.Paint(0, page.Canvas);          // features of the page that could not be drawn
+```
+
+`Paint` draws the page's content again rather than copying the file's objects, so it works the same on every canvas. The canvas' origin is the top-left of the area the page occupies and its units are points; the page is clipped to its own crop box (or media box) and honours `/Rotate`. On a `PdfCanvas`, text from an embedded TrueType or OpenType font comes out as real text with the original's text map, so it still selects, searches and copies as the same characters.
+
+The importer reads classic and stream cross-reference tables, object streams and incremental updates, and rebuilds a file whose table is missing or damaged. It draws paths (fill, stroke, clip, dashes, caps and joins), the graphics state, device, ICC-based, Lab and indexed colour, constant alpha, form XObjects and text in simple TrueType fonts and Type0 fonts with an `Identity-H` encoding. What it cannot draw yet - images, shadings, patterns, soft masks, blend modes, Type 1 and bare CFF fonts, Type 3 fonts, text drawn as an outline - is skipped, and `Paint` returns a name for each such feature it met. Encrypted files throw `NotSupportedException`, and data that is not a PDF throws `InvalidDataException`.
+
 ## Using it from PeachPDF
 
 You do not need this package to render HTML to PDF - [PeachPDF](getting-started.md) depends on it and uses it for you. Reach for it

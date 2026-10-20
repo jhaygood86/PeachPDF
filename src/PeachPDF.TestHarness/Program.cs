@@ -15373,6 +15373,67 @@ await SaveShowcaseAsync("encrypted_read_only", "Standards & Accessibility", "AES
         Encryption = PdfEncryptionOptions.ReadOnly(ownerPassword: "peachpdf-showcase-owner"),
     });
 
+// A letterhead file built with PeachDrawing.PDF itself, so the showcase needs no fixture on disk: a band across the top and a frame
+// around the page. OverlayFile/UnderlayFile read pages of an existing PDF - this is the stand-in for the file a caller would have.
+static byte[] BuildLetterheadFile()
+{
+    const double a4Width = 595.28, a4Height = 841.89;
+    using var composer = new PeachDrawing.PDF.PdfComposer(new PeachDrawing.PDF.PdfRenderContext());
+    var canvas = composer.AddPage(a4Width, a4Height).Canvas;
+    var band = canvas.GetSolidBrush(PaintColor.FromArgb(255, 200, 70, 30));
+    canvas.DrawRectangle(band, 0, 0, a4Width, 36);
+    var frame = canvas.GetPen(canvas.GetSolidBrush(PaintColor.FromArgb(255, 200, 70, 30)));
+    frame.Width = 1.5;
+    canvas.DrawRectangle(frame, 14, 50, a4Width - 28, a4Height - 64);
+    using var stream = new MemoryStream();
+    composer.Save(stream);
+    return stream.ToArray();
+}
+
+const string fileLayersSource =
+    """"
+    var letterhead = File.ReadAllBytes("letterhead.pdf");
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        // Underlay: the letterhead sits behind each page's own content, on every page.
+        doc.UnderlayFile(layer => layer.File(letterhead).SourcePages("1").RepeatSourcePages("1"));
+
+        for (var i = 1; i <= 3; i++)
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Margin(60);
+                page.Content(container => container.Text($"Page {i} of the report, on letterhead."));
+            });
+        }
+    });
+    """";
+
+await SaveDeclarativeShowcaseAsync("file_layers", "Document Building", "Overlay and Underlay PDF Files",
+    "IDocumentBuilder.UnderlayFile/OverlayFile: pages of an existing PDF (here a letterhead with a band and a frame) are drawn under or over the document's own pages, paired with target pages by a range such as \"1-z\", and cycled with RepeatSourcePages.",
+    fileLayersSource,
+    async gen =>
+    {
+        var letterhead = BuildLetterheadFile();
+        return await gen.CreateDocument(doc =>
+        {
+            doc.UnderlayFile(layer => layer.File(letterhead).SourcePages("1").RepeatSourcePages("1"));
+
+            for (var i = 1; i <= 3; i++)
+            {
+                var number = i;
+                doc.Page(page =>
+                {
+                    page.Size(PageSize.A4);
+                    page.Margin(60);
+                    page.Content(container => container.Text($"Page {number} of the report, on letterhead."));
+                });
+            }
+        });
+    });
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

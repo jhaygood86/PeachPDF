@@ -44,5 +44,22 @@ namespace PeachPDF.Layout
         /// </para>
         /// </summary>
         void Stylesheet(PeachPdfCssContent content);
+
+        /// <summary>
+        /// Stamps pages of an existing PDF file over the document's pages once they are drawn - a watermark, a
+        /// "DRAFT" stamp, a letterhead's foreground. May be called more than once; layers apply in the order they are added.
+        /// </summary>
+        /// <remarks>
+        /// The file's pages are drawn into the new document, not copied from it: text, paths, clips, colour and transparency
+        /// come across, and what the importer cannot draw yet (images, shadings, patterns, fonts with no embedded TrueType or
+        /// OpenType program) is left out. Encrypted files are refused. A page larger than the page it lands on is clipped to it.
+        /// </remarks>
+        void OverlayFile(Action<IFileLayerDescriptor> handler);
+
+        /// <summary>
+        /// Stamps pages of an existing PDF file under the document's pages, before their own content is drawn - a letterhead or
+        /// a form background that the page's content then sits on. See <see cref="OverlayFile"/> for what is carried over.
+        /// </summary>
+        void UnderlayFile(Action<IFileLayerDescriptor> handler);
     }
 }

@@ -1,0 +1,175 @@
+using PeachDrawing;
+using PeachDrawing.Core;
+using PeachDrawing.PDF;
+using PeachPDF.Layout;
+
+namespace PeachPDF.Tests.Integration
+{
+    /// <summary>
+    /// <see cref="IDocumentBuilder.OverlayFile"/> and <see cref="IDocumentBuilder.UnderlayFile"/>: the finished document is read back
+    /// and rasterized, so each test fails if the layer were not drawn, were drawn on the wrong page, or on the wrong side of the
+    /// page's own content.
+    /// </summary>
+    public class FileLayerIntegrationTests
+    {
+        private static readonly (byte R, byte G, byte B) Red = (255, 0, 0);
+        private static readonly (byte R, byte G, byte B) Blue = (0, 0, 255);
+        private static readonly (byte R, byte G, byte B) Green = (0, 255, 0);
+
+        /// <summary>A two-page 200x200pt file: page 1 has a red square at the top-left and one at the bottom-right, page 2 has a green square at the top-left.</summary>
+        private static byte[] LayerFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var first = composer.AddPage(200, 200).Canvas;
+            var red = first.GetSolidBrush(PaintColor.FromArgb(255, 255, 0, 0));
+            first.DrawRectangle(red, 0, 0, 50, 50);
+            first.DrawRectangle(red, 150, 150, 40, 40);
+            var second = composer.AddPage(200, 200).Canvas;
+            second.DrawRectangle(second.GetSolidBrush(PaintColor.FromArgb(255, 0, 255, 0)), 0, 0, 50, 50);
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        /// <summary>The base document: <paramref name="pages"/> pages of 200x200pt, each a 100pt blue square at the top-left.</summary>
+        private static async Task<byte[]> BuildAsync(int pages, Action<IDocumentBuilder> layers)
+        {
+            var generator = new PdfGenerator();
+            var document = await generator.CreateDocument(doc =>
+            {
+                for (var i = 0; i < pages; i++)
+                {
+                    doc.Page(page =>
+                    {
+                        page.Size(200, 200).Margin(0);
+                        page.Content(container => container.Width(100).Height(100).Background(PdfColor.FromRgb(0, 0, 255)).Text(" "));
+                    });
+                }
+
+                layers(doc);
+            });
+
+            using var ms = new MemoryStream();
+            document.Save(ms);
+            return ms.ToArray();
+        }
+
+        /// <summary>The colour at a point (in points from the page's top-left corner) of one page of <paramref name="pdf"/>, or null when nothing is drawn there.</summary>
+        private static (byte R, byte G, byte B)? ColourAt(byte[] pdf, int pageIndex, int x, int y)
+        {
+            var source = PdfPageSource.Open(pdf);
+            using var canvas = new RasterRenderContext().CreateCanvas(200, 200);
+            source.Paint(pageIndex, canvas);
+            return Pixel(canvas, x, y);
+        }
+
+        private static (byte R, byte G, byte B)? Pixel(RasterCanvas canvas, int x, int y)
+        {
+            var buffer = canvas.ToPixelBuffer();
+            var i = (y * buffer.Width + x) * 4;
+            var span = buffer.PremultipliedRgba.Span;
+            return span[i + 3] == 0 ? null : (span[i], span[i + 1], span[i + 2]);
+        }
+
+        [Fact]
+        public async Task OverlayFile_DrawsTheLayerOverThePageContent()
+        {
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(LayerFile()).SourcePages("1")));
+
+            Assert.Equal(Red, ColourAt(pdf, 0, 25, 25));    // over the blue square
+            Assert.Equal(Blue, ColourAt(pdf, 0, 75, 75));   // blue square outside the layer's square
+            Assert.Equal(Red, ColourAt(pdf, 0, 170, 170));  // where the page has nothing
+        }
+
+        [Fact]
+        public async Task UnderlayFile_DrawsTheLayerUnderThePageContent()
+        {
+            var pdf = await BuildAsync(1, doc => doc.UnderlayFile(layer => layer.File(LayerFile()).SourcePages("1")));
+
+            Assert.Equal(Blue, ColourAt(pdf, 0, 25, 25));   // the page's blue square covers the layer
+            Assert.Equal(Red, ColourAt(pdf, 0, 170, 170));  // but the layer shows where the page draws nothing
+        }
+
+        [Fact]
+        public async Task RepeatSourcePages_PutsTheSameFilePageOnEveryTargetPage()
+        {
+            var pdf = await BuildAsync(3, doc => doc.OverlayFile(layer => layer.File(LayerFile()).SourcePages("1").RepeatSourcePages("1")));
+
+            for (var page = 0; page < 3; page++)
+                Assert.Equal(Red, ColourAt(pdf, page, 25, 25));
+        }
+
+        [Fact]
+        public async Task SourcePages_ArePairedWithTargetPagesInOrder_AndTheLayerStopsWhenTheyRunOut()
+        {
+            var pdf = await BuildAsync(3, doc => doc.OverlayFile(layer => layer.File(LayerFile())));
+
+            Assert.Equal(Red, ColourAt(pdf, 0, 25, 25));            // file page 1
+            Assert.Equal(Green, ColourAt(pdf, 1, 25, 25));    // file page 2
+            Assert.Equal(Blue, ColourAt(pdf, 2, 25, 25));           // the file has no third page
+        }
+
+        [Fact]
+        public async Task TargetPages_RestrictTheLayer_AndZMeansTheLastPage()
+        {
+            var pdf = await BuildAsync(3, doc => doc.OverlayFile(layer => layer.File(LayerFile()).SourcePages("1").RepeatSourcePages("1").TargetPages("2-z")));
+
+            Assert.Equal(Blue, ColourAt(pdf, 0, 25, 25));
+            Assert.Equal(Red, ColourAt(pdf, 1, 25, 25));
+            Assert.Equal(Red, ColourAt(pdf, 2, 25, 25));
+        }
+
+        [Fact]
+        public async Task LayersFromAPathAndAStream_AreRead()
+        {
+            var path = Path.Combine(Path.GetTempPath(), "layer-" + Guid.NewGuid().ToString("N") + ".pdf");
+            await File.WriteAllBytesAsync(path, LayerFile(), TestContext.Current.CancellationToken);
+            try
+            {
+                var fromPath = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(path).SourcePages("1")));
+                using var stream = new MemoryStream(LayerFile());
+                var fromStream = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(stream).SourcePages("1")));
+
+                Assert.Equal(Red, ColourAt(fromPath, 0, 25, 25));
+                Assert.Equal(Red, ColourAt(fromStream, 0, 25, 25));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
+        public async Task ALayerWithNoFile_Throws()
+        {
+            await Assert.ThrowsAsync<InvalidOperationException>(() => BuildAsync(1, doc => doc.OverlayFile(_ => { })));
+        }
+
+        [Fact]
+        public async Task ANotAPdfLayerFile_Throws()
+        {
+            await Assert.ThrowsAsync<InvalidDataException>(() => BuildAsync(1, doc => doc.OverlayFile(layer => layer.File([1, 2, 3]))));
+        }
+
+        [Theory]
+        [InlineData("1", 5, new[] { 1 })]
+        [InlineData("1-3,5", 5, new[] { 1, 2, 3, 5 })]
+        [InlineData("2-z", 4, new[] { 2, 3, 4 })]
+        [InlineData("z-3", 5, new[] { 5, 4, 3 })]
+        [InlineData(" 2 , 9 ", 5, new[] { 2 })]
+        [InlineData("", 5, new int[0])]
+        public void PageRange_ParsesPagesSpansAndZ(string range, int pageCount, int[] expected)
+        {
+            Assert.Equal(expected, PageRange.Parse(range, pageCount));
+        }
+
+        [Theory]
+        [InlineData("a")]
+        [InlineData("1-b")]
+        [InlineData("-3")]
+        public void PageRange_RejectsText_ThatIsNotARange(string range)
+        {
+            Assert.Throws<FormatException>(() => PageRange.Parse(range, 5));
+        }
+    }
+}
