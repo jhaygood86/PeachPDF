@@ -30,7 +30,7 @@
 
 **Evidence:**
 
-- Windows, net8.0 with coverage: `PeachBrackets.Engine.Tests` 16,086 passed, `PeachPDF.Tests` 1,418 passed (9 skipped), CLI 213 passed, 0 failed. Linux (Docker, net10.0, Liberation/DejaVu fonts): 16,072 and 1,414 passed, 0 failed. arm64 not run.
-- diff-cover against `main`: 78 of 78 changed executable lines. Solution `Rebuild`: 0 compiler warnings.
+- Windows, net8.0 with coverage: `PeachBrackets.Engine.Tests` 16,088 passed, `PeachPDF.Tests` 1,418 passed (9 skipped), CLI 213 passed, 0 failed. Linux (Docker, net10.0, Liberation/DejaVu fonts): 16,074, 1,414 and CLI 213 passed, 0 failed. arm64 not run.
+- diff-cover against `main`: 80 of 80 changed executable lines. Solution `Rebuild`: 0 compiler warnings.
 - Mutants that fail a test: the post-wrap `ShiftEmptyLineBelowCrowdingFloats` call and the border-box clearance of a float (the wide-float tests), the bounded-scroll-container exclusion, the `Math.Max` on the blocker's bottom, the right float's `OuterTop = startY`, the left tried-position guard. The removed `TallestOuterHeight` term had no test that failed without it.
 - html-to-pdf vault test project (built against this working tree): 8 of 8 passed.
