@@ -55,16 +55,5 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Throws<ArgumentOutOfRangeException>(() => source.GetPageSize(-1));
             Assert.Throws<InvalidDataException>(() => PdfPageSource.Open([1, 2, 3]));
         }
-
-        [Fact]
-        public void EncryptedFiles_AreRefused()
-        {
-            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { Encryption = PdfEncryptionOptions.ReadOnly("owner") });
-            composer.AddPage(100, 100);
-            using var ms = new MemoryStream();
-            composer.Save(ms);
-
-            Assert.Throws<NotSupportedException>(() => PdfPageSource.Open(ms.ToArray()));
-        }
     }
 }

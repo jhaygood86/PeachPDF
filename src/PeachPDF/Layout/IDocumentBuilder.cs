@@ -52,7 +52,7 @@ namespace PeachPDF.Layout
         /// <remarks>
         /// The file's pages are drawn into the new document, not copied from it: text, paths, clips, colour and transparency
         /// come across, as do most images, and what the importer cannot draw yet (function-based shadings, tiling patterns, JPEG 2000/CCITT/JBIG2 images, fonts with no embedded TrueType or
-        /// OpenType program) is left out. Encrypted files are refused. A page larger than the page it lands on is clipped to it.
+        /// OpenType program) is left out. A file that needs a password to open is refused. A page larger than the page it lands on is clipped to it.
         /// </remarks>
         void OverlayFile(Action<IFileLayerDescriptor> handler);
 

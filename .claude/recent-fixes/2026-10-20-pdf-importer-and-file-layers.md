@@ -40,6 +40,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   tessellates patches into 14x14 triangles with bilinear corner colours (Coons interior points per PDF 8.7.4.5.7), fills triangles into
   an RGBA bitmap over the mesh bounding box at 2.5 px per canvas unit, and the interpreter draws it as an image under the shading
   transform, clipped to the filled path for a pattern. Triangle edges get a slack of 0.02 px so neighbours leave no hairline gaps.
+- **Encryption** (`PdfDecryptor`): the Standard handler with the empty user password, RC4 (V1/2/4) and AES-128/256 (R2-R6), with
+  objects decrypted as `LoadObject` parses them (strings in place, streams replaced) - so the file key must exist before the first
+  object is read, and a rebuild, which scans objects first, clears what it loaded once the key is known. Not decrypted: xref streams,
+  the Encrypt dictionary, objects inside an object stream (the stream is), `/Crypt` Identity streams, metadata when the handler leaves it
+  clear. Tests use fixtures written by MuPDF, an independent implementation - and `PdfEncryptionOptions.ReadOnly`'s FIRST argument is
+  the user password, so `ReadOnly("owner")` is a file that needs a password.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

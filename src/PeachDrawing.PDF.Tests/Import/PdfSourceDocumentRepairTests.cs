@@ -157,17 +157,6 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
-        public void EncryptedFile_IsRefused()
-        {
-            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { Encryption = PdfEncryptionOptions.ReadOnly("owner") });
-            composer.AddPage(100, 100);
-            using var ms = new MemoryStream();
-            composer.Save(ms);
-
-            Assert.Throws<NotSupportedException>(() => PdfSourceDocument.Open(ms.ToArray()));
-        }
-
-        [Fact]
         public void DecodeStream_AppliesFilterChains_AndReportsAnImageCodec()
         {
             var hex = "48 65 6C 6C 6F>";

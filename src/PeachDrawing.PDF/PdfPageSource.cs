@@ -20,7 +20,7 @@ namespace PeachDrawing.PDF
     /// <para>
     /// What the importer cannot draw yet (JPEG 2000, CCITT and JBIG2 images, function-based shadings, tiling patterns, fonts without an embedded TrueType or
     /// OpenType program) is skipped, and <see cref="Paint"/> names each such feature in its
-    /// result. Encrypted files are refused.
+    /// result. A file protected with the empty user password is read; one that needs a password is refused.
     /// </para>
     /// </remarks>
     public sealed class PdfPageSource
@@ -36,7 +36,7 @@ namespace PeachDrawing.PDF
         /// <param name="pdf">the bytes of the PDF file</param>
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
-        /// <exception cref="NotSupportedException">the PDF is encrypted</exception>
+        /// <exception cref="NotSupportedException">the PDF needs a password to open, or uses an unknown security handler</exception>
         public static PdfPageSource Open(byte[] pdf)
         {
             ArgumentNullException.ThrowIfNull(pdf);
@@ -47,7 +47,7 @@ namespace PeachDrawing.PDF
         /// <param name="stream">a stream positioned at the start of the PDF file</param>
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
-        /// <exception cref="NotSupportedException">the PDF is encrypted</exception>
+        /// <exception cref="NotSupportedException">the PDF needs a password to open, or uses an unknown security handler</exception>
         public static PdfPageSource Open(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);
