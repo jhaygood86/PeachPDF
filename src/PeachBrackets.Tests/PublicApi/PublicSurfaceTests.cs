@@ -41,7 +41,7 @@ namespace PeachBrackets.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachPDF.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachBrackets.Engine.Tests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

@@ -8,14 +8,6 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Remove="CSS\bootstrap.css" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="CSS\bootstrap.css" />
-  </ItemGroup>
-
   <!--
     Small JPEG XL fixtures (PeachImage has no JPEG XL encoder, so they are committed files), copied
     from PeachImage v0.5.0's own test assets (BSD-3-Clause, see TestSupport/Jxl/README.md).
@@ -146,12 +138,6 @@
   -->
   <ItemGroup>
     <None Include="..\..\assets\unicode\BidiCharacterTest.txt" Link="BidiCharacterTest.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <None Include="TestSupport\acid2.html">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
