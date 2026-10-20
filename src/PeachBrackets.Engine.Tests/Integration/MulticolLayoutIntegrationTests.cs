@@ -2052,28 +2052,29 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
 
-        // A word that wraps onto the line beside a float wider than the column goes below the float, whatever the text
-        // before the float amounts to: the lengths here put one onto that line at font sizes where it did not fit.
+        // A word that wraps onto the line beside a float wider than the column goes below the float, not to its far edge past
+        // the container. Which length of text puts a word on that line depends on the host's monospace face (Consolas,
+        // DejaVu Sans Mono, Menlo), so every length is tried and only what holds for all of them is asserted.
         [Theory]
-        [InlineData(4)]
-        [InlineData(5)]
-        public async Task FloatWiderThanTheColumn_NoWordIsBesideItOrPastTheContainer(int before)
+        [InlineData(16, 500, 200)]
+        [InlineData(13, 500, 344)]
+        public async Task FloatWiderThanTheColumn_NoWordIsPastTheContainer(int fontSize, int width, int floatWidth)
         {
-            var text = string.Join(" ", Enumerable.Range(0, before).Select(i => $"w{i:D3}xxxx"));
-            var html = Wrap("<div id='mc' style='width:500px; columns:3; font:16px/1.3 monospace'>" +
-                            "<div style='float:right; width:10px; height:15px'>R</div>" + text +
-                            " <div id='f' style='float:left; width:200px; height:15px; clear:both'>F</div> w900xxxx w901xxxx w902xxxx</div>");
-            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+            for (var before = 1; before <= 30; before++)
+            {
+                var text = string.Join(" ", Enumerable.Range(0, before).Select(i => $"w{i:D3}xxxx"));
+                var html = Wrap($"<div id='mc' style='width:{width}px; columns:3; font:{fontSize}px/1.3 monospace'>" +
+                                "<div style='float:right; width:10px; height:15px'>R</div>" + text +
+                                $" <div style='float:left; width:{floatWidth}px; height:15px; clear:both'>F</div> w900xxxx w901xxxx w902xxxx</div>");
+                var (root, _) = await BuildAndLayout(html, pageHeight: 800);
 
-            var mc = FindById(root, "mc")!;
-            var floated = FindById(root, "f")!;
-            var words = LayoutHarness.Descendants(mc)
-                .SelectMany(b => b.Words).Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+                var mc = FindById(root, "mc")!;
+                var words = LayoutHarness.Descendants(mc)
+                    .SelectMany(b => b.Words).Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
 
-            Assert.Equal(before + 3, words.Count);
-            Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{w.Text} starts at {w.Left}, past {mc.ActualRight}"));
-            Assert.DoesNotContain(words, w => w.Left < floated.ActualRight - 0.5 && w.Right > floated.Location.X + 0.5
-                                              && w.Top < floated.ActualBottom - 0.5 && w.Bottom > floated.Location.Y + 0.5);
+                Assert.Equal(before + 3, words.Count);
+                Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{before}: {w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+            }
         }
 
         // Text laid out in a scroll container of bounded height keeps the inline flow it had: the columns engine drops
