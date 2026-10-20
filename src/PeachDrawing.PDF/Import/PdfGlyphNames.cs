@@ -36,6 +36,30 @@ internal static class PdfGlyphNames
     /// <summary>The number of standard strings (the first custom string has this SID).</summary>
     public const int StandardStringCount = 391;
 
+    /// <summary>The name Adobe's StandardEncoding gives a character code, or null when it assigns none.</summary>
+    public static string? StandardEncodingName(int code)
+    {
+        int sid = code switch
+        {
+            >= 32 and <= 126 => code - 31,
+            >= 161 and <= 175 => code - 65,
+            >= 177 and <= 180 => code - 66,
+            >= 182 and <= 189 => code - 67,
+            191 => 123,
+            >= 193 and <= 200 => code - 69,
+            202 or 203 => code - 70,
+            >= 205 and <= 208 => code - 71,
+            225 => 138,
+            227 => 139,
+            >= 232 and <= 235 => code - 92,
+            241 => 144,
+            245 => 145,
+            >= 248 and <= 251 => code - 102,
+            _ => 0,
+        };
+        return sid == 0 ? null : StandardStrings[sid];
+    }
+
     static readonly Dictionary<string, int> CodePoints = BuildCodePoints();
 
     static Dictionary<string, int> BuildCodePoints()
