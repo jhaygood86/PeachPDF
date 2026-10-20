@@ -16,7 +16,7 @@ namespace PeachDrawing.PDF.Import;
 /// </summary>
 internal sealed class PdfContentInterpreter
 {
-    enum Push { Transform, Clip }
+    enum Push { Transform, Clip, Blend }
 
     sealed class State
     {
@@ -33,6 +33,7 @@ internal sealed class PdfContentInterpreter
         public int RenderMode;
         public Matrix3x2 Ctm = Matrix3x2.Identity;
         public PdfDictionary? FillPattern, StrokePattern;
+        public PaintBlendMode Blend = PaintBlendMode.Normal;
 
         public State Clone() => new()
         {
@@ -41,7 +42,7 @@ internal sealed class PdfContentInterpreter
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
             TextFont = TextFont, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
             HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
-            Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern,
+            Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern, Blend = Blend,
         };
     }
 
@@ -263,7 +264,12 @@ internal sealed class PdfContentInterpreter
         _stack.RemoveAt(_stack.Count - 1);
         for (int i = top.Pushes.Count - 1; i >= 0; i--)
         {
-            if (top.Pushes[i] == Push.Clip) _canvas.PopClip(); else _canvas.PopTransform();
+            switch (top.Pushes[i])
+            {
+                case Push.Clip: _canvas.PopClip(); break;
+                case Push.Blend: _canvas.PopBlendMode(); break;
+                default: _canvas.PopTransform(); break;
+            }
         }
     }
 
@@ -292,8 +298,9 @@ internal sealed class PdfContentInterpreter
             Cur.Dash = dash;
             Cur.DashPhase = _doc.NumberOf(d.Elements[1]);
         }
-        foreach (var key in new[] { "BM", "SMask", "Font", "TR", "TR2", "OP", "op" })
-            if (gs.GetRaw(key) is { } v && !(key == "BM" && _doc.NameOf(v) is "/Normal" or "/Compatible") && !(key == "SMask" && _doc.NameOf(v) == "/None"))
+        if (gs.GetRaw("BM") is { } bm) SetBlendMode(bm);
+        foreach (var key in new[] { "SMask", "Font", "TR", "TR2", "OP", "op" })
+            if (gs.GetRaw(key) is { } v && !(key == "SMask" && _doc.NameOf(v) == "/None"))
                 _unsupported.Add("gs " + key);
     }
 
@@ -356,6 +363,43 @@ internal sealed class PdfContentInterpreter
             finally { _canvas.PopTransform(); }
         }
         _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+    }
+
+    /// <summary>Applies a <c>/BM</c> entry (a name, or an array of names of which the first known one is used) to what is painted next.</summary>
+    void SetBlendMode(PdfItem value)
+    {
+        var resolved = _doc.Resolve(value);
+        var names = resolved is PdfArray list ? list.Elements.Select(e => _doc.NameOf(e)) : [_doc.NameOf(resolved)];
+        PaintBlendMode? mode = null;
+        foreach (var name in names)
+        {
+            mode = name switch
+            {
+                "/Normal" or "/Compatible" => PaintBlendMode.Normal,
+                "/Multiply" => PaintBlendMode.Multiply,
+                "/Screen" => PaintBlendMode.Screen,
+                "/Overlay" => PaintBlendMode.Overlay,
+                "/Darken" => PaintBlendMode.Darken,
+                "/Lighten" => PaintBlendMode.Lighten,
+                "/ColorDodge" => PaintBlendMode.ColorDodge,
+                "/ColorBurn" => PaintBlendMode.ColorBurn,
+                "/HardLight" => PaintBlendMode.HardLight,
+                "/SoftLight" => PaintBlendMode.SoftLight,
+                "/Difference" => PaintBlendMode.Difference,
+                "/Exclusion" => PaintBlendMode.Exclusion,
+                "/Hue" => PaintBlendMode.Hue,
+                "/Saturation" => PaintBlendMode.Saturation,
+                "/Color" => PaintBlendMode.Color,
+                "/Luminosity" => PaintBlendMode.Luminosity,
+                _ => null,
+            };
+            if (mode is not null) break;
+        }
+        if (mode is null) { _unsupported.Add("gs BM"); return; }
+        if (mode == Cur.Blend) return;
+        _canvas.PushBlendMode(mode.Value);
+        Cur.Pushes.Add(Push.Blend);
+        Cur.Blend = mode.Value;
     }
 
     // ---------------------------------------------------------------- paths

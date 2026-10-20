@@ -92,7 +92,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(alpha.A, 110, 145);                          // stroke alpha 0.5
             Assert.True(styled.At(30, 50, out _).A < 20);               // the dash from /D
             Assert.Empty(Draw("/G2 gs", res).Unsupported);              // Normal and no soft mask are no-ops
-            Assert.Equal(["gs BM", "gs SMask", "gs TR", "gs OP"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal).Select(x => x).OrderBy(x => new[] { "gs BM", "gs SMask", "gs TR", "gs OP" }.ToList().IndexOf(x)));
+            Assert.Equal(["gs OP", "gs SMask", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
             Assert.Empty(Draw("/Missing gs", res).Unsupported);
         }
 
@@ -291,6 +291,26 @@ namespace PeachDrawing.PDF.Tests.Import
             Red(page, 25, 50);
             var right = page.At(75, 50, out _);
             Assert.True(right.B > 200 && right.R < 60, $"the second stamp is blue: {right}");
+        }
+
+        [Fact]
+        public void BlendMode_FromAnExtGState_ChangesHowLaterPaintCombines_AndQRestoresIt()
+        {
+            const string res = "/ExtGState << /Mul << /BM /Multiply >> /Arr << /BM [/Bogus /Screen] >> /Bad << /BM /Bogus >> /Norm << /BM /Normal >> >>";
+            // Blue multiplied over red is black; ordinary blue over red is blue.
+            var multiplied = Draw("1 0 0 rg 0 0 100 100 re f /Mul gs 0 0 1 rg 0 0 100 100 re f", res).At(50, 50, out _);
+            var normal = Draw("1 0 0 rg 0 0 100 100 re f 0 0 1 rg 0 0 100 100 re f", res).At(50, 50, out _);
+            Assert.True(multiplied.R < 30 && multiplied.B < 30, $"multiply gives black: {multiplied}");
+            Assert.True(normal.B > 200, $"normal gives blue: {normal}");
+
+            var restored = Draw("1 0 0 rg 0 0 100 100 re f q /Mul gs Q 0 0 1 rg 0 0 100 100 re f", res).At(50, 50, out _);
+            Assert.True(restored.B > 200, $"Q undoes the blend mode: {restored}");
+
+            // The first known name of an array is used; an unknown mode is reported; Normal over Normal changes nothing.
+            var screened = Draw("1 0 0 rg 0 0 100 100 re f /Arr gs 0 0 1 rg 0 0 100 100 re f", res).At(50, 50, out _);
+            Assert.True(screened.R > 200 && screened.B > 200, $"screen of blue over red is magenta: {screened}");
+            Assert.Contains("gs BM", Draw("/Bad gs", res).Unsupported);
+            Assert.Empty(Draw("/Norm gs /Norm gs", res).Unsupported);
         }
     }
 }
