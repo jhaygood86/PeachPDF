@@ -53,6 +53,7 @@ internal static class PdfImageXObject
         var rgba = new byte[width * height * 4];
         if (stencil)
         {
+            var fillRgb = fill.ToRgb();   // a CMYK colour keeps its ink values in R/G/B untouched, so ask for the RGB rendition
             bool invert = decode is { Length: >= 2 } && decode[0] > decode[1];
             int stride = (width + 7) / 8;
             for (int y = 0; y < height; y++)
@@ -62,7 +63,7 @@ internal static class PdfImageXObject
                     int bit = byteIndex < decoded.Data.Length ? (decoded.Data[byteIndex] >> (7 - (x & 7))) & 1 : 1;
                     bool painted = invert ? bit == 1 : bit == 0;
                     int o = (y * width + x) * 4;
-                    rgba[o] = fill.R; rgba[o + 1] = fill.G; rgba[o + 2] = fill.B; rgba[o + 3] = painted ? fill.A : (byte)0;
+                    rgba[o] = fillRgb.R; rgba[o + 1] = fillRgb.G; rgba[o + 2] = fillRgb.B; rgba[o + 3] = painted ? fill.A : (byte)0;
                 }
             return FromPixels(context, rgba, width, height, out why);
         }
@@ -98,7 +99,8 @@ internal static class PdfImageXObject
                 }
                 var color = space.ToColor(samples, 1);
                 int o = (y * width + x) * 4;
-                rgba[o] = color.R; rgba[o + 1] = color.G; rgba[o + 2] = color.B; rgba[o + 3] = 255;
+                var (cr, cg, cb) = color.ToRgb();
+                rgba[o] = cr; rgba[o + 1] = cg; rgba[o + 2] = cb; rgba[o + 3] = 255;
                 if (keyMask is not null)
                 {
                     bool masked = true;

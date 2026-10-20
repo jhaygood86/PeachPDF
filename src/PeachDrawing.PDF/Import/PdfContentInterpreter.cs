@@ -722,6 +722,8 @@ internal sealed class PdfContentInterpreter
             if (!stencil) _images[x] = image;
         }
         if (image is null) return;
+        // An image is drawn with its pixels showing unless it asks to be smoothed (/Interpolate, PDF 8.9.5.3).
+        image.Interpolate = _doc.Resolve(x.GetRaw("Interpolate") ?? x.GetRaw("I")) is PdfBoolean { Value: true };
 
         // The unit square has the image's top edge at y = 1; the canvas draws an image upright in y-down space, so flip into it.
         _canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 1));
