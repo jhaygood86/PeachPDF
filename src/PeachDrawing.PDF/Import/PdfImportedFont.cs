@@ -43,6 +43,9 @@ internal sealed class PdfImportedFont
         _probe = probe;
     }
 
+    /// <summary>The typeface of the embedded program, for reading glyph outlines; null when the context does not expose it.</summary>
+    public PeachDrawing.Text.Typeface? Typeface => _probe.Typeface;
+
     /// <summary>The font at <paramref name="size"/>, or null when the context cannot make it.</summary>
     public Font? GetFont(double size) => _context.GetFont(_family, size, PaintFontStyle.Regular);
 

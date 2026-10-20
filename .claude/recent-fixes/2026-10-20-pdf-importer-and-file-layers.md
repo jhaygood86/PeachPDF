@@ -33,6 +33,9 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   since tiles are in the canvas' own units. Each push records the canvas it went onto, because pushes made while a group is open
   belong to the tile. A `/None` nested deeper than its group is ignored until the group's own state ends. Showcase round trip:
   32 -> 12 pages over a 2% difference, 185 -> 196 clean files.
+- **Stroked and clipping text** is built from `Typeface.TryGetOutline`: outlines are laid out in text space, carried into user
+  space with the run matrix and drawn there (so line width and dashes are user-space), while the glyphs are still drawn - invisibly
+  when not filled - to keep the text map. Clip modes accumulate into one path applied at `ET`.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

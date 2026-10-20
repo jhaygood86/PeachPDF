@@ -224,7 +224,7 @@ internal sealed class PdfContentInterpreter
 
             // --- text
             case "BT": _tm = _tlm = Matrix3x2.Identity; break;
-            case "ET": break;
+            case "ET": EndText(); break;
             case "Tc": Cur.CharSpacing = N(o, 0); break;
             case "Tw": Cur.WordSpacing = N(o, 0); break;
             case "Tz": Cur.HorizontalScale = N(o, 0) / 100.0; break;
@@ -232,7 +232,6 @@ internal sealed class PdfContentInterpreter
             case "Ts": Cur.Rise = N(o, 0); break;
             case "Tr":
                 Cur.RenderMode = (int)N(o, 0);
-                if (Cur.RenderMode is 1 or 2 or >= 4) _unsupported.Add("Tr " + Cur.RenderMode);
                 break;
             case "Tf": SetFont(o, res); break;
             case "Td": NextLine(N(o, 0), N(o, 1)); break;
@@ -241,18 +240,18 @@ internal sealed class PdfContentInterpreter
             case "Tm":
                 _tm = _tlm = new Matrix3x2((float)N(o, 0), (float)N(o, 1), (float)N(o, 2), (float)N(o, 3), (float)N(o, 4), (float)N(o, 5));
                 break;
-            case "Tj": ShowText([TextOf(o[0])]); break;
-            case "'": NextLine(0, -Cur.Leading); ShowText([TextOf(o[0])]); break;
+            case "Tj": ShowText([TextOf(o[0])], res); break;
+            case "'": NextLine(0, -Cur.Leading); ShowText([TextOf(o[0])], res); break;
             case "\"":
                 Cur.WordSpacing = N(o, 0); Cur.CharSpacing = N(o, 1);
-                NextLine(0, -Cur.Leading); ShowText([TextOf(o[2])]);
+                NextLine(0, -Cur.Leading); ShowText([TextOf(o[2])], res);
                 break;
             case "TJ":
             {
                 var parts = new List<object>();
                 foreach (var item in ((PdfArray)_doc.Resolve(o[0])!).Elements)
                     parts.Add(_doc.Resolve(item) is PdfString ps ? ps.Value : _doc.NumberOf(item));
-                ShowText(parts);
+                ShowText(parts, res);
                 break;
             }
 
@@ -362,7 +361,7 @@ internal sealed class PdfContentInterpreter
     }
 
     /// <summary>Draws the strings and kerning adjustments of one show-text operator as a single glyph run.</summary>
-    void ShowText(IReadOnlyList<object> parts)
+    void ShowText(IReadOnlyList<object> parts, PdfDictionary? res)
     {
         var st = Cur;
         if (st.TextFont is null || st.FontSize == 0) return;
@@ -384,17 +383,73 @@ internal sealed class PdfContentInterpreter
             // Glyphs are laid out upright in canvas space (y down); the flip puts them upright in PDF user space (y up), and
             // the horizontal scale and text matrix place the run.
             var run = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm;
+            // Render modes (PDF 9.3.6): 0 fill, 1 stroke, 2 both, 3 neither, 4-7 the same four and then add the glyphs to the clip.
+            int mode = st.RenderMode;
+            bool fill = mode is 0 or 2 or 4 or 6;
+            bool stroke = mode is 1 or 2 or 5 or 6;
+            bool clip = mode >= 4;
             _canvas.PushTransform(run);
             try
             {
-                var color = st.RenderMode == 3
-                    ? PaintColor.Transparent
-                    : st.FillSpace.ToColor(st.Fill, st.FillAlpha);
-                _canvas.DrawGlyphs(glyphs, font, color);
+                // Text that is not filled is still drawn, invisibly, so the page keeps its text for selection and search.
+                var color = fill ? st.FillSpace.ToColor(st.Fill, st.FillAlpha) : PaintColor.Transparent;
+                if (mode != 7) _canvas.DrawGlyphs(glyphs, font, color);
             }
             finally { _canvas.PopTransform(); }
+
+            if (stroke || clip) OutlineText(glyphs, run, stroke, clip, res);
         }
         _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+    }
+
+    GraphicsPath? _textClip;
+
+    /// <summary>
+    /// Strokes the outlines of a run of glyphs and/or adds them to the text clip. The outlines are built in text space, carried into the
+    /// current user space with <paramref name="run"/>, and drawn there, so the line width, caps and dashes are in user space as for any
+    /// other path.
+    /// </summary>
+    void OutlineText(List<GlyphPlacement> glyphs, Matrix3x2 run, bool stroke, bool clip, PdfDictionary? res)
+    {
+        var typeface = Cur.TextFont!.Typeface;
+        if (typeface is null || typeface.Metrics.UnitsPerEm <= 0) { _unsupported.Add("Tr (no glyph outlines)"); return; }
+        double scale = Math.Abs(Cur.FontSize) / typeface.Metrics.UnitsPerEm;
+        var path = _canvas.GetGraphicsPath();
+        foreach (var glyph in glyphs)
+        {
+            if (!typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline)) continue;
+            foreach (var contour in outline.Contours)
+            {
+                path.Start(glyph.X + contour.Start.X * scale, glyph.Y - contour.Start.Y * scale);
+                foreach (var seg in contour.Segments)
+                {
+                    if (seg.IsCubic)
+                        path.AddBezierTo(glyph.X + seg.Control1.X * scale, glyph.Y - seg.Control1.Y * scale,
+                            glyph.X + seg.Control2.X * scale, glyph.Y - seg.Control2.Y * scale,
+                            glyph.X + seg.End.X * scale, glyph.Y - seg.End.Y * scale);
+                    else path.LineTo(glyph.X + seg.End.X * scale, glyph.Y - seg.End.Y * scale);
+                }
+                path.CloseFigure();
+            }
+        }
+        path.Transform(run);
+        path.FillMode = FillMode.Nonzero;
+
+        if (stroke && MakePen(res) is { } pen) _canvas.DrawPath(pen, path);
+        if (clip)
+        {
+            if (_textClip is null) _textClip = path;
+            else _textClip.AddPath(path);
+        }
+    }
+
+    /// <summary>At the end of a text object, applies the clip that glyphs shown in a clipping render mode built up.</summary>
+    void EndText()
+    {
+        if (_textClip is null) return;
+        _canvas.PushClip(_textClip);
+        Cur.Pushes.Add(new(Push.Clip, _canvas));
+        _textClip = null;
     }
 
     /// <summary>
@@ -571,6 +626,21 @@ internal sealed class PdfContentInterpreter
         if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
     }
 
+    /// <summary>The pen the current stroke colour, line width, caps, joins and dash describe; null when the colour cannot be made.</summary>
+    Pen? MakePen(PdfDictionary? res)
+    {
+        var strokeBrush = BrushFor(fill: false, res);
+        if (strokeBrush is null) return null;
+        var pen = _canvas.GetPen(strokeBrush);
+        // A zero-width line is the thinnest line the device can draw; a hairline stands in for it.
+        pen.Width = Cur.LineWidth <= 0 ? 0.1 : Cur.LineWidth;
+        pen.MiterLimit = Cur.MiterLimit;
+        pen.LineCap = Cur.Cap;
+        pen.LineJoin = Cur.Join;
+        if (Cur.Dash.Length > 0 && Cur.Dash.Any(d => d > 0)) pen.SetDashPattern(Cur.Dash.Length % 2 == 1 ? [.. Cur.Dash, .. Cur.Dash] : Cur.Dash, Cur.DashPhase);
+        return pen;
+    }
+
     void Paint(bool fill, bool stroke, FillMode mode, bool close, PdfDictionary? res)
     {
         var path = _path;
@@ -585,18 +655,7 @@ internal sealed class PdfContentInterpreter
         }
         if (stroke)
         {
-            var strokeBrush = BrushFor(fill: false, res);
-            var pen = strokeBrush is null ? null : _canvas.GetPen(strokeBrush);
-            if (pen is not null)
-            {
-            // A zero-width line is the thinnest line the device can draw; a hairline stands in for it.
-            pen.Width = Cur.LineWidth <= 0 ? 0.1 : Cur.LineWidth;
-            pen.MiterLimit = Cur.MiterLimit;
-            pen.LineCap = Cur.Cap;
-            pen.LineJoin = Cur.Join;
-            if (Cur.Dash.Length > 0 && Cur.Dash.Any(d => d > 0)) pen.SetDashPattern(Cur.Dash.Length % 2 == 1 ? [.. Cur.Dash, .. Cur.Dash] : Cur.Dash, Cur.DashPhase);
-            _canvas.DrawPath(pen, path);
-            }
+            if (MakePen(res) is { } pen) _canvas.DrawPath(pen, path);
         }
         if (_pendingClip is { } clipMode)
         {
