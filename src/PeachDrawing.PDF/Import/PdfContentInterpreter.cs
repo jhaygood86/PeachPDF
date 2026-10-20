@@ -36,6 +36,8 @@ internal sealed class PdfContentInterpreter
         public LineJoin Join = LineJoin.Miter;
         public List<Pushed> Pushes = [];
         public PdfImportedFont? TextFont;
+        public PdfType3Font? Type3Font;
+        public bool ColorLocked;
         public double FontSize, CharSpacing, WordSpacing, HorizontalScale = 1, Leading, Rise;
         public int RenderMode;
         public Matrix3x2 Ctm = Matrix3x2.Identity;
@@ -47,7 +49,7 @@ internal sealed class PdfContentInterpreter
             FillSpace = FillSpace, StrokeSpace = StrokeSpace, Fill = Fill, Stroke = Stroke,
             FillAlpha = FillAlpha, StrokeAlpha = StrokeAlpha, LineWidth = LineWidth, MiterLimit = MiterLimit,
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
-            TextFont = TextFont, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
+            TextFont = TextFont, Type3Font = Type3Font, ColorLocked = ColorLocked, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
             HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
             Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern, Blend = Blend,
         };
@@ -138,8 +140,11 @@ internal sealed class PdfContentInterpreter
 
     double N(List<PdfItem> o, int i) => _doc.NumberOf(o[i]);
 
+    static bool IsColorOperator(string op) => op is "g" or "G" or "rg" or "RG" or "k" or "K" or "cs" or "CS" or "sc" or "SC" or "scn" or "SCN";
+
     void Execute(string op, List<PdfItem> o, PdfDictionary? res)
     {
+        if (Cur.ColorLocked && IsColorOperator(op)) return;
         switch (op)
         {
             // --- graphics state
@@ -259,7 +264,8 @@ internal sealed class PdfContentInterpreter
             // --- structure
             case "Do": DoXObject(o, res); break;
             case "sh": PaintShading(o, res); break;
-            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0" or "d1": break;
+            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0": break;
+            case "d1": Cur.ColorLocked = true; break;       // a Type 3 glyph that is a shape: it is painted in the current colour
 
             default:
                 _unsupported.Add(op);
@@ -352,19 +358,71 @@ internal sealed class PdfContentInterpreter
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var fonts = res is null ? null : _doc.DictOf(res, "Font");
         if (fonts is null || _doc.Resolve(fonts.GetRaw(name)) is not PdfDictionary fd) { Cur.TextFont = null; _unsupported.Add("Tf (missing font)"); return; }
+        if (_doc.NameOf(fd.GetRaw("Subtype")) == "/Type3")
+        {
+            if (!_type3Fonts.TryGetValue(fd, out var type3))
+            {
+                type3 = PdfType3Font.Load(_doc, fd, out var type3Why);
+                if (type3 is null) _unsupported.Add("font: " + type3Why);
+                _type3Fonts[fd] = type3;
+            }
+            (Cur.TextFont, Cur.Type3Font) = (null, type3);
+            return;
+        }
         if (!_fonts.TryGetValue(fd, out var font))
         {
             font = PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out var why);
             if (font is null) _unsupported.Add("font: " + why);
             _fonts[fd] = font;
         }
-        Cur.TextFont = font;
+        (Cur.TextFont, Cur.Type3Font) = (font, null);
+    }
+
+    readonly Dictionary<PdfDictionary, PdfType3Font?> _type3Fonts = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>Shows text in a Type 3 font: each glyph's own content stream is run under the font matrix, font size and text matrix.</summary>
+    void ShowType3(IReadOnlyList<object> parts, PdfDictionary? res)
+    {
+        var st = Cur;
+        var font = st.Type3Font!;
+        double x = 0;
+        foreach (var part in parts)
+        {
+            if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
+            foreach (var g in font.Decode((string)part))
+            {
+                if (st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
+                {
+                    // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
+                    var matrix = font.FontMatrix * Matrix3x2.CreateScale((float)st.FontSize) * Matrix3x2.CreateTranslation((float)x, (float)st.Rise)
+                        * Matrix3x2.CreateScale((float)st.HorizontalScale, 1f) * _tm;
+                    var (savedTm, savedTlm, savedPath) = (_tm, _tlm, _path);
+                    Save();
+                    _formDepth++;
+                    try
+                    {
+                        Transform(matrix);
+                        _path = null;
+                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res);
+                    }
+                    finally
+                    {
+                        _formDepth--;
+                        Restore();
+                        (_tm, _tlm, _path) = (savedTm, savedTlm, savedPath);
+                    }
+                }
+                x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+            }
+        }
+        _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
     }
 
     /// <summary>Draws the strings and kerning adjustments of one show-text operator as a single glyph run.</summary>
     void ShowText(IReadOnlyList<object> parts, PdfDictionary? res)
     {
         var st = Cur;
+        if (st.Type3Font is not null && st.FontSize != 0) { ShowType3(parts, res); return; }
         if (st.TextFont is null || st.FontSize == 0) return;
         var font = st.TextFont.GetFont(Math.Abs(st.FontSize));
         if (font is null) { _unsupported.Add("font size"); return; }
