@@ -3009,7 +3009,8 @@ namespace PeachBrackets.Html.Fragmentation
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
                             var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
                             claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop,
-                                snapshot is null && capture is null ? box : null);
+                                    snapshot is null && capture is null ? box : null)
+                                && ReachesIntoItsStrip(ownRect, displacement);
                             (lineClaims ??= [])[line] = claims;
                         }
                     }
@@ -3492,6 +3493,26 @@ namespace PeachBrackets.Html.Fragmentation
 
             return Rect.FromLTRB(left, top, right, bottom);
         }
+
+        /// <summary>
+        /// Whether <paramref name="landed"/>, a line in a run sliced across bands, belongs to the strip of the run this
+        /// fragmentainer shows: it starts in the strip, or reaches into it from above by more than the band-overlap
+        /// tolerance. Always true outside such a run.
+        /// </summary>
+        /// <remarks>
+        /// A cell lets a line end up to <see cref="HtmlContainerInt.PageBoundaryEpsilon"/> past the band's foot without
+        /// stopping (<see cref="HtmlContainerInt.FallsPast"/>), so the cell's padding and border alone can make its row
+        /// one no band holds, which is sliced. Displaced under the next band's repeated header, that line lands a sliver
+        /// inside the next strip, and was drawn by both bands: clipped to the sliver on the second, but extracted twice.
+        /// Only the strip's top is asked about: a line starting inside the strip is the strip's however short it is, and
+        /// one running past its foot is the later strip's question.
+        /// </remarks>
+        /// <param name="landed">the line's rectangle, displaced to where it draws here</param>
+        /// <param name="displacement">the displacement in force here, or null outside a sliced run</param>
+        private static bool ReachesIntoItsStrip(Rect landed, (CssBox Root, double Shift, Rect Band)? displacement) =>
+            displacement is not { Band: var strip }
+            || landed.Top >= strip.Top
+            || Math.Min(landed.Bottom, strip.Bottom) - strip.Top > HtmlContainerInt.PageBoundaryEpsilon;
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question

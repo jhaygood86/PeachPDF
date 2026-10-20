@@ -5522,8 +5522,10 @@ namespace PeachBrackets.Html.Dom
         /// of the avoid rather than a loop. The first body row in its band is never moved: above it is only the
         /// band's top, a repeated header or the table's own head, and moving it would leave those behind alone.
         /// That includes the row a continuation re-enters, which begins its band by construction. The column
-        /// decline is the straddle correction's; a row that stops at a column's foot measured as first in its band
-        /// too, so no test tells the two apart.
+        /// decline is the straddle correction's. A table inside another table's cell is declined too: its row
+        /// moves to the top of the page in document space, and the outer row holding it, which then no band
+        /// holds, is sliced and displaced under the repeated header, so the moved row's last line is drawn on
+        /// two pages. A forced break before such a row does the same, so that is a gap of its own (#1795).
         /// </remarks>
         private bool AvoidedBreakCorrectionAppliesTo(
             int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, int slot, double pageHeight)
@@ -5531,12 +5533,23 @@ namespace PeachBrackets.Html.Dom
             if (!cursor.Stopped) return false;
             if (container is null || pageHeight >= double.MaxValue - 1) return false;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
+            if (IsInsideATableCell(_tableBox)) return false;
             if (rowIndex == 0 || container.SlotStartingAt(_bodyRows[rowIndex - 1].Location.Y) != slot) return false;
 
             var row = _bodyRows[rowIndex];
             if (RowHoldsAnInternalForcedBreak(row)) return false;
 
             return RowAvoidsBreakInside(row);
+        }
+
+        private static bool IsInsideATableCell(CssBox box)
+        {
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.DerivedStyle.ActualDisplay == Keywords.TableCell) return true;
+            }
+
+            return false;
         }
 
         private static bool RowAvoidsBreakInside(CssBox row)

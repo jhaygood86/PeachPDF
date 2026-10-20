@@ -445,10 +445,10 @@ namespace PeachBrackets.Html.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <see cref="UnfinishedCells"/> is recorded as a count: a row that avoids breaks is retracted after a
-        /// cell stopped in it, and the entries it added are taken back. <see cref="FinishedCells"/> is absent for a
-        /// different reason — re-assigning <see cref="RowIndex"/> clears it, which the re-placement does
-        /// anyway.
+        /// <see cref="UnfinishedCells"/> needs no record: a stopped row ends the pass, so a row begins with
+        /// none, and <see cref="Retract"/> clears what a row that avoids breaks recorded before it was moved.
+        /// <see cref="FinishedCells"/> is absent for a different reason — re-assigning <see cref="RowIndex"/>
+        /// clears it, which the re-placement does anyway.
         /// </para>
         /// <para>
         /// So is the continuation geometry a row states
@@ -461,7 +461,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// those itself, before calling this, using <see cref="ForeignCellsWritten"/>.
         /// </para>
         /// </remarks>
-        internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts, int unfinishedCount)
+        internal readonly struct RowPlacement(double maxBottom, double maxRight, Dictionary<int, int>? spannedCounts)
         {
             internal double MaxBottom { get; } = maxBottom;
 
@@ -472,13 +472,6 @@ namespace PeachBrackets.Html.Fragmentation
             /// empty — which is every table with no <c>rowspan</c>, so it is worth not allocating for.
             /// </summary>
             internal Dictionary<int, int>? SpannedCounts { get; } = spannedCounts;
-
-            /// <summary>
-            /// How many cells were already recorded as unfinished — a retracted row's own entries are the
-            /// ones past this count, and leaving them would report the table stopped in a row that no
-            /// longer holds the content they name.
-            /// </summary>
-            internal int UnfinishedCount { get; } = unfinishedCount;
         }
 
         /// <summary>
@@ -546,7 +539,7 @@ namespace PeachBrackets.Html.Fragmentation
             // undo a previous row's writes. The one in Retract is belt against a second retraction.
             _foreignWrites.Clear();
 
-            if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null, _unfinishedCells.Count);
+            if (RowSpannedBoxes.Count == 0) return new RowPlacement(MaxBottom, MaxRight, null);
 
             var spanned = new Dictionary<int, int>(RowSpannedBoxes.Count);
 
@@ -555,7 +548,7 @@ namespace PeachBrackets.Html.Fragmentation
                 spanned[endRow] = boxes.Count;
             }
 
-            return new RowPlacement(MaxBottom, MaxRight, spanned, _unfinishedCells.Count);
+            return new RowPlacement(MaxBottom, MaxRight, spanned);
         }
 
         /// <summary>
@@ -582,8 +575,8 @@ namespace PeachBrackets.Html.Fragmentation
             MaxBottom = placement.MaxBottom;
             MaxRight = placement.MaxRight;
 
-            if (_unfinishedCells.Count > placement.UnfinishedCount)
-                _unfinishedCells.RemoveRange(placement.UnfinishedCount, _unfinishedCells.Count - placement.UnfinishedCount);
+            // Every entry is the retracted row's own: a stopped row ends the pass, so no row begins with one.
+            _unfinishedCells.Clear();
 
             for (var i = _foreignWrites.Count - 1; i >= 0; i--)
             {

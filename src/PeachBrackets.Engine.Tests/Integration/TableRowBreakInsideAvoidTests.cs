@@ -56,6 +56,7 @@ namespace PeachPDF.Tests.Integration
         [Theory]
         [InlineData("break-inside: avoid")]
         [InlineData("break-inside: avoid-page")]
+        [InlineData("page-break-inside: avoid")]
         public async Task RowsThatAvoidBreaks_AreNotFragmented(string rowStyle)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
@@ -158,6 +159,110 @@ namespace PeachPDF.Tests.Integration
             Assert.Empty(doubled);
             Assert.Equal(broken.Page, at.Page);
             Assert.Equal(broken.Y, at.Y, 3);
+        }
+
+        /// <summary>
+        /// A table in a multi-column container: a column is a fragmentainer the page grid does not describe, so a row that
+        /// avoids breaks and stops at a column's foot is left to the columns engine, and lays out exactly as a row that allows
+        /// breaks does. Moved against the page grid instead, the row's words were laid out in more than one column.
+        /// </summary>
+        [Fact]
+        public async Task RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns()
+        {
+            static string InColumns(string rowStyle) => LayoutHarness.Wrap(
+                $"<style>tr.r {{ {rowStyle} }}</style><div style='columns: 2; column-gap: 10pt'><table style='width:100%'><thead><tr><th>Id</th><th>T</th></tr></thead><tbody>" +
+                string.Concat(Enumerable.Range(1, 30).Select(r => $"<tr class='r'><td>w{r}_0</td><td>{Words(r, 12)}</td></tr>")) +
+                "</tbody></table></div>");
+
+            var (_, avoiding) = await LayoutHarness.LayoutAsync(InColumns("break-inside: avoid"), pageHeight: PageHeight, margin: Margin);
+            var (_, allowing) = await LayoutHarness.LayoutAsync(InColumns("break-inside: auto"), pageHeight: PageHeight, margin: Margin);
+
+            Assert.True(allowing.FragmentTree!.Fragmentainers.Count > 1, "the fixture has to overflow, or this asserts nothing");
+            Assert.Equal(WordsPerPage(allowing), WordsPerPage(avoiding));
+        }
+
+        /// <summary>
+        /// A nested table whose rows avoid breaks too (a global <c>tr</c> rule reaches them): the nested row is moved, does
+        /// not fit, and stops again. Each of its lines is laid out once.
+        /// </summary>
+        [Fact]
+        public async Task ANestedRowThatAvoidsBreaksAndStopsAgain_IsLaidOutOnce()
+        {
+            var html =
+                "<!doctype html><html><head><meta charset='utf-8'><style>@page{size:300pt 300pt;margin:20pt}body{margin:0;font:10pt Arial}" +
+                "table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:2pt}tr{break-inside:avoid}</style></head><body>" +
+                "<table><thead><tr><th>HDR0</th><th>HDR1</th></tr></thead><tbody>" +
+                string.Concat(Enumerable.Range(1, 3).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2 w{r}_3</td></tr>")) +
+                "<tr><td>w10_1<table><tr><td>w10_901</td><td>w10_902</td></tr>" +
+                $"<tr><td>w10_4</td><td>{string.Join("<br>", Enumerable.Range(5, 22).Select(l => $"w10_{l}"))}</td></tr></table></td><td>x</td></tr>" +
+                string.Concat(Enumerable.Range(21, 4).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2 w{r}_3</td></tr>")) +
+                "</tbody></table></body></html>";
+
+            var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
+            var (lost, doubled) = PaintedWords.Diff(html, painted);
+            var (visible, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+
+            Assert.Empty(lost);
+            Assert.Empty(doubled);
+            Assert.Empty(PaintedWords.InMarkup(html).Except(visible));
+        }
+
+        private static string RowEndingPastTheFreshBand(double overshoot, string movedRowStyle) =>
+            "<!doctype html><html><head><meta charset='utf-8'><style>@page { size: 300pt 250pt; margin: 20pt } " +
+            "body { margin: 0; font: 8pt/10pt Arial } table { width: 100%; border-collapse: collapse; border-spacing: 0 } " +
+            "th, td { padding: 0; border: 0 } th { height: 20pt } td.c { padding-bottom: 4pt }</style></head><body>" +
+            "<table><thead><tr><th>Id</th></tr></thead><tbody>" +
+            "<tr><td><div style='height:100pt'>w1_1</div></td></tr>" +
+            $"<tr style='{movedRowStyle}'><td class='c' style='padding-top:{overshoot.ToString(System.Globalization.CultureInfo.InvariantCulture)}pt'>{string.Join("<br>", Enumerable.Range(1, 19).Select(l => $"w2_{l}"))}</td></tr>" +
+            "<tr><td>w3_1</td></tr></tbody></table></body></html>";
+
+        /// <summary>
+        /// A moved row whose last line ends less than the band-overlap tolerance past the fresh band's foot: the line does not
+        /// stop the cell, but the cell's bottom padding makes the row one no band holds, so it is sliced and displaced under the
+        /// next page's repeated header. The line is laid out once, on the page it is on, whether the row was moved because it
+        /// avoids breaks or because a break was forced before it.
+        /// </summary>
+        [Theory]
+        [InlineData(0.3, "break-inside: avoid")]
+        [InlineData(0.45, "break-inside: avoid")]
+        [InlineData(0.3, "break-before: page")]
+        public async Task ARowJustTallerThanAFreshBand_IsLaidOutOnce(double overshoot, string movedRowStyle)
+        {
+            var html = RowEndingPastTheFreshBand(overshoot, movedRowStyle);
+
+            var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
+            var (lost, doubled) = PaintedWords.Diff(html, painted);
+            var at = await PaintedWords.PositionsAsync(html);
+
+            Assert.True(at["w2_1"].Page == 1, $"the row has to be moved off the first page, or this asserts nothing; it starts on page {at["w2_1"].Page}");
+            Assert.Empty(lost);
+            Assert.Empty(doubled);
+            Assert.Equal(1, at["w2_19"].Page);
+        }
+
+        /// <summary>
+        /// A row no band holds, sliced under a repeated header, keeps a line shorter than the band-overlap tolerance: the
+        /// strip that holds it draws it, wherever in the strip it sits.
+        /// </summary>
+        [Theory]
+        [InlineData(60)]
+        [InlineData(150)]
+        [InlineData(209.8)]
+        public async Task ASlicedRowKeepsALineShorterThanTheTolerance(double above)
+        {
+            var html =
+                "<!doctype html><html><head><meta charset='utf-8'><style>@page { size: 300pt 250pt; margin: 20pt } " +
+                "body { margin: 0; font: 8pt/10pt Arial } table { width: 100%; border-collapse: collapse } th, td { padding: 0; border: 0 } " +
+                "th { height: 20pt }</style></head><body><table><thead><tr><th>Id</th></tr></thead><tbody>" +
+                $"<tr><td><div style='height:{above.ToString(System.Globalization.CultureInfo.InvariantCulture)}pt'></div>" +
+                "<div style='font-size:0.3pt; line-height:0.3pt'>w1_1</div><div style='height:300pt'></div></td></tr>" +
+                "<tr><td>w2_1</td></tr></tbody></table></body></html>";
+
+            var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
+            var (lost, doubled) = PaintedWords.Diff(html, painted);
+
+            Assert.Empty(lost);
+            Assert.Empty(doubled);
         }
 
         /// <summary>
