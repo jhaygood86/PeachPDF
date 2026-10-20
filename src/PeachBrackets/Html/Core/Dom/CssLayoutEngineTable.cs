@@ -4342,6 +4342,9 @@ namespace PeachBrackets.Html.Dom
 
                     slot = await TakeBreakBeforeRow(g, container!, cursor, slot);
 
+                    // The slice below measures the row from its top, and a stale one makes a moved row look as if it spans the band it left.
+                    rowTop = cursor.CurrentY;
+
                     // Re-clears FinishedCells, which the retracted placement filled in. The footer's room is
                     // owed again, and against the *new* slot: this row is being placed in the band the
                     // break just opened. The header's is not - this arm never runs at ResumeRowIndex.
@@ -5518,11 +5521,14 @@ namespace PeachBrackets.Html.Dom
         /// straddle correction: a row no fresh band holds stops again where it lands, which is §4.4's relaxation
         /// of the avoid rather than a loop. The first body row in its band is never moved: above it is only the
         /// band's top, a repeated header or the table's own head, and moving it would leave those behind alone.
+        /// That includes the row a continuation re-enters, which begins its band by construction. The column
+        /// decline is the straddle correction's; a row that stops at a column's foot measured as first in its band
+        /// too, so no test tells the two apart.
         /// </remarks>
         private bool AvoidedBreakCorrectionAppliesTo(
             int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, int slot, double pageHeight)
         {
-            if (rowIndex <= ResumeRowIndex || !cursor.Stopped) return false;
+            if (!cursor.Stopped) return false;
             if (container is null || pageHeight >= double.MaxValue - 1) return false;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
             if (rowIndex == 0 || container.SlotStartingAt(_bodyRows[rowIndex - 1].Location.Y) != slot) return false;

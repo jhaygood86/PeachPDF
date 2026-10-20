@@ -53,11 +53,13 @@ namespace PeachPDF.Tests.Integration
                 .Where(row => HtmlContainerInt.FallsPast(row.ActualBottom, container.BandOfSlot(container.SlotStartingAt(row.Location.Y))))
                 .ToList();
 
-        [Fact]
-        public async Task RowsThatAvoidBreaks_AreNotFragmented()
+        [Theory]
+        [InlineData("break-inside: avoid")]
+        [InlineData("break-inside: avoid-page")]
+        public async Task RowsThatAvoidBreaks_AreNotFragmented(string rowStyle)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LongTable("break-inside: avoid"), pageHeight: PageHeight, margin: Margin);
+                LongTable(rowStyle), pageHeight: PageHeight, margin: Margin);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 1, "the fixture has to overflow, or this asserts nothing");
             Assert.Equal(30, BodyRowsOf(root).Count);
@@ -94,11 +96,13 @@ namespace PeachPDF.Tests.Integration
         /// Declared on the cells rather than the row: a cell is a parallel flow with no break point of its own before it
         /// (§4.1), so avoiding a break inside one can only be honored by keeping its row whole.
         /// </summary>
-        [Fact]
-        public async Task RowsWhoseCellsAvoidBreaks_AreNotFragmented()
+        [Theory]
+        [InlineData("break-inside: avoid")]
+        [InlineData("break-inside: avoid-page")]
+        public async Task RowsWhoseCellsAvoidBreaks_AreNotFragmented(string cellStyle)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LongTable("break-inside: avoid", selector: "tr.r td"), pageHeight: PageHeight, margin: Margin);
+                LongTable(cellStyle, selector: "tr.r td"), pageHeight: PageHeight, margin: Margin);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 1, "the fixture has to overflow, or this asserts nothing");
 
@@ -106,6 +110,54 @@ namespace PeachPDF.Tests.Integration
             {
                 Assert.Fail($"a row whose cells avoid breaks at {row.Location.Y:F1}..{row.ActualBottom:F1} crosses out of its band");
             }
+        }
+
+        /// <summary>Rows that avoid breaks and fit where they are stay there: only a row that stopped is moved.</summary>
+        [Fact]
+        public async Task RowsThatAvoidBreaksAndFit_StayOnTheirPage()
+        {
+            var body =
+                "<style>tr.r { break-inside: avoid }</style><table style='width:300pt'><thead><tr><th>Id</th><th>Text</th></tr></thead><tbody>" +
+                string.Concat(Enumerable.Range(1, 3).Select(r => $"<tr class='r'><td>w{r}_0</td><td>{Words(r, 6)}</td></tr>")) +
+                "</tbody></table>";
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: PageHeight, margin: Margin);
+
+            Assert.Single(container.FragmentTree!.Fragmentainers);
+        }
+
+        private static string RowOfLinesAfterThreeRows(int lines, string movedRowStyle) =>
+            "<!doctype html><html><head><meta charset='utf-8'><style>@page { size: 300pt 250pt; margin: 20pt } " +
+            "body { margin: 0; font: 10pt Arial } table { width: 100%; border-collapse: collapse } " +
+            "td, th { border: 1px solid #999; padding: 2pt } tr { break-inside: avoid }</style></head><body>" +
+            "<table><thead><tr><th>Id</th><th>Text</th></tr></thead><tbody>" +
+            string.Concat(Enumerable.Range(1, 3).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2 w{r}_3</td></tr>")) +
+            $"<tr style='{movedRowStyle}'><td>{string.Join("<br>", Enumerable.Range(1, lines).Select(l => $"w4_{l}"))}</td><td>w4_0</td></tr>" +
+            string.Concat(Enumerable.Range(5, 4).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2</td></tr>")) +
+            "</tbody></table></body></html>";
+
+        /// <summary>
+        /// A moved row starts where a break before it would put it, under the repeated header, and each of its lines is laid out
+        /// once. 15 and 16 lines fit the fresh band; 17 and 18 do not, so the row stops again where it lands and is split there.
+        /// </summary>
+        [Theory]
+        [InlineData(15)]
+        [InlineData(16)]
+        [InlineData(17)]
+        [InlineData(18)]
+        public async Task ARowMovedToTheNextBand_StartsAtItsTopAndIsLaidOutOnce(int lines)
+        {
+            var moved = RowOfLinesAfterThreeRows(lines, "");
+
+            var (painted, _) = await PaintedWords.LayOutAndPaintAsync(moved);
+            var (lost, doubled) = PaintedWords.Diff(moved, painted);
+            var at = (await PaintedWords.PositionsAsync(moved))["w4_1"];
+            var broken = (await PaintedWords.PositionsAsync(RowOfLinesAfterThreeRows(lines, "break-before: page")))["w4_1"];
+
+            Assert.True(at.Page == 1, $"the row has to be moved off the first page, or this asserts nothing; it starts on page {at.Page}");
+            Assert.Empty(lost);
+            Assert.Empty(doubled);
+            Assert.Equal(broken.Page, at.Page);
+            Assert.Equal(broken.Y, at.Y, 3);
         }
 
         /// <summary>
@@ -159,12 +211,37 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(ownCellWords.Count, ownCellWords.Distinct().Count());
         }
 
-        /// <summary>The control: with <c>break-inside: auto</c> the same fixture does put a band boundary inside a row.</summary>
+        /// <summary>
+        /// A forced break inside a cell is taken where the cell put it, once: a row holding one is not moved, whatever it avoids,
+        /// even when the lines after the break run out of band and stop the row.
+        /// </summary>
         [Fact]
-        public async Task RowsThatAllowBreaks_AreFragmentedAtTheFoot()
+        public async Task ARowThatAvoidsBreaksButHoldsAForcedBreak_TakesItOnce()
+        {
+            var rows = string.Concat(Enumerable.Range(1, 8).Select(i =>
+                i == 4
+                    ? "<tr style='break-inside:avoid'><td><div style='height:10pt'>before</div>"
+                      + $"<div id='after' style='break-before:page'>{string.Join("<br>", Enumerable.Range(1, 40).Select(l => $"after {l}"))}</div></td></tr>"
+                    : $"<tr><td><div style='height:50pt'>row {i}</div></td></tr>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                pageHeight: PageHeight, margin: Margin);
+
+            Assert.Equal(1, container.SlotStartingAt(LayoutHarness.FindById(root, "after")!.Location.Y));
+        }
+
+        /// <summary>
+        /// The control: with <c>break-inside: auto</c> the same fixture does put a band boundary inside a row, and so does
+        /// <c>avoid-column</c>, which says nothing about a page break.
+        /// </summary>
+        [Theory]
+        [InlineData("break-inside: auto")]
+        [InlineData("break-inside: avoid-column")]
+        public async Task RowsThatAllowBreaks_AreFragmentedAtTheFoot(string rowStyle)
         {
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LongTable("break-inside: auto"), pageHeight: PageHeight, margin: Margin);
+                LongTable(rowStyle), pageHeight: PageHeight, margin: Margin);
 
             Assert.NotEmpty(RowsCrossingTheirBand(root, container));
         }
