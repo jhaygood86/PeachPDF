@@ -5,7 +5,7 @@ using System.Linq;
 using System.Numerics;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The decomposition behind CSS Transforms 1 §13's matrix interpolation: two transform lists that do not match

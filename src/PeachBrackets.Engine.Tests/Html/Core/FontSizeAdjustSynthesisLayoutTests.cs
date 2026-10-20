@@ -11,7 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// <c>font-size-adjust</c> (CSS Fonts 5 §3.2) and <c>font-synthesis*</c> (CSS Fonts 4 §3.5) through real layout. Both are

@@ -11,7 +11,7 @@ using System.Linq;
 using System.Numerics;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Integration tests that actually render PDFs and verify header/footer repetition

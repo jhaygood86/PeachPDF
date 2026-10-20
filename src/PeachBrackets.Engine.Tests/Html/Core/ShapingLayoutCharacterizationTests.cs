@@ -11,7 +11,7 @@ using System.Linq;
 using System.Text;
 using PeachDrawing.Text;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>The layout half of the shaping characterization: direction and whitespace handling as the box tree lays words out.</summary>
     public class ShapingLayoutCharacterizationTests

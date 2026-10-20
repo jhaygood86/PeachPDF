@@ -2,7 +2,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A forced break steps a layout pass over slots without ending it, so the fragmentainer the pass is

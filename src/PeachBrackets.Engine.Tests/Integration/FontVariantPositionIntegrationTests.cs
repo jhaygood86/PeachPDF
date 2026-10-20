@@ -12,7 +12,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for CSS Fonts 4 <c>font-variant-position</c>. Two paths have to be pinned

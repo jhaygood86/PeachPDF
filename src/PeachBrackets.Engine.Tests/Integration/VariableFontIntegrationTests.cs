@@ -1,8 +1,9 @@
+using PeachPDF;
 using PeachDrawing.Text;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine;
-using PeachPDF.Tests.CSS;
+using PeachBrackets.Engine.Tests.CSS;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.IO;
@@ -12,7 +13,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>font-variation-settings</c>, <c>font-optical-sizing</c> and the weight and width of a box reaching the axes of a variable font, from

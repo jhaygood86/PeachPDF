@@ -3,7 +3,7 @@ using System.Linq;
 using PeachBrackets.MathML;
 using Xunit;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// Coverage for <see cref="MathGlyphAssemblyShaper"/> against STIX Two Math's real parenleft

@@ -1,5 +1,5 @@
 using PeachBrackets.Css;
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     using Xunit;
 

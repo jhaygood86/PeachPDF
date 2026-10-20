@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies the <c>box-shadow</c> paint hook in <see cref="CssBox"/>'s fragment loop: an outset shadow

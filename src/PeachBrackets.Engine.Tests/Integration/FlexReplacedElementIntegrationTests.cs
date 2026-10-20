@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Coverage for a customer-reported bug: an <c>&lt;img&gt;</c> (or any inline-level child - a

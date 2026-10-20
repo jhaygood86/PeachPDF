@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// The baseline properties read the font's own <c>BASE</c> table where it has one (Source Sans 3 puts the ideographic baseline at -170 of 1000

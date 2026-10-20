@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A percentage <c>width</c> on an <c>&lt;hr&gt;</c> resolves against the containing block's

@@ -11,7 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// End-to-end coverage of CSS Fonts 4 <c>font-variant-emoji</c> and the U+FE0E/U+FE0F selectors through

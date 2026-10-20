@@ -4,7 +4,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// Tests for the shared <see cref="BasicShapeGrammar"/> (Layer-agnostic parse of the

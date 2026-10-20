@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Svg;
 using System.Numerics;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     public class SvgTransformParserTests
     {

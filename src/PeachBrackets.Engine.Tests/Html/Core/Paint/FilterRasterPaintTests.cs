@@ -5,7 +5,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// How <c>FragmentPainter</c> drives the raster backend for CSS <c>filter</c>: driven through a real page layout,

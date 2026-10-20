@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// An HTML attribute written without a value has the empty string as its value, not no value at

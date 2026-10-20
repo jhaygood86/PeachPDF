@@ -1,6 +1,6 @@
 using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Unit tests for <see cref="CssCounterEngine.FormatCounterValue"/>, the shared counter-style

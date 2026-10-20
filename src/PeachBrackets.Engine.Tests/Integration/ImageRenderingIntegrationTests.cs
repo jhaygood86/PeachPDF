@@ -10,7 +10,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end coverage for CSS <c>image-rendering</c> (CSS Images 3 §5.3): the keyword reaches each image painter as the

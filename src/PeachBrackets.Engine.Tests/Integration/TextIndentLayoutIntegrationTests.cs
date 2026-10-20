@@ -1,7 +1,7 @@
 using PeachBrackets.Html;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>text-indent</c>'s <c>hanging</c>/<c>each-line</c> keywords

@@ -7,7 +7,7 @@ using PeachBrackets.MathML;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// An inline <c>&lt;math&gt;</c> keeps its markup as <see cref="MathSourceElement"/>s while no rule can change what the math builder

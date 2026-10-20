@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Coverage for CSS Text 4's hyphenation control properties (issue #713): <c>hyphenate-character</c>,

@@ -5,7 +5,7 @@ using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 using System.Globalization;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>
     /// The perspective entries of <c>matrix3d()</c> (4th, 8th and 12th values) are per CSS pixel, so a <c>matrix3d()</c> spelling of a

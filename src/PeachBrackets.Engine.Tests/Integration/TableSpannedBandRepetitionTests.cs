@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A repeating <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> on the bands a table spans without breaking on

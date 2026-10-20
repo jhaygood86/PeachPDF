@@ -7,7 +7,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachBrackets.Svg;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// <c>@supports</c> and <c>@container</c> block handling. <c>@supports</c>'s condition is genuinely

@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/tables.html#dynamic-effects">§17.6.1</see>:

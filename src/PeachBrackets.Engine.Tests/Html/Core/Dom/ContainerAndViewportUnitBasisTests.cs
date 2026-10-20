@@ -5,7 +5,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Direct coverage for <see cref="CssBox.GetContainerRelativeUnitBasis"/>/

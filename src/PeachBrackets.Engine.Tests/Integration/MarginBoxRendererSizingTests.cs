@@ -5,7 +5,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Direct unit tests for <see cref="MarginBoxRenderer.GetMarginBoxRect"/> — the sizing step for

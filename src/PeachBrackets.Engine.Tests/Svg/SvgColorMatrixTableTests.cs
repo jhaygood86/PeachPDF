@@ -1,7 +1,7 @@
 using PeachBrackets.Svg;
 using System.Numerics;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Proves <see cref="SvgColorMatrixTable.Build"/>'s row/column transpose against a known

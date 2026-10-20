@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A column with <c>visibility: collapse</c> is removed from the table (CSS 2.1 §17.5.5), so none of its cells paint. A cell does

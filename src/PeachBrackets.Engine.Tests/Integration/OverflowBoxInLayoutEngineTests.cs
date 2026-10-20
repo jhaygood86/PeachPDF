@@ -1,9 +1,10 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// An auto-height scroll container in ordinary block flow breaks between its lines. One that is a flex or grid

@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -8,7 +9,7 @@ using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.TestSupport
+namespace PeachBrackets.Engine.Tests.TestSupport
 {
     /// <summary>
     /// Lays a document out the way <see cref="PdfGenerator.AddPdfPages"/> does, and hands back the

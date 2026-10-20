@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Integration tests verifying that @media rules are applied correctly when rendering

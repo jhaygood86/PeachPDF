@@ -4,7 +4,7 @@ using PeachBrackets.MathML;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// A MathML token's (<c>mi</c>, <c>mo</c>, <c>mn</c>, <c>mtext</c>, <c>ms</c>) text lives on its element's box

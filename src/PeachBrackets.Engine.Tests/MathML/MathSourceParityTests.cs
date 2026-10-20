@@ -1,3 +1,4 @@
+using PeachPDF;
 using System.Text;
 using System.Threading.Tasks;
 using PeachBrackets.Html.Dom;
@@ -6,7 +7,7 @@ using PeachPDF.Tests.TestSupport;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// An inline <c>&lt;math&gt;</c> parsed into source elements must produce exactly the document the same markup produces parsed into

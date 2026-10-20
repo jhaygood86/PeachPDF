@@ -9,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// A document that omits its <c>&lt;html&gt;</c>/<c>&lt;body&gt;</c> start tags still gets both

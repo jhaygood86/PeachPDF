@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -9,7 +10,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #820: <see cref="Html.MediaQueryMatcher.CompareLength"/> (shared by <c>@media</c> and

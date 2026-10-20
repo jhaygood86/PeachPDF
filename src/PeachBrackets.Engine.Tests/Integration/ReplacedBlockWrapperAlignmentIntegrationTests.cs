@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A <c>display: block</c> <c>&lt;img&gt;</c>/inline <c>&lt;svg&gt;</c> is wrapped in a synthetic

@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>Whitespace handling in SVG text: default collapsing, <c>xml:space="preserve"</c>, and <c>white-space</c> with <c>tab-size</c>.</summary>
     public class SvgTextWhitespaceTests

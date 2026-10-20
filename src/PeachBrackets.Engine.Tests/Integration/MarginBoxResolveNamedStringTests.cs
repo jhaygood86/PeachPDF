@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Entities;
 using System.Collections.Generic;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Direct unit tests for <see cref="MarginBoxRenderer.ResolveNamedString"/> — the pure function

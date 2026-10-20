@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layer K (Tier 0) of mixed page orientation/size support: a <c>position: fixed</c> box's own

@@ -1,6 +1,6 @@
 using PeachBrackets.Css;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// <see cref="Selectors.MatchOrder"/> is a cached, cost-sorted view over a compound/list selector's

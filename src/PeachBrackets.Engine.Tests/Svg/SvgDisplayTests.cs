@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// The CSS <c>display</c> property on SVG elements: <c>none</c> takes an element and its subtree out of rendering, and

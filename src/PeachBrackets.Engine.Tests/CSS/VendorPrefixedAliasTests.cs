@@ -10,7 +10,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// The legacy <c>-webkit-</c>/<c>-moz-</c> spellings of properties, keyword values and gradient functions PeachPDF

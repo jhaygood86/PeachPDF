@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies <c>:link</c> matches exactly <c>&lt;a href&gt;</c> elements and nothing else, and locks

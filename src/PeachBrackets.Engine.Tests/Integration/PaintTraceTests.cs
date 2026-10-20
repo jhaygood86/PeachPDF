@@ -2,7 +2,7 @@
 using PeachBrackets.Html.Paint;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The Debug-build paint trace (<c>FragmentPainter.TraceSink</c>): a line per page and per word the painter

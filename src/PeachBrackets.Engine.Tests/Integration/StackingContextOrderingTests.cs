@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies the actual paint ORDER stacking-context content ends up in, not just that painting

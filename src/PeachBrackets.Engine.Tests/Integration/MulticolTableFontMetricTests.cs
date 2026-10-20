@@ -1,9 +1,10 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A table continued inside a balanced multi-column fragment keeps every word whatever the resolved font's natural

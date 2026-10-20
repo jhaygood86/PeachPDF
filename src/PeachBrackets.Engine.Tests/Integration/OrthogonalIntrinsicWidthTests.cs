@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A flex item that holds a vertical box with a declared width is as wide as that box, not as wide as its text laid out

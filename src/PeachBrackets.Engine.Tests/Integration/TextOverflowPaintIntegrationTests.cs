@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Paint-time coverage for <c>text-overflow: ellipsis</c> (issue #694) - per overflowing line,

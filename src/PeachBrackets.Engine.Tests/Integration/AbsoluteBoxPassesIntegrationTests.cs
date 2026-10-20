@@ -1,10 +1,11 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A tall absolutely positioned box breaks in passes of its own, so that its break does not end the pass of the

@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 using Xunit;
 using PeachDrawing.Text;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Real-font characterization for GPOS Lookup Type 3 (Cursive Attachment,

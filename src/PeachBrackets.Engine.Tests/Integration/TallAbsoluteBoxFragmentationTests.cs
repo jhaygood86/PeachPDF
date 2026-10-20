@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachBrackets.Html;
@@ -7,7 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// An absolutely positioned box taller than a page fragments like other content: it breaks between its

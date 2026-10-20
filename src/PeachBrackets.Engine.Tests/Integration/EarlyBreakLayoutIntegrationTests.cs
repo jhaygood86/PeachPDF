@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A box relocated by one of <see href="https://www.w3.org/TR/css-break-3/#possible-breaks">CSS

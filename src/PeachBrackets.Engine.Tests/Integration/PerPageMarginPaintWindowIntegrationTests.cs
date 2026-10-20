@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for the per-page paint window behind #125's full-bleed pages: when a per-page

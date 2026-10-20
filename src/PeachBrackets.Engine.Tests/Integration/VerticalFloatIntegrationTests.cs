@@ -7,7 +7,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>float</c> and <c>clear</c> in a vertical writing mode (issue #796). <c>left</c>/<c>right</c> are

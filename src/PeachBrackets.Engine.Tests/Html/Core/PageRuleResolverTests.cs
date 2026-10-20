@@ -6,7 +6,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Tests for <see cref="PageRuleResolver"/>'s two named-page attribution policies. The cascade

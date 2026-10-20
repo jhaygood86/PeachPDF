@@ -1,7 +1,7 @@
 using PeachBrackets.MathML;
 using Xunit;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// Coverage for <see cref="MathMetrics"/>'s fallback path (no <c>MATH</c> table) - the TeX-derived

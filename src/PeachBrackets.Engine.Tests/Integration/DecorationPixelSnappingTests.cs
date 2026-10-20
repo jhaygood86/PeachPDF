@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Paint;
 using PeachPDF.Tests.TestSupport;
@@ -6,7 +7,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     public class DecorationPixelSnappingTests
     {

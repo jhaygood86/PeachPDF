@@ -1,6 +1,6 @@
 using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <c>CssLayoutEngine.TryHyphenateWord</c> mutates the owning box's <see cref="CssBox.Words"/> list

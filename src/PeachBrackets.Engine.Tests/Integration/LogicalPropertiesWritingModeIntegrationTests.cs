@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end cascade tests confirming a logical margin/padding/inset/border longhand resolves to the

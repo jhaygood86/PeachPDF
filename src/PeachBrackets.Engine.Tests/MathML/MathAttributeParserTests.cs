@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using PeachBrackets.MathML;
 using Xunit;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     public class MathAttributeParserTests
     {

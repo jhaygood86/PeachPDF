@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A float wider than the inner column it sits in sticks out to the left of that column's extent. The column that holds it

@@ -2,7 +2,7 @@ using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// <c>HtmlContainerInt.Clear()</c> disposes <c>Root</c> and resets several per-document tracking

@@ -1,8 +1,8 @@
 using PeachBrackets.Html.Dom;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Direct coverage for <see cref="CssLayoutEngine.IsHeightDefinite"/>/

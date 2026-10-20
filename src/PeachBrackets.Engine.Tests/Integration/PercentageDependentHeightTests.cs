@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A height that depends on a percentage - a plain <c>50%</c> or a <c>calc()</c>/<c>min()</c> containing one -

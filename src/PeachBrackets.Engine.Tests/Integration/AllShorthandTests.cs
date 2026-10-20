@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachBrackets.Svg;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The <c>all</c> shorthand (CSS Cascade 4 §3.2): every property except <c>direction</c>, <c>unicode-bidi</c>

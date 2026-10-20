@@ -12,16 +12,16 @@ using System.Xml.Linq;
 using Xunit;
 using PeachDrawing.Text;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Real-font characterization for SVG <c>&lt;text&gt;</c>'s Devanagari Universal Shaping Engine
     /// (USE) syllable reordering (issue #533) - mirrors
-    /// <see cref="PeachPDF.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove it isn't
+    /// <see cref="PeachBrackets.Engine.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove it isn't
     /// a no-op" standard, applied to SVG's independent pipeline. The core USE algorithm itself
     /// (category classification, syllable scanning, glyph reordering) is exhaustively verified against
     /// real HarfBuzz's own output in <c>DevanagariUseShapingCharacterizationTests</c> and
-    /// <c>PeachPDF.Tests.Html.Core.DevanagariUseCharacterizationTests</c>; this file only proves SVG's
+    /// <c>PeachBrackets.Engine.Tests.Html.Core.DevanagariUseCharacterizationTests</c>; this file only proves SVG's
     /// own wiring (<c>SvgRenderer.ResolveComplexScriptRuns</c>) reaches it with the right values.
     /// </summary>
     public class SvgTextDevanagariUseCharacterizationTests

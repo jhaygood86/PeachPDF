@@ -12,7 +12,7 @@ using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for float layout and the <c>HtmlContainerInt.HasFloatedBoxes</c> short-circuit

@@ -4,7 +4,7 @@ using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// Reading a rule's selector or declaration block allocates nothing.

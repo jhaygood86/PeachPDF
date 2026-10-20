@@ -10,7 +10,7 @@ using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end regression test for the platform-aware generic-family mapping

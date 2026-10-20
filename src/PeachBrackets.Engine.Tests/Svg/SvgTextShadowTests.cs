@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary><c>text-shadow</c> on SVG text, asserted on the ordered <c>DrawString</c> calls.</summary>
     public class SvgTextShadowTests

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Numerics;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// The 3D properties of an SVG element (CSS Transforms 2 sections 8 to 11): <c>perspective</c>, <c>perspective-origin</c>, <c>transform-style</c> and

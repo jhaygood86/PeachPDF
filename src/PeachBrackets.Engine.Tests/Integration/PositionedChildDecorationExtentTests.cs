@@ -2,7 +2,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// An auto-height box's painted border box is sized from its <b>in-flow</b> content. A definite height

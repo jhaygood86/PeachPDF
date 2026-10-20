@@ -1,10 +1,11 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Fragmentation;
 
-namespace PeachPDF.Tests.TestSupport;
+namespace PeachBrackets.Engine.Tests.TestSupport;
 
 /// <summary>
 /// Lays a document out and collects the unique-word tokens (<c>w12_34</c>) every page actually paints, so a test can

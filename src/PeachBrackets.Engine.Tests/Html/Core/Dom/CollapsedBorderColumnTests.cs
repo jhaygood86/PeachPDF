@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c> border (CSS 2.1 §17.6.2's widest origin-priority tier)

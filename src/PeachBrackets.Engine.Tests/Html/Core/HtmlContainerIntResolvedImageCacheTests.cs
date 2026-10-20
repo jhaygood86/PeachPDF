@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Unit tests for <c>HtmlContainerInt</c>'s per-render resolved-image cache (added for issue #1172),

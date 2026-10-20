@@ -8,7 +8,7 @@ using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end layout tests for writing-mode-aware Table sizing, cell placement, captions,

@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Integration tests for string-set that verify PeachPDF's CssBox tree construction

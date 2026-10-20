@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A multi-column container that holds only a float, nested in an outer column, lays the float out whole: the float's lines

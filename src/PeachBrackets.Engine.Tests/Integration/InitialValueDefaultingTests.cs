@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Tests for PeachPDF's spec-correct CSS defaulting model (CSS Cascading &amp; Inheritance 4 §2.1):

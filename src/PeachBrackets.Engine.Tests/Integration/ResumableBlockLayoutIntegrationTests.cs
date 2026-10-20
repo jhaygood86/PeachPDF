@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layout fills one fragmentainer at a time, and where content does not fit it records where it

@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS Backgrounds 3 §2.11.2 canvas background: <c>&lt;html&gt;</c>'s own background (if set) fills

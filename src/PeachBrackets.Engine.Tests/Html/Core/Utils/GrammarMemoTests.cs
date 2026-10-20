@@ -1,6 +1,6 @@
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     public class GrammarMemoTests
     {

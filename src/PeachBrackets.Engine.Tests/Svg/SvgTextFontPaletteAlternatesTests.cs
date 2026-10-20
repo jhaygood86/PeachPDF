@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// SVG <c>&lt;text&gt;</c> honouring the font properties that depend on a per-document registry or on the used font

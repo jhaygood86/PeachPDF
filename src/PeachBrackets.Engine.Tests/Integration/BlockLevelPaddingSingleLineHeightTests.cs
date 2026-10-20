@@ -1,9 +1,9 @@
 using PeachBrackets.Html.Dom;
 using System.Linq;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A block-level box whose content is inline (a block, a grid item, a flex item, a table cell) is

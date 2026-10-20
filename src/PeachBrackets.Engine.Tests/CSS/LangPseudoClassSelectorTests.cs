@@ -12,7 +12,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// CSS 2.1 §5.11.4 <c>:lang(C)</c> - matches an element whose language (the nearest ancestor-or-self

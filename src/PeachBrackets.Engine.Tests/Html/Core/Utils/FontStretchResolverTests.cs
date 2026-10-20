@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Unit tests for <see cref="FontStretchResolver"/> - the CSS Fonts 4 <c>font-stretch</c> keyword or percentage

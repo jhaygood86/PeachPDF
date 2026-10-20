@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A float nearly as tall as the page leaves no room below it for the line that cannot sit beside it. Such a line stays beside the

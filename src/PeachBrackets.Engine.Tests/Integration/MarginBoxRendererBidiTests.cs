@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Direct unit tests for <see cref="MarginBoxRenderer.ResolveBidiText"/> - real UAX#9 resolution

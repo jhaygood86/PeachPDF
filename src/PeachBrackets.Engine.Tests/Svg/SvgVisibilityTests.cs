@@ -6,7 +6,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>visibility: hidden</c> (and <c>collapse</c>) stops an SVG element painting but leaves it in the rendering tree: it is inherited, a descendant can set

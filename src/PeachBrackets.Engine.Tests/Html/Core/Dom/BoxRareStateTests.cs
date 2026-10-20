@@ -3,7 +3,7 @@ using PeachBrackets.Html.Entities;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <see cref="BoxRareState"/> holds what only an unusual <see cref="CssBox"/> has. These pin that an ordinary box never

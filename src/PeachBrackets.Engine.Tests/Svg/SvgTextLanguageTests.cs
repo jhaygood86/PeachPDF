@@ -9,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s per-element <c>lang</c>/<c>xml:lang</c>-driven GSUB

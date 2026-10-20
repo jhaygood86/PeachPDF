@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>text-align</c>'s initial value is <c>start</c> (CSS Text 3 §7.1), which resolves against the

@@ -1,9 +1,10 @@
+using PeachPDF;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS Text 3's <c>line-break</c> tailorings that apply only where the writing system is Chinese or Japanese, reached from the

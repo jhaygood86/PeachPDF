@@ -6,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Fragments
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
 {
     /// <summary>
     /// <c>FragmentEmitter</c> skips re-descending into a subtree it has already walked and observed to

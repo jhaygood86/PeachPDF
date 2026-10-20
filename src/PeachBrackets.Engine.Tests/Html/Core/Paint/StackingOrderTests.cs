@@ -9,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     using DomUtils = PeachBrackets.Html.Utils.DomUtils;
 

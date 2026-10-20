@@ -10,7 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// CSS animations on the elements of an inline <c>&lt;svg&gt;</c>, sampled at <c>PdfGenerateConfig.AnimationProgress</c>: the value of each animated property

@@ -11,7 +11,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Deprecated presentational HTML attributes (<c>align</c>, <c>nowrap</c>) that <c>DomParser</c>

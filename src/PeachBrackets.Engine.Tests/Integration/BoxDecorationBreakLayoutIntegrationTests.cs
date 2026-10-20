@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The layout half of <c>box-decoration-break: clone</c>: <see href="https://www.w3.org/TR/css-break-3/#break-decoration">css-break-3

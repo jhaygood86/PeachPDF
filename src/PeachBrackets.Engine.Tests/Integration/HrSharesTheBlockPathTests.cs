@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// An <c>&lt;hr&gt;</c> is an ordinary block-level box, so it takes every width rule an equivalent

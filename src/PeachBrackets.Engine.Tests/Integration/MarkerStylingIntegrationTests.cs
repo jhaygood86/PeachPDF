@@ -9,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies that author-set properties on <c>::marker</c> (color, font, content, direction) are

@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Direct typed-storage assertions for the inset/position group (<c>top/left/right/bottom</c>), now

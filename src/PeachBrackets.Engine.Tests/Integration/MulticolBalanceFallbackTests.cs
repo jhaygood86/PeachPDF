@@ -1,7 +1,7 @@
 ﻿using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A balanced multi-column container whose retries ran out before one fitted used to keep the last, failing

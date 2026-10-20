@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A subtree containing a table that repeats a header takes the same §4.3 relocation every other

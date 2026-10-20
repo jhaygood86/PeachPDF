@@ -8,7 +8,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Proves <c>target-counter(attr(href), page)</c> resolves the *real* page a target element lands

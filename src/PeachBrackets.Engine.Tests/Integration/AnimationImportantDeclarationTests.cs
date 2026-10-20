@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// What the animation step sees of <c>!important</c> declarations and of several animations, checked against Chrome: an <c>!important</c>

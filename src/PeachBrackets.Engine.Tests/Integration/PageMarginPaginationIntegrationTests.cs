@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for the "@page margins waste marginTop+marginBottom of every page" bug:

@@ -8,7 +8,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layer-B tests for <see cref="CssClipRectResolver.TryBuildClipRect"/>: resolves a validated legacy

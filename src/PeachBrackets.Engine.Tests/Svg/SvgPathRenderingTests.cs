@@ -6,7 +6,7 @@ using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     public class SvgPathRenderingTests
     {

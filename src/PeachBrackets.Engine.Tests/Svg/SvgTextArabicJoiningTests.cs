@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s Arabic-family joining-form resolution/shaping-run
@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Svg
     /// </summary>
     public class SvgTextArabicJoiningTests
     {
-        // Same letters PeachPDF.Tests.Html.Core.ArabicJoiningCharacterizationTests uses, for
+        // Same letters PeachBrackets.Engine.Tests.Html.Core.ArabicJoiningCharacterizationTests uses, for
         // consistency across the Arabic-family test fixtures.
         private const string Beh = "ب";
         private const string Yeh = "ي";

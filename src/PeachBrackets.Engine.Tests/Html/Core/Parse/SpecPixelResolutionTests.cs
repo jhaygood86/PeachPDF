@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Issue #150: CSS px resolves spec-correctly (1px = 1/96in = 0.75pt, CSS Values &amp; Units

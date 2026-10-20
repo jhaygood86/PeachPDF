@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>margin: 0 auto</c> centres a box within its containing block's <b>content</b> width, per

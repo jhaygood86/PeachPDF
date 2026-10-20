@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     public class CommonUtilsTests
     {

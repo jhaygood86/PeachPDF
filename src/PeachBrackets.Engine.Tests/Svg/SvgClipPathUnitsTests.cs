@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>clipPathUnits="objectBoundingBox"</c> (issue #168, SVG 1.1 §14.3.5): the clipPath's 0..1 child

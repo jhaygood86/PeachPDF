@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Tests for the media-type and author-style-suppression cascade knobs that back the CLI's

@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for three real bugs found while chasing why the real Acid2 fixture's

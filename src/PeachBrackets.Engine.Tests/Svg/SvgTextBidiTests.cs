@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Real UAX#9 bidi resolution for SVG <c>&lt;text&gt;</c> (SVG 2 §11.3.1: the same

@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Svg;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>The conservative box of what a document draws: shapes, their strokes, transforms, <c>use</c>, nested viewports and images.</summary>
     public class SvgInkExtentTests

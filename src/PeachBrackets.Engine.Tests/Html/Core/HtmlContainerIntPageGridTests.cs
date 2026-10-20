@@ -3,7 +3,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachBrackets.Html;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Pure-math tests for the shifted-grid helper family on <see cref="HtmlContainerInt"/> —

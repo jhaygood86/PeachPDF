@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layout assertions for <c>CssBox.GetMinMaxWidth</c>/<c>GetMinMaxSumWords</c> — the intrinsic

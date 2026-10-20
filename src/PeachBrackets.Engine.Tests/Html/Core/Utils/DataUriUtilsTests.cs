@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Utils;
 using System;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Regression coverage for a real bug found while investigating why the Acid2 test's embedded

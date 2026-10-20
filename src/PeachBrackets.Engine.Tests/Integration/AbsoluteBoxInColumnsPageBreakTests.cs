@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// An absolutely positioned box inside a multi-column container breaks against the page grid, as one outside it does: its

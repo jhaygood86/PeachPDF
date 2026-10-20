@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
@@ -5,7 +6,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Tests for <see cref="PeachPdfCssContent.AddStyleSheet"/>: additional stylesheets are merged into

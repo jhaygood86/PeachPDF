@@ -1,10 +1,11 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// An absolutely positioned box across page boundaries: drawn on the page its offsets place it on even

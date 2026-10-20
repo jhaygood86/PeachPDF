@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachBrackets.Html;
 using PeachPDF.Tests.TestSupport;
@@ -7,7 +8,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// css-text-decor-3 §2.5: an underline is placed from the text's own baseline and font metrics, not from

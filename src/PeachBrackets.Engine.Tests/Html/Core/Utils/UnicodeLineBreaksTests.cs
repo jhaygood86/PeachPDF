@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// What <see cref="UnicodeLineBreaks"/> adds to the line breaking algorithm: the answer in the coordinates of the text it is given,

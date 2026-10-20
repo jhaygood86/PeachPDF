@@ -3,7 +3,7 @@ using PeachDrawing.PDF;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Entities;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Tests for document-level named string storage in HtmlContainerInt.

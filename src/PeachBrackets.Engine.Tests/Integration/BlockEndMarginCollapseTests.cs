@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/box.html#collapsing-margins">§8.3.1</see>'s

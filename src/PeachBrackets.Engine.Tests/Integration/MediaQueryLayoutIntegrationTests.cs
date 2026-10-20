@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
@@ -8,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end coverage for <c>@media</c> feature-condition evaluation (issue #235's <c>@media</c>

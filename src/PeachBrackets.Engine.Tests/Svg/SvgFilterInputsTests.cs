@@ -6,7 +6,7 @@ using PeachBrackets.Svg;
 using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>feImage</c> and the <c>FillPaint</c>/<c>StrokePaint</c> inputs of a raster SVG filter, drawn end to end: real markup is built

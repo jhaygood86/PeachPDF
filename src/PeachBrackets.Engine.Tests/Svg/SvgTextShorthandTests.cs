@@ -6,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>SVG text reading the <c>font</c>, <c>font-variant</c> and <c>text-decoration</c> shorthands from <c>style=""</c>, a presentation attribute and a stylesheet.</summary>
     public class SvgTextShorthandTests

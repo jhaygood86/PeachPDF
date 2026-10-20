@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A multi-column container is a formatting context root, so it keeps clear of the floats beside it (CSS 2.1 §9.5) rather than

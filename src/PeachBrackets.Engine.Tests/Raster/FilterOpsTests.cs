@@ -3,7 +3,7 @@ using PeachDrawing;
 using PeachDrawing.Filters;
 using PeachBrackets.Svg;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>The pixel operations behind the SVG filter primitives PDF cannot express, checked against values the filter specifications define.</summary>
     public class FilterOpsTests

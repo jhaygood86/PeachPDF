@@ -9,8 +9,6 @@
 
   <PropertyGroup>
     <ImplicitUsings>enable</ImplicitUsings>
-    <!-- The tests keep the PeachPDF.Tests namespace they were written in, and an embedded resource is named after it. -->
-    <RootNamespace>PeachPDF.Tests</RootNamespace>
 
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
@@ -186,6 +184,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <Using Include="PeachPDF.Tests.TestSupport" />
+    <Using Include="PeachBrackets.Engine.Tests.TestSupport" />
   </ItemGroup>
 
 </Project>

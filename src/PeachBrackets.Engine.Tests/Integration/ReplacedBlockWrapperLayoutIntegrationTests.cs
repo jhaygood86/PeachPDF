@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>DomParser.CorrectReplacedElementBoxes</c> wraps a <c>display: block</c> <c>&lt;img&gt;</c>/inline

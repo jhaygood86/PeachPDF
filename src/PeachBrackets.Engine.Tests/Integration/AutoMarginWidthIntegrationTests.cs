@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS 2.1 §10.3.3: an in-flow, non-replaced block with <c>width: auto</c> and

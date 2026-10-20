@@ -8,7 +8,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>&lt;textPath&gt;</c> <c>method="stretch"</c>, outlined glyphs painted in user space (paint servers measured against the whole

@@ -2,7 +2,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// A word (<see cref="CssRectWord"/>) keeps the state only an unusual word has - hyphenation pieces, overflow-wrap pieces,

@@ -2,7 +2,7 @@ using PeachBrackets.Html.Utils;
 using System.Linq;
 
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     public class DefaultFontResolverTests
     {

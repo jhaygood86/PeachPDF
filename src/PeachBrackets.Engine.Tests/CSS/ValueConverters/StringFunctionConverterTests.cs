@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Tests.CSS.ValueConverters
+namespace PeachBrackets.Engine.Tests.CSS.ValueConverters
 {
     /// <summary>
     /// Tests for the StringFunctionConverter that parses string() CSS function.

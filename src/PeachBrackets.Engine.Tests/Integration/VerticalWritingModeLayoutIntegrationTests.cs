@@ -9,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using PeachDrawing.Text.Unicode;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end layout tests for real <c>vertical-rl</c>/<c>vertical-lr</c> layout: both line flow

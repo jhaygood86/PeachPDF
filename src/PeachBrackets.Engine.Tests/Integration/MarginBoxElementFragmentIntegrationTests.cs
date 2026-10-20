@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine;
@@ -5,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end coverage for css-gcpm-3's <c>content: element()</c>, laid out the way the real

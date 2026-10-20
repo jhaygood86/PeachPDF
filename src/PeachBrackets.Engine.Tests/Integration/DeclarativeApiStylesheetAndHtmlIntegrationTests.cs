@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachBrackets.Building;
 using PeachDrawing.Core;
@@ -15,7 +16,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layout-assertion tests for the declarative document-building API's newer surface: <c>Class</c>/<c>Id</c>/

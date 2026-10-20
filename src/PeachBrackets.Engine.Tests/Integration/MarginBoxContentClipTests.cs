@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine;
 using PeachPDF.Tests.TestSupport;
@@ -5,7 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A running element's fragments (<c>content: element()</c>) are built by the same

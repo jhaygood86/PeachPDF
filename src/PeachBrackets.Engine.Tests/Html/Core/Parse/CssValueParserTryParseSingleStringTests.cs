@@ -1,6 +1,6 @@
 using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Direct unit tests for <see cref="CssValueParser.TryParseSingleString"/>. Regression: this method
@@ -8,7 +8,7 @@ namespace PeachPDF.Tests.Html.Core.Parse
     /// where <c>Lexer.NewString</c> passed its own "bad" flag straight into <c>Token.NewString</c>'s
     /// "valid" parameter with no inversion - a well-formed string came back <c>IsValid: false</c> and an
     /// unterminated (bad-string-token) one came back <c>IsValid: true</c>. Now that the underlying
-    /// inversion is fixed (see <c>PeachPDF.Tests.CSS.CssTokenizationTests</c>), this gates on
+    /// inversion is fixed (see <c>PeachBrackets.Engine.Tests.CSS.CssTokenizationTests</c>), this gates on
     /// <c>IsValid</c> normally.
     /// </summary>
     public class CssValueParserTryParseSingleStringTests

@@ -6,7 +6,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // Regression for FlowBox's end-of-box "handle height setting" correction
     // (CssLayoutEngine.FlowBox): when an inline(-block) box's flowed content comes out

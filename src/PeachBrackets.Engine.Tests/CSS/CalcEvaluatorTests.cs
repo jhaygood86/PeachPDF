@@ -4,7 +4,7 @@ using System;
 using System.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// Tests for <see cref="CalcEvaluator"/>'s angle-leaf evaluation: a calc() whose value is an

@@ -8,7 +8,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies the legacy CSS 2.1 <c>clip: rect()</c> paint hook in <c>FragmentPainter.PaintFragment</c>:

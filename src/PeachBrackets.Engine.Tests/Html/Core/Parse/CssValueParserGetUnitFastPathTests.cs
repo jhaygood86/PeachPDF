@@ -3,7 +3,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Issue #910: <c>CssValueParser.GetUnit</c> ran the full CSS tokenizer just to pull a number+unit

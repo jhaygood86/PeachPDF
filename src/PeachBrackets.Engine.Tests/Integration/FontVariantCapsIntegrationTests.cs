@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using Xunit;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for the real-GSUB side of <c>font-variant-caps</c>: when the resolved font

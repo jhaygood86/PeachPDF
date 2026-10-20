@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Thai, Lao, Khmer and Burmese wrap at the words a dictionary finds, as they do in a browser. The breaks themselves are checked in

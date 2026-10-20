@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">§10.8/§10.8.1</see>:

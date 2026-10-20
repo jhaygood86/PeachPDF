@@ -9,7 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Font-relative units (CSS Values and Units 4 §6.1) in SVG: <c>em</c>/<c>rem</c> follow the element's own /

@@ -4,9 +4,9 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using Xunit;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A footnote's page (its call, its reserved room, its note area) has to describe the layout that is

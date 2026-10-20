@@ -7,7 +7,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>context-fill</c> and <c>context-stroke</c> (SVG 2, painting): the fill and stroke of the context element, which is the <c>use</c> for

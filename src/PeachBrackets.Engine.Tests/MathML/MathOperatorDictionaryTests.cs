@@ -1,7 +1,7 @@
 using PeachBrackets.MathML;
 using Xunit;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// Coverage for <see cref="MathOperatorDictionary"/> - values spot-checked against MathML Core

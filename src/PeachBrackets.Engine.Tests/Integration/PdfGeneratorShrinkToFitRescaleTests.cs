@@ -1,9 +1,10 @@
+using PeachPDF;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <see cref="PdfGenerator.AddPdfPages"/>'s <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> arm used to

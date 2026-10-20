@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies <c>filter: drop-shadow()</c> actually paints the right geometry/color/order, not just

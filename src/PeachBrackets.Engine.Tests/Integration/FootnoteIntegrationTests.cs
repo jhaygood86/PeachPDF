@@ -11,9 +11,9 @@ using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Covers css-gcpm-3's <c>float: footnote</c>: the in-flow numbered call, the detached body's own

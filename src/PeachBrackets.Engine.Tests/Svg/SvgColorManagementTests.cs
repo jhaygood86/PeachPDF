@@ -7,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>SVG 1.1 §11.2 <c>icc-color()</c>/<c>&lt;color-profile&gt;</c> and §11.9.1 <c>color-interpolation</c> on gradients.</summary>
     public class SvgColorManagementTests

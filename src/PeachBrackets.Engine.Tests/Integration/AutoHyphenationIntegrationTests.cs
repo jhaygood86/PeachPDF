@@ -11,7 +11,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real automatic hyphenation (<c>hyphens: auto</c>). Previously there was
@@ -155,15 +155,15 @@ namespace PeachPDF.Tests.Integration
             // not applied afterwards: with none, the same document is not hyphenated at all.
             const string html = "<html><body><p id=\"p\" style=\"width:80px;hyphens:auto\">antidisestablishmentarianism</p></body></html>";
 
-            var (withDefault, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(
+            var (withDefault, _) = await PeachBrackets.Engine.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(
                 html, new PdfGenerateConfig { PageSize = PageSize.A4, DefaultLanguage = "en" });
-            var (without, _) = await PeachPDF.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
+            var (without, _) = await PeachBrackets.Engine.Tests.TestSupport.PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
-            var hyphenated = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(withDefault, "p")!;
-            Assert.Contains(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(hyphenated).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
+            var hyphenated = PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.FindById(withDefault, "p")!;
+            Assert.Contains(PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.Descendants(hyphenated).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
 
-            var plain = PeachPDF.Tests.TestSupport.LayoutHarness.FindById(without, "p")!;
-            Assert.DoesNotContain(PeachPDF.Tests.TestSupport.LayoutHarness.Descendants(plain).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
+            var plain = PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.FindById(without, "p")!;
+            Assert.DoesNotContain(PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.Descendants(plain).SelectMany(b => b.Words), w => w.Text!.EndsWith('-'));
         }
 
         // ─── Helpers ─────────────────────────────────────────────────────────────

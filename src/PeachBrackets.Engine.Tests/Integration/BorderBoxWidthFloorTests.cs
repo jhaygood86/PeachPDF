@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Under <c>box-sizing: border-box</c> a box's used border-box width floors at its own padding and

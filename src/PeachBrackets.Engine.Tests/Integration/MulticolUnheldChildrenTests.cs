@@ -7,7 +7,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// Each page of a multi-column container used to walk, live, every child its own columns do not hold - all the rest of the

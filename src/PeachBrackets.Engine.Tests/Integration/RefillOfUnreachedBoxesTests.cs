@@ -5,7 +5,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// <c>PassRewind.RollBackTo</c> resets every child a re-run pass was going to lay out, which on a keep-with-next or widows

@@ -7,19 +7,19 @@ using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s Devanagari Universal Shaping Engine (USE) category
     /// resolution/shaping-run wiring (issue #533) - mirrors
-    /// <see cref="PeachPDF.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove the
+    /// <see cref="PeachBrackets.Engine.Tests.Html.DevanagariUseCharacterizationTests"/>'s own "prove the
     /// wiring reaches real shaping" standard, but for SVG's own independent pipeline
     /// (<c>SvgRenderer.ResolveComplexScriptRuns</c>). Real-font syllable-reordering proof lives in
     /// <see cref="SvgTextDevanagariUseCharacterizationTests"/>.
     /// </summary>
     public class SvgTextDevanagariUseTests
     {
-        // Same letters PeachPDF.Tests.Html.Core.DevanagariUseCharacterizationTests uses, for
+        // Same letters PeachBrackets.Engine.Tests.Html.Core.DevanagariUseCharacterizationTests uses, for
         // consistency across the Devanagari test fixtures.
         private const string Ka = "क";
         private const string Virama = "्";

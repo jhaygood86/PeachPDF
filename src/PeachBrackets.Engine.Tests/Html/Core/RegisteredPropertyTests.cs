@@ -4,7 +4,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Unit tests for <see cref="RegisteredProperty"/> — the <c>@property</c> registration model: rule

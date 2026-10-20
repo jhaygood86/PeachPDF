@@ -5,7 +5,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A paragraph that continues into the next column or page is moved with a <c>Location</c> write to where its remainder

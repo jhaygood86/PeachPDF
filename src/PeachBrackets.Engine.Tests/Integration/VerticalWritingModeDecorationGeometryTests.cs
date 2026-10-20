@@ -2,7 +2,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #1075: under a true vertical writing mode (<c>vertical-rl</c>/<c>vertical-lr</c>), a

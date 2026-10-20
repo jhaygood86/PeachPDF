@@ -11,7 +11,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for two paint-pipeline fixes:

@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies <c>::first-letter</c> - previously parsed (see <c>PseudoElementSelectorFactory</c>)

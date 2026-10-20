@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #150: a textually identical <c>@page</c> margin must resolve to identical page geometry

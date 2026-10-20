@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Direct unit tests for <see cref="CssValueParser.IsValidCommaKeywordList{TValue}"/> — the

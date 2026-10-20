@@ -4,7 +4,7 @@ using PeachBrackets.Html.Fragmentation;
 using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// The monolithic classifier, asserted against

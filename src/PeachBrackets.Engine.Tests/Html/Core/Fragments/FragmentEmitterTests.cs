@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Fragments
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
 {
     /// <summary>
     /// Geometry and structure of the fragment tree — layout's immutable output (CSS Fragmentation

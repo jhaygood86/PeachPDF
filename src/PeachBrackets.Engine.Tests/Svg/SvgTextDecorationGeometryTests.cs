@@ -9,7 +9,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>text-decoration-thickness</c>, <c>text-underline-offset</c>, <c>text-underline-position</c>, the <c>double</c> style and

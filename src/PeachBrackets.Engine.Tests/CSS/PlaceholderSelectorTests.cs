@@ -4,7 +4,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// Generation-time support for HTML's <c>:placeholder-shown</c> state and the detached

@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Diagnostics;
 using System.Text;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// The structural selectors (<c>:nth-child</c> family, <c>+</c>, <c>~</c>, <c>:has(+ S)</c>) answer from a per-parent

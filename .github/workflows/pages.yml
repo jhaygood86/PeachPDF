@@ -47,7 +47,7 @@ jobs:
           COUNT=0
           for PROJECT in PeachPDF.Tests PeachBrackets.Engine.Tests; do
             N=$(dotnet test --project "src/$PROJECT/$PROJECT.csproj" --framework net8.0 --list-tests \
-              | grep -cE '^[[:space:]]+PeachPDF\.Tests\.' || true)
+              | grep -cE '^[[:space:]]+(PeachPDF|PeachBrackets\.Engine)\.Tests\.' || true)
             COUNT=$((COUNT + N))
           done
           if [ "$COUNT" -lt 1000 ]; then echo "Unexpected test count: $COUNT" >&2; exit 1; fi

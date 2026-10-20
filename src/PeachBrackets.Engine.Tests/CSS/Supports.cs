@@ -1,6 +1,6 @@
 using PeachPDF.Rendering;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     using PeachBrackets.Css;
     using System;

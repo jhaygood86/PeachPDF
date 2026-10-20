@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -12,7 +13,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>Auto-wrapped SVG text (SVG 2 §11.7): <c>inline-size</c>, <c>shape-inside</c>/<c>shape-subtract</c> and the CSS text properties that act on its line boxes.</summary>
     public class SvgTextWrappingTests

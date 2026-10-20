@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for the primary named-page bug: <c>CssBox.PerformLayoutImp</c> used to call

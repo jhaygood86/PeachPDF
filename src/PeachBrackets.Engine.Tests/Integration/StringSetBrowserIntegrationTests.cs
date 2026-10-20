@@ -8,7 +8,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Integration tests that verify string-set behavior matches between PeachPDF's CssBox DOM

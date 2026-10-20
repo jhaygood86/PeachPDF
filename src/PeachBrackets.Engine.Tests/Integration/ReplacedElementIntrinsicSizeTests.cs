@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #150: replaced-element intrinsic sizes are CSS pixels (1px = 1/96in) — a raster's

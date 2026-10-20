@@ -13,7 +13,7 @@ using System.Threading.Tasks;
 using Xunit;
 using PeachDrawing.Text;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Real-font characterization for Arabic-family cursive joining (issue #533) - unlike

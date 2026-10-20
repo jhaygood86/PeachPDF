@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.Text;
@@ -10,7 +11,7 @@ using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// How a family's faces are narrowed for a box (CSS Fonts 4 section 5.2), from the stylesheet to the face the box is set in: by width,

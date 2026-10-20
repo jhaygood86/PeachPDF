@@ -8,7 +8,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Coverage for <see cref="BorderImageLayerResolver"/>'s own pixel arithmetic against a

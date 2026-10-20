@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachDrawing.PDF;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
@@ -13,7 +14,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Verifies <c>outline</c>/<c>outline-color</c>/<c>outline-style</c>/<c>outline-width</c>/

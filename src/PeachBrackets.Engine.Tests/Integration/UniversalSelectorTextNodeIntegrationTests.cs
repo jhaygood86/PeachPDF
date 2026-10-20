@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The universal selector, <c>:not()</c> and <c>:lang()</c> match elements only (Selectors 4 §5.2, §4.3,

@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Parse;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS PaintColor 5 <c>device-cmyk()</c> (https://www.w3.org/TR/css-color-5/#device-cmyk) grammar and

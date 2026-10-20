@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// <see cref="LogicalPropertyResolver"/> against CSS Writing Modes Level 4 §7.1's abstract-to-physical

@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Tests for the page box's own border/padding (issue #1147) as modeled by

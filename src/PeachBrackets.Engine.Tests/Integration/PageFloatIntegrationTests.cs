@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Covers CSS Page Floats' <c>float: top/bottom/top-bottom/snap/inside/outside</c> (issue #699):

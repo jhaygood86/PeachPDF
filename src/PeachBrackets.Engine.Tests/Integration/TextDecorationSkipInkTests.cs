@@ -5,7 +5,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <see href="https://www.w3.org/TR/css-text-decor-4/#text-decoration-skip-ink-property">css-text-decor-4

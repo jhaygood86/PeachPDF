@@ -14,7 +14,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real per-character <c>text-orientation: mixed</c> - Unicode's

@@ -2,9 +2,9 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using System.Linq;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The empirical verification the implementation plan for css-gcpm-3's <c>content: element()</c>

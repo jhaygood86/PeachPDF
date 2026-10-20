@@ -12,7 +12,7 @@ using System.Text;
 using PeachDrawing.Text;
 
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// End-to-end coverage of the last-resort system-fallback step (issue #172): when NO family in a

@@ -6,7 +6,7 @@ using PeachBrackets.Html.Entities;
 using PeachBrackets.Html.Utils;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     public class CssContentEngineTests
     {

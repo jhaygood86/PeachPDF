@@ -6,7 +6,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>SVG-only properties written in a stylesheet rule or a <c>@keyframes</c> block are kept, and the SVG builder reads them from there.</summary>
     public class SvgOnlyStylesheetPropertyTests

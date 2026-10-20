@@ -7,7 +7,7 @@ using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layer K Tier 1 of mixed page orientation/size support: a <c>position: fixed</c> box's percentage

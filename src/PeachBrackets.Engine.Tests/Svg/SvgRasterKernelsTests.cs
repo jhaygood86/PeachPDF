@@ -2,7 +2,7 @@ using PeachBrackets.Svg;
 using System;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>The coverage-mask kernels (vectorized) against plain scalar references, on sizes that exercise every vector tail.</summary>
     public class SvgRasterKernelsTests

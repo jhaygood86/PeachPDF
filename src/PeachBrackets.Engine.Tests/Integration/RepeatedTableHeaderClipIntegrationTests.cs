@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using static PeachPDF.Tests.TestSupport.TestRecordingGraphics;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A repeating table <c>&lt;thead&gt;</c> is one source subtree shown at a different place on every

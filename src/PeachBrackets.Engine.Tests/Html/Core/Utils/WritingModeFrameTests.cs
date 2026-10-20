@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// <see cref="WritingModeFrame"/>'s logical-to-physical geometry conversion, exercised directly via

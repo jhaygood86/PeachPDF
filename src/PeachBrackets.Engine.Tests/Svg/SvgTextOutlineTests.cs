@@ -8,7 +8,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Call-adjacency coverage for gradient/pattern <c>fill</c> and <c>stroke</c> on SVG

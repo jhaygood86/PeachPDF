@@ -8,7 +8,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using static PeachPDF.Tests.TestSupport.TestRecordingGraphics;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     using DomUtils = PeachBrackets.Html.Utils.DomUtils;
 

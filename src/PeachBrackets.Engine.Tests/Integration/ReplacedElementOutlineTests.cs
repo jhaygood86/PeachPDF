@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A replaced element takes <c>outline</c> like any other box (css-ui-4 §3.1): it is drawn after the

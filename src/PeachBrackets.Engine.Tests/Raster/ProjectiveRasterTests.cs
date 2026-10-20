@@ -3,7 +3,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Paint;
 using System.Numerics;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>The geometry shared by the HTML painter and the SVG renderer for CSS 3D transforms: when a projective map is good enough to be a plain matrix, and in what order planes are drawn.</summary>
     public class ProjectiveRasterTests

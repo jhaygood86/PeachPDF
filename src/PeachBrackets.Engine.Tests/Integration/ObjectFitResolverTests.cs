@@ -8,7 +8,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Pure-geometry unit tests for <see cref="ObjectFitResolver.Compute"/> (the shared engine behind

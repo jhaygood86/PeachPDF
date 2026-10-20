@@ -5,7 +5,7 @@ using PeachDrawing;
 using PeachBrackets.Svg;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// The pixel evaluation of an SVG filter with a primitive PDF cannot express: filters are built from real markup and

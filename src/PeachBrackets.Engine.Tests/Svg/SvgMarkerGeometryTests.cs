@@ -1,7 +1,7 @@
 using PeachDrawing.Core;
 using PeachBrackets.Svg;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     public class SvgMarkerGeometryTests
     {

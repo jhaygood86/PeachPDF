@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Tests.TestSupport;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
@@ -16,7 +17,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS animations rendered as a single frame: <see cref="PdfGenerateConfig.AnimationProgress"/> picks the

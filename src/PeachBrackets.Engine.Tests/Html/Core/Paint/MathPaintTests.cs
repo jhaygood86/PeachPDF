@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// Paint-order coverage for MathML (per CLAUDE.md's painting-changes testing convention: assert

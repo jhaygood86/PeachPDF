@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using PeachBrackets.Html;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Direct coverage for <see cref="ContainerQuerySizes.SizesEqual"/>'s per-field comparison - in

@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>-webkit-text-stroke</c>, <c>text-rendering</c> and <c>font-language-override</c> on HTML text, asserted on the calls the painter makes on the

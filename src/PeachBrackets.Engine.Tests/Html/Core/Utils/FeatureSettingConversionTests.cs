@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Shaping;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// The CSS layer keeps its resolved font features as (tag, value) pairs and hands the shaper the engine's own

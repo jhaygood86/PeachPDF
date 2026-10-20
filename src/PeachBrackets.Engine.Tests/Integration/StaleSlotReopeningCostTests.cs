@@ -6,7 +6,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A paragraph moved by <c>orphans</c>/<c>widows</c> is laid out again, and re-opens the fragmentainers already emitted

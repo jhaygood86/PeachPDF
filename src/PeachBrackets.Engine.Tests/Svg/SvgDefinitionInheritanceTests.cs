@@ -5,7 +5,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Content inside <c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>/<c>&lt;clipPath&gt;</c> (and a

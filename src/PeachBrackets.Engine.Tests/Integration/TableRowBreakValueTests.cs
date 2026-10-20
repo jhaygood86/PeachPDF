@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <see href="https://www.w3.org/TR/css-break-3/#break-between">§3.1</see>'s forced breaks at the

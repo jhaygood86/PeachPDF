@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary><c>dominant-baseline</c>, <c>alignment-baseline</c> and <c>baseline-shift</c> on horizontal SVG text, asserted on where each run is drawn.</summary>
     public class SvgTextBaselineTests
