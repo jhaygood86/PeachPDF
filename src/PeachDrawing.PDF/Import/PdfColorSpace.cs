@@ -134,10 +134,11 @@ internal sealed class PdfColorSpace
             double m = (l + 16) / 116, ll = m + aa / 500, nn = m - bb / 200;
             static double G(double x) => x >= 6.0 / 29 ? x * x * x : 108.0 / 841 * (x - 4.0 / 29);
             double x = wp[0] * G(ll), y = wp[1] * G(m), z = wp[2] * G(nn);
-            // XYZ (D50-ish white) to linear sRGB, then gamma.
-            double r = 3.1339 * x - 1.6169 * y - 0.4906 * z;
-            double g = -0.9785 * x + 1.9160 * y + 0.0333 * z;
-            double b = 0.0720 * x - 0.2290 * y + 1.4057 * z;
+            // XYZ to linear sRGB with the matrix for the space's own white (D65 or D50), then the sRGB gamma.
+            bool d65 = wp[0] > 0.93;
+            double r = d65 ? 3.2406 * x - 1.5372 * y - 0.4986 * z : 3.1339 * x - 1.6169 * y - 0.4906 * z;
+            double g = d65 ? -0.9689 * x + 1.8758 * y + 0.0415 * z : -0.9785 * x + 1.9160 * y + 0.0333 * z;
+            double b = d65 ? 0.0557 * x - 0.2040 * y + 1.0570 * z : 0.0720 * x - 0.2290 * y + 1.4057 * z;
             static double Gamma(double v) => v <= 0.0031308 ? 12.92 * v : 1.055 * Math.Pow(v, 1 / 2.4) - 0.055;
             return PaintColor.FromArgb(Alpha(a), Byte(Gamma(r)), Byte(Gamma(g)), Byte(Gamma(b)));
         }, [0, 0, 0]);
