@@ -16,7 +16,13 @@ namespace PeachDrawing.PDF.Import;
 /// </summary>
 internal sealed class PdfContentInterpreter
 {
-    enum Push { Transform, Clip, Blend }
+    enum Push { Transform, Clip, Blend, Group }
+
+    /// <summary>One thing pushed onto a canvas by a state, and the canvas it went onto (a soft-mask group redirects drawing to another).</summary>
+    readonly record struct Pushed(Push Kind, Canvas Owner, SoftMaskGroup? Group = null);
+
+    /// <summary>Content being drawn into its own tile so a soft mask can be applied to it as a whole when the group ends.</summary>
+    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary Mask, PdfDictionary? Resources, Matrix3x2 Accumulated);
 
     sealed class State
     {
@@ -27,7 +33,7 @@ internal sealed class PdfContentInterpreter
         public double[] Dash = [];
         public LineCap Cap = LineCap.Butt;
         public LineJoin Join = LineJoin.Miter;
-        public List<Push> Pushes = [];
+        public List<Pushed> Pushes = [];
         public PdfImportedFont? TextFont;
         public double FontSize, CharSpacing, WordSpacing, HorizontalScale = 1, Leading, Rise;
         public int RenderMode;
@@ -47,7 +53,8 @@ internal sealed class PdfContentInterpreter
     }
 
     readonly PdfSourceDocument _doc;
-    readonly Canvas _canvas;
+    Canvas _canvas;
+    readonly Rect? _region;
     readonly List<State> _stack = [new State()];
     readonly HashSet<string> _unsupported = [];
     GraphicsPath? _path;
@@ -59,10 +66,17 @@ internal sealed class PdfContentInterpreter
     readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Creates an interpreter that draws onto <paramref name="canvas"/>.</summary>
-    public PdfContentInterpreter(PdfSourceDocument doc, Canvas canvas)
+    /// <param name="doc">the document the content comes from</param>
+    /// <param name="canvas">the canvas to draw on</param>
+    /// <param name="groupRegion">
+    /// the area of the canvas (in its own units, from the origin) that a soft-masked group is drawn into; null when the caller cannot
+    /// say, in which case soft masks are reported instead of applied
+    /// </param>
+    public PdfContentInterpreter(PdfSourceDocument doc, Canvas canvas, Rect? groupRegion = null)
     {
         _doc = doc;
         _canvas = canvas;
+        _region = groupRegion;
     }
 
     /// <summary>The operators and features met that this interpreter does not implement.</summary>
@@ -262,21 +276,38 @@ internal sealed class PdfContentInterpreter
         if (_stack.Count <= 1) return;
         var top = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
-        for (int i = top.Pushes.Count - 1; i >= 0; i--)
+        Unwind(top.Pushes);
+    }
+
+    /// <summary>Undoes pushes newest first, each on the canvas it went onto; a soft-mask group is composited when its marker is reached.</summary>
+    void Unwind(List<Pushed> pushes)
+    {
+        for (int i = pushes.Count - 1; i >= 0; i--)
         {
-            switch (top.Pushes[i])
+            var entry = pushes[i];
+            switch (entry.Kind)
             {
-                case Push.Clip: _canvas.PopClip(); break;
-                case Push.Blend: _canvas.PopBlendMode(); break;
-                default: _canvas.PopTransform(); break;
+                case Push.Clip: entry.Owner.PopClip(); break;
+                case Push.Blend: entry.Owner.PopBlendMode(); break;
+                case Push.Group: EndSoftMaskGroup(entry.Group!); break;
+                default: entry.Owner.PopTransform(); break;
             }
         }
+
+        pushes.Clear();
+    }
+
+    /// <summary>Closes everything the base graphics state still holds (a soft mask set with no <c>q</c> around it); call after the last <see cref="Run"/>.</summary>
+    public void Finish()
+    {
+        while (_stack.Count > 1) Restore();
+        Unwind(Cur.Pushes);
     }
 
     void Transform(Matrix3x2 m)
     {
         _canvas.PushTransform(m);
-        Cur.Pushes.Add(Push.Transform);
+        Cur.Pushes.Add(new(Push.Transform, _canvas));
         Cur.Ctm = m * Cur.Ctm;
     }
 
@@ -299,8 +330,9 @@ internal sealed class PdfContentInterpreter
             Cur.DashPhase = _doc.NumberOf(d.Elements[1]);
         }
         if (gs.GetRaw("BM") is { } bm) SetBlendMode(bm);
-        foreach (var key in new[] { "SMask", "Font", "TR", "TR2", "OP", "op" })
-            if (gs.GetRaw(key) is { } v && !(key == "SMask" && _doc.NameOf(v) == "/None"))
+        if (gs.GetRaw("SMask") is { } sm) SetSoftMask(sm, res);
+        foreach (var key in new[] { "Font", "TR", "TR2", "OP", "op" })
+            if (gs.GetRaw(key) is not null)
                 _unsupported.Add("gs " + key);
     }
 
@@ -365,6 +397,83 @@ internal sealed class PdfContentInterpreter
         _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
     }
 
+    /// <summary>
+    /// Applies a <c>/SMask</c> entry. A mask dictionary starts a group: what is drawn next goes into a tile of its own, and when the
+    /// state ends the tile is composited through the mask. <c>/None</c> ends a group begun in this same state when nothing has been
+    /// pushed since; a <c>/None</c> deeper than the group it should end leaves that group to the end of its own state.
+    /// </summary>
+    void SetSoftMask(PdfItem value, PdfDictionary? res)
+    {
+        var st = Cur;
+        if (st.Pushes.Count > 0 && st.Pushes[^1].Kind == Push.Group)
+        {
+            var open = st.Pushes[^1];
+            st.Pushes.RemoveAt(st.Pushes.Count - 1);
+            EndSoftMaskGroup(open.Group!);
+        }
+
+        var resolved = _doc.Resolve(value);
+        if (resolved is not PdfDictionary mask) return;                      // /None (or nothing usable): no mask
+        if (_region is not { } region) { _unsupported.Add("gs SMask"); return; }
+        if (_doc.DictOf(mask, "G") is null) { _unsupported.Add("gs SMask (no group)"); return; }
+        if (_canvas.CreateTile(region.Width, region.Height) is not { } tile) { _unsupported.Add("gs SMask"); return; }
+
+        // The tile is in the canvas' own units from its origin, so it takes on everything pushed so far.
+        var accumulated = _canvas.CurrentTransform;
+        tile.Graphics.PushTransform(accumulated);
+        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated);
+        st.Pushes.Add(new(Push.Group, _canvas, group));
+        _canvas = tile.Graphics;
+    }
+
+    /// <summary>Finishes a soft-mask group: draws the mask into a tile and composites the group's tile through it onto the canvas that began it.</summary>
+    void EndSoftMaskGroup(SoftMaskGroup group)
+    {
+        var region = _region!.Value;
+        group.Content.PopTransform();
+        group.Content.Dispose();
+        _canvas = group.Outer;
+
+        bool luminosity = _doc.NameOf(group.Mask.GetRaw("S")) != "/Alpha";
+        var maskTile = _canvas.CreateTile(region.Width, region.Height);
+        if (maskTile is null) return;
+        var mg = maskTile.Value.Graphics;
+        if (luminosity)
+        {
+            // The mask group is composited over its backdrop colour (black unless /BC says otherwise) across the whole area.
+            var backdrop = PaintColor.Black;
+            if (_doc.ArrayOf(group.Mask, "BC") is { } bc && bc.Elements.Count > 0)
+            {
+                var comps = new double[bc.Elements.Count];
+                for (int i = 0; i < comps.Length; i++) comps[i] = _doc.NumberOf(bc.Elements[i]);
+                var space = comps.Length switch { 1 => PdfColorSpace.Gray, 3 => PdfColorSpace.Rgb, 4 => PdfColorSpace.Cmyk, _ => null };
+                if (space is not null) backdrop = space.ToColor(comps, 1);
+            }
+
+            mg.DrawRectangle(mg.GetSolidBrush(backdrop), 0, 0, region.Width, region.Height);
+        }
+
+        mg.PushTransform(group.Accumulated);
+        var sub = new PdfContentInterpreter(_doc, mg, region) { _formDepth = _formDepth + 1 };
+        if (sub._formDepth < 16 && _doc.DictOf(group.Mask, "G") is { } form)
+            sub.DrawForm(form, group.Resources);
+        else _unsupported.Add("gs SMask (nesting)");
+        sub.Finish();
+        foreach (var f in sub._unsupported) _unsupported.Add(f);
+        mg.PopTransform();
+        mg.Dispose();
+
+        // The tiles are in the canvas' units, so they are composited with the transform undone.
+        if (!Matrix3x2.Invert(_canvas.CurrentTransform, out var undo)) return;
+        _canvas.PushTransform(undo);
+        try
+        {
+            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskTile.Value.Image, region);
+            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskTile.Value.Image, region);
+        }
+        finally { _canvas.PopTransform(); }
+    }
+
     /// <summary>Applies a <c>/BM</c> entry (a name, or an array of names of which the first known one is used) to what is painted next.</summary>
     void SetBlendMode(PdfItem value)
     {
@@ -398,7 +507,7 @@ internal sealed class PdfContentInterpreter
         if (mode is null) { _unsupported.Add("gs BM"); return; }
         if (mode == Cur.Blend) return;
         _canvas.PushBlendMode(mode.Value);
-        Cur.Pushes.Add(Push.Blend);
+        Cur.Pushes.Add(new(Push.Blend, _canvas));
         Cur.Blend = mode.Value;
     }
 
@@ -493,7 +602,7 @@ internal sealed class PdfContentInterpreter
         {
             path.FillMode = clipMode;
             _canvas.PushClip(path);
-            Cur.Pushes.Add(Push.Clip);
+            Cur.Pushes.Add(new(Push.Clip, _canvas));
         }
         _pendingClip = null;
     }
@@ -536,7 +645,12 @@ internal sealed class PdfContentInterpreter
         if (subtype == "/Image") { DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
+        DrawForm(x, res);
+    }
 
+    /// <summary>Draws a form XObject: its matrix, its bounding-box clip, then its content with its own resources (or the caller's).</summary>
+    void DrawForm(PdfDictionary x, PdfDictionary? res)
+    {
         Save();
         _formDepth++;
         try
@@ -554,7 +668,7 @@ internal sealed class PdfContentInterpreter
                 clip.LineTo(Math.Min(x0, x1), Math.Max(y0, y1));
                 clip.CloseFigure();
                 _canvas.PushClip(clip);
-                Cur.Pushes.Add(Push.Clip);
+                Cur.Pushes.Add(new(Push.Clip, _canvas));
             }
             var formRes = _doc.DictOf(x, "Resources") ?? res;
             var savedPath = _path;

@@ -45,7 +45,12 @@ internal static class PdfPagePainter
             270 => new Matrix3x2(0, -1, -1, 0, (float)(y0 + h), (float)(x0 + w)),
             _ => new Matrix3x2(1, 0, 0, -1, (float)-x0, (float)(y0 + h)),
         };
-        var interpreter = new PdfContentInterpreter(doc, canvas);
+        // A soft-masked group is drawn into a tile covering the page, in the canvas' own units.
+        var (pageWidth, pageHeight) = rot % 180 == 0 ? (w, h) : (h, w);
+        var origin = canvas.CurrentTransform;
+        var far = System.Numerics.Vector2.Transform(new System.Numerics.Vector2((float)pageWidth, (float)pageHeight), origin);
+        var region = new Rect(0, 0, Math.Max(1, Math.Ceiling(Math.Max(far.X, 0))), Math.Max(1, Math.Ceiling(Math.Max(far.Y, 0))));
+        var interpreter = new PdfContentInterpreter(doc, canvas, region);
         canvas.PushTransform(toCanvas);
         try
         {
@@ -53,7 +58,7 @@ internal static class PdfPagePainter
             clip.Start(x0, y0); clip.LineTo(x0 + w, y0); clip.LineTo(x0 + w, y0 + h); clip.LineTo(x0, y0 + h); clip.CloseFigure();
             canvas.PushClip(clip);
             try { interpreter.Run(doc.GetPageContent(page), doc.InheritedAttribute(page, "Resources") as PdfDictionary); }
-            finally { canvas.PopClip(); }
+            finally { interpreter.Finish(); canvas.PopClip(); }
         }
         finally { canvas.PopTransform(); }
         return interpreter.Unsupported;

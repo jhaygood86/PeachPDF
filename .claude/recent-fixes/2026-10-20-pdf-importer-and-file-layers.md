@@ -27,6 +27,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   (axial endpoints are transformed; a radial brush takes the matrix). Without that inverse a gradient drawn under a `cm` lands in
   the wrong place - `ShadingPattern_StaysInPatternSpace...` pins it. First showcase round trip: 78 of 429 pages over a 2% pixel
   difference with nothing imported but paths/text/images; patterns took it to 32.
+- **Soft masks are groups:** `gs SMask` redirects drawing into a `CreateTile` of the page's size; when the state that set it ends
+  (`Q`, `/None` in the same state, or `Finish()` for the base state) the mask form is drawn into a second tile and the two are
+  composited with `DrawImageMasked` (luminosity) or `DrawImageAlphaMasked` (alpha) under the inverse of the then-current transform,
+  since tiles are in the canvas' own units. Each push records the canvas it went onto, because pushes made while a group is open
+  belong to the tile. A `/None` nested deeper than its group is ignored until the group's own state ends. Showcase round trip:
+  32 -> 12 pages over a 2% difference, 185 -> 196 clean files.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

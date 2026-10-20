@@ -92,7 +92,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(alpha.A, 110, 145);                          // stroke alpha 0.5
             Assert.True(styled.At(30, 50, out _).A < 20);               // the dash from /D
             Assert.Empty(Draw("/G2 gs", res).Unsupported);              // Normal and no soft mask are no-ops
-            Assert.Equal(["gs OP", "gs SMask", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
+            Assert.Equal(["gs OP", "gs SMask (no group)", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
             Assert.Empty(Draw("/Missing gs", res).Unsupported);
         }
 
@@ -311,6 +311,82 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.True(screened.R > 200 && screened.B > 200, $"screen of blue over red is magenta: {screened}");
             Assert.Contains("gs BM", Draw("/Bad gs", res).Unsupported);
             Assert.Empty(Draw("/Norm gs /Norm gs", res).Unsupported);
+        }
+
+        // ------------------------------------------------------------ soft masks
+
+        private static string MaskForm(string content) =>
+            TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceGray >>", content);
+
+        private static Page Masked(string content, string maskDict, string maskContent) =>
+            Draw(content, $"/ExtGState << /G0 << /SMask {maskDict} >> /G1 << /SMask /None >> >>", MaskForm(maskContent));
+
+        [Fact]
+        public void LuminositySoftMask_HidesWhereTheMaskIsBlack()
+        {
+            // The mask is white on the left half only; the red square shows there and nowhere else.
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 100 re f");
+
+            Red(page, 25, 50);
+            Empty(page, 75, 50);
+        }
+
+        [Fact]
+        public void LuminositySoftMask_WithAWhiteBackdrop_ShowsWhereTheMaskDrawsNothing()
+        {
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Luminosity /BC [1] /G 5 0 R >>", "0 g 0 0 50 100 re f");
+
+            Empty(page, 25, 50);        // the mask is black here
+            Red(page, 75, 50);          // the backdrop (white) shows through everywhere else
+        }
+
+        [Fact]
+        public void AlphaSoftMask_KeepsWhereTheMaskDrew()
+        {
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Alpha /G 5 0 R >>", "0 g 50 0 50 100 re f");
+
+            Empty(page, 25, 50);
+            Red(page, 75, 50);
+        }
+
+        [Fact]
+        public void SoftMask_IsEndedByQ_AndByNone()
+        {
+            var afterQ = Masked("q /G0 gs 1 0 0 rg 0 0 100 100 re f Q 0 0 1 rg 0 0 10 10 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 50 re f");
+            Red(afterQ, 25, 75);
+            Empty(afterQ, 75, 25);
+            Assert.True(afterQ.At(5, 95, out _).B > 200, "drawing after Q is unmasked");
+
+            var afterNone = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f /G1 gs 0 0 1 rg 0 0 10 10 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 50 re f");
+            Red(afterNone, 25, 75);
+            Assert.True(afterNone.At(5, 95, out _).B > 200, "/None ends the mask");
+        }
+
+        [Fact]
+        public void SoftMask_AppliesUnderTheTransformInForceWhenItWasSet()
+        {
+            // Set under a 0.5 scale, so the mask's white 0..100 square covers only the page's 0..50.
+            var page = Masked("0.5 0 0 0.5 0 0 cm /G0 gs 1 0 0 rg 0 0 200 200 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 100 100 re f");
+
+            Red(page, 25, 75);
+            Empty(page, 75, 25);
+        }
+
+        [Fact]
+        public void SoftMaskWithoutAGroup_OrNestedTooDeep_IsReported()
+        {
+            Assert.Contains("gs SMask (no group)", Masked("/G0 gs 0 0 1 1 re f", "<< /S /Luminosity >>", "").Unsupported);
+        }
+
+        [Fact]
+        public void ReplacingASoftMask_EndsTheFirstGroup()
+        {
+            var page = Draw("/G0 gs 1 0 0 rg 0 0 100 100 re f /G2 gs 0 0 1 rg 0 0 100 100 re f",
+                "/ExtGState << /G0 << /SMask << /S /Luminosity /G 5 0 R >> >> /G2 << /SMask << /S /Luminosity /G 6 0 R >> >> >>",
+                MaskForm("1 g 0 0 50 100 re f"), MaskForm("1 g 50 0 50 100 re f"));
+
+            Red(page, 25, 50);                                            // first mask: left
+            Assert.True(page.At(75, 50, out _).B > 200, "second mask: right, in blue");
         }
     }
 }
