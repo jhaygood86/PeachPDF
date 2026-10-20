@@ -398,7 +398,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// simulation, underline, or strikeout handling - this exists for MathML's stretchy-operator
     /// glyph assemblies (see <c>MathRenderer</c>), which are never any of those.
     /// </summary>
-    public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush)
+    public void DrawGlyphsAtPositions(IReadOnlyList<(int GlyphIndex, double X, double Y, string? Text)> glyphs, TypefaceFont font, Brush brush)
     {
         if (glyphs.Count == 0)
             return;
@@ -409,12 +409,13 @@ internal sealed partial class PdfGraphicsRenderer
         // own draw loop), these glyphs never go through shaping at all - nothing else registers
         // them with the embedded font's subsetter/CID map. Without this, each glyph index drawn
         // below would reference a glyph the subset font never actually includes, rendering blank.
-        // No real source text exists for these (a stretchy-operator assembly part/size variant
-        // has no Unicode meaning of its own), so ToUnicode gets an empty mapping per glyph - the
-        // glyph itself still renders correctly, only copy/paste extraction is affected.
+        // A glyph with no source text (a stretchy-operator assembly part/size variant has no
+        // Unicode meaning of its own) gets an empty ToUnicode mapping - the glyph itself still
+        // renders correctly, only copy/paste extraction is affected. A caller that knows the
+        // text (an imported document's glyphs) passes it on GlyphPlacement.Text.
         PdfFont? realizedFont = _gfxState._realizedFont;
         foreach (var glyph in glyphs)
-            realizedFont?.AddShapedGlyph(glyph.GlyphIndex, "");
+            realizedFont?.AddShapedGlyph(glyph.GlyphIndex, glyph.Text ?? "");
 
         const string format2 = PdfNumberFormats.FourDecimals;
         foreach (var glyph in glyphs)

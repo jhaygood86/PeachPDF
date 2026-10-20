@@ -160,6 +160,33 @@ var stylesheet = await generator.ParseStyleSheet("@page chapter { size: landscap
 column.Item().PageName("chapter").Text("A landscape chapter starts here.");
 ```
 
+## Stamping pages of an existing PDF
+
+`IDocumentBuilder.OverlayFile` and `UnderlayFile` draw pages of an existing PDF over or under the document's own pages - a watermark, a "DRAFT" stamp, a letterhead, a form background:
+
+```csharp
+var document = await generator.CreateDocument(doc =>
+{
+    // The letterhead sits behind every page's own content.
+    doc.UnderlayFile(layer => layer.File("letterhead.pdf").SourcePages("1").RepeatSourcePages("1"));
+
+    // A stamp on the last page only.
+    doc.OverlayFile(layer => layer.File(stampBytes).TargetPages("z"));
+
+    doc.Page(page => page.Content(container => container.Text("...")));
+});
+```
+
+`File` takes a path, the bytes of a PDF, or a stream. Page numbers are one-based and a range is a comma-separated list of pages and spans - `"1"`, `"1-3,5"`, `"2-z"` - where `z` is the last page and a backwards span (`"z-1"`) runs backwards.
+
+- `TargetPages` names the pages of the finished document that receive the layer (every page when unset). It is read against the page count of the whole document, so `z` is the last page whichever `Page` call produced it.
+- `SourcePages` names the file's pages to use (every page of the file when unset). The target pages take them in order: the first target page the first source page, the second the second, and so on.
+- `RepeatSourcePages` names the file pages to cycle through once `SourcePages` runs out. Without it the layer stops there, and the remaining target pages get none. `SourcePages("1")` with `RepeatSourcePages("1")` puts the file's first page on every target page.
+
+Layers apply in the order they were added, and an underlay is drawn before the page's own background and content. A layer page is drawn into the new document (its text, paths, clipping, colour and transparency become ordinary content of the new page, with fonts re-embedded and the text keeping its text map), not copied object for object; it is clipped to its own page box and placed at the top-left of the page it lands on. Images (JPEG and the Flate/LZW/run-length family, with stencil, colour-key and soft masks) and axial and radial gradients come across too. What the importer cannot draw yet - JPEG with a mask, JPEG 2000, CCITT and JBIG2 images, mesh and function-based shadings, tiling patterns, soft masks on content, fonts that do not embed a TrueType or OpenType program, and text drawn as an outline - is left out of the layer, so check a layer file renders as you expect. Encrypted files are refused. A file that is not a PDF throws `InvalidDataException`, and a malformed range throws `FormatException`, both before any page is drawn.
+
+The same importer is available on its own as `PdfPageSource` in [PeachDrawing.PDF](peachdrawing-pdf.md#drawing-a-page-of-an-existing-pdf).
+
 ## Text and rich text
 
 ```csharp

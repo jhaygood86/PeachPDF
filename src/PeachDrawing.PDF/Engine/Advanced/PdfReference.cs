@@ -107,7 +107,13 @@ internal sealed class PdfReference : PdfItem
     /// </summary>
     public PdfObject Value
     {
-        get => _value;
+        get
+        {
+            // A document opened for import resolves its indirect objects on first use.
+            if (_value is null && _document?.ImportLoader is { } loader)
+                loader(this);
+            return _value!;
+        }
         set
         {
             Debug.Assert(value is not null, "The value of a PdfReference must never be null.");

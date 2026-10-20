@@ -398,9 +398,46 @@ namespace PeachPDF
 
             var buildContext = new DocumentBuildContext(_renderContext);
 
-            foreach (var pageHandler in documentBuilder.PageHandlers)
+            if (documentBuilder.FileLayers.Count == 0)
             {
-                await AddDeclarativePage(document, pageHandler, config, buildContext, documentBuilder.DocumentStylesheet);
+                foreach (var pageHandler in documentBuilder.PageHandlers)
+                {
+                    var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet);
+                    using (htmlDocument)
+                    using (measure)
+                    {
+                        await RenderPagesCore(document, htmlDocument, config);
+                    }
+                }
+
+                return;
+            }
+
+            // A file layer's target pages can be written relative to the last page ("2-z"), so every page of the document has to be laid out
+            // before the first is drawn. The layer files are read first: a bad file or range fails before any page work.
+            var layers = documentBuilder.FileLayers.ConvertAll(l => l.Build());
+            var prepared = new List<(HtmlDocument Document, PdfCanvas Measure)>();
+            try
+            {
+                foreach (var pageHandler in documentBuilder.PageHandlers)
+                {
+                    prepared.Add(await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet));
+                }
+
+                var totalPages = document.Composer.Pages.Count + prepared.Sum(p => p.Document.Pages.Count);
+                var plan = new FileLayerPlan(layers, totalPages);
+                foreach (var (htmlDocument, _) in prepared)
+                {
+                    await RenderPagesCore(document, htmlDocument, config, plan);
+                }
+            }
+            finally
+            {
+                foreach (var (htmlDocument, measure) in prepared)
+                {
+                    htmlDocument.Dispose();
+                    measure.Dispose();
+                }
             }
         }
 
@@ -408,7 +445,7 @@ namespace PeachPDF
         /// Builds one declarative page's tree, lays it out and renders it. The tree is built in code (see <c>PeachBrackets.Building</c>), so there
         /// is no HTML to parse: the style sheet, the page's own margin boxes and the geometry its builder fixed explicitly go to the document as given.
         /// </summary>
-        private async Task AddDeclarativePage(PeachPdfDocument document, Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, DocumentBuildContext context, PeachPdfCssContent? stylesheet)
+        private async Task<(HtmlDocument Document, PdfCanvas Measure)> PrepareDeclarativePage(Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, DocumentBuildContext context, PeachPdfCssContent? stylesheet)
         {
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, context);
             var page = pageDescriptor.Page;
@@ -442,13 +479,21 @@ namespace PeachPDF
                 CollectFormFields = config.EnableInteractivePdfForms,
             };
 
-            using var htmlDocument = await HtmlDocument.CreateAsync(page, options, stylesheet?.StyleSheet);
-
-            var contentArea = htmlDocument.ContentArea;
-            using var measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
-            await htmlDocument.LayoutAsync(measure);
-
-            await RenderPagesCore(document, htmlDocument, config);
+            var htmlDocument = await HtmlDocument.CreateAsync(page, options, stylesheet?.StyleSheet);
+            PdfCanvas? measure = null;
+            try
+            {
+                var contentArea = htmlDocument.ContentArea;
+                measure = PdfCanvas.CreateMeasuring(_renderContext, contentArea.Width, contentArea.Height);
+                await htmlDocument.LayoutAsync(measure);
+                return (htmlDocument, measure);
+            }
+            catch
+            {
+                measure?.Dispose();
+                htmlDocument.Dispose();
+                throw;
+            }
         }
 
         internal static HtmlDocumentOptions ToDocumentOptions(PdfGenerateConfig config, Size sheet)
@@ -485,7 +530,7 @@ namespace PeachPDF
         /// document-building path that builds a <c>Html.Dom.CssBox</c> tree directly instead
         /// of parsing HTML. The caller owns its own measure context and disposes it after this returns.
         /// </summary>
-        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config)
+        private async Task RenderPagesCore(PeachPdfDocument document, HtmlDocument htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers = null)
         {
             // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
             // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
@@ -518,11 +563,16 @@ namespace PeachPDF
             // resolved physical size, in true PDF points - it already falls back to the document's base size whenever no @page rule overrides it.
             foreach (var htmlPage in htmlDocument.Pages)
             {
+                var pageNumber = document.Composer.Pages.Count + 1;
                 var page = document.Composer.AddPage(htmlPage.WidthPoints, htmlPage.HeightPoints);
 
                 structureTagBuilder?.BeginPage(page);
 
+                fileLayers?.Paint(page, pageNumber, underlay: true);
+
                 await htmlDocument.PaintPageAsync(htmlPage.Index, page.Canvas);
+
+                fileLayers?.Paint(page, pageNumber, underlay: false);
 
                 page.Finish();
             }

@@ -214,6 +214,12 @@ PeachDrawing.PDF.PdfFormOption : struct
   property String Label { get; }
   property String Value { get; }
 PeachDrawing.PDF.PdfLink : sealed class
+PeachDrawing.PDF.PdfPageSource : sealed class
+  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
+  method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
+  method static PdfPageSource Open(Byte[] pdf)
+  method static PdfPageSource Open(Stream stream)
+  property Int32 PageCount { get; }
 PeachDrawing.PDF.PdfPermissions : enum Int32
   All = 3900
   AllowAccessibilityExtract = 512

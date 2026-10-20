@@ -44,6 +44,10 @@ Agreement between both is real evidence; a single lenient render that happens to
 
 This matters because automated assertions alone have real blind spots. Several genuine rendering bugs — a paint-order regression, a broken soft mask, a gradient `spread-method` that was silently a no-op at render time — were caught only by looking at a showcase render, not by the token-level tests that were passing at the time.
 
+### Round-tripping the showcases through the PDF importer
+
+The showcase PDFs double as a corpus for the [PDF importer](peachdrawing-pdf.md#drawing-a-page-of-an-existing-pdf). `--import-roundtrip <showcaseDir> <roundtripDir>` opens every PDF in a showcase output directory with `PdfPageSource`, paints each page onto a new document and saves it under the same name, writing a `report.txt` that names the features the importer could not draw for each file. `src/PeachPDF.TestHarness/compare-roundtrip.py` then rasterizes each original and its round trip with both MuPDF and PDFium and lists the pages whose pixels differ by more than a threshold in either renderer, optionally with side-by-side images. It is a development tool, not a CI gate: it needs Python with `pymupdf`, `pypdfium2`, `pillow` and `numpy`, and is run after a change to the importer.
+
 ## Benchmarks
 
 `src/PeachDrawing.Text.Benchmarks` is a [BenchmarkDotNet](https://benchmarkdotnet.org/) project for measuring the font and text engine's hot paths and catching performance regressions. Today it covers TrueType and CFF hinting: a cold benchmark that loads every glyph of a bundled font at several sizes into an empty cache (with allocations reported), and a hot benchmark that looks glyphs up in a warm cache from one, four and eight threads at once. It reads the engine only through the public API, like the engine's tests, and isn't part of the per-PR gate or any CI job; it's run deliberately when a change is expected to affect performance. Run it from `src/`, in Release, with nothing else building or testing on the machine:

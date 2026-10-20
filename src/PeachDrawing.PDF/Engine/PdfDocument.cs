@@ -26,6 +26,9 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     internal DocumentState _state;
     internal PdfDocumentOpenMode _openMode;
 
+    /// <summary>Resolves a lazily loaded indirect object of a document opened for import; null for a document being written.</summary>
+    internal Action<PdfReference>? ImportLoader;
+
     /// <summary>
     /// Creates a new PDF document in memory.
     /// To open an existing PDF file, use the PdfReader class.

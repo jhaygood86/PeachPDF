@@ -24,6 +24,21 @@ namespace PeachPDF.Layout
             PageHandlers.Add(handler);
         }
 
+        /// <summary>The PDF files to stamp over or under the document, in the order added.</summary>
+        public List<FileLayerBuilder> FileLayers { get; } = [];
+
+        public void OverlayFile(Action<IFileLayerDescriptor> handler) => AddLayer(handler, isUnderlay: false);
+
+        public void UnderlayFile(Action<IFileLayerDescriptor> handler) => AddLayer(handler, isUnderlay: true);
+
+        private void AddLayer(Action<IFileLayerDescriptor> handler, bool isUnderlay)
+        {
+            ArgumentNullException.ThrowIfNull(handler);
+            var layer = new FileLayerBuilder(isUnderlay);
+            handler(layer);
+            FileLayers.Add(layer);
+        }
+
         public void Stylesheet(PeachPdfCssContent content)
         {
             ArgumentNullException.ThrowIfNull(content);

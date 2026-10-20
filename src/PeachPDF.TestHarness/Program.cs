@@ -20,6 +20,54 @@ PdfGenerateConfig pdfConfig = new()
 
 PdfGenerator generator = new();
 
+// --import-roundtrip <inputDir> <outputDir>: the acceptance gate of the PDF importer. Every PDF in inputDir (the showcase output) is
+// opened with PdfPageSource, each page is painted onto a fresh PdfComposer page, and the result is saved to outputDir under the same
+// name; report.txt lists, per file, the features the importer could not draw yet. tools/compare-roundtrip.py then rasterizes the original
+// and the round-tripped file with MuPDF and PDFium and compares them.
+if (args.Length >= 3 && args[0] == "--import-roundtrip")
+{
+    Environment.Exit(RunImportRoundTrip(args[1], args[2]));
+}
+
+static int RunImportRoundTrip(string inputDir, string outputDir)
+{
+    Directory.CreateDirectory(outputDir);
+    var report = new StringBuilder();
+    var failures = 0;
+    foreach (var path in Directory.EnumerateFiles(inputDir, "*.pdf").OrderBy(p => p, StringComparer.Ordinal))
+    {
+        var name = Path.GetFileName(path);
+        try
+        {
+            var source = PeachDrawing.PDF.PdfPageSource.Open(File.ReadAllBytes(path));
+            using var composer = new PeachDrawing.PDF.PdfComposer(new PeachDrawing.PDF.PdfRenderContext());
+            var unsupported = new SortedSet<string>(StringComparer.Ordinal);
+            for (var pageIndex = 0; pageIndex < source.PageCount; pageIndex++)
+            {
+                var (width, height) = source.GetPageSize(pageIndex);
+                var page = composer.AddPage(width, height);
+                foreach (var feature in source.Paint(pageIndex, page.Canvas))
+                {
+                    unsupported.Add(feature);
+                }
+            }
+
+            using var output = File.Create(Path.Combine(outputDir, name));
+            composer.Save(output);
+            report.AppendLine($"{name}\tpages={source.PageCount}\tunsupported={string.Join("; ", unsupported)}");
+        }
+        catch (Exception ex)
+        {
+            failures++;
+            report.AppendLine($"{name}\tFAILED\t{ex.GetType().Name}: {ex.Message.ReplaceLineEndings(" ")}");
+        }
+    }
+
+    File.WriteAllText(Path.Combine(outputDir, "report.txt"), report.ToString());
+    Console.WriteLine($"Round-tripped {Directory.EnumerateFiles(inputDir, "*.pdf").Count()} PDFs, {failures} failed. See {Path.Combine(outputDir, "report.txt")}.");
+    return failures == 0 ? 0 : 1;
+}
+
 // --benchmark [--benchmark-iterations N]: instead of writing any output, times and measures
 // allocation for every showcase's render (GeneratePdf + Save, the same two calls a real caller
 // makes), N times each (default 10), and prints a per-showcase report plus totals at the end. A
@@ -15371,6 +15419,67 @@ await SaveShowcaseAsync("encrypted_read_only", "Standards & Accessibility", "AES
     {
         PageSize = PageSize.A4,
         Encryption = PdfEncryptionOptions.ReadOnly(ownerPassword: "peachpdf-showcase-owner"),
+    });
+
+// A letterhead file built with PeachDrawing.PDF itself, so the showcase needs no fixture on disk: a band across the top and a frame
+// around the page. OverlayFile/UnderlayFile read pages of an existing PDF - this is the stand-in for the file a caller would have.
+static byte[] BuildLetterheadFile()
+{
+    const double a4Width = 595.28, a4Height = 841.89;
+    using var composer = new PeachDrawing.PDF.PdfComposer(new PeachDrawing.PDF.PdfRenderContext());
+    var canvas = composer.AddPage(a4Width, a4Height).Canvas;
+    var band = canvas.GetSolidBrush(PaintColor.FromArgb(255, 200, 70, 30));
+    canvas.DrawRectangle(band, 0, 0, a4Width, 36);
+    var frame = canvas.GetPen(canvas.GetSolidBrush(PaintColor.FromArgb(255, 200, 70, 30)));
+    frame.Width = 1.5;
+    canvas.DrawRectangle(frame, 14, 50, a4Width - 28, a4Height - 64);
+    using var stream = new MemoryStream();
+    composer.Save(stream);
+    return stream.ToArray();
+}
+
+const string fileLayersSource =
+    """"
+    var letterhead = File.ReadAllBytes("letterhead.pdf");
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        // Underlay: the letterhead sits behind each page's own content, on every page.
+        doc.UnderlayFile(layer => layer.File(letterhead).SourcePages("1").RepeatSourcePages("1"));
+
+        for (var i = 1; i <= 3; i++)
+        {
+            doc.Page(page =>
+            {
+                page.Size(PageSize.A4);
+                page.Margin(60);
+                page.Content(container => container.Text($"Page {i} of the report, on letterhead."));
+            });
+        }
+    });
+    """";
+
+await SaveDeclarativeShowcaseAsync("file_layers", "Document Building", "Overlay and Underlay PDF Files",
+    "IDocumentBuilder.UnderlayFile/OverlayFile: pages of an existing PDF (here a letterhead with a band and a frame) are drawn under or over the document's own pages, paired with target pages by a range such as \"1-z\", and cycled with RepeatSourcePages.",
+    fileLayersSource,
+    async gen =>
+    {
+        var letterhead = BuildLetterheadFile();
+        return await gen.CreateDocument(doc =>
+        {
+            doc.UnderlayFile(layer => layer.File(letterhead).SourcePages("1").RepeatSourcePages("1"));
+
+            for (var i = 1; i <= 3; i++)
+            {
+                var number = i;
+                doc.Page(page =>
+                {
+                    page.Size(PageSize.A4);
+                    page.Margin(60);
+                    page.Content(container => container.Text($"Page {number} of the report, on letterhead."));
+                });
+            }
+        });
     });
 
 const string declarativeApiSource =
