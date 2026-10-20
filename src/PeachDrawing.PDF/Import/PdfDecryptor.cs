@@ -8,13 +8,14 @@ using PeachDrawing.PDF.Engine.Security;
 namespace PeachDrawing.PDF.Import;
 
 /// <summary>
-/// The Standard security handler of a PDF, opened with the empty user password (ISO 32000-1 7.6, ISO 32000-2 7.6.4): RC4 with 40 or
-/// more bits, AES-128 and AES-256 (revisions 2 to 6), with the crypt filters of version 4 and 5 files. A file that needs a password
-/// is refused, as is a handler this class does not know.
+/// The Standard security handler of a PDF, opened with the empty user password (ISO 32000-1 7.6, ISO 32000-2 7.6.4), for the ciphers
+/// .NET provides itself: AES-128 (version 4, revision 4) and AES-256 (version 5, revisions 5 and 6), with the crypt filters of those
+/// files. RC4 is not supported - .NET has no RC4, and this library does not carry cryptography of its own - so a file encrypted with
+/// it (versions 1 and 2, or an RC4 crypt filter) is refused, as is a handler this class does not know.
 /// </summary>
 internal sealed class PdfDecryptor
 {
-    enum Method { None, Rc4, AesV2, AesV3 }
+    enum Method { None, AesV2, AesV3 }
 
     static readonly byte[] PasswordPadding =
     [
@@ -26,6 +27,9 @@ internal sealed class PdfDecryptor
     readonly Method _streams, _strings;
     readonly bool _encryptMetadata;
     readonly int _revision;
+
+    /// <summary>Whether something decrypted to data that cannot be AES output: the empty password is not the file's password.</summary>
+    public bool SawInvalidPadding { get; private set; }
 
     PdfDecryptor(byte[] fileKey, Method streams, Method strings, bool encryptMetadata, int revision)
     {
@@ -46,85 +50,63 @@ internal sealed class PdfDecryptor
             throw new NotSupportedException("The PDF uses a security handler other than the Standard one.");
         int v = doc.IntOf(encrypt.GetRaw("V"));
         int r = doc.IntOf(encrypt.GetRaw("R"));
-        if (v is < 1 or > 5 || r is < 2 or > 6)
+        if (v is 1 or 2 || r is 2 or 3)
+            throw new NotSupportedException("The PDF is encrypted with RC4, which is not supported: .NET does not provide it.");
+        if (v is not (4 or 5) || r is not (4 or 5 or 6))
             throw new NotSupportedException($"The PDF's encryption (V {v}, R {r}) is not supported.");
 
         byte[] o = StringBytes(doc, encrypt, "O"), u = StringBytes(doc, encrypt, "U");
         int permissions = doc.IntOf(encrypt.GetRaw("P"));
         bool encryptMetadata = !(doc.Resolve(encrypt.GetRaw("EncryptMetadata")) is PdfBoolean { Value: false });
 
-        Method streams = Method.Rc4, strings = Method.Rc4;
-        int keyBytes = Math.Max(5, doc.IntOf(encrypt.GetRaw("Length")) / 8);
-        if (v == 1) keyBytes = 5;
-        if (v >= 4)
-        {
-            // Crypt filters: StmF and StrF name which filter in /CF applies; Identity (or absent) means no encryption.
-            var cf = doc.DictOf(encrypt, "CF");
-            (streams, _) = Filter(doc, cf, doc.NameOf(encrypt.GetRaw("StmF")));
-            (strings, _) = Filter(doc, cf, doc.NameOf(encrypt.GetRaw("StrF")));
-            keyBytes = v == 5 ? 32 : 16;
-        }
+        // Crypt filters: StmF and StrF name which filter in /CF applies; Identity (or absent) means no encryption.
+        var cf = doc.DictOf(encrypt, "CF");
+        var (streams, streamsRc4) = Filter(doc, cf, doc.NameOf(encrypt.GetRaw("StmF")));
+        var (strings, stringsRc4) = Filter(doc, cf, doc.NameOf(encrypt.GetRaw("StrF")));
+        if (streamsRc4 || stringsRc4)
+            throw new NotSupportedException("The PDF is encrypted with RC4, which is not supported: .NET does not provide it.");
 
         byte[] fileKey = r >= 5
             ? FileKeyR5R6(r, u, StringBytes(doc, encrypt, "UE"))
-            : FileKeyR2R4(r, keyBytes, o, u, permissions, firstId, encryptMetadata);
+            : FileKeyR4(o, permissions, firstId, encryptMetadata);
         return new PdfDecryptor(fileKey, streams, strings, encryptMetadata, r);
     }
 
     static byte[] StringBytes(PdfSourceDocument doc, PdfDictionary d, string key) =>
         doc.Resolve(d.GetRaw(key)) is PdfString s ? Encoding.Latin1.GetBytes(s.Value) : [];
 
-    static (Method Method, int Length) Filter(PdfSourceDocument doc, PdfDictionary? cf, string? name)
+    /// <summary>The method a crypt filter names, and whether it is the RC4 one (<c>/V2</c>), which is refused.</summary>
+    static (Method Method, bool IsRc4) Filter(PdfSourceDocument doc, PdfDictionary? cf, string? name)
     {
-        if (name is null or "/Identity" || cf is null) return (Method.None, 0);
+        if (name is null or "/Identity" || cf is null) return (Method.None, false);
         var f = doc.DictOf(cf, name.TrimStart('/'));
-        if (f is null) return (Method.None, 0);
-        int length = doc.IntOf(f.GetRaw("Length"));
-        var method = doc.NameOf(f.GetRaw("CFM")) switch
+        if (f is null) return (Method.None, false);
+        return doc.NameOf(f.GetRaw("CFM")) switch
         {
-            "/V2" => Method.Rc4,
-            "/AESV2" => Method.AesV2,
-            "/AESV3" => Method.AesV3,
-            _ => Method.None,
+            "/V2" => (Method.None, true),
+            "/AESV2" => (Method.AesV2, false),
+            "/AESV3" => (Method.AesV3, false),
+            _ => (Method.None, false),
         };
-        return (method, length);
     }
 
     // ------------------------------------------------------------ keys (ISO 32000-1 7.6.3.3, 7.6.3.4; ISO 32000-2 7.6.4.3)
 
-    static byte[] FileKeyR2R4(int r, int keyBytes, byte[] o, byte[] u, int permissions, byte[] id, bool encryptMetadata)
+    /// <summary>
+    /// The file key of a revision 4 file (Algorithm 2). The empty password is not checked against /U: doing so needs RC4. A file that
+    /// does need a password therefore decrypts to noise, which the caller meets as data it cannot read.
+    /// </summary>
+    static byte[] FileKeyR4(byte[] o, int permissions, byte[] id, bool encryptMetadata)
     {
         using var md5 = MD5.Create();
         var input = new List<byte>(PasswordPadding);
         input.AddRange(o.AsSpan(0, Math.Min(32, o.Length)).ToArray());
         input.AddRange(BitConverter.GetBytes(permissions));
         input.AddRange(id);
-        if (r >= 4 && !encryptMetadata) input.AddRange([0xFF, 0xFF, 0xFF, 0xFF]);
+        if (!encryptMetadata) input.AddRange([0xFF, 0xFF, 0xFF, 0xFF]);
         var hash = md5.ComputeHash(input.ToArray());
-        if (r >= 3)
-            for (int i = 0; i < 50; i++) hash = md5.ComputeHash(hash, 0, keyBytes);
-        var key = hash.AsSpan(0, keyBytes).ToArray();
-
-        // The empty user password must open the file: recompute /U and compare (Algorithms 4 and 5).
-        byte[] check;
-        if (r == 2) check = Rc4(key, PasswordPadding);
-        else
-        {
-            var seed = new List<byte>(PasswordPadding);
-            seed.AddRange(id);
-            var h = md5.ComputeHash(seed.ToArray());
-            check = Rc4(key, h);
-            for (int i = 1; i <= 19; i++)
-            {
-                var k = new byte[key.Length];
-                for (int j = 0; j < k.Length; j++) k[j] = (byte)(key[j] ^ i);
-                check = Rc4(k, check);
-            }
-        }
-        int compare = r == 2 ? 32 : 16;
-        if (u.Length < compare || !check.AsSpan(0, compare).SequenceEqual(u.AsSpan(0, compare)))
-            throw new NotSupportedException("The PDF needs a password to open.");
-        return key;
+        for (int i = 0; i < 50; i++) hash = md5.ComputeHash(hash, 0, 16);
+        return hash.AsSpan(0, 16).ToArray();
     }
 
     static byte[] FileKeyR5R6(int r, byte[] u, byte[] ue)
@@ -205,7 +187,6 @@ internal sealed class PdfDecryptor
         byte[] key = ObjectKey(method, number, generation);
         switch (method)
         {
-            case Method.Rc4: return Rc4(key, data);
             case Method.AesV2 or Method.AesV3:
             {
                 if (data.Length < 32) return [];
@@ -215,7 +196,15 @@ internal sealed class PdfDecryptor
                 aes.Key = key;
                 var plain = aes.DecryptCbc(data.AsSpan(16, cipherLength), data.AsSpan(0, 16), PaddingMode.None);
                 int pad = plain.Length > 0 ? plain[^1] : 0;
-                return pad is >= 1 and <= 16 && pad <= plain.Length ? plain.AsSpan(0, plain.Length - pad).ToArray() : plain;
+                bool valid = pad is >= 1 and <= 16 && pad <= plain.Length;
+                for (int i = 1; valid && i <= pad; i++) valid = plain[^i] == pad;
+                if (!valid)
+                {
+                    // Valid padding is what a correct key always produces and a wrong one almost never does.
+                    SawInvalidPadding = true;
+                    return plain;
+                }
+                return plain.AsSpan(0, plain.Length - pad).ToArray();
             }
             default: return data;
         }
@@ -232,26 +221,5 @@ internal sealed class PdfDecryptor
         using var md5 = MD5.Create();
         var hash = md5.ComputeHash(input.ToArray());
         return hash.AsSpan(0, Math.Min(_fileKey.Length + 5, 16)).ToArray();
-    }
-
-    /// <summary>RC4, which is its own inverse.</summary>
-    internal static byte[] Rc4(byte[] key, byte[] data)
-    {
-        var s = new byte[256];
-        for (int i = 0; i < 256; i++) s[i] = (byte)i;
-        for (int i = 0, j = 0; i < 256; i++)
-        {
-            j = (j + s[i] + key[i % key.Length]) & 0xFF;
-            (s[i], s[j]) = (s[j], s[i]);
-        }
-        var output = new byte[data.Length];
-        for (int n = 0, i = 0, j = 0; n < data.Length; n++)
-        {
-            i = (i + 1) & 0xFF;
-            j = (j + s[i]) & 0xFF;
-            (s[i], s[j]) = (s[j], s[i]);
-            output[n] = (byte)(data[n] ^ s[(s[i] + s[j]) & 0xFF]);
-        }
-        return output;
     }
 }

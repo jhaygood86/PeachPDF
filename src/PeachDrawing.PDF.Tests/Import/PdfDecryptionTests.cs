@@ -5,8 +5,9 @@ using PeachDrawing.PDF.Import;
 namespace PeachDrawing.PDF.Tests.Import
 {
     /// <summary>
-    /// Encrypted files read with the empty user password. The fixtures were written by MuPDF (an independent implementation), one for each
-    /// cipher the Standard security handler uses, so a key derivation or per-object key mistake here would not match what real files do.
+    /// Encrypted files read with the empty user password, for the ciphers .NET provides (AES-128 and AES-256). The fixtures were written by
+    /// MuPDF, an independent implementation, so a key derivation or per-object key mistake here would not match what real files do. RC4
+    /// files are refused: .NET has no RC4 and the library carries no cryptography of its own.
     /// </summary>
     public class PdfDecryptionTests
     {
@@ -22,8 +23,6 @@ namespace PeachDrawing.PDF.Tests.Import
         private static byte[] Bytes(string base64) => Convert.FromBase64String(base64);
 
         [Theory]
-        [InlineData(Fixtures.Rc4_40)]
-        [InlineData(Fixtures.Rc4_128)]
         [InlineData(Fixtures.Aes128)]
         [InlineData(Fixtures.Aes256)]
         public void EncryptedFile_IsReadWithTheEmptyUserPassword(string base64)
@@ -42,8 +41,6 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Theory]
-        [InlineData(Fixtures.Rc4_40)]
-        [InlineData(Fixtures.Rc4_128)]
         [InlineData(Fixtures.Aes128)]
         [InlineData(Fixtures.Aes256)]
         public void EncryptedStrings_AreDecrypted(string base64)
@@ -94,7 +91,7 @@ namespace PeachDrawing.PDF.Tests.Import
         [Theory]
         [InlineData("<< /Filter /Other /V 1 /R 2 >>", "security handler other than the Standard")]
         [InlineData("<< /Filter /Standard /V 9 /R 2 >>", "is not supported")]
-        [InlineData("<< /Filter /Standard /V 1 /R 7 >>", "is not supported")]
+        [InlineData("<< /Filter /Standard /V 4 /R 7 >>", "is not supported")]
         public void UnknownHandlers_AreRefused(string encrypt, string message)
         {
             var pdf = TestPdf.Build("", extraObjects: [encrypt]);
@@ -105,14 +102,26 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Contains(message, e.Message);
         }
 
-        [Fact]
-        public void Rc4_IsItsOwnInverse_AndMatchesTheKnownVector()
+        [Theory]
+        [InlineData(Fixtures.Rc4_40)]
+        [InlineData(Fixtures.Rc4_128)]
+        public void Rc4Files_AreRefused_BecauseDotNetHasNoRc4(string base64)
         {
-            // RFC 6229 style check: key "Key", plaintext "Plaintext" gives BBF316E8D940AF0AD3.
-            var cipher = PdfDecryptor.Rc4(System.Text.Encoding.ASCII.GetBytes("Key"), System.Text.Encoding.ASCII.GetBytes("Plaintext"));
+            var e = Assert.Throws<NotSupportedException>(() => PdfSourceDocument.Open(Bytes(base64)));
 
-            Assert.Equal("BBF316E8D940AF0AD3", Convert.ToHexString(cipher));
-            Assert.Equal("Plaintext", System.Text.Encoding.ASCII.GetString(PdfDecryptor.Rc4(System.Text.Encoding.ASCII.GetBytes("Key"), cipher)));
+            Assert.Contains("RC4", e.Message);
+        }
+
+        [Fact]
+        public void AesFileThatUsesAnRc4CryptFilter_IsRefused()
+        {
+            var pdf = TestPdf.Build("", extraObjects:
+                ["<< /Filter /Standard /V 4 /R 4 /Length 128 /CF << /StdCF << /CFM /V2 /Length 16 >> >> /StmF /StdCF /StrF /StdCF /O (x) /U (x) /P -4 >>"]);
+            var text = System.Text.Encoding.Latin1.GetString(pdf).Replace("/Root 1 0 R", "/Root 1 0 R /Encrypt 5 0 R");
+
+            var e = Assert.Throws<NotSupportedException>(() => PdfSourceDocument.Open(System.Text.Encoding.Latin1.GetBytes(text)));
+
+            Assert.Contains("RC4", e.Message);
         }
     }
 }

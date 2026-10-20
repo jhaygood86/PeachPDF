@@ -55,7 +55,21 @@ internal sealed class PdfSourceDocument
     public static PdfSourceDocument Open(byte[] data)
     {
         var doc = new PdfSourceDocument(data);
-        doc.Load();
+        const string needsPassword = "The PDF needs a password to open.";
+        try { doc.Load(); }
+        catch (InvalidDataException) when (doc._decryptor is not null)
+        {
+            // A revision 4 file cannot be checked against the empty password (that needs RC4), so a wrong one decrypts to noise.
+            throw new NotSupportedException(needsPassword);
+        }
+
+        // Read the first page's content now: it is what shows a wrong key, as AES output with padding that cannot be right.
+        if (doc._decryptor is not null && doc.Pages.Count > 0)
+        {
+            _ = doc.GetPageContent(doc.Pages[0]);
+            if (doc._decryptor.SawInvalidPadding) throw new NotSupportedException(needsPassword);
+        }
+
         return doc;
     }
 
