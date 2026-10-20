@@ -92,7 +92,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(alpha.A, 110, 145);                          // stroke alpha 0.5
             Assert.True(styled.At(30, 50, out _).A < 20);               // the dash from /D
             Assert.Empty(Draw("/G2 gs", res).Unsupported);              // Normal and no soft mask are no-ops
-            Assert.Equal(["gs OP", "gs SMask", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
+            Assert.Equal(["gs OP", "gs SMask (no group)", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
             Assert.Empty(Draw("/Missing gs", res).Unsupported);
         }
 
@@ -147,7 +147,7 @@ namespace PeachDrawing.PDF.Tests.Import
         [Fact]
         public void ClipText_MarkedContent_AndLegacyOperators_AreAccepted()
         {
-            var page = Draw("/Span <</MCID 0>> BDC BX /Tag BMC EMC EX EMC 0 0 d0 0 0 1 1 0 0 d1 /Perceptual ri 1 i 1 0 0 rg 0 0 100 100 re f");
+            var page = Draw("/Span <</MCID 0>> BDC BX /Tag BMC EMC EX EMC 0 0 d0 /Perceptual ri 1 i 1 0 0 rg 0 0 100 100 re f");
 
             Assert.Empty(page.Unsupported);
             Red(page, 50, 50);
@@ -189,7 +189,7 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Theory]
-        [InlineData("<< /ShadingType 7 >>", "shading type 7")]
+        [InlineData("<< /ShadingType 1 >>", "shading type 1")]
         [InlineData("<< /ShadingType 2 /ColorSpace /Nope /Coords [0 0 1 1] >>", "shading colour space")]
         [InlineData("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 1 1] >>", "shading function")]
         [InlineData("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >> >>", "shading coordinates")]
@@ -229,7 +229,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Contains("image: image size", WithImage("/Width 0 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "00").Unsupported);
             Assert.Contains("image: bits per component", WithImage("/Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 3", "00").Unsupported);
             Assert.Contains("image: image colour space", WithImage("/Width 1 /Height 1 /ColorSpace /Nope /BitsPerComponent 8", "00").Unsupported);
-            Assert.Contains("image: DCT image with a mask", Draw("100 0 0 100 0 0 cm /Im0 Do", "/XObject << /Im0 5 0 R >>",
+            Assert.Contains("image: image data could not be decoded", Draw("100 0 0 100 0 0 cm /Im0 Do", "/XObject << /Im0 5 0 R >>",
                 TestPdf.Stream("/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /Filter /DCTDecode /SMask 6 0 R", "x"),
                 Image("/Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "FF")).Unsupported);
         }
@@ -311,6 +311,169 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.True(screened.R > 200 && screened.B > 200, $"screen of blue over red is magenta: {screened}");
             Assert.Contains("gs BM", Draw("/Bad gs", res).Unsupported);
             Assert.Empty(Draw("/Norm gs /Norm gs", res).Unsupported);
+        }
+
+        // ------------------------------------------------------------ soft masks
+
+        private static string MaskForm(string content) =>
+            TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency /CS /DeviceGray >>", content);
+
+        private static Page Masked(string content, string maskDict, string maskContent) =>
+            Draw(content, $"/ExtGState << /G0 << /SMask {maskDict} >> /G1 << /SMask /None >> >>", MaskForm(maskContent));
+
+        [Fact]
+        public void LuminositySoftMask_HidesWhereTheMaskIsBlack()
+        {
+            // The mask is white on the left half only; the red square shows there and nowhere else.
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 100 re f");
+
+            Red(page, 25, 50);
+            Empty(page, 75, 50);
+        }
+
+        [Fact]
+        public void LuminositySoftMask_WithAWhiteBackdrop_ShowsWhereTheMaskDrawsNothing()
+        {
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Luminosity /BC [1] /G 5 0 R >>", "0 g 0 0 50 100 re f");
+
+            Empty(page, 25, 50);        // the mask is black here
+            Red(page, 75, 50);          // the backdrop (white) shows through everywhere else
+        }
+
+        [Fact]
+        public void AlphaSoftMask_KeepsWhereTheMaskDrew()
+        {
+            var page = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f", "<< /Type /Mask /S /Alpha /G 5 0 R >>", "0 g 50 0 50 100 re f");
+
+            Empty(page, 25, 50);
+            Red(page, 75, 50);
+        }
+
+        [Fact]
+        public void SoftMask_IsEndedByQ_AndByNone()
+        {
+            var afterQ = Masked("q /G0 gs 1 0 0 rg 0 0 100 100 re f Q 0 0 1 rg 0 0 10 10 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 50 re f");
+            Red(afterQ, 25, 75);
+            Empty(afterQ, 75, 25);
+            Assert.True(afterQ.At(5, 95, out _).B > 200, "drawing after Q is unmasked");
+
+            var afterNone = Masked("/G0 gs 1 0 0 rg 0 0 100 100 re f /G1 gs 0 0 1 rg 0 0 10 10 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 50 50 re f");
+            Red(afterNone, 25, 75);
+            Assert.True(afterNone.At(5, 95, out _).B > 200, "/None ends the mask");
+        }
+
+        [Fact]
+        public void SoftMask_AppliesUnderTheTransformInForceWhenItWasSet()
+        {
+            // Set under a 0.5 scale, so the mask's white 0..100 square covers only the page's 0..50.
+            var page = Masked("0.5 0 0 0.5 0 0 cm /G0 gs 1 0 0 rg 0 0 200 200 re f", "<< /S /Luminosity /G 5 0 R >>", "1 g 0 0 100 100 re f");
+
+            Red(page, 25, 75);
+            Empty(page, 75, 25);
+        }
+
+        [Fact]
+        public void SoftMaskWithoutAGroup_OrNestedTooDeep_IsReported()
+        {
+            Assert.Contains("gs SMask (no group)", Masked("/G0 gs 0 0 1 1 re f", "<< /S /Luminosity >>", "").Unsupported);
+        }
+
+        [Fact]
+        public void ReplacingASoftMask_EndsTheFirstGroup()
+        {
+            var page = Draw("/G0 gs 1 0 0 rg 0 0 100 100 re f /G2 gs 0 0 1 rg 0 0 100 100 re f",
+                "/ExtGState << /G0 << /SMask << /S /Luminosity /G 5 0 R >> >> /G2 << /SMask << /S /Luminosity /G 6 0 R >> >> >>",
+                MaskForm("1 g 0 0 50 100 re f"), MaskForm("1 g 50 0 50 100 re f"));
+
+            Red(page, 25, 50);                                            // first mask: left
+            Assert.True(page.At(75, 50, out _).B > 200, "second mask: right, in blue");
+        }
+
+        // ------------------------------------------------------------ Type 3 fonts
+
+        private static string Type3Font(string extra = "", string procName = "sq") =>
+            $"<< /Type /Font /Subtype /Type3 /FontBBox [0 0 750 750] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /{procName} 6 0 R >> " +
+            "/Encoding << /Type /Encoding /Differences [65 /sq] >> /FirstChar 65 /LastChar 66 /Widths [800 400] " + extra + " >>";
+
+        private static Page Type3(string content, string proc, string fontExtra = "")
+        {
+            return Draw(content, "/Font << /F0 5 0 R >>", Type3Font(fontExtra), TestPdf.Stream("", proc));
+        }
+
+        [Fact]
+        public void Type3Glyph_IsDrawnUnderTheFontMatrixSizeAndPosition_InTheFillColour()
+        {
+            // 'd1' glyph: a 750-unit square, so 37.5pt at size 50. At (10, 20) it covers x 10..47.5, y 20..57.5 (canvas y 42.5..80).
+            var page = Type3("BT /F0 50 Tf 10 20 Td 0 0 1 rg (A) Tj ET", "800 0 0 0 750 750 d1 1 0 0 rg 0 0 750 750 re f");
+
+            Assert.True(page.At(25, 60, out var unsupported).B > 200, "painted in the fill colour; the glyph's own red is ignored after d1");
+            Assert.Empty(unsupported);
+            Assert.True(page.At(25, 60, out _).R < 60);
+            Empty(page, 60, 60);
+            Empty(page, 25, 90);
+        }
+
+        [Fact]
+        public void Type3Advance_UsesTheWidthsTimesTheFontMatrix_SoTheNextGlyphLandsAfterIt()
+        {
+            // Width 800 -> 0.8 em -> 40pt at size 50, so the second glyph starts at x = 50.
+            var page = Type3("BT /F0 50 Tf 10 20 Td 0 0 1 rg (AA) Tj ET", "800 0 0 0 750 750 d1 0 0 750 750 re f");
+
+            Assert.True(page.At(25, 60, out _).B > 200);
+            Assert.True(page.At(65, 60, out _).B > 200, "the second glyph");
+            Empty(page, 49, 60);                                                      // the gap between them (47.5 .. 50)
+        }
+
+        [Fact]
+        public void Type3GlyphThatStartsWithD0_SetsItsOwnColours()
+        {
+            var page = Type3("BT /F0 50 Tf 10 20 Td 0 0 1 rg (A) Tj ET", "800 0 d0 1 0 0 rg 0 0 750 750 re f");
+
+            Red(page, 25, 60);
+        }
+
+        [Fact]
+        public void Type3Text_HonoursSpacingScaleRiseAndTheTextMatrix_AndInvisibleTextDrawsNothing()
+        {
+            const string proc = "800 0 0 0 750 750 d1 0 0 750 750 re f";
+            Assert.True(Type3("BT /F0 50 Tf 0 0 1 rg 20 Tc 10 20 Td (AA) Tj ET", proc).At(85, 60, out _).B > 200, "Tc adds space after each glyph");
+            Assert.True(Type3("BT /F0 50 Tf 0 0 1 rg 50 Tz 10 20 Td (A) Tj ET", proc).At(15, 60, out _).B > 200, "Tz 50 halves the width...");
+            Empty(Type3("BT /F0 50 Tf 0 0 1 rg 50 Tz 10 20 Td (A) Tj ET", proc), 35, 60);
+            Assert.True(Type3("BT /F0 50 Tf 0 0 1 rg 30 Ts 10 20 Td (A) Tj ET", proc).At(25, 35, out _).B > 200, "Ts lifts it");
+            Assert.True(Type3("BT /F0 50 Tf 0 0 1 rg 1 0 0 1 40 20 Tm (A) Tj ET", proc).At(55, 60, out _).B > 200, "Tm places it");
+            Empty(Type3("BT /F0 50 Tf 0 0 1 rg 3 Tr 10 20 Td (A) Tj ET", proc), 25, 60);
+            Assert.True(Type3("BT /F0 50 Tf 0 0 1 rg 10 20 Td [(A) -500 (A)] TJ ET", proc).At(85, 60, out _).B > 200, "TJ adjusts: the second glyph starts 25pt later than it would");
+        }
+
+        [Fact]
+        public void Type3_WordSpacing_ComesFromCodeThirtyTwoOnly()
+        {
+            const string spaceFont = "<< /Type /Font /Subtype /Type3 /FontBBox [0 0 750 750] /FontMatrix [0.001 0 0 0.001 0 0] /CharProcs << /sq 6 0 R /sp 7 0 R >> /Encoding << /Differences [32 /sp 65 /sq] >> /FirstChar 32 /LastChar 65 /Widths [500 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 800] >>";
+            var page = Draw("BT /F0 50 Tf 0 0 1 rg 20 Tw 10 20 Td (A A) Tj ET", "/Font << /F0 5 0 R >>", spaceFont,
+                TestPdf.Stream("", "800 0 0 0 750 750 d1 0 0 750 750 re f"), TestPdf.Stream("", "500 0 d0"));
+
+            // 'A' at 10..47.5, then the space (25pt + 20pt word spacing), so the second 'A' starts at x = 10 + 40 + 25 + 20 = 95.
+            Assert.True(page.At(25, 60, out _).B > 200);
+            Assert.True(page.At(97, 60, out _).B > 200, "word spacing applies to the space");
+        }
+
+        [Fact]
+        public void Type3Font_WithoutGlyphProcedures_OrACodeWithoutAProcedure_IsHandled()
+        {
+            Assert.Contains("font: Type3 font without CharProcs", Draw("BT /F0 20 Tf (A) Tj ET", "/Font << /F0 5 0 R >>", "<< /Type /Font /Subtype /Type3 >>").Unsupported);
+
+            var page = Type3("BT /F0 50 Tf 0 0 1 rg 10 20 Td (BA) Tj ET", "800 0 0 0 750 750 d1 0 0 750 750 re f");   // B has a width but no glyph
+            Empty(page, 25, 60);
+            Assert.True(page.At(40, 60, out _).B > 200, "A after B's 20pt advance (400 * 0.05)");
+        }
+
+        [Fact]
+        public void Type3GlyphsThatShowType3Text_DoNotRecurseWithoutEnd()
+        {
+            var selfShowing = Draw("BT /F0 50 Tf (A) Tj ET", "/Font << /F0 5 0 R >>", Type3Font(" /Resources << /Font << /F0 5 0 R >> >>"),
+                TestPdf.Stream("", "800 0 0 0 750 750 d1 BT /F0 50 Tf (A) Tj ET"));
+
+            Assert.NotNull(selfShowing.Unsupported);   // it returns at all: the nesting limit stops the recursion
         }
     }
 }

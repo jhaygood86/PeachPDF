@@ -27,6 +27,42 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   (axial endpoints are transformed; a radial brush takes the matrix). Without that inverse a gradient drawn under a `cm` lands in
   the wrong place - `ShadingPattern_StaysInPatternSpace...` pins it. First showcase round trip: 78 of 429 pages over a 2% pixel
   difference with nothing imported but paths/text/images; patterns took it to 32.
+- **Soft masks are groups:** `gs SMask` redirects drawing into a `CreateTile` of the page's size; when the state that set it ends
+  (`Q`, `/None` in the same state, or `Finish()` for the base state) the mask form is drawn into a second tile and the two are
+  composited with `DrawImageMasked` (luminosity) or `DrawImageAlphaMasked` (alpha) under the inverse of the then-current transform,
+  since tiles are in the canvas' own units. Each push records the canvas it went onto, because pushes made while a group is open
+  belong to the tile. A `/None` nested deeper than its group is ignored until the group's own state ends. Showcase round trip:
+  32 -> 12 pages over a 2% difference, 185 -> 196 clean files.
+- **Stroked and clipping text** is built from `Typeface.TryGetOutline`: outlines are laid out in text space, carried into user
+  space with the run matrix and drawn there (so line width and dashes are user-space), while the glyphs are still drawn - invisibly
+  when not filled - to keep the text map. Clip modes accumulate into one path applied at `ET`.
+- **Mesh shadings are rasterized:** a canvas has no Gouraud primitive, so `PdfMeshShading` decodes the vertices/patches (types 4-7),
+  tessellates patches into 14x14 triangles with bilinear corner colours (Coons interior points per PDF 8.7.4.5.7), fills triangles into
+  an RGBA bitmap over the mesh bounding box at 2.5 px per canvas unit, and the interpreter draws it as an image under the shading
+  transform, clipped to the filled path for a pattern. Triangle edges get a slack of 0.02 px so neighbours leave no hairline gaps.
+- **Encryption** (`PdfDecryptor`): the Standard handler with the empty user password, AES-128/256 only (R4-R6) - the rule is that the
+  importer carries no cryptography .NET does not provide, so RC4 files are refused. Revision 4 cannot be checked against /U (that needs
+  RC4), so a wrong empty password is detected by AES padding that cannot be right, after reading the first page's content.
+  Objects are decrypted as `LoadObject` parses them (strings in place, streams replaced) - so the file key must exist before the first
+  object is read, and a rebuild, which scans objects first, clears what it loaded once the key is known. Not decrypted: xref streams,
+  the Encrypt dictionary, objects inside an object stream (the stream is), `/Crypt` Identity streams, metadata when the handler leaves it
+  clear. Tests use fixtures written by MuPDF, an independent implementation - and `PdfEncryptionOptions.ReadOnly`'s FIRST argument is
+  the user password, so `ReadOnly("owner")` is a file that needs a password.
+- **Type 3 fonts** run each glyph's content stream under `fontMatrix * size * translate(x, rise) * scale(Th) * Tm`; `d1` locks the
+  colour operators (`State.ColorLocked`, popped with the state) so a shape glyph takes the text fill colour, `d0` leaves them free.
+  Widths are glyph space times the font matrix's horizontal scale. Type 3 glyphs have no text map yet.
+- **CFF fonts** (`Type1C`, `CIDFontType0C`, CID-keyed CFF inside OpenType): the font engine reads CFF outlines only inside an OpenType
+  file, so `SfntRepair.FromCff` wraps a bare CFF as OTTO (CFF + head/hhea/maxp/hmtx/cmap, then the name/OS/2/post repair). `CffFont`
+  reads names (charset + string index, SIDs below 391 from `PdfGlyphNames.StandardStrings`), the CID map and a custom built-in
+  encoding; the synthesized cmap maps each glyph name's Unicode and the built-in encoding at U+F000 + code. A Type0 font over a CID-keyed
+  CFF numbers glyphs by CID, so `Decode` goes CID -> glyph through the charset. The expert SIDs (229-390) and Standard/Expert
+  predefined encodings are not named; the PDF /Encoding covers the first and Latin-1 the second.
+- **Type 1 fonts** (`Type1Font`): `/FontFile` is clear text, an eexec-obfuscated private part (fixed-key arithmetic, not cryptography;
+  hex or binary, PFB headers stripped) and charstring-obfuscated Subrs/CharStrings (`lenIV`). The interpreter handles hsbw/sbw, path
+  ops, callsubr, `div`, flex (othersubrs 0-2) and hint replacement (3), and `seac` by composing StandardEncoding base/accent glyphs
+  (accent offset = composite sbx + adx - asb). `ToCff` re-expresses outlines as Type 2 charstrings (relative moves, width first) in a
+  name-keyed CFF with a charset and a custom encoding (glyphs with codes first, since CFF encodings number consecutive glyphs), which
+  then follows the CFF path. Hints are dropped. Tests build their own Type 1 fonts byte by byte - there is no Type 1 file in the repo.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

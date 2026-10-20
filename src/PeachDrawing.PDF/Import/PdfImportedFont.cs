@@ -29,6 +29,8 @@ internal sealed class PdfImportedFont
     readonly byte[]? _cidToGid;
     readonly Func<int, string?> _encodingText;
     readonly Font _probe;
+    Dictionary<int, int>? _cidToGlyph;
+    bool _preferBuiltIn;
 
     PdfImportedFont(bool composite, string family, RenderContext context, Dictionary<int, string> toUnicode, double defaultWidth,
         byte[]? cidToGid, Func<int, string?> encodingText, Font probe)
@@ -42,6 +44,9 @@ internal sealed class PdfImportedFont
         _encodingText = encodingText;
         _probe = probe;
     }
+
+    /// <summary>The typeface of the embedded program, for reading glyph outlines; null when the context does not expose it.</summary>
+    public PeachDrawing.Text.Typeface? Typeface => _probe.Typeface;
 
     /// <summary>The font at <paramref name="size"/>, or null when the context cannot make it.</summary>
     public Font? GetFont(double size) => _context.GetFont(_family, size, PaintFontStyle.Regular);
@@ -76,14 +81,42 @@ internal sealed class PdfImportedFont
 
         var descriptor = doc.DictOf(descriptorOwner, "FontDescriptor");
         PdfDictionary? file = null;
+        string? fileSubtype = null;
         if (descriptor is not null)
         {
             file = doc.DictOf(descriptor, "FontFile2");
-            if (file is null && doc.DictOf(descriptor, "FontFile3") is { } f3 && doc.NameOf(f3.GetRaw("Subtype")) == "/OpenType") file = f3;
+            if (file is null && !composite && doc.DictOf(descriptor, "FontFile") is { } f1)
+            {
+                file = f1;
+                fileSubtype = "/Type1";
+            }
+            if (file is null && doc.DictOf(descriptor, "FontFile3") is { } f3 && doc.NameOf(f3.GetRaw("Subtype")) is "/OpenType" or "/Type1C" or "/CIDFontType0C")
+            {
+                file = f3;
+                fileSubtype = doc.NameOf(f3.GetRaw("Subtype"));
+            }
         }
-        if (file is null) { why = "no embedded TrueType/OpenType program"; return null; }
+        if (file is null) { why = "no embedded TrueType, OpenType, CFF or Type 1 program"; return null; }
         byte[] data = doc.DecodeStream(file).Data;
-        if (!IsSfnt(data)) { why = "embedded font is not an sfnt program"; return null; }
+        CffFont? cff = null;
+        byte[] program = data;
+        if (IsSfnt(data))
+        {
+            // A CID-keyed CFF inside an OpenType file numbers its glyphs by CID, which a Type0 font's codes are.
+            if (composite && fileSubtype == "/OpenType" && SfntTable(data, "CFF ") is { } table) cff = CffFont.Parse(table);
+        }
+        else if (fileSubtype == "/Type1" && Type1Font.Parse(data) is { } type1 && type1.ToCff() is { } converted && CffFont.Parse(converted) is { } fromType1)
+        {
+            // A Type 1 program is converted to CFF, which the font engine reads.
+            cff = fromType1;
+            program = SfntRepair.FromCff(converted, fromType1, "pdfimport");
+        }
+        else if (fileSubtype is "/Type1C" or "/CIDFontType0C" && CffFont.Parse(data) is { } parsed)
+        {
+            cff = parsed;
+            program = SfntRepair.FromCff(data, parsed, "pdfimport");   // the family is renamed below; only the tables matter here
+        }
+        else { why = "embedded font is not an sfnt, CFF or Type 1 program"; return null; }
 
         string family = "pdfimport-" + Convert.ToHexString(SHA1.HashData(data))[..16];
         var set = Registered.GetOrCreateValue(context);
@@ -92,7 +125,7 @@ internal sealed class PdfImportedFont
         {
             if (set.Add(family))
             {
-                try { context.AddFontFromBytes(family, SfntRepair.AddMissingTables(data, family)).GetAwaiter().GetResult(); }
+                try { context.AddFontFromBytes(family, SfntRepair.AddMissingTables(program, family)).GetAwaiter().GetResult(); }
                 catch (Exception)
                 {
                     // An untrusted embedded program: any failure to read it means the font is reported unsupported, not thrown.
@@ -117,6 +150,7 @@ internal sealed class PdfImportedFont
             defaultWidth = doc.NumberOf(cidFont!.GetRaw("DW"), 1000) / 1000.0;
             if (doc.Resolve(cidFont!.GetRaw("CIDToGIDMap")) is PdfDictionary { Stream: not null } map) cidToGid = doc.DecodeStream(map).Data;
             font = new PdfImportedFont(true, family, context, toUnicode, defaultWidth, cidToGid, _ => null, probe);
+            if (cff is { IsCid: true }) font._cidToGlyph = cff.GlyphOfCid();
             ReadCidWidths(doc, cidFont!, font._widths);
         }
         else
@@ -125,12 +159,30 @@ internal sealed class PdfImportedFont
             var typeface = probe.Typeface;
             Func<int, string?> text = code => enc(code);
             font = new PdfImportedFont(false, family, context, toUnicode, doc.NumberOf(descriptor!.GetRaw("MissingWidth")) / 1000.0, null, text, probe);
+            // A font with a custom built-in encoding and no /Encoding of its own is read by that encoding, not by Latin-1.
+            font._preferBuiltIn = cff is { BuiltInEncoding.Count: > 0 } && fontDict.GetRaw("Encoding") is null;
             int first = doc.IntOf(fontDict.GetRaw("FirstChar"));
             if (doc.ArrayOf(fontDict, "Widths") is { } w)
                 for (int i = 0; i < w.Elements.Count; i++) font._widths[first + i] = doc.NumberOf(w.Elements[i]) / 1000.0;
             _ = typeface;
         }
         return font;
+    }
+
+    /// <summary>The bytes of table <paramref name="tag"/> of an OpenType file, or null.</summary>
+    internal static byte[]? SfntTable(byte[] d, string tag)
+    {
+        if (d.Length < 12) return null;
+        int count = (d[4] << 8) | d[5];
+        for (int i = 0; i < count && 12 + i * 16 + 16 <= d.Length; i++)
+        {
+            int rec = 12 + i * 16;
+            if (System.Text.Encoding.ASCII.GetString(d, rec, 4) != tag) continue;
+            int offset = (d[rec + 8] << 24) | (d[rec + 9] << 16) | (d[rec + 10] << 8) | d[rec + 11];
+            int length = (d[rec + 12] << 24) | (d[rec + 13] << 16) | (d[rec + 14] << 8) | d[rec + 15];
+            return offset >= 0 && length >= 0 && offset + length <= d.Length ? d.AsSpan(offset, length).ToArray() : null;
+        }
+        return null;
     }
 
     static bool IsSfnt(byte[] d) => d.Length > 12 && (
@@ -173,7 +225,7 @@ internal sealed class PdfImportedFont
             for (int i = 0; i + 1 < shown.Length; i += 2)
             {
                 int cid = (shown[i] << 8) | shown[i + 1];
-                int gid = cid;
+                int gid = _cidToGlyph is not null ? (_cidToGlyph.TryGetValue(cid, out var mapped) ? mapped : 0) : cid;
                 if (_cidToGid is not null && cid * 2 + 1 < _cidToGid.Length) gid = (_cidToGid[cid * 2] << 8) | _cidToGid[cid * 2 + 1];
                 _toUnicode.TryGetValue(cid, out var text);
                 yield return new PdfShownGlyph(cid, gid, _widths.TryGetValue(cid, out var w) ? w : _defaultWidth, text ?? "", false);
@@ -190,7 +242,8 @@ internal sealed class PdfImportedFont
             {
                 ushort mapped = 0;
                 bool found = false;
-                if (!string.IsNullOrEmpty(text) && Rune.TryGetRuneAt(text, 0, out var rune)) found = typeface.TryMapRune(rune, out mapped) && mapped != 0;
+                if (_preferBuiltIn) found = typeface.TryMapRune(new Rune(0xF000 + code), out mapped) && mapped != 0;
+                if (!found && !string.IsNullOrEmpty(text) && Rune.TryGetRuneAt(text, 0, out var rune)) found = typeface.TryMapRune(rune, out mapped) && mapped != 0;
                 if (!found) found = typeface.TryMapRune(new Rune(code), out mapped) && mapped != 0;
                 if (!found) found = typeface.TryMapRune(new Rune(0xF000 + code), out mapped) && mapped != 0;
                 gid = found ? mapped : 0;
@@ -287,26 +340,7 @@ internal sealed class PdfImportedFont
         '\u0090', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '\u009D', 'ž', 'Ÿ',
     ];
 
-    static readonly Dictionary<string, string> GlyphNames = new()
-    {
-        ["space"] = " ", ["exclam"] = "!", ["quotedbl"] = "\"", ["numbersign"] = "#", ["dollar"] = "$", ["percent"] = "%", ["ampersand"] = "&",
-        ["quotesingle"] = "'", ["parenleft"] = "(", ["parenright"] = ")", ["asterisk"] = "*", ["plus"] = "+", ["comma"] = ",", ["hyphen"] = "-",
-        ["period"] = ".", ["slash"] = "/", ["colon"] = ":", ["semicolon"] = ";", ["less"] = "<", ["equal"] = "=", ["greater"] = ">", ["question"] = "?",
-        ["at"] = "@", ["bracketleft"] = "[", ["backslash"] = "\\", ["bracketright"] = "]", ["asciicircum"] = "^", ["underscore"] = "_", ["grave"] = "`",
-        ["braceleft"] = "{", ["bar"] = "|", ["braceright"] = "}", ["asciitilde"] = "~", ["zero"] = "0", ["one"] = "1", ["two"] = "2", ["three"] = "3",
-        ["four"] = "4", ["five"] = "5", ["six"] = "6", ["seven"] = "7", ["eight"] = "8", ["nine"] = "9", ["bullet"] = "•", ["endash"] = "–",
-        ["emdash"] = "—", ["quoteleft"] = "‘", ["quoteright"] = "’", ["quotedblleft"] = "“", ["quotedblright"] = "”",
-        ["fi"] = "fi", ["fl"] = "fl", ["ff"] = "ff", ["ffi"] = "ffi", ["ffl"] = "ffl", ["Euro"] = "€", ["nbspace"] = " ", ["periodcentered"] = "·",
-    };
-
-    static string? NameToText(string name)
-    {
-        if (GlyphNames.TryGetValue(name, out var t)) return t;
-        if (name.Length == 1) return name;
-        if (name.StartsWith("uni", StringComparison.Ordinal) && name.Length >= 7 && int.TryParse(name.AsSpan(3, 4), System.Globalization.NumberStyles.HexNumber, null, out int u)) return char.ConvertFromUtf32(u);
-        if (name[0] == 'u' && name.Length is >= 5 and <= 7 && int.TryParse(name.AsSpan(1), System.Globalization.NumberStyles.HexNumber, null, out int u2) && u2 <= 0x10FFFF) return char.ConvertFromUtf32(u2);
-        return null;
-    }
+    static string? NameToText(string name) => PdfGlyphNames.ToText(name);
 
     static Func<int, string?> BuildSimpleEncoding(PdfSourceDocument doc, PdfDictionary fontDict)
     {

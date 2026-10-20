@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System;
 using System.Collections.Generic;
@@ -16,7 +17,13 @@ namespace PeachDrawing.PDF.Import;
 /// </summary>
 internal sealed class PdfContentInterpreter
 {
-    enum Push { Transform, Clip, Blend }
+    enum Push { Transform, Clip, Blend, Group }
+
+    /// <summary>One thing pushed onto a canvas by a state, and the canvas it went onto (a soft-mask group redirects drawing to another).</summary>
+    readonly record struct Pushed(Push Kind, Canvas Owner, SoftMaskGroup? Group = null);
+
+    /// <summary>Content being drawn into its own tile so a soft mask can be applied to it as a whole when the group ends.</summary>
+    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary Mask, PdfDictionary? Resources, Matrix3x2 Accumulated);
 
     sealed class State
     {
@@ -27,8 +34,10 @@ internal sealed class PdfContentInterpreter
         public double[] Dash = [];
         public LineCap Cap = LineCap.Butt;
         public LineJoin Join = LineJoin.Miter;
-        public List<Push> Pushes = [];
+        public List<Pushed> Pushes = [];
         public PdfImportedFont? TextFont;
+        public PdfType3Font? Type3Font;
+        public bool ColorLocked;
         public double FontSize, CharSpacing, WordSpacing, HorizontalScale = 1, Leading, Rise;
         public int RenderMode;
         public Matrix3x2 Ctm = Matrix3x2.Identity;
@@ -40,14 +49,15 @@ internal sealed class PdfContentInterpreter
             FillSpace = FillSpace, StrokeSpace = StrokeSpace, Fill = Fill, Stroke = Stroke,
             FillAlpha = FillAlpha, StrokeAlpha = StrokeAlpha, LineWidth = LineWidth, MiterLimit = MiterLimit,
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
-            TextFont = TextFont, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
+            TextFont = TextFont, Type3Font = Type3Font, ColorLocked = ColorLocked, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
             HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
             Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern, Blend = Blend,
         };
     }
 
     readonly PdfSourceDocument _doc;
-    readonly Canvas _canvas;
+    Canvas _canvas;
+    readonly Rect? _region;
     readonly List<State> _stack = [new State()];
     readonly HashSet<string> _unsupported = [];
     GraphicsPath? _path;
@@ -59,10 +69,17 @@ internal sealed class PdfContentInterpreter
     readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Creates an interpreter that draws onto <paramref name="canvas"/>.</summary>
-    public PdfContentInterpreter(PdfSourceDocument doc, Canvas canvas)
+    /// <param name="doc">the document the content comes from</param>
+    /// <param name="canvas">the canvas to draw on</param>
+    /// <param name="groupRegion">
+    /// the area of the canvas (in its own units, from the origin) that a soft-masked group is drawn into; null when the caller cannot
+    /// say, in which case soft masks are reported instead of applied
+    /// </param>
+    public PdfContentInterpreter(PdfSourceDocument doc, Canvas canvas, Rect? groupRegion = null)
     {
         _doc = doc;
         _canvas = canvas;
+        _region = groupRegion;
     }
 
     /// <summary>The operators and features met that this interpreter does not implement.</summary>
@@ -123,8 +140,11 @@ internal sealed class PdfContentInterpreter
 
     double N(List<PdfItem> o, int i) => _doc.NumberOf(o[i]);
 
+    static bool IsColorOperator(string op) => op is "g" or "G" or "rg" or "RG" or "k" or "K" or "cs" or "CS" or "sc" or "SC" or "scn" or "SCN";
+
     void Execute(string op, List<PdfItem> o, PdfDictionary? res)
     {
+        if (Cur.ColorLocked && IsColorOperator(op)) return;
         switch (op)
         {
             // --- graphics state
@@ -210,7 +230,7 @@ internal sealed class PdfContentInterpreter
 
             // --- text
             case "BT": _tm = _tlm = Matrix3x2.Identity; break;
-            case "ET": break;
+            case "ET": EndText(); break;
             case "Tc": Cur.CharSpacing = N(o, 0); break;
             case "Tw": Cur.WordSpacing = N(o, 0); break;
             case "Tz": Cur.HorizontalScale = N(o, 0) / 100.0; break;
@@ -218,7 +238,6 @@ internal sealed class PdfContentInterpreter
             case "Ts": Cur.Rise = N(o, 0); break;
             case "Tr":
                 Cur.RenderMode = (int)N(o, 0);
-                if (Cur.RenderMode is 1 or 2 or >= 4) _unsupported.Add("Tr " + Cur.RenderMode);
                 break;
             case "Tf": SetFont(o, res); break;
             case "Td": NextLine(N(o, 0), N(o, 1)); break;
@@ -227,25 +246,26 @@ internal sealed class PdfContentInterpreter
             case "Tm":
                 _tm = _tlm = new Matrix3x2((float)N(o, 0), (float)N(o, 1), (float)N(o, 2), (float)N(o, 3), (float)N(o, 4), (float)N(o, 5));
                 break;
-            case "Tj": ShowText([TextOf(o[0])]); break;
-            case "'": NextLine(0, -Cur.Leading); ShowText([TextOf(o[0])]); break;
+            case "Tj": ShowText([TextOf(o[0])], res); break;
+            case "'": NextLine(0, -Cur.Leading); ShowText([TextOf(o[0])], res); break;
             case "\"":
                 Cur.WordSpacing = N(o, 0); Cur.CharSpacing = N(o, 1);
-                NextLine(0, -Cur.Leading); ShowText([TextOf(o[2])]);
+                NextLine(0, -Cur.Leading); ShowText([TextOf(o[2])], res);
                 break;
             case "TJ":
             {
                 var parts = new List<object>();
                 foreach (var item in ((PdfArray)_doc.Resolve(o[0])!).Elements)
                     parts.Add(_doc.Resolve(item) is PdfString ps ? ps.Value : _doc.NumberOf(item));
-                ShowText(parts);
+                ShowText(parts, res);
                 break;
             }
 
             // --- structure
             case "Do": DoXObject(o, res); break;
             case "sh": PaintShading(o, res); break;
-            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0" or "d1": break;
+            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0": break;
+            case "d1": Cur.ColorLocked = true; break;       // a Type 3 glyph that is a shape: it is painted in the current colour
 
             default:
                 _unsupported.Add(op);
@@ -262,21 +282,38 @@ internal sealed class PdfContentInterpreter
         if (_stack.Count <= 1) return;
         var top = _stack[^1];
         _stack.RemoveAt(_stack.Count - 1);
-        for (int i = top.Pushes.Count - 1; i >= 0; i--)
+        Unwind(top.Pushes);
+    }
+
+    /// <summary>Undoes pushes newest first, each on the canvas it went onto; a soft-mask group is composited when its marker is reached.</summary>
+    void Unwind(List<Pushed> pushes)
+    {
+        for (int i = pushes.Count - 1; i >= 0; i--)
         {
-            switch (top.Pushes[i])
+            var entry = pushes[i];
+            switch (entry.Kind)
             {
-                case Push.Clip: _canvas.PopClip(); break;
-                case Push.Blend: _canvas.PopBlendMode(); break;
-                default: _canvas.PopTransform(); break;
+                case Push.Clip: entry.Owner.PopClip(); break;
+                case Push.Blend: entry.Owner.PopBlendMode(); break;
+                case Push.Group: EndSoftMaskGroup(entry.Group!); break;
+                default: entry.Owner.PopTransform(); break;
             }
         }
+
+        pushes.Clear();
+    }
+
+    /// <summary>Closes everything the base graphics state still holds (a soft mask set with no <c>q</c> around it); call after the last <see cref="Run"/>.</summary>
+    public void Finish()
+    {
+        while (_stack.Count > 1) Restore();
+        Unwind(Cur.Pushes);
     }
 
     void Transform(Matrix3x2 m)
     {
         _canvas.PushTransform(m);
-        Cur.Pushes.Add(Push.Transform);
+        Cur.Pushes.Add(new(Push.Transform, _canvas));
         Cur.Ctm = m * Cur.Ctm;
     }
 
@@ -299,8 +336,9 @@ internal sealed class PdfContentInterpreter
             Cur.DashPhase = _doc.NumberOf(d.Elements[1]);
         }
         if (gs.GetRaw("BM") is { } bm) SetBlendMode(bm);
-        foreach (var key in new[] { "SMask", "Font", "TR", "TR2", "OP", "op" })
-            if (gs.GetRaw(key) is { } v && !(key == "SMask" && _doc.NameOf(v) == "/None"))
+        if (gs.GetRaw("SMask") is { } sm) SetSoftMask(sm, res);
+        foreach (var key in new[] { "Font", "TR", "TR2", "OP", "op" })
+            if (gs.GetRaw(key) is not null)
                 _unsupported.Add("gs " + key);
     }
 
@@ -320,19 +358,71 @@ internal sealed class PdfContentInterpreter
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var fonts = res is null ? null : _doc.DictOf(res, "Font");
         if (fonts is null || _doc.Resolve(fonts.GetRaw(name)) is not PdfDictionary fd) { Cur.TextFont = null; _unsupported.Add("Tf (missing font)"); return; }
+        if (_doc.NameOf(fd.GetRaw("Subtype")) == "/Type3")
+        {
+            if (!_type3Fonts.TryGetValue(fd, out var type3))
+            {
+                type3 = PdfType3Font.Load(_doc, fd, out var type3Why);
+                if (type3 is null) _unsupported.Add("font: " + type3Why);
+                _type3Fonts[fd] = type3;
+            }
+            (Cur.TextFont, Cur.Type3Font) = (null, type3);
+            return;
+        }
         if (!_fonts.TryGetValue(fd, out var font))
         {
             font = PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out var why);
             if (font is null) _unsupported.Add("font: " + why);
             _fonts[fd] = font;
         }
-        Cur.TextFont = font;
+        (Cur.TextFont, Cur.Type3Font) = (font, null);
+    }
+
+    readonly Dictionary<PdfDictionary, PdfType3Font?> _type3Fonts = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>Shows text in a Type 3 font: each glyph's own content stream is run under the font matrix, font size and text matrix.</summary>
+    void ShowType3(IReadOnlyList<object> parts, PdfDictionary? res)
+    {
+        var st = Cur;
+        var font = st.Type3Font!;
+        double x = 0;
+        foreach (var part in parts)
+        {
+            if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
+            foreach (var g in font.Decode((string)part))
+            {
+                if (st.RenderMode != 3 && g.Procedure is { Stream: not null } proc && _formDepth < 16)
+                {
+                    // glyph space -> text space (font matrix) -> sized and placed in the line -> scaled horizontally -> the text matrix
+                    var matrix = font.FontMatrix * Matrix3x2.CreateScale((float)st.FontSize) * Matrix3x2.CreateTranslation((float)x, (float)st.Rise)
+                        * Matrix3x2.CreateScale((float)st.HorizontalScale, 1f) * _tm;
+                    var (savedTm, savedTlm, savedPath) = (_tm, _tlm, _path);
+                    Save();
+                    _formDepth++;
+                    try
+                    {
+                        Transform(matrix);
+                        _path = null;
+                        Run(_doc.DecodeStream(proc).Data, font.Resources ?? res);
+                    }
+                    finally
+                    {
+                        _formDepth--;
+                        Restore();
+                        (_tm, _tlm, _path) = (savedTm, savedTlm, savedPath);
+                    }
+                }
+                x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+            }
+        }
+        _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
     }
 
     /// <summary>Draws the strings and kerning adjustments of one show-text operator as a single glyph run.</summary>
-    void ShowText(IReadOnlyList<object> parts)
+    void ShowText(IReadOnlyList<object> parts, PdfDictionary? res)
     {
         var st = Cur;
+        if (st.Type3Font is not null && st.FontSize != 0) { ShowType3(parts, res); return; }
         if (st.TextFont is null || st.FontSize == 0) return;
         var font = st.TextFont.GetFont(Math.Abs(st.FontSize));
         if (font is null) { _unsupported.Add("font size"); return; }
@@ -352,17 +442,150 @@ internal sealed class PdfContentInterpreter
             // Glyphs are laid out upright in canvas space (y down); the flip puts them upright in PDF user space (y up), and
             // the horizontal scale and text matrix place the run.
             var run = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm;
+            // Render modes (PDF 9.3.6): 0 fill, 1 stroke, 2 both, 3 neither, 4-7 the same four and then add the glyphs to the clip.
+            int mode = st.RenderMode;
+            bool fill = mode is 0 or 2 or 4 or 6;
+            bool stroke = mode is 1 or 2 or 5 or 6;
+            bool clip = mode >= 4;
             _canvas.PushTransform(run);
             try
             {
-                var color = st.RenderMode == 3
-                    ? PaintColor.Transparent
-                    : st.FillSpace.ToColor(st.Fill, st.FillAlpha);
-                _canvas.DrawGlyphs(glyphs, font, color);
+                // Text that is not filled is still drawn, invisibly, so the page keeps its text for selection and search.
+                var color = fill ? st.FillSpace.ToColor(st.Fill, st.FillAlpha) : PaintColor.Transparent;
+                if (mode != 7) _canvas.DrawGlyphs(glyphs, font, color);
             }
             finally { _canvas.PopTransform(); }
+
+            if (stroke || clip) OutlineText(glyphs, run, stroke, clip, res);
         }
         _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
+    }
+
+    GraphicsPath? _textClip;
+
+    /// <summary>
+    /// Strokes the outlines of a run of glyphs and/or adds them to the text clip. The outlines are built in text space, carried into the
+    /// current user space with <paramref name="run"/>, and drawn there, so the line width, caps and dashes are in user space as for any
+    /// other path.
+    /// </summary>
+    void OutlineText(List<GlyphPlacement> glyphs, Matrix3x2 run, bool stroke, bool clip, PdfDictionary? res)
+    {
+        var typeface = Cur.TextFont!.Typeface;
+        if (typeface is null || typeface.Metrics.UnitsPerEm <= 0) { _unsupported.Add("Tr (no glyph outlines)"); return; }
+        double scale = Math.Abs(Cur.FontSize) / typeface.Metrics.UnitsPerEm;
+        var path = _canvas.GetGraphicsPath();
+        foreach (var glyph in glyphs)
+        {
+            if (!typeface.TryGetOutline((ushort)glyph.GlyphIndex, out var outline)) continue;
+            foreach (var contour in outline.Contours)
+            {
+                path.Start(glyph.X + contour.Start.X * scale, glyph.Y - contour.Start.Y * scale);
+                foreach (var seg in contour.Segments)
+                {
+                    if (seg.IsCubic)
+                        path.AddBezierTo(glyph.X + seg.Control1.X * scale, glyph.Y - seg.Control1.Y * scale,
+                            glyph.X + seg.Control2.X * scale, glyph.Y - seg.Control2.Y * scale,
+                            glyph.X + seg.End.X * scale, glyph.Y - seg.End.Y * scale);
+                    else path.LineTo(glyph.X + seg.End.X * scale, glyph.Y - seg.End.Y * scale);
+                }
+                path.CloseFigure();
+            }
+        }
+        path.Transform(run);
+        path.FillMode = FillMode.Nonzero;
+
+        if (stroke && MakePen(res) is { } pen) _canvas.DrawPath(pen, path);
+        if (clip)
+        {
+            if (_textClip is null) _textClip = path;
+            else _textClip.AddPath(path);
+        }
+    }
+
+    /// <summary>At the end of a text object, applies the clip that glyphs shown in a clipping render mode built up.</summary>
+    void EndText()
+    {
+        if (_textClip is null) return;
+        _canvas.PushClip(_textClip);
+        Cur.Pushes.Add(new(Push.Clip, _canvas));
+        _textClip = null;
+    }
+
+    /// <summary>
+    /// Applies a <c>/SMask</c> entry. A mask dictionary starts a group: what is drawn next goes into a tile of its own, and when the
+    /// state ends the tile is composited through the mask. <c>/None</c> ends a group begun in this same state when nothing has been
+    /// pushed since; a <c>/None</c> deeper than the group it should end leaves that group to the end of its own state.
+    /// </summary>
+    void SetSoftMask(PdfItem value, PdfDictionary? res)
+    {
+        var st = Cur;
+        if (st.Pushes.Count > 0 && st.Pushes[^1].Kind == Push.Group)
+        {
+            var open = st.Pushes[^1];
+            st.Pushes.RemoveAt(st.Pushes.Count - 1);
+            EndSoftMaskGroup(open.Group!);
+        }
+
+        var resolved = _doc.Resolve(value);
+        if (resolved is not PdfDictionary mask) return;                      // /None (or nothing usable): no mask
+        if (_region is not { } region) { _unsupported.Add("gs SMask"); return; }
+        if (_doc.DictOf(mask, "G") is null) { _unsupported.Add("gs SMask (no group)"); return; }
+        if (_canvas.CreateTile(region.Width, region.Height) is not { } tile) { _unsupported.Add("gs SMask"); return; }
+
+        // The tile is in the canvas' own units from its origin, so it takes on everything pushed so far.
+        var accumulated = _canvas.CurrentTransform;
+        tile.Graphics.PushTransform(accumulated);
+        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated);
+        st.Pushes.Add(new(Push.Group, _canvas, group));
+        _canvas = tile.Graphics;
+    }
+
+    /// <summary>Finishes a soft-mask group: draws the mask into a tile and composites the group's tile through it onto the canvas that began it.</summary>
+    void EndSoftMaskGroup(SoftMaskGroup group)
+    {
+        var region = _region!.Value;
+        group.Content.PopTransform();
+        group.Content.Dispose();
+        _canvas = group.Outer;
+
+        bool luminosity = _doc.NameOf(group.Mask.GetRaw("S")) != "/Alpha";
+        var maskTile = _canvas.CreateTile(region.Width, region.Height);
+        if (maskTile is null) return;
+        var mg = maskTile.Value.Graphics;
+        if (luminosity)
+        {
+            // The mask group is composited over its backdrop colour (black unless /BC says otherwise) across the whole area.
+            var backdrop = PaintColor.Black;
+            if (_doc.ArrayOf(group.Mask, "BC") is { } bc && bc.Elements.Count > 0)
+            {
+                var comps = new double[bc.Elements.Count];
+                for (int i = 0; i < comps.Length; i++) comps[i] = _doc.NumberOf(bc.Elements[i]);
+                var space = comps.Length switch { 1 => PdfColorSpace.Gray, 3 => PdfColorSpace.Rgb, 4 => PdfColorSpace.Cmyk, _ => null };
+                if (space is not null) backdrop = space.ToColor(comps, 1);
+            }
+
+            mg.DrawRectangle(mg.GetSolidBrush(backdrop), 0, 0, region.Width, region.Height);
+        }
+
+        mg.PushTransform(group.Accumulated);
+        var sub = new PdfContentInterpreter(_doc, mg, region) { _formDepth = _formDepth + 1 };
+        if (sub._formDepth < 16 && _doc.DictOf(group.Mask, "G") is { } form)
+            sub.DrawForm(form, group.Resources);
+        else _unsupported.Add("gs SMask (nesting)");
+        sub.Finish();
+        foreach (var f in sub._unsupported) _unsupported.Add(f);
+        mg.PopTransform();
+        mg.Dispose();
+
+        // The tiles are in the canvas' units, so they are composited with the transform undone.
+        if (!Matrix3x2.Invert(_canvas.CurrentTransform, out var undo)) return;
+        _canvas.PushTransform(undo);
+        try
+        {
+            if (luminosity) _canvas.DrawImageMasked(group.ContentImage, maskTile.Value.Image, region);
+            else _canvas.DrawImageAlphaMasked(group.ContentImage, maskTile.Value.Image, region);
+        }
+        finally { _canvas.PopTransform(); }
     }
 
     /// <summary>Applies a <c>/BM</c> entry (a name, or an array of names of which the first known one is used) to what is painted next.</summary>
@@ -398,7 +621,7 @@ internal sealed class PdfContentInterpreter
         if (mode is null) { _unsupported.Add("gs BM"); return; }
         if (mode == Cur.Blend) return;
         _canvas.PushBlendMode(mode.Value);
-        Cur.Pushes.Add(Push.Blend);
+        Cur.Pushes.Add(new(Push.Blend, _canvas));
         Cur.Blend = mode.Value;
     }
 
@@ -439,6 +662,7 @@ internal sealed class PdfContentInterpreter
             matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
                 (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
         if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { if (!fill) _unsupported.Add("stroke with a mesh shading"); return null; }
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
     }
 
@@ -452,14 +676,51 @@ internal sealed class PdfContentInterpreter
         return brush;
     }
 
+    /// <summary>Draws a mesh shading as an image of the mesh under the transform that carries shading space onto the canvas.</summary>
+    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    {
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return;
+        var toCurrent = shadingToBase * _streamBase * inverse;
+        var toCanvas = toCurrent * _canvas.CurrentTransform;
+        double scale = Math.Sqrt(Math.Abs(toCanvas.M11 * toCanvas.M22 - toCanvas.M12 * toCanvas.M21));
+        var bitmap = PdfMeshShading.Render(_doc, shading, res, scale, alpha, out var why);
+        if (bitmap is null) { _unsupported.Add(why!); return; }
+        Image image;
+        try { image = _canvas.RenderContext.ImageFromStream(new MemoryStream(PdfImageXObject.EncodePng(bitmap.Rgba, bitmap.Width, bitmap.Height))); }
+        catch (Exception) { _unsupported.Add("mesh shading image"); return; }
+
+        // The unit square (image top at v = 0) maps onto the mesh's box in shading space (y up).
+        double w = bitmap.X1 - bitmap.X0, h = bitmap.Y1 - bitmap.Y0;
+        _canvas.PushTransform(toCurrent);
+        _canvas.PushTransform(new Matrix3x2((float)w, 0, 0, (float)-h, (float)bitmap.X0, (float)bitmap.Y1));
+        try { _canvas.DrawImage(image, new Rect(0, 0, 1, 1)); }
+        finally { _canvas.PopTransform(); _canvas.PopTransform(); }
+    }
+
     /// <summary>The <c>sh</c> operator: paints a shading over the whole current clip.</summary>
     void PaintShading(List<PdfItem> o, PdfDictionary? res)
     {
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
         if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res); return; }
         var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res);
         if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
+    }
+
+    /// <summary>The pen the current stroke colour, line width, caps, joins and dash describe; null when the colour cannot be made.</summary>
+    Pen? MakePen(PdfDictionary? res)
+    {
+        var strokeBrush = BrushFor(fill: false, res);
+        if (strokeBrush is null) return null;
+        var pen = _canvas.GetPen(strokeBrush);
+        // A zero-width line is the thinnest line the device can draw; a hairline stands in for it.
+        pen.Width = Cur.LineWidth <= 0 ? 0.1 : Cur.LineWidth;
+        pen.MiterLimit = Cur.MiterLimit;
+        pen.LineCap = Cur.Cap;
+        pen.LineJoin = Cur.Join;
+        if (Cur.Dash.Length > 0 && Cur.Dash.Any(d => d > 0)) pen.SetDashPattern(Cur.Dash.Length % 2 == 1 ? [.. Cur.Dash, .. Cur.Dash] : Cur.Dash, Cur.DashPhase);
+        return pen;
     }
 
     void Paint(bool fill, bool stroke, FillMode mode, bool close, PdfDictionary? res)
@@ -471,29 +732,33 @@ internal sealed class PdfContentInterpreter
         path.FillMode = mode;
         if (fill)
         {
-            var brush = BrushFor(fill: true, res);
-            if (brush is not null) _canvas.DrawPath(brush, path);
+            if (Cur.FillPattern is { } fillPattern && _doc.IntOf(fillPattern.GetRaw("PatternType")) == 2 && _doc.DictOf(fillPattern, "Shading") is { } meshShading
+                && PdfMeshShading.IsMesh(_doc.IntOf(meshShading.GetRaw("ShadingType"))))
+            {
+                // A mesh is drawn as an image, so the path becomes a clip for it.
+                var matrix = Matrix3x2.Identity;
+                if (_doc.ArrayOf(fillPattern, "Matrix") is { Elements.Count: >= 6 } m)
+                    matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
+                        (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
+                _canvas.PushClip(path);
+                try { DrawMesh(meshShading, matrix, Cur.FillAlpha, res); }
+                finally { _canvas.PopClip(); }
+            }
+            else
+            {
+                var brush = BrushFor(fill: true, res);
+                if (brush is not null) _canvas.DrawPath(brush, path);
+            }
         }
         if (stroke)
         {
-            var strokeBrush = BrushFor(fill: false, res);
-            var pen = strokeBrush is null ? null : _canvas.GetPen(strokeBrush);
-            if (pen is not null)
-            {
-            // A zero-width line is the thinnest line the device can draw; a hairline stands in for it.
-            pen.Width = Cur.LineWidth <= 0 ? 0.1 : Cur.LineWidth;
-            pen.MiterLimit = Cur.MiterLimit;
-            pen.LineCap = Cur.Cap;
-            pen.LineJoin = Cur.Join;
-            if (Cur.Dash.Length > 0 && Cur.Dash.Any(d => d > 0)) pen.SetDashPattern(Cur.Dash.Length % 2 == 1 ? [.. Cur.Dash, .. Cur.Dash] : Cur.Dash, Cur.DashPhase);
-            _canvas.DrawPath(pen, path);
-            }
+            if (MakePen(res) is { } pen) _canvas.DrawPath(pen, path);
         }
         if (_pendingClip is { } clipMode)
         {
             path.FillMode = clipMode;
             _canvas.PushClip(path);
-            Cur.Pushes.Add(Push.Clip);
+            Cur.Pushes.Add(new(Push.Clip, _canvas));
         }
         _pendingClip = null;
     }
@@ -515,6 +780,8 @@ internal sealed class PdfContentInterpreter
             if (!stencil) _images[x] = image;
         }
         if (image is null) return;
+        // An image is drawn with its pixels showing unless it asks to be smoothed (/Interpolate, PDF 8.9.5.3).
+        image.Interpolate = _doc.Resolve(x.GetRaw("Interpolate") ?? x.GetRaw("I")) is PdfBoolean { Value: true };
 
         // The unit square has the image's top edge at y = 1; the canvas draws an image upright in y-down space, so flip into it.
         _canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 1));
@@ -536,7 +803,12 @@ internal sealed class PdfContentInterpreter
         if (subtype == "/Image") { DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
+        DrawForm(x, res);
+    }
 
+    /// <summary>Draws a form XObject: its matrix, its bounding-box clip, then its content with its own resources (or the caller's).</summary>
+    void DrawForm(PdfDictionary x, PdfDictionary? res)
+    {
         Save();
         _formDepth++;
         try
@@ -554,7 +826,7 @@ internal sealed class PdfContentInterpreter
                 clip.LineTo(Math.Min(x0, x1), Math.Max(y0, y1));
                 clip.CloseFigure();
                 _canvas.PushClip(clip);
-                Cur.Pushes.Add(Push.Clip);
+                Cur.Pushes.Add(new(Push.Clip, _canvas));
             }
             var formRes = _doc.DictOf(x, "Resources") ?? res;
             var savedPath = _path;

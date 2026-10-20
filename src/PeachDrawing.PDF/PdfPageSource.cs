@@ -18,9 +18,9 @@ namespace PeachDrawing.PDF
     /// document, with fonts re-embedded and text keeping the text map of the original.
     /// </para>
     /// <para>
-    /// What the importer cannot draw yet (JPEG with a mask, JPEG 2000, CCITT and JBIG2 images, mesh shadings, tiling patterns, soft masks, fonts without an embedded TrueType or
-    /// OpenType program, text render modes that stroke) is skipped, and <see cref="Paint"/> names each such feature in its
-    /// result. Encrypted files are refused.
+    /// What the importer cannot draw yet (JPEG 2000, CCITT and JBIG2 images, function-based shadings, tiling patterns, and fonts without an embedded TrueType, OpenType, CFF or
+    /// Type 1 program) is skipped, and <see cref="Paint"/> names each such feature in its
+    /// result. A file protected with AES and the empty user password is read; one that needs a password, or that uses RC4 (which .NET does not provide), is refused.
     /// </para>
     /// </remarks>
     public sealed class PdfPageSource
@@ -36,7 +36,7 @@ namespace PeachDrawing.PDF
         /// <param name="pdf">the bytes of the PDF file</param>
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
-        /// <exception cref="NotSupportedException">the PDF is encrypted</exception>
+        /// <exception cref="NotSupportedException">the PDF needs a password to open, uses RC4, or uses an unknown security handler</exception>
         public static PdfPageSource Open(byte[] pdf)
         {
             ArgumentNullException.ThrowIfNull(pdf);
@@ -47,7 +47,7 @@ namespace PeachDrawing.PDF
         /// <param name="stream">a stream positioned at the start of the PDF file</param>
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
-        /// <exception cref="NotSupportedException">the PDF is encrypted</exception>
+        /// <exception cref="NotSupportedException">the PDF needs a password to open, uses RC4, or uses an unknown security handler</exception>
         public static PdfPageSource Open(Stream stream)
         {
             ArgumentNullException.ThrowIfNull(stream);

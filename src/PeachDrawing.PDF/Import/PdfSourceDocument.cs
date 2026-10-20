@@ -31,6 +31,8 @@ internal sealed class PdfSourceDocument
     readonly HashSet<int> _loading = new();
     readonly Dictionary<int, List<(int Number, PdfItem Item)>> _objectStreams = new();
     bool _rebuilt;
+    PdfDecryptor? _decryptor;
+    int _encryptObjectNumber = -1;
 
     PdfSourceDocument(byte[] data)
     {
@@ -53,7 +55,21 @@ internal sealed class PdfSourceDocument
     public static PdfSourceDocument Open(byte[] data)
     {
         var doc = new PdfSourceDocument(data);
-        doc.Load();
+        const string needsPassword = "The PDF needs a password to open.";
+        try { doc.Load(); }
+        catch (InvalidDataException) when (doc._decryptor is not null)
+        {
+            // A revision 4 file cannot be checked against the empty password (that needs RC4), so a wrong one decrypts to noise.
+            throw new NotSupportedException(needsPassword);
+        }
+
+        // Read the first page's content now: it is what shows a wrong key, as AES output with padding that cannot be right.
+        if (doc._decryptor is not null && doc.Pages.Count > 0)
+        {
+            _ = doc.GetPageContent(doc.Pages[0]);
+            if (doc._decryptor.SawInvalidPadding) throw new NotSupportedException(needsPassword);
+        }
+
         return doc;
     }
 
@@ -61,12 +77,30 @@ internal sealed class PdfSourceDocument
     {
         bool ok = false;
         try { ok = ReadXrefChain(); } catch (Exception e) when (e is InvalidDataException or IndexOutOfRangeException or ArgumentException) { }
-        if (!ok || !HasUsableRoot()) Rebuild();
-        if (Trailer.ContainsKeyRaw("Encrypt"))
-            throw new NotSupportedException("The PDF is encrypted; reading encrypted files is not supported yet.");
+        // Objects are decrypted as they are loaded, so the file key is worked out before any of them is read.
+        if (ok) SetUpEncryption();
+        if (!ok || !HasUsableRoot()) { Rebuild(); SetUpEncryption(); }
         try { Pages = CollectPages(); }
-        catch (InvalidDataException) when (!_rebuilt) { Rebuild(); Pages = CollectPages(); }
-        if (Pages.Count == 0 && !_rebuilt) { Rebuild(); Pages = CollectPages(); }
+        catch (InvalidDataException) when (!_rebuilt) { Rebuild(); SetUpEncryption(); Pages = CollectPages(); }
+        if (Pages.Count == 0 && !_rebuilt) { Rebuild(); SetUpEncryption(); Pages = CollectPages(); }
+    }
+
+    /// <summary>Reads the trailer's <c>/Encrypt</c> entry, if any, and starts decrypting what is loaded from here on (the empty user password).</summary>
+    void SetUpEncryption()
+    {
+        _decryptor = null;
+        if (Trailer.GetRaw("Encrypt") is not { } entry) return;
+        _encryptObjectNumber = entry is PdfReference reference ? reference.ObjectNumber : -1;
+        var encrypt = Resolve(entry) as PdfDictionary ?? throw new InvalidDataException("The PDF's encryption dictionary is unreadable.");
+        byte[] id = [];
+        if (Resolve(Trailer.GetRaw("ID")) is PdfArray { Elements.Count: > 0 } ids && Resolve(ids.Elements[0]) is PdfString first)
+            id = Encoding.Latin1.GetBytes(first.Value);
+        _decryptor = PdfDecryptor.Create(this, encrypt, id);
+
+        // Anything read before the key was known (a rebuild scans every object) was read as ciphertext.
+        _loaded.Clear();
+        _objectStreams.Clear();
+        foreach (var r in _refs.Values) r.SetObject(null!);
     }
 
     bool HasUsableRoot()
@@ -314,6 +348,8 @@ internal sealed class PdfSourceDocument
                 PdfItem? item = null;
                 if (first.Kind == PdfTokenKind.Integer && first.Integer == number)
                     item = ParseIndirect(lx, first, out _, out _);
+                if (item is not null && _decryptor is not null && number != _encryptObjectNumber)
+                    _decryptor.DecryptObject(item, number, entry.B);
                 if (item is null)
                 {
                     if (!_rebuilt) { _loading.Remove(number); Rebuild(); return LoadObject(number); }

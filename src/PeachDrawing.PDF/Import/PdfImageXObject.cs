@@ -32,12 +32,10 @@ internal static class PdfImageXObject
 
         if (decoded.ImageFilter == "DCTDecode")
         {
-            if (stencil || image.GetRaw("SMask") is not null || image.GetRaw("Mask") is not null)
-            {
-                why = "DCT image with a mask";
-                return null;
-            }
-            return FromStream(context, decoded.Data, out why);
+            if (stencil) { why = "DCT stencil mask"; return null; }
+            if (image.GetRaw("SMask") is null && image.GetRaw("Mask") is null)
+                return FromStream(context, decoded.Data, out why);
+            return FromMaskedJpeg(doc, image, resources, context, decoded.Data, out why);
         }
         if (decoded.ImageFilter is not null) { why = decoded.ImageFilter + " image"; return null; }
 
@@ -53,6 +51,7 @@ internal static class PdfImageXObject
         var rgba = new byte[width * height * 4];
         if (stencil)
         {
+            var fillRgb = fill.ToRgb();   // a CMYK colour keeps its ink values in R/G/B untouched, so ask for the RGB rendition
             bool invert = decode is { Length: >= 2 } && decode[0] > decode[1];
             int stride = (width + 7) / 8;
             for (int y = 0; y < height; y++)
@@ -62,7 +61,7 @@ internal static class PdfImageXObject
                     int bit = byteIndex < decoded.Data.Length ? (decoded.Data[byteIndex] >> (7 - (x & 7))) & 1 : 1;
                     bool painted = invert ? bit == 1 : bit == 0;
                     int o = (y * width + x) * 4;
-                    rgba[o] = fill.R; rgba[o + 1] = fill.G; rgba[o + 2] = fill.B; rgba[o + 3] = painted ? fill.A : (byte)0;
+                    rgba[o] = fillRgb.R; rgba[o + 1] = fillRgb.G; rgba[o + 2] = fillRgb.B; rgba[o + 3] = painted ? fill.A : (byte)0;
                 }
             return FromPixels(context, rgba, width, height, out why);
         }
@@ -98,7 +97,8 @@ internal static class PdfImageXObject
                 }
                 var color = space.ToColor(samples, 1);
                 int o = (y * width + x) * 4;
-                rgba[o] = color.R; rgba[o + 1] = color.G; rgba[o + 2] = color.B; rgba[o + 3] = 255;
+                var (cr, cg, cb) = color.ToRgb();
+                rgba[o] = cr; rgba[o + 1] = cg; rgba[o + 2] = cb; rgba[o + 3] = 255;
                 if (keyMask is not null)
                 {
                     bool masked = true;
@@ -154,6 +154,37 @@ internal static class PdfImageXObject
                 rgba[o] = (byte)Math.Round(Math.Clamp(a, 0, 1) * rgba[o]);
             }
         }
+    }
+
+    /// <summary>A JPEG with a soft mask or stencil mask: its pixels are decoded so the mask can become the alpha channel.</summary>
+    static Image? FromMaskedJpeg(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpeg, out string? why)
+    {
+        why = null;
+        byte[] rgba;
+        int width, height;
+        try
+        {
+            if (!PeachImage.Image.TryLoad(new MemoryStream(jpeg), out var decoded, new PeachImage.DecoderOptions { TargetPixelFormat = PeachImage.PixelFormat.Rgba32 }) || decoded is null)
+            {
+                why = "image data could not be decoded";
+                return null;
+            }
+
+            using (decoded)
+            {
+                (width, height) = (decoded.Width, decoded.Height);
+                rgba = decoded.PixelMemory.Span.ToArray();
+            }
+        }
+        catch (Exception)
+        {
+            why = "image data could not be decoded";
+            return null;
+        }
+
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, resources, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, resources, soft: false);
+        return FromPixels(context, rgba, width, height, out why);
     }
 
     static Image? FromStream(RenderContext context, byte[] bytes, out string? why)

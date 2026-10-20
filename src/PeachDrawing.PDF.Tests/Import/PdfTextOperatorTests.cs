@@ -148,7 +148,8 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.Equal(0, invisible.Pixels);
             Assert.Empty(invisible.Unsupported);
-            Assert.Contains("Tr 1", stroked.Unsupported);
+            Assert.Empty(stroked.Unsupported);
+            Assert.True(stroked.Pixels > 0, "a stroked glyph is drawn as an outline");
         }
 
         [Fact]
@@ -182,6 +183,71 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal(0, blue);                                   // the blue was set inside q ... Q
             // The second glyph still has the 40pt size: Q restored it, so it is as tall as the first.
             Assert.True(Measure(canvas, out _)!.Value.Y1 - Measure(canvas, out _)!.Value.Y0 > 20);
+        }
+
+        private static (int Red, int Blue, int Black, int Ink) RunColours(PdfSourceDocument doc, PdfDictionary resources, string content)
+        {
+            using var canvas = new RasterRenderContext().CreateCanvas(300, 100);
+            canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 100));
+            var interpreter = new PdfContentInterpreter(doc, canvas);
+            interpreter.Run(Encoding.Latin1.GetBytes(content), resources);
+            interpreter.Finish();
+            var span = canvas.ToPixelBuffer().PremultipliedRgba.Span;
+            int red = 0, blue = 0, black = 0, ink = 0;
+            for (var i = 0; i < span.Length; i += 4)
+            {
+                if (span[i + 3] < 200) continue;
+                ink++;
+                if (span[i] > 200 && span[i + 1] < 60 && span[i + 2] < 60) red++;
+                if (span[i + 2] > 200 && span[i] < 60 && span[i + 1] < 60) blue++;
+                if (span[i] < 40 && span[i + 1] < 40 && span[i + 2] < 40) black++;
+            }
+
+            return (red, blue, black, ink);
+        }
+
+        [Fact]
+        public async Task StrokedText_IsDrawnAsAnOutlineInTheStrokeColour_AndFilledTextAsAnArea()
+        {
+            var (doc, res, hex) = await OpenAsync();
+            var shown = $"BT /F0 60 Tf 10 20 Td <{hex}> Tj ET";
+
+            var stroked = RunColours(doc, res, $"1 0 0 RG 2 w 1 Tr {shown}");
+            var both = RunColours(doc, res, $"1 0 0 RG 0 g 2 w 2 Tr {shown}");
+            var filled = RunColours(doc, res, $"0 g {shown}");
+
+            Assert.True(stroked.Red > 50, "the outline is in the stroke colour");
+            Assert.Equal(0, stroked.Black);                                  // and nothing is filled
+            Assert.True(both.Red > 50 && both.Black > 100, "fill and stroke together");
+            Assert.True(filled.Black > both.Red, "a filled glyph covers far more than its outline");
+        }
+
+        [Fact]
+        public async Task ClippingRenderModes_RestrictLaterPaintToTheGlyphs_UntilTheStateEnds()
+        {
+            var (doc, res, hex) = await OpenAsync();
+            var shown = $"BT /F0 60 Tf 10 20 Td <{hex}> Tj ET";
+            var wholePage = "0 0 1 rg 0 0 300 100 re f";
+
+            var unclipped = RunColours(doc, res, wholePage);
+            var clipped = RunColours(doc, res, $"q 7 Tr {shown} {wholePage} Q");
+            var fillClipped = RunColours(doc, res, $"1 0 0 rg q 4 Tr {shown} 0 0 1 rg {wholePage} Q");
+            var restored = RunColours(doc, res, $"q 7 Tr {shown} Q {wholePage}");
+
+            Assert.Equal(300 * 100, unclipped.Blue);
+            Assert.InRange(clipped.Blue, 100, 6000);                         // only inside the glyph
+            Assert.True(fillClipped.Blue > 100 && fillClipped.Blue < 6000, "mode 4 clips too");
+            Assert.Equal(300 * 100, restored.Blue);                          // Q undoes the clip
+        }
+
+        [Fact]
+        public async Task StrokeAndClipTogether_AreBothApplied()
+        {
+            var (doc, res, hex) = await OpenAsync();
+
+            var both = RunColours(doc, res, $"1 0 0 RG 2 w q BT /F0 60 Tf 5 Tr 10 20 Td <{hex}> Tj ET 0 0 1 rg 0 0 300 100 re f Q");
+
+            Assert.True(both.Blue > 100 && both.Red > 20, "the glyph is clipped to and outlined");
         }
     }
 }
