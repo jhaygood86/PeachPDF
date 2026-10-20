@@ -81,6 +81,45 @@ internal static class PdfImageXObject
             for (int i = 0; i < keyMask.Length; i++) keyMask[i] = doc.IntOf(ma.Elements[i]);
         }
         var data = decoded.Data;
+        if (space == PdfColorSpace.Cmyk && keyMask is null && image.GetRaw("SMask") is null && image.GetRaw("Mask") is null)
+        {
+            // A CMYK image stays CMYK: it goes to the canvas as a CMYK TIFF, which a PDF canvas embeds as a DeviceCMYK image rather
+            // than a converted RGB one, so the viewer's own CMYK conversion applies exactly as it did to the original.
+            var cmyk = new byte[width * height * 4];
+            for (int y = 0; y < height; y++)
+                for (int x = 0; x < width; x++)
+                    for (int c = 0; c < 4; c++)
+                    {
+                        int v = ReadSample(data, y * rowBytes, (x * 4 + c) * bpc, bpc);
+                        double d0 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2] : 0;
+                        double d1 = decode is not null && decode.Length >= c * 2 + 2 ? decode[c * 2 + 1] : 1;
+                        cmyk[(y * width + x) * 4 + c] = (byte)Math.Round(Math.Clamp(d0 + v / max * (d1 - d0), 0, 1) * 255);
+                    }
+            var tiff = FromStream(context, EncodeCmykTiff(cmyk, width, height), out why);
+            if (tiff is not null) return tiff;
+            why = null;                                                     // not decodable as a TIFF: fall through to the RGB conversion
+        }
+
+        if (space.Bulk is { } bulk && bpc == 8 && decode is null && keyMask is null)
+        {
+            // An ICC-based image is converted whole: one call to the profile engine rather than one per pixel.
+            var device = new byte[width * height * comps];
+            for (int y = 0; y < height; y++)
+            {
+                int available = Math.Max(0, Math.Min(rowBytes, data.Length - y * rowBytes));
+                Buffer.BlockCopy(data, y * rowBytes, device, y * width * comps, available);
+            }
+            var converted = new byte[width * height * 3];
+            bulk(device, converted, width * height);
+            for (int i = 0; i < width * height; i++)
+            {
+                rgba[i * 4] = converted[i * 3]; rgba[i * 4 + 1] = converted[i * 3 + 1]; rgba[i * 4 + 2] = converted[i * 3 + 2]; rgba[i * 4 + 3] = 255;
+            }
+            if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary bulkSoft) ApplyAlpha(doc, bulkSoft, rgba, width, height, resources, soft: true);
+            else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary bulkMask) ApplyAlpha(doc, bulkMask, rgba, width, height, resources, soft: false);
+            return FromPixels(context, rgba, width, height, out why);
+        }
+
         for (int y = 0; y < height; y++)
         {
             int rowStart = y * rowBytes;
@@ -200,6 +239,39 @@ internal static class PdfImageXObject
 
     static Image? FromPixels(RenderContext context, byte[] rgba, int width, int height, out string? why) =>
         FromStream(context, EncodePng(rgba, width, height), out why);
+
+    /// <summary>An uncompressed 8-bit CMYK (separated) TIFF.</summary>
+    internal static byte[] EncodeCmykTiff(byte[] cmyk, int width, int height)
+    {
+        const int entries = 11;
+        int ifdOffset = 8;
+        int bitsOffset = ifdOffset + 2 + entries * 12 + 4;
+        int dataOffset = bitsOffset + 8;
+        var o = new List<byte>();
+        void U16(int v) { o.Add((byte)v); o.Add((byte)(v >> 8)); }
+        void U32(long v) { o.Add((byte)v); o.Add((byte)(v >> 8)); o.Add((byte)(v >> 16)); o.Add((byte)(v >> 24)); }
+        void Entry(int tag, int type, int count, long value) { U16(tag); U16(type); U32(count); if (type == 3 && count == 1) { U16((int)value); U16(0); } else U32(value); }
+
+        o.AddRange("II"u8.ToArray());
+        U16(42);
+        U32(ifdOffset);
+        U16(entries);
+        Entry(256, 4, 1, width);                         // ImageWidth
+        Entry(257, 4, 1, height);                        // ImageLength
+        Entry(258, 3, 4, bitsOffset);                    // BitsPerSample: 8 8 8 8
+        Entry(259, 3, 1, 1);                             // Compression: none
+        Entry(262, 3, 1, 5);                             // Photometric: separated
+        Entry(273, 4, 1, dataOffset);                    // StripOffsets
+        Entry(277, 3, 1, 4);                             // SamplesPerPixel
+        Entry(278, 4, 1, height);                        // RowsPerStrip
+        Entry(279, 4, 1, cmyk.Length);                   // StripByteCounts
+        Entry(284, 3, 1, 1);                             // PlanarConfiguration: chunky
+        Entry(332, 3, 1, 1);                             // InkSet: CMYK
+        U32(0);                                          // no further IFD
+        for (int i = 0; i < 4; i++) U16(8);
+        o.AddRange(cmyk);
+        return o.ToArray();
+    }
 
     // ------------------------------------------------------------ PNG
 

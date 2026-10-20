@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
 
 namespace PeachDrawing.PDF.Import;
 
@@ -20,6 +21,15 @@ internal sealed class PdfColorSpace
         ToColor = toColor;
         Initial = initial;
     }
+
+    /// <summary>Converts a run of 8-bit device values (<see cref="Components"/> per colour) to 8-bit sRGB (three per colour).</summary>
+    public delegate void BulkConverter(ReadOnlySpan<byte> device, Span<byte> rgb, int count);
+
+    /// <summary>
+    /// For a space whose colours go through an embedded ICC profile: converts many 8-bit colours at once, which is how an image is
+    /// converted. Null for the device spaces (and for a profile that could not be used, which is then read as its device alternate).
+    /// </summary>
+    public BulkConverter? Bulk { get; private set; }
 
     /// <summary>The family name (<c>DeviceRGB</c>, <c>Indexed</c>...).</summary>
     public string Name { get; }
@@ -76,6 +86,7 @@ internal sealed class PdfColorSpace
             case "/Pattern": return Pattern;
             case "/ICCBased" when arr.Elements.Count > 1 && doc.Resolve(arr.Elements[1]) is PdfDictionary icc:
                 int n = doc.IntOf(icc.GetRaw("N"));
+                if (n is 1 or 3 && FromIccProfile(doc, icc, n) is { } converting) return converting;
                 return n switch
                 {
                     1 => Gray,
@@ -90,6 +101,53 @@ internal sealed class PdfColorSpace
             default:
                 return null;
         }
+    }
+
+    sealed record IccEntry(PdfColorSpace? Space);
+
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfDictionary, IccEntry> IccCache = new();
+
+    static readonly Lazy<PeachImage.IccColorProfile?> SRgbProfile =
+        new(() => PeachImage.IccColorProfile.TryCreate(PdfAResources.SRgbIccProfile, out var p) ? p : null);
+
+    /// <summary>
+    /// A gray or RGB space that converts through the embedded profile to sRGB, with PeachImage's ICC engine. Null when the profile cannot be
+    /// read or is not the kind its component count says: the caller then reads the space as its device alternate. CMYK profiles are left
+    /// as device CMYK, which a PDF canvas keeps as CMYK.
+    /// </summary>
+    static PdfColorSpace? FromIccProfile(PdfSourceDocument doc, PdfDictionary icc, int n)
+    {
+        if (IccCache.TryGetValue(icc, out var cached)) return cached.Space;
+        PdfColorSpace? space = null;
+        try
+        {
+            var want = n == 3 ? PeachImage.IccColorSpace.Rgb : PeachImage.IccColorSpace.Gray;
+            if (icc.Stream is not null && SRgbProfile.Value is { } srgb
+                && PeachImage.IccColorProfile.TryCreate(doc.DecodeStream(icc).Data, out var profile) && profile is not null
+                && profile.ChannelCount == n && profile.DataColorSpace == want)
+            {
+                const PeachImage.IccRenderingIntent intent = PeachImage.IccRenderingIntent.RelativeColorimetric;
+                space = new PdfColorSpace(n == 3 ? "ICCBased(RGB)" : "ICCBased(Gray)", n, (c, a) =>
+                {
+                    Span<byte> device = stackalloc byte[3];
+                    for (int i = 0; i < n; i++) device[i] = (byte)Math.Round(Math.Clamp(c[i], 0, 1) * 255);
+                    Span<byte> rgb = stackalloc byte[3];
+                    profile.ConvertTo(srgb, device[..n], rgb, 1, intent, true);
+                    return PaintColor.FromArgb(Alpha(a), rgb[0], rgb[1], rgb[2]);
+                }, n == 3 ? [0, 0, 0] : [0])
+                {
+                    Bulk = (device, rgb, count) => profile.ConvertTo(srgb, device, rgb, count, intent, true),
+                };
+            }
+        }
+        catch (Exception)
+        {
+            // An unreadable or hostile profile is no reason to fail the page: it is read as its device alternate.
+            space = null;
+        }
+
+        IccCache.TryAdd(icc, new IccEntry(space));
+        return space;
     }
 
     static PdfColorSpace? Indexed(PdfSourceDocument doc, PdfArray arr, PdfDictionary? resources, int depth)
