@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using System.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS.PropertyTests
+namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 {
     public class PageRuleTests : CssConstructionFunctions
     {

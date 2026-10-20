@@ -3,7 +3,7 @@ using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Fragments
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
 {
     /// <summary>
     /// Direct unit coverage for <see cref="BoxGeometrySnapshot.Translate"/>'s multi-root fallback path -

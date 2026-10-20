@@ -5,7 +5,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Proves <c>SvgTreeBuilder.BuildFilter</c>'s parse-time acceptance/rejection rules: which

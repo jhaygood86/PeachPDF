@@ -5,7 +5,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>text-align</c> inside a vertical-writing-mode (<c>vertical-rl</c>/<c>vertical-lr</c>) box's own

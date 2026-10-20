@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// The resumption record. A token says <i>where</i> layout stopped and nothing about geometry — the

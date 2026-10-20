@@ -21,5 +21,7 @@ from it; reusing the first canvas lays the second document out against the wrong
 the new `PeachBrackets.Engine.Tests`, the one project granted `InternalsVisibleTo` by PeachBrackets (and by PeachPDF, for `HtmlRenderContext` and the
 declarative builders). The move was driven by the compiler: remove the grant from `PeachPDF.Tests`, move every file that stops compiling, rebuild,
 repeat - the compiler reports only the first failing phase's errors, so it takes several rounds, and a helper that moves (`PaintedWords`,
-`PdfGeneratorLayoutHarness`) pulls its callers along. Files keep their `PeachPDF.Tests` namespace and the project sets `RootNamespace` to match, because an
-embedded resource's name (`CSS/bootstrap.css`) is built from it. Helpers both projects use are linked from `PeachPDF.Tests/TestSupport`.
+`PdfGeneratorLayoutHarness`) pulls its callers along. The moved files were then renamed into the `PeachBrackets.Engine.Tests` namespace; the embedded `CSS/bootstrap.css` is named after the namespace, so
+the two move together. Dropping the old `PeachPDF.Tests.*` parent namespace also dropped the implicit view of `PeachPDF` types, so files that use
+them say `using PeachPDF;` (not a global using: `PeachPDF.DataUri` and `PdfAConformance` collide with PeachBrackets' and PeachDrawing.PDF's).
+Helpers both projects use are linked from `PeachPDF.Tests/TestSupport`.

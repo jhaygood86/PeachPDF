@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // NOTE: this repo's CSS identifier tokenizer normalizes every keyword value to lowercase
     // at parse time (ValueExtensions.ToIdentifier), same as every other keyword property here

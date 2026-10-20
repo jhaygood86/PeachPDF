@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Painting tests for <c>leader()</c> (css-content-3 §6), asserting the actual sequence of calls

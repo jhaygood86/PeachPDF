@@ -6,7 +6,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Parse;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Unit tests for <see cref="FontVariantAlternatesResolver"/> — resolving a cascaded

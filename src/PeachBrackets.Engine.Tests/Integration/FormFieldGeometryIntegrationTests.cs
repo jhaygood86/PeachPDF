@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
@@ -6,7 +7,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The box-model geometry an <c>&lt;input&gt;</c>/<c>&lt;select&gt;</c> resolves to — the single

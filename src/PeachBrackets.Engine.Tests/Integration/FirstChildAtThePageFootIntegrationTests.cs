@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A first child whose parent's top padding or border crosses the page foot

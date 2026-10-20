@@ -4,7 +4,7 @@ using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// A pass that resumes where the one before did, one fragmentainer later, has placed nothing. The driver used to notice only

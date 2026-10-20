@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for a <c>&lt;style&gt;</c> element whose CSS contains a <c>&lt;</c> character (e.g. an

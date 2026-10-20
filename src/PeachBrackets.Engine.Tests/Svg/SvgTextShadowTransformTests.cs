@@ -9,7 +9,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary><c>text-shadow</c> on SVG glyphs painted under their own transform: along a <c>&lt;textPath&gt;</c>, and blurred under an explicit <c>rotate</c>.</summary>
     public class SvgTextShadowTransformTests

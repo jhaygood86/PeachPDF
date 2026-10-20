@@ -5,7 +5,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Text;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// The font-selection order for a character asked to be drawn in a presentation (CSS

@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Dom;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Unit tests for the one shared reader of the <c>[ &lt;counter-name&gt; &lt;integer&gt;? ]+ | none</c>

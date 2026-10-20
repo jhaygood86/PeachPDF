@@ -1,9 +1,9 @@
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A cell's declared <c>width</c> is its CONTENT width under <c>box-sizing: content-box</c> (the

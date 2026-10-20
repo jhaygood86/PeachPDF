@@ -12,7 +12,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // Painting-change coverage per CLAUDE.md: asserts the actual sequence of calls made to the
     // Canvas adapter layer (not just that painting completes, and not string-parsing serialized

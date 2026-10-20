@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// CSS 2.1 §9.5.1: a float that does not fit beside an earlier one drops below it, as high as possible (rule 8), for

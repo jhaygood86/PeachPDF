@@ -1,6 +1,6 @@
 using PeachBrackets.Css;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// <see cref="SelectorMatchCost"/> ranks selector kinds cheapest-to-evaluate first so

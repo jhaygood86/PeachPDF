@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     public class SvgTreeBuilderTests
     {

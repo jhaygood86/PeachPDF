@@ -11,7 +11,7 @@ using System.Numerics;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A rendered word separator is shown as a real space glyph, not only as the gap between two

@@ -1,10 +1,11 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using System.Globalization;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A card is an auto-height scroll container whose first child has a top margin, the shape of a titled panel.

@@ -144,7 +144,6 @@
 
   <ItemGroup>
     <PackageReference Include="coverlet.MTP" />
-    <PackageReference Include="Microsoft.Playwright" />
     <PackageReference Include="System.Text.Encoding.CodePages" />
     <PackageReference Include="xunit.v3" />
     <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />

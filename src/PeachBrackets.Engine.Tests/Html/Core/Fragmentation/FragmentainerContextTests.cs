@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// The fragmentainer a layout pass targets. These pin the two things the rest of the fragmentation

@@ -10,7 +10,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Targeted regression coverage for mechanisms the real Acid2 test (src/PeachPDF.TestHarness/acid2.html)

@@ -8,7 +8,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// #237 gap 3: an <c>@font-face</c>/<c>@property</c>/<c>@page</c> rule nested inside an <c>@layer</c>

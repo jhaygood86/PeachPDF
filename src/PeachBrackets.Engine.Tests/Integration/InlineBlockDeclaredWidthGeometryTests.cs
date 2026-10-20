@@ -2,9 +2,9 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The painted half of CSS 2.1 §10.3.9: a declared <c>width</c> sizes a non-replaced inline-block's

@@ -6,7 +6,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// CSS animations on the elements of an inline <c>&lt;svg&gt;</c> against Chrome: each row is a stylesheet and an element, a point of the run, and what Chrome

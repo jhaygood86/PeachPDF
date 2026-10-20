@@ -5,7 +5,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>How the inline style, the matching rules and the presentation attribute settle one property (against Chrome 155).</summary>
     public class SvgStyleCascadeTierTests

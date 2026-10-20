@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #826: <c>CssValueParser.ParseLength</c>'s <c>em</c>/<c>rem</c>/<c>ex</c>/<c>ch</c> handling

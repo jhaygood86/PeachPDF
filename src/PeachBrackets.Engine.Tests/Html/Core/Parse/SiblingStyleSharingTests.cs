@@ -8,7 +8,7 @@ using PeachDrawing.PDF.Engine.Advanced;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// An element takes the computed style of an earlier sibling with the same tag and attributes, skipping the matching and applying

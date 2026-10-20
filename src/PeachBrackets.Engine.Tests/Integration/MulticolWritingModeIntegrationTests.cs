@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A <c>display: multicol</c> (<c>column-count</c>/<c>column-width</c>) container under a vertical

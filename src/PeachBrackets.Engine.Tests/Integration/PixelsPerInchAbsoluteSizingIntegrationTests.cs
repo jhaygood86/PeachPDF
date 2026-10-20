@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
@@ -6,7 +7,7 @@ using PeachPDF.Tests.TestSupport;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #814: <c>PdfGenerateConfig.PixelsPerInch</c> sets <c>HtmlRenderContext.PixelsPerPoint</c>

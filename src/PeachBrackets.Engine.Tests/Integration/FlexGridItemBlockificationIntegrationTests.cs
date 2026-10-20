@@ -4,7 +4,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS Display 3 §2.7 / css-flexbox-1 §4 / css-grid-2 §6: every in-flow child of a flex or grid

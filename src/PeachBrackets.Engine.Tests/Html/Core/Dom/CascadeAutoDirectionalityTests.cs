@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// End-to-end tests for the <c>dir="auto"</c>/&lt;bdi&gt;-default directionality pre-pass

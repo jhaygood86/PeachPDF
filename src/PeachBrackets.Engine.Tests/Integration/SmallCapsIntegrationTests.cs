@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 using Xunit;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for real <c>font-variant: small-caps</c> rendering. Previously this property

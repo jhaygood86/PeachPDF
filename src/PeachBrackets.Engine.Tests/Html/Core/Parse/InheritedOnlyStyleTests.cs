@@ -4,7 +4,7 @@ using PeachBrackets.Html.Parse;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// A text or anonymous box has no element, so no rule or attribute reaches it and its computed style depends only on the style it

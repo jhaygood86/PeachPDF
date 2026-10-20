@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>SVG text honouring the whole <c>font-family</c> list, including per-character fallback when the first family lacks a glyph.</summary>
     public class SvgTextFontFallbackTests

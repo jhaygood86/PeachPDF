@@ -8,7 +8,7 @@ using System;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>revert</c> and <c>revert-layer</c> in an <c>!important</c> custom property or <c>color</c> are left to the cascade's own important phase, not

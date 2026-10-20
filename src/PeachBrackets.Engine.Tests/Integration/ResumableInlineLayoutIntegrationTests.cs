@@ -2,7 +2,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A block's inline content is laid out into one fragmentainer at a time: where a line does not

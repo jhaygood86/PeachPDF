@@ -8,7 +8,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Coverage for <see cref="HtmlContainerInt.DocumentBaseUri"/> — the one place the

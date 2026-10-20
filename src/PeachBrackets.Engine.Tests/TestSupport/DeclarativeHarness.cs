@@ -1,3 +1,4 @@
+using PeachPDF;
 using System;
 using System.Threading.Tasks;
 using PeachBrackets;
@@ -9,7 +10,7 @@ using PeachDrawing.PDF;
 using PeachPDF.Layout;
 using PeachPDF.Rendering;
 
-namespace PeachPDF.Tests.TestSupport
+namespace PeachBrackets.Engine.Tests.TestSupport
 {
     /// <summary>
     /// Builds and lays out exactly one declarative page - mirroring <c>PdfGenerator.AddDeclarativePage</c> up to (but not including) writing the PDF -

@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Text;
 using PeachDrawing.PDF;
@@ -7,13 +8,13 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Drawing;
-using PeachPDF.Tests.CSS;
+using PeachBrackets.Engine.Tests.CSS;
 using PeachPDF.Tests.TestSupport;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The range form of the <c>@font-face</c> descriptors (<c>font-weight: 100 900</c>, <c>font-stretch: 75% 125%</c>,

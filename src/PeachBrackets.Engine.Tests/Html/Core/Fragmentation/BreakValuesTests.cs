@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// The break-value classifier. These assert against the css-break-3 §3.1/§3.2 value sets directly

@@ -2,9 +2,9 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A float, or an inline-block, taller than the page it sits on shows all of its content: the lines that do

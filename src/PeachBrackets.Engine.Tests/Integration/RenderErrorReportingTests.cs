@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachDrawing.Text.Shaping;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
@@ -11,7 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// What happens when a phase of the pipeline throws: the exception is wrapped in an

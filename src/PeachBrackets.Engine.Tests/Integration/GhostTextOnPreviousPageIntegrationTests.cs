@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
@@ -7,7 +8,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression tests for a second, contributing bug found while diagnosing #113:

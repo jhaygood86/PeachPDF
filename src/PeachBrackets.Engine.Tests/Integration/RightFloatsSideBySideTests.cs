@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// CSS 2.1 §9.5.1: right floats that fit side by side sit side by side, each as far right as it can go (rule 9) without overlapping the

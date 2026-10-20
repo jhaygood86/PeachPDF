@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachBrackets.Html;
@@ -8,7 +9,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A line of content layout keeps whole and slices where it crosses a page boundary (css-break-3 §4.4:

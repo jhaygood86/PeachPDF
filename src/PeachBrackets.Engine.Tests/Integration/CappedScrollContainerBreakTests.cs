@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 using System;
@@ -6,7 +7,7 @@ using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A scroll container with an auto height and a <c>max-height</c> breaks between its lines like a plain

@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using PeachBrackets.Svg;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// The three pseudo-classes that depend only on the document tree, so a static renderer can answer them:

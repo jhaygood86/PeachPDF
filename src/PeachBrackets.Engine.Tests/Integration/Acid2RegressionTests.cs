@@ -20,7 +20,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Full-fixture regression coverage for the real Acid2 test (http://acid2.acidtests.org/), loaded

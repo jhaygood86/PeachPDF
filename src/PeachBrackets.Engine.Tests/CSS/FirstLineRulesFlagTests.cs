@@ -2,7 +2,7 @@ using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachBrackets.Html;
 
-namespace PeachPDF.Tests.CSS;
+namespace PeachBrackets.Engine.Tests.CSS;
 
 /// <summary>
 /// Regression tests for <c>CssData.HasFirstLineRules</c> (issue #911): a document-level flag,

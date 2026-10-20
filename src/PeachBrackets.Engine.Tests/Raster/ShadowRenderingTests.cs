@@ -6,7 +6,7 @@ using PeachDrawing;
 using PeachDrawing.Filters;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     public class ShadowRenderingTests
     {

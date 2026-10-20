@@ -1,7 +1,7 @@
 using PeachDrawing.Text.Unicode;
 using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Emergency wrapping temporarily replaces one word in its owner's word list with linked fragments.

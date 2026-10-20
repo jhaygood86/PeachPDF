@@ -12,7 +12,7 @@ using System.Threading.Tasks;
 using Xunit;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for <c>font-variant-numeric</c>: parses/cascades all 8 keywords and

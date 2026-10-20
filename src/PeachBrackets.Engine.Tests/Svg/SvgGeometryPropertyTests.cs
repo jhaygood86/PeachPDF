@@ -4,7 +4,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>r</c>, <c>cx</c>, <c>cy</c>, <c>rx</c>, <c>ry</c>, <c>x</c>, <c>y</c>, <c>width</c>, <c>height</c> and <c>d</c> are CSS properties in SVG 2: a rule or

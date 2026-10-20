@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// What <see href="https://www.w3.org/TR/css-break-3/#monolithic">css-break-3 §2</see>'s monolithic set

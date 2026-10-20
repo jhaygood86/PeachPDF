@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
@@ -9,7 +10,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// The <c>background</c> shorthand with several layers expands into one value per layer for each layered longhand. A layer whose text leaves a longhand

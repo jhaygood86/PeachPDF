@@ -4,9 +4,9 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Regression coverage for issue #1168: an <c>inline-block</c> whose content needs to wrap was

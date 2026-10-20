@@ -7,7 +7,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // NOTE: like -peachpdf-pdf-tag-type (see PdfTagTypeIntegrationTests), the CSS identifier
     // tokenizer normalizes every keyword value to lowercase at parse time, so CssBox.PdfFormField

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Numerics;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// Tests for <see cref="FilterEffectResolver"/> - the paint-time resolution of a parsed

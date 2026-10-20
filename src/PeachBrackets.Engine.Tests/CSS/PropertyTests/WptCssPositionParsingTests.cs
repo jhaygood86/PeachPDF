@@ -1,4 +1,4 @@
-namespace PeachPDF.Tests.CSS.PropertyTests
+namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 {
     using PeachBrackets.Css;
     using System.Linq;

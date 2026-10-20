@@ -12,7 +12,7 @@ using System.Text;
 using PeachDrawing.Text;
 
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// End-to-end coverage of <c>@font-face</c> <c>unicode-range</c>: two genuinely different fonts

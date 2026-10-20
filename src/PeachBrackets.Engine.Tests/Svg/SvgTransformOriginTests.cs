@@ -5,7 +5,7 @@ using System.Linq;
 using System.Numerics;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>transform-origin</c>, <c>transform-box</c> and the relative lengths of a CSS <c>transform</c> on an SVG element. The expected matrices are Chrome's computed values for a

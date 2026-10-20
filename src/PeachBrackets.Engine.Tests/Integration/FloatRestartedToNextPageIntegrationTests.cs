@@ -4,7 +4,7 @@ using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A float with no room left on its page is restarted at the top of the next one, and the in-flow

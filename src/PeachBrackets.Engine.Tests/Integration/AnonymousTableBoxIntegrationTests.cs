@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Coverage for CSS2.1 §17.2.1 anonymous table-object generation (<c>DomParser.CorrectAnonymousTablesGenerateMissingChildWrappers</c>)

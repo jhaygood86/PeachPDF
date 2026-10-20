@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine;
@@ -5,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// css-gcpm-3 <c>running()</c>/<c>element()</c> edge cases called out in the implementation plan's

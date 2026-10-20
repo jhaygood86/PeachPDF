@@ -6,7 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// <see cref="CssBox.CollapsedBorderSegments"/>' exact geometry at an interior grid line - distinct

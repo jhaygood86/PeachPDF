@@ -2,9 +2,9 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using System.Threading.Tasks;
 using Xunit;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS Logical Properties §2.2 (issue #1285): <c>float</c> and <c>clear</c> accept

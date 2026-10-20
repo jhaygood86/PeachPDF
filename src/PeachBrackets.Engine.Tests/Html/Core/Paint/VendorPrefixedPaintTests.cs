@@ -4,7 +4,7 @@ using PeachDrawing;
 using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// A prefixed-only declaration paints exactly what its standard spelling paints. Pages are laid out for real

@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The <c>&lt;hr&gt;</c> user-agent margin, <c>margin-block: 0.5em; margin-inline: auto</c>

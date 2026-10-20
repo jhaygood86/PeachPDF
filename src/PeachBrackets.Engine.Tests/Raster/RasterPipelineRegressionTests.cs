@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.PDF;
 using PeachDrawing.Core;
@@ -8,7 +9,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Numerics;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>Regressions for defects a review of the raster backend found: each pins the behaviour that was wrong.</summary>
     public class RasterPipelineRegressionTests

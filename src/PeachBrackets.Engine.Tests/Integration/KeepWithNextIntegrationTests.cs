@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // css-break §3.1 keep-with-next: a break-after: avoid on an earlier sibling (or
     // break-before: avoid on the later one) forbids a break between the two. PeachPDF's

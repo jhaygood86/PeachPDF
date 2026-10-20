@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end layout tests for real writing-mode-aware Flexbox

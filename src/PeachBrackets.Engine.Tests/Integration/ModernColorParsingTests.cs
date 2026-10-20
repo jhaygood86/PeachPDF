@@ -7,7 +7,7 @@ using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF.Engine.Drawing;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS PaintColor 4/5 function forms the CSS-OM color converter doesn't handle - <c>oklch()</c>,

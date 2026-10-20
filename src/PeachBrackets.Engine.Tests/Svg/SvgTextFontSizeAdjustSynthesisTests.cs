@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>SVG text honouring <c>font-size-adjust</c> and <c>font-synthesis*</c> (CSS Fonts 5 §3.2, CSS Fonts 4 §3.5).</summary>
     public class SvgTextFontSizeAdjustSynthesisTests

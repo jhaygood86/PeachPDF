@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <see cref="CssBidiParagraphResolver"/> writes plain ASCII in a left-to-right paragraph out without running the bidi, script and

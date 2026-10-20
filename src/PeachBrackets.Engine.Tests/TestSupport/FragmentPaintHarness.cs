@@ -4,7 +4,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Paint;
 
-namespace PeachPDF.Tests.TestSupport
+namespace PeachBrackets.Engine.Tests.TestSupport
 {
     /// <summary>
     /// Drives paint the way production does: off one fragmentainer of the fragment tree layout

@@ -5,7 +5,7 @@ using PeachBrackets.Html.Entities;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Direct unit tests for <see cref="PdfGenerator.SelectPageRule"/> — the pure function that picks

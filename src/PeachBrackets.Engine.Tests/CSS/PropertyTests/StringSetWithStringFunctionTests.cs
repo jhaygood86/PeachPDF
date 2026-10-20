@@ -1,6 +1,6 @@
 using PeachBrackets.Css;
 
-namespace PeachPDF.Tests.CSS.PropertyTests
+namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 {
     /// <summary>
     /// Extended tests for string-set property that specifically test the string() function

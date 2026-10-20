@@ -1,6 +1,6 @@
 using PeachBrackets.Css;
 
-namespace PeachPDF.Tests.CSS.PropertyTests
+namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 {
     /// <summary>
     /// Unit tests verifying that the CSS module correctly parses all five global keywords

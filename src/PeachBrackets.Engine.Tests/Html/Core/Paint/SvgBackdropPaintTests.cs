@@ -4,7 +4,7 @@ using PeachDrawing.PDF;
 using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// <c>BackgroundImage</c> of an SVG filter in an HTML page: the page behind an inline <c>&lt;svg&gt;</c> is repainted into the filter's

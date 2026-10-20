@@ -6,7 +6,7 @@ using System.Linq;
 using System.Numerics;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// What a stylesheet rule (or a keyframe) can say about an SVG element, against Chrome 155 (computed style of a <c>rect</c> in a 200 x 100

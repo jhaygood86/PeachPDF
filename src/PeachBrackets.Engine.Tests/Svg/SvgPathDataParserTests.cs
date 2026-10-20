@@ -1,7 +1,7 @@
 using PeachBrackets.Svg;
 using System.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     public class SvgPathDataParserTests
     {

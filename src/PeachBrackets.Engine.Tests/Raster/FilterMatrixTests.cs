@@ -3,7 +3,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Html.Paint;
 using PeachDrawing;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>The colour matrices Filter Effects 1 §3 defines, checked against colours whose result follows straight from the spec's tables.</summary>
     public class FilterMatrixTests

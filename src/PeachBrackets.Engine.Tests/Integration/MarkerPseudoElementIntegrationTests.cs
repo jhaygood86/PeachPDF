@@ -9,7 +9,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     public class MarkerPseudoElementIntegrationTests
     {

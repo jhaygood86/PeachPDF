@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Annotations;
 using PeachPDF.Rendering;
 using PeachBrackets.Css;
@@ -15,7 +16,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>display: contents</c> (<see href="https://www.w3.org/TR/css-display-3/#valdef-display-contents">CSS
@@ -959,7 +960,7 @@ namespace PeachPDF.Tests.Integration
         public async Task Declarative_ContentsOnTheRoot_IsBlockAndNotDropped()
         {
             var stylesheet = await new PdfGenerator().ParseStyleSheet("#root { display: contents }");
-            var (page, root, container) = await PeachPDF.Tests.TestSupport.DeclarativeHarness.BuildAsync(
+            var (page, root, container) = await PeachBrackets.Engine.Tests.TestSupport.DeclarativeHarness.BuildAsync(
                 p => p.Content(c => c.Id("root").Text("hello")), stylesheet);
 
             Assert.Equal(DisplayMode.Block, root.Display.Value);
@@ -984,7 +985,7 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Declarative_ATopLevelFragmentShell_StillReachesTheRealTree()
         {
-            var (_, root, container) = await PeachPDF.Tests.TestSupport.DeclarativeHarness.BuildAsync(
+            var (_, root, container) = await PeachBrackets.Engine.Tests.TestSupport.DeclarativeHarness.BuildAsync(
                 p => p.Content(c => c.Html("<p>before</p><div id='empty' style='display:contents'></div>")));
 
             var shell = Assert.Single(container.DisplayContentsShells);

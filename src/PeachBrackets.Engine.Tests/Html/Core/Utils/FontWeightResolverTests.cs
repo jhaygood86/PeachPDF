@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Unit tests for <see cref="FontWeightResolver"/> - CSS Fonts 4 §2.2.1's bolder/lighter step table,

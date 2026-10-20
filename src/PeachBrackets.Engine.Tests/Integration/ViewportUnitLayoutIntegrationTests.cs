@@ -9,7 +9,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// End-to-end coverage for viewport-relative units (<c>vw</c>/<c>vh</c>/<c>vi</c>/<c>vb</c>/

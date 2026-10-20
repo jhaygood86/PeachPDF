@@ -2,7 +2,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A <c>widows</c> rewind names a box and the number of lines to keep, and is carried out after the pass

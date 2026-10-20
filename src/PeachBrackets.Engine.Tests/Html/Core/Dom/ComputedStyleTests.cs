@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Coverage for the copy-on-write sharing guarantee <see cref="ComputedStyle"/> is built around: a

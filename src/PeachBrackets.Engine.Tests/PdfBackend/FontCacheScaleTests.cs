@@ -4,7 +4,7 @@ using PeachBrackets.Html.Utils;
 using PeachDrawing.Core;
 using System.Text;
 
-namespace PeachPDF.Tests.PdfBackendTests
+namespace PeachBrackets.Engine.Tests.PdfBackendTests
 {
     /// <summary>
     /// A font size the layout asks for is in layout units (points × <see cref="PdfRenderContext.PixelsPerPoint"/>),

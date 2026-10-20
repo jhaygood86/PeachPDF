@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
@@ -7,7 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A block-level box's layout pass is entered at the <i>frame</i>, which places the box before handing

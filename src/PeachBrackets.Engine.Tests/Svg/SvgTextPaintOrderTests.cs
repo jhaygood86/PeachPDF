@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary><c>paint-order</c> on stroked SVG text: which of fill and stroke is painted first.</summary>
     public class SvgTextPaintOrderTests

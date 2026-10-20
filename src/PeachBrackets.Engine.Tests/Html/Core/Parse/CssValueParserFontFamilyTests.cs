@@ -3,7 +3,7 @@ using PeachDrawing.PDF;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Direct unit tests for <see cref="CssValueParser.GetFontFamilyByName"/>'s not-found behavior.

@@ -11,7 +11,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     public class CssLayoutEngineTableTests
     {

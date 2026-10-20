@@ -1,6 +1,6 @@
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Direct unit tests for <see cref="FontSizeResolver"/>, extracted from

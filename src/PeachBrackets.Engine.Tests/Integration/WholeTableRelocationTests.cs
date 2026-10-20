@@ -5,7 +5,7 @@ using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A table that laid out without breaking between any two of its own rows did not fragment, so

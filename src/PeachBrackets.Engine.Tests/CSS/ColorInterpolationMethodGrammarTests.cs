@@ -3,7 +3,7 @@ using PeachBrackets.Html.Parse;
 using System.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// Tests for the shared <see cref="ColorInterpolationMethodGrammar"/> (the single home of the gradient

@@ -4,7 +4,7 @@ using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// What a structurally-cloned box's <c>break-*</c> values actually do to pagination, now that the clone

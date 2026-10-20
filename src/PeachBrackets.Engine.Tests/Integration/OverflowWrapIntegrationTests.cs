@@ -6,7 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>End-to-end coverage for CSS Text 3's overflow-wrap property and word-wrap alias.</summary>
     public class OverflowWrapIntegrationTests

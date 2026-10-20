@@ -4,7 +4,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Entities;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     public class CssNamedStringEngineTests
     {

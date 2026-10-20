@@ -13,11 +13,11 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Real-font characterization for SVG <c>&lt;text&gt;</c>'s Arabic-family joining (issue #533) -
-    /// mirrors <see cref="PeachPDF.Tests.Html.ArabicJoiningCharacterizationTests"/>'s own "prove
+    /// mirrors <see cref="PeachBrackets.Engine.Tests.Html.ArabicJoiningCharacterizationTests"/>'s own "prove
     /// it isn't a no-op" standard against real font data, applied to SVG's independent pipeline:
     /// renders through the real SVG pipeline with a <see cref="TestRecordingGraphics"/> mock to
     /// capture exactly the <c>(text, ShapeSettings)</c> pair <c>SvgRenderer.PaintGlyphs</c>
@@ -108,7 +108,7 @@ namespace PeachPDF.Tests.Svg
         [Fact]
         public void CursiveAttachment_RealFontProducesPlausiblePositiveWidth_NotCollapsedByBadFormula()
         {
-            // Mirrors PeachPDF.Tests.Html.Core.ArabicCursiveAttachmentCharacterizationTests' own
+            // Mirrors PeachBrackets.Engine.Tests.Html.Core.ArabicCursiveAttachmentCharacterizationTests' own
             // regression signature for GposPositioner.TryApplyCursivePair against a font whose Arabic
             // joining actually relies on GPOS cursive attachment (curs), not only positional
             // substitution - a wrong formula previously collapsed a connected word's measured width to

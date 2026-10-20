@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Annotations;
 using PeachBrackets.Building;
 using PeachPDF.Rendering;
@@ -20,7 +21,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layout-assertion tests for the declarative document-building API (<see cref="PdfGenerator.CreateDocument"/>)
@@ -1511,16 +1512,16 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public void DataUri_SniffsMimeTypeFromSignature_ForEachKnownFormat()
         {
-            Assert.StartsWith("data:image/png;base64,", DataUri.FromBytes([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0]));
-            Assert.StartsWith("data:image/jpeg;base64,", DataUri.FromBytes([0xFF, 0xD8, 0xFF, 0, 0]));
-            Assert.StartsWith("data:image/gif;base64,", DataUri.FromBytes([(byte)'G', (byte)'I', (byte)'F', (byte)'8', 0, 0]));
-            Assert.StartsWith("data:image/bmp;base64,", DataUri.FromBytes([(byte)'B', (byte)'M']));
-            Assert.StartsWith("data:image/webp;base64,", DataUri.FromBytes(
+            Assert.StartsWith("data:image/png;base64,", PeachPDF.Layout.DataUri.FromBytes([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0]));
+            Assert.StartsWith("data:image/jpeg;base64,", PeachPDF.Layout.DataUri.FromBytes([0xFF, 0xD8, 0xFF, 0, 0]));
+            Assert.StartsWith("data:image/gif;base64,", PeachPDF.Layout.DataUri.FromBytes([(byte)'G', (byte)'I', (byte)'F', (byte)'8', 0, 0]));
+            Assert.StartsWith("data:image/bmp;base64,", PeachPDF.Layout.DataUri.FromBytes([(byte)'B', (byte)'M']));
+            Assert.StartsWith("data:image/webp;base64,", PeachPDF.Layout.DataUri.FromBytes(
                 [(byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P']));
-            Assert.StartsWith("data:image/jxl;base64,", DataUri.FromBytes([0xFF, 0x0A, 0, 0]));
-            Assert.StartsWith("data:image/jxl;base64,", DataUri.FromBytes(
+            Assert.StartsWith("data:image/jxl;base64,", PeachPDF.Layout.DataUri.FromBytes([0xFF, 0x0A, 0, 0]));
+            Assert.StartsWith("data:image/jxl;base64,", PeachPDF.Layout.DataUri.FromBytes(
                 [0, 0, 0, 0x0C, (byte)'J', (byte)'X', (byte)'L', (byte)' ', 0x0D, 0x0A, 0x87, 0x0A]));
-            Assert.StartsWith("data:image/png;base64,", DataUri.FromBytes([1, 2, 3]));
+            Assert.StartsWith("data:image/png;base64,", PeachPDF.Layout.DataUri.FromBytes([1, 2, 3]));
         }
 
         // ─── Page descriptor geometry/style setters ─────────────────────────────────────────────────

@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>-webkit-text-stroke</c>, <c>text-rendering</c> and <c>font-language-override</c> on SVG text, asserted on what is drawn (the recorded

@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// Coverage for <see cref="DerivedStyle.ActualDisplay"/> - the CSS 2.1 §9.7 blockification a floated

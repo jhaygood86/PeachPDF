@@ -1,7 +1,7 @@
 using PeachBrackets.MathML;
 using Xunit;
 
-namespace PeachPDF.Tests.MathML
+namespace PeachBrackets.Engine.Tests.MathML
 {
     /// <summary>
     /// Coverage for <see cref="MathItalicMappings"/> - values transcribed directly from MathML Core

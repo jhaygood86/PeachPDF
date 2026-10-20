@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Raster
+namespace PeachBrackets.Engine.Tests.Raster
 {
     /// <summary>
     /// 3D transforms on SVG elements (CSS Transforms 2 section 11): <c>rotateX/Y()</c>, <c>translateZ()</c>, <c>perspective()</c>, a container's

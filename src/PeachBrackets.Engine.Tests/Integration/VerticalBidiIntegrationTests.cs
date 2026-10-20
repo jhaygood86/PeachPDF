@@ -5,7 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Unicode Bidi Algorithm reordering inside a vertical-writing-mode (<c>vertical-rl</c>/<c>vertical-lr</c>)

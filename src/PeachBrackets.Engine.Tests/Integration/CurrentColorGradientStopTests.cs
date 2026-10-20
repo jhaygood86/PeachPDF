@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using GradientStop = PeachDrawing.Core.GradientStop;
@@ -14,7 +15,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>currentcolor</c> as a colour stop of a gradient: the CSS-OM grammar accepts it (it used to drop the whole declaration, so

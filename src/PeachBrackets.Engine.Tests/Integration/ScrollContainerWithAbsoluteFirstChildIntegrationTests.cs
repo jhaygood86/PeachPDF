@@ -1,10 +1,11 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using System.Text.RegularExpressions;
 using PeachDrawing.PDF;
 using PeachBrackets.Html.Fragmentation;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// An auto-height scroll container whose first child is an absolutely positioned box breaks between its

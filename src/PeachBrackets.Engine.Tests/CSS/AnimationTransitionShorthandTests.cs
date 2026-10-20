@@ -2,7 +2,7 @@ using PeachBrackets.Css;
 using System.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// The <c>animation</c> and <c>transition</c> shorthands expand into their longhands. Both go through

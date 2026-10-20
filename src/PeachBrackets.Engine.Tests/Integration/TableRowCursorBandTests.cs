@@ -6,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// What the table engine's row cursor does with the band it is filling.

@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layer B of mixed page orientation/size support: <see cref="PageGeometryTable"/> resolving a

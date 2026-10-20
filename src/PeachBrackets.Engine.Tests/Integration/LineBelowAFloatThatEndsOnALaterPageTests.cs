@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// CSS 2.1 §9.5: "If a shortened line box is too small to contain any content, then the line box is shifted downward (and its width

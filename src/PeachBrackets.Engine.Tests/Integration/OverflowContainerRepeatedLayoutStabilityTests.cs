@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// An overflow container that may break is laid out again on every layout generation, and fragmentation state has

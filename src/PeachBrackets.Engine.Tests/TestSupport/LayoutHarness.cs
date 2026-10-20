@@ -9,7 +9,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.TestSupport
+namespace PeachBrackets.Engine.Tests.TestSupport
 {
     /// <summary>
     /// The shared lightweight layout harness: builds an <see cref="HtmlContainerInt"/> over a real

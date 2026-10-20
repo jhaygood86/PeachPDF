@@ -4,7 +4,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Xml.Linq;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// A <c>url()</c> reference that reaches the SVG builder through the CSS-OM (a stylesheet rule) is serialised with quotes,

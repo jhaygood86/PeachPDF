@@ -3,7 +3,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Content laid out inside a monolithic subtree or a measurement pass has no fragmentainer to ask

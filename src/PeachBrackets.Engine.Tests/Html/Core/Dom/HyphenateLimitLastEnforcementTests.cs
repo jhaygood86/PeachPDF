@@ -6,7 +6,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 using System.Linq;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <c>hyphenate-limit-last</c> (CSS Text 4 §6.3.5, issue #723): whether the last line before a

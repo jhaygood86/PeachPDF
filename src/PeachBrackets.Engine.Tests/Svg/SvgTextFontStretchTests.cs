@@ -5,7 +5,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s <c>font-stretch</c> support (issue #533) - previously

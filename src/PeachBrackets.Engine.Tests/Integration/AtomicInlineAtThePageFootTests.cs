@@ -1,6 +1,6 @@
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// An inline-block or inline-table "may also be considered monolithic" (css-break-3 §4.1), and a monolithic box that fits a fresh

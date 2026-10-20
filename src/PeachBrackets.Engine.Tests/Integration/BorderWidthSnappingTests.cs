@@ -1,9 +1,10 @@
+using PeachPDF;
 using PeachBrackets.Html.Parse;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     public class BorderWidthSnappingTests
     {

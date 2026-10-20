@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// End-to-end wiring coverage for Khmer's coeng/subjoined-consonant shaping (issue #1493) - drives

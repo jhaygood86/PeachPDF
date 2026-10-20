@@ -4,7 +4,7 @@ using PeachBrackets.Html.Dom;
 using System;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// CSS 2.1 §17.6.2 border-conflict resolution, tested in isolation from layout/paint -

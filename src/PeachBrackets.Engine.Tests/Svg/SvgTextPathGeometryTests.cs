@@ -2,7 +2,7 @@ using PeachBrackets.Svg;
 using System;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Unit coverage for <see cref="SvgTextPathGeometry"/>: arc-length total, and point/tangent lookup

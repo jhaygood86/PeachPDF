@@ -7,7 +7,7 @@ using System.Linq;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary><c>textLength</c> and <c>lengthAdjust</c> on SVG text: straight, <c>&lt;textPath&gt;</c> and vertical.</summary>
     public class SvgTextLengthTests

@@ -9,7 +9,7 @@ using PeachBrackets.Svg;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// The same stylesheet properties as <see cref="SvgStylesheetPropertyTests"/>, through an inline <c>&lt;svg&gt;</c> whose rules live in the

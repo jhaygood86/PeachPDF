@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using System.Numerics;
 using PeachDrawing;
@@ -9,7 +10,7 @@ using PeachBrackets.Html.Paint;
 using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// css-transforms-1 §"Transform Rendering": an element whose transformation matrix is not invertible has no visible area and is not
@@ -324,7 +325,7 @@ namespace PeachPDF.Tests.Integration
         {
             // A visible context that needs a depth test (a plane tilted in perspective) is composed as a bitmap, which PDF/A-1b rejects; a collapsed one has no
             // picture, so nothing is rejected.
-            var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfAConformance = PdfAConformance.PdfA1B, Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow } };
+            var config = new PdfGenerateConfig { PageSize = PageSize.A4, PdfAConformance = PeachPDF.PdfAConformance.PdfA1B, Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow } };
 
             var doc = await new PdfGenerator().GeneratePdf($"<!DOCTYPE html><html><body>{string.Format(CollapsedContext, "scale(0)")}<p>after</p></body></html>", config);
             Assert.Equal(1, doc.PageCount);

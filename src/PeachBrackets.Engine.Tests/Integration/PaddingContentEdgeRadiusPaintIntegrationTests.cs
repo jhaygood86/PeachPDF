@@ -5,7 +5,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <c>background-clip: padding-box</c>/<c>content-box</c> and the <c>overflow: hidden</c> descendant

@@ -5,7 +5,7 @@ using PeachBrackets.Html;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #156: <c>@page { size: ... }</c> must honor font-relative lengths (<c>em</c>/<c>ex</c>/

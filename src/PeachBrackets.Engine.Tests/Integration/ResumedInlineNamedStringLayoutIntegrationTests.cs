@@ -4,7 +4,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// The real-world shape behind the css4.pub Icelandic dictionary running-header bug: a <c>&lt;b&gt;</c>

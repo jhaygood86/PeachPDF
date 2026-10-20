@@ -1,7 +1,8 @@
+using PeachPDF;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #582: when a document's own base <c>@page { size: ... }</c> differs from the configured

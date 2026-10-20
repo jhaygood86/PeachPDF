@@ -7,7 +7,7 @@ using PeachDrawing.PDF.Engine.Drawing;
 using System;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     // Regression coverage for two compounding bugs that caused css4.pub's Icelandic
     // dictionary title page to overflow onto a second physical PDF page instead of

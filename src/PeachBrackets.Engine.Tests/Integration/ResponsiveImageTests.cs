@@ -1,3 +1,4 @@
+using PeachPDF;
 using System;
 using System.IO;
 using System.Text;
@@ -6,7 +7,7 @@ using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>srcset/sizes and &lt;picture&gt;/&lt;source&gt; selection: which image an &lt;img&gt; ends up loading and at what size.</summary>
     public class ResponsiveImageTests

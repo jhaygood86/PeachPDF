@@ -2,7 +2,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Html.Core.Fragmentation
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
 {
     /// <summary>
     /// Where a forced break (css-break-3 §3.1) puts a box is the <i>frame's</i> question, re-derived at

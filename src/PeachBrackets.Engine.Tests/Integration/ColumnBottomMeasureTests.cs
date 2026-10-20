@@ -5,7 +5,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Text;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// Filling a column asks how far down the content reaches. It used to ask every child of the container, including every

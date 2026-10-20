@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachPDF.Rendering;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
@@ -5,7 +6,7 @@ using PeachDrawing;
 using PeachPDF.Tests.TestSupport;
 using System.Text.RegularExpressions;
 
-namespace PeachPDF.Tests.Html.Core.Paint
+namespace PeachBrackets.Engine.Tests.Html.Core.Paint
 {
     /// <summary>
     /// <c>backdrop-filter</c>: the filter applies to what was painted behind the element, inside its border box. Pages are laid out for real
@@ -235,7 +236,7 @@ namespace PeachPDF.Tests.Html.Core.Paint
         public async Task UnderPdfA1_TheBitmapIsRejected_LikeAnyOtherTransparencyConstruct()
         {
             var config = Config();
-            config.PdfAConformance = PdfAConformance.PdfA1B;
+            config.PdfAConformance = PeachPDF.PdfAConformance.PdfA1B;
 
             await Assert.ThrowsAnyAsync<InvalidOperationException>(() => PdfObjectReader.GeneratePdf(Stage("backdrop-filter:blur(3pt)"), config));
         }

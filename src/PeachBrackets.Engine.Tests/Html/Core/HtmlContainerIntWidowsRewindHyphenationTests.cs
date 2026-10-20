@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// <c>HtmlContainerInt.TryRebuildForBudget</c> rebuilds the <see cref="InlineBreakToken"/> a widows

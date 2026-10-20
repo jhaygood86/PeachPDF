@@ -7,7 +7,7 @@ using System;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     public class ContentImageMeasurementIntegrationTests
     {

@@ -1,7 +1,7 @@
 ﻿using PeachBrackets.Html.Fragments;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A <c>break-inside: avoid</c> block taller than a page that straddles a page foot is relaxed by moving it to the next page

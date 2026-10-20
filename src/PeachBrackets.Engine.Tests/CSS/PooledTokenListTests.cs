@@ -1,4 +1,4 @@
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     using System.Collections.Generic;
     using PeachBrackets.Css;

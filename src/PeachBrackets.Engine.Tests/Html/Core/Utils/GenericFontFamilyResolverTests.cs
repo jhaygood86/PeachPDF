@@ -2,7 +2,7 @@ using PeachDrawing.Text;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// The CSS keyword side of the generic-family mapping: which keywords <see cref="GenericFontFamilyResolver"/> maps to a

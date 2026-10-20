@@ -1,7 +1,7 @@
 using PeachBrackets.Css;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     public class AttrSelectorTests
     {

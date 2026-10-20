@@ -6,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Xml.Linq;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// Coverage for SVG <c>&lt;text&gt;</c>'s <c>text-transform</c> support (issue #533), applied to

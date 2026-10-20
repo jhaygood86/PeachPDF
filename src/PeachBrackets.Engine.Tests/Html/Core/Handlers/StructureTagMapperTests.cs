@@ -3,7 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Handlers;
 using PeachBrackets.Html.Utils;
 
-namespace PeachPDF.Tests.Html.Core.Handlers
+namespace PeachBrackets.Engine.Tests.Html.Core.Handlers
 {
     public class StructureTagMapperTests
     {

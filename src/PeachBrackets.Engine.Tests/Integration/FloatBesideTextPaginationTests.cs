@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
-using static PeachPDF.Tests.TestSupport.LayoutHarness;
+using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
-namespace PeachPDF.Tests.Integration;
+namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
 /// A float taller than the page continues on the next page, and the text that flows beside it carries on

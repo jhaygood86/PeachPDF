@@ -7,7 +7,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using Xunit;
 
-namespace PeachPDF.Tests.Html.Core
+namespace PeachBrackets.Engine.Tests.Html.Core
 {
     /// <summary>
     /// Coverage for <c>CssBidiParagraphResolver</c>'s generalized <c>UseShapedScripts</c> gate (issue

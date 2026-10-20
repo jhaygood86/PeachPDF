@@ -1,7 +1,7 @@
 using PeachBrackets.Html.Dom;
 using System.Globalization;
 
-namespace PeachPDF.Tests.Html.Core.Dom
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 {
     /// <summary>
     /// <see cref="CssLayoutEngine.UpdateTrailingGraphemeContext"/> has a no-allocation path for plain ASCII; it must agree with the

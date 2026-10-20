@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Fragments
+namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
 {
     /// <summary>
     /// <c>FragmentEmitter</c>'s pruning skips a subtree it has concluded has nothing left to show, and every

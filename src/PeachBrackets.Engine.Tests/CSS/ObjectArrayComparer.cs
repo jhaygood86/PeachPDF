@@ -1,5 +1,5 @@
 using System.Collections;
-namespace PeachPDF.Tests.CSS
+namespace PeachBrackets.Engine.Tests.CSS
 {
     class ObjectArrayComparer : IEqualityComparer, IEqualityComparer<object[]>
     {

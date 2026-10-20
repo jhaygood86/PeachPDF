@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine;
@@ -6,7 +7,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// A repeating <c>&lt;thead&gt;</c> above, and a repeating <c>&lt;tfoot&gt;</c> below, a row that

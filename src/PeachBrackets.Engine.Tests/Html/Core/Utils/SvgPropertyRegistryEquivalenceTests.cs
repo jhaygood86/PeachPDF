@@ -3,7 +3,7 @@ using PeachDrawing.PDF;
 using PeachDrawing.Core;
 using PeachBrackets.Svg;
 
-namespace PeachPDF.Tests.Html.Core.Utils
+namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 {
     /// <summary>
     /// Proves the generated <see cref="SvgPropertyRegistry"/> (built from css-properties.json by

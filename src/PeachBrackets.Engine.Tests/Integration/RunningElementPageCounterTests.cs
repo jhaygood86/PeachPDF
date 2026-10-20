@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine;
@@ -5,7 +6,7 @@ using PeachPDF.Tests.TestSupport;
 using System.Linq;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// css-page-3's <c>page</c>/<c>pages</c> counters resolved inside a <c>position: running()</c>

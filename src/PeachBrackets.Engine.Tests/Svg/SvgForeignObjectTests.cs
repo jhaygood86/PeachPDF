@@ -4,7 +4,7 @@ using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachPDF.Tests.TestSupport;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <c>&lt;foreignObject&gt;</c> in an inline <c>&lt;svg&gt;</c>: the HTML inside is laid out as its own block and

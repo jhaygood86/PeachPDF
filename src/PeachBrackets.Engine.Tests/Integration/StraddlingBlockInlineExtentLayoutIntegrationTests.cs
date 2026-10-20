@@ -7,7 +7,7 @@ using PeachBrackets.Html.Fragments;
 using PeachDrawing.PDF.Engine.Drawing;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Issue #876 (<c>Draft.InlineExtentDeltaWidth</c>): an auto-width main-column block's own outer

@@ -1,7 +1,7 @@
 using PeachPDF.Tests.TestSupport;
 using PeachBrackets.Html.Dom;
 
-namespace PeachPDF.Tests.Html.Core.Dom;
+namespace PeachBrackets.Engine.Tests.Html.Core.Dom;
 
 /// <summary>
 /// <see cref="CssBox.IndexOfChild"/> answers what <c>Boxes.IndexOf</c> would, whatever its remembered position is.
@@ -84,7 +84,7 @@ public class SpacingBoxFlagTests
     [Fact]
     public async Task OnlyTheRowsBelowARowspanHoldASpacingBox()
     {
-        var (root, _) = await PeachPDF.Tests.TestSupport.LayoutHarness.LayoutAsync(PeachPDF.Tests.TestSupport.LayoutHarness.Wrap(
+        var (root, _) = await PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.LayoutAsync(PeachBrackets.Engine.Tests.TestSupport.LayoutHarness.Wrap(
             "<table><tr><td rowspan='2'>a</td><td>b</td></tr><tr><td>c</td></tr><tr><td>d</td><td>e</td></tr></table>"));
 
         var rows = new List<CssBox>();

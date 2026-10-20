@@ -2,7 +2,7 @@ using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Html.Core.Parse
+namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 {
     /// <summary>
     /// Whitespace-only text boxes between tags are kept only where CSS 2.1 §16.6.1 can make them visible. The pass that decides

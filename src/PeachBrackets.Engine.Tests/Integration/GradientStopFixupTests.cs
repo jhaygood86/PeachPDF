@@ -1,3 +1,4 @@
+using PeachPDF;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Entities;
 using PeachBrackets.Html.Handlers;
@@ -10,7 +11,7 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// CSS Images 3 §3.4.3 step 2: a color stop positioned before an earlier stop takes that stop's position.

@@ -5,7 +5,7 @@ using PeachBrackets.Html.Utils;
 using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// <see href="https://www.w3.org/TR/css-break-3/#break-between">css-break-3 §3.1</see> forced-break

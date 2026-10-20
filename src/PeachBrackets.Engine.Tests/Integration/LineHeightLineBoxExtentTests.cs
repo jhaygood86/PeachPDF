@@ -10,7 +10,7 @@ using System;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace PeachPDF.Tests.Integration
+namespace PeachBrackets.Engine.Tests.Integration
 {
     /// <summary>
     /// Layout-level coverage for how <c>line-height</c> sizes a line box (CSS 2.1

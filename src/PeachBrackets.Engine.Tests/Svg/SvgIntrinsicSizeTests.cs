@@ -2,7 +2,7 @@ using PeachDrawing.Core;
 using PeachBrackets.Svg;
 using Xunit;
 
-namespace PeachPDF.Tests.Svg
+namespace PeachBrackets.Engine.Tests.Svg
 {
     /// <summary>
     /// <see cref="SvgIntrinsicSize.HasNaturalSize"/>: whether an svg has a natural size in an axis, as
