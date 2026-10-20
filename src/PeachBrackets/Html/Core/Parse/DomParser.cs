@@ -3577,7 +3577,9 @@ namespace PeachBrackets.Html.Parse
             //
             // A float joins the wrapped run, as it does in any block (CSS 2.1 §9.2.1.1), so it is placed beside the
             // text in the same inline flow. A box holding only floats is not wrapped: it already reaches the engine
-            // (see CssBox's float disjunct). Nor under a vertical
+            // (see CssBox's float disjunct). Nor is a scroll container whose height is bounded: the columns engine
+            // skips words when it fills columns of a bounded height, so such a box keeps the inline flow it had.
+            // Nor under a vertical
             // writing mode: measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run
             // of text, CreateVerticalLineBoxes keeps the content inside the box (72pt x 58pt), while the
             // columns engine stacks it into a single 511pt run that leaves the box entirely.
@@ -3586,7 +3588,8 @@ namespace PeachBrackets.Html.Parse
                 && box.Boxes.Count > 0
                 && DomUtils.ContainsInlinesOnly(box)
                 && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
-                && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr);
+                && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+                && !IsHeightBoundedScrollContainer(box);
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
@@ -3752,6 +3755,15 @@ namespace PeachBrackets.Html.Parse
         /// </remarks>
         private static bool JoinsTheInlineRun(CssBox box) =>
             (box.IsInline || box.IsFloated || JoinsAsOutOfFlow(box)) && !CssBox.IsOutsideMarker(box);
+
+
+        /// <summary>
+        /// Whether <paramref name="box"/> clips its content (<c>overflow</c> other than <c>visible</c>) and has a
+        /// <c>height</c> or <c>max-height</c> that bounds how much of it shows.
+        /// </summary>
+        private static bool IsHeightBoundedScrollContainer(CssBox box) =>
+            (box.Overflow.Value != Css.Overflow.Visible || box.ClipsWithoutScrolling)
+            && (CssValueParser.IsValidLength(box.Height) || CssValueParser.IsValidLength(box.MaxHeight));
 
         /// <summary>
         /// Whether an absolutely positioned <paramref name="box"/> stays among the inline content around it

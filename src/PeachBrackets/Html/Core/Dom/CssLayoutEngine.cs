@@ -4557,8 +4557,11 @@ namespace PeachBrackets.Html.Dom
             await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
 
             // The words already on this line are moved beside a float placed after them, as a browser lays the
-            // line out again around it. Where they would no longer fit, the float starts the next line instead.
-            if (coordinates.Line.Words.Count > 0 && FloatOverlapsLineWords(b, coordinates.Line))
+            // line out again around it. Where they would no longer fit, the float starts the next line instead. A float
+            // wider than the line has no line to start, as none has room beside it: it keeps the place it was given
+            // and the text beside it is laid out as it always was.
+            if (coordinates.Line.Words.Count > 0 && FloatFitsLine(b, coordinates.Line)
+                && FloatOverlapsLineWords(b, coordinates.Line))
             {
                 if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {
@@ -4574,8 +4577,7 @@ namespace PeachBrackets.Html.Dom
                     coordinates.InlineFloats?.Remove(b);
                     OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
                         followsForcedBreak: false, isRtl);
-                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
-                }
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);                }
             }
 
             await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
@@ -4597,6 +4599,10 @@ namespace PeachBrackets.Html.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
         }
+
+        private static bool FloatFitsLine(CssBox floated, CssLineBox line) =>
+            floated.ActualRight + floated.ActualMarginRight - (floated.Location.X - floated.ActualMarginLeft)
+            <= line.ContentRight - line.ContentLeft + LineFitTolerance;
 
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {

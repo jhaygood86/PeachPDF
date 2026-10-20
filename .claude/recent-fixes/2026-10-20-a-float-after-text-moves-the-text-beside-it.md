@@ -1,8 +1,8 @@
 # A float after text moves that text beside it, instead of overlapping it
 
-**Load-bearing idea:** `CssLayoutEngine.FlowFloatChild` placed a float at the top of the current line and never moved the words already on that line. They stayed where they were, under the float. The float is now placed as before, and if it covers words already on its line, those words move right past it when they still fit on the line, or the float starts the next line when they do not. This is what a browser does, measured below. The float never lands on a word.
+**Load-bearing idea:** `CssLayoutEngine.FlowFloatChild` placed a float at the top of the current line and never moved the words already on that line. They stayed where they were, under the float. The float is now placed as before, and if it covers words already on its line, those words move right past it when they still fit on the line, or the float starts the next line when they do not. This is what a browser does, measured below. The float never lands on a word, except a float wider than its line (`FloatFitsLine`): there reopening the line moved the words after it past the container edge, so it keeps its place as on `main` ([accepted gap](../accepted-gaps/float-wider-than-its-line-after-text-keeps-its-place.md)).
 
-**Multi-column containers:** `DomParser.CorrectInlineBoxesParent` now wraps a float together with the text around it, as it does in any block. The exclusion that kept a float out of the wrapped run put the float in the column flow, where nothing could move the text on its line beside it. See [the inline-only columnize fix](2026-10-14-inline-only-multicol-columnizes.md).
+**Multi-column containers:** `DomParser.CorrectInlineBoxesParent` now wraps a float together with the text around it, as it does in any block. The exclusion that kept a float out of the wrapped run put the float in the column flow, where nothing could move the text on its line beside it. See [the inline-only columnize fix](2026-10-20-inline-only-multicol-columnizes.md).
 
 **Measured against Chrome, word positions, same HTML:**
 

@@ -2001,6 +2001,67 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.All(columns, c => Assert.InRange(c.Count(), 1, 16));
         }
 
+
+        // The columns of a container that holds a float among its text are at least as tall as that float: the text
+        // alone would divide into columns shorter than it. Pins the float's own height in the balance, apart from where
+        // an earlier pass happened to leave it.
+        [Theory]
+        [InlineData(120)]
+        [InlineData(400)]
+        [InlineData(700)]
+        public async Task FloatAmongShortText_ColumnsAreAsTallAsTheFloat(int floatHeight)
+        {
+            var html = Wrap("<div id='mc' style='width:300pt; columns:2'>w00001 w00002 w00003 " +
+                            $"<div id='f' style='float:left; width:30pt; height:{floatHeight}pt'>F</div> w00004 w00005 w00006</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+
+            Assert.True(mc.ActualBottom - mc.Location.Y >= f.ActualBottom - f.Location.Y - 0.5,
+                $"container {mc.ActualBottom - mc.Location.Y} tall, float {f.ActualBottom - f.Location.Y}");
+        }
+
+        // A float wider than the line it follows text on has no room beside that text, so the words before it are not
+        // moved and the line is not reopened: reopening it sent the words after the float past the edge of the container.
+        [Theory]
+        [InlineData("<div id='mc' style='width:700px;columns:3'><div style='float:right;width:20px;height:20px'>F1</div>" +
+                    "w00045ab w00047ab w00048a w00049abcde w00050abcde w00052abcd w00053abcd w00054a w00055 w00056ab w00057abc " +
+                    "w00059abcde w00060abc w00061ab <div style='float:left;width:344px;height:20px;clear:both'>F3</div>" +
+                    "w00063a w00064abcde w00065abcde</div>", 17)]
+        [InlineData("<table style='width:700px'><tr><td style='width:50%'>x</td><td><div id='mc' style='columns:2'>" +
+                    "w00033 w00034 w00035 w00036 <div style='float:left;width:260px;height:40px;margin:5px -20px -30px -10px'>FL2</div>" +
+                    " w00141 w00142 w00145 w00146</div></td></tr></table>", 8)]
+        public async Task FloatWiderThanItsLine_AfterText_KeepsEveryWordInsideTheContainer(string content, int expectedWords)
+        {
+            var html = Wrap(content).Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words).Where(w => w.Text is { } text && text.StartsWith('w')).ToList();
+
+            Assert.Equal(expectedWords, words.Count);
+            Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+        }
+
+        // Text laid out in a scroll container of bounded height keeps the inline flow it had: the columns engine drops
+        // words when it fills columns of such a height.
+        [Theory]
+        [InlineData("overflow:hidden; height:100px")]
+        [InlineData("overflow:auto; max-height:100px")]
+        [InlineData("overflow:clip; height:100px")]
+        public async Task TextOnlyScrollContainerOfBoundedHeight_IsNotWrappedForColumns(string containerStyle)
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; {containerStyle}'>{text}</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            Assert.DoesNotContain(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+
+
         // Placing a float must end however the floats before it are sized, spaced and cleared. The shape of a hang is
         // a set of floats and margins, so a seeded sweep of them (both sides, margins of either sign on all four edges,
         // clear on some, floats taller than the column) catches the next stall that a hand-built case does not.
