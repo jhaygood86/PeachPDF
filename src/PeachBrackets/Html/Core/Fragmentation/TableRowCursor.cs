@@ -445,10 +445,10 @@ namespace PeachBrackets.Html.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <see cref="UnfinishedCells"/> is deliberately absent: the loop only retracts a row no cell
-        /// stopped in, so there is nothing there to take back. <see cref="FinishedCells"/> is absent for a
-        /// different reason — re-assigning <see cref="RowIndex"/> clears it, which the re-placement does
-        /// anyway.
+        /// <see cref="UnfinishedCells"/> needs no record: a stopped row ends the pass, so a row begins with
+        /// none, and <see cref="Retract"/> clears what a row that avoids breaks recorded before it was moved.
+        /// <see cref="FinishedCells"/> is absent for a different reason — re-assigning <see cref="RowIndex"/>
+        /// clears it, which the re-placement does anyway.
         /// </para>
         /// <para>
         /// So is the continuation geometry a row states
@@ -574,6 +574,9 @@ namespace PeachBrackets.Html.Fragmentation
         {
             MaxBottom = placement.MaxBottom;
             MaxRight = placement.MaxRight;
+
+            // Every entry is the retracted row's own: a stopped row ends the pass, so no row begins with one.
+            _unfinishedCells.Clear();
 
             for (var i = _foreignWrites.Count - 1; i >= 0; i--)
             {
