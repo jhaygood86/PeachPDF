@@ -85,13 +85,18 @@ internal sealed class PdfImportedFont
         if (descriptor is not null)
         {
             file = doc.DictOf(descriptor, "FontFile2");
+            if (file is null && !composite && doc.DictOf(descriptor, "FontFile") is { } f1)
+            {
+                file = f1;
+                fileSubtype = "/Type1";
+            }
             if (file is null && doc.DictOf(descriptor, "FontFile3") is { } f3 && doc.NameOf(f3.GetRaw("Subtype")) is "/OpenType" or "/Type1C" or "/CIDFontType0C")
             {
                 file = f3;
                 fileSubtype = doc.NameOf(f3.GetRaw("Subtype"));
             }
         }
-        if (file is null) { why = "no embedded TrueType, OpenType or CFF program"; return null; }
+        if (file is null) { why = "no embedded TrueType, OpenType, CFF or Type 1 program"; return null; }
         byte[] data = doc.DecodeStream(file).Data;
         CffFont? cff = null;
         byte[] program = data;
@@ -100,12 +105,18 @@ internal sealed class PdfImportedFont
             // A CID-keyed CFF inside an OpenType file numbers its glyphs by CID, which a Type0 font's codes are.
             if (composite && fileSubtype == "/OpenType" && SfntTable(data, "CFF ") is { } table) cff = CffFont.Parse(table);
         }
+        else if (fileSubtype == "/Type1" && Type1Font.Parse(data) is { } type1 && type1.ToCff() is { } converted && CffFont.Parse(converted) is { } fromType1)
+        {
+            // A Type 1 program is converted to CFF, which the font engine reads.
+            cff = fromType1;
+            program = SfntRepair.FromCff(converted, fromType1, "pdfimport");
+        }
         else if (fileSubtype is "/Type1C" or "/CIDFontType0C" && CffFont.Parse(data) is { } parsed)
         {
             cff = parsed;
             program = SfntRepair.FromCff(data, parsed, "pdfimport");   // the family is renamed below; only the tables matter here
         }
-        else { why = "embedded font is not an sfnt or CFF program"; return null; }
+        else { why = "embedded font is not an sfnt, CFF or Type 1 program"; return null; }
 
         string family = "pdfimport-" + Convert.ToHexString(SHA1.HashData(data))[..16];
         var set = Registered.GetOrCreateValue(context);

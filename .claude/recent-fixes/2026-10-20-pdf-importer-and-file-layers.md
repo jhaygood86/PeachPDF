@@ -57,6 +57,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   encoding; the synthesized cmap maps each glyph name's Unicode and the built-in encoding at U+F000 + code. A Type0 font over a CID-keyed
   CFF numbers glyphs by CID, so `Decode` goes CID -> glyph through the charset. The expert SIDs (229-390) and Standard/Expert
   predefined encodings are not named; the PDF /Encoding covers the first and Latin-1 the second.
+- **Type 1 fonts** (`Type1Font`): `/FontFile` is clear text, an eexec-obfuscated private part (fixed-key arithmetic, not cryptography;
+  hex or binary, PFB headers stripped) and charstring-obfuscated Subrs/CharStrings (`lenIV`). The interpreter handles hsbw/sbw, path
+  ops, callsubr, `div`, flex (othersubrs 0-2) and hint replacement (3), and `seac` by composing StandardEncoding base/accent glyphs
+  (accent offset = composite sbx + adx - asb). `ToCff` re-expresses outlines as Type 2 charstrings (relative moves, width first) in a
+  name-keyed CFF with a charset and a custom encoding (glyphs with codes first, since CFF encodings number consecutive glyphs), which
+  then follows the CFF path. Hints are dropped. Tests build their own Type 1 fonts byte by byte - there is no Type 1 file in the repo.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

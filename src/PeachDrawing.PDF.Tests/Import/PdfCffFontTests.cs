@@ -230,7 +230,7 @@ namespace PeachDrawing.PDF.Tests.Import
 
             var unsupported = PdfPagePainter.Paint(doc, doc.Pages[0], canvas);
 
-            Assert.Contains("font: embedded font is not an sfnt or CFF program", unsupported);
+            Assert.Contains("font: embedded font is not an sfnt, CFF or Type 1 program", unsupported);
         }
 
         [Theory]
