@@ -2200,23 +2200,53 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>The words of floats drawn from live geometry during the walk of the slot in progress: each is drawn once.</summary>
         private readonly HashSet<(CssBox Box, int Word)> _liveFloatWordsThisWalk = [];
 
-        /// <summary>The <c>rowspan</c> cells that have a fragment in the walk of the slot in progress: each is drawn once (#1834).</summary>
-        private readonly HashSet<CssBox> _spanningCellsDrawnThisWalk = [];
-
-        /// <summary>Records that <paramref name="box"/>, if it spans rows, has a fragment in this walk.</summary>
-        private void NoteSpanningCellDrawn(CssBox box, Draft? draft)
-        {
-            if (draft is not null && box.Display.Value == DisplayMode.TableCell && CssLayoutEngineTable.GetRowSpan(box) > 1
-                && ReachesIntoItsBand(draft))
-                _spanningCellsDrawnThisWalk.Add(box);
-        }
+        /// <summary>
+        /// What the copies of <c>rowspan</c> cells kept in the walk of the slot in progress show (#1834): for each fragment and
+        /// the rectangle it lands at, the block-axis span each kept copy shows.
+        /// </summary>
+        private readonly Dictionary<(FragmentKey Key, Rect Displaced), List<(double Top, double Bottom)>> _spanningCellCopiesThisWalk = [];
 
         /// <summary>
-        /// Whether <paramref name="draft"/> draws anything in the band it is confined to. A displaced fragment is clipped to its
-        /// band, so a box that ends above it - a cell continuing under a repeated header - is a draft that paints nothing here.
+        /// Whether <paramref name="draft"/> shows something no copy of the same box kept in this walk already shows, recording
+        /// what it shows when it does. Always true for a box that does not span rows.
         /// </summary>
-        private static bool ReachesIntoItsBand(Draft draft) =>
-            draft.ConfinedTo is not { } band || Displaced(BoundsOf(draft.Box, draft.Snapshot), draft.Shift).Bottom > band.Top;
+        /// <remarks>
+        /// A <c>rowspan</c> cell is reached through its own row and through every placeholder in the rows it spans, and every
+        /// visit reads the same geometry. A copy that lands at the same rectangle as earlier ones (its stated continuation
+        /// shell, or its own bounds, moved by its displacement), and whose whole visible part - inside the fragmentainer and
+        /// inside the band a displaced run confines it to - one of those copies already shows, would paint the same pixels and
+        /// words again, so it is not kept. A copy that lands elsewhere, or shows a part the earlier ones clip away, is: a run
+        /// displaced under a repeated header clips each row's copy to that row's band, so each draws a different part of the
+        /// cell.
+        /// </remarks>
+        private bool ShowsSomethingNew(CssBox box, Draft draft)
+        {
+            if (box.Display.Value != DisplayMode.TableCell || CssLayoutEngineTable.GetRowSpan(box) <= 1) return true;
+
+            var displaced = Displaced(draft.ShellRect ?? BoundsOf(box, draft.Snapshot), draft.Shift);
+            var top = Math.Max(displaced.Top, draft.Region.Top);
+            var bottom = Math.Min(displaced.Bottom, draft.Region.Bottom);
+
+            if (draft.ConfinedTo is { } band)
+            {
+                top = Math.Max(top, band.Top);
+                bottom = Math.Min(bottom, band.Bottom);
+            }
+
+            if (!_spanningCellCopiesThisWalk.TryGetValue((draft.Key, displaced), out var shown))
+            {
+                shown = [];
+                _spanningCellCopiesThisWalk.Add((draft.Key, displaced), shown);
+            }
+
+            foreach (var (shownTop, shownBottom) in shown)
+            {
+                if (shownTop <= top + EdgeEpsilon && shownBottom >= bottom - EdgeEpsilon) return false;
+            }
+
+            shown.Add((top, bottom));
+            return true;
+        }
 
         /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
         private static bool IsInAFloat(CssBox box)
@@ -2280,7 +2310,7 @@ namespace PeachBrackets.Html.Fragmentation
             _pruningSuspended = wasSuspended || !mayWrite;
 
             _liveFloatWordsThisWalk.Clear();
-            _spanningCellsDrawnThisWalk.Clear();
+            _spanningCellCopiesThisWalk.Clear();
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -2376,7 +2406,7 @@ namespace PeachBrackets.Html.Fragmentation
             try
             {
                 _liveFloatWordsThisWalk.Clear();
-                _spanningCellsDrawnThisWalk.Clear();
+                _spanningCellCopiesThisWalk.Clear();
                 full = BuildDraft(root, snapshot: null, slot,
                     capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
@@ -3088,10 +3118,9 @@ namespace PeachBrackets.Html.Fragmentation
                         childBox, snapshot, slot, capture, instance,
                         ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
-                    NoteSpanningCellDrawn(childBox, childDraft);
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null)
+                    if (childDraft is not null && ShowsSomethingNew(childBox, childDraft))
                         children.Add(childDraft);
                 }
             }
@@ -3106,10 +3135,9 @@ namespace PeachBrackets.Html.Fragmentation
                         childBox, childSnapshot, slot, childCapture, childInstance,
                         ref hasPrintableContent, ref childPrunable, displacement, fixedOffset);
 
-                    NoteSpanningCellDrawn(childBox, childDraft);
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null)
+                    if (childDraft is not null && ShowsSomethingNew(childBox, childDraft))
                         children.Add(childDraft);
                 }
             }
@@ -3651,10 +3679,11 @@ namespace PeachBrackets.Html.Fragmentation
             CssBox box, BoxGeometrySnapshot? snapshot, Slot slot,
             CapturedInstance? capture, int instance)
         {
-            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row, on a
-            // slot that row did not reach. Where the cell already has a fragment in this walk - through its
-            // own row or an earlier placeholder - another one would paint the same content in the same place.
-            if (box is CssSpacingBox spacing && !_spanningCellsDrawnThisWalk.Contains(spacing.ExtendedBox))
+            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row: on a
+            // slot that row did not reach, or in this row's own band where a repeated header displaces the
+            // run. A copy that would repeat one this walk already drew is dropped once it is built
+            // (ShowsSomethingNew), since only then are its displacement and band known.
+            if (box is CssSpacingBox spacing)
                 yield return (spacing.ExtendedBox, snapshot, capture, instance);
 
             if (_capturedInstances.TryGetValue((box, slot.Index), out var allCaptures) && allCaptures.Count > 0)
