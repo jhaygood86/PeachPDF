@@ -57,21 +57,95 @@ internal static class SfntRepair
     }
 
     /// <summary>A format 4 cmap that maps nothing: a subset used through glyph indexes needs the table to exist, not to map.</summary>
-    static byte[] BuildEmptyCmap()
+    static byte[] BuildEmptyCmap() => BuildCmap(new Dictionary<int, int>());
+
+    /// <summary>A format 4 cmap of the given Unicode (BMP) to glyph assignments.</summary>
+    static byte[] BuildCmap(IReadOnlyDictionary<int, int> map)
     {
-        var d = new byte[12 + 24];
+        // One segment per code: simple, and a font's names give a few hundred at most.
+        var codes = map.Keys.Where(c => c is >= 0 and < 0xFFFF).OrderBy(c => c).ToList();
+        int segs = codes.Count + 1;
+        int length = 16 + segs * 8;
+        var d = new byte[12 + length];
         BinaryPrimitives.WriteUInt16BigEndian(d.AsSpan(2), 1);        // numTables
         BinaryPrimitives.WriteUInt16BigEndian(d.AsSpan(4), 3);        // platform: Windows
         BinaryPrimitives.WriteUInt16BigEndian(d.AsSpan(6), 1);        // encoding: Unicode BMP
         BinaryPrimitives.WriteUInt32BigEndian(d.AsSpan(8), 12);       // subtable offset
         var t = d.AsSpan(12);
         BinaryPrimitives.WriteUInt16BigEndian(t, 4);                  // format
-        BinaryPrimitives.WriteUInt16BigEndian(t[2..], 24);            // length
-        BinaryPrimitives.WriteUInt16BigEndian(t[6..], 2);             // segCountX2
-        BinaryPrimitives.WriteUInt16BigEndian(t[14..], 0xFFFF);       // endCode
-        BinaryPrimitives.WriteUInt16BigEndian(t[18..], 0xFFFF);       // startCode
-        BinaryPrimitives.WriteUInt16BigEndian(t[20..], 1);            // idDelta
+        BinaryPrimitives.WriteUInt16BigEndian(t[2..], (ushort)length);
+        BinaryPrimitives.WriteUInt16BigEndian(t[6..], (ushort)(segs * 2));
+        int endBase = 14, startBase = 16 + segs * 2, deltaBase = 16 + segs * 4, offsetBase = 16 + segs * 6;
+        for (int i = 0; i < codes.Count; i++)
+        {
+            int code = codes[i];
+            BinaryPrimitives.WriteUInt16BigEndian(t[(endBase + i * 2)..], (ushort)code);
+            BinaryPrimitives.WriteUInt16BigEndian(t[(startBase + i * 2)..], (ushort)code);
+            BinaryPrimitives.WriteUInt16BigEndian(t[(deltaBase + i * 2)..], (ushort)(map[code] - code));
+        }
+        int last = codes.Count;
+        BinaryPrimitives.WriteUInt16BigEndian(t[(endBase + last * 2)..], 0xFFFF);
+        BinaryPrimitives.WriteUInt16BigEndian(t[(startBase + last * 2)..], 0xFFFF);
+        BinaryPrimitives.WriteUInt16BigEndian(t[(deltaBase + last * 2)..], 1);
+        _ = offsetBase;
         return d;
+    }
+
+    /// <summary>
+    /// Wraps a bare CFF program in an OpenType (OTTO) file: the CFF table plus the head, hhea, maxp, hmtx and cmap tables the font loader
+    /// needs (and, through <see cref="AddMissingTables"/>, name, OS/2 and post). The cmap maps the Unicode text of each glyph name, and
+    /// the font's own encoding at U+F000 + code.
+    /// </summary>
+    public static byte[] FromCff(byte[] cff, CffFont info, string familyName)
+    {
+        int unitsPerEm = info.FontMatrix[0] != 0 ? (int)Math.Clamp(Math.Round(1 / Math.Abs(info.FontMatrix[0])), 16, 16384) : 1000;
+        double[] box = info.FontBBox;
+        short S(double v) => (short)Math.Clamp(Math.Round(v), short.MinValue, short.MaxValue);
+
+        var head = new byte[54];
+        BinaryPrimitives.WriteUInt32BigEndian(head.AsSpan(0), 0x00010000);
+        BinaryPrimitives.WriteUInt32BigEndian(head.AsSpan(12), 0x5F0F3CF5);
+        BinaryPrimitives.WriteUInt16BigEndian(head.AsSpan(18), (ushort)unitsPerEm);
+        BinaryPrimitives.WriteInt16BigEndian(head.AsSpan(36), S(box[0]));
+        BinaryPrimitives.WriteInt16BigEndian(head.AsSpan(38), S(box[1]));
+        BinaryPrimitives.WriteInt16BigEndian(head.AsSpan(40), S(box[2]));
+        BinaryPrimitives.WriteInt16BigEndian(head.AsSpan(42), S(box[3]));
+        BinaryPrimitives.WriteUInt16BigEndian(head.AsSpan(46), 8);       // lowestRecPPEM
+        BinaryPrimitives.WriteInt16BigEndian(head.AsSpan(48), 2);        // fontDirectionHint
+
+        var hhea = new byte[36];
+        BinaryPrimitives.WriteUInt32BigEndian(hhea.AsSpan(0), 0x00010000);
+        BinaryPrimitives.WriteInt16BigEndian(hhea.AsSpan(4), box[3] > 0 ? S(box[3]) : (short)(unitsPerEm * 8 / 10));
+        BinaryPrimitives.WriteInt16BigEndian(hhea.AsSpan(6), box[1] < 0 ? S(box[1]) : (short)(-unitsPerEm * 2 / 10));
+        BinaryPrimitives.WriteUInt16BigEndian(hhea.AsSpan(10), (ushort)unitsPerEm);
+        BinaryPrimitives.WriteUInt16BigEndian(hhea.AsSpan(18), 1);       // caretSlopeRise
+        BinaryPrimitives.WriteUInt16BigEndian(hhea.AsSpan(34), 1);       // numberOfHMetrics
+
+        var maxp = new byte[6];
+        BinaryPrimitives.WriteUInt32BigEndian(maxp.AsSpan(0), 0x00005000);
+        BinaryPrimitives.WriteUInt16BigEndian(maxp.AsSpan(4), (ushort)Math.Min(info.GlyphCount, 65535));
+
+        // One full metric, then a left side bearing per remaining glyph; the advances come from the PDF's own widths when text is shown.
+        var hmtx = new byte[4 + Math.Max(0, info.GlyphCount - 1) * 2];
+        BinaryPrimitives.WriteUInt16BigEndian(hmtx.AsSpan(0), (ushort)(unitsPerEm / 2));
+
+        var cmap = new Dictionary<int, int>();
+        if (!info.IsCid)
+        {
+            for (int g = 1; g < info.GlyphNames.Length; g++)
+            {
+                var text = info.GlyphNames[g] is { } name ? PdfGlyphNames.ToText(name) : null;
+                if (text is { Length: 1 }) cmap.TryAdd(text[0], g);
+            }
+            foreach (var kv in info.BuiltInEncoding) cmap.TryAdd(0xF000 + kv.Key, kv.Value);
+        }
+
+        var tables = new List<Table>
+        {
+            new("CFF ", cff), new("cmap", BuildCmap(cmap)), new("head", head), new("hhea", hhea), new("hmtx", hmtx), new("maxp", maxp),
+        };
+        tables.Sort((x, y) => string.CompareOrdinal(x.Tag, y.Tag));
+        return AddMissingTables(Write("OTTO"u8, tables), familyName);
     }
 
     static byte[] BuildName(string family)
