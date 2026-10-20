@@ -900,8 +900,7 @@ namespace PeachBrackets.Html.Paint
         {
             var box = fragment.Box;
 
-            if (box.DerivedStyle.ActualDisplay == Keywords.None ||
-                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells.Value == EmptyCellsMode.Hide && box.IsSpaceOrEmpty)) return;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None || HidesAsAnEmptyCell(box)) return;
 
             var (overflowClip, overflowClipCurve) = OverflowClipOf(g, fragment);
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
@@ -969,13 +968,15 @@ namespace PeachBrackets.Html.Paint
                 // A box whose background was "promoted" to fill the whole page canvas (see
                 // HtmlContainerInt.ResolveCanvasBackground / PaintCanvasBackground) already had it
                 // painted for every page - skip this box's own normal paint pass so it isn't painted
-                // twice.
-                if (!box.SuppressOwnBackgroundPaint)
+                // twice. A table track's background is painted by its cells instead (see
+                // FragmentPainter.TableBackgrounds), which also paint it beneath their own.
+                if (!box.SuppressOwnBackgroundPaint && !IsTableTrack(box))
                 {
                     // A sliced background is painted over the whole unbroken box, so this clip is what
                     // keeps it out of the space beside this rectangle - which belongs to other content.
                     if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
+                    PaintTrackBackgroundsBehind(g, box, geometry);
                     PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line), fragment);
 
                     if (geometry.NeedsClip) g.PopClip();

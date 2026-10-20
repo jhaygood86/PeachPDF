@@ -13324,6 +13324,68 @@ await SaveShowcaseAsync("table_caption", "Layout", "Table Captions (caption-side
     + "<table>'s own border/background wrapping the row grid only.",
     tableCaptionHtml, pdfConfig);
 
+// --- table track backgrounds showcase ---
+//
+// CSS 2.1 §17.5.1: a row's, row group's, column's or column group's background covers exactly the cells that
+// originate in it, beneath every cell. Each cell paints those backgrounds over its own area, so a striped row never
+// covers a cell spanning down into it, the gaps border-spacing leaves show the table's background, and a gradient on a
+// row is positioned against the whole row, each cell showing its own slice.
+var tableTrackBackgroundsHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a5 landscape; margin: 12mm }
+    body { font: 10pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h1 { font-size: 14pt; margin: 0 0 0.3em }
+    h2 { font-size: 11pt; margin: 1em 0 0.4em }
+    p.intro { color: #6b7280; font-size: 9pt; margin: 0 0 0.6em; max-width: 40em }
+    .row { display: flex; gap: 18pt; align-items: flex-start }
+    table { margin-bottom: 0.4em }
+    td, th { padding: 4pt 8pt; border: 0.75pt solid #94a3b8; text-align: left }
+    #zebra { border-collapse: collapse }
+    #zebra tbody tr:nth-child(even) { background: #dbeafe }
+    #zebra td.span { background: #fef3c7; vertical-align: middle }
+    #cols { border-collapse: separate; border-spacing: 3pt }
+    #grad { border-collapse: separate; border-spacing: 4pt }
+    #grad tr.first { background: linear-gradient(to right, #fca5a5, #93c5fd) }
+    </style></head><body>
+    <h1>Table Row and Column Backgrounds</h1>
+    <p class="intro">Each row's, group's and column's background covers only the cells that start in it, beneath every
+    cell (CSS 2.1 §17.5.1): the striped rows stay behind the merged cell, a merged cell takes the colour of the column it
+    starts in, and the spacing between cells shows the table's own background.</p>
+    <div class="row">
+    <div>
+    <h2>Zebra stripes beside a merged cell</h2>
+    <table id="zebra"><tbody>
+    <tr><td class="span" rowspan="3">Site recovery plan</td><td>Assess</td></tr>
+    <tr><td>Contain</td></tr>
+    <tr><td>Restore</td></tr>
+    <tr><td>Data centre</td><td>Review</td></tr>
+    </tbody></table>
+    </div>
+    <div>
+    <h2>Column backgrounds and colspan</h2>
+    <table id="cols">
+    <colgroup style="background:#ecfccb"><col style="background:#ddd6fe"><col></colgroup><col style="background:#fde68a">
+    <tr><td>Owner</td><td>Deputy</td><td>Status</td></tr>
+    <tr><td colspan="2">Owner and deputy share this</td><td>Open</td></tr>
+    <tr><td>Owner</td><td colspan="2">Deputy and status merged</td></tr>
+    </table>
+    </div>
+    <div>
+    <h2>A gradient across a row</h2>
+    <table id="grad">
+    <tr class="first"><td rowspan="2">Tier 1</td><td>RTO</td><td>RPO</td><td>MTPD</td></tr>
+    <tr><td>4 h</td><td>1 h</td><td>24 h</td></tr>
+    </table>
+    </div>
+    </div>
+    </body></html>
+    """;
+await SaveShowcaseAsync("table_track_backgrounds", "Layout", "Table Row & Column Backgrounds",
+    "Backgrounds on <tr>, <tbody>, <col> and <colgroup> cover exactly the cells that originate in them, beneath every "
+    + "cell (CSS 2.1 §17.5.1): zebra stripes stay behind a rowspan cell, a colspan cell takes the column it starts in, "
+    + "border-spacing shows the table's background, and a row gradient runs across all of its cells.",
+    tableTrackBackgroundsHtml, pdfConfig);
+
 // --- table/row explicit height showcase (issue #1116) ---
 //
 // height/min-height on a <table> or <tr> was previously silently ignored - the table/row always
