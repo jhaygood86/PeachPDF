@@ -73,7 +73,8 @@ internal static class PdfMeshShading
                 return new Vertex(x, y, Math.Clamp(t, 0, 1), 0, 0, 0);
             }
             var color = space.ToColor(c, alpha);
-            return new Vertex(x, y, color.R, color.G, color.B, color.A);
+            var (r, g, b) = color.ToRgb();
+            return new Vertex(x, y, r, g, b, color.A);
         }
 
         var triangles = new List<(Vertex, Vertex, Vertex)>();
@@ -304,7 +305,8 @@ internal static class PdfMeshShading
             var comps = new double[space.Components];
             for (int k = 0; k < comps.Length; k++) comps[k] = k < values.Length ? values[k] : 0;
             var color = space.ToColor(comps, alpha);
-            lut[i] = (color.R, color.G, color.B, color.A);
+            var (r, g, b) = color.ToRgb();
+            lut[i] = (r, g, b, color.A);
         }
         return lut;
     }

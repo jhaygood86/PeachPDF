@@ -189,7 +189,7 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Theory]
-        [InlineData("<< /ShadingType 7 >>", "shading type 7")]
+        [InlineData("<< /ShadingType 1 >>", "shading type 1")]
         [InlineData("<< /ShadingType 2 /ColorSpace /Nope /Coords [0 0 1 1] >>", "shading colour space")]
         [InlineData("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 1 1] >>", "shading function")]
         [InlineData("<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0] /Function << /FunctionType 2 /Domain [0 1] /C0 [0 0 0] /C1 [1 1 1] /N 1 >> >>", "shading coordinates")]

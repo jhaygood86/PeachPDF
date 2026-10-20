@@ -280,5 +280,34 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.Contains("pattern type 1", unsupported);
         }
+
+        [Fact]
+        public void CmykImage_AndACmykStencilFill_ConvertToRgb()
+        {
+            // One pure-cyan pixel; and a 1x1 stencil painted in a CMYK fill colour (pure magenta).
+            var cyan = ImageObject("/Width 1 /Height 1 /ColorSpace /DeviceCMYK /BitsPerComponent 8", "FF000000");
+            var cyanPdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: cyan);
+            var p = Px(cyanPdf, 50, 50);
+            Assert.True(p.R < 60 && p.B > 150 && p.A == 255, $"cyan: {p}");
+
+            var stencil = ImageObject("/Width 1 /Height 1 /ImageMask true", "00");
+            var magentaPdf = Pdf("0 1 0 0 k 100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: stencil);
+            var m = Px(magentaPdf, 50, 50);
+            Assert.True(m.R > 150 && m.G < 60 && m.B > 150, $"magenta: {m}");
+        }
+
+        [Fact]
+        public void ImageInterpolation_FollowsTheInterpolateEntry()
+        {
+            const string pixels = "FF0000 00FF00 0000FF FFFFFF";
+            const string basic = "/Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8";
+            var crisp = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: ImageObject(basic, pixels));
+            var smooth = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: ImageObject(basic + " /Interpolate true", pixels));
+
+            var nearEdge = Px(crisp, 47, 25);          // just inside the red pixel's right edge
+            Assert.True(nearEdge.R > 250 && nearEdge.G < 5, $"pixels stay crisp by default: {nearEdge}");
+            var blended = Px(smooth, 47, 25);
+            Assert.True(blended.G > 40, $"/Interpolate true smooths across the edge: {blended}");
+        }
     }
 }
