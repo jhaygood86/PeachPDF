@@ -51,6 +51,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
 - **Type 3 fonts** run each glyph's content stream under `fontMatrix * size * translate(x, rise) * scale(Th) * Tm`; `d1` locks the
   colour operators (`State.ColorLocked`, popped with the state) so a shape glyph takes the text fill colour, `d0` leaves them free.
   Widths are glyph space times the font matrix's horizontal scale. Type 3 glyphs have no text map yet.
+- **CFF fonts** (`Type1C`, `CIDFontType0C`, CID-keyed CFF inside OpenType): the font engine reads CFF outlines only inside an OpenType
+  file, so `SfntRepair.FromCff` wraps a bare CFF as OTTO (CFF + head/hhea/maxp/hmtx/cmap, then the name/OS/2/post repair). `CffFont`
+  reads names (charset + string index, SIDs below 391 from `PdfGlyphNames.StandardStrings`), the CID map and a custom built-in
+  encoding; the synthesized cmap maps each glyph name's Unicode and the built-in encoding at U+F000 + code. A Type0 font over a CID-keyed
+  CFF numbers glyphs by CID, so `Decode` goes CID -> glyph through the charset. The expert SIDs (229-390) and Standard/Expert
+  predefined encodings are not named; the PDF /Encoding covers the first and Latin-1 the second.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
