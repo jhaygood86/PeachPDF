@@ -411,7 +411,7 @@ internal sealed class PdfSourceDocument
     // ---------------------------------------------------------------- object syntax
 
     /// <summary>Parses one object whose first token is <paramref name="t"/>; the "n g R" reference form is recognised.</summary>
-    PdfItem ParseItem(PdfLexer lx, PdfToken t, int depth = 0)
+    internal PdfItem ParseItem(PdfLexer lx, PdfToken t, int depth = 0)
     {
         if (depth > 200) throw new InvalidDataException("PDF object nesting is too deep.");
         switch (t.Kind)
