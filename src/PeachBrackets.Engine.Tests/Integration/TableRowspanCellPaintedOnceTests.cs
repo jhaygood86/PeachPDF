@@ -1,4 +1,7 @@
+using PeachDrawing.Core;
+using PeachPDF.Rendering;
 using PeachPDF.Tests.TestSupport;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
@@ -63,6 +66,67 @@ namespace PeachPDF.Tests.Integration
             Assert.True(painted.Count == 4, $"the census has to see the cells, or this asserts nothing; it saw {painted.Count} words");
             Assert.Empty(lost);
             Assert.Empty(doubled);
+        }
+
+        private const string SpanningTableUnderARepeatedHeader =
+            "<table style='border-collapse:separate'><thead><tr><th>w0_1</th><th>w0_2</th></tr></thead><tbody>" +
+            "<tr><td rowspan='2' style='{0}'>w1_1</td><td><div style='height:300pt'>w2_0</div></td></tr>" +
+            "<tr><td>w2_1</td></tr></tbody></table>";
+
+        /// <summary>
+        /// Under a repeated header the cell's own row reaches the next page with nothing inside the band it is clipped to, so the
+        /// placeholder in the next row is what draws the continuation; keeping the own row's empty fragment instead lost it.
+        /// </summary>
+        [Theory]
+        [InlineData("background:#fdd")]
+        [InlineData("border:2px solid #36c")]
+        public async Task ARowspanCellContinuingUnderARepeatedHeader_IsDecoratedOnceOnTheNextPage(string decoration)
+        {
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(
+                Page(string.Format(SpanningTableUnderARepeatedHeader, decoration)), new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
+
+            Assert.True(container.FragmentTree!.Fragmentainers.Count == 2, "the cell has to continue onto a second page, or this asserts nothing");
+
+            using var graphics = new RecordingGraphics(new HtmlRenderContext());
+            FragmentPaintHarness.PaintPage(container, graphics, 1);
+            var strips = VisibleDecoration(graphics.Log);
+
+            Assert.NotEmpty(strips);
+            Assert.Equal(strips.Count, strips.Distinct().Count());
+        }
+
+        /// <summary>The reference walk the pruning check builds starts from no spanning cell drawn, as the pruned walk did.</summary>
+        [Fact]
+        public async Task ARowspanCellContinuingUnderARepeatedHeader_PrunesWithoutChangingTheTree()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(
+                Page(string.Format(SpanningTableUnderARepeatedHeader, "background:#fdd")), pageHeight: 250, margin: 20,
+                prepare: root => root.HtmlContainer!.VerifyFragmentPruningOverride = true);
+
+            Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2, "the cell has to continue onto a second page, or this asserts nothing");
+        }
+
+        /// <summary>The fills and border strips of a paint log that some of each lies inside every clip in force.</summary>
+        private static List<Rect> VisibleDecoration(IEnumerable<PaintOp> log)
+        {
+            List<Rect> visible = [];
+            Stack<Rect?> clips = [];
+
+            foreach (var op in log)
+            {
+                switch (op.Kind)
+                {
+                    case PaintOpKind.PushClip: clips.Push(op.Bounds); break;
+                    case PaintOpKind.PushClipPath: clips.Push(null); break;
+                    case PaintOpKind.PopClip: clips.Pop(); break;
+                    case PaintOpKind.FillRect or PaintOpKind.Polygon:
+                        var shown = clips.Aggregate(op.Bounds, (r, clip) => clip is { } c ? Rect.Intersect(r, c) : r);
+                        if (!shown.IsEmpty) visible.Add(op.Bounds);
+                        break;
+                }
+            }
+
+            return visible;
         }
     }
 }

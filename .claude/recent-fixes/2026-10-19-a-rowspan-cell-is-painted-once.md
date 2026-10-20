@@ -14,10 +14,16 @@ Recorded after `BuildDraft` returns a draft, not before, so a slot the cell's ow
 `TableRowspanContinuationTests` pins) still gets it from its first placeholder there. A suppressed placeholder is never recorded
 as empty for pruning: `ContentStaysInOneRun` already excludes `CssSpacingBox`.
 
+A draft is not enough evidence on its own. Under a repeated `<thead>` the own row reaches the next page displaced, and its
+cell ends above the band the row is clipped to: a draft that paints nothing there. `ReachesIntoItsBand` records the cell only
+when its displaced bounds reach into that band, so the placeholder draws the continuation, as it did before.
+
 ## Evidence
 
 - `TableRowspanCellPaintedOnceTests` (paint-log census, spans 2/3/5, both border models, no-span control) fails on `main` and
-  passes here; `TableRowspanContinuationTests` is unchanged apart from its remark on the duplicate fragments.
-- Full suite on net8.0: 17,451 tests, the one failure (`AnchorLinkDestinationTests…NearThePageTop`) also fails on `main`.
-- Diff coverage of the changed library lines: 9/9.
+  passes here. Its repeated-header cases (background and border on the continuation page, visible through the clips) fail
+  without `ReachesIntoItsBand` or without the `EmitSlot` reset, and its pruning-parity case fails without the reset in
+  `VerifyAgainstTheFullWalk`; `TableRowspanContinuationTests` is unchanged apart from its remark on the duplicate fragments.
+- `PeachBrackets.Engine.Tests` on net8.0 (Debug): 16,063 tests, all passing.
+- Diff coverage of the changed library lines: 11/11.
 - The issue's repro through `PeachPDF.Cli` now matches Chrome 149: `SPANNING` drawn once.

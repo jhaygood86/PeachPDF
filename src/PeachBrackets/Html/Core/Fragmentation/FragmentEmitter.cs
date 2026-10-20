@@ -2206,9 +2206,17 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>Records that <paramref name="box"/>, if it spans rows, has a fragment in this walk.</summary>
         private void NoteSpanningCellDrawn(CssBox box, Draft? draft)
         {
-            if (draft is not null && box.Display.Value == DisplayMode.TableCell && CssLayoutEngineTable.GetRowSpan(box) > 1)
+            if (draft is not null && box.Display.Value == DisplayMode.TableCell && CssLayoutEngineTable.GetRowSpan(box) > 1
+                && ReachesIntoItsBand(draft))
                 _spanningCellsDrawnThisWalk.Add(box);
         }
+
+        /// <summary>
+        /// Whether <paramref name="draft"/> draws anything in the band it is confined to. A displaced fragment is clipped to its
+        /// band, so a box that ends above it - a cell continuing under a repeated header - is a draft that paints nothing here.
+        /// </summary>
+        private static bool ReachesIntoItsBand(Draft draft) =>
+            draft.ConfinedTo is not { } band || Displaced(BoundsOf(draft.Box, draft.Snapshot), draft.Shift).Bottom > band.Top;
 
         /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
         private static bool IsInAFloat(CssBox box)
