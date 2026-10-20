@@ -42,6 +42,15 @@ A moved row leaves the rows above it where they are, so a page can end with only
 above the moved one more often than in Chrome (171 such pages on `main`, 177 here, 53 in Chrome over the review's corpus);
 moving the rows above it too would be a keep-together rule `break-inside` does not state.
 
+A page can also hold nothing but the repeated header. A moved row that fills the fresh band to within about its cell padding
+is sliced (the padding is past the band), and the next row, nearly a band tall itself, cannot share the sliver it leaves, so
+that page is the header alone. Measured by the review: a 4-page document in Chrome gives 5 here and 3 on `main` (which splits
+the rows), and one corpus document 35 pages against Chrome's 34 and `main`'s 28.
+
+The `rowTop` re-read reaches documents with no `avoid` row, through the straddle correction: 15 of 460 such documents in the
+review's corpus change. Rows move closer to Chrome, but one (`C10129`) goes from 81 to 84 pages, two of them header-only, and
+loses two words where `main` loses two others; disabling the re-read restores `main`'s result.
+
 ## Evidence
 
 - `TableRowBreakInsideAvoidTests`: the three keep-together cases (row geometry via `FallsPast`: avoid on the row, on its cells,
@@ -57,9 +66,12 @@ moving the rows above it too would be a keep-together rule `break-inside` does n
   says what happens to a row whose cells wrap.
 - `ARowJustTallerThanAFreshBand_IsLaidOutOnce` (overshoot 0.3 and 0.45pt, moved by `avoid` and by `break-before: page`)
   fails without `ReachesIntoItsStrip`; `ANestedRowThatAvoidsBreaksAndStopsAgain_IsLaidOutOnce` fails without the nested-table
-  decline; `RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns` fails without the column decline; `page-break-inside: avoid`
+  decline; `RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns` (fonts pinned; every row, or every third or fourth row, avoiding) fails
+  without the column decline, and the nested case with the table inside two `div`s fails if the decline asks only the direct
+  parent; `page-break-inside: avoid`
   alone is a case of the row theory.
-- `PeachBrackets.Engine.Tests`, net8.0, **Debug** build, Windows: 16,076 tests, all passing.
+- `PeachBrackets.Engine.Tests`, net8.0, Windows: 16,069 tests in **Release** and 16,083 in Debug (two files
+  hold `#if DEBUG` tests), all passing.
 - Diff coverage of the changed library lines: 25/25.
 - The issue's repro through `PeachPDF.Cli` now matches Chrome 149: no row cut across pages, 7 pages as in Chrome (the same file
   without the declaration still cuts R04/R08/R12/R19, as `auto` should).

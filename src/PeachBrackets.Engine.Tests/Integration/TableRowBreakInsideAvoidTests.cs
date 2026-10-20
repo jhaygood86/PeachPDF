@@ -166,16 +166,23 @@ namespace PeachPDF.Tests.Integration
         /// avoids breaks and stops at a column's foot is left to the columns engine, and lays out exactly as a row that allows
         /// breaks does. Moved against the page grid instead, the row's words were laid out in more than one column.
         /// </summary>
-        [Fact]
-        public async Task RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns()
+        /// <remarks>Fonts are pinned: on host fonts the rows can land where no row stops at a column's foot, and the case is never reached.</remarks>
+        [Theory]
+        [InlineData(300, 1)]
+        [InlineData(300, 3)]
+        [InlineData(240, 3)]
+        [InlineData(400, 4)]
+        public async Task RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns(double pageHeight, int everyNthRowAvoids)
         {
-            static string InColumns(string rowStyle) => LayoutHarness.Wrap(
-                $"<style>tr.r {{ {rowStyle} }}</style><div style='columns: 2; column-gap: 10pt'><table style='width:100%'><thead><tr><th>Id</th><th>T</th></tr></thead><tbody>" +
-                string.Concat(Enumerable.Range(1, 30).Select(r => $"<tr class='r'><td>w{r}_0</td><td>{Words(r, 12)}</td></tr>")) +
+            string InColumns(string rowStyle) => LayoutHarness.Wrap(
+                $"<style>body {{ font: 10pt sans-serif }} tr.r {{ {rowStyle} }}</style><div style='columns: 2; column-gap: 10pt'><table style='width:100%'><thead><tr><th>Id</th><th>T</th></tr></thead><tbody>" +
+                string.Concat(Enumerable.Range(1, 30).Select(r => $"<tr{(r % everyNthRowAvoids == 0 ? " class='r'" : "")}><td>w{r}_0</td><td>{Words(r, 12 + r % 5 * 4)}</td></tr>")) +
                 "</tbody></table></div>");
 
-            var (_, avoiding) = await LayoutHarness.LayoutAsync(InColumns("break-inside: avoid"), pageHeight: PageHeight, margin: Margin);
-            var (_, allowing) = await LayoutHarness.LayoutAsync(InColumns("break-inside: auto"), pageHeight: PageHeight, margin: Margin);
+            var (_, avoiding) = await LayoutHarness.LayoutAsync(InColumns("break-inside: avoid"), pageHeight: pageHeight, margin: Margin,
+                configureRenderContext: BundledFonts.PinSansSerifAsync);
+            var (_, allowing) = await LayoutHarness.LayoutAsync(InColumns("break-inside: auto"), pageHeight: pageHeight, margin: Margin,
+                configureRenderContext: BundledFonts.PinSansSerifAsync);
 
             Assert.True(allowing.FragmentTree!.Fragmentainers.Count > 1, "the fixture has to overflow, or this asserts nothing");
             Assert.Equal(WordsPerPage(allowing), WordsPerPage(avoiding));
@@ -183,18 +190,21 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>
         /// A nested table whose rows avoid breaks too (a global <c>tr</c> rule reaches them): the nested row is moved, does
-        /// not fit, and stops again. Each of its lines is laid out once.
+        /// not fit, and stops again. Each of its lines is laid out once, whether the nested table is the cell's own child or sits
+        /// further down inside it.
         /// </summary>
-        [Fact]
-        public async Task ANestedRowThatAvoidsBreaksAndStopsAgain_IsLaidOutOnce()
+        [Theory]
+        [InlineData("", "")]
+        [InlineData("<div><div>", "</div></div>")]
+        public async Task ANestedRowThatAvoidsBreaksAndStopsAgain_IsLaidOutOnce(string open, string close)
         {
             var html =
                 "<!doctype html><html><head><meta charset='utf-8'><style>@page{size:300pt 300pt;margin:20pt}body{margin:0;font:10pt Arial}" +
                 "table{width:100%;border-collapse:collapse}td,th{border:1px solid #999;padding:2pt}tr{break-inside:avoid}</style></head><body>" +
                 "<table><thead><tr><th>HDR0</th><th>HDR1</th></tr></thead><tbody>" +
                 string.Concat(Enumerable.Range(1, 3).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2 w{r}_3</td></tr>")) +
-                "<tr><td>w10_1<table><tr><td>w10_901</td><td>w10_902</td></tr>" +
-                $"<tr><td>w10_4</td><td>{string.Join("<br>", Enumerable.Range(5, 22).Select(l => $"w10_{l}"))}</td></tr></table></td><td>x</td></tr>" +
+                $"<tr><td>w10_1{open}<table><tr><td>w10_901</td><td>w10_902</td></tr>" +
+                $"<tr><td>w10_4</td><td>{string.Join("<br>", Enumerable.Range(5, 22).Select(l => $"w10_{l}"))}</td></tr></table>{close}</td><td>x</td></tr>" +
                 string.Concat(Enumerable.Range(21, 4).Select(r => $"<tr><td>w{r}_1</td><td>w{r}_2 w{r}_3</td></tr>")) +
                 "</tbody></table></body></html>";
 

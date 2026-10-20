@@ -7,6 +7,7 @@ table's cell, is still split. Documents with rows that avoid breaks can change p
 
 Two changes reach documents with no `avoid` at all. A row moved to the next page because it straddled the page foot now starts
 right under the repeated header, where it used to start one header-height lower; that moves such a row's top closer to where
-browsers put it, and a document can gain or lose a page by it. And a row that overflows the page by little more than its cell's
+browsers put it (about 3% of documents with no `avoid` row change, in the review's corpus). A document can gain or lose a page by
+it, and one that gains them can end on pages holding only the repeated header. And a row that overflows the page by little more than its cell's
 bottom padding, under a repeated header, no longer draws its last line a second time, mostly clipped, at the top of the next page
 (a PDF reader used to extract that line twice).

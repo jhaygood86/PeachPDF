@@ -4,6 +4,8 @@ Tracking issue: [#1795](https://github.com/jhaygood86/PeachPDF/issues/1795), whi
 the page top without the room its outer table's repeated header takes there, and the row that then crosses the page foot is
 drawn on two pages.
 
+[#1862](https://github.com/jhaygood86/PeachPDF/issues/1862) tracks the consequence: `break-inside: avoid` on a nested table's row is not honoured.
+
 A table inside another table's cell, whose row is moved to the next page (`break-before: page` on it, or the
 straddle correction) and still does not fit there, lays its last line out on two pages: once at the foot of the
 page it moved to, and again under the outer table's repeated header on the next. It is on `main` independently of
@@ -24,6 +26,6 @@ does not carry across tables. That is a change to how nested fragmentation compo
 **What #1835 did instead:** `CssLayoutEngineTable.AvoidedBreakCorrectionAppliesTo` declines a table inside a
 table cell, so `break-inside: avoid` on a nested table's rows does not make the shape reachable from an ordinary
 rule (a global `tr { break-inside: avoid }` reaches nested rows). Such a row is split at the page foot, as it was
-before #1835 — a second, smaller deviation from css-break-3 §3.2, under the same issue.
+before #1835 — a second deviation, from css-break-3 §3.2, tracked by #1862.
 `TableRowBreakInsideAvoidTests.ANestedRowThatAvoidsBreaksAndStopsAgain_IsLaidOutOnce` pins the avoid case; the
 `break-before: page` variant still repeats the line.

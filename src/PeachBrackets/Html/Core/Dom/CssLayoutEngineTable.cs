@@ -5525,7 +5525,8 @@ namespace PeachBrackets.Html.Dom
         /// decline is the straddle correction's. A table inside another table's cell is declined too: its row
         /// moves to the top of the page in document space, and the outer row holding it, which then no band
         /// holds, is sliced and displaced under the repeated header, so the moved row's last line is drawn on
-        /// two pages. A forced break before such a row does the same, so that is a gap of its own (#1795).
+        /// two pages. A forced break before such a row does the same, so that is a gap of its own (#1795), and
+        /// not honouring the avoid here is #1862.
         /// </remarks>
         private bool AvoidedBreakCorrectionAppliesTo(
             int rowIndex, HtmlContainerInt? container, TableRowCursor cursor, int slot, double pageHeight)
