@@ -144,5 +144,70 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.Equal((100.0, 200.0), PdfPagePainter.GetPageSize(doc, doc.Pages[0]));
         }
+
+        private static void AssertNear((int R, int G, int B, int A) expected, (byte R, byte G, byte B, byte A) actual)
+        {
+            // An image scaled up is resampled smoothly, so a pixel is near its sample's colour rather than exactly it.
+            Assert.True(Math.Abs(expected.R - actual.R) <= 8 && Math.Abs(expected.G - actual.G) <= 8 && Math.Abs(expected.B - actual.B) <= 8 && Math.Abs(expected.A - actual.A) <= 8,
+                $"expected about {expected}, was {actual}");
+        }
+
+        private static string ImageObject(string dictExtras, string hex) =>
+            $"<< /Type /XObject /Subtype /Image {dictExtras} /Filter /ASCIIHexDecode /Length {hex.Length} >>\nstream\n{hex}>\nendstream";
+
+        [Fact]
+        public void RgbImage_IsDrawnIntoTheUnitSquare_TopRowAtTheTop()
+        {
+            // 2x2: red green / blue white, scaled to fill the 100x100 page.
+            var image = ImageObject("/Width 2 /Height 2 /ColorSpace /DeviceRGB /BitsPerComponent 8", "FF0000 00FF00 0000FF FFFFFF");
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image);
+
+            AssertNear((255, 0, 0, 255), Px(pdf, 25, 25));
+            AssertNear((0, 255, 0, 255), Px(pdf, 75, 25));
+            AssertNear((0, 0, 255, 255), Px(pdf, 25, 75));
+            AssertNear((255, 255, 255, 255), Px(pdf, 75, 75));
+        }
+
+        [Fact]
+        public void ImageMask_IsPaintedInTheFillColourWhereTheSampleIsZero()
+        {
+            // 2x1 stencil: bit 0 = painted, bit 1 = transparent -> 0b01.......
+            var image = ImageObject("/Width 2 /Height 1 /ImageMask true", "40");
+            var pdf = Pdf("0 0 1 rg 100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image);
+
+            AssertNear((0, 0, 255, 255), Px(pdf, 25, 50));
+            Assert.InRange(Px(pdf, 75, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void SoftMask_SetsTheAlphaOfTheImage()
+        {
+            var smask = ImageObject("/Width 2 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8", "FF00");
+            var image = ImageObject("/Width 2 /Height 1 /ColorSpace /DeviceRGB /BitsPerComponent 8 /SMask 6 0 R", "FF0000 FF0000");
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image + "|||" + smask);
+
+            AssertNear((255, 0, 0, 255), Px(pdf, 25, 50));
+            Assert.InRange(Px(pdf, 75, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void IndexedOneBitImage_UsesThePalette_AndAColourKeyMaskMakesAnIndexTransparent()
+        {
+            // 2x1, palette: green, red; bits 0,1 -> green, red. Colour key masks index 0.
+            var image = ImageObject("/Width 2 /Height 1 /ColorSpace [/Indexed /DeviceRGB 1 <00FF00FF0000>] /BitsPerComponent 1 /Mask [0 0]", "40");
+            var pdf = Pdf("100 0 0 100 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image);
+
+            Assert.InRange(Px(pdf, 25, 50).A, 0, 8);
+            AssertNear((255, 0, 0, 255), Px(pdf, 75, 50));
+        }
+
+        [Fact]
+        public void ImageFilterThatIsNotDecodedYet_IsReported()
+        {
+            var image = "<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /JBIG2Decode /Length 1 >>\nstream\nx\nendstream";
+            Render(Pdf("1 0 0 1 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image), 1, 1, out var unsupported);
+
+            Assert.Contains("image: JBIG2Decode image", unsupported);
+        }
     }
 }

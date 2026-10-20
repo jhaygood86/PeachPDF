@@ -5,7 +5,7 @@
 tables/streams/object streams, rebuild by scan, page tree, general filters), content-stream interpreter (paths, clips,
 graphics state, colour, ExtGState alpha, form XObjects, page rotation), text from embedded sfnt fonts, then the public
 surface. Images, shadings, patterns, soft masks, blend modes, Type 1/CFF/Type 3 fonts and stroked text render modes are
-reported by `PdfPageSource.Paint` and not drawn yet - these are the next slices, not accepted gaps.
+reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-up: raw samples are unpacked in `PdfImageXObject` and handed to the canvas as PNG, JPEG passes through, and a smoothly-resampled upscale means pixel tests need a tolerance) - these are the next slices, not accepted gaps.
 
 **Load-bearing ideas**
 - The importer **re-draws** a page onto a `Canvas` rather than copying objects, so one implementation serves `PdfCanvas`,

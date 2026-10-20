@@ -18,7 +18,7 @@ namespace PeachDrawing.PDF
     /// document, with fonts re-embedded and text keeping the text map of the original.
     /// </para>
     /// <para>
-    /// What the importer cannot draw yet (images, shadings, patterns, soft masks, fonts without an embedded TrueType or
+    /// What the importer cannot draw yet (JPEG with a mask, JPEG 2000, CCITT and JBIG2 images, shadings, patterns, soft masks, fonts without an embedded TrueType or
     /// OpenType program, text render modes that stroke) is skipped, and <see cref="Paint"/> names each such feature in its
     /// result. Encrypted files are refused.
     /// </para>

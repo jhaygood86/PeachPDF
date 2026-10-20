@@ -101,5 +101,30 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal("fi", map[0x20]);
             Assert.Equal("ff", map[0x21]);
         }
+
+        [Fact]
+        public void ComposerImage_WithTransparency_RoundTripsThroughImport()
+        {
+            // 2x1 image written by the composer (opaque red, then half-transparent blue), imported back and rasterized.
+            var context = new PdfRenderContext();
+            using var composer = new PdfComposer(context);
+            var canvas = composer.AddPage(100, 50).Canvas;
+            var rgba = new byte[] { 255, 0, 0, 255, 0, 0, 255, 128 };
+            using var image = context.ImageFromStream(new MemoryStream(PdfImageXObject.EncodePng(rgba, 2, 1)));
+            canvas.DrawImage(image, new Rect(0, 0, 100, 50));
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+
+            var doc = PdfSourceDocument.Open(ms.ToArray());
+            using var raster = new RasterRenderContext().CreateCanvas(100, 50);
+            var unsupported = PdfPagePainter.Paint(doc, doc.Pages[0], raster);
+
+            Assert.Empty(unsupported);
+            var span = raster.ToPixelBuffer().PremultipliedRgba.Span;
+            int left = (25 * 4) + 50 * 0, right = (75 * 4) + 50 * 0;
+            int row = 25 * 100 * 4;
+            Assert.True(span[row + left] > 240 && span[row + left + 3] > 240, "left pixel should be opaque red");
+            Assert.InRange(span[row + right + 3], 100, 160);
+        }
     }
 }

@@ -395,12 +395,40 @@ internal sealed class PdfContentInterpreter
 
     // ---------------------------------------------------------------- XObjects
 
+    readonly Dictionary<PdfDictionary, Image?> _images = new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>Draws an image XObject into the unit square of the current space (PDF 8.9.4).</summary>
+    void DrawImage(PdfDictionary x, PdfDictionary? res)
+    {
+        bool stencil = PdfImageXObject.IsStencil(_doc, x);
+        Image? image;
+        if (stencil || !_images.TryGetValue(x, out image))
+        {
+            var fill = Cur.FillSpace.ToColor(Cur.Fill, Cur.FillAlpha);
+            image = PdfImageXObject.Decode(_doc, x, res, fill, _canvas.RenderContext, out var why);
+            if (image is null) _unsupported.Add("image: " + why);
+            if (!stencil) _images[x] = image;
+        }
+        if (image is null) return;
+
+        // The unit square has the image's top edge at y = 1; the canvas draws an image upright in y-down space, so flip into it.
+        _canvas.PushTransform(new Matrix3x2(1, 0, 0, -1, 0, 1));
+        try
+        {
+            var unit = new Rect(0, 0, 1, 1);
+            if (!stencil && Cur.FillAlpha < 1) _canvas.DrawImageWithOpacity(image, unit, Cur.FillAlpha);
+            else _canvas.DrawImage(image, unit);
+        }
+        finally { _canvas.PopTransform(); }
+    }
+
     void DoXObject(List<PdfItem> o, PdfDictionary? res)
     {
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var xobjects = res is null ? null : _doc.DictOf(res, "XObject");
         if (xobjects is null || _doc.Resolve(xobjects.GetRaw(name)) is not PdfDictionary x) { _unsupported.Add("Do (missing XObject)"); return; }
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
+        if (subtype == "/Image") { DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
 
