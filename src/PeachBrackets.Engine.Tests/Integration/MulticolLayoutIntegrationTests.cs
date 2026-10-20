@@ -2022,8 +2022,8 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"container {mc.ActualBottom - mc.Location.Y} tall, float {f.ActualBottom - f.Location.Y}");
         }
 
-        // A float wider than the line it follows text on has no room beside that text, so the words before it are not
-        // moved and the line is not reopened: reopening it sent the words after the float past the edge of the container.
+        // A float wider than the line it follows text on has no room beside that text: the words after it go below it,
+        // not past the edge of the column and the container.
         [Theory]
         [InlineData("<div id='mc' style='width:700px;columns:3'><div style='float:right;width:20px;height:20px'>F1</div>" +
                     "w00045ab w00047ab w00048a w00049abcde w00050abcde w00052abcd w00053abcd w00054a w00055 w00056ab w00057abc " +
@@ -2032,7 +2032,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("<table style='width:700px'><tr><td style='width:50%'>x</td><td><div id='mc' style='columns:2'>" +
                     "w00033 w00034 w00035 w00036 <div style='float:left;width:260px;height:40px;margin:5px -20px -30px -10px'>FL2</div>" +
                     " w00141 w00142 w00145 w00146</div></td></tr></table>", 8)]
-        public async Task FloatWiderThanItsLine_AfterText_KeepsEveryWordInsideTheContainer(string content, int expectedWords)
+        public async Task FloatWiderThanItsLine_AfterText_PutsTheTextBelowIt(string content, int expectedWords)
         {
             var html = Wrap(content).Replace("<body", "<body style='font:14px/1.3 Arial'");
             var (root, container) = await BuildAndLayout(html, pageHeight: 800);
@@ -2043,6 +2043,37 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(expectedWords, words.Count);
             Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+
+            foreach (var floated in LayoutHarness.Descendants(mc).Where(x => x.IsFloated && x.Words.Any(w => w.Text == "F3")))
+            {
+                Assert.DoesNotContain(words, w => w.Left < floated.ActualRight && w.Right > floated.Location.X
+                                                  && w.Top < floated.ActualBottom && w.Bottom > floated.Location.Y);
+            }
+        }
+
+
+        // A word that wraps onto the line beside a float wider than the column goes below the float, whatever the text
+        // before the float amounts to: the lengths here put one onto that line at font sizes where it did not fit.
+        [Theory]
+        [InlineData(4)]
+        [InlineData(5)]
+        public async Task FloatWiderThanTheColumn_NoWordIsBesideItOrPastTheContainer(int before)
+        {
+            var text = string.Join(" ", Enumerable.Range(0, before).Select(i => $"w{i:D3}xxxx"));
+            var html = Wrap("<div id='mc' style='width:500px; columns:3; font:16px/1.3 monospace'>" +
+                            "<div style='float:right; width:10px; height:15px'>R</div>" + text +
+                            " <div id='f' style='float:left; width:200px; height:15px; clear:both'>F</div> w900xxxx w901xxxx w902xxxx</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var floated = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words).Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(before + 3, words.Count);
+            Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+            Assert.DoesNotContain(words, w => w.Left < floated.ActualRight - 0.5 && w.Right > floated.Location.X + 0.5
+                                              && w.Top < floated.ActualBottom - 0.5 && w.Bottom > floated.Location.Y + 0.5);
         }
 
         // Text laid out in a scroll container of bounded height keeps the inline flow it had: the columns engine drops

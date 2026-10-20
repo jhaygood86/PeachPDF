@@ -27,11 +27,10 @@
 
 - Keeping an inline-only scroll container monolithic while it is columnized. That needs the columns engine to lay out inside a detached fragmentainer, which it does not do.
 - Fixing the two pre-existing columns-engine defects above. They live in the columns engine's line and fragment handling, not in the box generation this change touches.
-- Moving a line below a float wider than the line (#1850, [accepted gap](../accepted-gaps/float-wider-than-its-line-after-text-keeps-its-place.md)). `FlowFloatChild` leaves such a float where it was placed: reopening the line sent the last words of the container past its edge, which `main` kept.
 
 **Evidence:**
 
 - Windows, net8.0 with coverage: `PeachBrackets.Engine.Tests` 16,086 passed, `PeachPDF.Tests` 1,418 passed (9 skipped), CLI 213 passed, 0 failed. Linux (Docker, net10.0, Liberation/DejaVu fonts): 16,072 and 1,414 passed, 0 failed. arm64 not run.
 - diff-cover against `main`: 78 of 78 changed executable lines. Solution `Rebuild`: 0 compiler warnings.
-- Mutants that fail a test: the `FloatFitsLine` guard, the bounded-scroll-container exclusion, the `Math.Max` on the blocker's bottom, the right float's `OuterTop = startY`, the left tried-position guard. The removed `TallestOuterHeight` term had no test that failed without it.
+- Mutants that fail a test: the post-wrap `ShiftEmptyLineBelowCrowdingFloats` call and the border-box clearance of a float (the wide-float tests), the bounded-scroll-container exclusion, the `Math.Max` on the blocker's bottom, the right float's `OuterTop = startY`, the left tried-position guard. The removed `TallestOuterHeight` term had no test that failed without it.
 - html-to-pdf vault test project (built against this working tree): 8 of 8 passed.

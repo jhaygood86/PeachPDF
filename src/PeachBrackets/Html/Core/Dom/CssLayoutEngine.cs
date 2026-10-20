@@ -4338,11 +4338,13 @@ namespace PeachBrackets.Html.Dom
                 var ownFloatsOnly = (leftFloat is null || ColumnsContainerOf(leftFloat) == ColumnsContainerOf(blockBox))
                     && (rightFloat is null || ColumnsContainerOf(rightFloat) == ColumnsContainerOf(blockBox));
 
+                // Never above a float's border-box bottom: the lookup that found the float reads that edge, so a negative
+                // margin-bottom would leave the line below the margin edge and still beside the float.
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
-                    nextY = Math.Min(nextY, leftFloat.ActualBottom + leftFloat.ActualMarginBottom);
+                    nextY = Math.Min(nextY, Math.Max(leftFloat.ActualBottom, leftFloat.ActualBottom + leftFloat.ActualMarginBottom));
                 if (rightFloat is not null)
-                    nextY = Math.Min(nextY, rightFloat.ActualBottom + rightFloat.ActualMarginBottom);
+                    nextY = Math.Min(nextY, Math.Max(rightFloat.ActualBottom, rightFloat.ActualBottom + rightFloat.ActualMarginBottom));
 
                 // The cursor stays where the first lookup left it unless the line really moves down.
                 if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
@@ -4557,11 +4559,8 @@ namespace PeachBrackets.Html.Dom
             await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
 
             // The words already on this line are moved beside a float placed after them, as a browser lays the
-            // line out again around it. Where they would no longer fit, the float starts the next line instead. A float
-            // wider than the line has no line to start, as none has room beside it: it keeps the place it was given
-            // and the text beside it is laid out as it always was.
-            if (coordinates.Line.Words.Count > 0 && FloatFitsLine(b, coordinates.Line)
-                && FloatOverlapsLineWords(b, coordinates.Line))
+            // line out again around it. Where they would no longer fit, the float starts the next line instead.
+            if (coordinates.Line.Words.Count > 0 && FloatOverlapsLineWords(b, coordinates.Line))
             {
                 if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {
@@ -4599,10 +4598,6 @@ namespace PeachBrackets.Html.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
         }
-
-        private static bool FloatFitsLine(CssBox floated, CssLineBox line) =>
-            floated.ActualRight + floated.ActualMarginRight - (floated.Location.X - floated.ActualMarginLeft)
-            <= line.ContentRight - line.ContentLeft + LineFitTolerance;
 
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {
@@ -5913,6 +5908,14 @@ namespace PeachBrackets.Html.Dom
                             if (lastLeftIntersectingFloatBox is not null)
                             {
                                 coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+
+                                // The line the word wrapped onto may have no room beside that float, as when the float is wider
+                                // than the line; the word goes below it, as it would have had it been about to open the line.
+                                if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre))
+                                {
+                                    ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
+                                        clonedTrailing, isRtl, GrowLineToItsExtent);
+                                }
                             }
 
                             if (word.IsImage || word.Equals(b.FirstWord))
