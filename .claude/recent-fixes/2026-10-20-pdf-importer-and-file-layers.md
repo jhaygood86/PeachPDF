@@ -36,6 +36,10 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
 - **Stroked and clipping text** is built from `Typeface.TryGetOutline`: outlines are laid out in text space, carried into user
   space with the run matrix and drawn there (so line width and dashes are user-space), while the glyphs are still drawn - invisibly
   when not filled - to keep the text map. Clip modes accumulate into one path applied at `ET`.
+- **Mesh shadings are rasterized:** a canvas has no Gouraud primitive, so `PdfMeshShading` decodes the vertices/patches (types 4-7),
+  tessellates patches into 14x14 triangles with bilinear corner colours (Coons interior points per PDF 8.7.4.5.7), fills triangles into
+  an RGBA bitmap over the mesh bounding box at 2.5 px per canvas unit, and the interpreter draws it as an image under the shading
+  transform, clipped to the filled path for a pattern. Triangle edges get a slack of 0.02 px so neighbours leave no hairline gaps.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

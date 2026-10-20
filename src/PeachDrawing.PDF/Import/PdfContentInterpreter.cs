@@ -1,3 +1,4 @@
+using System.IO;
 using System.Linq;
 using System;
 using System.Collections.Generic;
@@ -603,6 +604,7 @@ internal sealed class PdfContentInterpreter
             matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
                 (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
         if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { if (!fill) _unsupported.Add("stroke with a mesh shading"); return null; }
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
     }
 
@@ -616,12 +618,34 @@ internal sealed class PdfContentInterpreter
         return brush;
     }
 
+    /// <summary>Draws a mesh shading as an image of the mesh under the transform that carries shading space onto the canvas.</summary>
+    void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    {
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return;
+        var toCurrent = shadingToBase * _streamBase * inverse;
+        var toCanvas = toCurrent * _canvas.CurrentTransform;
+        double scale = Math.Sqrt(Math.Abs(toCanvas.M11 * toCanvas.M22 - toCanvas.M12 * toCanvas.M21));
+        var bitmap = PdfMeshShading.Render(_doc, shading, res, scale, alpha, out var why);
+        if (bitmap is null) { _unsupported.Add(why!); return; }
+        Image image;
+        try { image = _canvas.RenderContext.ImageFromStream(new MemoryStream(PdfImageXObject.EncodePng(bitmap.Rgba, bitmap.Width, bitmap.Height))); }
+        catch (Exception) { _unsupported.Add("mesh shading image"); return; }
+
+        // The unit square (image top at v = 0) maps onto the mesh's box in shading space (y up).
+        double w = bitmap.X1 - bitmap.X0, h = bitmap.Y1 - bitmap.Y0;
+        _canvas.PushTransform(toCurrent);
+        _canvas.PushTransform(new Matrix3x2((float)w, 0, 0, (float)-h, (float)bitmap.X0, (float)bitmap.Y1));
+        try { _canvas.DrawImage(image, new Rect(0, 0, 1, 1)); }
+        finally { _canvas.PopTransform(); _canvas.PopTransform(); }
+    }
+
     /// <summary>The <c>sh</c> operator: paints a shading over the whole current clip.</summary>
     void PaintShading(List<PdfItem> o, PdfDictionary? res)
     {
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
         if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
+        if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { DrawMesh(shading, Matrix3x2.Identity, Cur.FillAlpha, res); return; }
         var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res);
         if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
     }
@@ -650,8 +674,23 @@ internal sealed class PdfContentInterpreter
         path.FillMode = mode;
         if (fill)
         {
-            var brush = BrushFor(fill: true, res);
-            if (brush is not null) _canvas.DrawPath(brush, path);
+            if (Cur.FillPattern is { } fillPattern && _doc.IntOf(fillPattern.GetRaw("PatternType")) == 2 && _doc.DictOf(fillPattern, "Shading") is { } meshShading
+                && PdfMeshShading.IsMesh(_doc.IntOf(meshShading.GetRaw("ShadingType"))))
+            {
+                // A mesh is drawn as an image, so the path becomes a clip for it.
+                var matrix = Matrix3x2.Identity;
+                if (_doc.ArrayOf(fillPattern, "Matrix") is { Elements.Count: >= 6 } m)
+                    matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
+                        (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
+                _canvas.PushClip(path);
+                try { DrawMesh(meshShading, matrix, Cur.FillAlpha, res); }
+                finally { _canvas.PopClip(); }
+            }
+            else
+            {
+                var brush = BrushFor(fill: true, res);
+                if (brush is not null) _canvas.DrawPath(brush, path);
+            }
         }
         if (stroke)
         {
