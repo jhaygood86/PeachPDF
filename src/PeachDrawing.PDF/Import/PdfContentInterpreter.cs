@@ -31,6 +31,8 @@ internal sealed class PdfContentInterpreter
         public PdfImportedFont? TextFont;
         public double FontSize, CharSpacing, WordSpacing, HorizontalScale = 1, Leading, Rise;
         public int RenderMode;
+        public Matrix3x2 Ctm = Matrix3x2.Identity;
+        public PdfDictionary? FillPattern, StrokePattern;
 
         public State Clone() => new()
         {
@@ -39,6 +41,7 @@ internal sealed class PdfContentInterpreter
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
             TextFont = TextFont, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
             HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
+            Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern,
         };
     }
 
@@ -50,6 +53,7 @@ internal sealed class PdfContentInterpreter
     double _curX, _curY, _startX, _startY;
     FillMode? _pendingClip;
     int _formDepth;
+    Matrix3x2 _streamBase = Matrix3x2.Identity;
     Matrix3x2 _tm = Matrix3x2.Identity, _tlm = Matrix3x2.Identity;
     readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = new(ReferenceEqualityComparer.Instance);
 
@@ -71,6 +75,9 @@ internal sealed class PdfContentInterpreter
         var lx = new PdfLexer(content);
         var operands = new List<PdfItem>();
         int baseDepth = _stack.Count;
+        // A pattern's space is the default space of the stream that uses it: here, the current transform at the stream's start.
+        var savedBase = _streamBase;
+        _streamBase = Cur.Ctm;
         while (true)
         {
             var t = lx.Next();
@@ -89,6 +96,7 @@ internal sealed class PdfContentInterpreter
         }
         // A stream that leaves q unbalanced must not leak state into whatever follows.
         while (_stack.Count > baseDepth) Restore();
+        _streamBase = savedBase;
     }
 
     static void SkipInlineImage(PdfLexer lx)
@@ -153,31 +161,31 @@ internal sealed class PdfContentInterpreter
                 break;
 
             // --- path painting
-            case "S": Paint(fill: false, stroke: true, FillMode.Nonzero, close: false); break;
-            case "s": Paint(false, true, FillMode.Nonzero, close: true); break;
-            case "f" or "F": Paint(true, false, FillMode.Nonzero, false); break;
-            case "f*": Paint(true, false, FillMode.EvenOdd, false); break;
-            case "B": Paint(true, true, FillMode.Nonzero, false); break;
-            case "B*": Paint(true, true, FillMode.EvenOdd, false); break;
-            case "b": Paint(true, true, FillMode.Nonzero, true); break;
-            case "b*": Paint(true, true, FillMode.EvenOdd, true); break;
-            case "n": Paint(false, false, FillMode.Nonzero, false); break;
+            case "S": Paint(fill: false, stroke: true, FillMode.Nonzero, close: false, res); break;
+            case "s": Paint(false, true, FillMode.Nonzero, close: true, res); break;
+            case "f" or "F": Paint(true, false, FillMode.Nonzero, false, res); break;
+            case "f*": Paint(true, false, FillMode.EvenOdd, false, res); break;
+            case "B": Paint(true, true, FillMode.Nonzero, false, res); break;
+            case "B*": Paint(true, true, FillMode.EvenOdd, false, res); break;
+            case "b": Paint(true, true, FillMode.Nonzero, true, res); break;
+            case "b*": Paint(true, true, FillMode.EvenOdd, true, res); break;
+            case "n": Paint(false, false, FillMode.Nonzero, false, res); break;
             case "W": _pendingClip = FillMode.Nonzero; break;
             case "W*": _pendingClip = FillMode.EvenOdd; break;
 
             // --- colour
-            case "g": Cur.FillSpace = PdfColorSpace.Gray; Cur.Fill = [N(o, 0)]; break;
-            case "G": Cur.StrokeSpace = PdfColorSpace.Gray; Cur.Stroke = [N(o, 0)]; break;
-            case "rg": Cur.FillSpace = PdfColorSpace.Rgb; Cur.Fill = [N(o, 0), N(o, 1), N(o, 2)]; break;
-            case "RG": Cur.StrokeSpace = PdfColorSpace.Rgb; Cur.Stroke = [N(o, 0), N(o, 1), N(o, 2)]; break;
-            case "k": Cur.FillSpace = PdfColorSpace.Cmyk; Cur.Fill = [N(o, 0), N(o, 1), N(o, 2), N(o, 3)]; break;
-            case "K": Cur.StrokeSpace = PdfColorSpace.Cmyk; Cur.Stroke = [N(o, 0), N(o, 1), N(o, 2), N(o, 3)]; break;
+            case "g": Cur.FillPattern = null; Cur.FillSpace = PdfColorSpace.Gray; Cur.Fill = [N(o, 0)]; break;
+            case "G": Cur.StrokePattern = null; Cur.StrokeSpace = PdfColorSpace.Gray; Cur.Stroke = [N(o, 0)]; break;
+            case "rg": Cur.FillPattern = null; Cur.FillSpace = PdfColorSpace.Rgb; Cur.Fill = [N(o, 0), N(o, 1), N(o, 2)]; break;
+            case "RG": Cur.StrokePattern = null; Cur.StrokeSpace = PdfColorSpace.Rgb; Cur.Stroke = [N(o, 0), N(o, 1), N(o, 2)]; break;
+            case "k": Cur.FillPattern = null; Cur.FillSpace = PdfColorSpace.Cmyk; Cur.Fill = [N(o, 0), N(o, 1), N(o, 2), N(o, 3)]; break;
+            case "K": Cur.StrokePattern = null; Cur.StrokeSpace = PdfColorSpace.Cmyk; Cur.Stroke = [N(o, 0), N(o, 1), N(o, 2), N(o, 3)]; break;
             case "cs" or "CS":
             {
                 var space = PdfColorSpace.Resolve(_doc, o[0], res);
                 if (space is null) { _unsupported.Add($"{op} {(o[0] as PdfName)?.Value}"); break; }
-                if (op == "cs") { Cur.FillSpace = space; Cur.Fill = space.Initial; }
-                else { Cur.StrokeSpace = space; Cur.Stroke = space.Initial; }
+                if (op == "cs") { Cur.FillSpace = space; Cur.Fill = space.Initial; Cur.FillPattern = null; }
+                else { Cur.StrokeSpace = space; Cur.Stroke = space.Initial; Cur.StrokePattern = null; }
                 break;
             }
             case "sc" or "scn" or "SC" or "SCN":
@@ -186,6 +194,14 @@ internal sealed class PdfContentInterpreter
                 foreach (var item in o) if (_doc.Resolve(item) is PdfInteger or PdfReal) comps.Add(_doc.NumberOf(item));
                 bool fill = op is "sc" or "scn";
                 var space = fill ? Cur.FillSpace : Cur.StrokeSpace;
+                if (space == PdfColorSpace.Pattern)
+                {
+                    var patterns = res is null ? null : _doc.DictOf(res, "Pattern");
+                    var named = o.Count > 0 && o[^1] is PdfName pn && patterns is not null ? _doc.Resolve(patterns.GetRaw(pn.Value.TrimStart('/'))) as PdfDictionary : null;
+                    if (named is null) _unsupported.Add(op + " (missing pattern)");
+                    if (fill) Cur.FillPattern = named; else Cur.StrokePattern = named;
+                    break;
+                }
                 if (comps.Count != space.Components) { _unsupported.Add(op + " (pattern or arity)"); break; }
                 if (fill) Cur.Fill = comps.ToArray(); else Cur.Stroke = comps.ToArray();
                 break;
@@ -227,6 +243,7 @@ internal sealed class PdfContentInterpreter
 
             // --- structure
             case "Do": DoXObject(o, res); break;
+            case "sh": PaintShading(o, res); break;
             case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0" or "d1": break;
 
             default:
@@ -254,6 +271,7 @@ internal sealed class PdfContentInterpreter
     {
         _canvas.PushTransform(m);
         Cur.Pushes.Add(Push.Transform);
+        Cur.Ctm = m * Cur.Ctm;
     }
 
     void ApplyExtGState(List<PdfItem> o, PdfDictionary? res)
@@ -361,7 +379,46 @@ internal sealed class PdfContentInterpreter
         _curX = x3; _curY = y3;
     }
 
-    void Paint(bool fill, bool stroke, FillMode mode, bool close)
+    /// <summary>The brush a fill or stroke paints with: its solid colour, or the pattern the colour names. Null when it cannot be made.</summary>
+    Brush? BrushFor(bool fill, PdfDictionary? res)
+    {
+        var st = Cur;
+        var pattern = fill ? st.FillPattern : st.StrokePattern;
+        var space = fill ? st.FillSpace : st.StrokeSpace;
+        if (space == PdfColorSpace.Pattern && pattern is null) return null;
+        if (pattern is null) return _canvas.GetSolidBrush(space.ToColor(fill ? st.Fill : st.Stroke, fill ? st.FillAlpha : st.StrokeAlpha));
+
+        int type = _doc.IntOf(pattern.GetRaw("PatternType"));
+        if (type != 2) { _unsupported.Add("pattern type " + type); return null; }
+        var matrix = Matrix3x2.Identity;
+        if (_doc.ArrayOf(pattern, "Matrix") is { Elements.Count: >= 6 } m)
+            matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
+                (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
+        if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
+        return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
+    }
+
+    /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>
+    Brush? ShadingBrush(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
+    {
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
+        var toCurrent = shadingToBase * _streamBase * inverse;
+        var brush = PdfShading.CreateBrush(_doc, shading, res, toCurrent, alpha, _canvas.RenderContext, out var why);
+        if (brush is null) _unsupported.Add(why!);
+        return brush;
+    }
+
+    /// <summary>The <c>sh</c> operator: paints a shading over the whole current clip.</summary>
+    void PaintShading(List<PdfItem> o, PdfDictionary? res)
+    {
+        string name = _doc.NameOf(o[0])!.TrimStart('/');
+        var shadings = res is null ? null : _doc.DictOf(res, "Shading");
+        if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
+        var brush = ShadingBrush(shading, Matrix3x2.Identity, Cur.FillAlpha, res);
+        if (brush is not null) _canvas.DrawRectangle(brush, -1e5, -1e5, 2e5, 2e5);
+    }
+
+    void Paint(bool fill, bool stroke, FillMode mode, bool close, PdfDictionary? res)
     {
         var path = _path;
         _path = null;
@@ -370,12 +427,15 @@ internal sealed class PdfContentInterpreter
         path.FillMode = mode;
         if (fill)
         {
-            using var brush = _canvas.GetSolidBrush(Cur.FillSpace.ToColor(Cur.Fill, Cur.FillAlpha));
-            _canvas.DrawPath(brush, path);
+            var brush = BrushFor(fill: true, res);
+            if (brush is not null) _canvas.DrawPath(brush, path);
         }
         if (stroke)
         {
-            var pen = _canvas.GetPen(_canvas.GetSolidBrush(Cur.StrokeSpace.ToColor(Cur.Stroke, Cur.StrokeAlpha)));
+            var strokeBrush = BrushFor(fill: false, res);
+            var pen = strokeBrush is null ? null : _canvas.GetPen(strokeBrush);
+            if (pen is not null)
+            {
             // A zero-width line is the thinnest line the device can draw; a hairline stands in for it.
             pen.Width = Cur.LineWidth <= 0 ? 0.1 : Cur.LineWidth;
             pen.MiterLimit = Cur.MiterLimit;
@@ -383,6 +443,7 @@ internal sealed class PdfContentInterpreter
             pen.LineJoin = Cur.Join;
             if (Cur.Dash.Length > 0 && Cur.Dash.Any(d => d > 0)) pen.SetDashPattern(Cur.Dash.Length % 2 == 1 ? [.. Cur.Dash, .. Cur.Dash] : Cur.Dash, Cur.DashPhase);
             _canvas.DrawPath(pen, path);
+            }
         }
         if (_pendingClip is { } clipMode)
         {

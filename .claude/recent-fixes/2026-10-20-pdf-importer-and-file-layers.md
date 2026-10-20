@@ -22,6 +22,11 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   "Font file does not contain a name table", then NREs further in, in `TypefaceMetrics`). `SfntRepair` synthesizes them in the
   importer; the text engine stays strict. An earlier attempt at making `PeachDrawing.Text` tolerate each in turn was reverted:
   `os2` alone is dereferenced in dozens of places.
+- **Patterns are brushes in the current space:** a pattern space is the default space of the stream that uses it, so the
+  interpreter tracks the CTM and each stream's base; a shading brush is built with `patternMatrix * streamBase * inverse(CTM)`
+  (axial endpoints are transformed; a radial brush takes the matrix). Without that inverse a gradient drawn under a `cm` lands in
+  the wrong place - `ShadingPattern_StaysInPatternSpace...` pins it. First showcase round trip: 78 of 429 pages over a 2% pixel
+  difference with nothing imported but paths/text/images; patterns took it to 32.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

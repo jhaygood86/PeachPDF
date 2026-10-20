@@ -133,7 +133,7 @@ namespace PeachDrawing.PDF.Tests.Import
         {
             Render(Pdf("/Sh0 sh BT /F1 12 Tf (hi) Tj ET"), 1, 1, out var unsupported);
 
-            Assert.Contains("sh", unsupported);
+            Assert.Contains("sh (missing shading)", unsupported);
             Assert.Contains("Tf (missing font)", unsupported);
         }
 
@@ -145,10 +145,10 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Equal((100.0, 200.0), PdfPagePainter.GetPageSize(doc, doc.Pages[0]));
         }
 
-        private static void AssertNear((int R, int G, int B, int A) expected, (byte R, byte G, byte B, byte A) actual)
+        private static void AssertNear((int R, int G, int B, int A) expected, (byte R, byte G, byte B, byte A) actual, int tolerance = 8)
         {
             // An image scaled up is resampled smoothly, so a pixel is near its sample's colour rather than exactly it.
-            Assert.True(Math.Abs(expected.R - actual.R) <= 8 && Math.Abs(expected.G - actual.G) <= 8 && Math.Abs(expected.B - actual.B) <= 8 && Math.Abs(expected.A - actual.A) <= 8,
+            Assert.True(Math.Abs(expected.R - actual.R) <= tolerance && Math.Abs(expected.G - actual.G) <= tolerance && Math.Abs(expected.B - actual.B) <= tolerance && Math.Abs(expected.A - actual.A) <= tolerance,
                 $"expected about {expected}, was {actual}");
         }
 
@@ -208,6 +208,77 @@ namespace PeachDrawing.PDF.Tests.Import
             Render(Pdf("1 0 0 1 0 0 cm /Im0 Do", resources: "/XObject << /Im0 5 0 R >>", extraObjects: image), 1, 1, out var unsupported);
 
             Assert.Contains("image: JBIG2Decode image", unsupported);
+        }
+
+        private const string RedToBlue = "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 0 1] /N 1 >>";
+
+        private static string AxialShading(string function = RedToBlue) =>
+            $"<< /ShadingType 2 /ColorSpace /DeviceRGB /Coords [0 0 100 0] /Function {function} /Extend [true true] >>";
+
+        private static byte[] PatternPdf(string content, string function = RedToBlue, string extraObjects = "") =>
+            Pdf(content, resources: "/Pattern << /P0 5 0 R >>", extraObjects: $"<< /PatternType 2 /Shading {AxialShading(function)} >>" + extraObjects);
+
+        [Fact]
+        public void AxialShadingPattern_FillsWithTheGradient()
+        {
+            var pdf = PatternPdf("/Pattern cs /P0 scn 0 0 100 100 re f");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
+            AssertNear((128, 0, 128, 255), Px(pdf, 50, 50), 14);
+            AssertNear((5, 0, 250, 255), Px(pdf, 97, 50), 14);
+        }
+
+        [Fact]
+        public void ShadingPattern_StaysInPatternSpace_WhateverTheCurrentTransformIs()
+        {
+            // The rectangle is drawn under a 0.5 scale, but the pattern's space is the page's: the gradient still spans x = 0..100 of the page.
+            var pdf = PatternPdf("0.5 0 0 0.5 0 0 cm /Pattern cs /P0 scn 0 0 200 200 re f");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
+            AssertNear((5, 0, 250, 255), Px(pdf, 97, 50), 14);
+        }
+
+        [Fact]
+        public void ShOperator_PaintsTheShadingOverTheClip()
+        {
+            var pdf = Pdf("0 0 50 100 re W n /S0 sh", resources: $"/Shading << /S0 {AxialShading()} >>");
+
+            AssertNear((250, 0, 5, 255), Px(pdf, 2, 50), 14);
+            Assert.InRange(Px(pdf, 75, 50).A, 0, 8);
+        }
+
+        [Fact]
+        public void StitchingFunction_SwitchesSubfunctionAtItsBound()
+        {
+            var stitched = "<< /FunctionType 3 /Domain [0 1] /Bounds [0.5] /Encode [0 1 0 1] /Functions [" +
+                "<< /FunctionType 2 /Domain [0 1] /C0 [1 0 0] /C1 [0 1 0] /N 1 >> << /FunctionType 2 /Domain [0 1] /C0 [0 1 0] /C1 [0 0 1] /N 1 >>] >>";
+            var pdf = PatternPdf("/Pattern cs /P0 scn 0 0 100 100 re f", stitched);
+
+            AssertNear((128, 128, 0, 255), Px(pdf, 25, 50), 16);
+            AssertNear((0, 255, 0, 255), Px(pdf, 50, 50), 24);
+            AssertNear((0, 128, 128, 255), Px(pdf, 75, 50), 16);
+        }
+
+        [Fact]
+        public void PostScriptFunction_IsEvaluated()
+        {
+            // { dup 1 exch sub 0 } maps t to (t, 1 - t, 0): green on the left, red on the right.
+            var body = "{ dup 1 exch sub 0 }";
+            var function = "6 0 R";
+            var stream = "|||<< /FunctionType 4 /Domain [0 1] /Range [0 1 0 1 0 1] /Length " + body.Length + " >>" + "\nstream\n" + body + "\nendstream";
+            var pdf = PatternPdf("/Pattern cs /P0 scn 0 0 100 100 re f", function, stream);
+
+            AssertNear((5, 250, 0, 255), Px(pdf, 2, 50), 14);
+            AssertNear((250, 5, 0, 255), Px(pdf, 97, 50), 14);
+        }
+
+        [Fact]
+        public void TilingPattern_IsReportedNotDrawn()
+        {
+            var pdf = Pdf("/Pattern cs /P0 scn 0 0 100 100 re f", resources: "/Pattern << /P0 5 0 R >>", extraObjects: "<< /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 1 /YStep 1 /Resources << >> /Length 0 >>" + "\nstream\n\nendstream");
+            Render(pdf, 1, 1, out var unsupported);
+
+            Assert.Contains("pattern type 1", unsupported);
         }
     }
 }

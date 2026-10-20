@@ -40,6 +40,9 @@ internal sealed class PdfColorSpace
     /// <summary>DeviceGray.</summary>
     public static readonly PdfColorSpace Gray = new("DeviceGray", 1, (c, a) => { byte g = Byte(c[0]); return PaintColor.FromArgb(Alpha(a), g, g, g); }, [0]);
 
+    /// <summary>The Pattern space: it has no components of its own, the colour is a pattern named by <c>scn</c>.</summary>
+    public static readonly PdfColorSpace Pattern = new("Pattern", 0, (_, a) => PaintColor.FromArgb(Alpha(a), 0, 0, 0), []);
+
     /// <summary>DeviceRGB.</summary>
     public static readonly PdfColorSpace Rgb = new("DeviceRGB", 3, (c, a) => PaintColor.FromArgb(Alpha(a), Byte(c[0]), Byte(c[1]), Byte(c[2])), [0, 0, 0]);
 
@@ -58,7 +61,7 @@ internal sealed class PdfColorSpace
                 case "/DeviceGray" or "/G" or "/CalGray": return Gray;
                 case "/DeviceRGB" or "/RGB" or "/CalRGB": return Rgb;
                 case "/DeviceCMYK" or "/CMYK": return Cmyk;
-                case "/Pattern": return null;
+                case "/Pattern": return Pattern;
             }
             var named = resources is null ? null : doc.DictOf(resources, "ColorSpace") is { } cs ? cs.GetRaw(name.Value.TrimStart('/')) : null;
             return named is null ? null : Resolve(doc, named, resources, depth + 1);
@@ -70,6 +73,7 @@ internal sealed class PdfColorSpace
             case "/DeviceGray" or "/CalGray": return Gray;
             case "/DeviceRGB" or "/CalRGB": return Rgb;
             case "/DeviceCMYK": return Cmyk;
+            case "/Pattern": return Pattern;
             case "/ICCBased" when arr.Elements.Count > 1 && doc.Resolve(arr.Elements[1]) is PdfDictionary icc:
                 int n = doc.IntOf(icc.GetRaw("N"));
                 return n switch
