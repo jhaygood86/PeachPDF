@@ -84,6 +84,7 @@ PeachDrawing.Core.Canvas : abstract class
   property Double RasterizationDpi { get; }
   property Matrix3x2 CurrentTransform { get; }
   property Object TileCacheOwner { get; }
+  property RenderContext RenderContext { get; }
   property ValueTuple<Double, Double> TransformScale { get; }
 PeachDrawing.Core.CanvasConstraintException : abstract class
 PeachDrawing.Core.CanvasLayer : sealed class
@@ -351,8 +352,8 @@ PeachDrawing.Core.Geometry.PathShapes : static class
 PeachDrawing.Core.Geometry.PolygonClipper : static class
   method static List<PaintPoint> ClipToRect(IReadOnlyList<PaintPoint> polygon, Rect rect)
 PeachDrawing.Core.GlyphPlacement : struct
-  ctor(Int32 GlyphIndex, Double X, Double Y)
-  method Void Deconstruct(out Int32 GlyphIndex, out Double X, out Double Y)
+  ctor(Int32 GlyphIndex, Double X, Double Y, String Text = null)
+  method Void Deconstruct(out Int32 GlyphIndex, out Double X, out Double Y, out String Text)
   method virtual Boolean Equals(GlyphPlacement other)
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()
@@ -360,6 +361,7 @@ PeachDrawing.Core.GlyphPlacement : struct
   property Double X { get; init; }
   property Double Y { get; init; }
   property Int32 GlyphIndex { get; init; }
+  property String Text { get; init; }
 PeachDrawing.Core.GradientSpread : enum Int32
   Pad = 0
   Repeat = 1
@@ -742,6 +744,7 @@ PeachDrawing.Core.RenderContext : abstract class
   method Pen GetPen(Brush brush)
   method Pen GetPen(PaintColor color)
   method Task<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, RUri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method Task<Boolean> AddFontFromBytes(String fontFamilyName, ReadOnlyMemory<Byte> data, FontFaceDescriptors descriptors = null)
   method Task<Boolean> AddLocalFontFamily(String fontFamilyName, String localFontFaceName, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void AddFontFamily(FontFamily fontFamily)
   method Void AddFontFamilyMapping(String fromFamily, String toFamily)

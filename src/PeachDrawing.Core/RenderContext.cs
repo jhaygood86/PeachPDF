@@ -244,6 +244,17 @@ namespace PeachDrawing.Core
             _fontsHandler.AddFontFamily(fontFamily);
         }
 
+        /// <summary>
+        /// Adds a font whose file bytes the caller already holds under <paramref name="fontFamilyName"/> (TrueType, OpenType, WOFF or
+        /// WOFF2, recognised by content), without going through a URL: the way to use a font embedded in a document being imported.
+        /// </summary>
+        /// <param name="fontFamilyName">the family name to register the font under</param>
+        /// <param name="data">the font file</param>
+        /// <param name="descriptors">the weight, width and style the font is declared for</param>
+        /// <returns><see langword="true"/> when the font was added</returns>
+        public Task<bool> AddFontFromBytes(string fontFamilyName, ReadOnlyMemory<byte> data, FontFaceDescriptors descriptors = default) =>
+            AddFontFromStream(fontFamilyName, new MemoryStream(data.ToArray()), null, descriptors);
+
         /// <param name="fontFamilyName">the font family name declared by the <c>@font-face</c> rule</param>
         /// <param name="url">the (possibly relative) <c>url()</c> the font file is served from</param>
         /// <param name="format">the <c>@font-face</c> <c>format()</c> hint, if any</param>

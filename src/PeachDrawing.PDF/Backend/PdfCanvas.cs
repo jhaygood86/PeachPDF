@@ -140,9 +140,6 @@ namespace PeachDrawing.PDF
             return new PdfCanvas(renderContext, graphics, renderContext.PixelsPerPoint) { _ownsGraphics = true };
         }
 
-        /// <summary>The adapter this graphics draws for, which resolves the fonts and images of what is drawn.</summary>
-        internal RenderContext RenderContext => _renderContext;
-
         /// <inheritdoc />
         public override void PopClip()
         {
@@ -328,12 +325,12 @@ namespace PeachDrawing.PDF
                 return;
 
             var xBrush = ToXBrush(_renderContext.GetSolidBrush(color));
-            var positioned = new (int GlyphIndex, double X, double Y)[glyphs.Count];
+            var positioned = new (int GlyphIndex, double X, double Y, string? Text)[glyphs.Count];
             for (var i = 0; i < glyphs.Count; i++)
             {
                 var glyph = glyphs[i];
                 var point = Units.ToPoints(new PaintPoint(glyph.X, glyph.Y), PixelsPerPoint);
-                positioned[i] = (glyph.GlyphIndex, point.X, point.Y);
+                positioned[i] = (glyph.GlyphIndex, point.X, point.Y, glyph.Text);
             }
 
             _g.DrawGlyphsAtPositions(positioned, ((PdfCanvasFont)font).Font, xBrush);

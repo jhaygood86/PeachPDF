@@ -84,7 +84,7 @@ internal sealed partial class PdfGraphics : IDisposable
     /// directly by font glyph index - see <see cref="PeachDrawing.Core.Canvas.DrawGlyphs"/>'s
     /// own remarks for why this exists alongside the ordinary character-based <c>DrawString</c>.
     /// </summary>
-    public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y)> glyphs, TypefaceFont font, Brush brush)
+    public void DrawGlyphsAtPositions(System.Collections.Generic.IReadOnlyList<(int GlyphIndex, double X, double Y, string? Text)> glyphs, TypefaceFont font, Brush brush)
     {
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(brush);

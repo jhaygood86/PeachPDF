@@ -131,10 +131,10 @@ namespace PeachDrawing.PDF.Tests.Import
         [Fact]
         public void UnsupportedOperators_AreReportedNotThrown()
         {
-            Render(Pdf("BT /F1 12 Tf (hi) Tj ET"), 1, 1, out var unsupported);
+            Render(Pdf("/Sh0 sh BT /F1 12 Tf (hi) Tj ET"), 1, 1, out var unsupported);
 
-            Assert.Contains("Tf", unsupported);
-            Assert.Contains("Tj", unsupported);
+            Assert.Contains("sh", unsupported);
+            Assert.Contains("Tf (missing font)", unsupported);
         }
 
         [Fact]

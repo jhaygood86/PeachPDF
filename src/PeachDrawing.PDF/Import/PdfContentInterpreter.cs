@@ -28,12 +28,17 @@ internal sealed class PdfContentInterpreter
         public LineCap Cap = LineCap.Butt;
         public LineJoin Join = LineJoin.Miter;
         public List<Push> Pushes = [];
+        public PdfImportedFont? TextFont;
+        public double FontSize, CharSpacing, WordSpacing, HorizontalScale = 1, Leading, Rise;
+        public int RenderMode;
 
         public State Clone() => new()
         {
             FillSpace = FillSpace, StrokeSpace = StrokeSpace, Fill = Fill, Stroke = Stroke,
             FillAlpha = FillAlpha, StrokeAlpha = StrokeAlpha, LineWidth = LineWidth, MiterLimit = MiterLimit,
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
+            TextFont = TextFont, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
+            HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
         };
     }
 
@@ -45,6 +50,8 @@ internal sealed class PdfContentInterpreter
     double _curX, _curY, _startX, _startY;
     FillMode? _pendingClip;
     int _formDepth;
+    Matrix3x2 _tm = Matrix3x2.Identity, _tlm = Matrix3x2.Identity;
+    readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>Creates an interpreter that draws onto <paramref name="canvas"/>.</summary>
     public PdfContentInterpreter(PdfSourceDocument doc, Canvas canvas)
@@ -184,6 +191,40 @@ internal sealed class PdfContentInterpreter
                 break;
             }
 
+            // --- text
+            case "BT": _tm = _tlm = Matrix3x2.Identity; break;
+            case "ET": break;
+            case "Tc": Cur.CharSpacing = N(o, 0); break;
+            case "Tw": Cur.WordSpacing = N(o, 0); break;
+            case "Tz": Cur.HorizontalScale = N(o, 0) / 100.0; break;
+            case "TL": Cur.Leading = N(o, 0); break;
+            case "Ts": Cur.Rise = N(o, 0); break;
+            case "Tr":
+                Cur.RenderMode = (int)N(o, 0);
+                if (Cur.RenderMode is 1 or 2 or >= 4) _unsupported.Add("Tr " + Cur.RenderMode);
+                break;
+            case "Tf": SetFont(o, res); break;
+            case "Td": NextLine(N(o, 0), N(o, 1)); break;
+            case "TD": Cur.Leading = -N(o, 1); NextLine(N(o, 0), N(o, 1)); break;
+            case "T*": NextLine(0, -Cur.Leading); break;
+            case "Tm":
+                _tm = _tlm = new Matrix3x2((float)N(o, 0), (float)N(o, 1), (float)N(o, 2), (float)N(o, 3), (float)N(o, 4), (float)N(o, 5));
+                break;
+            case "Tj": ShowText([TextOf(o[0])]); break;
+            case "'": NextLine(0, -Cur.Leading); ShowText([TextOf(o[0])]); break;
+            case "\"":
+                Cur.WordSpacing = N(o, 0); Cur.CharSpacing = N(o, 1);
+                NextLine(0, -Cur.Leading); ShowText([TextOf(o[2])]);
+                break;
+            case "TJ":
+            {
+                var parts = new List<object>();
+                foreach (var item in ((PdfArray)_doc.Resolve(o[0])!).Elements)
+                    parts.Add(_doc.Resolve(item) is PdfString ps ? ps.Value : _doc.NumberOf(item));
+                ShowText(parts);
+                break;
+            }
+
             // --- structure
             case "Do": DoXObject(o, res); break;
             case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0" or "d1": break;
@@ -236,6 +277,67 @@ internal sealed class PdfContentInterpreter
         foreach (var key in new[] { "BM", "SMask", "Font", "TR", "TR2", "OP", "op" })
             if (gs.GetRaw(key) is { } v && !(key == "BM" && _doc.NameOf(v) is "/Normal" or "/Compatible") && !(key == "SMask" && _doc.NameOf(v) == "/None"))
                 _unsupported.Add("gs " + key);
+    }
+
+    // ---------------------------------------------------------------- text
+
+    string TextOf(PdfItem item) => _doc.Resolve(item) is PdfString s ? s.Value : "";
+
+    void NextLine(double tx, double ty)
+    {
+        _tlm = Matrix3x2.CreateTranslation((float)tx, (float)ty) * _tlm;
+        _tm = _tlm;
+    }
+
+    void SetFont(List<PdfItem> o, PdfDictionary? res)
+    {
+        Cur.FontSize = N(o, 1);
+        string name = _doc.NameOf(o[0])!.TrimStart('/');
+        var fonts = res is null ? null : _doc.DictOf(res, "Font");
+        if (fonts is null || _doc.Resolve(fonts.GetRaw(name)) is not PdfDictionary fd) { Cur.TextFont = null; _unsupported.Add("Tf (missing font)"); return; }
+        if (!_fonts.TryGetValue(fd, out var font))
+        {
+            font = PdfImportedFont.Load(_doc, fd, _canvas.RenderContext, out var why);
+            if (font is null) _unsupported.Add("font: " + why);
+            _fonts[fd] = font;
+        }
+        Cur.TextFont = font;
+    }
+
+    /// <summary>Draws the strings and kerning adjustments of one show-text operator as a single glyph run.</summary>
+    void ShowText(IReadOnlyList<object> parts)
+    {
+        var st = Cur;
+        if (st.TextFont is null || st.FontSize == 0) return;
+        var font = st.TextFont.GetFont(Math.Abs(st.FontSize));
+        if (font is null) { _unsupported.Add("font size"); return; }
+        var glyphs = new List<GlyphPlacement>();
+        double x = 0;
+        foreach (var part in parts)
+        {
+            if (part is double adjust) { x -= adjust / 1000.0 * st.FontSize; continue; }
+            foreach (var g in st.TextFont.Decode((string)part))
+            {
+                glyphs.Add(new GlyphPlacement(g.GlyphIndex, x, -st.Rise, g.Text));
+                x += g.Width * st.FontSize + st.CharSpacing + (g.IsWordSpace ? st.WordSpacing : 0);
+            }
+        }
+        if (glyphs.Count > 0)
+        {
+            // Glyphs are laid out upright in canvas space (y down); the flip puts them upright in PDF user space (y up), and
+            // the horizontal scale and text matrix place the run.
+            var run = Matrix3x2.CreateScale((float)st.HorizontalScale, st.FontSize < 0 ? 1f : -1f) * _tm;
+            _canvas.PushTransform(run);
+            try
+            {
+                var color = st.RenderMode == 3
+                    ? PaintColor.Transparent
+                    : st.FillSpace.ToColor(st.Fill, st.FillAlpha);
+                _canvas.DrawGlyphs(glyphs, font, color);
+            }
+            finally { _canvas.PopTransform(); }
+        }
+        _tm = Matrix3x2.CreateTranslation((float)(x * st.HorizontalScale), 0) * _tm;
     }
 
     // ---------------------------------------------------------------- paths

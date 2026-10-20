@@ -32,6 +32,9 @@ namespace PeachDrawing.Core
         /// </summary>
         protected readonly RenderContext _renderContext;
 
+        /// <summary>The <see cref="Core.RenderContext"/> this canvas draws with: the source of its fonts, brushes and pens.</summary>
+        public RenderContext RenderContext => _renderContext;
+
         /// <summary>
         /// The clipping bound stack as clips are pushed/poped to/from the graphics
         /// </summary>
