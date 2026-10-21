@@ -297,12 +297,12 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone()
+        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone_ButItsOutputIntentIs()
         {
             var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig());
 
             Assert.Equal(new PdfSourceConformance(PeachDrawing.PDF.PdfAConformance.None, PeachDrawing.PDF.PdfXConformance.None), source.GetConformance());
-            Assert.Null(source.GetOutputIntent());
+            Assert.Equal("Stamp condition", source.GetOutputIntent()!.Identifier);
         }
 
         [Fact]

@@ -314,6 +314,22 @@ namespace PeachDrawing.PDF
                 _document.Catalog.SetOutputIntent(outputIntent);
             }
 
+            // A document with no PDF/A or PDF/X level can still say what its colours are meant for: an output intent with the profile and
+            // condition it was given. It uses the same subtype a press-ready file does; the level claims (the XMP packet's identification
+            // and the information dictionary's version) are what say a file conforms, and none is written here.
+            if (!pdfAConformanceRequested && !pdfXConformanceRequested && options.ColorOptions?.OutputIntentProfile is { Length: > 0 } plainProfile
+                && !_document.Catalog.Elements.ContainsKey("/OutputIntents"))
+            {
+                if (!PeachImage.IccColorProfile.TryCreate(plainProfile, out var plainParsed))
+                {
+                    throw new InvalidOperationException(
+                        "PdfComposerOptions.ColorOptions.OutputIntentProfile could not be parsed as a valid ICC profile.");
+                }
+
+                var condition = options.ColorOptions.OutputIntentIdentifier is { Length: > 0 } named ? named : "Custom";
+                _document.Catalog.SetOutputIntent(new PdfOutputIntent(_document, plainProfile, "/GTS_PDFX", condition, condition, explicitN: plainParsed?.ChannelCount));
+            }
+
             // Same "not already present" dedup as PDF/A - ColorOptions.OutputIntentProfile was validated (non-null, and CMYK under X1a)
             // above.
             if (pdfXConformanceRequested && !_document.Catalog.Elements.ContainsKey("/OutputIntents"))

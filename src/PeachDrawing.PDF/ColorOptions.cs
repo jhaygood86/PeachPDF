@@ -27,7 +27,9 @@ namespace PeachDrawing.PDF
         /// <see cref="PdfAConformance"/>, since there is no single correct default for a print output
         /// intent. Under <see cref="PdfXConformance.X1a"/> this profile must itself be a CMYK
         /// profile (validated at generation time); <see cref="PdfXConformance.X3"/>/
-        /// <see cref="PdfXConformance.X4"/> accept a CMYK, RGB, or Gray profile.
+        /// <see cref="PdfXConformance.X4"/> accept a CMYK, RGB, or Gray profile. A document with no PDF/X level (and no PDF/A level, which
+        /// brings its own sRGB output intent) writes an output intent too when this is set, naming
+        /// <see cref="OutputIntentIdentifier"/> (<c>"Custom"</c> when that is not set), without claiming any conformance.
         /// </summary>
         public byte[]? OutputIntentProfile { get; set; }
 

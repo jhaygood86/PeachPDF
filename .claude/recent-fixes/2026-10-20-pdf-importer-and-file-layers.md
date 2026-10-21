@@ -120,10 +120,8 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   set of the file's elements - each handler builds its own `StructureTagBuilder`/recorder, which probably replaces the earlier `Document` root kid. The tests stamp one page twice instead.
 - **PDF/A, PDF/X and output-intent markers**: read-only `GetConformance` (regex over the XMP `pdfaid:part/conformance` and `pdfxid:GTS_PDFXVersion` or the Info
   `GTS_PDFXVersion`; element and attribute forms) and `GetOutputIntent` (first intent whose `DestOutputProfile` PeachImage parses). `FileLayerPlan.ApplyDocumentInformation`
-  adopts the file's `/Lang` into a blank language and the file's output intent *only* for a PDF/X target with no profile of its own. Deliberately not done: adopting the
-  file's PDF/A/PDF/X claim (the target's content is not the file's; the target's config decides), and adopting an output intent into a document with no level - the writer
-  emits `/OutputIntents` only under PDF/A (its bundled sRGB) or PDF/X (the configured profile), so a plain document cannot carry one without a writer change that would also
-  have to pick an intent subtype that does not claim a level. Fixture trap: `PdfComposerOptions` with PDF/A or PDF/X needs `CreationDate`.
+  adopts the file's `/Lang` into a blank language and the file's output intent for any target that has no profile of its own and is not PDF/A (the writer now emits a plain `/OutputIntents`, subtype `GTS_PDFX`, for a document with a profile and no level, claiming nothing). Deliberately not done: adopting the
+  file's PDF/A/PDF/X claim (the target's content is not the file's; the target's config decides), (the subtype of a plain output intent is `GTS_PDFX`: the conformance claim lives in the XMP packet and the Info `GTS_PDFXVersion`, which a document with no level does not get). Fixture trap: `PdfComposerOptions` with PDF/A or PDF/X needs `CreationDate`.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

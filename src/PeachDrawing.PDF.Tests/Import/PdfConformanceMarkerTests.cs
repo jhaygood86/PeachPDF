@@ -48,6 +48,27 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void OutputIntent_WithoutAConformanceLevel_IsWrittenWithoutAClaim()
+        {
+            var profile = IccProfileFixture.BuildRgbProfile();
+            var pdf = Build(o => o.ColorOptions = new ColorOptions { OutputIntentProfile = profile, OutputIntentIdentifier = "Plain" });
+            var source = PdfPageSource.Open(pdf);
+
+            Assert.Equal("Plain", source.GetOutputIntent()!.Identifier);
+            Assert.Equal(profile, source.GetOutputIntent()!.Profile);
+            Assert.Equal(new PdfSourceConformance(PdfAConformance.None, PdfXConformance.None), source.GetConformance());
+        }
+
+        [Fact]
+        public void OutputIntent_WithoutAnIdentifier_IsNamedCustom_AndAnUnreadableProfileIsRefused()
+        {
+            var pdf = Build(o => o.ColorOptions = new ColorOptions { OutputIntentProfile = IccProfileFixture.BuildRgbProfile() });
+            Assert.Equal("Custom", PdfPageSource.Open(pdf).GetOutputIntent()!.Identifier);
+
+            Assert.Throws<InvalidOperationException>(() => Build(o => o.ColorOptions = new ColorOptions { OutputIntentProfile = [1, 2, 3, 4] }));
+        }
+
+        [Fact]
         public void PlainFile_HasNoMarkers()
         {
             var source = PdfPageSource.Open(TestPdf.Build("0 g"));
