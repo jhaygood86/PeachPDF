@@ -23,7 +23,7 @@ internal sealed class PdfContentInterpreter
     readonly record struct Pushed(Push Kind, Canvas Owner, SoftMaskGroup? Group = null);
 
     /// <summary>Content being drawn into its own tile so a soft mask can be applied to it as a whole when the group ends.</summary>
-    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary Mask, PdfDictionary? Resources, Matrix3x2 Accumulated);
+    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary? Mask, PdfDictionary? Resources, Matrix3x2 Accumulated, ColorMatrix? Transfer = null);
 
     sealed class State
     {
@@ -341,7 +341,9 @@ internal sealed class PdfContentInterpreter
         }
         if (gs.GetRaw("BM") is { } bm) SetBlendMode(bm);
         if (gs.GetRaw("SMask") is { } sm) SetSoftMask(sm, res);
-        foreach (var key in new[] { "Font", "TR", "TR2", "OP", "op" })
+        if (gs.GetRaw("TR2") is { } tr2) SetTransfer(tr2);
+        else if (gs.GetRaw("TR") is { } tr) SetTransfer(tr);
+        foreach (var key in new[] { "Font", "OP", "op" })
             if (gs.GetRaw(key) is not null)
                 _unsupported.Add("gs " + key);
     }
@@ -532,16 +534,91 @@ internal sealed class PdfContentInterpreter
 
         var resolved = _doc.Resolve(value);
         if (resolved is not PdfDictionary mask) return;                      // /None (or nothing usable): no mask
-        if (_region is not { } region) { _unsupported.Add("gs SMask"); return; }
         if (_doc.DictOf(mask, "G") is null) { _unsupported.Add("gs SMask (no group)"); return; }
-        if (_canvas.CreateTile(region.Width, region.Height) is not { } tile) { _unsupported.Add("gs SMask"); return; }
+        BeginGroup(mask, res, null, "gs SMask");
+    }
+
+    /// <summary>Starts drawing into a tile of its own, to be composited through a soft mask or a colour transfer when the state ends.</summary>
+    void BeginGroup(PdfDictionary? mask, PdfDictionary? res, ColorMatrix? transfer, string what)
+    {
+        if (_region is not { } region) { _unsupported.Add(what); return; }
+        if (_canvas.CreateTile(region.Width, region.Height) is not { } tile) { _unsupported.Add(what); return; }
 
         // The tile is in the canvas' own units from its origin, so it takes on everything pushed so far.
         var accumulated = _canvas.CurrentTransform;
         tile.Graphics.PushTransform(accumulated);
-        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated);
-        st.Pushes.Add(new(Push.Group, _canvas, group));
+        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated, transfer);
+        Cur.Pushes.Add(new(Push.Group, _canvas, group));
         _canvas = tile.Graphics;
+    }
+
+    /// <summary>
+    /// Applies a <c>/TR</c> or <c>/TR2</c> entry: a function (or one per colour component) that the colours painted from now on are passed
+    /// through. A canvas has no such state, so what follows is drawn into a group that is composited through the equivalent per-channel
+    /// colour matrix - which exists only for a function that is linear between 0 and 1 (the clamped scale-and-offset the writer emits).
+    /// <c>/Identity</c> and <c>/Default</c> end a transfer begun in this state.
+    /// </summary>
+    void SetTransfer(PdfItem value)
+    {
+        var st = Cur;
+        if (st.Pushes.Count > 0 && st.Pushes[^1].Kind == Push.Group && st.Pushes[^1].Group!.Transfer is not null)
+        {
+            var open = st.Pushes[^1];
+            st.Pushes.RemoveAt(st.Pushes.Count - 1);
+            EndSoftMaskGroup(open.Group!);
+        }
+
+        var resolved = _doc.Resolve(value);
+        if (resolved is PdfName) return;                                     // /Identity or /Default
+        var functions = new List<PdfFunction>();
+        if (resolved is PdfArray list)
+        {
+            foreach (var item in list.Elements)
+            {
+                if (PdfFunction.Load(_doc, item) is not { } f) { _unsupported.Add("gs TR (function)"); return; }
+                functions.Add(f);
+            }
+        }
+        else if (PdfFunction.Load(_doc, value) is { } single) functions.Add(single);
+        else { _unsupported.Add("gs TR (function)"); return; }
+        if (functions.Count == 0) return;
+
+        var (scale, offset) = (new float[3], new float[3]);
+        for (int c = 0; c < 3; c++)
+        {
+            var f = functions.Count >= 3 ? functions[c] : functions[0];
+            if (!FitLinear(f, out double a, out double b)) { _unsupported.Add("gs TR (not a linear function)"); return; }
+            (scale[c], offset[c]) = ((float)a, (float)b);
+        }
+        var matrix = new ColorMatrix(new Matrix4x4(scale[0], 0, 0, 0, 0, scale[1], 0, 0, 0, 0, scale[2], 0, 0, 0, 0, 1), new Vector4(offset[0], offset[1], offset[2], 0));
+        BeginGroup(null, null, matrix, "gs TR");
+    }
+
+    /// <summary>Fits <c>y = a x + b</c> to a transfer function on 0..1 where its output is not clamped, and checks it also explains the clamped ends.</summary>
+    static bool FitLinear(PdfFunction f, out double a, out double b)
+    {
+        const int n = 20;
+        var xs = new double[n + 1];
+        var ys = new double[n + 1];
+        for (int i = 0; i <= n; i++)
+        {
+            xs[i] = i / (double)n;
+            ys[i] = f.Evaluate(xs[i])[0];
+        }
+        // The unclamped samples (strictly inside the range) fix the line; a function that is clamped everywhere is a constant.
+        var inside = Enumerable.Range(0, n + 1).Where(i => ys[i] is > 0.001 and < 0.999).ToList();
+        if (inside.Count < 2)
+        {
+            a = 0;
+            b = ys[0];
+            return ys.All(y => Math.Abs(y - ys[0]) < 0.01);
+        }
+        int lo = inside[0], hi = inside[^1];
+        a = (ys[hi] - ys[lo]) / (xs[hi] - xs[lo]);
+        b = ys[lo] - a * xs[lo];
+        for (int i = 0; i <= n; i++)
+            if (Math.Abs(Math.Clamp(a * xs[i] + b, 0, 1) - ys[i]) > 0.01) return false;
+        return true;
     }
 
     /// <summary>Finishes a soft-mask group: draws the mask into a tile and composites the group's tile through it onto the canvas that began it.</summary>
@@ -552,7 +629,17 @@ internal sealed class PdfContentInterpreter
         group.Content.Dispose();
         _canvas = group.Outer;
 
-        bool luminosity = _doc.NameOf(group.Mask.GetRaw("S")) != "/Alpha";
+        if (group.Transfer is { } transfer)
+        {
+            if (!Matrix3x2.Invert(_canvas.CurrentTransform, out var undoTransfer)) return;
+            _canvas.PushTransform(undoTransfer);
+            try { _canvas.DrawImageWithColorMatrix(group.ContentImage, region, transfer); }
+            finally { _canvas.PopTransform(); }
+            return;
+        }
+
+        var maskDict = group.Mask!;
+        bool luminosity = _doc.NameOf(maskDict.GetRaw("S")) != "/Alpha";
         var maskTile = _canvas.CreateTile(region.Width, region.Height);
         if (maskTile is null) return;
         var mg = maskTile.Value.Graphics;
@@ -560,7 +647,7 @@ internal sealed class PdfContentInterpreter
         {
             // The mask group is composited over its backdrop colour (black unless /BC says otherwise) across the whole area.
             var backdrop = PaintColor.Black;
-            if (_doc.ArrayOf(group.Mask, "BC") is { } bc && bc.Elements.Count > 0)
+            if (_doc.ArrayOf(maskDict, "BC") is { } bc && bc.Elements.Count > 0)
             {
                 var comps = new double[bc.Elements.Count];
                 for (int i = 0; i < comps.Length; i++) comps[i] = _doc.NumberOf(bc.Elements[i]);
@@ -573,7 +660,7 @@ internal sealed class PdfContentInterpreter
 
         mg.PushTransform(group.Accumulated);
         var sub = new PdfContentInterpreter(_doc, mg, region) { _formDepth = _formDepth + 1 };
-        if (sub._formDepth < 16 && _doc.DictOf(group.Mask, "G") is { } form)
+        if (sub._formDepth < 16 && _doc.DictOf(maskDict, "G") is { } form)
             sub.DrawForm(form, group.Resources);
         else _unsupported.Add("gs SMask (nesting)");
         sub.Finish();

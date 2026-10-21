@@ -74,6 +74,10 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   `[1 0 0 -1 x0 y0+YStep] * pattern matrix * stream base * inverse(CTM)`. Uncoloured patterns (PaintType 2) get the `scn` colour from the
   `[/Pattern base]` space and lock their colour operators; tiles are cached per (pattern, colour, oversample). Not handled: overlap
   (box larger than the steps) is clipped to the cell.
+- **Transfer functions** (`gs TR`/`TR2`) reuse the soft-mask group: what is painted under them goes into a tile, composited with
+  `DrawImageWithColorMatrix` and a per-channel matrix. The matrix exists only for a function that is a clamped line on 0..1: `FitLinear`
+  fits the unclamped samples and verifies the clamped ends, otherwise "gs TR (not a linear function)". A function array uses its first
+  three entries for R, G, B. With this the showcase round trip reports nothing unsupported for any of its 226 files.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
