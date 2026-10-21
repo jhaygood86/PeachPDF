@@ -47,7 +47,7 @@ internal static class PdfPagePainter
     /// occupies and whose y axis points down (the <see cref="Canvas"/> convention). Returns the features that could not
     /// be drawn yet.
     /// </summary>
-    public static IReadOnlyCollection<string> Paint(PdfSourceDocument doc, PdfDictionary page, Canvas canvas)
+    public static IReadOnlyCollection<string> Paint(PdfSourceDocument doc, PdfDictionary page, Canvas canvas, PdfAnnotationPaint annotations = PdfAnnotationPaint.None, PdfTagBinding? tags = null)
     {
         var (x0, y0, w, h, rot) = Geometry(doc, page);
         var toCanvas = PageToCanvas(doc, page);
@@ -56,7 +56,8 @@ internal static class PdfPagePainter
         var origin = canvas.CurrentTransform;
         var far = System.Numerics.Vector2.Transform(new System.Numerics.Vector2((float)pageWidth, (float)pageHeight), origin);
         var region = new Rect(0, 0, Math.Max(1, Math.Ceiling(Math.Max(far.X, 0))), Math.Max(1, Math.Ceiling(Math.Max(far.Y, 0))));
-        var interpreter = new PdfContentInterpreter(doc, canvas, region);
+        var interpreter = new PdfContentInterpreter(doc, canvas, region) { Tags = tags };
+        if (page.ContainsKeyRaw("StructParents")) interpreter.StructParents = doc.IntOf(page.GetRaw("StructParents"));
         canvas.PushTransform(toCanvas);
         try
         {
@@ -67,6 +68,25 @@ internal static class PdfPagePainter
             finally { interpreter.Finish(); canvas.PopClip(); }
         }
         finally { canvas.PopTransform(); }
-        return interpreter.Unsupported;
+
+        if (annotations == PdfAnnotationPaint.None) return interpreter.Unsupported;
+
+        // The annotations are drawn over the content, each clipped to the page like the content is.
+        var unsupported = new HashSet<string>(interpreter.Unsupported);
+        canvas.PushTransform(toCanvas);
+        try
+        {
+            var clip = canvas.GetGraphicsPath();
+            clip.Start(x0, y0); clip.LineTo(x0 + w, y0); clip.LineTo(x0 + w, y0 + h); clip.LineTo(x0, y0 + h); clip.CloseFigure();
+            canvas.PushClip(clip);
+            try
+            {
+                foreach (var why in PdfAppearance.DrawAnnotations(doc, page, canvas, Matrix3x2.Identity, region, includeWidgets: annotations == PdfAnnotationPaint.All, tags))
+                    unsupported.Add(why);
+            }
+            finally { canvas.PopClip(); }
+        }
+        finally { canvas.PopTransform(); }
+        return unsupported;
     }
 }

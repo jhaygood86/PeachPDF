@@ -197,6 +197,114 @@ namespace PeachPDF.Tests.Integration
             return ms.ToArray();
         }
 
+        /// <summary>Draws every state of a field as a solid colour, so a rasterized copy shows which appearance came across.</summary>
+        private sealed class FlatAppearance(PaintColor colour) : IPdfFormAppearance
+        {
+            public double PixelsPerPoint => 1;
+
+            public double TextFontSizePoints(Size sizePoints, bool autoFontSize, bool isPlaceholder) => 10;
+
+            public void PaintText(Canvas canvas, Size sizePoints, string text, bool autoFontSize, int? combCells, bool isPlaceholder) =>
+                canvas.DrawRectangle(canvas.GetSolidBrush(colour), 0, 0, sizePoints.Width, sizePoints.Height);
+
+            public void PaintCheckbox(Canvas canvas, Size sizePoints, bool isChecked) => PaintText(canvas, sizePoints, "", false, null, false);
+
+            public void PaintRadio(Canvas canvas, Size sizePoints, bool isSelected) => PaintText(canvas, sizePoints, "", false, null, false);
+        }
+
+        /// <summary>A one-page file with a text field named "who" (value "Ada", green) at the top-left and a stamp-like annotation drawn by its appearance.</summary>
+        private static byte[] FormFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(200, 200);
+            composer.CreateFormBuilder(new PdfRenderContext()).AddField(page, new PdfFormFieldDefinition
+            {
+                Kind = PdfFormFieldKind.Text,
+                Name = "who",
+                Value = "Ada",
+                Bounds = new Rect(10, 10, 80, 20),
+                ContentSize = new Size(80, 20),
+                Appearance = new FlatAppearance(PaintColor.FromArgb(255, 0, 255, 0)),
+            });
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public async Task FormFields_OfTheDrawnPage_AreCarriedAcrossWithTheirAppearance()
+        {
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(FormFile()).SourcePages("1")));
+            var source = PdfPageSource.Open(pdf);
+
+            var field = Assert.Single(source.GetFormFields(0));
+
+            Assert.Equal("who", field.Name);
+            Assert.Equal("Ada", field.Value);
+            Assert.Equal(10, field.Bounds.X, 0.5);
+            Assert.Equal(10, field.Bounds.Y, 0.5);
+            using var canvas = new RasterRenderContext().CreateCanvas(200, 200);
+            source.Paint(0, canvas, PdfAnnotationPaint.All);
+            Assert.Equal(Green, Pixel(canvas, 50, 20));       // the field is drawn with the file's own appearance
+        }
+
+        [Fact]
+        public async Task FormFields_OfAPageDrawnTwice_GetNamesOfTheirOwn()
+        {
+            var pdf = await BuildAsync(2, doc => doc.OverlayFile(layer => layer.File(FormFile()).SourcePages("1").RepeatSourcePages("1")));
+            var source = PdfPageSource.Open(pdf);
+
+            var names = new[] { source.GetFormFields(0).Single().Name, source.GetFormFields(1).Single().Name };
+
+            Assert.Equal(["who", "who_2"], names);
+        }
+
+        /// <summary>A PDF/X-4 file with an RGB output intent named "Stamp condition".</summary>
+        private static byte[] PdfXFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions
+            {
+                XConformance = PeachDrawing.PDF.PdfXConformance.X4,
+                CreationDate = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero),
+                Title = "Stamp",
+                ColorOptions = new PeachDrawing.PDF.ColorOptions { OutputIntentProfile = TestSupport.IccProfileFixture.BuildRgbProfile(), OutputIntentIdentifier = "Stamp condition" },
+            });
+            composer.AddPage(200, 200);
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        private static async Task<PdfPageSource> BuildWithAsync(byte[] file, PdfGenerateConfig config)
+        {
+            var document = await new PdfGenerator().CreateDocument(doc =>
+            {
+                doc.Page(page => page.Size(200, 200).Margin(0).Content(container => container.Text("Body")));
+                doc.OverlayFile(layer => layer.File(file).SourcePages("1"));
+            }, config);
+            using var ms = new MemoryStream();
+            document.Save(ms);
+            return PdfPageSource.Open(ms.ToArray());
+        }
+
+        [Fact]
+        public async Task PdfXDocumentWithoutAnOutputIntent_UsesTheOneOfTheFile()
+        {
+            var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig { PdfXConformance = PdfXConformance.X4, Metadata = new PdfDocumentMetadata { CreationDate = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero) } });
+
+            Assert.Equal("Stamp condition", source.GetOutputIntent()!.Identifier);
+            Assert.Equal(PeachDrawing.PDF.PdfXConformance.X4, source.GetConformance().PdfX);       // the document's own level
+        }
+
+        [Fact]
+        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone()
+        {
+            var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig());
+
+            Assert.Equal(new PdfSourceConformance(PeachDrawing.PDF.PdfAConformance.None, PeachDrawing.PDF.PdfXConformance.None), source.GetConformance());
+            Assert.Null(source.GetOutputIntent());
+        }
+
         [Fact]
         public async Task Links_OfTheDrawnPage_AreCarriedAcross()
         {

@@ -83,6 +83,79 @@ internal sealed class PdfContentInterpreter
         _region = groupRegion;
     }
 
+    /// <summary>
+    /// Whether a <c>/Tx BMC</c> ... <c>EMC</c> span (the text of a form field's appearance) is passed on as variable text, so a reader that
+    /// regenerates the field replaces exactly that.
+    /// </summary>
+    public bool MarkVariableText { get; init; }
+
+    // One entry per open BMC/BDC: whether it is variable text, and the tagging scope (a structure element's content, an artifact) it opened.
+    readonly Stack<(bool Variable, IDisposable? Scope)> _markedContent = new();
+
+    /// <summary>
+    /// Where to record the structure of the content being drawn, or null to draw it untagged. With it set, a marked-content sequence the source
+    /// gave a structure element is opened as that element's content, and everything else that is drawn is marked as an artifact.
+    /// </summary>
+    public PdfTagBinding? Tags { get; init; }
+
+    /// <summary>The parent-tree key of the stream being interpreted (the page's, or a form's <c>/StructParents</c>), or -1.</summary>
+    public int StructParents { get; set; } = -1;
+
+    int _openTagged;
+    IDisposable? _implicitArtifact;
+
+    /// <summary>Marks content drawn outside any structure-bound sequence as an artifact, so a tagged document has no untagged content.</summary>
+    void BeginUntagged()
+    {
+        if (Tags is null || _openTagged > 0 || _implicitArtifact is not null) return;
+        _implicitArtifact = Tags.Recorder.OpenArtifact(_canvas);
+    }
+
+    void EndUntagged()
+    {
+        _implicitArtifact?.Dispose();
+        _implicitArtifact = null;
+    }
+
+    IDisposable? OpenTag(string name, List<PdfItem> o, PdfDictionary? res)
+    {
+        if (Tags is not { } tags) return null;
+        EndUntagged();
+        IDisposable? scope = null;
+        if (name == "/Artifact")
+        {
+            scope = tags.Recorder.OpenArtifact(_canvas);
+        }
+        else
+        {
+            var props = o.Count >= 2 ? _doc.Resolve(o[1]) as PdfDictionary : null;
+            if (props is null && o.Count >= 2 && _doc.NameOf(o[1]) is { } propName && res is not null && _doc.DictOf(res, "Properties") is { } table)
+                props = _doc.Resolve(table.GetRaw(propName.TrimStart('/'))) as PdfDictionary;
+            if (props is not null && props.ContainsKeyRaw("MCID") && tags.Find(StructParents, _doc.IntOf(props.GetRaw("MCID"))) is { } binding)
+            {
+                var ancestors = tags.Recorder.OpenPhantomAncestors(binding.Ancestors);
+                var content = tags.Recorder.OpenContentElement(_canvas, binding.Key, binding.Type, binding.AltText);
+                scope = new Scopes(content, ancestors);
+            }
+        }
+        if (scope is not null) _openTagged++;
+        return scope;
+    }
+
+    sealed class Scopes(IDisposable inner, IDisposable outer) : IDisposable
+    {
+        public void Dispose()
+        {
+            inner.Dispose();
+            outer.Dispose();
+        }
+    }
+
+    /// <summary>Draws a form XObject (an appearance stream) under the transform already pushed on the canvas: its matrix, box clip and content.</summary>
+    /// <param name="form">the form XObject</param>
+    /// <param name="fallbackResources">the resources to use when the form has none of its own</param>
+    public void PaintAppearance(PdfDictionary form, PdfDictionary? fallbackResources) => DrawForm(form, fallbackResources);
+
     /// <summary>The operators and features met that this interpreter does not implement.</summary>
     public IReadOnlyCollection<string> Unsupported => _unsupported;
 
@@ -97,6 +170,7 @@ internal sealed class PdfContentInterpreter
         // A pattern's space is the default space of the stream that uses it: here, the current transform at the stream's start.
         var savedBase = _streamBase;
         _streamBase = Cur.Ctm;
+        int baseMarks = _markedContent.Count;
         while (true)
         {
             var t = lx.Next();
@@ -115,6 +189,8 @@ internal sealed class PdfContentInterpreter
         }
         // A stream that leaves q unbalanced must not leak state into whatever follows.
         while (_stack.Count > baseDepth) Restore();
+        while (_markedContent.Count > baseMarks) CloseMarked(_markedContent.Pop());
+        EndUntagged();
         _streamBase = savedBase;
     }
 
@@ -268,7 +344,21 @@ internal sealed class PdfContentInterpreter
             // --- structure
             case "Do": DoXObject(o, res); break;
             case "sh": PaintShading(o, res); break;
-            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0": break;
+            case "BMC":
+                {
+                    bool variable = MarkVariableText && o.Count > 0 && _doc.NameOf(o[0]) == "/Tx";
+                    var scope = o.Count > 0 && _doc.NameOf(o[0]) == "/Artifact" ? OpenTag("/Artifact", o, res) : null;
+                    _markedContent.Push((variable, scope));
+                    if (variable) _canvas.BeginVariableText();
+                    break;
+                }
+            case "BDC":
+                _markedContent.Push((false, o.Count > 0 && _doc.NameOf(o[0]) is { } tag ? OpenTag(tag, o, res) : null));
+                break;
+            case "EMC":
+                if (_markedContent.Count > 0) CloseMarked(_markedContent.Pop());
+                break;
+            case "MP" or "DP" or "BX" or "EX" or "d0": break;
             case "d1": Cur.ColorLocked = true; break;       // a Type 3 glyph that is a shape: it is painted in the current colour
 
             default:
@@ -305,6 +395,16 @@ internal sealed class PdfContentInterpreter
         }
 
         pushes.Clear();
+    }
+
+    void CloseMarked((bool Variable, IDisposable? Scope) span)
+    {
+        if (span.Variable) _canvas.EndVariableText();
+        if (span.Scope is not null)
+        {
+            span.Scope.Dispose();
+            _openTagged--;
+        }
     }
 
     /// <summary>Closes everything the base graphics state still holds (a soft mask set with no <c>q</c> around it); call after the last <see cref="Run"/>.</summary>
@@ -432,6 +532,7 @@ internal sealed class PdfContentInterpreter
         if (st.TextFont is null || st.FontSize == 0) return;
         var font = st.TextFont.GetFont(Math.Abs(st.FontSize));
         if (font is null) { _unsupported.Add("font size"); return; }
+        BeginUntagged();
         var glyphs = new List<GlyphPlacement>();
         double x = 0;
         foreach (var part in parts)
@@ -881,6 +982,7 @@ internal sealed class PdfContentInterpreter
     /// <summary>The <c>sh</c> operator: paints a shading over the whole current clip.</summary>
     void PaintShading(List<PdfItem> o, PdfDictionary? res)
     {
+        BeginUntagged();
         string name = _doc.NameOf(o[0])!.TrimStart('/');
         var shadings = res is null ? null : _doc.DictOf(res, "Shading");
         if (shadings is null || _doc.Resolve(shadings.GetRaw(name)) is not PdfDictionary shading) { _unsupported.Add("sh (missing shading)"); return; }
@@ -909,6 +1011,7 @@ internal sealed class PdfContentInterpreter
         var path = _path;
         _path = null;
         if (path is null) { _pendingClip = null; return; }
+        if (fill || stroke) BeginUntagged();
         if (close) path.CloseFigure();
         path.FillMode = mode;
         if (fill)
@@ -981,7 +1084,7 @@ internal sealed class PdfContentInterpreter
         var xobjects = res is null ? null : _doc.DictOf(res, "XObject");
         if (xobjects is null || _doc.Resolve(xobjects.GetRaw(name)) is not PdfDictionary x) { _unsupported.Add("Do (missing XObject)"); return; }
         string? subtype = _doc.NameOf(x.GetRaw("Subtype"));
-        if (subtype == "/Image") { DrawImage(x, res); return; }
+        if (subtype == "/Image") { BeginUntagged(); DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
         if (Cur.FillAlpha < 1 && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
@@ -1017,6 +1120,8 @@ internal sealed class PdfContentInterpreter
     {
         Save();
         _formDepth++;
+        var savedStructParents = StructParents;
+        if (x.ContainsKeyRaw("StructParents")) StructParents = _doc.IntOf(x.GetRaw("StructParents"));
         try
         {
             if (_doc.ArrayOf(x, "Matrix") is { Elements.Count: >= 6 } m)
@@ -1042,6 +1147,7 @@ internal sealed class PdfContentInterpreter
         }
         finally
         {
+            StructParents = savedStructParents;
             _formDepth--;
             Restore();
         }

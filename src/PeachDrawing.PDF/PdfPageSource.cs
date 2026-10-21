@@ -19,7 +19,7 @@ namespace PeachDrawing.PDF
     /// </para>
     /// <para>
     /// What the importer cannot draw yet (fonts without an embedded TrueType, OpenType, CFF or
-    /// Type 1 program) is skipped, and <see cref="Paint"/> names each such feature in its
+    /// Type 1 program) is skipped, and <see cref="Paint(int, Canvas)"/> names each such feature in its
     /// result. A file protected with AES and the empty user password is read; one that needs a password, or that uses RC4 (which .NET does not provide), is refused.
     /// </para>
     /// </remarks>
@@ -27,11 +27,13 @@ namespace PeachDrawing.PDF
     {
         private readonly PdfSourceDocument _document;
         private readonly PdfSourceNavigation _navigation;
+        private readonly PdfSourceForms _forms;
 
         private PdfPageSource(PdfSourceDocument document)
         {
             _document = document;
             _navigation = new PdfSourceNavigation(document);
+            _forms = new PdfSourceForms(document);
         }
 
         /// <summary>Opens a PDF held in memory.</summary>
@@ -82,7 +84,7 @@ namespace PeachDrawing.PDF
 
         /// <summary>The links of a page that open a web address or lead to another place in the file; other kinds of link are left out.</summary>
         /// <param name="pageIndex">the zero-based page number</param>
-        /// <returns>the links, with their rectangles in the same terms <see cref="Paint"/> draws the page in</returns>
+        /// <returns>the links, with their rectangles in the same terms <see cref="Paint(int, Canvas)"/> draws the page in</returns>
         public IReadOnlyList<PdfSourceLink> GetLinks(int pageIndex) => _navigation.Links(Page(pageIndex));
 
         /// <summary>The document outline (the bookmarks sidebar of a reader) flattened in reading order; an entry's <see cref="PdfBookmark.PageIndex"/> is a page of this file.</summary>
@@ -100,6 +102,50 @@ namespace PeachDrawing.PDF
         /// <summary>The files attached to the PDF.</summary>
         /// <returns>one entry per attachment whose data could be read</returns>
         public IReadOnlyList<PdfEmbeddedFile> GetAttachments() => _navigation.Attachments();
+
+        /// <summary>
+        /// Paints a page like <see cref="Paint(int, Canvas)"/> and then the appearance of its annotations, as a viewer shows them (a highlight, a
+        /// stamp, a note, a drawing, a filled-in field).
+        /// </summary>
+        /// <param name="pageIndex">the zero-based page number</param>
+        /// <param name="canvas">the canvas to draw on</param>
+        /// <param name="annotations">which annotations to draw</param>
+        /// <param name="tags">
+        /// the recorder of a document being tagged, or <see langword="null"/>. With one, the logical structure the file gave the page's content (headings,
+        /// paragraphs, lists, figures with their alternative text) is recorded under the recorder's current parent as the content is drawn, and
+        /// everything else that is drawn is marked as an artifact, so the page adds no untagged content to a tagged document. The recorder must have
+        /// had <see cref="PdfTagRecorder.BeginPage"/> called for the page being drawn on.
+        /// </param>
+        /// <returns>the features of the page that could not be drawn, each named once; empty when all of it was</returns>
+        public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder? tags = null)
+        {
+            ArgumentNullException.ThrowIfNull(canvas);
+            return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags is null ? null : new PdfTagBinding(_document, tags));
+        }
+
+        /// <summary>
+        /// The interactive form fields (text fields, check boxes, radio buttons and choice fields) with widgets on a page, ready to add to a
+        /// page of a document with <see cref="PdfFormBuilder.AddField"/>. Each field is drawn by the appearance stream of its own widget, so it looks as
+        /// it did in the file; a push button or signature field has no definition here and is drawn by
+        /// <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagRecorder)"/> with <see cref="PdfAnnotationPaint.ExceptFormFields"/> instead.
+        /// </summary>
+        /// <param name="pageIndex">the zero-based page number</param>
+        /// <param name="pixelsPerPoint">the layout units per point of the canvas the fields' appearances are drawn at</param>
+        /// <param name="rename">
+        /// maps a field's name in the file to the name it is to have, for when the same page is added more than once; it is called once per widget
+        /// with the field's full name, so the buttons of a radio group, which share a name, must be given the same answer
+        /// </param>
+        /// <returns>the fields, with positions in points from the top-left corner of the page as it is shown</returns>
+        public IReadOnlyList<PdfFormFieldDefinition> GetFormFields(int pageIndex, double pixelsPerPoint = 1, Func<string, string>? rename = null) =>
+            _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
+
+        /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
+        /// <returns>the levels, <c>None</c> where it claims none</returns>
+        public PdfSourceConformance GetConformance() => _navigation.Conformance();
+
+        /// <summary>The file's output intent, the condition its colours are meant for, when it has one with a readable ICC profile.</summary>
+        /// <returns>the output intent, or <see langword="null"/></returns>
+        public PdfSourceOutputIntent? GetOutputIntent() => _navigation.OutputIntent();
 
         private PdfDictionary Page(int pageIndex)
         {

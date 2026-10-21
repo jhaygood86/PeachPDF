@@ -432,7 +432,7 @@ namespace PeachPDF
                 }
 
                 // The links, destinations and outline of the files drawn on the pages, now that every page they can lead to exists.
-                plan.Finish(document.Composer);
+                plan.Finish(document.Composer, _renderContext);
             }
             finally
             {
@@ -573,11 +573,11 @@ namespace PeachPDF
 
                 structureTagBuilder?.BeginPage(page);
 
-                fileLayers?.Paint(page, pageNumber, underlay: true);
+                fileLayers?.Paint(page, pageNumber, underlay: true, structureTagBuilder?.Recorder);
 
                 await htmlDocument.PaintPageAsync(htmlPage.Index, page.Canvas);
 
-                fileLayers?.Paint(page, pageNumber, underlay: false);
+                fileLayers?.Paint(page, pageNumber, underlay: false, structureTagBuilder?.Recorder);
 
                 page.Finish();
             }

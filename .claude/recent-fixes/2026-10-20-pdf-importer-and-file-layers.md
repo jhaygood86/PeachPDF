@@ -98,6 +98,29 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   generated destination names `PeachPDFFile<layer>-<page>-<top>`, outline entries kept for drawn pages plus their ancestors as heading-only
   entries, info/attachments only fill blanks. Attachments are skipped under PDF/A-1/2 (the writer rejects them there). Forms, other
   annotations and tags are not carried yet.
+- **Forms and annotation appearances through file layers**: `PdfSourceForms` turns widgets into `PdfFormFieldDefinition`s (inherited `FT`/`Ff`/`V`/`MaxLen`/`Opt`,
+  dotted full name, `AS`/`V` for the checked state, the on-state being the one non-Off key of `AP/N`) with an `IPdfFormAppearance` that draws the widget's own
+  `/AP /N` stream fitted to the control (`PdfAppearance.Fit`: BBox through Matrix onto Rect, ISO 32000-1 12.5.5). `/Tx BMC` spans are passed to the canvas as
+  variable text (`PdfContentInterpreter.MarkVariableText`) so a reader that regenerates the field replaces only the text. Rotated pages: ContentSize is the
+  upright size and `AppearanceTransform` is the page matrix's linear part flipped into the writer's y-down convention. Push buttons, signatures and other annotations are
+  flattened by `Paint(..., PdfAnnotationPaint.ExceptFormFields)` (the writer has no generic annotation API); list boxes become combo boxes and multi-line is
+  lost because `PdfFormBuilder` has no such kinds. `FileLayerPlan.Finish` adds the fields after all pages exist and renames a repeated page's fields through the
+  `rename` hook (same answer per name, so a radio group stays one field). MuPDF and PDFium (with `init_forms`) both show the carried field's appearance. Trap:
+  a test fixture's radio buttons must have one `/AS /Off`, else both read as selected.
+- **Tags through file layers**: `PdfTagBinding` finds a marked-content sequence's structure element through the source's ParentTree (`/StructParents` of the
+  page, or of a form XObject; entry index = MCID) and the chain of `/P` parents, then the interpreter opens `OpenPhantomAncestors` + `OpenContentElement` at `BDC`
+  and disposes at `EMC`; `/Artifact` BMC/BDC open an artifact. Anything painted outside a structure-bound sequence gets an *implicit artifact*
+  (`BeginUntagged` in path paint / text / image / shading, closed at the end of every `Run`) so a tagged target has no untagged content - marked content
+  cannot nest, so the implicit one is closed before a `BDC`. Keys are `(per-Paint stamp object, source element)`: a page stamped twice gets two element sets. Source
+  `LBody` after `LI` is skipped (the recorder's phantom LI makes its own), an LBody that owns content directly becomes a Span, custom roles go through
+  `RoleMap` (unknown ones become Div/Span). Dropped: `/Lang`, `/A` attributes, `/ActualText`, link OBJR ties, source reading order. Trap seen (not investigated): a tagged declarative document with two `Page` handlers and a layer on both pages showed only one
+  set of the file's elements - each handler builds its own `StructureTagBuilder`/recorder, which probably replaces the earlier `Document` root kid. The tests stamp one page twice instead.
+- **PDF/A, PDF/X and output-intent markers**: read-only `GetConformance` (regex over the XMP `pdfaid:part/conformance` and `pdfxid:GTS_PDFXVersion` or the Info
+  `GTS_PDFXVersion`; element and attribute forms) and `GetOutputIntent` (first intent whose `DestOutputProfile` PeachImage parses). `FileLayerPlan.ApplyDocumentInformation`
+  adopts the file's `/Lang` into a blank language and the file's output intent *only* for a PDF/X target with no profile of its own. Deliberately not done: adopting the
+  file's PDF/A/PDF/X claim (the target's content is not the file's; the target's config decides), and adopting an output intent into a document with no level - the writer
+  emits `/OutputIntents` only under PDF/A (its bundled sRGB) or PDF/X (the configured profile), so a plain document cannot carry one without a writer change that would also
+  have to pick an intent subtype that does not claim a level. Fixture trap: `PdfComposerOptions` with PDF/A or PDF/X needs `CreationDate`.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

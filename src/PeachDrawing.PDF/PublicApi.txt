@@ -44,6 +44,10 @@ PeachDrawing.PDF.PdfAConformance : enum Int32
   PdfA4 = 9
   PdfA4E = 10
   PdfA4F = 11
+PeachDrawing.PDF.PdfAnnotationPaint : enum Int32
+  All = 2
+  ExceptFormFields = 1
+  None = 0
 PeachDrawing.PDF.PdfBookmark : sealed class
   ctor(Int32 level, String title, Boolean isOpen)
   property Boolean IsOpen { get; }
@@ -216,11 +220,15 @@ PeachDrawing.PDF.PdfFormOption : struct
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
+  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder tags = null)
   method IReadOnlyDictionary<String, PdfSourceDestination> GetNamedDestinations()
   method IReadOnlyList<PdfBookmark> GetOutline()
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
+  method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
   method IReadOnlyList<PdfSourceLink> GetLinks(Int32 pageIndex)
+  method PdfSourceConformance GetConformance()
   method PdfSourceMetadata GetMetadata()
+  method PdfSourceOutputIntent GetOutputIntent()
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
   method static PdfPageSource Open(Byte[] pdf)
   method static PdfPageSource Open(Stream stream)
@@ -244,6 +252,16 @@ PeachDrawing.PDF.PdfRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+PeachDrawing.PDF.PdfSourceConformance : sealed class
+  ctor(PdfAConformance PdfA, PdfXConformance PdfX)
+  method PdfSourceConformance <Clone>$()
+  method Void Deconstruct(out PdfAConformance PdfA, out PdfXConformance PdfX)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PdfSourceConformance other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PdfAConformance PdfA { get; init; }
+  property PdfXConformance PdfX { get; init; }
 PeachDrawing.PDF.PdfSourceDestination : sealed class
   ctor(Int32 PageIndex, Double TopPoints)
   method PdfSourceDestination <Clone>$()
@@ -266,9 +284,9 @@ PeachDrawing.PDF.PdfSourceLink : sealed class
   property Rect Bounds { get; init; }
   property String Uri { get; init; }
 PeachDrawing.PDF.PdfSourceMetadata : sealed class
-  ctor(String Title, String Author, String Subject, String Keywords, String Creator, String Producer)
+  ctor(String Title, String Author, String Subject, String Keywords, String Creator, String Producer, String Language = null)
   method PdfSourceMetadata <Clone>$()
-  method Void Deconstruct(out String Title, out String Author, out String Subject, out String Keywords, out String Creator, out String Producer)
+  method Void Deconstruct(out String Title, out String Author, out String Subject, out String Keywords, out String Creator, out String Producer, out String Language)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(PdfSourceMetadata other)
   method virtual Int32 GetHashCode()
@@ -276,9 +294,21 @@ PeachDrawing.PDF.PdfSourceMetadata : sealed class
   property String Author { get; init; }
   property String Creator { get; init; }
   property String Keywords { get; init; }
+  property String Language { get; init; }
   property String Producer { get; init; }
   property String Subject { get; init; }
   property String Title { get; init; }
+PeachDrawing.PDF.PdfSourceOutputIntent : sealed class
+  ctor(String Identifier, String Info, Byte[] Profile)
+  method PdfSourceOutputIntent <Clone>$()
+  method Void Deconstruct(out String Identifier, out String Info, out Byte[] Profile)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PdfSourceOutputIntent other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Byte[] Profile { get; init; }
+  property String Identifier { get; init; }
+  property String Info { get; init; }
 PeachDrawing.PDF.PdfTagRecorder : sealed class
   method IDisposable OpenArtifact(Canvas canvas)
   method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText = null)

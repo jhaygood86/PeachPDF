@@ -16,6 +16,9 @@ namespace PeachPDF.PdfFeatures
     /// </summary>
     internal sealed class StructureTagBuilder(PdfTagRecorder recorder) : IStructureTagSink
     {
+        /// <summary>The recorder this builder writes to.</summary>
+        public PdfTagRecorder Recorder => recorder;
+
         /// <summary>Called once per page, right after the page is created, before it is painted.</summary>
         public void BeginPage(PdfComposerPage page) => recorder.BeginPage(page);
 

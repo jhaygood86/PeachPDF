@@ -22,7 +22,7 @@ namespace PeachPDF.Layout
         }
 
         /// <summary>Draws every layer of the requested kind that targets <paramref name="pageNumber"/> (one-based) onto the page.</summary>
-        public void Paint(PdfComposerPage page, int pageNumber, bool underlay)
+        public void Paint(PdfComposerPage page, int pageNumber, bool underlay, PdfTagRecorder? tags = null)
         {
             foreach (var (layer, targets) in _layers)
             {
@@ -43,7 +43,7 @@ namespace PeachPDF.Layout
 
                 try
                 {
-                    layer.Source.Paint(sourcePage, canvas);
+                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.ExceptFormFields, tags);
                 }
                 finally
                 {
@@ -66,6 +66,18 @@ namespace PeachPDF.Layout
                 if (string.IsNullOrEmpty(options.Author)) options.Author = info.Author;
                 if (string.IsNullOrEmpty(options.Subject)) options.Subject = info.Subject;
                 if (string.IsNullOrEmpty(options.Keywords)) options.Keywords = info.Keywords;
+                if (string.IsNullOrEmpty(options.Language)) options.Language = info.Language;
+
+                // A document building to PDF/X must name its output condition and supply the profile; when it has not, the file's output intent is
+                // used. (PDF/A brings its own sRGB intent, and a document with no level writes none.) The file's own PDF/A or PDF/X claim is never
+                // adopted: the document's content is not the file's, and the document says what it conforms to itself.
+                if (options.XConformance != PeachDrawing.PDF.PdfXConformance.None && options.ColorOptions?.OutputIntentProfile is not { Length: > 0 }
+                    && layer.Source.GetOutputIntent() is { } intent)
+                {
+                    options.ColorOptions ??= new PeachDrawing.PDF.ColorOptions();
+                    options.ColorOptions.OutputIntentProfile = intent.Profile;
+                    options.ColorOptions.OutputIntentIdentifier = intent.Identifier ?? intent.Info ?? "Imported";
+                }
 
                 if (!canAttachFiles)
                     continue;
@@ -82,7 +94,7 @@ namespace PeachPDF.Layout
         /// Carries the navigation of the drawn pages across, once every page of the document exists: the links, which now lead to the
         /// pages their targets were drawn on, the named destinations, and the outline. Whatever leads to a page that was not drawn is left out.
         /// </summary>
-        public void Finish(PdfComposer composer)
+        public void Finish(PdfComposer composer, PdfRenderContext renderContext)
         {
             var destinations = new Dictionary<(int Layer, int SourcePage), int>();
             foreach (var (layer, sourcePage, targetPage) in _stamps)
@@ -109,6 +121,32 @@ namespace PeachPDF.Layout
                         target.AddDestinationLink(link.Bounds, name);
                     }
                 }
+            }
+
+            // The form fields of each drawn page. A page drawn more than once gets its fields again under names of their own (the first keeps
+            // the file's), while the buttons of one radio group, which share a name, stay together.
+            var forms = composer.CreateFormBuilder(renderContext, "PeachPDFFileField");
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (layerIndex, sourcePage, targetPage) in _stamps.Distinct())
+            {
+                if (targetPage >= composer.Pages.Count)
+                    continue;
+
+                var target = composer.Pages[targetPage];
+                var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
+                string Unique(string name)
+                {
+                    if (renamed.TryGetValue(name, out var existing))
+                        return existing;
+
+                    var unique = name;
+                    for (var n = 2; !names.Add(unique); n++)
+                        unique = name + "_" + n;
+                    return renamed[name] = unique;
+                }
+
+                foreach (var field in _layers[layerIndex].Layer.Source.GetFormFields(sourcePage, target.Canvas.PixelsPerPoint, Unique))
+                    forms.AddField(target, field);
             }
 
             foreach (var layerIndex in destinations.Keys.Select(k => k.Layer).Distinct())
