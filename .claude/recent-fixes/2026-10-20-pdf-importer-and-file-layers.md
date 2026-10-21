@@ -91,6 +91,13 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   tile at alpha 1 and composites the tile at the outer alpha (`SoftMaskGroup.Opacity`, composited in `EndSoftMaskGroup`). Blend modes on a group are still applied per shape. With it all
   430 showcase pages are under the 2% round-trip threshold in both renderers (`css_filter`, `opacity` and `stacking_context` were the three that were not). Lesson: look at the
   diff image, not just the percentage.
+- **Navigation carried by file layers**: `PdfPageSource.GetLinks/GetOutline/GetNamedDestinations/GetMetadata/GetAttachments` (`Import/PdfSourceNavigation`) read
+  link annotations (`/URI`, `/GoTo`, `/Dest`), the outline, name tree and legacy `/Dests`, `/Info` and `/EmbeddedFiles`; positions go through
+  `PdfPagePainter.PageToCanvas` so a rotated page's rectangles and destination tops are in painted terms. `FileLayerPlan` records where each
+  source page was stamped and does the transfer in `Finish` (after the last page exists, since a link may point at a page stamped later):
+  generated destination names `PeachPDFFile<layer>-<page>-<top>`, outline entries kept for drawn pages plus their ancestors as heading-only
+  entries, info/attachments only fill blanks. Attachments are skipped under PDF/A-1/2 (the writer rejects them there). Forms, other
+  annotations and tags are not carried yet.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

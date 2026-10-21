@@ -26,10 +26,12 @@ namespace PeachDrawing.PDF
     public sealed class PdfPageSource
     {
         private readonly PdfSourceDocument _document;
+        private readonly PdfSourceNavigation _navigation;
 
         private PdfPageSource(PdfSourceDocument document)
         {
             _document = document;
+            _navigation = new PdfSourceNavigation(document);
         }
 
         /// <summary>Opens a PDF held in memory.</summary>
@@ -77,6 +79,27 @@ namespace PeachDrawing.PDF
             ArgumentNullException.ThrowIfNull(canvas);
             return PdfPagePainter.Paint(_document, Page(pageIndex), canvas);
         }
+
+        /// <summary>The links of a page that open a web address or lead to another place in the file; other kinds of link are left out.</summary>
+        /// <param name="pageIndex">the zero-based page number</param>
+        /// <returns>the links, with their rectangles in the same terms <see cref="Paint"/> draws the page in</returns>
+        public IReadOnlyList<PdfSourceLink> GetLinks(int pageIndex) => _navigation.Links(Page(pageIndex));
+
+        /// <summary>The document outline (the bookmarks sidebar of a reader) flattened in reading order; an entry's <see cref="PdfBookmark.PageIndex"/> is a page of this file.</summary>
+        /// <returns>the entries, each with its nesting level</returns>
+        public IReadOnlyList<PdfBookmark> GetOutline() => _navigation.Outline();
+
+        /// <summary>The destinations the file gives a name, which another document can link to.</summary>
+        /// <returns>each name with the place it leads to</returns>
+        public IReadOnlyDictionary<string, PdfSourceDestination> GetNamedDestinations() => _navigation.NamedDestinations();
+
+        /// <summary>The title, author and the other document information of the file.</summary>
+        /// <returns>the information the file gives</returns>
+        public PdfSourceMetadata GetMetadata() => _navigation.Metadata();
+
+        /// <summary>The files attached to the PDF.</summary>
+        /// <returns>one entry per attachment whose data could be read</returns>
+        public IReadOnlyList<PdfEmbeddedFile> GetAttachments() => _navigation.Attachments();
 
         private PdfDictionary Page(int pageIndex)
         {

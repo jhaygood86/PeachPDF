@@ -29,6 +29,19 @@ internal static class PdfPagePainter
         return (x0, y0, x1 - x0, y1 - y0, rot / 90 * 90);
     }
 
+    /// <summary>Maps PDF user space (origin bottom-left, y up) of <paramref name="page"/> to the canvas (origin top-left, y down), honouring <c>/Rotate</c> (clockwise).</summary>
+    public static Matrix3x2 PageToCanvas(PdfSourceDocument doc, PdfDictionary page)
+    {
+        var (x0, y0, w, h, rot) = Geometry(doc, page);
+        return rot switch
+        {
+            90 => new Matrix3x2(0, 1, 1, 0, (float)-y0, (float)-x0),
+            180 => new Matrix3x2(-1, 0, 0, 1, (float)(x0 + w), (float)-y0),
+            270 => new Matrix3x2(0, -1, -1, 0, (float)(y0 + h), (float)(x0 + w)),
+            _ => new Matrix3x2(1, 0, 0, -1, (float)-x0, (float)(y0 + h)),
+        };
+    }
+
     /// <summary>
     /// Draws <paramref name="page"/> onto <paramref name="canvas"/>, whose origin is the top-left of the area the page
     /// occupies and whose y axis points down (the <see cref="Canvas"/> convention). Returns the features that could not
@@ -37,14 +50,7 @@ internal static class PdfPagePainter
     public static IReadOnlyCollection<string> Paint(PdfSourceDocument doc, PdfDictionary page, Canvas canvas)
     {
         var (x0, y0, w, h, rot) = Geometry(doc, page);
-        // Map PDF user space (origin bottom-left, y up) to the canvas, honouring /Rotate (clockwise).
-        var toCanvas = rot switch
-        {
-            90 => new Matrix3x2(0, 1, 1, 0, (float)-y0, (float)-x0),
-            180 => new Matrix3x2(-1, 0, 0, 1, (float)(x0 + w), (float)-y0),
-            270 => new Matrix3x2(0, -1, -1, 0, (float)(y0 + h), (float)(x0 + w)),
-            _ => new Matrix3x2(1, 0, 0, -1, (float)-x0, (float)(y0 + h)),
-        };
+        var toCanvas = PageToCanvas(doc, page);
         // A soft-masked group is drawn into a tile covering the page, in the canvas' own units.
         var (pageWidth, pageHeight) = rot % 180 == 0 ? (w, h) : (h, w);
         var origin = canvas.CurrentTransform;
