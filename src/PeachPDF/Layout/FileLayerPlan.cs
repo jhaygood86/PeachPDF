@@ -43,7 +43,7 @@ namespace PeachPDF.Layout
 
                 try
                 {
-                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.ExceptFormFields, tags);
+                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.None, tags);
                 }
                 finally
                 {
@@ -125,6 +125,7 @@ namespace PeachPDF.Layout
 
             // The form fields of each drawn page. A page drawn more than once gets its fields again under names of their own (the first keeps
             // the file's), while the buttons of one radio group, which share a name, stay together.
+            var annotations = composer.CreateAnnotationBuilder(renderContext);
             var forms = composer.CreateFormBuilder(renderContext, "PeachPDFFileField");
             var names = new HashSet<string>(StringComparer.Ordinal);
             foreach (var (layerIndex, sourcePage, targetPage) in _stamps.Distinct())
@@ -147,6 +148,9 @@ namespace PeachPDF.Layout
 
                 foreach (var field in _layers[layerIndex].Layer.Source.GetFormFields(sourcePage, target.Canvas.PixelsPerPoint, Unique))
                     forms.AddField(target, field);
+
+                foreach (var annotation in _layers[layerIndex].Layer.Source.GetAnnotations(sourcePage, target.Canvas.PixelsPerPoint))
+                    annotations.AddAnnotation(target, annotation);
             }
 
             foreach (var layerIndex in destinations.Keys.Select(k => k.Layer).Distinct())

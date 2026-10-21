@@ -122,6 +122,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   `GTS_PDFXVersion`; element and attribute forms) and `GetOutputIntent` (first intent whose `DestOutputProfile` PeachImage parses). `FileLayerPlan.ApplyDocumentInformation`
   adopts the file's `/Lang` into a blank language and the file's output intent for any target that has no profile of its own and is not PDF/A (the writer now emits a plain `/OutputIntents`, subtype `GTS_PDFX`, for a document with a profile and no level, claiming nothing). Deliberately not done: adopting the
   file's PDF/A/PDF/X claim (the target's content is not the file's; the target's config decides), (the subtype of a plain output intent is `GTS_PDFX`: the conformance claim lives in the XMP packet and the Info `GTS_PDFXVersion`, which a document with no level does not get). Fixture trap: `PdfComposerOptions` with PDF/A or PDF/X needs `CreationDate`.
+- **Forms and annotations stay real (second pass)**: the writer gained `PdfFormFieldKind.List/PushButton/Signature` (`PdfListBoxField`, `PdfPushButtonField`, `PdfSignatureField`),
+  `Multiline`/`MultiSelect` on the definition, and `PdfAnnotationBuilder` + `PdfAnnotationDefinition` (a `PdfGenericAnnotation` with Contents/T/Subj/C/IC/CA/Border/Name, QuadPoints, InkList,
+  Vertices, L, flags, and a drawn appearance - coordinates flipped to y-up on the way in). `PdfSourceAnnotations` reads them back (page matrix applied to every point) and
+  `FileLayerPlan` now paints the layer page with `PdfAnnotationPaint.None` and adds fields and annotations as objects. Dropped on purpose: actions (a push button is inert; JavaScript and submit
+  actions are not something to copy), a signature's value (the file changed, so it would not verify - the field comes across unsigned), annotations with no `/AP` (the writer cannot synthesize
+  one) and pop-ups. A real viewer round-trip: MuPDF lists the Highlight annotation and the Button widget, PDFium (`init_forms`) draws both appearances.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

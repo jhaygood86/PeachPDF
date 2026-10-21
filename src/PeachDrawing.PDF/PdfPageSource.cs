@@ -28,12 +28,14 @@ namespace PeachDrawing.PDF
         private readonly PdfSourceDocument _document;
         private readonly PdfSourceNavigation _navigation;
         private readonly PdfSourceForms _forms;
+        private readonly PdfSourceAnnotations _annotations;
 
         private PdfPageSource(PdfSourceDocument document)
         {
             _document = document;
             _navigation = new PdfSourceNavigation(document);
             _forms = new PdfSourceForms(document);
+            _annotations = new PdfSourceAnnotations(document);
         }
 
         /// <summary>Opens a PDF held in memory.</summary>
@@ -146,6 +148,17 @@ namespace PeachDrawing.PDF
         /// <summary>The file's output intent, the condition its colours are meant for, when it has one with a readable ICC profile.</summary>
         /// <returns>the output intent, or <see langword="null"/></returns>
         public PdfSourceOutputIntent? GetOutputIntent() => _navigation.OutputIntent();
+
+        /// <summary>
+        /// The annotations of a page that are neither links nor form fields (highlights, notes, stamps, drawings...) and have an appearance, ready to
+        /// add to a page of a document with <see cref="PdfAnnotationBuilder.AddAnnotation"/>. Each is drawn by the appearance stream it had in the file.
+        /// An annotation with no appearance stream, one marked hidden, and pop-up windows have no definition here.
+        /// </summary>
+        /// <param name="pageIndex">the zero-based page number</param>
+        /// <param name="pixelsPerPoint">the layout units per point of the canvas the appearances are drawn at</param>
+        /// <returns>the annotations, with positions in points from the top-left corner of the page as it is shown</returns>
+        public IReadOnlyList<PdfAnnotationDefinition> GetAnnotations(int pageIndex, double pixelsPerPoint = 1) =>
+            _annotations.Annotations(Page(pageIndex), pixelsPerPoint);
 
         private PdfDictionary Page(int pageIndex)
         {

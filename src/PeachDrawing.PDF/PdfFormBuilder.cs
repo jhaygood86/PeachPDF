@@ -27,6 +27,15 @@ namespace PeachDrawing.PDF
 
         /// <summary>A drop-down list (combo box) of options.</summary>
         Select,
+
+        /// <summary>A list box: the options stay visible and, with <see cref="PdfFormFieldDefinition.MultiSelect"/>, several can be chosen.</summary>
+        List,
+
+        /// <summary>A push button: it holds no value, and <see cref="PdfFormFieldDefinition.Value"/> is its caption.</summary>
+        PushButton,
+
+        /// <summary>An unsigned signature field: a place a reader can sign.</summary>
+        Signature,
     }
 
     /// <summary>One choice of a <see cref="PdfFormFieldKind.Select"/> field.</summary>
@@ -106,7 +115,7 @@ namespace PeachDrawing.PDF
         /// <summary>Whether a check box or radio button is on initially.</summary>
         public bool IsChecked { get; init; }
 
-        /// <summary>The choices of a select, in order.</summary>
+        /// <summary>The choices of a select or list, in order.</summary>
         public IReadOnlyList<PdfFormOption> Options { get; init; } = [];
 
         /// <summary>Whether the field cannot be edited.</summary>
@@ -138,6 +147,12 @@ namespace PeachDrawing.PDF
 
         /// <summary>The number of comb cells of a text field (one character each), or <see langword="null"/> for none.</summary>
         public int? CombCells { get; init; }
+
+        /// <summary>Whether a text field takes several lines of text.</summary>
+        public bool Multiline { get; init; }
+
+        /// <summary>Whether a list box lets more than one option be chosen.</summary>
+        public bool MultiSelect { get; init; }
 
         /// <summary>Whether a text field does not scroll when its text overflows.</summary>
         public bool DoNotScroll { get; init; }
@@ -285,6 +300,15 @@ namespace PeachDrawing.PDF
                 case PdfFormFieldKind.Select:
                     AddSelectField(acroForm, enginePage, rect, content, matrix, field.Appearance, field);
                     break;
+                case PdfFormFieldKind.List:
+                    AddListField(acroForm, enginePage, rect, content, matrix, field.Appearance, field);
+                    break;
+                case PdfFormFieldKind.PushButton:
+                    AddPushButton(acroForm, enginePage, rect, content, matrix, field.Appearance, field);
+                    break;
+                case PdfFormFieldKind.Signature:
+                    AddSignatureField(acroForm, enginePage, rect, content, matrix, field.Appearance, field);
+                    break;
             }
         }
 
@@ -298,6 +322,7 @@ namespace PeachDrawing.PDF
             };
 
             var flags = SharedFieldFlags(c);
+            if (c.Multiline) flags |= PdfTextField.MultilineFlag;
             if (c.DoNotScroll) flags |= PdfTextField.DoNotScrollFlag;
             if (c.Password) flags |= PdfTextField.PasswordFlag;
             if (c.CombCells is > 0)
@@ -457,16 +482,86 @@ namespace PeachDrawing.PDF
             acroForm.AddField(field);
         }
 
+        void AddListField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, IPdfFormAppearance look, PdfFormFieldDefinition c)
+        {
+            var field = new PdfListBoxField(Document)
+            {
+                Rectangle = rect,
+                PartialFieldName = ResolveFieldName(c.Name),
+                FieldFlags = SharedFieldFlags(c) | (c.MultiSelect ? PdfListBoxField.MultiSelectFlag : 0),
+            };
+            ApplyAlternateName(field, c);
+
+            var options = new List<(string Value, string Label)>();
+            var chosen = new List<string>();
+            var indices = new List<int>();
+            for (var i = 0; i < c.Options.Count; i++)
+            {
+                var option = c.Options[i];
+                options.Add((option.Value, option.Label));
+                if (option.Selected && (c.MultiSelect || chosen.Count == 0))
+                {
+                    chosen.Add(option.Value);
+                    indices.Add(i);
+                }
+            }
+            field.SetOptions(options);
+            field.SetSelection(chosen, indices);
+
+            var labels = string.Join("\n", c.Options.Where(o => o.Selected).Select(o => o.Label));
+            SetNormalAppearance(field, CreateForm(look, content, g => look.PaintText(g, content, labels, autoFontSize: false, combCells: null, isPlaceholder: false)), matrix);
+
+            page.Annotations.Add(field);
+            acroForm.AddField(field);
+        }
+
+        void AddPushButton(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, IPdfFormAppearance look, PdfFormFieldDefinition c)
+        {
+            var field = new PdfPushButtonField(Document)
+            {
+                Rectangle = rect,
+                PartialFieldName = ResolveFieldName(c.Name),
+                FieldFlags = PdfPushButtonField.PushButtonFlag | SharedFieldFlags(c),
+            };
+            ApplyAlternateName(field, c);
+            if (!string.IsNullOrEmpty(c.Value))
+                field.SetCaption(c.Value);
+
+            SetNormalAppearance(field, CreateForm(look, content, g => look.PaintText(g, content, c.Value ?? string.Empty, autoFontSize: false, combCells: null, isPlaceholder: false)), matrix);
+
+            page.Annotations.Add(field);
+            acroForm.AddField(field);
+        }
+
+        void AddSignatureField(PdfAcroForm acroForm, PdfPage page, PdfRectangle rect, Size content, Matrix3x2? matrix, IPdfFormAppearance look, PdfFormFieldDefinition c)
+        {
+            var field = new PdfSignatureField(Document)
+            {
+                Rectangle = rect,
+                PartialFieldName = ResolveFieldName(c.Name),
+                FieldFlags = SharedFieldFlags(c),
+            };
+            ApplyAlternateName(field, c);
+
+            SetNormalAppearance(field, CreateForm(look, content, g => look.PaintText(g, content, string.Empty, autoFontSize: false, combCells: null, isPlaceholder: false)), matrix);
+
+            page.Annotations.Add(field);
+            acroForm.AddField(field);
+        }
+
         /// <summary>
         /// Makes an appearance stream (a <see cref="PeachDrawing.PDF.Engine.Advanced.PdfFormXObject"/>) by painting onto a fresh <see cref="PdfForm"/>
         /// through a <see cref="PdfCanvas"/> - the recipe <c>PdfCanvas.CreateTile</c> already uses for SVG mask and pattern tiles - at the
         /// pixels-per-point the control was laid out with, so its real CSS border, padding and font stay consistently sized.
         /// </summary>
-        PeachDrawing.PDF.Engine.Advanced.PdfFormXObject CreateForm(IPdfFormAppearance look, Size sizePt, Action<Canvas> draw)
+        PeachDrawing.PDF.Engine.Advanced.PdfFormXObject CreateForm(IPdfFormAppearance look, Size sizePt, Action<Canvas> draw) =>
+            CreateAppearanceForm(Document, RenderContext, look.PixelsPerPoint, sizePt, draw);
+
+        internal static PeachDrawing.PDF.Engine.Advanced.PdfFormXObject CreateAppearanceForm(PdfDocument document, PdfRenderContext renderContext, double pixelsPerPoint, Size sizePt, Action<Canvas> draw)
         {
-            var form = new PdfForm(Document, sizePt);
+            var form = new PdfForm(document, sizePt);
             var formGraphics = PdfGraphics.FromForm(form);
-            using (var g = new PdfCanvas(RenderContext, formGraphics, look.PixelsPerPoint, releaseGraphics: true))
+            using (var g = new PdfCanvas(renderContext, formGraphics, pixelsPerPoint, releaseGraphics: true))
             {
                 draw(g);
             }
@@ -503,7 +598,7 @@ namespace PeachDrawing.PDF
         /// written only when it does something the fit cannot: turn or skew the appearance (an off-diagonal term), or mirror it (a
         /// diagonal that is not positive).
         /// </summary>
-        static void ApplyMatrix(PeachDrawing.PDF.Engine.Advanced.PdfFormXObject appearance, Matrix3x2? matrix)
+        internal static void ApplyMatrix(PeachDrawing.PDF.Engine.Advanced.PdfFormXObject appearance, Matrix3x2? matrix)
         {
             // The tolerance absorbs the rounding the divided and converted corner coordinates leave in a plain move or scale.
             if (matrix is { } m && (System.Math.Abs(m.M12) > 1e-6 || System.Math.Abs(m.M21) > 1e-6 || m.M11 <= 1e-6 || m.M22 <= 1e-6))
