@@ -44,6 +44,10 @@ PeachDrawing.PDF.PdfAConformance : enum Int32
   PdfA4 = 9
   PdfA4E = 10
   PdfA4F = 11
+PeachDrawing.PDF.PdfAnnotationPaint : enum Int32
+  All = 2
+  ExceptFormFields = 1
+  None = 0
 PeachDrawing.PDF.PdfBookmark : sealed class
   ctor(Int32 level, String title, Boolean isOpen)
   property Boolean IsOpen { get; }
@@ -216,9 +220,11 @@ PeachDrawing.PDF.PdfFormOption : struct
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
+  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations)
   method IReadOnlyDictionary<String, PdfSourceDestination> GetNamedDestinations()
   method IReadOnlyList<PdfBookmark> GetOutline()
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
+  method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
   method IReadOnlyList<PdfSourceLink> GetLinks(Int32 pageIndex)
   method PdfSourceMetadata GetMetadata()
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)

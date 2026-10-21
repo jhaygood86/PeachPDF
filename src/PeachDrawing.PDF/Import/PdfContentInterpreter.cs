@@ -83,6 +83,19 @@ internal sealed class PdfContentInterpreter
         _region = groupRegion;
     }
 
+    /// <summary>
+    /// Whether a <c>/Tx BMC</c> ... <c>EMC</c> span (the text of a form field's appearance) is passed on as variable text, so a reader that
+    /// regenerates the field replaces exactly that.
+    /// </summary>
+    public bool MarkVariableText { get; init; }
+
+    readonly Stack<bool> _markedContent = new();
+
+    /// <summary>Draws a form XObject (an appearance stream) under the transform already pushed on the canvas: its matrix, box clip and content.</summary>
+    /// <param name="form">the form XObject</param>
+    /// <param name="fallbackResources">the resources to use when the form has none of its own</param>
+    public void PaintAppearance(PdfDictionary form, PdfDictionary? fallbackResources) => DrawForm(form, fallbackResources);
+
     /// <summary>The operators and features met that this interpreter does not implement.</summary>
     public IReadOnlyCollection<string> Unsupported => _unsupported;
 
@@ -268,7 +281,18 @@ internal sealed class PdfContentInterpreter
             // --- structure
             case "Do": DoXObject(o, res); break;
             case "sh": PaintShading(o, res); break;
-            case "BMC" or "BDC" or "EMC" or "MP" or "DP" or "BX" or "EX" or "d0": break;
+            case "BMC":
+                {
+                    bool variable = MarkVariableText && o.Count > 0 && _doc.NameOf(o[0]) == "/Tx";
+                    _markedContent.Push(variable);
+                    if (variable) _canvas.BeginVariableText();
+                    break;
+                }
+            case "BDC": _markedContent.Push(false); break;
+            case "EMC":
+                if (_markedContent.Count > 0 && _markedContent.Pop()) _canvas.EndVariableText();
+                break;
+            case "MP" or "DP" or "BX" or "EX" or "d0": break;
             case "d1": Cur.ColorLocked = true; break;       // a Type 3 glyph that is a shape: it is painted in the current colour
 
             default:

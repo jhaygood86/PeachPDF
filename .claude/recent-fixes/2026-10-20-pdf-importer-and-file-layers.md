@@ -87,6 +87,15 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   generated destination names `PeachPDFFile<layer>-<page>-<top>`, outline entries kept for drawn pages plus their ancestors as heading-only
   entries, info/attachments only fill blanks. Attachments are skipped under PDF/A-1/2 (the writer rejects them there). Forms, other
   annotations and tags are not carried yet.
+- **Forms and annotation appearances through file layers**: `PdfSourceForms` turns widgets into `PdfFormFieldDefinition`s (inherited `FT`/`Ff`/`V`/`MaxLen`/`Opt`,
+  dotted full name, `AS`/`V` for the checked state, the on-state being the one non-Off key of `AP/N`) with an `IPdfFormAppearance` that draws the widget's own
+  `/AP /N` stream fitted to the control (`PdfAppearance.Fit`: BBox through Matrix onto Rect, ISO 32000-1 12.5.5). `/Tx BMC` spans are passed to the canvas as
+  variable text (`PdfContentInterpreter.MarkVariableText`) so a reader that regenerates the field replaces only the text. Rotated pages: ContentSize is the
+  upright size and `AppearanceTransform` is the page matrix's linear part flipped into the writer's y-down convention. Push buttons, signatures and other annotations are
+  flattened by `Paint(..., PdfAnnotationPaint.ExceptFormFields)` (the writer has no generic annotation API); list boxes become combo boxes and multi-line is
+  lost because `PdfFormBuilder` has no such kinds. `FileLayerPlan.Finish` adds the fields after all pages exist and renames a repeated page's fields through the
+  `rename` hook (same answer per name, so a radio group stays one field). MuPDF and PDFium (with `init_forms`) both show the carried field's appearance. Trap:
+  a test fixture's radio buttons must have one `/AS /Off`, else both read as selected.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
