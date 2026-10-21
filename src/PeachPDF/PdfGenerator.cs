@@ -573,11 +573,11 @@ namespace PeachPDF
 
                 structureTagBuilder?.BeginPage(page);
 
-                fileLayers?.Paint(page, pageNumber, underlay: true);
+                fileLayers?.Paint(page, pageNumber, underlay: true, structureTagBuilder?.Recorder);
 
                 await htmlDocument.PaintPageAsync(htmlPage.Index, page.Canvas);
 
-                fileLayers?.Paint(page, pageNumber, underlay: false);
+                fileLayers?.Paint(page, pageNumber, underlay: false, structureTagBuilder?.Recorder);
 
                 page.Finish();
             }

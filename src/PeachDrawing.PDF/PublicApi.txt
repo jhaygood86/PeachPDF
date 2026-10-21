@@ -220,7 +220,7 @@ PeachDrawing.PDF.PdfFormOption : struct
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
-  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations)
+  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder tags = null)
   method IReadOnlyDictionary<String, PdfSourceDestination> GetNamedDestinations()
   method IReadOnlyList<PdfBookmark> GetOutline()
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()

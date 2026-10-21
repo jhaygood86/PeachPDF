@@ -96,6 +96,14 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   lost because `PdfFormBuilder` has no such kinds. `FileLayerPlan.Finish` adds the fields after all pages exist and renames a repeated page's fields through the
   `rename` hook (same answer per name, so a radio group stays one field). MuPDF and PDFium (with `init_forms`) both show the carried field's appearance. Trap:
   a test fixture's radio buttons must have one `/AS /Off`, else both read as selected.
+- **Tags through file layers**: `PdfTagBinding` finds a marked-content sequence's structure element through the source's ParentTree (`/StructParents` of the
+  page, or of a form XObject; entry index = MCID) and the chain of `/P` parents, then the interpreter opens `OpenPhantomAncestors` + `OpenContentElement` at `BDC`
+  and disposes at `EMC`; `/Artifact` BMC/BDC open an artifact. Anything painted outside a structure-bound sequence gets an *implicit artifact*
+  (`BeginUntagged` in path paint / text / image / shading, closed at the end of every `Run`) so a tagged target has no untagged content - marked content
+  cannot nest, so the implicit one is closed before a `BDC`. Keys are `(per-Paint stamp object, source element)`: a page stamped twice gets two element sets. Source
+  `LBody` after `LI` is skipped (the recorder's phantom LI makes its own), an LBody that owns content directly becomes a Span, custom roles go through
+  `RoleMap` (unknown ones become Div/Span). Dropped: `/Lang`, `/A` attributes, `/ActualText`, link OBJR ties, source reading order. Trap seen (not investigated): a tagged declarative document with two `Page` handlers and a layer on both pages showed only one
+  set of the file's elements - each handler builds its own `StructureTagBuilder`/recorder, which probably replaces the earlier `Document` root kid. The tests stamp one page twice instead.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
