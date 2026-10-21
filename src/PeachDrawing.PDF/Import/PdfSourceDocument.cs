@@ -290,6 +290,9 @@ internal sealed class PdfSourceDocument
             throw new InvalidDataException("The PDF has no document catalog and could not be repaired.");
     }
 
+    /// <summary>A new, empty dictionary owned by this document, for an object that has no place in the file (an inline image).</summary>
+    public PdfDictionary NewDictionary() => new(_doc);
+
     PdfDictionary MakeTrailer(int catalogNumber)
     {
         var d = new PdfDictionary(_doc);

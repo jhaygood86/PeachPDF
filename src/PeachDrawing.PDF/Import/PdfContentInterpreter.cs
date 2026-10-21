@@ -177,7 +177,13 @@ internal sealed class PdfContentInterpreter
             if (t.Kind == PdfTokenKind.Eof) break;
             if (t.Kind == PdfTokenKind.Keyword && t.Text is not ("true" or "false" or "null"))
             {
-                if (t.Text == "BI") { SkipInlineImage(lx); operands.Clear(); _unsupported.Add("BI"); continue; }
+                if (t.Text == "BI")
+                {
+                    operands.Clear();
+                    if (ReadInlineImage(lx, resources) is { } inline) DrawImage(inline, resources);
+                    else _unsupported.Add("BI (malformed)");
+                    continue;
+                }
                 try { Execute(t.Text, operands, resources); }
                 catch (Exception e) when (e is InvalidCastException or ArgumentOutOfRangeException or InvalidOperationException or IndexOutOfRangeException)
                 {
@@ -194,25 +200,69 @@ internal sealed class PdfContentInterpreter
         _streamBase = savedBase;
     }
 
-    static void SkipInlineImage(PdfLexer lx)
+    /// <summary>
+    /// Reads an inline image (<c>BI</c> was just read): its dictionary up to <c>ID</c>, then its data up to <c>EI</c>, as an image XObject
+    /// the image code can decode like any other. The dictionary keeps the abbreviated keys the operator allows. Null when it is malformed.
+    /// </summary>
+    PdfDictionary? ReadInlineImage(PdfLexer lx, PdfDictionary? resources)
     {
-        // BI <dict> ID <data> EI: scan for whitespace-delimited EI after ID.
+        var image = _doc.NewDictionary();
         while (true)
         {
             var t = lx.Next();
-            if (t.Kind == PdfTokenKind.Eof) return;
+            if (t.Kind == PdfTokenKind.Eof) return null;
             if (t.Kind == PdfTokenKind.Keyword && t.Text == "ID") break;
+            if (_doc.ParseItem(lx, t) is not PdfName key) return null;
+            var vt = lx.Next();
+            if (vt.Kind == PdfTokenKind.Eof) return null;
+            image.Elements[key.Value] = _doc.ParseItem(lx, vt);
         }
+
         var d = lx.Data;
-        for (int i = lx.Position; i + 1 < lx.End; i++)
+        int start = lx.Position;
+        if (start < lx.End && PdfLexer.IsWhite(d[start])) start++;          // one white-space byte separates ID from the data
+
+        int end = ExactInlineLength(image, resources) is { } exact && start + exact <= lx.End ? start + exact : -1;
+        int search = end >= 0 ? end : start;
+        int found = -1;
+        for (int i = search; i + 1 < lx.End; i++)
         {
-            if (d[i] == 'E' && d[i + 1] == 'I' && (i == 0 || PdfLexer.IsWhite(d[i - 1])) && (i + 2 >= lx.End || PdfLexer.IsWhite(d[i + 2])))
-            {
-                lx.Position = i + 2;
-                return;
-            }
+            if (d[i] != 'E' || d[i + 1] != 'I') continue;
+            if (i > start && !PdfLexer.IsWhite(d[i - 1]) && end < 0) continue;
+            if (i + 2 < lx.End && !PdfLexer.IsWhite(d[i + 2])) continue;
+            // Binary data can hold the letters EI between white space; a real EI is followed by operators, which are text.
+            if (end < 0 && !LooksLikeContent(d, i + 2, lx.End)) continue;
+            found = i;
+            break;
         }
-        lx.Position = lx.End;
+        if (found < 0) { lx.Position = lx.End; return null; }
+
+        int dataEnd = end >= 0 ? end : (found > start && PdfLexer.IsWhite(d[found - 1]) ? found - 1 : found);
+        image.Stream = new PdfDictionary.PdfStream(d.AsSpan(start, Math.Max(0, dataEnd - start)).ToArray(), image);
+        lx.Position = found + 2;
+        return image;
+    }
+
+    /// <summary>The byte length of an unfiltered inline image's data, from its size and colour space, or null when it cannot be known.</summary>
+    int? ExactInlineLength(PdfDictionary image, PdfDictionary? resources)
+    {
+        if (image.ContainsKeyRaw("F") || image.ContainsKeyRaw("Filter")) return null;
+        int w = _doc.IntOf(image.GetRaw("W") ?? image.GetRaw("Width")), h = _doc.IntOf(image.GetRaw("H") ?? image.GetRaw("Height"));
+        if (w <= 0 || h <= 0) return null;
+        bool mask = _doc.Resolve(image.GetRaw("IM") ?? image.GetRaw("ImageMask")) is PdfBoolean { Value: true };
+        int bpc = mask ? 1 : _doc.IntOf(image.GetRaw("BPC") ?? image.GetRaw("BitsPerComponent"));
+        int comps = mask ? 1 : PdfColorSpace.Resolve(_doc, image.GetRaw("CS") ?? image.GetRaw("ColorSpace"), resources)?.Components ?? 0;
+        if (bpc <= 0 || comps <= 0) return null;
+        long length = ((long)w * comps * bpc + 7) / 8 * h;
+        return length is > 0 and < 100_000_000 ? (int)length : null;
+    }
+
+    /// <summary>Whether the bytes after a candidate <c>EI</c> read as content stream text rather than image data.</summary>
+    static bool LooksLikeContent(byte[] d, int from, int end)
+    {
+        for (int i = from; i < Math.Min(end, from + 12); i++)
+            if (d[i] > 126 || (d[i] < 32 && !PdfLexer.IsWhite(d[i]))) return false;
+        return true;
     }
 
     double N(List<PdfItem> o, int i) => _doc.NumberOf(o[i]);
