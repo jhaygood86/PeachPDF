@@ -17,7 +17,7 @@
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.1" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageVersion Include="MimeKit" Version="4.18.1" />
-    <PackageVersion Include="PeachImage" Version="0.5.2" />
+    <PackageVersion Include="PeachImage" Version="0.6.0" />
     <PackageVersion Include="ScottPlot" Version="5.1.59" />
     <PackageVersion Include="System.IO.Pipelines" Version="10.0.13" />
     <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.13" />

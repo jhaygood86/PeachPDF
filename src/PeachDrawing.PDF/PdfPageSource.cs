@@ -18,7 +18,7 @@ namespace PeachDrawing.PDF
     /// document, with fonts re-embedded and text keeping the text map of the original.
     /// </para>
     /// <para>
-    /// What the importer cannot draw yet (JPEG 2000, CCITT and JBIG2 images, and fonts without an embedded TrueType, OpenType, CFF or
+    /// What the importer cannot draw yet (fonts without an embedded TrueType, OpenType, CFF or
     /// Type 1 program) is skipped, and <see cref="Paint"/> names each such feature in its
     /// result. A file protected with AES and the empty user password is read; one that needs a password, or that uses RC4 (which .NET does not provide), is refused.
     /// </para>
