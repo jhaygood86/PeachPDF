@@ -113,23 +113,23 @@ namespace PeachDrawing.PDF
         /// <param name="canvas">the canvas to draw on</param>
         /// <param name="annotations">which annotations to draw</param>
         /// <param name="tags">
-        /// the recorder of a document being tagged, or <see langword="null"/>. With one, the logical structure the file gave the page's content (headings,
-        /// paragraphs, lists, figures with their alternative text) is recorded under the recorder's current parent as the content is drawn, and
-        /// everything else that is drawn is marked as an artifact, so the page adds no untagged content to a tagged document. The recorder must have
-        /// had <see cref="PdfTagRecorder.BeginPage"/> called for the page being drawn on.
+        /// the tagging of a document being tagged (from <see cref="CreateTagSession"/>), or <see langword="null"/>. With one, the logical structure the file
+        /// gave the page's content (headings, paragraphs, lists, tables, figures with their alternative text, languages and attributes) is recorded under
+        /// the recorder's current parent in the order of the file's structure tree, and everything else that is drawn is marked as an artifact, so the page
+        /// adds no untagged content to a tagged document. The recorder must have had <see cref="PdfTagRecorder.BeginPage"/> called for the page being drawn on.
         /// </param>
         /// <returns>the features of the page that could not be drawn, each named once; empty when all of it was</returns>
-        public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder? tags = null)
+        public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagSession? tags = null)
         {
             ArgumentNullException.ThrowIfNull(canvas);
-            return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags is null ? null : new PdfTagBinding(_document, tags));
+            return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags?.Binding);
         }
 
         /// <summary>
         /// The interactive form fields (text fields, check boxes, radio buttons and choice fields) with widgets on a page, ready to add to a
         /// page of a document with <see cref="PdfFormBuilder.AddField"/>. Each field is drawn by the appearance stream of its own widget, so it looks as
         /// it did in the file; a push button or signature field has no definition here and is drawn by
-        /// <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagRecorder)"/> with <see cref="PdfAnnotationPaint.ExceptFormFields"/> instead.
+        /// <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagSession)"/> with <see cref="PdfAnnotationPaint.ExceptFormFields"/> instead.
         /// </summary>
         /// <param name="pageIndex">the zero-based page number</param>
         /// <param name="pixelsPerPoint">the layout units per point of the canvas the fields' appearances are drawn at</param>
@@ -159,6 +159,35 @@ namespace PeachDrawing.PDF
         /// <returns>the annotations, with positions in points from the top-left corner of the page as it is shown</returns>
         public IReadOnlyList<PdfAnnotationDefinition> GetAnnotations(int pageIndex, double pixelsPerPoint = 1) =>
             _annotations.Annotations(Page(pageIndex), pixelsPerPoint);
+
+        /// <summary>
+        /// Starts the tagging of one drawing of a page of this file onto a document being tagged. Pass the result to <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagSession)"/>,
+        /// and to <see cref="TieLinkToStructure"/> for the links of the page; use a new one each time a page is drawn, so each drawing gets structure elements of its own.
+        /// </summary>
+        /// <param name="recorder">the recorder of the document</param>
+        /// <returns>the tagging of one drawing</returns>
+        public PdfTagSession CreateTagSession(PdfTagRecorder recorder)
+        {
+            ArgumentNullException.ThrowIfNull(recorder);
+            return new PdfTagSession(new PdfTagBinding(_document, recorder));
+        }
+
+        /// <summary>
+        /// Ties a link that was added to a document to the structure element the file gave the link, when that element was recorded by <paramref name="tags"/>,
+        /// so a reader can reach one from the other. Call it after <see cref="PdfTagRecorder.Finish"/>. Does nothing for a link whose file had no structure for it.
+        /// </summary>
+        /// <param name="tags">the tagging of the drawing of the page the link is on</param>
+        /// <param name="link">the link as read from the file</param>
+        /// <param name="added">the link as added to the document's page</param>
+        public void TieLinkToStructure(PdfTagSession tags, PdfSourceLink link, PdfLink added)
+        {
+            ArgumentNullException.ThrowIfNull(tags);
+            ArgumentNullException.ThrowIfNull(link);
+            ArgumentNullException.ThrowIfNull(added);
+
+            if (link.Annotation is { } annotation && tags.Binding.KeyOfAnnotation(annotation) is { } key)
+                tags.Binding.Recorder.LinkAnnotation(key, added);
+        }
 
         private PdfDictionary Page(int pageIndex)
         {

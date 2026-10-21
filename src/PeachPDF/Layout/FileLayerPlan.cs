@@ -13,7 +13,10 @@ namespace PeachPDF.Layout
 
         // Where each page of each layer's file was drawn: the layer, the zero-based page of its file, the zero-based page of the document.
         // The first target of a page that is drawn on several wins, so a link to it has one place to lead to.
-        private readonly List<(int Layer, int SourcePage, int TargetPage)> _stamps = [];
+        private readonly List<Stamp> _stamps = [];
+
+        /// <summary>One drawing of a page of a layer's file onto a page of the document, with the tagging of that drawing when the document is tagged.</summary>
+        private sealed record Stamp(int Layer, int SourcePage, int TargetPage, PdfTagSession? Tags);
 
         public FileLayerPlan(IEnumerable<FileLayer> layers, int totalPages)
         {
@@ -39,11 +42,12 @@ namespace PeachPDF.Layout
                 if (scaled)
                     canvas.PushTransform(Matrix3x2.CreateScale((float)canvas.PixelsPerPoint));
 
-                _stamps.Add((_layers.FindIndex(l => ReferenceEquals(l.Layer, layer)), sourcePage, page.Index));
+                var session = tags is null ? null : layer.Source.CreateTagSession(tags);
+                _stamps.Add(new Stamp(_layers.FindIndex(l => ReferenceEquals(l.Layer, layer)), sourcePage, page.Index, session));
 
                 try
                 {
-                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.None, tags);
+                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.None, session);
                 }
                 finally
                 {
@@ -97,29 +101,34 @@ namespace PeachPDF.Layout
         public void Finish(PdfComposer composer, PdfRenderContext renderContext)
         {
             var destinations = new Dictionary<(int Layer, int SourcePage), int>();
-            foreach (var (layer, sourcePage, targetPage) in _stamps)
-                destinations.TryAdd((layer, sourcePage), targetPage);
+            foreach (var stamp in _stamps)
+                destinations.TryAdd((stamp.Layer, stamp.SourcePage), stamp.TargetPage);
 
             // Each drawn page carries its links once, however many times it was drawn.
             var linked = new HashSet<(int, int, int)>();
-            foreach (var (layerIndex, sourcePage, targetPage) in _stamps)
+            foreach (var (layerIndex, sourcePage, targetPage, tags) in _stamps)
             {
                 if (!linked.Add((layerIndex, sourcePage, targetPage)) || targetPage >= composer.Pages.Count)
                     continue;
 
+                var source = _layers[layerIndex].Layer.Source;
                 var target = composer.Pages[targetPage];
-                foreach (var link in _layers[layerIndex].Layer.Source.GetLinks(sourcePage))
+                foreach (var link in source.GetLinks(sourcePage))
                 {
+                    PdfLink? added = null;
                     if (link.Uri is not null)
                     {
-                        target.AddLink(link.Bounds, link.Uri);
+                        added = target.AddLink(link.Bounds, link.Uri);
                     }
                     else if (link.Destination is { } to && destinations.TryGetValue((layerIndex, to.PageIndex), out var toPage))
                     {
                         var name = DestinationName(layerIndex, to.PageIndex, to.TopPoints);
                         composer.AddNamedDestination(name, toPage, to.TopPoints);
-                        target.AddDestinationLink(link.Bounds, name);
+                        added = target.AddDestinationLink(link.Bounds, name);
                     }
+
+                    if (added is not null && tags is not null)
+                        source.TieLinkToStructure(tags, link, added);
                 }
             }
 
@@ -128,7 +137,7 @@ namespace PeachPDF.Layout
             var annotations = composer.CreateAnnotationBuilder(renderContext);
             var forms = composer.CreateFormBuilder(renderContext, "PeachPDFFileField");
             var names = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var (layerIndex, sourcePage, targetPage) in _stamps.Distinct())
+            foreach (var (layerIndex, sourcePage, targetPage, _) in _stamps.DistinctBy(s => (s.Layer, s.SourcePage, s.TargetPage)))
             {
                 if (targetPage >= composer.Pages.Count)
                     continue;
