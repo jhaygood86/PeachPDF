@@ -20,7 +20,7 @@ internal static class PdfMeshShading
     readonly record struct Vertex(double X, double Y, double R, double G, double B, double A);
 
     /// <summary>Whether <paramref name="type"/> is a mesh shading this class reads.</summary>
-    public static bool IsMesh(int type) => type is >= 4 and <= 7;
+    public static bool IsMesh(int type) => type is 1 or (>= 4 and <= 7);
 
     /// <summary>The bitmap a mesh was rasterized into, and the rectangle of shading space it covers.</summary>
     public sealed record Bitmap(byte[] Rgba, int Width, int Height, double X0, double Y0, double X1, double Y1);
@@ -33,6 +33,7 @@ internal static class PdfMeshShading
     {
         why = null;
         int type = doc.IntOf(shading.GetRaw("ShadingType"));
+        if (type == 1) return RenderFunctionBased(doc, shading, resources, scale, alpha, out why);
         if (!IsMesh(type) || shading.Stream is null) { why = "mesh shading data"; return null; }
         var space = PdfColorSpace.Resolve(doc, shading.GetRaw("ColorSpace"), resources);
         if (space is null) { why = "shading colour space"; return null; }
@@ -103,6 +104,48 @@ internal static class PdfMeshShading
             Fill(rgba, width, height, x0, y1, sx, sy, a, b, c, lut);
         return new Bitmap(rgba, width, height, x0, y0, x1, y1);
     }
+
+    /// <summary>
+    /// A function-based shading (type 1): a two-input function evaluated at every pixel of the bitmap over the shading's domain. The
+    /// caller draws the bitmap under the shading's <c>/Matrix</c>, which carries the domain onto the target space.
+    /// </summary>
+    static Bitmap? RenderFunctionBased(PdfSourceDocument doc, PdfDictionary shading, PdfDictionary? resources, double scale, double alpha, out string? why)
+    {
+        why = null;
+        var space = PdfColorSpace.Resolve(doc, shading.GetRaw("ColorSpace"), resources);
+        if (space is null) { why = "shading colour space"; return null; }
+        if (PdfFunction.Load(doc, shading.GetRaw("Function")) is not { } function) { why = "shading function"; return null; }
+        double x0 = 0, x1 = 1, y0 = 0, y1 = 1;
+        if (doc.ArrayOf(shading, "Domain") is { Elements.Count: >= 4 } dom)
+        {
+            (x0, x1, y0, y1) = (doc.NumberOf(dom.Elements[0]), doc.NumberOf(dom.Elements[1]), doc.NumberOf(dom.Elements[2]), doc.NumberOf(dom.Elements[3]));
+        }
+        if (!(x1 > x0) || !(y1 > y0)) { why = "degenerate function shading"; return null; }
+
+        // Every pixel costs a function evaluation, so the bitmap is smaller than a mesh's.
+        double density = Math.Clamp(scale * 2.5, 0.01, 1e6);
+        int width = (int)Math.Clamp(Math.Ceiling((x1 - x0) * density), 1, FunctionPixels);
+        int height = (int)Math.Clamp(Math.Ceiling((y1 - y0) * density), 1, FunctionPixels);
+        var rgba = new byte[width * height * 4];
+        var comps = new double[space.Components];
+        var input = new double[2];
+        for (int j = 0; j < height; j++)
+        {
+            input[1] = y1 - (j + 0.5) / height * (y1 - y0);
+            for (int i = 0; i < width; i++)
+            {
+                input[0] = x0 + (i + 0.5) / width * (x1 - x0);
+                var values = function.Evaluate(input);
+                for (int k = 0; k < comps.Length; k++) comps[k] = k < values.Length ? values[k] : 0;
+                var (r, g, b) = space.ToColor(comps, 1).ToRgb();
+                int o = (j * width + i) * 4;
+                rgba[o] = r; rgba[o + 1] = g; rgba[o + 2] = b; rgba[o + 3] = (byte)Math.Round(Math.Clamp(alpha, 0, 1) * 255);
+            }
+        }
+        return new Bitmap(rgba, width, height, x0, y0, x1, y1);
+    }
+
+    const int FunctionPixels = 512;
 
     // ------------------------------------------------------------ reading the mesh
 

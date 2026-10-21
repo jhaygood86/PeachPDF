@@ -78,6 +78,8 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   `DrawImageWithColorMatrix` and a per-channel matrix. The matrix exists only for a function that is a clamped line on 0..1: `FitLinear`
   fits the unclamped samples and verifies the clamped ends, otherwise "gs TR (not a linear function)". A function array uses its first
   three entries for R, G, B. With this the showcase round trip reports nothing unsupported for any of its 226 files.
+- **Function-based shadings** (type 1) share the mesh path: a bitmap over the domain (at most 512 px a side: every pixel is a function
+  evaluation), drawn under `/Matrix * pattern matrix * ...`; a sampled two-input function interpolates bilinearly.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
