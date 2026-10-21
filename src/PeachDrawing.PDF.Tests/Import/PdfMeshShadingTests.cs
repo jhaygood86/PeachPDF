@@ -189,5 +189,87 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.Contains("degenerate mesh", unsupported);
         }
+
+        // ------------------------------------------------------------ function-based shadings (type 1)
+
+        private static string Ps(string body) => TestPdf.Stream("/FunctionType 4 /Domain [0 1 0 1] /Range [0 1 0 1 0 1]", body);
+
+        private static byte[] FnPage(string content, string shadingEntries, string function, string spaceEntry = "/ColorSpace /DeviceRGB")
+        {
+            var shading = $"<< /ShadingType 1 {spaceEntry} {shadingEntries} /Function 7 0 R >>";
+            return TestPdf.Build(content, resources: "/Shading << /S0 5 0 R >> /Pattern << /P0 6 0 R >>", extraObjects: [shading, "<< /PatternType 2 /Shading 5 0 R >>", function]);
+        }
+
+        private static void Near(byte[] pdf, int pdfX, int pdfY, int r, int g, int b, int tolerance = 14)
+        {
+            var p = At(pdf, pdfX, 99 - pdfY, out _);
+            Assert.True(Math.Abs(p.R - r) <= tolerance && Math.Abs(p.G - g) <= tolerance && Math.Abs(p.B - b) <= tolerance && p.A > 200, $"at ({pdfX},{pdfY}) expected about ({r},{g},{b}), was {p}");
+        }
+
+        [Fact]
+        public void FunctionShading_EvaluatesItsFunctionAcrossTheDomain_AndMapsItWithTheMatrix()
+        {
+            // { 0 } leaves (x, y, 0): red grows to the right, green upward; /Matrix scales the unit domain to the page.
+            var pdf = FnPage("/S0 sh", "/Domain [0 1 0 1] /Matrix [100 0 0 100 0 0]", Ps("{ 0 }"));
+
+            Near(pdf, 10, 10, 26, 26, 0);
+            Near(pdf, 90, 10, 230, 26, 0);
+            Near(pdf, 10, 90, 26, 230, 0);
+            Near(pdf, 50, 50, 128, 128, 0);
+        }
+
+        [Fact]
+        public void FunctionShading_IsOnlyPaintedWhereItsDomainLands()
+        {
+            var pdf = FnPage("/S0 sh", "/Domain [0 1 0 1] /Matrix [50 0 0 50 25 25]", Ps("{ 0 }"));
+
+            Assert.True(At(pdf, 10, 89, out _).A < 10, "outside the mapped domain");
+            Near(pdf, 30, 30, 26, 26, 0);
+        }
+
+        [Fact]
+        public void FunctionShading_AsAPattern_IsClippedToTheFilledPath()
+        {
+            var pdf = FnPage("/Pattern cs /P0 scn 0 0 50 100 re f", "/Domain [0 1 0 1] /Matrix [100 0 0 100 0 0]", Ps("{ 0 }"));
+
+            Near(pdf, 25, 50, 64, 128, 0);
+            Assert.True(At(pdf, 75, 49, out _).A < 10, "outside the path");
+        }
+
+        [Fact]
+        public void FunctionShading_StaysInPatternSpace_UnderACurrentTransform()
+        {
+            var pdf = FnPage("0.5 0 0 0.5 0 0 cm /Pattern cs /P0 scn 0 0 200 200 re f", "/Domain [0 1 0 1] /Matrix [100 0 0 100 0 0]", Ps("{ 0 }"));
+
+            Near(pdf, 90, 10, 230, 26, 0);
+        }
+
+        [Fact]
+        public void SampledTwoInputFunction_IsInterpolatedBilinearly()
+        {
+            // 2x2 samples, x varying fastest: black, red, green, yellow.
+            var sampled = TestPdf.Stream("/FunctionType 0 /Domain [0 1 0 1] /Range [0 1 0 1 0 1] /Size [2 2] /BitsPerSample 8",
+                TestPdf.Binary([0, 0, 0, 255, 0, 0, 0, 255, 0, 255, 255, 0]));
+            var pdf = FnPage("/S0 sh", "/Domain [0 1 0 1] /Matrix [100 0 0 100 0 0]", sampled);
+
+            Near(pdf, 50, 50, 128, 128, 0);
+            Near(pdf, 25, 25, 64, 64, 0, 18);
+            Near(pdf, 75, 25, 191, 64, 0, 18);
+        }
+
+        [Fact]
+        public void FunctionShading_DefaultsItsDomain_AndReportsWhatItCannotUse()
+        {
+            Near(FnPage("/S0 sh", "/Matrix [100 0 0 100 0 0]", Ps("{ 0 }")), 90, 10, 230, 26, 0);        // no /Domain: the unit square
+
+            At(FnPage("/S0 sh", "/Domain [0 0 0 1]", Ps("{ 0 }")), 0, 0, out var degenerate);
+            Assert.Contains("degenerate function shading", degenerate);
+
+            At(FnPage("/S0 sh", "/Domain [0 1 0 1]", "42"), 0, 0, out var noFunction);
+            Assert.Contains("shading function", noFunction);
+
+            At(FnPage("/S0 sh", "/Domain [0 1 0 1]", Ps("{ 0 }"), "/ColorSpace /Nope"), 0, 0, out var noSpace);
+            Assert.Contains("shading colour space", noSpace);
+        }
     }
 }

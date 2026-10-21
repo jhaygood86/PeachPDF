@@ -83,6 +83,8 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   all work, including a fax/JBIG2 `/Mask` or `/SMask` (`ApplyAlpha`). JBIG2 reads `/JBIG2Globals`. JPX goes through `FromJpx`: decoded to RGBA with
   its own colour (the `/ColorSpace` entry is ignored), alpha forced opaque unless `/SMaskInData` is non-zero. Fixtures were made with Pillow
   (libtiff Group 4 strip; the same bytes as a JBIG2 MMR generic region; openjpeg) and MuPDF renders them identically. Not handled: inline images.
+- **Function-based shadings** (type 1) share the mesh path: a bitmap over the domain (at most 512 px a side: every pixel is a function
+  evaluation), drawn under `/Matrix * pattern matrix * ...`; a sampled two-input function interpolates bilinearly.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
