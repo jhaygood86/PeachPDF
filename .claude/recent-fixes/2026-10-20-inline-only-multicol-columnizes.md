@@ -10,6 +10,8 @@
 
 **A `<br>` before a float:** the marker word a `<br>` leaves on the line it opens is not content, so `FlowFloatChild` asks `IsAtLineStart` rather than `Words.Count` before it shifts the line beside the float. Counted as a word, it sent a float wider than the line (a right float wider than the column) to a third line and drew the line before it twice under `white-space: nowrap`.
 
+Under `nowrap`/`pre` the float still covers the next line; see [the accepted gap](../accepted-gaps/a-float-wider-than-its-column-covers-the-text-after-it-under-nowrap.md) (#1891).
+
 **Vertical writing modes** keep the inline path. Measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run of text: `CreateVerticalLineBoxes` keeps the content inside the box (72pt x 58pt), while the columns engine stacks it into a single 511pt run that leaves the box entirely.
 
 **Found by running it:**
