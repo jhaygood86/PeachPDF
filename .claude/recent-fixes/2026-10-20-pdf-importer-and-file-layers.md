@@ -85,6 +85,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   (libtiff Group 4 strip; the same bytes as a JBIG2 MMR generic region; openjpeg) and MuPDF renders them identically. Not handled: inline images.
 - **Function-based shadings** (type 1) share the mesh path: a bitmap over the domain (at most 512 px a side: every pixel is a function
   evaluation), drawn under `/Matrix * pattern matrix * ...`; a sampled two-input function interpolates bilinearly.
+- **Transparency groups under a constant alpha**: a form XObject with `/Group /S /Transparency` drawn while `ca` < 1 (how the writer emits CSS `opacity`:
+  `/GSn gs /Fm Do`, with `/ca 1` set again inside the form) was drawn with the inner alpha only, so the outer alpha vanished - the translucent boxes of the
+  `opacity` showcase came back opaque while the pixel share stayed small enough (5%) to pass for MuPDF/PDFium noise. `DrawTransparencyGroup` now draws the form into a
+  tile at alpha 1 and composites the tile at the outer alpha (`SoftMaskGroup.Opacity`, composited in `EndSoftMaskGroup`). Blend modes on a group are still applied per shape. With it all
+  430 showcase pages are under the 2% round-trip threshold in both renderers (`css_filter`, `opacity` and `stacking_context` were the three that were not). Lesson: look at the
+  diff image, not just the percentage.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
