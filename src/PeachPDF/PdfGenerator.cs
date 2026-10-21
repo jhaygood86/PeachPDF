@@ -430,6 +430,9 @@ namespace PeachPDF
                 {
                     await RenderPagesCore(document, htmlDocument, config, plan);
                 }
+
+                // The links, destinations and outline of the files drawn on the pages, now that every page they can lead to exists.
+                plan.Finish(document.Composer);
             }
             finally
             {
@@ -536,7 +539,9 @@ namespace PeachPDF
             // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
             // document. Everything that depends on this render's content (title, language, creation date) is known by now.
             var embeddings = PdfEmbeddingPlan.Create(config);
-            document.Composer.Configure(BuildComposerOptions(config, htmlDocument, embeddings));
+            var composerOptions = BuildComposerOptions(config, htmlDocument, embeddings);
+            fileLayers?.ApplyDocumentInformation(composerOptions, canAttachFiles: config.PdfAConformance is PdfAConformance.None or PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F);
+            document.Composer.Configure(composerOptions);
 
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
             // which Configure has already checked.

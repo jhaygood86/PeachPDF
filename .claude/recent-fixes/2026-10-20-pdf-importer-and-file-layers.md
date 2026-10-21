@@ -80,6 +80,13 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   three entries for R, G, B. With this the showcase round trip reports nothing unsupported for any of its 226 files.
 - **Function-based shadings** (type 1) share the mesh path: a bitmap over the domain (at most 512 px a side: every pixel is a function
   evaluation), drawn under `/Matrix * pattern matrix * ...`; a sampled two-input function interpolates bilinearly.
+- **Navigation carried by file layers**: `PdfPageSource.GetLinks/GetOutline/GetNamedDestinations/GetMetadata/GetAttachments` (`Import/PdfSourceNavigation`) read
+  link annotations (`/URI`, `/GoTo`, `/Dest`), the outline, name tree and legacy `/Dests`, `/Info` and `/EmbeddedFiles`; positions go through
+  `PdfPagePainter.PageToCanvas` so a rotated page's rectangles and destination tops are in painted terms. `FileLayerPlan` records where each
+  source page was stamped and does the transfer in `Finish` (after the last page exists, since a link may point at a page stamped later):
+  generated destination names `PeachPDFFile<layer>-<page>-<top>`, outline entries kept for drawn pages plus their ancestors as heading-only
+  entries, info/attachments only fill blanks. Attachments are skipped under PDF/A-1/2 (the writer rejects them there). Forms, other
+  annotations and tags are not carried yet.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
