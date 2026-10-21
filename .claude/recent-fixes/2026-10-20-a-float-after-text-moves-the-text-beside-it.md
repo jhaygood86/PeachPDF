@@ -19,7 +19,7 @@
 
 The two-column 600px row is worse on word positions than the exclusion was. The words beside the float match Chrome row for row. The difference is which words fall in column 1: balancing does not count the space the float takes, which `html-css-support.md` already lists as a limitation, and Chrome's balance does count it.
 
-- A float at the start of its line, or after text that already ends before it, is unchanged.
+- A float after text that already ends before it is unchanged, as are documents with floats up to 45% of the container. A float at the start of a line that the float crowds changes too: the post-wrap `ShiftEmptyLineBelowCrowdingFloats` call fires for any wrapped line crowded by floats, not only floats wider than the line. Of 320 float-first documents 84 differ from `main`, and of 160 scroll containers with block children and floats 43 do; the net effect is positive (words over a float 760 to 561, word loss 70 to 0, 5 float-first documents and 1 scroll document worse).
 - All 221 showcases have the same word layout as `HEAD`.
 - `XY <float>ZZZZ</float> more words` at 16px monospace: `more` now starts 0.3pt from Chrome's position. The old overlap put `XY` under the float.
 
@@ -33,9 +33,9 @@ The two-column 600px row is worse on word positions than the exclusion was. The 
 
 - Re-laying the whole line with the float first, which is Chrome's method. Words are shifted, and the float moves down when a shift would need a re-break. That can differ from Chrome when the re-break matters.
 - Counting a float's height in column balancing (documented as a limitation).
-- The column word skip below.
+- The column word skip below (#1818).
 
-**Column word skip (found while checking this, not fixed):** in a fixed-height multi-column box whose content is taller than its columns, column two can start a line late, and that line is lost. `CssLayoutEngineColumns.LayoutRunSegment` targets a column band taller than the box (the balanced target is not capped by the box's definite height). The line at the box's bottom is consumed by column one but lies past the box edge, so it is never emitted. Capping the band at the box height removes the loss at 150px, but the overflow then goes to a second page that holds no words, so the words are lost silently in a different place. The cap was reverted. A real fix needs overflow columns (css-multicol-1 §3.3) or an explicit overflow policy for a continuation.
+**Column word skip (found while checking this, not fixed; tracked as #1818):** in a fixed-height multi-column box whose content is taller than its columns, column two can start a line late, and that line is lost. `CssLayoutEngineColumns.LayoutRunSegment` targets a column band taller than the box (the balanced target is not capped by the box's definite height). The line at the box's bottom is consumed by column one but lies past the box edge, so it is never emitted. Capping the band at the box height removes the loss at 150px, but the overflow then goes to a second page that holds no words, so the words are lost silently in a different place. The cap was reverted. A real fix needs overflow columns (css-multicol-1 §3.3) or an explicit overflow policy for a continuation.
 
 **Evidence:**
 

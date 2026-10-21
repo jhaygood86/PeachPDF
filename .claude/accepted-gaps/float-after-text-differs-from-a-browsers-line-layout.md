@@ -8,4 +8,8 @@
 
 **Why out of scope:** re-laying the line with the float placed first is a rewrite of the inline flow around floats, not a fix to the box generation this change makes (a box-generation step that lets the columns engine see text). The shift rule means a float never covers a word, which `main` allowed. `shape-outside` needs a shape-aware line extent in `ExtentBesideFloats`; the first-child margin is a float-margin collapse bug in block flow that predates this change.
 
-**Overall:** on the reviewer's 324 generated float-among-text documents, compared with Chrome by word position, the shift rule was better on 134, worse on 22 and equal on 148.
+**Overall:** on the reviewer's 324 generated float-among-text documents, compared with Chrome by word position, the shift rule was better on 139, worse on 22 and equal on 143.
+
+**Text after a float that is wider than its line:** the rule that puts the following text below such a float is closer to Chrome overall (on 60 documents compared by word position: better on 19, worse on 8, equal on 33; mismatched words 1,310 on `main`, 1,070 now), but where Chrome keeps the following text on the current line when the float drops below it, the text is pushed below the float (`wide_55_plain`: 2 mismatched words become 40 from a 2-word shift). Part of #1784.
+
+**Crowded lines:** the post-wrap `ShiftEmptyLineBelowCrowdingFloats` call fires whenever a wrapped line is crowded by floats, not only by floats wider than the line. On the reviewer's float-first documents (320) and scroll containers with block children and floats (160), 84 and 43 differ from `main`. The net effect is positive (words over a float 760 to 561, word loss 70 to 0; 5 float-first documents and 1 scroll document get worse). Documents with floats up to 45% of the container are identical to `main`.

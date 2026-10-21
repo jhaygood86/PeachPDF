@@ -4560,7 +4560,9 @@ namespace PeachBrackets.Html.Dom
 
             // The words already on this line are moved beside a float placed after them, as a browser lays the
             // line out again around it. Where they would no longer fit, the float starts the next line instead.
-            if (coordinates.Line.Words.Count > 0 && FloatOverlapsLineWords(b, coordinates.Line))
+            // The zero-width marker a <br> leaves on the line it opens is not content to move: counted as words it
+            // sent a float wider than the line to a third line and left the line before it drawn twice.
+            if (!IsAtLineStart(coordinates) && FloatOverlapsLineWords(b, coordinates.Line))
             {
                 if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {

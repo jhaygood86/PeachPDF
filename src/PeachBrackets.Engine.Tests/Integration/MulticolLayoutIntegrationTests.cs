@@ -2092,6 +2092,52 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.DoesNotContain(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
         }
 
+        // A multi-column container that holds a float inside a table cell keeps the inline flow it had: wrapped, a float
+        // that spans the page leaves the lines after it past the page foot or the cell, and those words are lost.
+        // Without a float the same container is wrapped like any other.
+        [Theory]
+        [InlineData("<div style='float:left;width:361px;height:1027px'>F</div>", false)]
+        [InlineData("", true)]
+        public async Task MulticolContainerInATableCell_IsWrappedForColumnsOnlyWithoutAFloat(string floatHtml, bool wrapped)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap("<table style='width:600px'><tr><td style='width:50%'>x</td><td>" +
+                            $"<div id='mc' style='columns:2'>w00000 {floatHtml}{words}</div></td></tr></table>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            Assert.Equal(wrapped, mc.Boxes.Any(b => b.IsInlineRunWrapper));
+            Assert.Equal(41, LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Count(w => w.Text is { } t && t.StartsWith('w')));
+        }
+
+        // The marker a <br> leaves on the line it opens is not text to move beside a float placed after it. Counted as
+        // text, it sent a float wider than the column to a third line and, under nowrap, drew the line before it twice.
+        [Theory]
+        [InlineData("white-space:nowrap;")]
+        [InlineData("")]
+        public async Task FloatWiderThanTheColumn_AfterABreak_StartsTheLineTheBreakOpened(string whiteSpace)
+        {
+            var html = Wrap($"<div id='mc' style='width:650px;{whiteSpace}columns:3'>w00001 w00002 w00003 w00004 w00005<br>" +
+                            "<div id='f' style='float:right;width:280px;height:60px'>FL1</div>w00006 w00007 w00008 w00009</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(9, words.Count);
+            Assert.Equal(words.Count, words.Select(w => w.Text).Distinct().Count());
+
+            // Without wrapping the break is the only line end, which makes the lines known.
+            if (whiteSpace.Length == 0) return;
+
+            Assert.Equal(words[4].Top, words[0].Top, 1);
+            Assert.True(words[5].Top > words[4].Top, $"the line after the break starts at {words[5].Top}, the one before at {words[4].Top}");
+            Assert.True(FindById(root, "f")!.Location.Y >= words[4].Bottom - 0.5, "the float sits on the line the break opened, not the one before it");
+        }
+
 
 
         // Placing a float must end however the floats before it are sized, spaced and cleared. The shape of a hang is

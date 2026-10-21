@@ -6,6 +6,10 @@
 
 **Scroll containers:** a text-only multi-column container that clips (`overflow` other than `visible`) and has a `height` or `max-height` is not wrapped (`DomParser.IsHeightBoundedScrollContainer`) and keeps `main`'s inline flow. Wrapped, it reaches the columns engine, which skips words when it fills columns of a bounded height (40 words, `columns:3; height:100px`: 15 inside the box on `main` and in Chrome, 5 wrapped), and an explicit `<div>` skips the same words on `main`, so the wrapper was not equivalent to a `<div>` there either. Tracked as #1849 with [an accepted gap](../accepted-gaps/text-only-multicol-scroll-container-of-bounded-height-is-not-columnized.md). `CssBox`'s `suppressMonolithicBreaking` keeps `main`'s exemption for a box that dispatches to the columns engine; a scroll container with block children is unchanged.
 
+**Table cells:** a multi-column container that holds a float and sits in a table cell is not wrapped (`IsInsideTableCell`), tracked as #1884 with [an accepted gap](../accepted-gaps/a-multicol-container-with-a-float-in-a-table-cell-is-not-columnized.md). Wrapped, a page-spanning float there loses the words after it.
+
+**A `<br>` before a float:** the marker word a `<br>` leaves on the line it opens is not content, so `FlowFloatChild` asks `IsAtLineStart` rather than `Words.Count` before it shifts the line beside the float. Counted as a word, it sent a float wider than the line (a right float wider than the column) to a third line and drew the line before it twice under `white-space: nowrap`.
+
 **Vertical writing modes** keep the inline path. Measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run of text: `CreateVerticalLineBoxes` keeps the content inside the box (72pt x 58pt), while the columns engine stacks it into a single 511pt run that leaves the box entirely.
 
 **Found by running it:**

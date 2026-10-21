@@ -3579,6 +3579,9 @@ namespace PeachBrackets.Html.Parse
             // text in the same inline flow. A box holding only floats is not wrapped: it already reaches the engine
             // (see CssBox's float disjunct). Nor is a scroll container whose height is bounded: the columns engine
             // skips words when it fills columns of a bounded height, so such a box keeps the inline flow it had.
+            // Nor does one holding a float inside a table cell: a float that spans the page, or is wider than a column,
+            // leaves the lines after it past the page foot or past the cell, and the words there are lost. That keeps the
+            // inline flow it had until the columns engine places them (see the accepted gap).
             // Nor under a vertical
             // writing mode: measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run
             // of text, CreateVerticalLineBoxes keeps the content inside the box (72pt x 58pt), while the
@@ -3589,7 +3592,8 @@ namespace PeachBrackets.Html.Parse
                 && DomUtils.ContainsInlinesOnly(box)
                 && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
                 && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
-                && !IsHeightBoundedScrollContainer(box);
+                && !IsHeightBoundedScrollContainer(box)
+                && !(box.Boxes.Any(b => b.IsFloated) && IsInsideTableCell(box));
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
@@ -3756,6 +3760,16 @@ namespace PeachBrackets.Html.Parse
         private static bool JoinsTheInlineRun(CssBox box) =>
             (box.IsInline || box.IsFloated || JoinsAsOutOfFlow(box)) && !CssBox.IsOutsideMarker(box);
 
+
+        private static bool IsInsideTableCell(CssBox box)
+        {
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.IsTableCell) return true;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/> clips its content (<c>overflow</c> other than <c>visible</c>) and has a
