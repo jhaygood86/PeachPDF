@@ -88,7 +88,7 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
 - **Transparency groups under a constant alpha**: a form XObject with `/Group /S /Transparency` drawn while `ca` < 1 (how the writer emits CSS `opacity`:
   `/GSn gs /Fm Do`, with `/ca 1` set again inside the form) was drawn with the inner alpha only, so the outer alpha vanished - the translucent boxes of the
   `opacity` showcase came back opaque while the pixel share stayed small enough (5%) to pass for MuPDF/PDFium noise. `DrawTransparencyGroup` now draws the form into a
-  tile at alpha 1 and composites the tile at the outer alpha (`SoftMaskGroup.Opacity`, composited in `EndSoftMaskGroup`). Blend modes on a group are still applied per shape. With it all
+  tile at alpha 1 and composites the tile at the outer alpha (`SoftMaskGroup.Opacity`, composited in `EndSoftMaskGroup`). A blend mode in force when a group form is drawn now also goes through the tile (the tile is composited on the canvas the mode was pushed on, and the group's own state starts at Normal), so it applies to the finished group; a test with overlapping shapes under Multiply tells the two apart. With it all
   430 showcase pages are under the 2% round-trip threshold in both renderers (`css_filter`, `opacity` and `stacking_context` were the three that were not). Lesson: look at the
   diff image, not just the percentage.
 - **Navigation carried by file layers**: `PdfPageSource.GetLinks/GetOutline/GetNamedDestinations/GetMetadata/GetAttachments` (`Import/PdfSourceNavigation`) read
