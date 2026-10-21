@@ -69,6 +69,11 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   alternate. CMYK images are handed to the canvas as an uncompressed CMYK TIFF so a PDF canvas embeds `/DeviceCMYK`; converting them
   to RGB ourselves had no CMYK profile to use and drifted from the original (`cmyk_tiff`). The fixture ICC profile has linear curves,
   which makes "profile applied" observable: 0.5 reads as ~188, not 128. The ICC accepted-gap note is gone with this change.
+- **Tiling patterns** use `TileBrush` + `Canvas.CreateTile`: one cell (XStep x YStep, oversampled for a raster canvas) is drawn by a sub-interpreter
+  into a tile - pattern space maps to the tile by `[1 0 0 -1 -x0 y0+YStep]`, clipped to the box - and the brush transform is
+  `[1 0 0 -1 x0 y0+YStep] * pattern matrix * stream base * inverse(CTM)`. Uncoloured patterns (PaintType 2) get the `scn` colour from the
+  `[/Pattern base]` space and lock their colour operators; tiles are cached per (pattern, colour, oversample). Not handled: overlap
+  (box larger than the steps) is clipped to the cell.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

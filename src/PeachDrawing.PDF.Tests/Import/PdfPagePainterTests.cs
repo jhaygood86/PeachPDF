@@ -273,15 +273,6 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
-        public void TilingPattern_IsReportedNotDrawn()
-        {
-            var pdf = Pdf("/Pattern cs /P0 scn 0 0 100 100 re f", resources: "/Pattern << /P0 5 0 R >>", extraObjects: "<< /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 1 1] /XStep 1 /YStep 1 /Resources << >> /Length 0 >>" + "\nstream\n\nendstream");
-            Render(pdf, 1, 1, out var unsupported);
-
-            Assert.Contains("pattern type 1", unsupported);
-        }
-
-        [Fact]
         public void CmykImage_AndACmykStencilFill_ConvertToRgb()
         {
             // One pure-cyan pixel; and a 1x1 stencil painted in a CMYK fill colour (pure magenta).
