@@ -42,6 +42,7 @@ internal sealed class PdfContentInterpreter
         public int RenderMode;
         public Matrix3x2 Ctm = Matrix3x2.Identity;
         public PdfDictionary? FillPattern, StrokePattern;
+        public PaintColor? FillPatternColor, StrokePatternColor;
         public PaintBlendMode Blend = PaintBlendMode.Normal;
 
         public State Clone() => new()
@@ -51,7 +52,7 @@ internal sealed class PdfContentInterpreter
             DashPhase = DashPhase, Dash = Dash, Cap = Cap, Join = Join,
             TextFont = TextFont, Type3Font = Type3Font, ColorLocked = ColorLocked, FontSize = FontSize, CharSpacing = CharSpacing, WordSpacing = WordSpacing,
             HorizontalScale = HorizontalScale, Leading = Leading, Rise = Rise, RenderMode = RenderMode,
-            Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern, Blend = Blend,
+            Ctm = Ctm, FillPattern = FillPattern, StrokePattern = StrokePattern, FillPatternColor = FillPatternColor, StrokePatternColor = StrokePatternColor, Blend = Blend,
         };
     }
 
@@ -215,8 +216,11 @@ internal sealed class PdfContentInterpreter
                 foreach (var item in o) if (_doc.Resolve(item) is PdfInteger or PdfReal) comps.Add(_doc.NumberOf(item));
                 bool fill = op is "sc" or "scn";
                 var space = fill ? Cur.FillSpace : Cur.StrokeSpace;
-                if (space == PdfColorSpace.Pattern)
+                if (space.IsPattern)
                 {
+                    // An uncoloured pattern's own colour comes first, in the underlying space: "r g b /P1 scn".
+                    PaintColor? patternColor = space.UnderlyingSpace is { } under && comps.Count == under.Components ? under.ToColor(comps.ToArray(), 1) : null;
+                    if (fill) Cur.FillPatternColor = patternColor; else Cur.StrokePatternColor = patternColor;
                     var patterns = res is null ? null : _doc.DictOf(res, "Pattern");
                     var named = o.Count > 0 && o[^1] is PdfName pn && patterns is not null ? _doc.Resolve(patterns.GetRaw(pn.Value.TrimStart('/'))) as PdfDictionary : null;
                     if (named is null) _unsupported.Add(op + " (missing pattern)");
@@ -652,18 +656,94 @@ internal sealed class PdfContentInterpreter
         var st = Cur;
         var pattern = fill ? st.FillPattern : st.StrokePattern;
         var space = fill ? st.FillSpace : st.StrokeSpace;
-        if (space == PdfColorSpace.Pattern && pattern is null) return null;
+        if (space.IsPattern && pattern is null) return null;
         if (pattern is null) return _canvas.GetSolidBrush(space.ToColor(fill ? st.Fill : st.Stroke, fill ? st.FillAlpha : st.StrokeAlpha));
 
         int type = _doc.IntOf(pattern.GetRaw("PatternType"));
-        if (type != 2) { _unsupported.Add("pattern type " + type); return null; }
+        if (type is not (1 or 2)) { _unsupported.Add("pattern type " + type); return null; }
         var matrix = Matrix3x2.Identity;
         if (_doc.ArrayOf(pattern, "Matrix") is { Elements.Count: >= 6 } m)
             matrix = new Matrix3x2((float)_doc.NumberOf(m.Elements[0]), (float)_doc.NumberOf(m.Elements[1]), (float)_doc.NumberOf(m.Elements[2]),
                 (float)_doc.NumberOf(m.Elements[3]), (float)_doc.NumberOf(m.Elements[4]), (float)_doc.NumberOf(m.Elements[5]));
+        if (type == 1) return TilingBrush(pattern, matrix, fill ? st.FillPatternColor : st.StrokePatternColor, res);
         if (_doc.DictOf(pattern, "Shading") is not { } shading) { _unsupported.Add("pattern without shading"); return null; }
         if (PdfMeshShading.IsMesh(_doc.IntOf(shading.GetRaw("ShadingType")))) { if (!fill) _unsupported.Add("stroke with a mesh shading"); return null; }
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
+    }
+
+    readonly Dictionary<(PdfDictionary Pattern, int Color, int Scale), Image> _tiles = new(new TileKeyComparer());
+
+    sealed class TileKeyComparer : IEqualityComparer<(PdfDictionary Pattern, int Color, int Scale)>
+    {
+        public bool Equals((PdfDictionary Pattern, int Color, int Scale) a, (PdfDictionary Pattern, int Color, int Scale) b) =>
+            ReferenceEquals(a.Pattern, b.Pattern) && a.Color == b.Color && a.Scale == b.Scale;
+
+        public int GetHashCode((PdfDictionary Pattern, int Color, int Scale) k) =>
+            HashCode.Combine(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(k.Pattern), k.Color, k.Scale);
+    }
+
+    /// <summary>
+    /// A tiling pattern (PatternType 1) as a canvas tile brush: one cell (XStep by YStep) of the pattern's content is drawn into a tile - once,
+    /// however many cells show it - and the brush repeats it under the transform that carries pattern space onto the current space. A
+    /// cell's content is clipped to the cell, so a pattern whose bounding box is larger than its steps does not overlap itself.
+    /// </summary>
+    Brush? TilingBrush(PdfDictionary pattern, Matrix3x2 patternMatrix, PaintColor? uncolouredColor, PdfDictionary? res)
+    {
+        if (pattern.Stream is null) { _unsupported.Add("pattern without content"); return null; }
+        if (_doc.ArrayOf(pattern, "BBox") is not { Elements.Count: >= 4 } bb) { _unsupported.Add("pattern without a bounding box"); return null; }
+        double bx0 = Math.Min(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by0 = Math.Min(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
+        double bx1 = Math.Max(_doc.NumberOf(bb.Elements[0]), _doc.NumberOf(bb.Elements[2])), by1 = Math.Max(_doc.NumberOf(bb.Elements[1]), _doc.NumberOf(bb.Elements[3]));
+        double cellW = Math.Abs(_doc.NumberOf(pattern.GetRaw("XStep"))), cellH = Math.Abs(_doc.NumberOf(pattern.GetRaw("YStep")));
+        if (!(cellW > 0) || !(cellH > 0) || !(bx1 > bx0) || !(by1 > by0) || _formDepth >= 16) { _unsupported.Add("pattern cell"); return null; }
+        bool uncoloured = _doc.IntOf(pattern.GetRaw("PaintType")) == 2;
+        if (uncoloured && uncolouredColor is null) { _unsupported.Add("uncoloured pattern without a colour"); return null; }
+        if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return null;
+
+        var toCurrent = patternMatrix * _streamBase * inverse;
+        var toCanvas = toCurrent * _canvas.CurrentTransform;
+        double scale = Math.Sqrt(Math.Abs(toCanvas.M11 * toCanvas.M22 - toCanvas.M12 * toCanvas.M21));
+        // The tile is drawn a little larger than it shows, so a raster canvas has pixels to spare; a PDF canvas keeps it as vector content.
+        int oversample = (int)Math.Clamp(Math.Ceiling(scale * 2), 1, 16);
+        while (cellW * oversample > 4096 || cellH * oversample > 4096) oversample = Math.Max(1, oversample / 2);
+
+        var key = (pattern, uncoloured ? uncolouredColor!.Value.ToRgb().GetHashCode() ^ uncolouredColor.Value.A : 0, oversample);
+        if (!_tiles.TryGetValue(key, out var image))
+        {
+            int w = (int)Math.Max(1, Math.Ceiling(cellW * oversample)), h = (int)Math.Max(1, Math.Ceiling(cellH * oversample));
+            if (_canvas.CreateTile(w, h) is not { } tile) { _unsupported.Add("pattern tile"); return null; }
+            var g = tile.Graphics;
+            // Pattern space -> the tile: the cell's lower-left bounding-box corner is at the tile's bottom-left; y is flipped, then scaled up.
+            g.PushTransform(Matrix3x2.CreateScale((float)(w / cellW), (float)(h / cellH)));
+            g.PushTransform(new Matrix3x2(1, 0, 0, -1, (float)-bx0, (float)(by0 + cellH)));
+            var clip = g.GetGraphicsPath();
+            clip.Start(bx0, by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), by0); clip.LineTo(Math.Min(bx1, bx0 + cellW), Math.Min(by1, by0 + cellH)); clip.LineTo(bx0, Math.Min(by1, by0 + cellH)); clip.CloseFigure();
+            g.PushClip(clip);
+            var sub = new PdfContentInterpreter(_doc, g, new Rect(0, 0, w, h)) { _formDepth = _formDepth + 1 };
+            if (uncoloured) sub.UseFixedColour(uncolouredColor!.Value);
+            sub.Run(_doc.DecodeStream(pattern).Data, _doc.DictOf(pattern, "Resources") ?? res);
+            sub.Finish();
+            foreach (var f in sub._unsupported) _unsupported.Add(f);
+            g.PopClip();
+            g.PopTransform();
+            g.PopTransform();
+            g.Dispose();
+            image = tile.Image;
+            _tiles[key] = image;
+        }
+
+        // Brush space has a cell's top-left at the origin with y down; in pattern space that corner is (x0, y0 + YStep) with y up.
+        var brushToPattern = new Matrix3x2(1, 0, 0, -1, (float)bx0, (float)(by0 + cellH));
+        return new TileBrush(image, cellW, cellH, brushToPattern * toCurrent);
+    }
+
+    /// <summary>Makes every colour operator a no-op and paints in <paramref name="colour"/>: the content of an uncoloured pattern (PDF 8.7.3.3).</summary>
+    void UseFixedColour(PaintColor colour)
+    {
+        var (r, g, b) = colour.ToRgb();
+        var comps = new[] { r / 255.0, g / 255.0, b / 255.0 };
+        Cur.FillSpace = Cur.StrokeSpace = PdfColorSpace.Rgb;
+        Cur.Fill = Cur.Stroke = comps;
+        Cur.ColorLocked = true;
     }
 
     /// <summary>A brush for a shading whose space is <paramref name="shadingToBase"/> away from the stream's default space.</summary>

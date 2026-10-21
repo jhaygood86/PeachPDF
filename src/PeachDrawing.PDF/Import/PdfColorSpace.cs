@@ -31,6 +31,12 @@ internal sealed class PdfColorSpace
     /// </summary>
     public BulkConverter? Bulk { get; private set; }
 
+    /// <summary>For <c>[/Pattern base]</c>, the space the colour of an uncoloured pattern is given in; otherwise null.</summary>
+    public PdfColorSpace? UnderlyingSpace { get; private set; }
+
+    /// <summary>Whether this is the Pattern space (with or without an underlying space).</summary>
+    public bool IsPattern => Name == "Pattern";
+
     /// <summary>The family name (<c>DeviceRGB</c>, <c>Indexed</c>...).</summary>
     public string Name { get; }
 
@@ -83,7 +89,10 @@ internal sealed class PdfColorSpace
             case "/DeviceGray" or "/CalGray": return Gray;
             case "/DeviceRGB" or "/CalRGB": return Rgb;
             case "/DeviceCMYK": return Cmyk;
-            case "/Pattern": return Pattern;
+            case "/Pattern":
+                return arr.Elements.Count > 1 && Resolve(doc, arr.Elements[1], resources, depth + 1) is { IsPattern: false } over
+                    ? new PdfColorSpace("Pattern", 0, (_, a) => PaintColor.FromArgb(Alpha(a), 0, 0, 0), []) { UnderlyingSpace = over }
+                    : Pattern;
             case "/ICCBased" when arr.Elements.Count > 1 && doc.Resolve(arr.Elements[1]) is PdfDictionary icc:
                 int n = doc.IntOf(icc.GetRaw("N"));
                 if (n is 1 or 3 && FromIccProfile(doc, icc, n) is { } converting) return converting;
