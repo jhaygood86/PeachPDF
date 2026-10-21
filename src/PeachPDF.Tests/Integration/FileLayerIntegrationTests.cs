@@ -248,6 +248,54 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(Green, Pixel(canvas, 50, 20));       // the field is drawn with the file's own appearance
         }
 
+        /// <summary>A one-page file with a yellow highlight over (10,10)-(110,30) and a push button captioned "Go" below it.</summary>
+        private static byte[] AnnotatedFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(200, 200);
+            composer.CreateAnnotationBuilder(new PdfRenderContext()).AddAnnotation(page, new PdfAnnotationDefinition
+            {
+                Subtype = "Highlight",
+                Bounds = new Rect(10, 10, 100, 20),
+                ContentSize = new Size(100, 20),
+                Contents = "Look here",
+                Color = PaintColor.FromArgb(255, 255, 255, 0),
+                QuadPoints = [new(10, 10), new(110, 10), new(10, 30), new(110, 30)],
+                PaintAppearance = canvas => canvas.DrawRectangle(canvas.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 0)), 0, 0, 100, 20),
+            });
+            composer.CreateFormBuilder(new PdfRenderContext()).AddField(page, new PdfFormFieldDefinition
+            {
+                Kind = PdfFormFieldKind.PushButton,
+                Name = "go",
+                Value = "Go",
+                Bounds = new Rect(10, 50, 60, 20),
+                ContentSize = new Size(60, 20),
+                Appearance = new FlatAppearance(PaintColor.FromArgb(255, 0, 255, 0)),
+            });
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public async Task Annotations_AndPushButtons_OfTheDrawnPage_StayAnnotations()
+        {
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(AnnotatedFile()).SourcePages("1")));
+            var source = PdfPageSource.Open(pdf);
+
+            var annotation = Assert.Single(source.GetAnnotations(0));
+            Assert.Equal("Highlight", annotation.Subtype);
+            Assert.Equal("Look here", annotation.Contents);
+            Assert.Equal(4, annotation.QuadPoints.Count);
+            var button = Assert.Single(source.GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.PushButton, button.Kind);
+            Assert.Equal("Go", button.Value);
+            using var canvas = new RasterRenderContext().CreateCanvas(200, 200);
+            source.Paint(0, canvas, PdfAnnotationPaint.All);
+            Assert.Equal(((byte)255, (byte)255, (byte)0), Pixel(canvas, 60, 20));        // drawn by the annotation's own appearance
+            Assert.Equal(Green, Pixel(canvas, 30, 60));                // and the button by its own
+        }
+
         [Fact]
         public async Task FormFields_OfAPageDrawnTwice_GetNamesOfTheirOwn()
         {
@@ -297,12 +345,12 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone()
+        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone_ButItsOutputIntentIs()
         {
             var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig());
 
             Assert.Equal(new PdfSourceConformance(PeachDrawing.PDF.PdfAConformance.None, PeachDrawing.PDF.PdfXConformance.None), source.GetConformance());
-            Assert.Null(source.GetOutputIntent());
+            Assert.Equal("Stamp condition", source.GetOutputIntent()!.Identifier);
         }
 
         [Fact]

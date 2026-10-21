@@ -56,6 +56,7 @@ internal static class PdfPagePainter
         var origin = canvas.CurrentTransform;
         var far = System.Numerics.Vector2.Transform(new System.Numerics.Vector2((float)pageWidth, (float)pageHeight), origin);
         var region = new Rect(0, 0, Math.Max(1, Math.Ceiling(Math.Max(far.X, 0))), Math.Max(1, Math.Ceiling(Math.Max(far.Y, 0))));
+        tags?.Declare(page);
         var interpreter = new PdfContentInterpreter(doc, canvas, region) { Tags = tags };
         if (page.ContainsKeyRaw("StructParents")) interpreter.StructParents = doc.IntOf(page.GetRaw("StructParents"));
         canvas.PushTransform(toCanvas);

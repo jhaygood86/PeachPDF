@@ -13,7 +13,10 @@ namespace PeachDrawing.PDF
     /// <param name="Bounds">the clickable rectangle, in points from the top-left corner of the page as it is shown</param>
     /// <param name="Uri">the address it opens, or <see langword="null"/> for a link that leads somewhere in the file</param>
     /// <param name="Destination">where it leads in the file, or <see langword="null"/> for a link that opens an address</param>
-    public sealed record PdfSourceLink(Rect Bounds, string? Uri, PdfSourceDestination? Destination);
+    public sealed record PdfSourceLink(Rect Bounds, string? Uri, PdfSourceDestination? Destination)
+    {
+        internal PeachDrawing.PDF.Engine.PdfDictionary? Annotation { get; init; }
+    }
 
     /// <summary>The document information of an opened PDF; a field the file does not give is <see langword="null"/>.</summary>
     public sealed record PdfSourceMetadata(string? Title, string? Author, string? Subject, string? Keywords, string? Creator, string? Producer, string? Language = null);

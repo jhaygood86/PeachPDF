@@ -107,6 +107,19 @@ namespace PeachDrawing.PDF
         private PdfTagRecorder? _tagRecorder;
 
         /// <summary>
+        /// Starts adding annotations that are neither links nor form fields (highlights, notes, stamps, drawings) to the document's pages.
+        /// </summary>
+        /// <param name="renderContext">the context whose fonts and images the annotations' appearances are drawn with</param>
+        /// <returns>the builder to add annotations with</returns>
+        public PdfAnnotationBuilder CreateAnnotationBuilder(PdfRenderContext renderContext)
+        {
+            ArgumentNullException.ThrowIfNull(renderContext);
+
+            EnsureConfigured();
+            return new PdfAnnotationBuilder(_document, renderContext);
+        }
+
+        /// <summary>
         /// Starts adding interactive form fields to the document's pages.
         /// </summary>
         /// <param name="renderContext">the context whose fonts and images the fields' appearances are drawn with</param>

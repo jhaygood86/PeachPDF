@@ -44,6 +44,33 @@ PeachDrawing.PDF.PdfAConformance : enum Int32
   PdfA4 = 9
   PdfA4E = 10
   PdfA4F = 11
+PeachDrawing.PDF.PdfAnnotationBuilder : sealed class
+  method Void AddAnnotation(PdfComposerPage page, PdfAnnotationDefinition annotation)
+PeachDrawing.PDF.PdfAnnotationDefinition : sealed class
+  ctor()
+  property Action<Canvas> PaintAppearance { get; init; }
+  property Boolean Locked { get; init; }
+  property Boolean NoRotate { get; init; }
+  property Boolean NoZoom { get; init; }
+  property Boolean NotPrinted { get; init; }
+  property Boolean ReadOnly { get; init; }
+  property Double PixelsPerPoint { get; init; }
+  property Double? BorderWidth { get; init; }
+  property Double? Opacity { get; init; }
+  property IReadOnlyList<IReadOnlyList<PaintPoint>> InkStrokes { get; init; }
+  property IReadOnlyList<PaintPoint> LineEnds { get; init; }
+  property IReadOnlyList<PaintPoint> QuadPoints { get; init; }
+  property IReadOnlyList<PaintPoint> Vertices { get; init; }
+  property Matrix3x2? AppearanceTransform { get; init; }
+  property PaintColor? Color { get; init; }
+  property PaintColor? InteriorColor { get; init; }
+  property Rect Bounds { get; init; }
+  property Size ContentSize { get; init; }
+  property String Contents { get; init; }
+  property String IconName { get; init; }
+  property String Subject { get; init; }
+  property String Subtype { get; init; }
+  property String Title { get; init; }
 PeachDrawing.PDF.PdfAnnotationPaint : enum Int32
   All = 2
   ExceptFormFields = 1
@@ -110,6 +137,7 @@ PeachDrawing.PDF.PdfCanvas : sealed class
   property ValueTuple<Double, Double> TransformScale { get; }
 PeachDrawing.PDF.PdfComposer : sealed class
   ctor(PdfRenderContext renderContext, PdfComposerOptions options = null)
+  method PdfAnnotationBuilder CreateAnnotationBuilder(PdfRenderContext renderContext)
   method PdfComposerPage AddPage(Double widthPoints, Double heightPoints)
   method PdfFormBuilder CreateFormBuilder(PdfRenderContext renderContext, String generatedNamePrefix = Field)
   method PdfTagRecorder CreateTagRecorder(Boolean requireAlternateText = False)
@@ -191,6 +219,8 @@ PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
   property Boolean AutoFontSize { get; init; }
   property Boolean DoNotScroll { get; init; }
   property Boolean IsChecked { get; init; }
+  property Boolean MultiSelect { get; init; }
+  property Boolean Multiline { get; init; }
   property Boolean NoExport { get; init; }
   property Boolean Password { get; init; }
   property Boolean PlaceholderShown { get; init; }
@@ -209,8 +239,11 @@ PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
   property String Value { get; init; }
 PeachDrawing.PDF.PdfFormFieldKind : enum Int32
   Checkbox = 1
+  List = 4
+  PushButton = 5
   Radio = 2
   Select = 3
+  Signature = 6
   Text = 0
 PeachDrawing.PDF.PdfFormOption : struct
   ctor(String value, String label, Boolean selected)
@@ -220,8 +253,9 @@ PeachDrawing.PDF.PdfFormOption : struct
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPageSource : sealed class
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
-  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder tags = null)
+  method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagSession tags = null)
   method IReadOnlyDictionary<String, PdfSourceDestination> GetNamedDestinations()
+  method IReadOnlyList<PdfAnnotationDefinition> GetAnnotations(Int32 pageIndex, Double pixelsPerPoint = 1)
   method IReadOnlyList<PdfBookmark> GetOutline()
   method IReadOnlyList<PdfEmbeddedFile> GetAttachments()
   method IReadOnlyList<PdfFormFieldDefinition> GetFormFields(Int32 pageIndex, Double pixelsPerPoint = 1, Func<String, String> rename = null)
@@ -229,7 +263,9 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method PdfSourceConformance GetConformance()
   method PdfSourceMetadata GetMetadata()
   method PdfSourceOutputIntent GetOutputIntent()
+  method PdfTagSession CreateTagSession(PdfTagRecorder recorder)
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
+  method Void TieLinkToStructure(PdfTagSession tags, PdfSourceLink link, PdfLink added)
   method static PdfPageSource Open(Byte[] pdf)
   method static PdfPageSource Open(Stream stream)
   property Int32 PageCount { get; }
@@ -309,7 +345,30 @@ PeachDrawing.PDF.PdfSourceOutputIntent : sealed class
   property Byte[] Profile { get; init; }
   property String Identifier { get; init; }
   property String Info { get; init; }
+PeachDrawing.PDF.PdfStructureAttributeValue : sealed class
+  method static PdfStructureAttributeValue FromBoolean(Boolean flag)
+  method static PdfStructureAttributeValue FromList(IEnumerable<PdfStructureAttributeValue> items)
+  method static PdfStructureAttributeValue FromName(String name)
+  method static PdfStructureAttributeValue FromNumber(Double number)
+  method static PdfStructureAttributeValue FromText(String text)
+PeachDrawing.PDF.PdfStructureAttributes : sealed class
+  ctor(String Owner, IReadOnlyDictionary<String, PdfStructureAttributeValue> Values)
+  method PdfStructureAttributes <Clone>$()
+  method Void Deconstruct(out String Owner, out IReadOnlyDictionary<String, PdfStructureAttributeValue> Values)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(PdfStructureAttributes other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyDictionary<String, PdfStructureAttributeValue> Values { get; init; }
+  property String Owner { get; init; }
+PeachDrawing.PDF.PdfStructureDetails : sealed class
+  ctor()
+  property IReadOnlyList<PdfStructureAttributes> Attributes { get; init; }
+  property String ActualText { get; init; }
+  property String Language { get; init; }
+  property String Title { get; init; }
 PeachDrawing.PDF.PdfTagRecorder : sealed class
+  method Boolean HasElement(Object key)
   method IDisposable OpenArtifact(Canvas canvas)
   method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText = null)
   method IDisposable OpenGroupingElement(Object key, String structureType)
@@ -317,9 +376,12 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method IDisposable OpenPhantomAncestors(IReadOnlyList<ValueTuple<Object, String>> ancestors)
   method Void AttachMathMlSource(Object key, String mathMlSource)
   method Void BeginPage(PdfComposerPage page)
+  method Void DeclareElement(Object key, String structureType, Object parentKey = null, PdfStructureDetails details = null, Boolean parentIsListItemBody = False)
+  method Void DeclareListItemBody(Object itemKey)
   method Void Finish()
   method Void LinkAnnotation(Object key, PdfLink link)
   property Boolean IsInMarkedContent { get; }
+PeachDrawing.PDF.PdfTagSession : sealed class
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

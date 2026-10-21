@@ -16,20 +16,21 @@ internal sealed class PdfSourceForms(PdfSourceDocument doc)
 {
     const int ReadOnly = 1 << 0, Required = 1 << 1, NoExport = 1 << 2;
     const int Password = 1 << 13, DoNotScroll = 1 << 23, Comb = 1 << 24;
-    const int Radio = 1 << 15, PushButton = 1 << 16;
+    const int Radio = 1 << 15, PushButton = 1 << 16, Combo = 1 << 17, MultiSelect = 1 << 21, Multiline = 1 << 12;
 
     static readonly Regex FontSizeOperator = new(@"([0-9]*\.?[0-9]+)\s+Tf", RegexOptions.CultureInvariant);
 
-    /// <summary>The kind of field a widget is, or null for one that is drawn from its appearance instead (push buttons, signatures).</summary>
+    /// <summary>The kind of field a widget is, or null for one of a type this does not know.</summary>
     public static PdfFormFieldKind? KindOf(PdfSourceDocument doc, PdfDictionary widget)
     {
         int flags = doc.IntOf(Inherited(doc, widget, "Ff"));
         return doc.NameOf(Inherited(doc, widget, "FT")) switch
         {
             "/Tx" => PdfFormFieldKind.Text,
-            "/Btn" when (flags & PushButton) != 0 => null,
+            "/Btn" when (flags & PushButton) != 0 => PdfFormFieldKind.PushButton,
             "/Btn" => (flags & Radio) != 0 ? PdfFormFieldKind.Radio : PdfFormFieldKind.Checkbox,
-            "/Ch" => PdfFormFieldKind.Select,
+            "/Ch" => (flags & Combo) != 0 ? PdfFormFieldKind.Select : PdfFormFieldKind.List,
+            "/Sig" => PdfFormFieldKind.Signature,
             _ => null,
         };
     }
@@ -107,9 +108,17 @@ internal sealed class PdfSourceForms(PdfSourceDocument doc)
             {
                 Kind = kind,
                 Name = FullName(widget) is { } fullName ? (rename is null ? fullName : rename(fullName)) : null,
-                Value = kind is PdfFormFieldKind.Checkbox or PdfFormFieldKind.Radio ? onState : Text(value),
+                Value = kind switch
+                {
+                    PdfFormFieldKind.Checkbox or PdfFormFieldKind.Radio => onState,
+                    PdfFormFieldKind.PushButton => doc.DictOf(widget, "MK") is { } mk ? Text(mk.GetRaw("CA")) : null,
+                    PdfFormFieldKind.Signature => null,
+                    _ => Text(value),
+                },
                 IsChecked = on,
-                Options = kind == PdfFormFieldKind.Select ? Options(widget, value) : [],
+                Options = kind is PdfFormFieldKind.Select or PdfFormFieldKind.List ? Options(widget, value) : [],
+                Multiline = kind == PdfFormFieldKind.Text && (flags & Multiline) != 0,
+                MultiSelect = kind == PdfFormFieldKind.List && (flags & MultiSelect) != 0,
                 ReadOnly = (flags & ReadOnly) != 0 || (doc.IntOf(widget.GetRaw("F")) & 64) != 0,
                 Required = (flags & Required) != 0,
                 NoExport = (flags & NoExport) != 0,

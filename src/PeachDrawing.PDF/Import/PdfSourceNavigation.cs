@@ -196,7 +196,7 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
                 destination = Destination(annot.GetRaw("Dest"));
             }
 
-            if (uri is not null || destination is not null) links.Add(new PdfSourceLink(bounds, uri, destination));
+            if (uri is not null || destination is not null) links.Add(new PdfSourceLink(bounds, uri, destination) { Annotation = annot });
         }
         return links;
     }

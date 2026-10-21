@@ -197,6 +197,119 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// Creates the structure element for <paramref name="key"/> now, in the position it is declared, without any content of its own. Declaring
+        /// the elements of a piece of structure in their logical order before drawing it keeps that order in the tree, where creating each
+        /// when its content is first drawn would follow the order of drawing. An element opened later with the same key is this one.
+        /// </summary>
+        /// <param name="key">identifies the element</param>
+        /// <param name="structureType">the structure type, without the slash</param>
+        /// <param name="parentKey">the key of the element it goes under, or <see langword="null"/> for the current parent</param>
+        /// <param name="details">the language, actual text, title and attributes to give it, or <see langword="null"/></param>
+        /// <param name="parentIsListItemBody">whether the parent is the body (<c>LBody</c>) of the list item whose key is <paramref name="parentKey"/></param>
+        public void DeclareElement(object key, string structureType, object? parentKey = null, PdfStructureDetails? details = null, bool parentIsListItemBody = false)
+        {
+            ArgumentNullException.ThrowIfNull(key);
+            ArgumentNullException.ThrowIfNull(structureType);
+
+            PdfStructureElement? parent = null;
+            if (parentKey is not null)
+                (parentIsListItemBody ? _lbodyElementsByBox : _elementsByBox).TryGetValue(parentKey, out parent);
+
+            if (parent is not null)
+                _parentStack.Push(parent);
+            PdfStructureElement element;
+            try
+            {
+                element = GetOrCreateElement(_elementsByBox, key, structureType);
+            }
+            finally
+            {
+                if (parent is not null)
+                    _parentStack.Pop();
+            }
+
+            if (details is not null)
+                ApplyDetails(element, details);
+        }
+
+        /// <summary>Creates the body element of the list item declared with <paramref name="itemKey"/>, in its place under the item.</summary>
+        /// <param name="itemKey">the key of the list item</param>
+        public void DeclareListItemBody(object itemKey)
+        {
+            ArgumentNullException.ThrowIfNull(itemKey);
+
+            if (!_elementsByBox.TryGetValue(itemKey, out var item))
+                return;
+
+            _parentStack.Push(item);
+            try
+            {
+                GetOrCreateElement(_lbodyElementsByBox, itemKey, "LBody");
+            }
+            finally
+            {
+                _parentStack.Pop();
+            }
+        }
+
+        /// <summary>Whether a structure element has been created for <paramref name="key"/>.</summary>
+        /// <param name="key">identifies the element</param>
+        /// <returns><see langword="true"/> when it exists</returns>
+        public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
+
+        void ApplyDetails(PdfStructureElement element, PdfStructureDetails details)
+        {
+            if (!string.IsNullOrEmpty(details.Language))
+                element.Elements.SetString("/Lang", details.Language, PdfStringEncoding.Unicode);
+            if (!string.IsNullOrEmpty(details.ActualText))
+                element.Elements.SetString("/ActualText", details.ActualText, PdfStringEncoding.Unicode);
+            if (!string.IsNullOrEmpty(details.Title))
+                element.Elements.SetString("/T", details.Title, PdfStringEncoding.Unicode);
+            if (details.Attributes.Count == 0)
+                return;
+
+            PdfItem Convert(PdfStructureAttributeValue value)
+            {
+                switch (value.Kind)
+                {
+                    case "name": return new PdfName("/" + ((string)value.Value!).TrimStart('/'));
+                    case "text": return new PdfString((string)value.Value!, PdfStringEncoding.Unicode);
+                    case "boolean": return new PdfBoolean((bool)value.Value!);
+                    case "number":
+                        var number = (double)value.Value!;
+                        return number == Math.Floor(number) && Math.Abs(number) < int.MaxValue ? new PdfInteger((int)number) : new PdfReal(number);
+                    default:
+                        var array = new PdfArray(_document);
+                        foreach (var item in value.Items!)
+                            array.Elements.Add(Convert(item));
+                        return array;
+                }
+            }
+
+            var dictionaries = new List<PdfDictionary>();
+            foreach (var set in details.Attributes)
+            {
+                var dictionary = new PdfDictionary(_document);
+                dictionary.Elements.SetName("/O", "/" + set.Owner.TrimStart('/'));
+                foreach (var (name, value) in set.Values)
+                    dictionary.Elements["/" + name.TrimStart('/')] = Convert(value);
+                dictionaries.Add(dictionary);
+            }
+
+            if (dictionaries.Count == 1)
+            {
+                element.Elements.SetObject("/A", dictionaries[0]);
+            }
+            else
+            {
+                var array = new PdfArray(_document);
+                foreach (var dictionary in dictionaries)
+                    array.Elements.Add(dictionary);
+                element.Elements.SetObject("/A", array);
+            }
+        }
+
+        /// <summary>
         /// Attaches MathML markup to a formula's structure element as a PDF 2.0 associated file (ISO 32000-2 §14.13,
         /// <c>/AFRelationship /Supplement</c>), so assistive technology can read the formula, and indexes it in the document-level
         /// <c>/AF</c> array. Does nothing if the key never opened a content element, or if its source was attached already (a formula that

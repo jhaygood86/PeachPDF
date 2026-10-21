@@ -2,7 +2,7 @@
 
 namespace PeachDrawing.PDF
 {
-    /// <summary>Which of a page's annotations <see cref="PdfPageSource.Paint(int, PeachDrawing.Core.Canvas, PdfAnnotationPaint, PdfTagRecorder)"/> draws, over its content.</summary>
+    /// <summary>Which of a page's annotations <see cref="PdfPageSource.Paint(int, PeachDrawing.Core.Canvas, PdfAnnotationPaint, PdfTagSession)"/> draws, over its content.</summary>
     public enum PdfAnnotationPaint
     {
         /// <summary>None: only the page's content, which is what a page is without any markup.</summary>

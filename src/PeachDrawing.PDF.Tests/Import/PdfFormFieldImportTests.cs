@@ -79,11 +79,14 @@ namespace PeachDrawing.PDF.Tests.Import
         {
             using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { CompressContentStreams = false });
             var builder = composer.CreateFormBuilder(new PdfRenderContext());
+            var annotations = composer.CreateAnnotationBuilder(new PdfRenderContext());
             for (var i = 0; i < pages; i++)
             {
                 var page = composer.AddPage(100, 100);
                 foreach (var field in source.GetFormFields(0, 1, rename))
                     builder.AddField(page, field);
+                foreach (var annotation in source.GetAnnotations(0))
+                    annotations.AddAnnotation(page, annotation);
             }
 
             using var ms = new MemoryStream();
@@ -242,9 +245,10 @@ namespace PeachDrawing.PDF.Tests.Import
             IsColour(At(pdf, 20, 90, PdfAnnotationPaint.ExceptFormFields, out var unsupported), 0, 255, 0);   // the square annotation
             Assert.Empty(unsupported);
             IsEmpty(At(pdf, 20, 50, PdfAnnotationPaint.ExceptFormFields, out _));                    // the text field is carried, not drawn
-            IsColour(At(pdf, 70, 90, PdfAnnotationPaint.ExceptFormFields, out _), 0, 0, 255);        // but a push button is drawn
+            IsEmpty(At(pdf, 70, 90, PdfAnnotationPaint.ExceptFormFields, out _));                    // and so is the push button
             IsColour(At(pdf, 20, 50, PdfAnnotationPaint.All, out _), 255, 0, 0);                     // All draws the text field too
-            Assert.Single(PdfPageSource.Open(pdf).GetFormFields(0));                                 // and the push button is not a field
+            IsColour(At(pdf, 70, 90, PdfAnnotationPaint.All, out _), 0, 0, 255);
+            Assert.Equal([PdfFormFieldKind.Text, PdfFormFieldKind.PushButton], PdfPageSource.Open(pdf).GetFormFields(0).Select(f => f.Kind));
         }
 
         [Fact]
@@ -286,6 +290,149 @@ namespace PeachDrawing.PDF.Tests.Import
             var renamed = source.GetFormFields(0, 1, n => { names.Add(n); return n + "_2"; });
             Assert.Equal(["name"], names);
             Assert.Equal("name_2", Assert.Single(renamed).Name);
+        }
+
+        [Fact]
+        public void ListBox_IsKeptAsAListBoxWithItsSelection()
+        {
+            var pdf = Form("5 0 R", objects:
+            [
+                "<< /Type /Annot /Subtype /Widget /FT /Ch /Ff 2097152 /T (many) /V [(a) (c)] /Opt [(a) [(b) (Bee)] (c)] /Rect [10 10 90 60] /AP << /N 6 0 R >> >>",
+                TestPdf.Stream(RedBox, Red),
+            ]);
+            var source = PdfPageSource.Open(pdf);
+
+            var field = Assert.Single(source.GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.List, field.Kind);
+            Assert.True(field.MultiSelect);
+            Assert.Equal([true, false, true], field.Options.Select(o => o.Selected));
+
+            var again = Assert.Single(PdfPageSource.Open(AddToNewDocument(source)).GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.List, again.Kind);                                       // not a drop-down
+            Assert.True(again.MultiSelect);
+            Assert.Equal(["a", "b", "c"], again.Options.Select(o => o.Value));
+            Assert.Equal([true, false, true], again.Options.Select(o => o.Selected));
+        }
+
+        [Fact]
+        public void MultilineTextField_StaysMultiline()
+        {
+            var pdf = Form("5 0 R", objects: ["<< /Type /Annot /Subtype /Widget /FT /Tx /Ff 4096 /T (notes) /V (one) /Rect [10 10 90 60] >>"]);
+            var source = PdfPageSource.Open(pdf);
+
+            Assert.True(Assert.Single(source.GetFormFields(0)).Multiline);
+            Assert.True(Assert.Single(PdfPageSource.Open(AddToNewDocument(source)).GetFormFields(0)).Multiline);
+        }
+
+        [Fact]
+        public void PushButton_KeepsItsCaptionAndAppearance()
+        {
+            var pdf = Form("5 0 R", objects:
+            [
+                "<< /Type /Annot /Subtype /Widget /FT /Btn /Ff 65536 /T (go) /MK << /CA (Send) >> /Rect [10 10 90 30] /AP << /N 6 0 R >> >>",
+                TestPdf.Stream(RedBox, Red),
+            ]);
+            var source = PdfPageSource.Open(pdf);
+
+            var field = Assert.Single(source.GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.PushButton, field.Kind);
+            Assert.Equal("Send", field.Value);
+
+            var saved = AddToNewDocument(source);
+            var again = Assert.Single(PdfPageSource.Open(saved).GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.PushButton, again.Kind);
+            Assert.Equal("Send", again.Value);
+            IsColour(At(saved, 50, 80, PdfAnnotationPaint.All, out _), 255, 0, 0);
+        }
+
+        [Fact]
+        public void SignatureField_IsKeptUnsigned_WithItsAppearance()
+        {
+            var pdf = Form("5 0 R", objects:
+            [
+                "<< /Type /Annot /Subtype /Widget /FT /Sig /T (sign) /V << /Type /Sig /Filter /Adobe.PPKLite /Contents <00> >> /Rect [10 10 90 30] /AP << /N 6 0 R >> >>",
+                TestPdf.Stream(RedBox, Red),
+            ]);
+            var source = PdfPageSource.Open(pdf);
+
+            var field = Assert.Single(source.GetFormFields(0));
+            Assert.Equal(PdfFormFieldKind.Signature, field.Kind);
+            Assert.Null(field.Value);
+
+            var saved = AddToNewDocument(source);
+            Assert.Equal(PdfFormFieldKind.Signature, Assert.Single(PdfPageSource.Open(saved).GetFormFields(0)).Kind);
+            IsColour(At(saved, 50, 80, PdfAnnotationPaint.All, out _), 255, 0, 0);
+            Assert.DoesNotContain("PPKLite", System.Text.Encoding.Latin1.GetString(saved));          // the signature itself is not carried
+        }
+
+        private static byte[] AnnotationFile() => Form("5 0 R 7 0 R 9 0 R 11 0 R", objects:
+        [
+            "<< /Type /Annot /Subtype /Highlight /Rect [10 70 60 90] /QuadPoints [10 90 60 90 10 70 60 70] /C [1 1 0] /CA 0.5 /Contents (Important) /T (Ada) /Subj (Review) /F 4 /AP << /N 6 0 R >> >>",
+            TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 50 20]", "1 1 0 rg 0 0 50 20 re f"),
+            "<< /Type /Annot /Subtype /Ink /Rect [10 10 40 40] /InkList [[10 10 25 40 40 10]] /C [1 0 0] /BS << /W 2 >> /F 4 /AP << /N 8 0 R >> >>",
+            TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 30 30]", "0 0 1 rg 0 0 30 30 re f"),
+            "<< /Type /Annot /Subtype /Stamp /Name /Approved /Rect [60 10 90 30] /F 2 /AP << /N 10 0 R >> >>",
+            TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 30 20]", "0 1 0 rg 0 0 30 20 re f"),
+            "<< /Type /Annot /Subtype /Text /Rect [60 40 80 60] /Contents (No appearance) /F 4 >>",
+        ]);
+
+        [Fact]
+        public void Annotations_AreReadWithTheirMarkup_AndSkippedWithoutAppearanceOrWhenHidden()
+        {
+            var annotations = PdfPageSource.Open(AnnotationFile()).GetAnnotations(0);
+
+            Assert.Equal(["Highlight", "Ink"], annotations.Select(a => a.Subtype));            // the stamp is hidden, the note has no appearance
+            var highlight = annotations[0];
+            Assert.Equal("Important", highlight.Contents);
+            Assert.Equal("Ada", highlight.Title);
+            Assert.Equal("Review", highlight.Subject);
+            Assert.Equal(0.5, highlight.Opacity!.Value, 3);
+            Assert.Equal(255, highlight.Color!.Value.R);
+            Assert.Equal(255, highlight.Color!.Value.G);
+            Assert.Equal(0, highlight.Color!.Value.B);
+            Assert.Equal(4, highlight.QuadPoints.Count);
+            Assert.Equal(10, highlight.QuadPoints[0].X, 0.01);
+            Assert.Equal(10, highlight.QuadPoints[0].Y, 0.01);                                 // 100 - 90: from the top of the page
+            Assert.Equal(10, highlight.Bounds.X, 0.01);
+            Assert.Equal(10, highlight.Bounds.Y, 0.01);
+            Assert.Equal(2, annotations[1].BorderWidth);
+            var stroke = Assert.Single(annotations[1].InkStrokes);
+            Assert.Equal(3, stroke.Count);
+            Assert.Equal(90, stroke[0].Y, 0.01);                                               // (10, 10) up from the bottom is 90 from the top
+        }
+
+        [Fact]
+        public void Annotations_AddedToANewDocument_KeepTheirMarkupAndAppearance()
+        {
+            var saved = AddToNewDocument(PdfPageSource.Open(AnnotationFile()));
+            var again = PdfPageSource.Open(saved).GetAnnotations(0);
+
+            Assert.Equal(["Highlight", "Ink"], again.Select(a => a.Subtype));
+            Assert.Equal("Important", again[0].Contents);
+            Assert.Equal("Ada", again[0].Title);
+            Assert.Equal(4, again[0].QuadPoints.Count);
+            Assert.Equal(10, again[0].QuadPoints[0].Y, 0.01);
+            Assert.Single(again[1].InkStrokes);
+            // They are real annotations now, and drawn: the highlight's yellow and the ink's blue box show where they sit.
+            IsColour(At(saved, 30, 20, PdfAnnotationPaint.All, out _), 255, 255, 0);
+            IsColour(At(saved, 20, 80, PdfAnnotationPaint.All, out _), 0, 0, 255);
+        }
+
+        [Fact]
+        public void AnnotationOnARotatedPage_IsPlacedAndTurnedWithThePage()
+        {
+            var pdf = Form("5 0 R", width: 200, height: 100, pageExtras: "/Rotate 90", objects:
+            [
+                "<< /Type /Annot /Subtype /Square /Rect [10 20 90 40] /F 4 /AP << /N 6 0 R >> >>",
+                TestPdf.Stream(RedBox, Red),
+            ]);
+
+            var annotation = Assert.Single(PdfPageSource.Open(pdf).GetAnnotations(0));
+
+            Assert.Equal(20, annotation.Bounds.X, 0.01);
+            Assert.Equal(10, annotation.Bounds.Y, 0.01);
+            Assert.Equal(80, annotation.ContentSize.Width, 0.01);
+            Assert.NotNull(annotation.AppearanceTransform);
         }
     }
 }

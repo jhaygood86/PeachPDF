@@ -8,6 +8,9 @@ namespace PeachDrawing.PDF.Engine.AcroForms;
 /// </summary>
 internal sealed class PdfTextField : PdfAcroField
 {
+    /// <summary>Bit 13 (ISO 32000-1 Table 228) - the field takes several lines of text.</summary>
+    internal const int MultilineFlag = 1 << 12;
+
     /// <summary>Bit 14 (ISO 32000-1 Table 228) - the field's text is not echoed as the user types, and its value is not stored in the file when the form is saved.</summary>
     internal const int PasswordFlag = 1 << 13;
 
