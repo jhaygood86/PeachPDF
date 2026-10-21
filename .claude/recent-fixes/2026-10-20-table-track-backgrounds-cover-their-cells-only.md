@@ -1,5 +1,7 @@
 # Table track backgrounds cover only their own cells
 
+[#1894](https://github.com/jhaygood86/PeachPDF/issues/1894), found while removing the duplicate rowspan copies in #1839.
+
 CSS 2.1 §17.5.1 puts column groups, columns, row groups and rows on layers beneath every cell, each one's background covering
 "exactly the full area of all cells that originate in" it ("even if they span outside", which "does not affect background
 image positioning"); css-tables-3 §5.3.2 says the same by having each cell draw them. PeachPDF painted each track's whole
