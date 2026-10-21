@@ -846,6 +846,10 @@ internal sealed class PdfContentInterpreter
     /// <summary>Draws a mesh shading as an image of the mesh under the transform that carries shading space onto the canvas.</summary>
     void DrawMesh(PdfDictionary shading, Matrix3x2 shadingToBase, double alpha, PdfDictionary? res)
     {
+        // A function-based shading's /Matrix carries its domain onto the space the pattern or sh operator names.
+        if (_doc.IntOf(shading.GetRaw("ShadingType")) == 1 && _doc.ArrayOf(shading, "Matrix") is { Elements.Count: >= 6 } fm)
+            shadingToBase = new Matrix3x2((float)_doc.NumberOf(fm.Elements[0]), (float)_doc.NumberOf(fm.Elements[1]), (float)_doc.NumberOf(fm.Elements[2]),
+                (float)_doc.NumberOf(fm.Elements[3]), (float)_doc.NumberOf(fm.Elements[4]), (float)_doc.NumberOf(fm.Elements[5])) * shadingToBase;
         if (!Matrix3x2.Invert(Cur.Ctm, out var inverse)) return;
         var toCurrent = shadingToBase * _streamBase * inverse;
         var toCanvas = toCurrent * _canvas.CurrentTransform;

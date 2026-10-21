@@ -183,6 +183,15 @@ internal sealed class PdfFunction
                     idx[0] = i1; double s1 = Sample(idx, c);
                     value = s0 + (e[0] - i0) * (s1 - s0);
                 }
+                else if (m == 2)
+                {
+                    // Two inputs (a function-based shading): interpolate between the four surrounding samples.
+                    int x0 = (int)Math.Floor(e[0]), y0 = (int)Math.Floor(e[1]);
+                    int x1 = Math.Min(x0 + 1, (int)size[0] - 1), y1 = Math.Min(y0 + 1, (int)size[1] - 1);
+                    double fx = e[0] - x0, fy = e[1] - y0;
+                    double At(int ix, int iy) { idx[0] = ix; idx[1] = iy; return Sample(idx, c); }
+                    value = At(x0, y0) * (1 - fx) * (1 - fy) + At(x1, y0) * fx * (1 - fy) + At(x0, y1) * (1 - fx) * fy + At(x1, y1) * fx * fy;
+                }
                 else
                 {
                     for (int i = 0; i < m; i++) idx[i] = (int)Math.Round(e[i]);
