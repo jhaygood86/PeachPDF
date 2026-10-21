@@ -106,15 +106,15 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
-        public void InlineImages_AreSkipped_AndReported_AndDrawingContinuesAfterThem()
+        public void InlineImages_AreDrawn_AndDrawingContinuesAfterThem_AndAMalformedOneIsReported()
         {
-            var page = Draw("BI /W 1 /H 1 /CS /G /BPC 8 ID \u0001 EI 1 0 0 rg 0 0 100 100 re f");
+            var page = Draw("BI /W 1 /H 1 /CS /G /BPC 8 ID  EI 1 0 0 rg 0 0 100 100 re f");
 
-            Assert.Contains("BI", page.Unsupported);
+            Assert.DoesNotContain("BI", page.Unsupported);
             Red(page, 50, 50);
 
-            Assert.Contains("BI", Draw("BI /W 1 /H 1 ID \u0001 never terminated").Unsupported);
-            Assert.Contains("BI", Draw("BI /W 1 /H 1").Unsupported);
+            Assert.Contains("BI (malformed)", Draw("BI /W 1 /H 1 ID  never terminated").Unsupported);
+            Assert.Contains("BI (malformed)", Draw("BI /W 1 /H 1").Unsupported);
         }
 
         [Fact]

@@ -82,9 +82,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   filters produce (0 = black unless `/BlackIs1`) and feeds them back through the ordinary 1-bit path, so stencils, `/Decode`, colour spaces and masks
   all work, including a fax/JBIG2 `/Mask` or `/SMask` (`ApplyAlpha`). JBIG2 reads `/JBIG2Globals`. JPX goes through `FromJpx`: decoded to RGBA with
   its own colour (the `/ColorSpace` entry is ignored), alpha forced opaque unless `/SMaskInData` is non-zero. Fixtures were made with Pillow
-  (libtiff Group 4 strip; the same bytes as a JBIG2 MMR generic region; openjpeg) and MuPDF renders them identically. Not handled: inline images.
+  (libtiff Group 4 strip; the same bytes as a JBIG2 MMR generic region; openjpeg) and MuPDF renders them identically.
 - **Function-based shadings** (type 1) share the mesh path: a bitmap over the domain (at most 512 px a side: every pixel is a function
   evaluation), drawn under `/Matrix * pattern matrix * ...`; a sampled two-input function interpolates bilinearly.
+- **Inline images** (`BI`/`ID`/`EI`): `ReadInlineImage` builds an image dictionary (abbreviated keys kept - the image code already reads `W`/`H`/`BPC`/`CS`/`F`/`IM`)
+  with the data as its stream and draws it through the ordinary `DrawImage`. The end of the data is exact for an unfiltered image (rows x height from size and
+  colour space) because binary data can contain ` EI `; otherwise the first whitespace-delimited `EI` that is followed by text-like bytes. No `EI` = "BI (malformed)".
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

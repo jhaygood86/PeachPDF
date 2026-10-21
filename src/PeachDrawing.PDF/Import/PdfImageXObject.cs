@@ -17,7 +17,7 @@ internal static class PdfImageXObject
 {
     /// <summary>Whether the image's pixels depend on the current fill colour (a stencil), so a decoded copy cannot be reused.</summary>
     public static bool IsStencil(PdfSourceDocument doc, PdfDictionary image) =>
-        doc.Resolve(image.GetRaw("ImageMask")) is PdfBoolean { Value: true };
+        doc.Resolve(image.GetRaw("ImageMask") ?? image.GetRaw("IM")) is PdfBoolean { Value: true };
 
     /// <summary>Decodes <paramref name="image"/>; returns null and a reason in <paramref name="why"/> when it cannot be.</summary>
     public static Image? Decode(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, PaintColor fill, RenderContext context, out string? why)
