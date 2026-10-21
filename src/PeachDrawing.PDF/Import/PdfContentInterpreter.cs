@@ -1137,7 +1137,7 @@ internal sealed class PdfContentInterpreter
         if (subtype == "/Image") { BeginUntagged(); DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
-        if (Cur.FillAlpha < 1 && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
+        if ((Cur.FillAlpha < 1 || Cur.Blend != PaintBlendMode.Normal) && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
         {
             DrawTransparencyGroup(x, res);
             return;
@@ -1146,7 +1146,7 @@ internal sealed class PdfContentInterpreter
     }
 
     /// <summary>
-    /// Draws a form that is a transparency group while a constant alpha is in force: the group's content goes into a tile, painted with an
+    /// Draws a form that is a transparency group while a constant alpha or a blend mode is in force: the group's content goes into a tile, painted with an
     /// alpha of 1 (a group starts with the initial state), and the tile is composited at the alpha, so overlapping shapes in the group do not
     /// show through one another - which is what the alpha of each shape on its own would do.
     /// </summary>
@@ -1159,7 +1159,10 @@ internal sealed class PdfContentInterpreter
             int before = Cur.Pushes.Count;
             BeginGroup(null, res, null, "form group", alpha);
             if (Cur.Pushes.Count == before) { DrawForm(x, res); return; }      // no tile to draw into: the content is drawn on the page as it is
+            // The group starts from the initial state: opaque, and drawn normally onto its own backdrop (the blend mode in force outside still
+            // applies to the finished group, because the tile is composited on the canvas it was set on).
             Cur.FillAlpha = Cur.StrokeAlpha = 1;
+            Cur.Blend = PaintBlendMode.Normal;
             DrawForm(x, res);
         }
         finally { Restore(); }

@@ -68,5 +68,21 @@ namespace PeachDrawing.PDF.Tests.Import
 
             Assert.InRange(At(pdf, 10, 10, out _).A, 110, 145);
         }
+
+        [Fact]
+        public void BlendModeOnAGroup_AppliesToTheFinishedGroup()
+        {
+            // Over white, multiplied as a whole the group shows its top shape (128,255,128) where the shapes overlap; blending each shape in turn
+            // would multiply that shape with the one beneath it and leave (128,128,0).
+            var group = TestPdf.Stream("/Type /XObject /Subtype /Form /BBox [0 0 100 100] /Group << /S /Transparency >>",
+                "1 0.5 0 rg 0 0 60 60 re f 0.5 1 0.5 rg 30 30 60 60 re f");
+            var pdf = TestPdf.Build("1 g 0 0 100 100 re f /G1 gs /Fm Do", resources: "/XObject << /Fm 5 0 R >> /ExtGState << /G1 << /BM /Multiply >> >>", extraObjects: [group]);
+
+            var overlap = At(pdf, 45, 45, out var unsupported);
+            var first = At(pdf, 10, 10, out _);
+            Assert.Empty(unsupported);
+            Assert.True(Math.Abs(overlap.R - 128) < 20 && overlap.G > 230 && Math.Abs(overlap.B - 128) < 20, $"the top shape alone, multiplied with white, was {overlap}");
+            Assert.True(first.R > 230 && Math.Abs(first.G - 128) < 20 && first.B < 25, $"the first shape multiplied with white, was {first}");
+        }
     }
 }
