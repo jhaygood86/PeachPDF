@@ -43,7 +43,7 @@ namespace PeachPDF.Layout
 
                 try
                 {
-                    layer.Source.Paint(sourcePage, canvas);
+                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.ExceptFormFields);
                 }
                 finally
                 {
@@ -82,7 +82,7 @@ namespace PeachPDF.Layout
         /// Carries the navigation of the drawn pages across, once every page of the document exists: the links, which now lead to the
         /// pages their targets were drawn on, the named destinations, and the outline. Whatever leads to a page that was not drawn is left out.
         /// </summary>
-        public void Finish(PdfComposer composer)
+        public void Finish(PdfComposer composer, PdfRenderContext renderContext)
         {
             var destinations = new Dictionary<(int Layer, int SourcePage), int>();
             foreach (var (layer, sourcePage, targetPage) in _stamps)
@@ -109,6 +109,32 @@ namespace PeachPDF.Layout
                         target.AddDestinationLink(link.Bounds, name);
                     }
                 }
+            }
+
+            // The form fields of each drawn page. A page drawn more than once gets its fields again under names of their own (the first keeps
+            // the file's), while the buttons of one radio group, which share a name, stay together.
+            var forms = composer.CreateFormBuilder(renderContext, "PeachPDFFileField");
+            var names = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (layerIndex, sourcePage, targetPage) in _stamps.Distinct())
+            {
+                if (targetPage >= composer.Pages.Count)
+                    continue;
+
+                var target = composer.Pages[targetPage];
+                var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
+                string Unique(string name)
+                {
+                    if (renamed.TryGetValue(name, out var existing))
+                        return existing;
+
+                    var unique = name;
+                    for (var n = 2; !names.Add(unique); n++)
+                        unique = name + "_" + n;
+                    return renamed[name] = unique;
+                }
+
+                foreach (var field in _layers[layerIndex].Layer.Source.GetFormFields(sourcePage, target.Canvas.PixelsPerPoint, Unique))
+                    forms.AddField(target, field);
             }
 
             foreach (var layerIndex in destinations.Keys.Select(k => k.Layer).Distinct())

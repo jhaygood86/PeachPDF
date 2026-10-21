@@ -432,7 +432,7 @@ namespace PeachPDF
                 }
 
                 // The links, destinations and outline of the files drawn on the pages, now that every page they can lead to exists.
-                plan.Finish(document.Composer);
+                plan.Finish(document.Composer, _renderContext);
             }
             finally
             {

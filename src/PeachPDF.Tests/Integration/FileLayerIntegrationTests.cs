@@ -197,6 +197,68 @@ namespace PeachPDF.Tests.Integration
             return ms.ToArray();
         }
 
+        /// <summary>Draws every state of a field as a solid colour, so a rasterized copy shows which appearance came across.</summary>
+        private sealed class FlatAppearance(PaintColor colour) : IPdfFormAppearance
+        {
+            public double PixelsPerPoint => 1;
+
+            public double TextFontSizePoints(Size sizePoints, bool autoFontSize, bool isPlaceholder) => 10;
+
+            public void PaintText(Canvas canvas, Size sizePoints, string text, bool autoFontSize, int? combCells, bool isPlaceholder) =>
+                canvas.DrawRectangle(canvas.GetSolidBrush(colour), 0, 0, sizePoints.Width, sizePoints.Height);
+
+            public void PaintCheckbox(Canvas canvas, Size sizePoints, bool isChecked) => PaintText(canvas, sizePoints, "", false, null, false);
+
+            public void PaintRadio(Canvas canvas, Size sizePoints, bool isSelected) => PaintText(canvas, sizePoints, "", false, null, false);
+        }
+
+        /// <summary>A one-page file with a text field named "who" (value "Ada", green) at the top-left and a stamp-like annotation drawn by its appearance.</summary>
+        private static byte[] FormFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(200, 200);
+            composer.CreateFormBuilder(new PdfRenderContext()).AddField(page, new PdfFormFieldDefinition
+            {
+                Kind = PdfFormFieldKind.Text,
+                Name = "who",
+                Value = "Ada",
+                Bounds = new Rect(10, 10, 80, 20),
+                ContentSize = new Size(80, 20),
+                Appearance = new FlatAppearance(PaintColor.FromArgb(255, 0, 255, 0)),
+            });
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public async Task FormFields_OfTheDrawnPage_AreCarriedAcrossWithTheirAppearance()
+        {
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(FormFile()).SourcePages("1")));
+            var source = PdfPageSource.Open(pdf);
+
+            var field = Assert.Single(source.GetFormFields(0));
+
+            Assert.Equal("who", field.Name);
+            Assert.Equal("Ada", field.Value);
+            Assert.Equal(10, field.Bounds.X, 0.5);
+            Assert.Equal(10, field.Bounds.Y, 0.5);
+            using var canvas = new RasterRenderContext().CreateCanvas(200, 200);
+            source.Paint(0, canvas, PdfAnnotationPaint.All);
+            Assert.Equal(Green, Pixel(canvas, 50, 20));       // the field is drawn with the file's own appearance
+        }
+
+        [Fact]
+        public async Task FormFields_OfAPageDrawnTwice_GetNamesOfTheirOwn()
+        {
+            var pdf = await BuildAsync(2, doc => doc.OverlayFile(layer => layer.File(FormFile()).SourcePages("1").RepeatSourcePages("1")));
+            var source = PdfPageSource.Open(pdf);
+
+            var names = new[] { source.GetFormFields(0).Single().Name, source.GetFormFields(1).Single().Name };
+
+            Assert.Equal(["who", "who_2"], names);
+        }
+
         [Fact]
         public async Task Links_OfTheDrawnPage_AreCarriedAcross()
         {
