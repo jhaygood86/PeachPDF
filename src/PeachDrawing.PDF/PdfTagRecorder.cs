@@ -49,8 +49,9 @@ namespace PeachDrawing.PDF
         // /MCR handling), but nothing else stops this method's own caller from running per-occurrence.
         readonly HashSet<object> _mathMlAttached = new();
 
-        // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID.
-        readonly List<List<PdfItem>> _parentTreeEntriesByKey = new();
+        // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID, for the pages drawn since the last Finish.
+        // Keys come from the structure tree root's running counter, which annotation keys share, so recording can resume after a Finish.
+        readonly Dictionary<int, List<PdfItem>> _parentTreeEntriesByKey = new();
 
         PdfPage? _currentPage;
         int _currentPageStructParentsKey;
@@ -89,8 +90,9 @@ namespace PeachDrawing.PDF
 
             _currentPage = page.Page;
             _nextMcidOnCurrentPage = 0;
-            _currentPageStructParentsKey = _parentTreeEntriesByKey.Count;
-            _parentTreeEntriesByKey.Add(new List<PdfItem>());
+            _currentPageStructParentsKey = _root.ParentTreeNextKey;
+            _root.ParentTreeNextKey = _currentPageStructParentsKey + 1;
+            _parentTreeEntriesByKey[_currentPageStructParentsKey] = new List<PdfItem>();
             page.Page.StructParents = _currentPageStructParentsKey;
         }
 
@@ -293,15 +295,15 @@ namespace PeachDrawing.PDF
         public void Finish()
         {
             var parentTree = _root.ParentTree;
-            for (var key = 0; key < _parentTreeEntriesByKey.Count; key++)
+            foreach (var (key, entries) in _parentTreeEntriesByKey)
             {
                 var array = new PdfArray(_document);
-                foreach (var item in _parentTreeEntriesByKey[key])
+                foreach (var item in entries)
                     array.Elements.Add(item);
                 parentTree.AddNumber(key, array);
             }
 
-            _root.ParentTreeNextKey = _parentTreeEntriesByKey.Count;
+            _parentTreeEntriesByKey.Clear();
 
             if (!string.IsNullOrEmpty(_document.Info.Title))
                 _document.Catalog.ViewerPreferences.DisplayDocTitle = true;

@@ -23,7 +23,7 @@ internal sealed class PdfContentInterpreter
     readonly record struct Pushed(Push Kind, Canvas Owner, SoftMaskGroup? Group = null);
 
     /// <summary>Content being drawn into its own tile so a soft mask can be applied to it as a whole when the group ends.</summary>
-    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary? Mask, PdfDictionary? Resources, Matrix3x2 Accumulated, ColorMatrix? Transfer = null);
+    sealed record SoftMaskGroup(Canvas Outer, Canvas Content, Image ContentImage, PdfDictionary? Mask, PdfDictionary? Resources, Matrix3x2 Accumulated, ColorMatrix? Transfer = null, double Opacity = 1);
 
     sealed class State
     {
@@ -589,7 +589,7 @@ internal sealed class PdfContentInterpreter
     }
 
     /// <summary>Starts drawing into a tile of its own, to be composited through a soft mask or a colour transfer when the state ends.</summary>
-    void BeginGroup(PdfDictionary? mask, PdfDictionary? res, ColorMatrix? transfer, string what)
+    void BeginGroup(PdfDictionary? mask, PdfDictionary? res, ColorMatrix? transfer, string what, double opacity = 1)
     {
         if (_region is not { } region) { _unsupported.Add(what); return; }
         if (_canvas.CreateTile(region.Width, region.Height) is not { } tile) { _unsupported.Add(what); return; }
@@ -597,7 +597,7 @@ internal sealed class PdfContentInterpreter
         // The tile is in the canvas' own units from its origin, so it takes on everything pushed so far.
         var accumulated = _canvas.CurrentTransform;
         tile.Graphics.PushTransform(accumulated);
-        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated, transfer);
+        var group = new SoftMaskGroup(_canvas, tile.Graphics, tile.Image, mask, res, accumulated, transfer, opacity);
         Cur.Pushes.Add(new(Push.Group, _canvas, group));
         _canvas = tile.Graphics;
     }
@@ -684,6 +684,16 @@ internal sealed class PdfContentInterpreter
             if (!Matrix3x2.Invert(_canvas.CurrentTransform, out var undoTransfer)) return;
             _canvas.PushTransform(undoTransfer);
             try { _canvas.DrawImageWithColorMatrix(group.ContentImage, region, transfer); }
+            finally { _canvas.PopTransform(); }
+            return;
+        }
+
+        if (group.Mask is null)
+        {
+            // A transparency group drawn with a constant alpha: the group is composited as a whole at that alpha.
+            if (!Matrix3x2.Invert(_canvas.CurrentTransform, out var undoOpacity)) return;
+            _canvas.PushTransform(undoOpacity);
+            try { _canvas.DrawImageWithOpacity(group.ContentImage, region, group.Opacity); }
             finally { _canvas.PopTransform(); }
             return;
         }
@@ -1024,7 +1034,32 @@ internal sealed class PdfContentInterpreter
         if (subtype == "/Image") { DrawImage(x, res); return; }
         if (subtype != "/Form") { _unsupported.Add("Do " + subtype); return; }
         if (_formDepth >= 16) { _unsupported.Add("Do (form nesting)"); return; }
+        if (Cur.FillAlpha < 1 && _region is not null && _doc.DictOf(x, "Group") is { } group && _doc.NameOf(group.GetRaw("S")) == "/Transparency")
+        {
+            DrawTransparencyGroup(x, res);
+            return;
+        }
         DrawForm(x, res);
+    }
+
+    /// <summary>
+    /// Draws a form that is a transparency group while a constant alpha is in force: the group's content goes into a tile, painted with an
+    /// alpha of 1 (a group starts with the initial state), and the tile is composited at the alpha, so overlapping shapes in the group do not
+    /// show through one another - which is what the alpha of each shape on its own would do.
+    /// </summary>
+    void DrawTransparencyGroup(PdfDictionary x, PdfDictionary? res)
+    {
+        Save();
+        try
+        {
+            double alpha = Cur.FillAlpha;
+            int before = Cur.Pushes.Count;
+            BeginGroup(null, res, null, "form group", alpha);
+            if (Cur.Pushes.Count == before) { DrawForm(x, res); return; }      // no tile to draw into: the content is drawn on the page as it is
+            Cur.FillAlpha = Cur.StrokeAlpha = 1;
+            DrawForm(x, res);
+        }
+        finally { Restore(); }
     }
 
     /// <summary>Draws a form XObject: its matrix, its bounding-box clip, then its content with its own resources (or the caller's).</summary>

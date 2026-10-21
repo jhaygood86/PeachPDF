@@ -92,12 +92,19 @@ namespace PeachDrawing.PDF
         /// whether a figure with no alternative text gets an empty one (which marks it decorative) instead of none: required by the
         /// accessible PDF/A levels
         /// </param>
-        /// <returns>the recorder to open structure elements with while pages are drawn</returns>
+        /// <returns>
+        /// the recorder to open structure elements with while pages are drawn; a document has one structure tree, so asking again returns the same recorder
+        /// (and the first call's <paramref name="requireAlternateText"/> stays in force)
+        /// </returns>
         public PdfTagRecorder CreateTagRecorder(bool requireAlternateText = false)
         {
             EnsureConfigured();
-            return new PdfTagRecorder(_document, requireAlternateText);
+            return _tagRecorder ??= new PdfTagRecorder(_document, requireAlternateText);
         }
+
+        // A document has one structure tree, so every call that asks for a recorder gets the same one: a second recorder would replace the
+        // tree's single Document element and number its pages' parent-tree keys from zero again.
+        private PdfTagRecorder? _tagRecorder;
 
         /// <summary>
         /// Starts adding interactive form fields to the document's pages.
