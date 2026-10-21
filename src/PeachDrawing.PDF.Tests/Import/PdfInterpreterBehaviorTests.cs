@@ -92,7 +92,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.InRange(alpha.A, 110, 145);                          // stroke alpha 0.5
             Assert.True(styled.At(30, 50, out _).A < 20);               // the dash from /D
             Assert.Empty(Draw("/G2 gs", res).Unsupported);              // Normal and no soft mask are no-ops
-            Assert.Equal(["gs OP", "gs SMask (no group)", "gs TR"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
+            Assert.Equal(["gs OP", "gs SMask (no group)"], Draw("/G1 gs", res).Unsupported.Order(StringComparer.Ordinal));
             Assert.Empty(Draw("/Missing gs", res).Unsupported);
         }
 
@@ -474,6 +474,93 @@ namespace PeachDrawing.PDF.Tests.Import
                 TestPdf.Stream("", "800 0 0 0 750 750 d1 BT /F0 50 Tf (A) Tj ET"));
 
             Assert.NotNull(selfShowing.Unsupported);   // it returns at all: the nesting limit stops the recursion
+        }
+
+        // ------------------------------------------------------------ transfer functions
+
+        private static string Fn(string body) => TestPdf.Stream("/FunctionType 4 /Domain [0 1] /Range [0 1]", body);
+
+        private const string Clamp = "dup 0 lt { pop 0 } if dup 1 gt { pop 1 } if";
+
+        private static Page Transfer(string content, string entry, params string[] functions) =>
+            Draw(content, $"/ExtGState << /T0 << {entry} >> /Id << /TR /Identity >> /Def << /TR2 /Default >> >>", functions);
+
+        private static void Near(Page page, int x, int y, int r, int g, int b, int tolerance = 10)
+        {
+            var p = page.At(x, y, out _);
+            Assert.True(Math.Abs(p.R - r) <= tolerance && Math.Abs(p.G - g) <= tolerance && Math.Abs(p.B - b) <= tolerance && p.A > 200, $"expected about ({r},{g},{b}), was {p}");
+        }
+
+        [Fact]
+        public void TransferFunction_InvertsTheColoursPaintedUnderIt_UntilTheStateEnds()
+        {
+            var invert = Fn("{ -1 mul 1 add " + Clamp + " }");
+            var page = Transfer("q /T0 gs 1 0 0 rg 0 0 100 50 re f Q 0 0 1 rg 0 50 100 50 re f", "/TR 5 0 R", invert);
+
+            Near(page, 50, 75, 0, 255, 255);         // red inverted: cyan (the lower half, y up)
+            Near(page, 50, 25, 0, 0, 255);           // after Q the blue is drawn as it is
+        }
+
+        [Fact]
+        public void TransferFunction_ScalesAndOffsets_AndClamps()
+        {
+            var half = Fn("{ 0.5 mul 0.25 add }");
+            var page = Transfer("/T0 gs 0 g 0 0 50 100 re f 1 g 50 0 50 100 re f", "/TR 5 0 R", half);
+
+            Near(page, 25, 50, 64, 64, 64);          // 0 -> 0.25
+            Near(page, 75, 50, 191, 191, 191);       // 1 -> 0.75
+
+            var doubled = Fn("{ 2 mul " + Clamp + " }");
+            var clamped = Transfer("/T0 gs 0.25 g 0 0 50 100 re f 0.8 g 50 0 50 100 re f", "/TR 5 0 R", doubled);
+            Near(clamped, 25, 50, 128, 128, 128);    // 0.25 -> 0.5
+            Near(clamped, 75, 50, 255, 255, 255);    // 0.8 -> 1.6, clamped to 1
+        }
+
+        [Fact]
+        public void TransferFunction_PerComponent_AndAConstantOne()
+        {
+            var invert = Fn("{ -1 mul 1 add " + Clamp + " }");
+            var identity = Fn("{ }");
+            var zero = Fn("{ pop 0 }");
+            var perChannel = Transfer("/T0 gs 0.2 0.6 0.9 rg 0 0 100 100 re f", "/TR [5 0 R 6 0 R 7 0 R]", invert, identity, zero);
+
+            Near(perChannel, 50, 50, 204, 153, 0);   // R inverted (0.8), G unchanged (0.6), B forced to 0
+
+            var constant = Transfer("/T0 gs 1 0 0 rg 0 0 100 100 re f", "/TR 5 0 R", Fn("{ pop 0.5 }"));
+            Near(constant, 50, 50, 128, 128, 128);
+        }
+
+        [Fact]
+        public void TransferIdentityAndDefault_AreNoOps_AndIdentityEndsATransfer()
+        {
+            var invert = Fn("{ -1 mul 1 add " + Clamp + " }");
+            var ended = Transfer("/T0 gs 1 0 0 rg 0 0 50 100 re f /Id gs 1 0 0 rg 50 0 50 100 re f", "/TR 5 0 R", invert);
+
+            Near(ended, 25, 50, 0, 255, 255);        // inverted
+            Near(ended, 75, 50, 255, 0, 0);          // /Identity ended it: red as drawn
+
+            Near(Transfer("/Def gs 1 0 0 rg 0 0 100 100 re f", "/TR 5 0 R", invert), 50, 50, 255, 0, 0);
+            Assert.Empty(Transfer("/Def gs /Id gs", "/TR 5 0 R", invert).Unsupported);
+        }
+
+        [Fact]
+        public void TransferFunctionThatIsNotLinear_OrNotAFunction_IsReported_AndDrawingContinuesUnchanged()
+        {
+            var square = Transfer("/T0 gs 1 0 0 rg 0 0 100 100 re f", "/TR 5 0 R", Fn("{ dup mul }"));
+            Assert.Contains("gs TR (not a linear function)", square.Unsupported);
+            Near(square, 50, 50, 255, 0, 0);
+
+            Assert.Contains("gs TR (function)", Transfer("/T0 gs", "/TR 42", Fn("{ }")).Unsupported);
+            Assert.Contains("gs TR (function)", Transfer("/T0 gs", "/TR [5 0 R 99 0 R]", Fn("{ }")).Unsupported);
+        }
+
+        [Fact]
+        public void Tr2_IsPreferredOverTr_WhenBothAreGiven()
+        {
+            var invert = Fn("{ -1 mul 1 add " + Clamp + " }");
+            var page = Transfer("/T0 gs 1 0 0 rg 0 0 100 100 re f", "/TR /Identity /TR2 5 0 R", invert);
+
+            Near(page, 50, 50, 0, 255, 255);
         }
     }
 }
