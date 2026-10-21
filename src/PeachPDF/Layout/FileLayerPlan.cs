@@ -66,6 +66,18 @@ namespace PeachPDF.Layout
                 if (string.IsNullOrEmpty(options.Author)) options.Author = info.Author;
                 if (string.IsNullOrEmpty(options.Subject)) options.Subject = info.Subject;
                 if (string.IsNullOrEmpty(options.Keywords)) options.Keywords = info.Keywords;
+                if (string.IsNullOrEmpty(options.Language)) options.Language = info.Language;
+
+                // A document building to PDF/X must name its output condition and supply the profile; when it has not, the file's output intent is
+                // used. (PDF/A brings its own sRGB intent, and a document with no level writes none.) The file's own PDF/A or PDF/X claim is never
+                // adopted: the document's content is not the file's, and the document says what it conforms to itself.
+                if (options.XConformance != PeachDrawing.PDF.PdfXConformance.None && options.ColorOptions?.OutputIntentProfile is not { Length: > 0 }
+                    && layer.Source.GetOutputIntent() is { } intent)
+                {
+                    options.ColorOptions ??= new PeachDrawing.PDF.ColorOptions();
+                    options.ColorOptions.OutputIntentProfile = intent.Profile;
+                    options.ColorOptions.OutputIntentIdentifier = intent.Identifier ?? intent.Info ?? "Imported";
+                }
 
                 if (!canAttachFiles)
                     continue;

@@ -16,5 +16,16 @@ namespace PeachDrawing.PDF
     public sealed record PdfSourceLink(Rect Bounds, string? Uri, PdfSourceDestination? Destination);
 
     /// <summary>The document information of an opened PDF; a field the file does not give is <see langword="null"/>.</summary>
-    public sealed record PdfSourceMetadata(string? Title, string? Author, string? Subject, string? Keywords, string? Creator, string? Producer);
+    public sealed record PdfSourceMetadata(string? Title, string? Author, string? Subject, string? Keywords, string? Creator, string? Producer, string? Language = null);
+
+    /// <summary>The PDF/A and PDF/X levels an opened PDF claims for itself; <c>None</c> for one it does not.</summary>
+    /// <param name="PdfA">the PDF/A level named by the file's XMP metadata</param>
+    /// <param name="PdfX">the PDF/X level named by the file</param>
+    public sealed record PdfSourceConformance(PdfAConformance PdfA, PdfXConformance PdfX);
+
+    /// <summary>The output intent of an opened PDF: the print or display condition its colours are meant for, with the ICC profile that describes it.</summary>
+    /// <param name="Identifier">the output condition identifier, such as the name of a characterised printing condition</param>
+    /// <param name="Info">a human-readable description of the condition, or <see langword="null"/></param>
+    /// <param name="Profile">the ICC profile</param>
+    public sealed record PdfSourceOutputIntent(string? Identifier, string? Info, byte[] Profile);
 }

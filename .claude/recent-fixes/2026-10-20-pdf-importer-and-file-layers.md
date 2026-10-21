@@ -109,6 +109,12 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   `LBody` after `LI` is skipped (the recorder's phantom LI makes its own), an LBody that owns content directly becomes a Span, custom roles go through
   `RoleMap` (unknown ones become Div/Span). Dropped: `/Lang`, `/A` attributes, `/ActualText`, link OBJR ties, source reading order. Trap seen (not investigated): a tagged declarative document with two `Page` handlers and a layer on both pages showed only one
   set of the file's elements - each handler builds its own `StructureTagBuilder`/recorder, which probably replaces the earlier `Document` root kid. The tests stamp one page twice instead.
+- **PDF/A, PDF/X and output-intent markers**: read-only `GetConformance` (regex over the XMP `pdfaid:part/conformance` and `pdfxid:GTS_PDFXVersion` or the Info
+  `GTS_PDFXVersion`; element and attribute forms) and `GetOutputIntent` (first intent whose `DestOutputProfile` PeachImage parses). `FileLayerPlan.ApplyDocumentInformation`
+  adopts the file's `/Lang` into a blank language and the file's output intent *only* for a PDF/X target with no profile of its own. Deliberately not done: adopting the
+  file's PDF/A/PDF/X claim (the target's content is not the file's; the target's config decides), and adopting an output intent into a document with no level - the writer
+  emits `/OutputIntents` only under PDF/A (its bundled sRGB) or PDF/X (the configured profile), so a plain document cannot carry one without a writer change that would also
+  have to pick an intent subtype that does not claim a level. Fixture trap: `PdfComposerOptions` with PDF/A or PDF/X needs `CreationDate`.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
