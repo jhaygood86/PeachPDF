@@ -139,6 +139,14 @@ namespace PeachDrawing.PDF
         public IReadOnlyList<PdfFormFieldDefinition> GetFormFields(int pageIndex, double pixelsPerPoint = 1, Func<string, string>? rename = null) =>
             _forms.Fields(Page(pageIndex), pixelsPerPoint, rename);
 
+        /// <summary>The PDF/A and PDF/X levels the file claims for itself.</summary>
+        /// <returns>the levels, <c>None</c> where it claims none</returns>
+        public PdfSourceConformance GetConformance() => _navigation.Conformance();
+
+        /// <summary>The file's output intent, the condition its colours are meant for, when it has one with a readable ICC profile.</summary>
+        /// <returns>the output intent, or <see langword="null"/></returns>
+        public PdfSourceOutputIntent? GetOutputIntent() => _navigation.OutputIntent();
+
         private PdfDictionary Page(int pageIndex)
         {
             if ((uint)pageIndex >= (uint)_document.Pages.Count)

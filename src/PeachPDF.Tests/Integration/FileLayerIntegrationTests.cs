@@ -259,6 +259,52 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(["who", "who_2"], names);
         }
 
+        /// <summary>A PDF/X-4 file with an RGB output intent named "Stamp condition".</summary>
+        private static byte[] PdfXFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions
+            {
+                XConformance = PeachDrawing.PDF.PdfXConformance.X4,
+                CreationDate = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero),
+                Title = "Stamp",
+                ColorOptions = new PeachDrawing.PDF.ColorOptions { OutputIntentProfile = TestSupport.IccProfileFixture.BuildRgbProfile(), OutputIntentIdentifier = "Stamp condition" },
+            });
+            composer.AddPage(200, 200);
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        private static async Task<PdfPageSource> BuildWithAsync(byte[] file, PdfGenerateConfig config)
+        {
+            var document = await new PdfGenerator().CreateDocument(doc =>
+            {
+                doc.Page(page => page.Size(200, 200).Margin(0).Content(container => container.Text("Body")));
+                doc.OverlayFile(layer => layer.File(file).SourcePages("1"));
+            }, config);
+            using var ms = new MemoryStream();
+            document.Save(ms);
+            return PdfPageSource.Open(ms.ToArray());
+        }
+
+        [Fact]
+        public async Task PdfXDocumentWithoutAnOutputIntent_UsesTheOneOfTheFile()
+        {
+            var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig { PdfXConformance = PdfXConformance.X4, Metadata = new PdfDocumentMetadata { CreationDate = new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero) } });
+
+            Assert.Equal("Stamp condition", source.GetOutputIntent()!.Identifier);
+            Assert.Equal(PeachDrawing.PDF.PdfXConformance.X4, source.GetConformance().PdfX);       // the document's own level
+        }
+
+        [Fact]
+        public async Task FilesPdfXClaim_IsNotAdoptedByADocumentThatMakesNone()
+        {
+            var source = await BuildWithAsync(PdfXFile(), new PdfGenerateConfig());
+
+            Assert.Equal(new PdfSourceConformance(PeachDrawing.PDF.PdfAConformance.None, PeachDrawing.PDF.PdfXConformance.None), source.GetConformance());
+            Assert.Null(source.GetOutputIntent());
+        }
+
         [Fact]
         public async Task Links_OfTheDrawnPage_AreCarriedAcross()
         {

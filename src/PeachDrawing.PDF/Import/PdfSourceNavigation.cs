@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Text;
+using System.Text.RegularExpressions;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
 
@@ -247,7 +248,79 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
     {
         var info = doc.Resolve(doc.Trailer.GetRaw("Info")) as PdfDictionary;
         string? Field(string key) => info is null ? null : TextValue(info.GetRaw(key));
-        return new PdfSourceMetadata(Field("Title"), Field("Author"), Field("Subject"), Field("Keywords"), Field("Creator"), Field("Producer"));
+        return new PdfSourceMetadata(Field("Title"), Field("Author"), Field("Subject"), Field("Keywords"), Field("Creator"), Field("Producer"),
+            Catalog is { } catalog ? TextValue(catalog.GetRaw("Lang")) : null);
+    }
+
+    /// <summary>The XMP packet of the catalog's <c>/Metadata</c>, or an empty string.</summary>
+    string Xmp()
+    {
+        if (Catalog is not { } catalog || doc.Resolve(catalog.GetRaw("Metadata")) is not PdfDictionary { Stream: not null } stream) return "";
+        try { return Encoding.UTF8.GetString(doc.DecodeStream(stream).Data); }
+        catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or NotSupportedException) { return ""; }
+    }
+
+    static string? XmpValue(string xmp, string ns, string name)
+    {
+        var match = Regex.Match(xmp, ns + ":" + name + "\\s*(?:=\\s*\"([^\"]*)\"|>\\s*([^<\\s]*)\\s*<)", RegexOptions.CultureInvariant);
+        return match.Success ? (match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value) : null;
+    }
+
+    /// <summary>The PDF/A and PDF/X levels the file claims, from its XMP packet (and, for PDF/X, the information dictionary).</summary>
+    public PdfSourceConformance Conformance()
+    {
+        var xmp = Xmp();
+        var pdfA = PdfAConformance.None;
+        if (int.TryParse(XmpValue(xmp, "pdfaid", "part"), out var part))
+        {
+            var level = XmpValue(xmp, "pdfaid", "conformance")?.ToUpperInvariant();
+            pdfA = (part, level) switch
+            {
+                (1, "A") => PdfAConformance.PdfA1A,
+                (1, _) => PdfAConformance.PdfA1B,
+                (2, "A") => PdfAConformance.PdfA2A,
+                (2, "U") => PdfAConformance.PdfA2U,
+                (2, _) => PdfAConformance.PdfA2B,
+                (3, "A") => PdfAConformance.PdfA3A,
+                (3, "U") => PdfAConformance.PdfA3U,
+                (3, _) => PdfAConformance.PdfA3B,
+                (4, "E") => PdfAConformance.PdfA4E,
+                (4, "F") => PdfAConformance.PdfA4F,
+                (4, _) => PdfAConformance.PdfA4,
+                _ => PdfAConformance.None,
+            };
+        }
+
+        var version = XmpValue(xmp, "pdfxid", "GTS_PDFXVersion")
+            ?? (doc.Resolve(doc.Trailer.GetRaw("Info")) is PdfDictionary info ? TextValue(info.GetRaw("GTS_PDFXVersion")) : null)
+            ?? "";
+        var pdfX = version switch
+        {
+            _ when version.StartsWith("PDF/X-1a", StringComparison.OrdinalIgnoreCase) => PdfXConformance.X1a,
+            _ when version.StartsWith("PDF/X-3", StringComparison.OrdinalIgnoreCase) => PdfXConformance.X3,
+            _ when version.StartsWith("PDF/X-4", StringComparison.OrdinalIgnoreCase) => PdfXConformance.X4,
+            _ when version.StartsWith("PDF/X-6", StringComparison.OrdinalIgnoreCase) => PdfXConformance.X6,
+            _ => PdfXConformance.None,
+        };
+        return new PdfSourceConformance(pdfA, pdfX);
+    }
+
+    /// <summary>The first output intent that carries an ICC profile PeachImage can read, or null.</summary>
+    public PdfSourceOutputIntent? OutputIntent()
+    {
+        if (Catalog is not { } catalog || doc.ArrayOf(catalog, "OutputIntents") is not { } intents) return null;
+        foreach (var item in intents.Elements)
+        {
+            if (doc.Resolve(item) is not PdfDictionary intent || doc.DictOf(intent, "DestOutputProfile") is not { Stream: not null } profile) continue;
+            byte[] bytes;
+            try { bytes = doc.DecodeStream(profile).Data; }
+            catch (Exception ex) when (ex is InvalidOperationException or InvalidDataException or NotSupportedException) { continue; }
+            if (!PeachImage.IccColorProfile.TryCreate(bytes, out var parsed) || parsed is null) continue;
+
+            var identifier = TextValue(intent.GetRaw("OutputConditionIdentifier")) ?? TextValue(intent.GetRaw("OutputCondition"));
+            return new PdfSourceOutputIntent(identifier, TextValue(intent.GetRaw("Info")), bytes);
+        }
+        return null;
     }
 
     /// <summary>The files attached to the document through the catalog's <c>/Names /EmbeddedFiles</c> tree.</summary>
