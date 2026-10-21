@@ -107,6 +107,28 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task DeclarativeDocument_WithSeveralPageHandlers_SharesOneStructureTree()
+        {
+            // Each Page handler lays out and draws on its own, but the document has one structure tree: one Document element holding the
+            // structure of every handler, and page keys that do not repeat.
+            var document = await new PdfGenerator().CreateDocument(doc =>
+            {
+                doc.Page(page => page.Size(200, 200).Content(container => container.Text("First")));
+                doc.Page(page => page.Size(200, 200).Content(container => container.Text("Second")));
+            }, new PdfGenerateConfig { EnableTaggedPdf = true });
+
+            var file = document.Inspect();
+            var documentElement = RootKids(file).Single();
+            var leaves = Kids(documentElement).ToList();
+            var keys = file.Pages.Select(page => (int)page.Number("/StructParents")!.Value).ToList();
+
+            Assert.Equal(2, file.PageCount);
+            Assert.Equal(keys.Count, keys.Distinct().Count());
+            Assert.True(leaves.Count >= 2, "the structure of both handlers is in the tree");
+            Assert.All(keys, key => Assert.True(file.ParentTreeEntry(key) is PdfArr { Count: > 0 }));
+        }
+
+        [Fact]
         public async Task Table_ProducesTableRowCellStructure()
         {
             var config = new PdfGenerateConfig { PageSize = PageSize.A4, EnableTaggedPdf = true };
