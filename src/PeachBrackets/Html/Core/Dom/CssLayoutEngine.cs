@@ -4562,7 +4562,10 @@ namespace PeachBrackets.Html.Dom
             // line out again around it. Where they would no longer fit, the float starts the next line instead.
             // The zero-width marker a <br> leaves on the line it opens is not content to move: counted as words it
             // sent a float wider than the line to a third line and left the line before it drawn twice.
-            if (!IsAtLineStart(coordinates) && FloatOverlapsLineWords(b, coordinates.Line))
+            // A line that cannot wrap (white-space: nowrap or pre) stays one line, as in a browser: it may be wider
+            // than the column, and moving it or opening a line after it draws its words twice or on top of each other.
+            if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
+                && FloatOverlapsLineWords(b, coordinates.Line))
             {
                 if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {
@@ -4578,7 +4581,8 @@ namespace PeachBrackets.Html.Dom
                     coordinates.InlineFloats?.Remove(b);
                     OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
                         followsForcedBreak: false, isRtl);
-                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);                }
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                }
             }
 
             await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);

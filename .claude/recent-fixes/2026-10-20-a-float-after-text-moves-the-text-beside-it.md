@@ -29,6 +29,8 @@ The two-column 600px row is worse on word positions than the exclusion was. The 
 - `FloatLayoutRegressionTests.FloatWithLeftInsetAmidInlineContent_DoesNotLeakItsOwnInsetIntoTheNextSiblingsCursor` required `more` to start at the float's right edge, which put `XY` under the float. It now requires `XY` beside the float and `more` one space after `XY`.
 - `MulticolLayoutIntegrationTests.InlineTextBesideAMiddleFloat_StartsPastIt` now also checks that no word is drawn over the float.
 
+**A line that cannot wrap is not shifted:** under `white-space: nowrap` or `pre` a run wider than the column stays one line, so moving it beside a float, or opening a line after it, drew its last word twice and laid the words after the float over earlier ones (166 of 280 generated `nowrap`/`pre` documents; `main` with a `<div>` and the wrapping text case had none). `FlowFloatChild` skips the shift when any word on the line belongs to a box that does not permit wrapping (`WhiteSpacePermitsWrapping`). The float then overlaps the line as it does on `main` with a `<div>`; the `<br>` case in the [accepted gap](../accepted-gaps/a-float-wider-than-its-column-covers-the-text-after-it-under-nowrap.md) is separate.
+
 **Deliberately not done:**
 
 - Re-laying the whole line with the float first, which is Chrome's method. Words are shifted, and the float moves down when a shift would need a re-break. That can differ from Chrome when the re-break matters.

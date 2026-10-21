@@ -2140,6 +2140,73 @@ namespace PeachBrackets.Engine.Tests.Integration
 
 
 
+        // A line that cannot wrap stays one line, however wide: a float after its text must not move the words beside it or
+        // open a line after them, which drew the last word twice and laid the words after the float over earlier ones.
+        [Theory]
+        [InlineData("nowrap")]
+        [InlineData("pre")]
+        public async Task FloatAfterTextWiderThanTheColumn_UnderNoWrap_DoesNotRepeatOrOverlapWords(string whiteSpace)
+        {
+            var before = string.Join(" ", Enumerable.Range(1, 10).Select(i => $"w{i:D5}"));
+            var after = string.Join(" ", Enumerable.Range(11, 4).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:450px;columns:2;white-space:{whiteSpace}'>{before}" +
+                            $"<div style='float:right;width:60px;height:92px'>FL</div>{after}</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var words = LayoutHarness.Descendants(FindById(root, "mc")!).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(14, words.Count);
+            Assert.Equal(14, words.Select(w => w.Text).Distinct().Count());
+
+            for (var i = 0; i < words.Count; i++)
+            {
+                for (var j = i + 1; j < words.Count; j++)
+                {
+                    var a = words[i];
+                    var b = words[j];
+                    Assert.False(a.Left < b.Right - 0.5 && b.Left < a.Right - 0.5 && a.Top < b.Bottom - 0.5 && b.Top < a.Bottom - 0.5,
+                        $"{a.Text} and {b.Text} overlap");
+                }
+            }
+        }
+
+        // A line moved below the floats that crowd it clears the float's border box, not the margin edge a negative
+        // margin-bottom pulls up inside it: the words would otherwise be drawn over the float.
+        [Theory]
+        [InlineData("left")]
+        [InlineData("right")]
+        public async Task LineBelowACrowdingFloat_WithNegativeMarginBottom_ClearsItsBorderBox(string side)
+        {
+            var html = Wrap("<div id='mc' style='width:400px;columns:2'>w00001 w00002 " +
+                            $"<div id='f' style='float:{side};width:190px;height:60px;margin-bottom:-40px'>FL</div>" +
+                            "w00003 w00004 w00005 w00006 w00007 w00008 w00009 w00010 w00011 w00012</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var floated = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(12, words.Count);
+            Assert.DoesNotContain(words, w => w.Left < floated.ActualRight - 0.5 && w.Right > floated.Location.X + 0.5
+                                              && w.Top < floated.ActualBottom - 0.5 && w.Bottom > floated.Location.Y + 0.5);
+        }
+
+        // The height only bounds a container that clips: a visible-overflow container with one still divides its text into
+        // columns, which the bounded scroll container above does not.
+        [Fact]
+        public async Task TextOnlyContainerWithHeightAndVisibleOverflow_IsWrappedForColumns()
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; height:100px; overflow:visible'>{text}</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            Assert.Contains(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
         // Placing a float must end however the floats before it are sized, spaced and cleared. The shape of a hang is
         // a set of floats and margins, so a seeded sweep of them (both sides, margins of either sign on all four edges,
         // clear on some, floats taller than the column) catches the next stall that a hand-built case does not.
