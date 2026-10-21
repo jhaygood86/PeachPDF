@@ -55,7 +55,7 @@ later row repainted the cell over that row's background. With one copy kept, a l
 over the cell: measured as row 2's fill drawn after the cell's fill and text in a `rowspan="3"` table with a background on
 row 2. Keeping the *last* copy instead is not the fix: `PdfTagRecorder` parents an element under whichever element opens it
 first, so the cell's `TD` would move under the last row's `TR`. The fix belongs to table background painting
-(css-tables-3 §5.3.2: each cell draws its column-group, column, row-group and row backgrounds), tracked as its own bug.
+(css-tables-3 §5.3.2: each cell draws its column-group, column, row-group and row backgrounds): [#1894](https://github.com/jhaygood86/PeachPDF/issues/1894), fixed by [#1895](https://github.com/jhaygood86/PeachPDF/pull/1895), which should land first.
 
 ## Evidence
 

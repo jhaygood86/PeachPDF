@@ -10,4 +10,4 @@ reach the bottom of its last row on the continuation page.
 One thing the extra copies used to hide: a background on a later row the cell spans is painted over that row's whole width,
 and the cell's next copy then covered it again. Without that copy, the row's background covers the part of the cell in that
 row (its fill, borders and text) until row backgrounds are painted only behind the cells of their own row, as CSS 2.1 §17.5.1
-requires, which is being fixed separately.
+requires ([#1894](https://github.com/jhaygood86/PeachPDF/issues/1894), fixed by [#1895](https://github.com/jhaygood86/PeachPDF/pull/1895)).
