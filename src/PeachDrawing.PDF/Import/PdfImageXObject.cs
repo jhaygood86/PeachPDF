@@ -10,8 +10,8 @@ namespace PeachDrawing.PDF.Import;
 /// <summary>
 /// Turns an image XObject into a <see cref="PeachDrawing.Core.Image"/> a canvas can draw: JPEG data passes through
 /// untouched, anything else is unpacked (bit depth, <c>/Decode</c>, colour space), given its alpha (<c>/SMask</c>, a stencil
-/// or colour-key <c>/Mask</c>, or the fill colour of an image mask) and handed over as PNG. JPEG 2000, CCITT and JBIG2 data
-/// are not decoded yet.
+/// or colour-key <c>/Mask</c>, or the fill colour of an image mask) and handed over as PNG. JPEG 2000 is decoded to pixels; CCITT
+/// fax and JBIG2 data are decoded to the one-bit samples the filters produce and then read like any other 1-bit image.
 /// </summary>
 internal static class PdfImageXObject
 {
@@ -37,9 +37,21 @@ internal static class PdfImageXObject
                 return FromStream(context, decoded.Data, out why);
             return FromMaskedJpeg(doc, image, resources, context, decoded.Data, out why);
         }
-        if (decoded.ImageFilter is not null) { why = decoded.ImageFilter + " image"; return null; }
+        if (decoded.ImageFilter == "JPXDecode")
+        {
+            if (stencil) { why = "JPX stencil mask"; return null; }
+            return FromJpx(doc, image, resources, context, decoded.Data, out why);
+        }
+        bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
+        if (bilevel)
+        {
+            var bits = DecodeBilevel(doc, decoded, width, height);
+            if (bits is null) { why = decoded.ImageFilter + " image"; return null; }
+            decoded = decoded with { Data = bits, ImageFilter = null };
+        }
+        else if (decoded.ImageFilter is not null) { why = decoded.ImageFilter + " image"; return null; }
 
-        int bpc = stencil ? 1 : doc.IntOf(image.GetRaw("BitsPerComponent") ?? image.GetRaw("BPC"));
+        int bpc = stencil || bilevel ? 1 : doc.IntOf(image.GetRaw("BitsPerComponent") ?? image.GetRaw("BPC"));
         if (bpc is not (1 or 2 or 4 or 8 or 16)) { why = "bits per component"; return null; }
         double[]? decode = null;
         if (doc.Resolve(image.GetRaw("Decode") ?? image.GetRaw("D")) is PdfArray da)
@@ -172,8 +184,14 @@ internal static class PdfImageXObject
     {
         int mw = doc.IntOf(mask.GetRaw("Width")), mh = doc.IntOf(mask.GetRaw("Height"));
         var decoded = doc.DecodeStream(mask);
+        bool bilevel = decoded.ImageFilter is "CCITTFaxDecode" or "JBIG2Decode";
+        if (mw > 0 && mh > 0 && bilevel)
+        {
+            if (DecodeBilevel(doc, decoded, mw, mh) is not { } bits) return;
+            decoded = decoded with { Data = bits, ImageFilter = null };
+        }
         if (mw <= 0 || mh <= 0 || decoded.ImageFilter is not null) return;
-        int bpc = soft ? doc.IntOf(mask.GetRaw("BitsPerComponent")) : 1;
+        int bpc = soft && !bilevel ? doc.IntOf(mask.GetRaw("BitsPerComponent")) : 1;
         if (bpc is not (1 or 2 or 4 or 8 or 16)) return;
         bool invert = doc.Resolve(mask.GetRaw("Decode")) is PdfArray { Elements.Count: >= 2 } d && doc.NumberOf(d.Elements[0]) > doc.NumberOf(d.Elements[1]);
         int rowBytes = (mw * bpc + 7) / 8;
@@ -193,6 +211,97 @@ internal static class PdfImageXObject
                 rgba[o] = (byte)Math.Round(Math.Clamp(a, 0, 1) * rgba[o]);
             }
         }
+    }
+
+    /// <summary>
+    /// Decodes a CCITT fax or JBIG2 stream to what the PDF filter produces: one bit per pixel, rows padded to a byte, 0 for black
+    /// unless the fax filter's <c>/BlackIs1</c> says otherwise. Null when the data cannot be decoded.
+    /// </summary>
+    static byte[]? DecodeBilevel(PdfSourceDocument doc, PdfDecodedStream decoded, int width, int height)
+    {
+        var parms = decoded.ImageParameters;
+        PeachImage.DecoderOptions options;
+        if (decoded.ImageFilter == "CCITTFaxDecode")
+        {
+            bool Flag(string key, bool fallback) => parms is not null && doc.Resolve(parms.GetRaw(key)) is PdfBoolean flag ? flag.Value : fallback;
+            int Int(string key, int fallback) => parms is not null && parms.GetRaw(key) is { } v && doc.Resolve(v) is PdfNumber ? doc.IntOf(v) : fallback;
+            int columns = Int("Columns", 1728);
+            int rows = Int("Rows", 0);
+            options = new PeachImage.Formats.Ccitt.CcittFaxDecoderOptions
+            {
+                K = Int("K", 0),
+                Columns = columns,
+                Rows = rows > 0 ? rows : height,
+                EndOfLine = Flag("EndOfLine", false),
+                EncodedByteAlign = Flag("EncodedByteAlign", false),
+                EndOfBlock = Flag("EndOfBlock", true),
+                BlackIs1 = Flag("BlackIs1", false),
+            };
+        }
+        else
+        {
+            byte[]? globals = parms is not null && doc.Resolve(parms.GetRaw("JBIG2Globals")) is PdfDictionary g ? doc.DecodeStream(g).Data : null;
+            options = new PeachImage.Formats.Jbig2.Jbig2DecoderOptions { Embedded = true, Globals = globals };
+        }
+
+        try
+        {
+            using var gray = PeachImage.Image.Load(new MemoryStream(decoded.Data), options);
+            if (gray.PixelFormat != PeachImage.PixelFormat.Gray8) return null;
+            var pixels = gray.PixelMemory.Span;
+            int stride = (width + 7) / 8;
+            var packed = new byte[stride * height];
+            int rowsAvailable = Math.Min(height, gray.Height), columnsAvailable = Math.Min(width, gray.Width);
+            // A row the data did not reach is white (1), as the filter would leave it.
+            Array.Fill(packed, (byte)0xFF);
+            for (int y = 0; y < rowsAvailable; y++)
+                for (int x = 0; x < columnsAvailable; x++)
+                {
+                    int mask = 0x80 >> (x & 7);
+                    if (pixels[y * gray.Width + x] >= 128) packed[y * stride + (x >> 3)] |= (byte)mask;
+                    else packed[y * stride + (x >> 3)] &= (byte)~mask;
+                }
+            return packed;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A JPEG 2000 image: decoded to RGBA (the codestream carries its own colour), then given the image's soft or stencil mask.</summary>
+    static Image? FromJpx(PdfSourceDocument doc, PdfDictionary image, PdfDictionary? resources, RenderContext context, byte[] jpx, out string? why)
+    {
+        why = null;
+        byte[] rgba;
+        int width, height;
+        try
+        {
+            if (!PeachImage.Image.TryLoad(new MemoryStream(jpx), out var decoded, new PeachImage.DecoderOptions { TargetPixelFormat = PeachImage.PixelFormat.Rgba32 }) || decoded is null)
+            {
+                why = "image data could not be decoded";
+                return null;
+            }
+
+            using (decoded)
+            {
+                (width, height) = (decoded.Width, decoded.Height);
+                rgba = decoded.PixelMemory.Span.ToArray();
+            }
+        }
+        catch (Exception)
+        {
+            why = "image data could not be decoded";
+            return null;
+        }
+
+        // The codestream's own alpha channel counts only when the dictionary asks for it (/SMaskInData).
+        if (doc.IntOf(image.GetRaw("SMaskInData")) == 0)
+            for (int i = 3; i < rgba.Length; i += 4) rgba[i] = 255;
+
+        if (doc.Resolve(image.GetRaw("SMask")) is PdfDictionary soft) ApplyAlpha(doc, soft, rgba, width, height, resources, soft: true);
+        else if (doc.Resolve(image.GetRaw("Mask")) is PdfDictionary stencilMask) ApplyAlpha(doc, stencilMask, rgba, width, height, resources, soft: false);
+        return FromPixels(context, rgba, width, height, out why);
     }
 
     /// <summary>A JPEG with a soft mask or stencil mask: its pixels are decoded so the mask can become the alpha channel.</summary>

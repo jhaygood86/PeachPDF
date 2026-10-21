@@ -78,6 +78,11 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
   `DrawImageWithColorMatrix` and a per-channel matrix. The matrix exists only for a function that is a clamped line on 0..1: `FitLinear`
   fits the unclamped samples and verifies the clamped ends, otherwise "gs TR (not a linear function)". A function array uses its first
   three entries for R, G, B. With this the showcase round trip reports nothing unsupported for any of its 226 files.
+- **CCITT fax, JBIG2 and JPEG 2000 images** (PeachImage 0.6.0): `PdfImageXObject.DecodeBilevel` decodes the first two to the 1-bit rows the PDF
+  filters produce (0 = black unless `/BlackIs1`) and feeds them back through the ordinary 1-bit path, so stencils, `/Decode`, colour spaces and masks
+  all work, including a fax/JBIG2 `/Mask` or `/SMask` (`ApplyAlpha`). JBIG2 reads `/JBIG2Globals`. JPX goes through `FromJpx`: decoded to RGBA with
+  its own colour (the `/ColorSpace` entry is ignored), alpha forced opaque unless `/SMaskInData` is non-zero. Fixtures were made with Pillow
+  (libtiff Group 4 strip; the same bytes as a JBIG2 MMR generic region; openjpeg) and MuPDF renders them identically. Not handled: inline images.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 
