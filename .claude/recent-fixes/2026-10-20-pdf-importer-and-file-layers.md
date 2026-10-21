@@ -88,6 +88,13 @@ reported by `PdfPageSource.Paint` and not drawn yet (images landed in a follow-u
 - **Inline images** (`BI`/`ID`/`EI`): `ReadInlineImage` builds an image dictionary (abbreviated keys kept - the image code already reads `W`/`H`/`BPC`/`CS`/`F`/`IM`)
   with the data as its stream and draws it through the ordinary `DrawImage`. The end of the data is exact for an unfiltered image (rows x height from size and
   colour space) because binary data can contain ` EI `; otherwise the first whitespace-delimited `EI` that is followed by text-like bytes. No `EI` = "BI (malformed)".
+- **Navigation carried by file layers**: `PdfPageSource.GetLinks/GetOutline/GetNamedDestinations/GetMetadata/GetAttachments` (`Import/PdfSourceNavigation`) read
+  link annotations (`/URI`, `/GoTo`, `/Dest`), the outline, name tree and legacy `/Dests`, `/Info` and `/EmbeddedFiles`; positions go through
+  `PdfPagePainter.PageToCanvas` so a rotated page's rectangles and destination tops are in painted terms. `FileLayerPlan` records where each
+  source page was stamped and does the transfer in `Finish` (after the last page exists, since a link may point at a page stamped later):
+  generated destination names `PeachPDFFile<layer>-<page>-<top>`, outline entries kept for drawn pages plus their ancestors as heading-only
+  entries, info/attachments only fill blanks. Attachments are skipped under PDF/A-1/2 (the writer rejects them there). Forms, other
+  annotations and tags are not carried yet.
 - File-layer target ranges can use `z`, so a document with layers lays out **all** its pages before drawing the first
   (`PdfGenerator.AddPages`); a document with no layers keeps the one-page-at-a-time path unchanged.
 

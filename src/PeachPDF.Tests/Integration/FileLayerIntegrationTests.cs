@@ -171,5 +171,97 @@ namespace PeachPDF.Tests.Integration
         {
             Assert.Throws<FormatException>(() => PageRange.Parse(range, 5));
         }
+
+        /// <summary>A three-page file with a web link and a link to page 3 on page 1, a two-level outline, a named destination, information and an attachment.</summary>
+        private static byte[] NavigationFile()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions
+            {
+                Title = "Stamp title",
+                Author = "Stamp author",
+                EmbeddedFiles = { new PdfEmbeddedFile { FileName = "stamp.txt", Data = "hello"u8.ToArray(), MimeType = "text/plain" } },
+            });
+            for (var i = 0; i < 3; i++)
+                composer.AddPage(200, 200);
+            composer.Pages[0].AddLink(new Rect(10, 10, 40, 20), "https://example.com/stamp");
+            composer.AddNamedDestination("stamp-last", 2, 30);
+            composer.Pages[0].AddDestinationLink(new Rect(10, 40, 40, 20), "stamp-last");
+            composer.AddBookmarks(
+            [
+                new PdfBookmark(1, "First", true) { PageIndex = 0 },
+                new PdfBookmark(2, "Nested", false) { PageIndex = 2, TopPoints = 30 },
+                new PdfBookmark(1, "Second", false) { PageIndex = 1 },
+            ]);
+            using var ms = new MemoryStream();
+            composer.Save(ms);
+            return ms.ToArray();
+        }
+
+        [Fact]
+        public async Task Links_OfTheDrawnPage_AreCarriedAcross()
+        {
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(NavigationFile()).SourcePages("1")));
+
+            var links = PdfPageSource.Open(pdf).GetLinks(0);
+
+            var web = Assert.Single(links, l => l.Uri is not null);
+            Assert.Equal("https://example.com/stamp", web.Uri);
+            Assert.Equal(10, web.Bounds.X, 0.5);
+            Assert.Equal(10, web.Bounds.Y, 0.5);
+            // The link to page 3 of the file leads nowhere here: that page was not drawn.
+            Assert.Single(links);
+        }
+
+        [Fact]
+        public async Task LinkToADrawnPage_LeadsToThePageItWasDrawnOn()
+        {
+            // Pages 1 and 3 of the file are drawn on the document's pages 2 and 3.
+            var pdf = await BuildAsync(3, doc => doc.OverlayFile(layer => layer.File(NavigationFile()).TargetPages("2-3").SourcePages("1,3")));
+            var source = PdfPageSource.Open(pdf);
+
+            var link = Assert.Single(source.GetLinks(1), l => l.Destination is not null);
+
+            Assert.Equal(2, link.Destination!.PageIndex);
+            Assert.Equal(30, link.Destination.TopPoints, 0.5);
+            Assert.Equal(2, source.GetNamedDestinations()["stamp-last"].PageIndex);
+        }
+
+        [Fact]
+        public async Task Outline_KeepsTheEntriesOfDrawnPages_AndTheirParents()
+        {
+            // Only page 3 of the file is drawn: "Nested" survives, under "First", whose own page was not drawn.
+            var pdf = await BuildAsync(1, doc => doc.OverlayFile(layer => layer.File(NavigationFile()).SourcePages("3")));
+
+            var outline = PdfPageSource.Open(pdf).GetOutline();
+
+            Assert.Equal(["First", "Nested"], outline.Select(o => o.Title));
+            Assert.Equal([1, 2], outline.Select(o => o.Level));
+            Assert.Null(outline[0].PageIndex);
+            Assert.Equal(0, outline[1].PageIndex);
+            Assert.Equal(30, outline[1].TopPoints, 0.5);
+        }
+
+        [Fact]
+        public async Task InformationAndAttachments_FillWhatTheDocumentLacks_AndKeepWhatItHas()
+        {
+            var generator = new PdfGenerator();
+            var document = await generator.CreateDocument(doc =>
+            {
+                doc.Page(page =>
+                {
+                    page.Size(200, 200).Margin(0);
+                    page.Content(container => container.Text("body"));
+                });
+                doc.OverlayFile(layer => layer.File(NavigationFile()).SourcePages("1"));
+            }, new PdfGenerateConfig { Metadata = new PdfDocumentMetadata { Title = "Own title" } });
+            using var ms = new MemoryStream();
+            document.Save(ms);
+
+            var source = PdfPageSource.Open(ms.ToArray());
+
+            Assert.Equal("Own title", source.GetMetadata().Title);
+            Assert.Equal("Stamp author", source.GetMetadata().Author);
+            Assert.Equal("stamp.txt", Assert.Single(source.GetAttachments()).FileName);
+        }
     }
 }
