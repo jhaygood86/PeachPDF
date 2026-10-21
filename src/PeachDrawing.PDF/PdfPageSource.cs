@@ -110,18 +110,24 @@ namespace PeachDrawing.PDF
         /// <param name="pageIndex">the zero-based page number</param>
         /// <param name="canvas">the canvas to draw on</param>
         /// <param name="annotations">which annotations to draw</param>
+        /// <param name="tags">
+        /// the recorder of a document being tagged, or <see langword="null"/>. With one, the logical structure the file gave the page's content (headings,
+        /// paragraphs, lists, figures with their alternative text) is recorded under the recorder's current parent as the content is drawn, and
+        /// everything else that is drawn is marked as an artifact, so the page adds no untagged content to a tagged document. The recorder must have
+        /// had <see cref="PdfTagRecorder.BeginPage"/> called for the page being drawn on.
+        /// </param>
         /// <returns>the features of the page that could not be drawn, each named once; empty when all of it was</returns>
-        public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations)
+        public IReadOnlyCollection<string> Paint(int pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagRecorder? tags = null)
         {
             ArgumentNullException.ThrowIfNull(canvas);
-            return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations);
+            return PdfPagePainter.Paint(_document, Page(pageIndex), canvas, annotations, tags is null ? null : new PdfTagBinding(_document, tags));
         }
 
         /// <summary>
         /// The interactive form fields (text fields, check boxes, radio buttons and choice fields) with widgets on a page, ready to add to a
         /// page of a document with <see cref="PdfFormBuilder.AddField"/>. Each field is drawn by the appearance stream of its own widget, so it looks as
         /// it did in the file; a push button or signature field has no definition here and is drawn by
-        /// <see cref="Paint(int, Canvas, PdfAnnotationPaint)"/> with <see cref="PdfAnnotationPaint.ExceptFormFields"/> instead.
+        /// <see cref="Paint(int, Canvas, PdfAnnotationPaint, PdfTagRecorder)"/> with <see cref="PdfAnnotationPaint.ExceptFormFields"/> instead.
         /// </summary>
         /// <param name="pageIndex">the zero-based page number</param>
         /// <param name="pixelsPerPoint">the layout units per point of the canvas the fields' appearances are drawn at</param>

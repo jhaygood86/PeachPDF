@@ -22,7 +22,7 @@ namespace PeachPDF.Layout
         }
 
         /// <summary>Draws every layer of the requested kind that targets <paramref name="pageNumber"/> (one-based) onto the page.</summary>
-        public void Paint(PdfComposerPage page, int pageNumber, bool underlay)
+        public void Paint(PdfComposerPage page, int pageNumber, bool underlay, PdfTagRecorder? tags = null)
         {
             foreach (var (layer, targets) in _layers)
             {
@@ -43,7 +43,7 @@ namespace PeachPDF.Layout
 
                 try
                 {
-                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.ExceptFormFields);
+                    layer.Source.Paint(sourcePage, canvas, PdfAnnotationPaint.ExceptFormFields, tags);
                 }
                 finally
                 {

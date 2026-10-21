@@ -57,10 +57,10 @@ internal static class PdfAppearance
     /// target space onto the canvas), fitted to the rectangle given in that space.
     /// </summary>
     public static IReadOnlyCollection<string> Draw(PdfSourceDocument doc, PdfDictionary form, Canvas canvas, Matrix3x2 toCanvas, Rect region,
-        double x0, double y0, double x1, double y1, PdfDictionary? fallbackResources, bool variableText)
+        double x0, double y0, double x1, double y1, PdfDictionary? fallbackResources, bool variableText, PdfTagBinding? tags = null)
     {
         if (Fit(doc, form, x0, y0, x1, y1) is not { } fit) return [];
-        var interpreter = new PdfContentInterpreter(doc, canvas, region) { MarkVariableText = variableText };
+        var interpreter = new PdfContentInterpreter(doc, canvas, region) { MarkVariableText = variableText, Tags = tags };
         canvas.PushTransform(fit * toCanvas);
         try { interpreter.PaintAppearance(form, fallbackResources); }
         finally { interpreter.Finish(); canvas.PopTransform(); }
@@ -71,7 +71,7 @@ internal static class PdfAppearance
     /// Draws the visible annotations of a page (those with a normal appearance), after its content. Links and popups have nothing to draw;
     /// form field widgets are drawn only when <paramref name="includeWidgets"/> is set.
     /// </summary>
-    public static IReadOnlyCollection<string> DrawAnnotations(PdfSourceDocument doc, PdfDictionary page, Canvas canvas, Matrix3x2 pageToCanvas, Rect region, bool includeWidgets)
+    public static IReadOnlyCollection<string> DrawAnnotations(PdfSourceDocument doc, PdfDictionary page, Canvas canvas, Matrix3x2 pageToCanvas, Rect region, bool includeWidgets, PdfTagBinding? tags = null)
     {
         var unsupported = new HashSet<string>();
         if (doc.ArrayOf(page, "Annots") is not { } annots) return unsupported;
@@ -89,7 +89,7 @@ internal static class PdfAppearance
             if (doc.ArrayOf(annot, "Rect") is not { Elements.Count: >= 4 } r || Normal(doc, annot) is not { } form) continue;
 
             foreach (var why in Draw(doc, form, canvas, pageToCanvas, region, doc.NumberOf(r.Elements[0]), doc.NumberOf(r.Elements[1]),
-                         doc.NumberOf(r.Elements[2]), doc.NumberOf(r.Elements[3]), resources, variableText: false))
+                         doc.NumberOf(r.Elements[2]), doc.NumberOf(r.Elements[3]), resources, variableText: false, tags))
                 unsupported.Add(why);
         }
         return unsupported;
