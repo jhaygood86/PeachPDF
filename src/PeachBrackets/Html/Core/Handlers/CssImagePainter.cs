@@ -214,7 +214,7 @@ namespace PeachBrackets.Html.Handlers
             var (p1, p2) = ComputeGradientLine(originRect, gradient.AngleRad);
             double gdx = p2.X - p1.X, gdy = p2.Y - p1.Y;
             double gradientLength = Math.Sqrt(gdx * gdx + gdy * gdy);
-            var stops = NormalizeGradientStops(ResolveCurrentColorStops(gradient.Stops, gradient.CurrentColorStops, box, currentColor), gradientLength, box, g.PixelsPerPoint, emSizePt, gradient.ColorSpace, gradient.HueMethod);
+            var stops = NormalizeGradientStops(ResolveCurrentColorStops(gradient.Stops, gradient.CurrentColorStops, gradient.NestedCurrentColorStops, box, currentColor), gradientLength, box, g.PixelsPerPoint, emSizePt, gradient.ColorSpace, gradient.HueMethod);
             if (gradient.IsRepeating) stops = ExpandRepeatingStops(stops);
             return g.GetLinearGradientBrush(p1, p2, stops, gradient.IsRepeating);
         }
@@ -295,7 +295,7 @@ namespace PeachBrackets.Html.Handlers
                 }
             }
 
-            var radialStops = NormalizeGradientStops(ResolveCurrentColorStops(radialGradient.Stops, radialGradient.CurrentColorStops, box, currentColor), radiusX, box, pixelsPerPoint, emSizePt, radialGradient.ColorSpace, radialGradient.HueMethod);
+            var radialStops = NormalizeGradientStops(ResolveCurrentColorStops(radialGradient.Stops, radialGradient.CurrentColorStops, radialGradient.NestedCurrentColorStops, box, currentColor), radiusX, box, pixelsPerPoint, emSizePt, radialGradient.ColorSpace, radialGradient.HueMethod);
             if (radialGradient.IsRepeating) radialStops = ExpandRepeatingStops(radialStops);
             return g.GetRadialGradientBrush(center, radiusX, radiusY, radialStops, radialGradient.IsRepeating);
         }
@@ -304,7 +304,7 @@ namespace PeachBrackets.Html.Handlers
         internal static Brush GetConicGradientBrush(Canvas g, ParsedConicGradient conicGradient, Rect originRect, CssBox? box = null, PaintColor? currentColor = null)
         {
             if (conicGradient.CurrentColorStops is not null)
-                conicGradient = conicGradient.WithStops(ResolveCurrentColorStops(conicGradient.Stops, conicGradient.CurrentColorStops, box, currentColor));
+                conicGradient = conicGradient.WithStops(ResolveCurrentColorStops(conicGradient.Stops, conicGradient.CurrentColorStops, conicGradient.NestedCurrentColorStops, box, currentColor));
 
             double cx = originRect.X + conicGradient.CenterX * originRect.Width;
             double cy = originRect.Y + conicGradient.CenterY * originRect.Height;
@@ -326,7 +326,8 @@ namespace PeachBrackets.Html.Handlers
         /// color, else black. The color is only final at paint time, which is why the parser records those stops instead of resolving them.
         /// </summary>
         private static (PaintColor? PaintColor, TPosition Position, bool IsHint)[] ResolveCurrentColorStops<TPosition>(
-            (PaintColor? PaintColor, TPosition Position, bool IsHint)[] stops, IReadOnlyList<int>? currentColorStops, CssBox? box, PaintColor? currentColor)
+            (PaintColor? PaintColor, TPosition Position, bool IsHint)[] stops, IReadOnlyList<int>? currentColorStops,
+            IReadOnlyDictionary<int, Func<PaintColor, PaintColor>>? nestedCurrentColorStops, CssBox? box, PaintColor? currentColor)
         {
             if (currentColorStops is null) return stops;
 
@@ -334,7 +335,10 @@ namespace PeachBrackets.Html.Handlers
             var resolved = stops.ToArray();
 
             foreach (var index in currentColorStops)
-                resolved[index] = (color, resolved[index].Position, resolved[index].IsHint);
+            {
+                var stopColor = nestedCurrentColorStops is not null && nestedCurrentColorStops.TryGetValue(index, out var resolve) ? resolve(color) : color;
+                resolved[index] = (stopColor, resolved[index].Position, resolved[index].IsHint);
+            }
 
             return resolved;
         }

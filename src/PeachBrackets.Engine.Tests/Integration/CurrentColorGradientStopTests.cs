@@ -176,6 +176,73 @@ namespace PeachBrackets.Engine.Tests.Integration
             AssertStop(BackgroundBrushStops(box)[0], 0, 0, 255);
         }
 
+        [Theory]
+        [InlineData("linear-gradient(to right, color-mix(in srgb, currentcolor, rgb(255, 0, 0)), white)")]
+        [InlineData("radial-gradient(circle, color-mix(in srgb, currentcolor, rgb(255, 0, 0)), white)")]
+        [InlineData("conic-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)), white)")]
+        public async Task ANestedCurrentColor_IsMixedWithTheBoxsColor(string gradient)
+        {
+            var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: {gradient}"">x</div>");
+
+            var stops = BackgroundBrushStops(box);
+
+            AssertStop(stops[0], 128, 0, 128);
+            AssertStop(stops[^1], 255, 255, 255);
+        }
+
+        [Fact]
+        public async Task ANestedCurrentColor_WithTwoPositions_ResolvesBothStops()
+        {
+            var box = await BuildAsync(@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background-image: linear-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)) 0 50%, white)"">x</div>");
+
+            var stops = BackgroundBrushStops(box);
+
+            Assert.Equal(3, stops.Count);
+            AssertStop(stops[0], 128, 0, 128);
+            AssertStop(stops[1], 128, 0, 128);
+        }
+
+        [Theory]
+        [InlineData("background")]
+        [InlineData("background-color")]
+        public async Task CurrentColorMixedIntoAColorFunction_PaintsTheBackgroundColor(string property)
+        {
+            var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; {property}: color-mix(in srgb, currentcolor, rgb(255, 0, 0))"">x</div>");
+
+            var color = box.ActualBackgroundColor;
+            Assert.Equal(255, color.A);
+            Assert.InRange(color.R, 127, 128);
+            Assert.Equal(0, color.G);
+            Assert.InRange(color.B, 127, 128);
+        }
+
+        [Fact]
+        public async Task CurrentColorMixedIntoAColorFunction_FollowsAnInheritedColor_ForOutlineAndBorder()
+        {
+            var box = await BuildAsync(@"<div style=""color: rgb(0, 0, 255)""><div id=""a"" style=""width: 200px; height: 100px; border: 4px solid color-mix(in srgb, currentcolor, rgb(255, 0, 0)); outline: 2px solid color-mix(in srgb, rgb(255, 0, 0), currentcolor 50%)"">x</div></div>");
+
+            Assert.InRange(box.ActualBorderTopColor.R, 127, 128);
+            Assert.InRange(box.ActualBorderTopColor.B, 127, 128);
+            Assert.InRange(box.ActualOutlineColor.R, 127, 128);
+            Assert.InRange(box.ActualOutlineColor.B, 127, 128);
+        }
+
+        [Theory]
+        [InlineData("linear-gradient(rgb(255, 0, 0))", 255, 0, 0)]
+        [InlineData("linear-gradient(currentcolor)", 0, 0, 255)]
+        [InlineData("linear-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)))", 128, 0, 128)]
+        public async Task ASingleStopGradient_PaintsThatColourSolid(string gradient, int r, int g, int b)
+        {
+            var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background: rgb(255, 204, 204); background-image: {gradient}"">x</div>");
+
+            var image = Assert.IsType<CssImage.LinearGradient>(box.BackgroundImages![0]);
+            var stops = BackgroundBrushStops(box);
+            Assert.NotNull(image);
+            Assert.Equal(2, stops.Count);
+            AssertStop(stops[0], r, g, b);
+            AssertStop(stops[1], r, g, b);
+        }
+
         [Fact]
         public async Task TwoPositionStop_ResolvesBothStops()
         {

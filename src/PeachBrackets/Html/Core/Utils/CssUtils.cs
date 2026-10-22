@@ -177,6 +177,13 @@ namespace PeachBrackets.Html.Utils
             {
                 SetPropertyValue(valueParser, box, propertyName, baseColor);
             }
+            else if (value is not null && CssValueParser.HasNestedCurrentColor(value))
+            {
+                // color-mix(in srgb, currentcolor, red): currentcolor is the element's color wherever a <color> is accepted, so the whole
+                // function is read with it and stored as the color it comes to.
+                var resolved = valueParser.GetActualColor(value, valueParser.GetActualColor(baseColor));
+                SetPropertyValue(valueParser, box, propertyName, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"rgba({resolved.R}, {resolved.G}, {resolved.B}, {resolved.A / 255.0:0.####})"));
+            }
         }
     }
 }

@@ -319,6 +319,9 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private PaintColor ResolveBorderSideColor(string colorValue, LineStyle lineStyle)
         {
+            if (CssValueParser.HasNestedCurrentColor(colorValue))
+                return Owner.HtmlContainer!.CssParser.ParseColor(colorValue, ActualColor);
+
             if (!Keywords.CurrentColor.Equals(colorValue, StringComparison.OrdinalIgnoreCase))
                 return Owner.GetActualColor(colorValue);
 
