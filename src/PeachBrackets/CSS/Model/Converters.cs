@@ -524,7 +524,8 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter LengthOrPercentOrStretchConverter = LengthOrPercentConverter.OrStretch();
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
-        public static readonly IValueConverter OptionalPercentOrNumberConverter = PercentOrNumberConverter.OrDefault(1f);
+        public static readonly IValueConverter OptionalPercentOrNumberConverter =
+            PercentOrNumberConverter.Or(new CalcValueConverter(CalcCategory.Number | CalcCategory.Percentage)).OrDefault(1f);
 
         public static readonly IValueConverter FontSizeConverter =
             LengthOrPercentConverter.Or(Map.FontSizes.ToConverter());

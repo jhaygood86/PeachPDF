@@ -32,8 +32,9 @@ namespace PeachBrackets.Html.Dom
     internal static class LayeredBackgroundPainter
     {
         /// <summary>
-        /// What <c>currentcolor</c> means in a page or page-margin box's gradient: that box's own <c>color</c>, black without one, as its
-        /// text is. These boxes paint with the root box as their geometry stand-in, so the root's <c>color</c> is not theirs.
+        /// What <c>currentcolor</c> means in a gradient painted for a style with no resolved colour passed in: that style's own <c>color</c>,
+        /// black without one. The page and page-margin boxes pass their resolved colour (<see cref="MarginBoxRenderer.ResolveColor"/>) instead,
+        /// since they paint with the root box as their geometry stand-in and inherit their <c>color</c> from the page context.
         /// </summary>
         internal static PaintColor OwnColor(StyleDeclaration style, RenderContext renderContext) =>
             string.IsNullOrEmpty(style.Color) ? PaintColor.Black : new CssValueParser(renderContext).GetActualColor(style.Color);
@@ -69,6 +70,7 @@ namespace PeachBrackets.Html.Dom
         /// the positioning area a <c>background-attachment: fixed</c> layer uses instead of its own
         /// origin rect (CSS Backgrounds 3 §3.9)
         /// </param>
+        /// <param name="currentColor">what <c>currentcolor</c> means in a gradient layer; null for the style's own <c>color</c> (<see cref="OwnColor"/>).</param>
         /// <param name="imageCache">
         /// caches parsed+loaded image layers by raw <c>background-image</c> declaration text, since the
         /// same declaration (the same image) repeats identically on every page/every instance of a
@@ -85,7 +87,8 @@ namespace PeachBrackets.Html.Dom
             double? gradientEmSizePt,
             Func<string, Rect> resolvePositioningRect,
             Rect viewportRect,
-            Dictionary<string, IReadOnlyList<CssImage?>?> imageCache)
+            Dictionary<string, IReadOnlyList<CssImage?>?> imageCache,
+            PaintColor? currentColor = null)
         {
             if (style is null) return;
 
@@ -112,7 +115,7 @@ namespace PeachBrackets.Html.Dom
                 imageValue.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return;
 
-            var currentColor = OwnColor(style, renderContext);
+            var layerCurrentColor = currentColor ?? OwnColor(style, renderContext);
 
             if (!imageCache.TryGetValue(imageValue, out var images))
             {
@@ -161,7 +164,7 @@ namespace PeachBrackets.Html.Dom
                         g.DrawRectangle(brush, clipRect.X, clipRect.Y, clipRect.Width, clipRect.Height);
                         brush.Dispose();
                     },
-                    gradientEmSizePt: gradientEmSizePt, currentColor: currentColor);
+                    gradientEmSizePt: gradientEmSizePt, currentColor: layerCurrentColor);
             }
         }
     }

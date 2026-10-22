@@ -437,6 +437,44 @@ namespace PeachBrackets.Html.Parse
         /// Parses a plain finite <c>&lt;number&gt;</c> such as <c>350.5</c>, for a keyword-or-value property whose non-keyword side is a
         /// number (<c>font-weight</c>).
         /// </summary>
+        /// <summary>
+        /// Parses an <c>&lt;alpha-value&gt;</c> (css-color-4 section 3.2) - a number, a percentage (100% is 1), or a <c>calc()</c>-family
+        /// function that resolves to either - to its value, not yet clamped to [0, 1].
+        /// </summary>
+        public static bool TryParseAlphaValue(string? value, out double result)
+        {
+            result = 0;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+
+            var trimmed = value.Trim();
+
+            if (trimmed.EndsWith(')'))
+            {
+                using var pooledTokens = GetCssTokensPooled(trimmed);
+                List<Token> tokens = pooledTokens;
+
+                if (tokens.OnlyOrDefault() is not { Type: TokenType.Function } function || !CalcParser.IsCalcFamily(function.Data)) return false;
+
+                var node = CalcParser.Parse(function);
+                if (node is null || CalcTypeChecker.Check(node) is not (CalcCategory.Number or CalcCategory.Percentage)) return false;
+
+                // A percentage leaf resolves against 100% = 1, and a Number-category calc() has none, so no layout context is needed.
+                var evaluated = CalcEvaluator.Evaluate(node, new CalcContext(1, 0, 0));
+                if (evaluated is not { } fromCalc || !double.IsFinite(fromCalc)) return false;
+
+                result = fromCalc;
+                return true;
+            }
+
+            var isPercent = trimmed.EndsWith('%');
+            if (!double.TryParse(isPercent ? trimmed[..^1] : trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                || !double.IsFinite(number))
+                return false;
+
+            result = isPercent ? number / 100.0 : number;
+            return true;
+        }
+
         public static bool TryParseNumber(string value, out double result)
         {
             if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
@@ -745,6 +783,11 @@ namespace PeachBrackets.Html.Parse
         /// <returns>true - valid, false - invalid</returns>
         public bool IsColorValid(string colorValue)
         {
+            // currentcolor inside a colour function is only a colour once the element's color is known (it is read then, see GetActualColor(string, PaintColor)):
+            // the declaration is valid when it would be with any colour in its place.
+            if (HasNestedCurrentColor(colorValue))
+                colorValue = CurrentColorIdent.Replace(colorValue, "black");
+
             return TryGetColor(colorValue, 0, colorValue.Length, out _);
         }
 
@@ -1571,8 +1614,28 @@ namespace PeachBrackets.Html.Parse
             return new Matrix3x2((float)m11, (float)m12, (float)m21, (float)m22, (float)offsetX, (float)offsetY);
         }
 
+        private Func<PaintColor, PaintColor> AsNestedResolver(string colorText) => current => GetActualColor(colorText, current);
+
         private static bool IsCurrentColorText(string colorText) =>
             colorText.Trim().Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase);
+
+        private static readonly System.Text.RegularExpressions.Regex CurrentColorIdent =
+            new(@"(?<![\w-])currentcolor(?![\w-])", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        /// <summary>Whether <paramref name="colorText"/> names <c>currentcolor</c> as an operand of a colour function, e.g. <c>color-mix(in srgb, currentcolor, red)</c> (a bare <c>currentcolor</c> is not nested).</summary>
+        internal static bool HasNestedCurrentColor(string colorText) =>
+            colorText.IndexOf('(') >= 0 && !IsCurrentColorText(colorText) && CurrentColorIdent.IsMatch(colorText);
+
+        /// <summary>
+        /// <paramref name="colorText"/> read as a colour with every <c>currentcolor</c> in it standing for <paramref name="currentColor"/> (CSS Color 4: it is
+        /// the element's own <c>color</c> wherever a <c>&lt;color&gt;</c> is accepted).
+        /// </summary>
+        internal PaintColor GetActualColor(string colorText, PaintColor currentColor)
+        {
+            var substitute = string.Create(System.Globalization.CultureInfo.InvariantCulture,
+                $"rgb({currentColor.R} {currentColor.G} {currentColor.B} / {currentColor.A / 255.0:0.####})");
+            return GetActualColor(CurrentColorIdent.Replace(colorText, substitute));
+        }
 
         private ParsedLinearGradient? ParseLinearGradient(string value)
         {
@@ -1633,11 +1696,12 @@ namespace PeachBrackets.Html.Parse
             }
 
             var stopGroups = args.Skip(stopOffset).ToList();
-            if (stopGroups.Count < 2)
+            if (stopGroups.Count < 1)
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
             var currentColorStops = new List<int>();
+            var nestedCurrentColorStops = new Dictionary<int, Func<PaintColor, PaintColor>>();
 
             foreach (var group in stopGroups)
             {
@@ -1685,14 +1749,25 @@ namespace PeachBrackets.Html.Parse
                 // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
                 // takes that color there (CssImagePainter.ResolveCurrentColorStops).
                 var isCurrentColor = IsCurrentColorText(colorText);
-                var color = isCurrentColor ? default : GetActualColor(colorText);
+                var isNestedCurrentColor = HasNestedCurrentColor(colorText);
+                var color = isCurrentColor || isNestedCurrentColor ? default : GetActualColor(colorText);
                 if (isCurrentColor) currentColorStops.Add(stops.Count);
+                if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
                 {
                     if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                     stops.Add((color, position2, IsHint: false));
                 }
+            }
+
+            // A single colour stop is a solid fill (CSS Images 3 §3.4: the colour stop list may be one stop): it is drawn as that stop twice.
+            if (stops.Count == 1 && !stops[0].IsHint)
+            {
+                if (currentColorStops.Contains(0)) currentColorStops.Add(1);
+                if (nestedCurrentColorStops.TryGetValue(0, out var nestedResolver)) nestedCurrentColorStops[1] = nestedResolver;
+                stops.Add((stops[0].PaintColor, null, IsHint: false));
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -1703,6 +1778,7 @@ namespace PeachBrackets.Html.Parse
                 AngleRad = angleRad,
                 Stops = stops.ToArray(),
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = linearColorSpace,
                 HueMethod = linearHueMethod,
@@ -1867,11 +1943,12 @@ namespace PeachBrackets.Html.Parse
             }
 
             var stopGroups = args.Skip(stopOffset).ToList();
-            if (stopGroups.Count < 2)
+            if (stopGroups.Count < 1)
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, Length? Position, bool IsHint)>();
             var currentColorStops = new List<int>();
+            var nestedCurrentColorStops = new Dictionary<int, Func<PaintColor, PaintColor>>();
 
             foreach (var group in stopGroups)
             {
@@ -1918,14 +1995,25 @@ namespace PeachBrackets.Html.Parse
                 // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
                 // takes that color there (CssImagePainter.ResolveCurrentColorStops).
                 var isCurrentColor = IsCurrentColorText(colorText);
-                var color = isCurrentColor ? default : GetActualColor(colorText);
+                var isNestedCurrentColor = HasNestedCurrentColor(colorText);
+                var color = isCurrentColor || isNestedCurrentColor ? default : GetActualColor(colorText);
                 if (isCurrentColor) currentColorStops.Add(stops.Count);
+                if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
                 {
                     if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                     stops.Add((color, position2, IsHint: false));
                 }
+            }
+
+            // A single colour stop is a solid fill (CSS Images 3 §3.4: the colour stop list may be one stop): it is drawn as that stop twice.
+            if (stops.Count == 1 && !stops[0].IsHint)
+            {
+                if (currentColorStops.Contains(0)) currentColorStops.Add(1);
+                if (nestedCurrentColorStops.TryGetValue(0, out var nestedResolver)) nestedCurrentColorStops[1] = nestedResolver;
+                stops.Add((stops[0].PaintColor, null, IsHint: false));
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -1941,6 +2029,7 @@ namespace PeachBrackets.Html.Parse
                 ExplicitRadiusY = explicitRadiusY,
                 Stops = stops.ToArray(),
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = radialColorSpace,
                 HueMethod = radialHueMethod,
@@ -2031,11 +2120,12 @@ namespace PeachBrackets.Html.Parse
             }
 
             var stopGroups = args.Skip(stopOffset).ToList();
-            if (stopGroups.Count < 2)
+            if (stopGroups.Count < 1)
                 return null;
 
             var stops = new List<(PaintColor? PaintColor, double? PositionRad, bool IsHint)>();
             var currentColorStops = new List<int>();
+            var nestedCurrentColorStops = new Dictionary<int, Func<PaintColor, PaintColor>>();
 
             foreach (var group in stopGroups)
             {
@@ -2079,14 +2169,25 @@ namespace PeachBrackets.Html.Parse
                 // currentcolor is the box's own color, which is only final when the gradient paints: the stop is recorded and
                 // takes that color there (CssImagePainter.ResolveCurrentColorStops).
                 var isCurrentColor = IsCurrentColorText(colorText);
-                var color = isCurrentColor ? default : GetActualColor(colorText);
+                var isNestedCurrentColor = HasNestedCurrentColor(colorText);
+                var color = isCurrentColor || isNestedCurrentColor ? default : GetActualColor(colorText);
                 if (isCurrentColor) currentColorStops.Add(stops.Count);
+                if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                 stops.Add((color, position1, IsHint: false));
                 if (position2.HasValue)
                 {
                     if (isCurrentColor) currentColorStops.Add(stops.Count);
+                    if (isNestedCurrentColor) { currentColorStops.Add(stops.Count); nestedCurrentColorStops[stops.Count] = AsNestedResolver(colorText); }
                     stops.Add((color, position2, IsHint: false));
                 }
+            }
+
+            // A single colour stop is a solid fill (CSS Images 3 §3.4: the colour stop list may be one stop): it is drawn as that stop twice.
+            if (stops.Count == 1 && !stops[0].IsHint)
+            {
+                if (currentColorStops.Contains(0)) currentColorStops.Add(1);
+                if (nestedCurrentColorStops.TryGetValue(0, out var nestedResolver)) nestedCurrentColorStops[1] = nestedResolver;
+                stops.Add((stops[0].PaintColor, null, IsHint: false));
             }
 
             if (stops.Count(s => !s.IsHint) < 2)
@@ -2099,6 +2200,7 @@ namespace PeachBrackets.Html.Parse
                 CenterY = centerY,
                 Stops = stops.ToArray(),
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
+                NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,
                 ColorSpace = conicColorSpace,
                 HueMethod = conicHueMethod,

@@ -424,16 +424,18 @@ namespace PeachBrackets.Html
         /// order is preserved (a grouping rule's children are yielded at the grouping rule's own
         /// position), so last-declared-wins collection stays correct.
         /// </summary>
-        internal IEnumerable<IRule> EnumerateRulesRecursive()
+        /// <param name="media">When given, an <c>@media</c> block is descended only if its query matches this context, for a caller whose
+        /// rules apply document-wide (<c>@keyframes</c>) and so have no candidate box to evaluate the query against later.</param>
+        internal IEnumerable<IRule> EnumerateRulesRecursive(MediaQueryContext? media = null)
         {
             foreach (var stylesheet in Stylesheets)
             {
-                foreach (var rule in FlattenRules(stylesheet.Rules))
+                foreach (var rule in FlattenRules(stylesheet.Rules, media))
                     yield return rule;
             }
         }
 
-        internal IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules)
+        internal IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules, MediaQueryContext? media = null)
         {
             foreach (var rule in rules)
             {
@@ -442,20 +444,21 @@ namespace PeachBrackets.Html
                 switch (rule)
                 {
                     case ILayerRule layerRule:
-                        foreach (var child in FlattenRules(layerRule.Rules))
+                        foreach (var child in FlattenRules(layerRule.Rules, media))
                             yield return child;
                         break;
                     case IMediaRule mediaRule:
-                        foreach (var child in FlattenRules(mediaRule.Rules))
-                            yield return child;
+                        if (media is not { } mediaContext || MediaQueryMatcher.Matches([mediaRule.Media], mediaContext))
+                            foreach (var child in FlattenRules(mediaRule.Rules, media))
+                                yield return child;
                         break;
                     case IContainerRule containerRule:
-                        foreach (var child in FlattenRules(containerRule.Rules))
+                        foreach (var child in FlattenRules(containerRule.Rules, media))
                             yield return child;
                         break;
                     case ISupportsRule supportsRule:
                         if (supportsRule.Condition.Check(_renderContext))
-                            foreach (var child in FlattenRules(supportsRule.Rules))
+                            foreach (var child in FlattenRules(supportsRule.Rules, media))
                                 yield return child;
                         break;
                 }

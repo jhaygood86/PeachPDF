@@ -362,20 +362,11 @@ namespace PeachBrackets.Svg
                 return false;
             }
 
-            var trimmed = value.Trim();
-            var isPercent = trimmed.EndsWith('%');
-
-            if (isPercent)
-                trimmed = trimmed[..^1];
-
-            if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            if (!CssValueParser.TryParseAlphaValue(value, out var v))
             {
                 opacity = 1.0;
                 return false;
             }
-
-            if (isPercent)
-                v /= 100.0;
 
             opacity = Math.Clamp(v, 0.0, 1.0);
             return true;
@@ -426,7 +417,7 @@ namespace PeachBrackets.Svg
         /// <c>currentColor</c> (resolved against <paramref name="contextColor"/> - the CSS <c>color</c>
         /// property of the inline <c>&lt;svg&gt;</c>'s HTML ancestor for inline SVG, or black for
         /// standalone/<c>&lt;img&gt;</c> SVG, which has no CSS context to inherit from), or a solid
-        /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor"/>).
+        /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor(string)"/>).
         /// </summary>
         public static SvgPaint ParsePaint(string value, RenderContext renderContext, PaintColor contextColor)
         {

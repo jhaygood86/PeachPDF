@@ -154,6 +154,12 @@ namespace PeachBrackets.Html.Parse
             return _valueParser.GetActualColor(colorStr);
         }
 
+        /// <summary><see cref="ParseColor(string)"/> with every <c>currentcolor</c> in a colour function standing for <paramref name="currentColor"/>.</summary>
+        public PaintColor ParseColor(string colorStr, PaintColor currentColor)
+        {
+            return _valueParser.GetActualColor(colorStr, currentColor);
+        }
+
         public bool IsColorValid(string colorValue)
         {
             return _valueParser.IsColorValid(colorValue);

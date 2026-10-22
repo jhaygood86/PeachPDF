@@ -319,6 +319,9 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private PaintColor ResolveBorderSideColor(string colorValue, LineStyle lineStyle)
         {
+            if (CssValueParser.HasNestedCurrentColor(colorValue))
+                return Owner.HtmlContainer!.CssParser.ParseColor(colorValue, ActualColor);
+
             if (!Keywords.CurrentColor.Equals(colorValue, StringComparison.OrdinalIgnoreCase))
                 return Owner.GetActualColor(colorValue);
 
@@ -949,9 +952,9 @@ namespace PeachBrackets.Html.Dom
             {
                 if (!_actualOpacityComputed)
                 {
-                    _actualOpacity = string.IsNullOrEmpty(Style.VisualEffects.Opacity)
-                        ? 1.0
-                        : Math.Clamp(CssValueParser.ParseNumber(Style.VisualEffects.Opacity, 1.0), 0.0, 1.0);
+                    _actualOpacity = CssValueParser.TryParseAlphaValue(Style.VisualEffects.Opacity, out var opacity)
+                        ? Math.Clamp(opacity, 0.0, 1.0)
+                        : 1.0;
                     _actualOpacityComputed = true;
                 }
                 return _actualOpacity;

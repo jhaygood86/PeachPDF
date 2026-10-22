@@ -92,7 +92,8 @@ namespace PeachBrackets.Html.Dom
                     var emSizePt = image is CssImage.LinearGradient or CssImage.RadialGradient
                         ? ResolveFontSizePt(marginRule.Style, pageStyle)
                         : (double?)null;
-                    PaintImage(canvas, image, rect, position, renderContext, htmlContainer, emSizePt, marginRule.Style);
+                    PaintImage(canvas, image, rect, position, renderContext, htmlContainer, emSizePt, marginRule.Style,
+                        ResolveColor(marginRule.Style, pageStyle, htmlContainer, renderContext));
                     continue;
                 }
 
@@ -104,7 +105,7 @@ namespace PeachBrackets.Html.Dom
                     continue;
 
                 var font = BuildFont(marginRule.Style, pageStyle, renderContext);
-                var color = BuildColor(marginRule.Style);
+                var color = ResolveColor(marginRule.Style, pageStyle, htmlContainer, renderContext);
                 var (horizontal, vertical) = BuildAlignment(marginRule.Style, pageStyle, boxName);
 
                 var visualText = ResolveBidiText(text, marginRule.Style, pageStyle, out var logicalText);
@@ -500,11 +501,13 @@ namespace PeachBrackets.Html.Dom
                 _ => paddingBoxPx,
             };
 
+            var boxColor = ResolveColor(rule.Style, pageStyle, htmlContainer, renderContext);
+
             await LayeredBackgroundPainter.PaintAsync(
                 canvas, rule.Style, renderContext, htmlContainer, rootBox, emPt,
-                ResolvePositioningRect, pageBoxPx, backgroundImageCache);
+                ResolvePositioningRect, pageBoxPx, backgroundImageCache, boxColor);
 
-            PaintBorder(canvas, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, renderContext);
+            PaintBorder(canvas, borderBoxPx, rule.Style, emPt, remPt, pixelsPerPoint, renderContext, boxColor);
         }
 
         /// <summary>
@@ -516,21 +519,21 @@ namespace PeachBrackets.Html.Dom
         /// primitive already used for collapsed table borders. <c>border-color</c>'s own initial value
         /// is <c>currentcolor</c> (CSS Backgrounds 3 §4), so an edge with no explicit color (or an
         /// explicit <c>currentcolor</c>) resolves against the box's own already-resolved text
-        /// <c>color</c>, defaulting to black exactly as <see cref="BuildColor"/> already does for text
-        /// with no <c>color</c> of its own.
+        /// <c>color</c>, which is <paramref name="color"/> when the caller has resolved it through the page context and the root element
+        /// (<see cref="ResolveColor"/>), else the style's own <c>color</c>, black without one.
         /// Internal (not private) so <c>PdfGenerator</c> can reuse it for the page box's own border - a
         /// distinct paint layer from a page-<em>margin</em>-box's border (this method still paints those
         /// too, via <see cref="PaintBackgroundAndBorder"/>) but identical box-model math (issue #1147).
         /// </summary>
         internal static void PaintBorder(Canvas g, Rect borderBoxRect, StyleDeclaration style,
-            double emPt, double remPt, double pixelsPerPoint, RenderContext renderContext)
+            double emPt, double remPt, double pixelsPerPoint, RenderContext renderContext, PaintColor? color = null)
         {
             // borderBoxRect is already known positive-size here - the sole caller, PaintBackgroundAndBorder,
             // returns before this call otherwise. emPt is the same em-basis BorderExtent already used to
             // charge this box's own space - a border-*-width of "0.1em" must paint at the identical width
             // it was charged, or content would sit under (or float above) the stroke it made room for.
             var colorParser = new CssValueParser(renderContext);
-            var textColor = string.IsNullOrEmpty(style.Color) ? PaintColor.Black : colorParser.GetActualColor(style.Color);
+            var textColor = color ?? (string.IsNullOrEmpty(style.Color) ? PaintColor.Black : colorParser.GetActualColor(style.Color));
 
             // An edge with no explicit colour resolves currentColor exactly as
             // DerivedStyle.ResolveBorderSideColor does for an ordinary box: against the text colour
@@ -610,7 +613,7 @@ namespace PeachBrackets.Html.Dom
         /// already correctly is.
         /// </summary>
         private static void PaintImage(Canvas canvas, CssImage image, Rect rect, string positionList, RenderContext renderContext,
-            HtmlContainerInt htmlContainer, double? emSizePt, StyleDeclaration style)
+            HtmlContainerInt htmlContainer, double? emSizePt, StyleDeclaration style, PaintColor boxColor)
         {
             // Root is only ever null before the document's initial layout, which has already run by
             // the time page rendering (and so margin-box painting) begins - null here would mean
@@ -631,9 +634,9 @@ namespace PeachBrackets.Html.Dom
                     brush.Dispose();
                 },
                 gradientEmSizePt: emSizePt,
-                // The margin box's own text colour, as BuildBrush gives its text (black without one): the root box passed above is only
-                // the geometry stand-in.
-                currentColor: LayeredBackgroundPainter.OwnColor(style, renderContext));
+                // The margin box's text colour (its own, else the page context's, else the root element's): the root box passed above is
+                // only the geometry stand-in.
+                currentColor: boxColor);
         }
 
         /// <summary>
@@ -1032,16 +1035,18 @@ namespace PeachBrackets.Html.Dom
         private static string? FirstNonEmpty(string? a, string? b) =>
             !string.IsNullOrEmpty(a) ? a : (!string.IsNullOrEmpty(b) ? b : null);
 
-        private static PaintColor BuildColor(StyleDeclaration style)
+        /// <summary>
+        /// The <c>color</c> of a page or page-margin box: its own, else the page context's, else the root element's, since the margin boxes inherit
+        /// from the page context, which inherits from the root element (css-page-3 section 4.1 and section 5). Text, border <c>currentcolor</c> and a
+        /// gradient's <c>currentcolor</c> all read it. Pass a null <paramref name="pageStyle"/> for the page box itself.
+        /// </summary>
+        internal static PaintColor ResolveColor(StyleDeclaration style, StyleDeclaration? pageStyle, HtmlContainerInt container, RenderContext renderContext)
         {
-            var colorStr = style.Color;
-            if (!string.IsNullOrEmpty(colorStr))
-            {
-                var color = ParseColor(colorStr);
-                if (color.HasValue)
-                    return color.Value;
-            }
-            return PaintColor.Black;
+            var colorStr = FirstNonEmpty(style.Color, pageStyle?.Color);
+            if (colorStr is not null)
+                return new CssValueParser(renderContext).GetActualColor(colorStr);
+
+            return DomUtils.GetBoxByTagName(container.Root, "html")?.ActualColor ?? PaintColor.Black;
         }
 
         private static PaintColor UnpackArgb(int argb) =>
