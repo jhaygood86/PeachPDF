@@ -46,8 +46,8 @@ namespace PeachBrackets.Html.Pages
         // the same image - repeats identically on every page; without this a multi-hundred-page document would re-decode (or re-fetch) the same
         // logo once per page. @page box background image layers and margin-box background image layers share the same shape and rationale.
         private readonly Dictionary<string, CssImage?> marginBoxImageCache = new();
-        private readonly Dictionary<string, IReadOnlyList<CssImage>?> pageBackgroundImageCache = new();
-        private readonly Dictionary<string, IReadOnlyList<CssImage>?> marginBoxBackgroundImageCache = new();
+        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> pageBackgroundImageCache = new();
+        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> marginBoxBackgroundImageCache = new();
 
         private Func<CanvasLease> _lease = null!;
         private Func<double, double, IDisposable?> _shift = null!;
@@ -311,13 +311,13 @@ namespace PeachBrackets.Html.Pages
             foreach (var cachedImage in pageBackgroundImageCache.Values)
             {
                 if (cachedImage is null) continue;
-                foreach (var image in cachedImage) image.Dispose();
+                foreach (var image in cachedImage) image?.Dispose();
             }
 
             foreach (var cachedImage in marginBoxBackgroundImageCache.Values)
             {
                 if (cachedImage is null) continue;
-                foreach (var image in cachedImage) image.Dispose();
+                foreach (var image in cachedImage) image?.Dispose();
             }
 
             foreach (var cachedImage in marginBoxImageCache.Values)
@@ -401,7 +401,7 @@ namespace PeachBrackets.Html.Pages
             CanvasLease lease, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
-            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
+            Dictionary<string, IReadOnlyList<CssImage?>?> backgroundImageCache)
         {
             var pixelsPerPoint = renderContext.LayoutUnitsPerPoint;
             using var pdfLease = lease;

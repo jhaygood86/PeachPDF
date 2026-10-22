@@ -45,7 +45,7 @@ namespace PeachBrackets.Html.Dom
             StyleDeclaration? pageStyle,
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache,
-            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
+            Dictionary<string, IReadOnlyList<CssImage?>?> backgroundImageCache)
         {
             foreach (var marginRule in margins)
             {
@@ -452,7 +452,7 @@ namespace PeachBrackets.Html.Dom
             Canvas canvas, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
             RenderContext renderContext, HtmlContainerInt htmlContainer,
-            Dictionary<string, IReadOnlyList<CssImage>?> backgroundImageCache)
+            Dictionary<string, IReadOnlyList<CssImage?>?> backgroundImageCache)
         {
             // Root is only ever null before the document's initial layout, which has already run by the
             // time page rendering (and so margin-box painting) begins - null here would mean there's no

@@ -2150,20 +2150,29 @@ namespace PeachBrackets.Html.Parse
             return null;
         }
 
-        public IReadOnlyList<CssImage>? ParseImages(string value)
+        /// <summary>
+        /// Parses a <c>background-image</c> layer list. The result has one slot per declared layer, in
+        /// declaration order, with <c>null</c> for a <c>none</c> layer (or one that does not parse): the
+        /// slot index is the layer index the other per-layer longhands (<c>background-position</c>,
+        /// <c>-size</c>, <c>-repeat</c>...) are paired with, so a <c>none</c> layer must keep its place
+        /// (CSS Backgrounds 3 §2.1). Returns <c>null</c> when no layer holds an image.
+        /// </summary>
+        public IReadOnlyList<CssImage?>? ParseImages(string value)
         {
             if (string.IsNullOrWhiteSpace(value) ||
                 value.Equals("none", StringComparison.OrdinalIgnoreCase))
                 return null;
 
-            var result = new List<CssImage>();
+            var result = new List<CssImage?>();
+            var any = false;
             foreach (var segment in SplitTopLevelCommas(value))
             {
                 var image = ParseImage(segment.Trim());
-                if (image != null) result.Add(image);
+                any |= image != null;
+                result.Add(image);
             }
 
-            return result.Count > 0 ? result : null;
+            return any ? result : null;
         }
 
         internal static IEnumerable<string> SplitTopLevelCommas(string value)

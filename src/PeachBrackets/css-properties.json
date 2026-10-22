@@ -1938,7 +1938,7 @@
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.MultipleImageSourceConverter.Convert" },
       "html": {
         "propertyPath": "BackgroundImages",
-        "csharpDataType": "IReadOnlyList<CssImage>?",
+        "csharpDataType": "IReadOnlyList<CssImage?>?",
         "area": "BackgroundArea",
         "customSetter": "{box}.BackgroundImages = {parser}.ParseImages({value});",
         "hasGetter": false,

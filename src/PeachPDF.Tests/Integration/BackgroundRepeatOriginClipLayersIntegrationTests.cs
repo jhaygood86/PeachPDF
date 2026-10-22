@@ -113,5 +113,21 @@ namespace PeachPDF.Tests.Integration
             Assert.Matches(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // second tile, below
             Assert.DoesNotMatch(new Regex(@"q 20 0 0 20 50 792 cm"), pdfText); // no second column
         }
+
+        [Fact]
+        public async Task NoneLayerInBackgroundImage_KeepsLaterLayersOnTheirOwnPositionAndRepeat()
+        {
+            // `none` is layer 0, so the image is layer 1: top-left, tiled horizontally only. It must not take
+            // layer 0's bottom-right, no-repeat values.
+            var html = $"<!DOCTYPE html><html><head><style>body {{ margin: 0; }}</style></head><body>" +
+                $"<div style=\"width: 120pt; height: 80pt; border: 10pt solid black; padding: 10pt; " +
+                $"background-image: none, url('data:image/png;base64,{PngBase64}'); background-size: 20pt 20pt; " +
+                "background-position: 100% 100%, 0 0; background-repeat: no-repeat, repeat-x;\"></div></body></html>";
+            var pdfText = await GetPdfText(html);
+
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 792 cm"), pdfText); // layer 1's top-left
+            Assert.Matches(new Regex(@"q 20 0 0 20 50 792 cm"), pdfText); // and repeated along x
+            Assert.DoesNotMatch(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // not down
+        }
     }
 }

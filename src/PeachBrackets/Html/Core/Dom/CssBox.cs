@@ -2569,7 +2569,7 @@ namespace PeachBrackets.Html.Dom
         {
             if (BackgroundImages != null)
                 foreach (var image in BackgroundImages)
-                    image.Dispose();
+                    image?.Dispose();
 
             ListStyleImage?.Dispose();
             ContentImage?.Dispose();
@@ -7850,7 +7850,10 @@ namespace PeachBrackets.Html.Dom
         {
             if (BackgroundImages is { Count: > 0 })
                 foreach (var image in BackgroundImages)
-                    await image.EnsureLoadedAsync(HtmlContainer!);
+                {
+                    if (image != null)
+                        await image.EnsureLoadedAsync(HtmlContainer!);
+                }
 
             if (ListStyleImage != null)
                 await ListStyleImage.EnsureLoadedAsync(HtmlContainer!);
