@@ -760,7 +760,7 @@
     },
     {
       "name": "opacity",
-      "comment": "customValidator implements <alpha-value> (css-color-4 §14): a plain number or a percentage, matching CssValueParser.ParseNumber's actual grammar (which the html setter's ActualOpacity resolution calls) rather than the cssDataType 'number' clause alone, which doesn't accept a percentage.",
+      "comment": "customValidator implements <alpha-value> (css-color-4 §14): a plain number or a percentage, matching CssValueParser.TryParseAlphaValue (which the html setter's ActualOpacity resolution calls too, and which also accepts a calc() that resolves to a number or percentage) rather than the cssDataType 'number' clause alone, which doesn't accept a percentage.",
       "inherited": false,
       "initialValue": "1",
       "cssDataType": "number",
@@ -769,7 +769,7 @@
         "invalidates": "InvalidateOpacity",
         "csharpDataType": "string",
         "area": "VisualEffectsArea",
-        "customValidator": "{value}.EndsWith('%') ? double.TryParse({value}[..^1], global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _) : double.TryParse({value}, global::System.Globalization.NumberStyles.Float, global::System.Globalization.CultureInfo.InvariantCulture, out _)"
+        "customValidator": "global::PeachBrackets.Html.Parse.CssValueParser.TryParseAlphaValue({value}, out _)"
       },
       "svg": {
         "propertyPath": "Opacity",
