@@ -204,7 +204,7 @@ namespace PeachBrackets.Css
         private static Color? ParseColorMix(IEnumerable<Token> args, bool wantOklab, out double[] oklab)
         {
             oklab = null;
-            if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out var space, out var hue, out var alphaMultiplier, out var oklab1, out var oklab2))
+            if (!TryColorMixOperands(args, out var c1, out var c2, out var t, out var space, out var hue, out var alphaMultiplier, out var oklab1, out var oklab2, out var written1, out var written2))
                 return null;
 
             // Neither operand CMYK: the normal rectangular-space mix. Both CMYK: a project-specific
@@ -215,8 +215,8 @@ namespace PeachBrackets.Css
             if (c1.IsDeviceCmyk != c2.IsDeviceCmyk) return null;
             if (c1.IsDeviceCmyk) return Color.MixCmyk(c1, c2, t, alphaMultiplier);
 
-            if (wantOklab) oklab = ColorSpaceMath.ToOklab(Color.MixComponents(c1, c2, t, space, hue, out _, oklab1, oklab2), space);
-            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier, oklab1, oklab2);
+            if (wantOklab) oklab = ColorSpaceMath.ToOklab(Color.MixComponents(c1, c2, t, space, hue, out _, oklab1, oklab2, written1, written2), space);
+            return Color.Mix(c1, c2, t, space, hue, alphaMultiplier, oklab1, oklab2, written1, written2);
         }
 
         /// <summary>
@@ -235,10 +235,11 @@ namespace PeachBrackets.Css
         }
 
         // The operands, weight and space of a color-mix(), after the CSS Color 5 §3 percentage normalization.
-        private static bool TryColorMixOperands(IEnumerable<Token> args, out Color c1, out Color c2, out double t, out ColorSpaceMath.Space space, out ColorSpaceMath.HueMethod hue, out double alphaMultiplier, out double[] oklab1, out double[] oklab2)
+        private static bool TryColorMixOperands(IEnumerable<Token> args, out Color c1, out Color c2, out double t, out ColorSpaceMath.Space space, out ColorSpaceMath.HueMethod hue, out double alphaMultiplier, out double[] oklab1, out double[] oklab2, out ColorSpaceMath.WrittenCoords? written1, out ColorSpaceMath.WrittenCoords? written2)
         {
             c1 = c2 = default;
             oklab1 = oklab2 = null;
+            written1 = written2 = null;
             t = alphaMultiplier = 0;
             space = default;
             hue = default;
@@ -252,8 +253,8 @@ namespace PeachBrackets.Css
             space = MapSpace(config[1]);
             hue = MapHue(config, 2);
 
-            if (!ParseMixOperand(segments[1], out c1, out var p1, out oklab1)) return false;
-            if (!ParseMixOperand(segments[2], out c2, out var p2, out oklab2)) return false;
+            if (!ParseMixOperand(segments[1], out c1, out var p1, out oklab1, out written1)) return false;
+            if (!ParseMixOperand(segments[2], out c2, out var p2, out oklab2, out written2)) return false;
 
             // CSS Color 5 §3 normalization: a missing percentage is 100% minus the other; percentages
             // scale to sum 1, and a pre-normalization sum below 100% scales the result alpha down.
@@ -268,10 +269,11 @@ namespace PeachBrackets.Css
             return true;
         }
 
-        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent, out double[] oklab)
+        private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent, out double[] oklab, out ColorSpaceMath.WrittenCoords? written)
         {
             color = default;
             oklab = null;
+            written = null;
             percent = null;
 
             var tokens = new List<Token>();
@@ -304,7 +306,29 @@ namespace PeachBrackets.Css
             var resolved = ResolveColor(tokens, wantOklab: true, out oklab);
             if (resolved is null) return false;
             color = resolved.Value;
+            written = WrittenComponents(tokens);
             return true;
+        }
+
+        // The components a lab(), lch(), oklab() or oklch() operand was written with (null for any other colour).
+        private static ColorSpaceMath.WrittenCoords? WrittenComponents(List<Token> tokens)
+        {
+            if (tokens.Count != 1 || tokens[0].Type != TokenType.Function) return null;
+
+            var name = tokens[0].Data;
+            var args = tokens[0].ArgumentTokens;
+            double[] v;
+
+            if (name.Equals(FunctionNames.Lab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 125.0, 100.0, out v, out _))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lab, v);
+            if (name.Equals(FunctionNames.Oklab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 0.4, 1.0, out v, out _))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklab, v);
+            if (name.Equals(FunctionNames.Lch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 150.0, 100.0, out v, out _))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lch, v);
+            if (name.Equals(FunctionNames.Oklch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 0.4, 1.0, out v, out _))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklch, v);
+
+            return null;
         }
 
         // ── Token helpers ────────────────────────────────────────────────────────

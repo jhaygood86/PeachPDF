@@ -165,6 +165,73 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.InRange(c.B, 127, 128);
         }
 
+        [Theory]
+        [InlineData("hsl")]
+        [InlineData("hwb")]
+        public void ColorMix_HslAndHwb_RedBlue_TakesTheShorterHueArc(string space)
+        {
+            var c = Parse($"color-mix(in {space}, red, blue)");
+            Assert.Equal(255, c.R);
+            Assert.Equal(0, c.G);
+            Assert.Equal(255, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_Hsl_LongerHue_TakesTheArcThroughGreen()
+        {
+            var c = Parse("color-mix(in hsl longer hue, red, blue)");
+            Assert.Equal(0, c.R);
+            Assert.Equal(255, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_Hsl_HueMixedPastZero_StaysInRange()
+        {
+            // 350 -> 30 degrees the short way crosses 0: the mid hue is 10, not 190 or a negative angle.
+            var c = Parse("color-mix(in hsl, hsl(350 100% 50%), hsl(30 100% 50%))");
+            Assert.Equal(255, c.R);
+            Assert.InRange(c.G, 40, 45);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_OklchGrayWrittenInTheMixSpace_KeepsItsHue()
+        {
+            // Hue 120 and 240 meet at 180, as in Chrome (0,132,116); the gray's hue is not replaced by the other colour's.
+            var c = Parse("color-mix(in oklch, oklch(0.5 0 120), oklch(0.6 0.2 240))");
+            Assert.InRange(c.R, 0, 3);
+            Assert.InRange(c.G, 130, 134);
+            Assert.InRange(c.B, 114, 118);
+        }
+
+        [Fact]
+        public void ColorMix_LchGrayWrittenInTheMixSpace_KeepsItsHue()
+        {
+            var kept = Parse("color-mix(in lch, lch(50 0 90), lch(50 60 270))");
+            var replaced = Parse("color-mix(in lch, rgb(119 119 119), lch(50 60 270))");
+            Assert.NotEqual(kept, replaced);
+        }
+
+        [Fact]
+        public void ColorMix_NearGrayLabInALchMix_IsNotTreatedAsGray()
+        {
+            // lab(60 0.03 0) has a chroma of 0.03, above the 0.02 a hue is powerless below; the trip through Oklab used to move it under.
+            var c = Parse("color-mix(in lch, lab(60 0.03 0), red)");
+            Assert.Equal(219, c.R);
+            Assert.Equal(96, c.G);
+            Assert.Equal(108, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_ARoundTripGray_StillTakesTheOtherHue()
+        {
+            // A gray written as a hex colour has no hue of its own: the other colour's stands in (unchanged).
+            var c = Parse("color-mix(in oklch, #808080, oklch(0.6 0.2 240))");
+            var d = Parse("color-mix(in oklch, oklch(0.6 0.2 240), #808080)");
+            Assert.InRange(Math.Abs(c.G - d.G), 0, 1);
+        }
+
         [Fact]
         public void ColorMix_Srgb_WeightedPercentages_ShiftTowardHeavierColor()
         {

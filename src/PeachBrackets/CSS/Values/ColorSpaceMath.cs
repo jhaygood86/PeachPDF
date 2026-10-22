@@ -45,16 +45,51 @@ namespace PeachBrackets.Css
         /// Gives a gray its missing hue before two colours in lch or oklch are mixed in a color-mix() (see <see cref="IsHuePowerless"/>): the other colour's hue
         /// stands in for it, and where both are gray the hue is 0, as in Chrome. Does nothing in any other space.
         /// </summary>
-        public static void ResolveMissingHues(double[] v1, double[] v2, Space cs)
+        public static void ResolveMissingHues(double[] v1, double[] v2, Space cs, bool hue1IsWritten = false, bool hue2IsWritten = false)
         {
             var hueIndex = HueIndex(cs);
             if (hueIndex < 0) return;
 
-            var powerless1 = IsHuePowerless(v1, cs);
-            var powerless2 = IsHuePowerless(v2, cs);
+            var powerless1 = !hue1IsWritten && IsHuePowerless(v1, cs);
+            var powerless2 = !hue2IsWritten && IsHuePowerless(v2, cs);
             if (powerless1 && powerless2) v1[hueIndex] = v2[hueIndex] = 0;
             else if (powerless1) v1[hueIndex] = v2[hueIndex];
             else if (powerless2) v2[hueIndex] = v1[hueIndex];
+        }
+
+        /// <summary>
+        /// A <c>lab()</c>, <c>lch()</c>, <c>oklab()</c> or <c>oklch()</c> colour's components as they were written, in the space they were written in: what
+        /// a mix in that space (or the polar/rectangular form of it) takes the colour from, where converting through Oklab would replace a gray's hue
+        /// with whatever angle the round trip leaves, and move the chroma of a near-gray.
+        /// </summary>
+        internal readonly record struct WrittenCoords(Space Space, double[] Values);
+
+        /// <summary>
+        /// The written coordinates in <paramref name="cs"/> when that is the space they were written in, or its polar/rectangular form (lab and lch share a
+        /// white point, as do oklab and oklch, so the conversion is exact); null when they would have to cross to another family.
+        /// </summary>
+        public static double[] ToSpaceFromWritten(WrittenCoords written, Space cs)
+        {
+            var v = written.Values;
+            if (written.Space == cs) return [v[0], v[1], v[2]];
+
+            switch (written.Space, cs)
+            {
+                case (Space.Lab, Space.Lch):
+                case (Space.Oklab, Space.Oklch):
+                {
+                    var (L, c, h) = RectToPolar(v[0], v[1], v[2]);
+                    return [L, c, h];
+                }
+                case (Space.Lch, Space.Lab):
+                case (Space.Oklch, Space.Oklab):
+                {
+                    var (L, a, b) = PolarToRect(v[0], v[1], v[2]);
+                    return [L, a, b];
+                }
+                default:
+                    return null;
+            }
         }
 
         public static double NormalizeHue(double h) => ((h % 360) + 360) % 360;
@@ -81,7 +116,7 @@ namespace PeachBrackets.Css
                     else if (diff < -180) diff += 360;
                     break;
             }
-            return h1 + t * diff;
+            return NormalizeHue(h1 + t * diff);
         }
 
         // ── sRGB gamma ────────────────────────────────────────────────────────
