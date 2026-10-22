@@ -43,5 +43,20 @@ namespace PeachPDF.Tests.Integration
         [InlineData("background-image: inherit; background-repeat: inherit; background-position: inherit; background-size: inherit;")]
         public async Task AChildThatInherits_DrawsItsOwnCopyOfTheImage(string childStyle) =>
             Assert.Equal(2, ImageDraws(await GetPdfText(Html(childStyle))));
+
+        [Fact]
+        public async Task AChildThatInheritsAGradient_PaintsTheGradientToo()
+        {
+            string Page(string childStyle) =>
+                "<!DOCTYPE html><html><head><style>body { margin: 0; }</style></head><body>" +
+                "<div style=\"padding: 10pt; width: 100pt; height: 90pt; background-image: linear-gradient(red, blue);\">" +
+                $"<div style=\"height: 40pt; margin-top: 40pt; {childStyle}\"></div></div></body></html>";
+
+            var alone = Regex.Matches(await GetPdfText(Page("")), "/ShadingType").Count;
+            var inherited = Regex.Matches(await GetPdfText(Page("background-image: inherit;")), "/ShadingType").Count;
+
+            Assert.True(alone >= 1);
+            Assert.True(inherited > alone, $"expected the child to add a gradient: {alone} alone, {inherited} with the inheriting child");
+        }
     }
 }
