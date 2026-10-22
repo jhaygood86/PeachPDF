@@ -13,6 +13,12 @@ namespace PeachBrackets.Html.Entities
 
         internal virtual ValueTask EnsureLoadedAsync(HtmlContainerInt container) => ValueTask.CompletedTask;
 
+        /// <summary>
+        /// The image a descendant takes when it inherits this layer (<c>background-image: inherit</c>). A box disposes the images it owns, so a
+        /// layer that holds a loaded resource must be a separate, not-yet-loaded copy; a gradient is an immutable value and is shared.
+        /// </summary>
+        internal virtual CssImage CopyForInheritance() => this;
+
         internal sealed record Url(string Href) : CssImage
         {
             private ImageLoadHandler? _handler;
@@ -27,6 +33,8 @@ namespace PeachBrackets.Html.Entities
                 _handler ??= new ImageLoadHandler(container);
                 await _handler.LoadImage(Href);
             }
+
+            internal override CssImage CopyForInheritance() => new Url(Href);
 
             public override void Dispose() => _handler?.Dispose();
         }
