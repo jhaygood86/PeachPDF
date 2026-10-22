@@ -115,7 +115,7 @@ namespace PeachBrackets.Html.Parse
             // Collect @keyframes (read by AnimationApplier mid-cascade); nothing consults them unless animations
             // are being sampled, so a document pays nothing for them otherwise.
             htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null
-                ? RegisteredKeyframes.BuildRegistry(cssData)
+                ? RegisteredKeyframes.BuildRegistry(cssData, media)
                 : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
             htmlContainer.KeyframesUseRevert = htmlContainer.Keyframes.Values.Any(set => set.UsesRevert);
 
