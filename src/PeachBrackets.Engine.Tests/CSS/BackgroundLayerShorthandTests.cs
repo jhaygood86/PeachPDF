@@ -129,5 +129,26 @@ namespace PeachBrackets.Engine.Tests.CSS
             var longhands = await Pdf("linear-gradient(to right, #00f, #0f0)", "background-color: rgba(255, 0, 0, .5)");
             Assert.Equal(Streams(longhands), Streams(shorthand));
         }
+
+        [Theory]
+        [InlineData("top 10px left")]
+        [InlineData("bottom left 20px")]
+        [InlineData("top 10px left 20px")]
+        [InlineData("left 10px top")]
+        [InlineData("right bottom 20px")]
+        public void AThreeOrFourValuePosition_IsAcceptedInEitherGroupOrder(string position)
+        {
+            Assert.Equal([position], Expand("background-position: " + position, "background-position"));
+            Assert.Equal([position], Expand("background: url(a.png) " + position, "background-position"));
+        }
+
+        [Theory]
+        [InlineData("top left left")]
+        [InlineData("top top 10px")]
+        [InlineData("center 10px left")]
+        [InlineData("top 10px center 20px")]
+        [InlineData("left 10px left")]
+        public void AnInvalidThreeOrFourValuePosition_IsStillDropped(string position) =>
+            Assert.Equal([""], Expand("background-position: " + position, "background-position"));
     }
 }

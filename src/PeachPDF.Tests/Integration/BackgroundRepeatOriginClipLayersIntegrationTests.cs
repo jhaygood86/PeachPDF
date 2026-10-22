@@ -129,5 +129,15 @@ namespace PeachPDF.Tests.Integration
             Assert.Matches(new Regex(@"q 20 0 0 20 50 792 cm"), pdfText); // and repeated along x
             Assert.DoesNotMatch(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // not down
         }
+
+        [Fact]
+        public async Task VerticalFirstThreeValuePosition_PlacesTheTileFromTheTopEdge()
+        {
+            var pdfText = await GetPdfText(ImageBoxHtml(
+                "background-image: url('data:image/png;base64," + PngBase64 + "'); " +
+                "background-size: 20pt 20pt; background-repeat: no-repeat; background-position: top 10pt left;"));
+
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 782 cm"), pdfText); // padding-box left edge, 10pt below its top (792)
+        }
     }
 }

@@ -123,6 +123,25 @@ namespace PeachBrackets.Css
                 return new ParsedPosition(x, y, new[] { x, y });
             }
 
+            // The two groups may come in either order (CSS Backgrounds 3 section 3.6, the `&&`): vertical first,
+            // vi, offset, hi: e.g. "top 10px left". A `center` takes no offset.
+            if (IsEdgeKeywordSlot(t0, horizontal: false) && IsLengthOrPercent(t1) && KeywordOf(t0) != AxisKeyword.Center &&
+                IsEdgeKeywordSlot(t2, horizontal: true))
+            {
+                var y = new Component(KeywordOf(t0), t1);
+                var x = new Component(KeywordOf(t2), null);
+                return new ParsedPosition(x, y, new[] { y, x });
+            }
+
+            // vi, hi, offset (offset applies to the horizontal group): e.g. "bottom left 20px".
+            if (IsEdgeKeywordSlot(t0, horizontal: false) && IsEdgeKeywordSlot(t1, horizontal: true) &&
+                KeywordOf(t1) != AxisKeyword.Center && IsLengthOrPercent(t2))
+            {
+                var y = new Component(KeywordOf(t0), null);
+                var x = new Component(KeywordOf(t1), t2);
+                return new ParsedPosition(x, y, new[] { y, x });
+            }
+
             return null;
         }
 
@@ -135,6 +154,16 @@ namespace PeachBrackets.Css
                 var x = new Component(KeywordOf(t0), t1);
                 var y = new Component(KeywordOf(t2), t3);
                 return new ParsedPosition(x, y, new[] { x, y });
+            }
+
+            // vi, offset, hi, offset: e.g. "top 10px left 20px".
+            if (IsEdgeKeywordSlot(t0, horizontal: false) && IsLengthOrPercent(t1) &&
+                IsEdgeKeywordSlot(t2, horizontal: true) && IsLengthOrPercent(t3) &&
+                KeywordOf(t0) != AxisKeyword.Center && KeywordOf(t2) != AxisKeyword.Center)
+            {
+                var y = new Component(KeywordOf(t0), t1);
+                var x = new Component(KeywordOf(t2), t3);
+                return new ParsedPosition(x, y, new[] { y, x });
             }
 
             return null;
