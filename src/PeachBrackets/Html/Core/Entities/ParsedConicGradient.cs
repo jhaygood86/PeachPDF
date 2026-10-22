@@ -14,6 +14,11 @@ namespace PeachBrackets.Html.Entities
         /// when the gradient is drawn; null when there are none.
         /// </summary>
         public IReadOnlyList<int>? CurrentColorStops { get; init; }
+        /// <summary>
+        /// For a stop in <see cref="CurrentColorStops"/> whose colour is a function naming <c>currentcolor</c> (<c>color-mix(in srgb, currentcolor, red)</c>), the
+        /// reading of that colour given the painting box's own color; null when there are none.
+        /// </summary>
+        public IReadOnlyDictionary<int, System.Func<PaintColor, PaintColor>>? NestedCurrentColorStops { get; init; }
         public bool IsRepeating { get; init; }
         public GradientColorSpace ColorSpace { get; init; } = GradientColorSpace.Srgb;
         public HueInterpolationMethod HueMethod { get; init; } = HueInterpolationMethod.Shorter;
