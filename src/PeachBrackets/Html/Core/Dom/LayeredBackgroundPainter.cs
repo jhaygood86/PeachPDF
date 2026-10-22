@@ -85,7 +85,7 @@ namespace PeachBrackets.Html.Dom
             double? gradientEmSizePt,
             Func<string, Rect> resolvePositioningRect,
             Rect viewportRect,
-            Dictionary<string, IReadOnlyList<CssImage>?> imageCache)
+            Dictionary<string, IReadOnlyList<CssImage?>?> imageCache)
         {
             if (style is null) return;
 
@@ -120,7 +120,10 @@ namespace PeachBrackets.Html.Dom
                 if (images != null)
                 {
                     foreach (var image in images)
-                        await image.EnsureLoadedAsync(htmlContainer);
+                    {
+                        if (image != null)
+                            await image.EnsureLoadedAsync(htmlContainer);
+                    }
                 }
 
                 imageCache[imageValue] = images;
@@ -140,13 +143,17 @@ namespace PeachBrackets.Html.Dom
             // FragmentPainter.PaintBackground uses.
             for (var layerIndex = images.Count - 1; layerIndex >= 0; layerIndex--)
             {
+                // A `none` layer holds its slot (so the later layers keep their own position/size/repeat) but draws nothing.
+                var layerImage = images[layerIndex];
+                if (layerImage is null) continue;
+
                 var originValue = BackgroundLayerResolver.LayerAt(originLayers, layerIndex);
                 var clipValue = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
                 var originRect = resolvePositioningRect(originValue);
                 var clipRect = resolvePositioningRect(clipValue);
                 if (clipRect is not { Width: > 0, Height: > 0 }) continue;
 
-                CssImagePainter.Paint(g, images[layerIndex], layerIndex, originRect, clipRect,
+                CssImagePainter.Paint(g, layerImage, layerIndex, originRect, clipRect,
                     roundedClipPath: null, positionList, sizeList, repeatList, attachmentList,
                     viewportRect, lengthBasisBox,
                     drawBrush: brush =>

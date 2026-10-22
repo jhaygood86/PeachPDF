@@ -199,13 +199,17 @@ namespace PeachBrackets.Html.Paint
 
             foreach (int layerIndex in layersToPaint)
             {
+                // A `none` layer keeps its slot (so later layers pair with their own position/size/repeat) but draws nothing.
+                var layerImage = box.BackgroundImages![layerIndex];
+                if (layerImage is null) continue;
+
                 var originRect = BoxModelRect(BackgroundLayerResolver.LayerAt(originLayers, layerIndex));
                 var clipValue  = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
                 var (clipRect, clipShape, shapeShared) = ResolveClip(clipValue);
 
                 void DrawBrush(Brush brush) => PaintClippedBrush(g, box, brush, clipRect, clipShape);
 
-                CssImagePainter.Paint(g, box.BackgroundImages![layerIndex], layerIndex, originRect, clipRect,
+                CssImagePainter.Paint(g, layerImage, layerIndex, originRect, clipRect,
                     clipShape, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
                     viewportRect, box, DrawBrush);
 

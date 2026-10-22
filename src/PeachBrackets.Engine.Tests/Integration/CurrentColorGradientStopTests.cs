@@ -143,7 +143,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var rect = new Rect(0, 0, 200, 100);
             Brush? painted = null;
 
-            CssImagePainter.Paint(g, box.BackgroundImages![0], 0, rect, rect, null, "0% 0%", "auto", "repeat", "scroll", rect, box, brush => painted = brush);
+            CssImagePainter.Paint(g, box.BackgroundImages![0]!, 0, rect, rect, null, "0% 0%", "auto", "repeat", "scroll", rect, box, brush => painted = brush);
 
             var stops = painted switch
             {
