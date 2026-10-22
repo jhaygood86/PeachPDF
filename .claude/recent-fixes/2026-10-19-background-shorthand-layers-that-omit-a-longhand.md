@@ -33,7 +33,7 @@ answers from the same entry. Any per-layer longhand the shorthand starts exporti
 ## Not done
 
 The deviations from a browser that this left in place (the position grammar, a single box keyword, `inherit`, a `none` layer shifting later layers, a two-value repeat) are recorded in
-[the accepted gap](../accepted-gaps/background-shorthand-and-layer-deviations-from-a-browser.md), each with an issue.
+an accepted gap at the time; all have since been fixed (see the 2026-10-21 `background` recent fixes).
 
 Serialising the shorthand back (`style.cssText` / `Stringify`) still prints only what the layers hold. `background-position` fills `0% 0%` for an omitted layer, which the CSS-OM prints as `0 0`.
 
