@@ -757,6 +757,15 @@ namespace PeachBrackets.Css
 
         #region Order / Unordered
 
+        /// <summary>
+        /// Like <see cref="WithOrder"/>, but the converters after the first only match when the first one did:
+        /// the grammar <c>&lt;first&gt; [ / &lt;second&gt; ]?</c>, where the second cannot stand without the first.
+        /// </summary>
+        public static IValueConverter WithOrderDependingOnFirst(params IValueConverter[] converters)
+        {
+            return new OrderedOptionsConverter(true, converters);
+        }
+
         public static IValueConverter WithOrder(params IValueConverter[] converters)
         {
             return new OrderedOptionsConverter(converters);

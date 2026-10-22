@@ -123,5 +123,19 @@ namespace PeachPDF.Tests.Integration
             // A transparent background should behave like no background
             Assert.DoesNotContain("/ShadingType", transparentPdf);
         }
+
+        [Fact]
+        public async Task BackgroundShorthand_SingleBoxKeyword_ClipsToThatBoxToo()
+        {
+            // 20pt margin + 10pt border + 10pt padding: the content box starts at 40, the border box at 20. One <box> sets
+            // background-origin and background-clip both, so the gradient is painted into the content box only.
+            var html = "<!DOCTYPE html><html><head><style>body { margin: 0; }</style></head><body>" +
+                "<div style=\"width: 120pt; height: 80pt; border: 10pt solid black; padding: 10pt; " +
+                "background: linear-gradient(red, blue) content-box;\"></div></body></html>";
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("40 722 120 80 re", pdfText);
+            Assert.DoesNotContain("20 702 160 120 re", pdfText);
+        }
     }
 }

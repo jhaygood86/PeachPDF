@@ -14,7 +14,8 @@
 
         private static readonly IValueConverter NormalLayerConverter = WithAny(
             OptionalImageSourceConverter.Option().For(PropertyNames.BackgroundImage),
-            WithOrder(
+            // <bg-position> [ / <bg-size> ]?: the size cannot stand without the position before its slash.
+            WithOrderDependingOnFirst(
                 PointConverter.Option().For(PropertyNames.BackgroundPosition),
                 BackgroundSizeConverter.StartsWithDelimiter().Option().For(PropertyNames.BackgroundSize)),
             BackgroundRepeatsConverter.Option().For(PropertyNames.BackgroundRepeat),
@@ -24,7 +25,8 @@
 
         private static readonly IValueConverter FinalLayerConverter = WithAny(
             OptionalImageSourceConverter.Option().For(PropertyNames.BackgroundImage),
-            WithOrder(
+            // <bg-position> [ / <bg-size> ]?: the size cannot stand without the position before its slash.
+            WithOrderDependingOnFirst(
                 PointConverter.Option().For(PropertyNames.BackgroundPosition),
                 BackgroundSizeConverter.StartsWithDelimiter().Option().For(PropertyNames.BackgroundSize)),
             BackgroundRepeatsConverter.Option().For(PropertyNames.BackgroundRepeat),
@@ -46,7 +48,14 @@
             [PropertyNames.BackgroundClip] = "border-box",
         };
 
+        // One <box> value sets both background-origin and background-clip; with two, the first is the origin and the second the clip (CSS Backgrounds 3
+        // section 2.10). The converter hands the one box to the origin, so a layer with no clip of its own takes its origin's.
+        private static readonly Dictionary<string, string> LayerFallbacks = new()
+        {
+            [PropertyNames.BackgroundClip] = PropertyNames.BackgroundOrigin,
+        };
+
         private static readonly IValueConverter StyleConverter =
-            NormalLayerConverter.RequiresEnd(FinalLayerConverter, LayerDefaults).OrDefault();
+            NormalLayerConverter.RequiresEnd(FinalLayerConverter, LayerDefaults, LayerFallbacks).OrDefault();
     }
 }
