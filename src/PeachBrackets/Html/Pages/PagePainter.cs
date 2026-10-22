@@ -170,7 +170,8 @@ namespace PeachBrackets.Html.Pages
                     rootBoxForPageBackground, pageEmSizePt,
                     resolvePositioningRect: ResolvePagePositioningRect,
                     viewportRect: sheetRect,
-                    pageBackgroundImageCache);
+                    pageBackgroundImageCache,
+                    currentColor: MarginBoxRenderer.ResolveColor(applicablePageStyle, null, _container, _renderContext));
             }
 
             if (canvasBackgroundBox != null)
@@ -196,7 +197,8 @@ namespace PeachBrackets.Html.Pages
                 using var pageBorderGraphics = Lease();
                 MarginBoxRenderer.PaintBorder(
                     pageBorderGraphics, borderBoxRect, applicablePageStyle,
-                    pageEmSizePt, pageRemPt, _renderContext.LayoutUnitsPerPoint, _renderContext);
+                    pageEmSizePt, pageRemPt, _renderContext.LayoutUnitsPerPoint, _renderContext,
+                    MarginBoxRenderer.ResolveColor(applicablePageStyle, null, _container, _renderContext));
             }
 
             // Save state so the content transform can be undone for margin box rendering
