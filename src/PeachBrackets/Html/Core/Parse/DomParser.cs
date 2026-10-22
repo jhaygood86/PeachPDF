@@ -2447,6 +2447,14 @@ namespace PeachBrackets.Html.Parse
                     continue;
                 }
 
+                // background-image holds parsed layers, not text, so it has no string getter for the generic inherit below to read: copy the parent's layers.
+                if (prop.Value == Keywords.Inherit && box.ParentBox != null && prop.Name.Equals("background-image", StringComparison.OrdinalIgnoreCase))
+                {
+                    pendingVarProperties.Remove(prop.Name);
+                    box.BackgroundImages = box.ParentBox.BackgroundImages?.Select(image => image?.CopyForInheritance()).ToList();
+                    continue;
+                }
+
                 var value = prop.Value switch
                 {
                     Keywords.Inherit when box.ParentBox != null
