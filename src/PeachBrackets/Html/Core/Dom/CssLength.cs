@@ -52,11 +52,12 @@ namespace PeachBrackets.Html.Dom
                 return;
             }
 
-            //Get units of the length
-            var u = length.Substring(length.Length - 2, 2);
+            //Get units of the length; "rem" is the one three-letter unit, and its last two letters read as "em"
+            var isRem = length.EndsWith(UnitNames.Rem, StringComparison.Ordinal);
+            var u = isRem ? UnitNames.Rem : length.Substring(length.Length - 2, 2);
 
             //Number of the length
-            var number = length[..^2];
+            var number = isRem ? length[..^3] : length[..^2];
 
             //TODO: Units behave different in paper and in screen!
             switch (u)
