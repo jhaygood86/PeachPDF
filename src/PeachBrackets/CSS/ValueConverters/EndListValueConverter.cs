@@ -11,6 +11,7 @@ namespace PeachBrackets.Css
         private readonly IValueConverter _endConverter;
         private readonly IValueConverter _listConverter;
         private readonly IReadOnlyDictionary<string, List<Token>> _layerDefaults;
+        private readonly IReadOnlyDictionary<string, string> _layerFallbacks;
 
         /// <summary>
         /// A list of layers, every one but the last converted by <paramref name="listConverter"/> and the last by <paramref name="endConverter"/>
@@ -23,10 +24,17 @@ namespace PeachBrackets.Css
         /// text leaves that longhand out (CSS Backgrounds 3 section 2.10: an omitted sub-property is its initial value). A longhand that is not listed
         /// (the colour, which only the last layer sets) is taken from the layers that do set it.
         /// </param>
-        public EndListValueConverter(IValueConverter listConverter, IValueConverter endConverter, IReadOnlyDictionary<string, string> layerDefaults = null)
+        /// <param name="layerFallbacks">
+        /// For a longhand whose omitted value comes from another longhand of the same layer rather than from its own initial value: the name of that
+        /// other longhand (<c>background-clip</c> takes what <c>background-origin</c> was given, CSS Backgrounds 3 section 2.10). It is tried before
+        /// <paramref name="layerDefaults"/>.
+        /// </param>
+        public EndListValueConverter(IValueConverter listConverter, IValueConverter endConverter, IReadOnlyDictionary<string, string> layerDefaults = null,
+            IReadOnlyDictionary<string, string> layerFallbacks = null)
         {
             _listConverter = listConverter;
             _endConverter = endConverter;
+            _layerFallbacks = layerFallbacks;
 
             // Tokenized once: ExtractFor runs for every longhand of every declaration, and the defaults never change.
             _layerDefaults = layerDefaults?.ToDictionary(pair => pair.Key, pair => Tokenize(pair.Value));
@@ -66,7 +74,7 @@ namespace PeachBrackets.Css
             }
 
             values[n] = _endConverter.Convert(items[n]);
-            return values[n] != null ? new ListValue(values, value, _layerDefaults) : null;
+            return values[n] != null ? new ListValue(values, value, _layerDefaults, _layerFallbacks) : null;
         }
 
         public IPropertyValue Construct(Property[] properties)
@@ -99,18 +107,21 @@ namespace PeachBrackets.Css
                 values[i] = converter.Construct(dummies);
             }
 
-            return new ListValue(values, Enumerable.Empty<Token>(), _layerDefaults);
+            return new ListValue(values, Enumerable.Empty<Token>(), _layerDefaults, _layerFallbacks);
         }
 
         private sealed class ListValue : IPropertyValue
         {
             private readonly IPropertyValue[] _values;
             private readonly IReadOnlyDictionary<string, List<Token>> _layerDefaults;
+            private readonly IReadOnlyDictionary<string, string> _layerFallbacks;
 
-            public ListValue(IPropertyValue[] values, IEnumerable<Token> tokens, IReadOnlyDictionary<string, List<Token>> layerDefaults)
+            public ListValue(IPropertyValue[] values, IEnumerable<Token> tokens, IReadOnlyDictionary<string, List<Token>> layerDefaults,
+                IReadOnlyDictionary<string, string> layerFallbacks)
             {
                 _values = values;
                 _layerDefaults = layerDefaults;
+                _layerFallbacks = layerFallbacks;
                 Original = new TokenValue(tokens);
             }
 
@@ -128,6 +139,9 @@ namespace PeachBrackets.Css
                 foreach (var value in _values)
                 {
                     var extracted = value.ExtractFor(name);
+                    if (extracted is not { Count: > 0 } && _layerFallbacks is not null && _layerFallbacks.TryGetValue(name, out var fallbackName))
+                        extracted = value.ExtractFor(fallbackName);
+
                     layers.Add(extracted is { Count: > 0 } ? new List<Token>(extracted) : null);
                 }
 

@@ -86,9 +86,10 @@ namespace PeachBrackets.Css
             return new PeriodicValueConverter(converter, labels);
         }
 
-        public static IValueConverter RequiresEnd(this IValueConverter listConverter, IValueConverter endConverter, IReadOnlyDictionary<string, string> layerDefaults = null)
+        public static IValueConverter RequiresEnd(this IValueConverter listConverter, IValueConverter endConverter, IReadOnlyDictionary<string, string> layerDefaults = null,
+            IReadOnlyDictionary<string, string> layerFallbacks = null)
         {
-            return new EndListValueConverter(listConverter, endConverter, layerDefaults);
+            return new EndListValueConverter(listConverter, endConverter, layerDefaults, layerFallbacks);
         }
 
         public static IValueConverter Required(this IValueConverter converter)
