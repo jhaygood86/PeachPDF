@@ -362,20 +362,11 @@ namespace PeachBrackets.Svg
                 return false;
             }
 
-            var trimmed = value.Trim();
-            var isPercent = trimmed.EndsWith('%');
-
-            if (isPercent)
-                trimmed = trimmed[..^1];
-
-            if (!double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var v))
+            if (!CssValueParser.TryParseAlphaValue(value, out var v))
             {
                 opacity = 1.0;
                 return false;
             }
-
-            if (isPercent)
-                v /= 100.0;
 
             opacity = Math.Clamp(v, 0.0, 1.0);
             return true;

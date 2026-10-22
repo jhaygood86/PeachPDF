@@ -437,6 +437,44 @@ namespace PeachBrackets.Html.Parse
         /// Parses a plain finite <c>&lt;number&gt;</c> such as <c>350.5</c>, for a keyword-or-value property whose non-keyword side is a
         /// number (<c>font-weight</c>).
         /// </summary>
+        /// <summary>
+        /// Parses an <c>&lt;alpha-value&gt;</c> (css-color-4 section 3.2) - a number, a percentage (100% is 1), or a <c>calc()</c>-family
+        /// function that resolves to either - to its value, not yet clamped to [0, 1].
+        /// </summary>
+        public static bool TryParseAlphaValue(string? value, out double result)
+        {
+            result = 0;
+            if (string.IsNullOrWhiteSpace(value)) return false;
+
+            var trimmed = value.Trim();
+
+            if (trimmed.EndsWith(')'))
+            {
+                using var pooledTokens = GetCssTokensPooled(trimmed);
+                List<Token> tokens = pooledTokens;
+
+                if (tokens.OnlyOrDefault() is not { Type: TokenType.Function } function || !CalcParser.IsCalcFamily(function.Data)) return false;
+
+                var node = CalcParser.Parse(function);
+                if (node is null || CalcTypeChecker.Check(node) is not (CalcCategory.Number or CalcCategory.Percentage)) return false;
+
+                // A percentage leaf resolves against 100% = 1, and a Number-category calc() has none, so no layout context is needed.
+                var evaluated = CalcEvaluator.Evaluate(node, new CalcContext(1, 0, 0));
+                if (evaluated is not { } fromCalc || !double.IsFinite(fromCalc)) return false;
+
+                result = fromCalc;
+                return true;
+            }
+
+            var isPercent = trimmed.EndsWith('%');
+            if (!double.TryParse(isPercent ? trimmed[..^1] : trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                || !double.IsFinite(number))
+                return false;
+
+            result = isPercent ? number / 100.0 : number;
+            return true;
+        }
+
         public static bool TryParseNumber(string value, out double result)
         {
             if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
