@@ -355,9 +355,9 @@ namespace PeachBrackets.Css
         /// (below 1 only when the two percentages summed to under 100%). <paramref name="oklab1"/> and <paramref name="oklab2"/> are an operand's Oklab
         /// coordinates when it lies outside the sRGB gamut its <see cref="Color"/> is clipped to; the mix is then made from them.
         /// </summary>
-        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier, double[] oklab1 = null, double[] oklab2 = null)
+        public static Color Mix(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, double alphaMultiplier, double[] oklab1 = null, double[] oklab2 = null, ColorSpaceMath.WrittenCoords? written1 = null, ColorSpaceMath.WrittenCoords? written2 = null)
         {
-            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha, oklab1, oklab2);
+            var v = MixComponents(c1, c2, t, cs, hue, out var mixedAlpha, oklab1, oklab2, written1, written2);
             var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
             var outAlpha = (byte)Math.Round(Math.Clamp(mixedAlpha * alphaMultiplier, 0, 1) * 255);
             return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
@@ -367,18 +367,27 @@ namespace PeachBrackets.Css
         /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
         /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> clips them.
         /// </summary>
-        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha, double[] oklab1 = null, double[] oklab2 = null)
+        // An operand's coordinates in the mix's space: as written when it was written in that space (or its polar/rectangular form), so a gray keeps the
+        // hue it was written with; else from its Oklab coordinates when it lies outside the gamut its Color is clipped to; else from the Color.
+        private static double[] Operand(Color c, double[] oklab, ColorSpaceMath.WrittenCoords? written, ColorSpaceMath.Space cs)
+        {
+            if (written is { } w && ColorSpaceMath.ToSpaceFromWritten(w, cs) is { } asWritten) return asWritten;
+            return oklab is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab, cs) : ColorSpaceMath.ToSpace(c.R / 255.0, c.G / 255.0, c.B / 255.0, cs);
+        }
+
+        internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha, double[] oklab1 = null, double[] oklab2 = null, ColorSpaceMath.WrittenCoords? written1 = null, ColorSpaceMath.WrittenCoords? written2 = null)
         {
             t = Math.Clamp(t, 0.0, 1.0);
             double a1 = c1.A / 255.0, a2 = c2.A / 255.0;
 
-            var v1 = oklab1 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab1, cs) : ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, cs);
-            var v2 = oklab2 is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab2, cs) : ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, cs);
+            var v1 = Operand(c1, oklab1, written1, cs);
+            var v2 = Operand(c2, oklab2, written2, cs);
             var hueIndex = ColorSpaceMath.HueIndex(cs);
 
             // A gray has no hue of its own: the other colour's stands in for it (CSS Color 4, interpolating with a missing hue), instead of whatever angle the
             // conversion leaves behind.
-            ColorSpaceMath.ResolveMissingHues(v1, v2, cs);
+            // (A colour written in the mix's own space keeps the hue it was written with, even at a chroma of 0: only a hue that conversion produced is powerless.)
+            ColorSpaceMath.ResolveMissingHues(v1, v2, cs, written1?.Space == cs, written2?.Space == cs);
 
             for (var i = 0; i < 3; i++)
             {
