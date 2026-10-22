@@ -19,6 +19,7 @@ namespace PeachBrackets.Css
         /// <param name="laterRequireFirst">when true the converters after the first only take part if the first
         /// one consumed tokens, so an omitted first slot leaves the rest at their defaults and anything that was
         /// meant for them (the <c>/ &lt;size&gt;</c> of <c>&lt;position&gt; [ / &lt;size&gt; ]</c>) is left over and fails the match</param>
+        /// <param name="converters">the options, in the order they are tried</param>
         public OrderedOptionsConverter(bool laterRequireFirst, params IValueConverter[] converters)
             : this(converters)
         {

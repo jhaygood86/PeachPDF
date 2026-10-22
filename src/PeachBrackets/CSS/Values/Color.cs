@@ -363,10 +363,6 @@ namespace PeachBrackets.Css
             return new Color(ToByte(r), ToByte(g), ToByte(b), outAlpha);
         }
 
-        /// <summary>
-        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
-        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[])"/> clips them.
-        /// </summary>
         // An operand's coordinates in the mix's space: as written when it was written in that space (or its polar/rectangular form), so a gray keeps the
         // hue it was written with; else from its Oklab coordinates when it lies outside the gamut its Color is clipped to; else from the Color.
         private static double[] Operand(Color c, double[] oklab, ColorSpaceMath.WrittenCoords? written, ColorSpaceMath.Space cs)
@@ -375,6 +371,10 @@ namespace PeachBrackets.Css
             return oklab is not null ? ColorSpaceMath.ToSpaceFromOklab(oklab, cs) : ColorSpaceMath.ToSpace(c.R / 255.0, c.G / 255.0, c.B / 255.0, cs);
         }
 
+        /// <summary>
+        /// The premultiplied mix <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[], ColorSpaceMath.WrittenCoords?, ColorSpaceMath.WrittenCoords?)"/> makes, as its coordinates in <paramref name="cs"/> before they are mapped to sRGB: a colour
+        /// outside the sRGB gamut keeps its out-of-range coordinates here, where <see cref="Mix(Color, Color, double, ColorSpaceMath.Space, ColorSpaceMath.HueMethod, double, double[], double[], ColorSpaceMath.WrittenCoords?, ColorSpaceMath.WrittenCoords?)"/> clips them.
+        /// </summary>
         internal static double[] MixComponents(Color c1, Color c2, double t, ColorSpaceMath.Space cs, ColorSpaceMath.HueMethod hue, out double mixedAlpha, double[] oklab1 = null, double[] oklab2 = null, ColorSpaceMath.WrittenCoords? written1 = null, ColorSpaceMath.WrittenCoords? written2 = null)
         {
             t = Math.Clamp(t, 0.0, 1.0);
