@@ -14,7 +14,7 @@ namespace PeachDrawing.Svg;
 /// express - a bitmap a caller asks for through <see cref="BeginRasterSurface"/> - is embedded as pixels.
 /// </summary>
 /// <remarks>
-/// Get one from <see cref="SvgComposer.AddPage"/>. Push and pop calls (clips, transforms, blend modes, layers) must nest, as they do on
+/// Get one from <see cref="SvgComposer.Canvas"/>. Push and pop calls (clips, transforms, blend modes, layers) must nest, as they do on
 /// the PDF canvas, because each becomes a group in the document.
 /// </remarks>
 public sealed partial class SvgCanvas : Canvas
@@ -77,7 +77,7 @@ public sealed partial class SvgCanvas : Canvas
     }
 
     /// <summary>
-    /// Closes whatever is still open and returns the canvas's content. Idempotent: a tile is completed when it is first used, a page when
+    /// Closes whatever is still open and returns the canvas's content. Idempotent: a tile is completed when it is first used, the document when
     /// it is saved, and drawing after that is not written.
     /// </summary>
     internal string CompleteContent()
@@ -478,7 +478,7 @@ public sealed partial class SvgCanvas : Canvas
     /// <inheritdoc/>
     public override void Dispose()
     {
-        // A page canvas belongs to its page, and a tile is completed on first use (or when saved); nothing is released here.
+        // The document canvas belongs to its composer, and a tile is completed on first use (or when saved); nothing is released here.
         if (_isTile)
             CompleteContent();
     }

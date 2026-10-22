@@ -62,8 +62,7 @@ internal static class SvgShowcaseRenderer
             var laidOut = false;
             SvgCanvas Measure(HtmlDocument d)
             {
-                using var composer = new SvgComposer(context, composerOptions);
-                return composer.AddPage(Math.Max(d.ContentArea.Width, 1), Math.Max(d.ContentArea.Height, 1)).Canvas;
+                return new SvgComposer(context, Math.Max(d.ContentArea.Width, 1), Math.Max(d.ContentArea.Height, 1), composerOptions).Canvas;
             }
 
             if (config.ScaleToPageSize || config.ShrinkToFit)
@@ -94,15 +93,14 @@ internal static class SvgShowcaseRenderer
                 await document.LayoutAsync(Measure(document));
 
             // The sheet ends where the content does (and keeps the bottom margin); the marker's bounds are in points.
-            using var composer = new SvgComposer(context, composerOptions);
-            var composed = new List<SvgComposerPage>();
+            var composed = new List<SvgComposer>();
             foreach (var htmlPage in document.Pages)
             {
                 var height = htmlPage.HeightPoints;
                 if (document.GetElementBounds(EndMarker) is { } end)
                     height = Math.Min(height, end.Bottom + config.MarginBottom);
 
-                var page = composer.AddPage(htmlPage.WidthPoints, Math.Max(height, 1));
+                var page = new SvgComposer(context, htmlPage.WidthPoints, Math.Max(height, 1), composerOptions);
                 await document.PaintPageAsync(htmlPage.Index, page.Canvas);
                 composed.Add(page);
             }

@@ -7,7 +7,7 @@ namespace PeachDrawing.Svg.Tests;
 public class SvgComposerTests
 {
     [Fact]
-    public void AnEmptyPageIsAWellFormedSvgDocumentSizedInPoints()
+    public void AnEmptyDocumentIsAWellFormedSvgSizedInPoints()
     {
         using var scene = Create(300, 150);
 
@@ -18,7 +18,7 @@ public class SvgComposerTests
     }
 
     [Fact]
-    public void ThePageIsInLayoutUnitsSoTheViewBoxScalesByPixelsPerPoint()
+    public void TheDocumentIsInLayoutUnitsSoTheViewBoxScalesByPixelsPerPoint()
     {
         using var scene = Create(100, 50, pixelsPerPoint: 2);
 
@@ -53,7 +53,7 @@ public class SvgComposerTests
     {
         using var scene = Create(options: new SvgComposerOptions { Title = "é" });
         using var stream = new MemoryStream();
-        scene.Page.Save(stream);
+        scene.Composer.Save(stream);
 
         Assert.True(stream.CanWrite);
         var bytes = stream.ToArray();
@@ -67,9 +67,9 @@ public class SvgComposerTests
         using var scene = Create();
         scene.Canvas.DrawRectangle(scene.Solid(1, 2, 3), 0, 0, 5, 5);
         using var writer = new StringWriter();
-        scene.Page.Save(writer);
+        scene.Composer.Save(writer);
 
-        Assert.Equal(scene.Page.ToSvg(), writer.ToString());
+        Assert.Equal(scene.Composer.ToSvg(), writer.ToString());
     }
 
     [Fact]
@@ -79,21 +79,20 @@ public class SvgComposerTests
         scene.Canvas.PushClip(new Rect(0, 0, 5, 5));
         scene.Canvas.DrawRectangle(scene.Solid(1, 2, 3), 0, 0, 5, 5);
 
-        Assert.Equal(scene.Page.ToSvg(), scene.Page.ToSvg());
+        Assert.Equal(scene.Composer.ToSvg(), scene.Composer.ToSvg());
     }
 
     [Fact]
-    public void EachPageIsItsOwnDocumentWithItsOwnDefinitions()
+    public void EachComposerIsItsOwnDocumentWithItsOwnDefinitions()
     {
         var context = new SvgRenderContext();
-        using var composer = new SvgComposer(context);
-        var first = composer.AddPage(10, 10);
-        var second = composer.AddPage(20, 20);
+        var first = new SvgComposer(context, 10, 10);
+        var second = new SvgComposer(context, 20, 20);
         first.Canvas.PushClip(new Rect(0, 0, 5, 5));
         first.Canvas.PopClip();
 
-        Assert.Equal(2, composer.PageCount);
-        Assert.Equal([first, second], composer.Pages);
+        Assert.Equal((10.0, 10.0), (first.WidthPoints, first.HeightPoints));
+        Assert.Same(context, first.RenderContext);
         Assert.Contains("<clipPath", first.ToSvg());
         Assert.DoesNotContain("<clipPath", second.ToSvg());
     }
@@ -103,17 +102,15 @@ public class SvgComposerTests
     [InlineData(10, -1)]
     [InlineData(double.NaN, 10)]
     [InlineData(10, double.PositiveInfinity)]
-    public void APageNeedsAPositiveFiniteSize(double width, double height)
+    public void ADocumentNeedsAPositiveFiniteSize(double width, double height)
     {
-        using var composer = new SvgComposer(new SvgRenderContext());
-
-        Assert.Throws<ArgumentOutOfRangeException>(() => composer.AddPage(width, height));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new SvgComposer(new SvgRenderContext(), width, height));
     }
 
     [Fact]
     public void TheComposerRequiresAContext()
     {
-        Assert.Throws<ArgumentNullException>(() => new SvgComposer(null!));
+        Assert.Throws<ArgumentNullException>(() => new SvgComposer(null!, 10, 10));
     }
 
     [Fact]
@@ -121,9 +118,9 @@ public class SvgComposerTests
     {
         using var scene = Create();
         scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 0, 0, 1, 1);
-        var written = scene.Page.ToSvg();
+        var written = scene.Composer.ToSvg();
         scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 5, 5, 1, 1);
 
-        Assert.Equal(written, scene.Page.ToSvg());
+        Assert.Equal(written, scene.Composer.ToSvg());
     }
 }

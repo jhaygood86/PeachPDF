@@ -281,7 +281,7 @@ other.AddDestinationLink(new Rect(40, 200, 90, 14), "terms");           // ...an
   rectangle the link started as, in the same units) is given when the clickable shape is a rotated rectangle rather than `bounds` itself.
   Call them after the content the link covers has been drawn: a link is meant to lie over what is there.
 - **`AddDestination(name, top)`** names a place `top` below the top edge of the page the canvas draws. A name is unique in the document,
-  and a destination can be named on the canvas of a page that is drawn after the pages that link to it.
+  and a destination can be named on the canvas of a page that is drawn after the pages that link to it. A format with no pages (SVG) has one canvas, and a link to a name that is not on it leads nowhere.
 - **The return value** is a handle the canvas's own format defines for the link it wrote, or `null`. The PDF canvas returns the `PdfLink` a
   tagged document attaches to a structure element; the SVG canvas has nothing to hand back.
 

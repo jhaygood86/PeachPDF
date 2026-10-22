@@ -21,7 +21,7 @@ public sealed class SvgComposerOptions
     public string? Description { get; set; }
 
     /// <summary>
-    /// A colour the whole page is painted with before anything else, or <see langword="null"/> (the default) for a transparent page,
+    /// A colour the whole document is painted with before anything else, or <see langword="null"/> (the default) for a transparent background,
     /// which shows whatever the SVG is placed on.
     /// </summary>
     public PaintColor? Background { get; set; }

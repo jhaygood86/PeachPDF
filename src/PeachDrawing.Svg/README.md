@@ -18,14 +18,13 @@ using PeachDrawing.Core;
 using PeachDrawing.Svg;
 
 var context = new SvgRenderContext();
-using var composer = new SvgComposer(context);
-var page = composer.AddPage(widthPoints: 400, heightPoints: 200);
+var composer = new SvgComposer(context, widthPoints: 400, heightPoints: 200);
 
-var canvas = page.Canvas;
+var canvas = composer.Canvas;
 canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 30, 144, 255)), 20, 20, 200, 100);
 
 await using var file = File.Create("out.svg");
-page.Save(file);
+composer.Save(file);
 ```
 
 Units are points with the origin at the top left and y growing downwards, as in `PeachDrawing.PDF`. The only content that is

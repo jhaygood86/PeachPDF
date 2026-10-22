@@ -107,9 +107,9 @@ public class SvgSpecialGlyphAndImageTests
         var html = $"<!DOCTYPE html><html><head><style>body{{font:16px 'Source Sans 3'}} @page{{size:300pt 200pt;margin:10pt}}</style></head><body>{body}</body></html>";
 
         using var document = await HtmlDocument.LoadAsync(html, context, new HtmlDocumentOptions { PageWidthPoints = 300, PageHeightPoints = 200 });
-        using var composer = new SvgComposer(context, new SvgComposerOptions { TextMode = SvgTextMode.Text });
-        await document.LayoutAsync(composer.AddPage(300, 200).Canvas);
-        var page = composer.AddPage(document.Pages[0].WidthPoints, document.Pages[0].HeightPoints);
+        var options = new SvgComposerOptions { TextMode = SvgTextMode.Text };
+        await document.LayoutAsync(new SvgComposer(context, 300, 200, options).Canvas);
+        var page = new SvgComposer(context, document.Pages[0].WidthPoints, document.Pages[0].HeightPoints, options);
         await document.PaintPageAsync(0, page.Canvas);
 
         var svg = System.Xml.Linq.XDocument.Parse(page.ToSvg());

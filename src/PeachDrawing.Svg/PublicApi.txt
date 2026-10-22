@@ -51,11 +51,13 @@ PeachDrawing.Svg.SvgCanvas : sealed class
   property Object TileCacheOwner { get; }
   property ValueTuple<Double, Double> TransformScale { get; }
 PeachDrawing.Svg.SvgComposer : sealed class
-  ctor(SvgRenderContext renderContext, SvgComposerOptions options = null)
-  method SvgComposerPage AddPage(Double widthPoints, Double heightPoints)
-  method virtual Void Dispose()
-  property IReadOnlyList<SvgComposerPage> Pages { get; }
-  property Int32 PageCount { get; }
+  ctor(SvgRenderContext renderContext, Double widthPoints, Double heightPoints, SvgComposerOptions options = null)
+  method String ToSvg()
+  method Void Save(Stream stream)
+  method Void Save(TextWriter writer)
+  property Double HeightPoints { get; }
+  property Double WidthPoints { get; }
+  property SvgCanvas Canvas { get; }
   property SvgComposerOptions Options { get; }
   property SvgRenderContext RenderContext { get; }
 PeachDrawing.Svg.SvgComposerOptions : sealed class
@@ -66,13 +68,6 @@ PeachDrawing.Svg.SvgComposerOptions : sealed class
   property String Title { get; set; }
   property SvgConicGradientMode ConicGradients { get; set; }
   property SvgTextMode TextMode { get; set; }
-PeachDrawing.Svg.SvgComposerPage : sealed class
-  method String ToSvg()
-  method Void Save(Stream stream)
-  method Void Save(TextWriter writer)
-  property Double HeightPoints { get; }
-  property Double WidthPoints { get; }
-  property SvgCanvas Canvas { get; }
 PeachDrawing.Svg.SvgConicGradientMode : enum Int32
   Css = 1
   Wedges = 0

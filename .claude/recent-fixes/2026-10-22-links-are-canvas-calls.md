@@ -26,7 +26,7 @@ Links and destinations are collected on the canvas and written after everything 
 coordinates whatever was pushed: `<a href><rect fill="none" pointer-events="all"/></a>` (a `<polygon>` for a quad - the corners come
 top-left, top-right, bottom-left, bottom-right, a polygon goes round), and `<rect id="anchor-NAME" y=TOP width=0 height=0/>` for a
 destination (prefixed so a document's anchor name cannot collide with the ids the canvas writes). A link to a place on another page is a
-dead fragment: each page is its own SVG.
+dead fragment: an SVG is one document, so a name that is not on its canvas leads nowhere.
 
 ## Evidence
 

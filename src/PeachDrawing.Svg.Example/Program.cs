@@ -39,14 +39,13 @@ void Scene(string name, double width, double height, Action<Canvas, SvgRenderCon
     options.Title = name;
     options.Background ??= PaintColor.White;
 
-    using var composer = new SvgComposer(context, options);
-    var page = composer.AddPage(width, height);
-    draw(page.Canvas, context);
+    var composer = new SvgComposer(context, width, height, options);
+    draw(composer.Canvas, context);
 
     var path = Path.Combine(outputDirectory, name + ".svg");
     using (var file = File.Create(path))
     {
-        page.Save(file);
+        composer.Save(file);
     }
 
     Console.WriteLine($"Wrote {path}");

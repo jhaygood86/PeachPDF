@@ -61,11 +61,11 @@ public class SvgLinkTests
         Assert.Null(tile.AddLink(new Rect(0, 0, 1, 1), "x"));
         tile.AddDestination("t", 1);
         tile.Dispose();
-        _ = scene.Page.ToSvg();
+        _ = scene.Composer.ToSvg();
         scene.Canvas.AddLink(new Rect(0, 0, 1, 1), "late");
         scene.Canvas.AddDestination("late", 1);
 
-        Assert.DoesNotContain("late", scene.Page.ToSvg());
+        Assert.DoesNotContain("late", scene.Composer.ToSvg());
         Assert.Empty(scene.Drawn());
     }
 
@@ -82,9 +82,8 @@ public class SvgLinkTests
             """;
 
         using var document = await HtmlDocument.LoadAsync(html, context, new HtmlDocumentOptions { PageWidthPoints = 300, PageHeightPoints = 400 });
-        using var composer = new SvgComposer(context);
-        await document.LayoutAsync(composer.AddPage(300, 400).Canvas);
-        var page = composer.AddPage(300, 400);
+        await document.LayoutAsync(new SvgComposer(context, 300, 400).Canvas);
+        var page = new SvgComposer(context, 300, 400);
         await document.PaintPageAsync(0, page.Canvas);
         document.PaintLinks(0, page.Canvas);
 

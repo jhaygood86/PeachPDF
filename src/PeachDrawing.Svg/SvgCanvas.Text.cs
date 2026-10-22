@@ -275,7 +275,7 @@ public sealed partial class SvgCanvas
 
     /// <summary>
     /// The id of the definition of one glyph's outline at one size and slant, relative to the glyph's own origin: a glyph is written once
-    /// and every place it is drawn is a <c>&lt;use&gt;</c> of it, which is what keeps a page of text a fraction of the size of the same
+    /// and every place it is drawn is a <c>&lt;use&gt;</c> of it, which is what keeps a screenful of text a fraction of the size of the same
     /// outlines written out again at every position.
     /// </summary>
     private string GlyphId(Typeface typeface, int glyphIndex, GlyphOutline outline, double scale, double skew) =>

@@ -191,7 +191,7 @@ public class SvgDetailTests
         layer.Dispose();
         layer.Dispose();
         var layerLeftOpen = scene.Canvas.BeginLayer(new LayerOptions(Opacity: 0.5))!;
-        _ = scene.Page.ToSvg();
+        _ = scene.Composer.ToSvg();
         layerLeftOpen.Dispose(); // the page is already written: nothing to close, and nothing thrown
 
         Assert.Single(scene.Drawn(), e => e.Name == Ns + "g"); // the second layer held nothing, so saving the page took it back out
@@ -301,8 +301,8 @@ public class SvgDetailTests
         plain.Canvas.DrawString("A", font, PaintColor.Black, new PaintPoint(0, 0), plain.Canvas.MeasureString("A", font));
         recoloured.Canvas.DrawString("A", font, PaintColor.Black, new PaintPoint(0, 0), recoloured.Canvas.MeasureString("A", font), fontPalette: palette);
 
-        Assert.DoesNotContain("#ff00ff", plain.Page.ToSvg());
-        Assert.Contains("#ff00ff", recoloured.Page.ToSvg());
+        Assert.DoesNotContain("#ff00ff", plain.Composer.ToSvg());
+        Assert.Contains("#ff00ff", recoloured.Composer.ToSvg());
     }
 
     [Fact]

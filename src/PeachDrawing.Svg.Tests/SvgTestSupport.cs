@@ -11,20 +11,17 @@ internal sealed class SvgScene : IDisposable
 {
     public static readonly XNamespace Ns = "http://www.w3.org/2000/svg";
 
-    private readonly SvgComposer _composer;
-
     public SvgScene(SvgRenderContext context, double width = 200, double height = 100, SvgComposerOptions? options = null)
     {
         Context = context;
-        _composer = new SvgComposer(context, options);
-        Page = _composer.AddPage(width, height);
+        Composer = new SvgComposer(context, width, height, options);
     }
 
     public SvgRenderContext Context { get; }
 
-    public SvgComposerPage Page { get; }
+    public SvgComposer Composer { get; }
 
-    public SvgCanvas Canvas => Page.Canvas;
+    public SvgCanvas Canvas => Composer.Canvas;
 
     public static SvgScene Create(double width = 200, double height = 100, SvgComposerOptions? options = null, double pixelsPerPoint = 1) =>
         new(new SvgRenderContext { PixelsPerPoint = pixelsPerPoint }, width, height, options);
@@ -38,7 +35,7 @@ internal sealed class SvgScene : IDisposable
         return new SvgScene(context, width, height, options);
     }
 
-    public XDocument Document => XDocument.Parse(Page.ToSvg());
+    public XDocument Document => XDocument.Parse(Composer.ToSvg());
 
     /// <summary>The elements the canvas drew (everything in the document outside the definitions), in document order.</summary>
     public IEnumerable<XElement> Drawn() => Document.Root!.Elements().Where(e => e.Name != Ns + "defs" && e.Name != Ns + "title" && e.Name != Ns + "desc" && e.Name != Ns + "style");
@@ -71,6 +68,5 @@ internal sealed class SvgScene : IDisposable
 
     public void Dispose()
     {
-        _composer.Dispose();
     }
 }

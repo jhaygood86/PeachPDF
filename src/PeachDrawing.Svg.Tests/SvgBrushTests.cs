@@ -159,7 +159,7 @@ public class SvgBrushTests
         using var scene = Create();
         scene.Canvas.DrawRectangle(scene.Context.GetConicGradientBrush(new PaintPoint(5, 5), 5, [C(255, 0, 0), C(0, 0, 255)], [0, Math.PI]), 0, 0, 10, 10);
 
-        Assert.DoesNotContain("foreignObject", scene.Page.ToSvg());
+        Assert.DoesNotContain("foreignObject", scene.Composer.ToSvg());
     }
 
     [Fact]

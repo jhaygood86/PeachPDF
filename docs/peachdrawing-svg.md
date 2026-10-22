@@ -13,7 +13,7 @@ Native AOT compatible, and is versioned in lockstep with PeachPDF: the same vers
 dotnet add package PeachDrawing.Svg
 ```
 
-> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerPage`, `SvgComposerOptions`, `SvgTextMode` and
+> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerOptions`, `SvgTextMode` and
 > `SvgCanvas` are the package's full public surface - see `PublicApi.txt` for the exact, machine-checked snapshot. Until
 > 1.0 the public API may change between releases.
 
@@ -24,9 +24,8 @@ using PeachDrawing.Core;
 using PeachDrawing.Svg;
 
 var context = new SvgRenderContext();
-using var composer = new SvgComposer(context);
-var page = composer.AddPage(widthPoints: 480, heightPoints: 300);
-var g = page.Canvas;
+var composer = new SvgComposer(context, widthPoints: 480, heightPoints: 300);
+var g = composer.Canvas;
 
 g.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 30, 144, 255)), x: 20, y: 20, width: 200, height: 100);
 
@@ -37,10 +36,10 @@ if (font is not null)
 }
 
 await using var file = File.Create("out.svg");
-page.Save(file);
+composer.Save(file);
 ```
 
-A page is one SVG document. Like the PDF writer, `SvgComposer` works in points with the origin at the top left and y growing
+An `SvgComposer` is one SVG document - SVG has no pages, so there is no page to add; make one composer for each image. Like the PDF writer, `SvgComposer` works in points with the origin at the top left and y growing
 downwards; the document's `width`/`height` are in `pt` and its `viewBox` is in the render context's layout units
 (`SvgRenderContext.PixelsPerPoint` of them to a point, `1` by default). The `SvgRenderContext` constructor registers every font
 installed on the machine; `AddFont` registers a TrueType, OpenType, WOFF or WOFF2 font from a stream under a family name, which is
@@ -84,7 +83,7 @@ stays animated; any other format PeachImage reads is embedded as a PNG of its pi
 it is drawn, and gradients, clip paths, patterns, masks and filters that are identical are defined once and shared.
 
 Each push (clip, transform, blend mode, layer) is counted like the PDF canvas's saved graphics states: a pop undoes the innermost
-push, and a pop with nothing pushed throws `InvalidOperationException`. Anything still open when the page is saved is closed, and
+push, and a pop with nothing pushed throws `InvalidOperationException`. Anything still open when the document is saved is closed, and
 a group that holds nothing is not written.
 
 ## Text
@@ -94,7 +93,7 @@ a group that holds nothing is not written.
 - **`SvgTextMode.Outlines`** (the default) - every glyph is an exact vector outline. The text looks identical in every viewer,
   whatever fonts it has; shaping, kerning, synthetic bold and italic, colour glyphs (COLR/CPAL, drawn as vector paths and
   gradients), bitmap glyphs and OpenType-SVG glyphs are all handled. Each glyph's outline is defined once per size and slant and
-  every occurrence is a `<use>`, so a page of text is far smaller than the outlines written out again at every position. The
+  every occurrence is a `<use>`, so a screenful of text is far smaller than the outlines written out again at every position. The
   text is not selectable.
 - **`SvgTextMode.Text`** - selectable, searchable `<text>`, with each character placed at the position the shaper chose and a
   subset of the font embedded in the document as an `@font-face`. A run a viewer could not reproduce that way - ligatures,
@@ -111,8 +110,9 @@ some other way) and skipped in outline mode.
   SvgConicGradientMode.Css` writes a CSS `conic-gradient()` in a `<foreignObject>` instead - exact and smooth in a browser - inside a
   `<switch>` whose fallback is the wedges, so a viewer that ignores foreign content (resvg, Inkscape and most others) still shows them.
 - **Colour.** Gradient stops interpolate in non-premultiplied sRGB, the SVG default; a CMYK colour is written as its RGB rendition.
-- **Cross-page links.** Each page is its own SVG document, so a link to a place named on another page cannot be followed (its `href` is a
-  fragment of the page that holds the link). A document written as one continuous sheet, as the showcases are, has none of these.
+- **Links to another document.** A destination is a fragment of its own SVG, so a link to a place named on another canvas cannot be followed.
+  That happens only when one multi-page source (an HTML document with paper pages) is written as several SVGs; a source written as one
+  continuous sheet, as the showcases are, has every destination in the file.
 - **Bookmarks, forms and tagging** are PDF concepts and have no counterpart: `BeginMarkedContent` and its relatives do nothing.
 
 ## Licences

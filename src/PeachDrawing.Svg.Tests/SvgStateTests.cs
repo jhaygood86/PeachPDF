@@ -169,7 +169,7 @@ public class SvgStateTests
         Assert.Equal("0.5", Attr(Assert.Single(groups, a => Attr(a, "opacity").Length > 0), "opacity"));
         Assert.DoesNotContain(groups, group => Attr(group, "clip-path").Length > 0 && group.Elements().Contains(drawn));
         Assert.Equal(new Rect(0, 0, 200, 100), g.GetClip());
-        _ = scene.Page.ToSvg(); // well-formed
+        _ = scene.Composer.ToSvg(); // well-formed
     }
 
     [Fact]
