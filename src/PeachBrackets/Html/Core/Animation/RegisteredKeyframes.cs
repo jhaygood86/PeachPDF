@@ -52,13 +52,14 @@ namespace PeachBrackets.Html.Animation
     /// </summary>
     internal static class RegisteredKeyframes
     {
-        public static Dictionary<string, KeyframeSet> BuildRegistry(CssData cssData)
+        public static Dictionary<string, KeyframeSet> BuildRegistry(CssData cssData, MediaQueryContext? media = null)
         {
             var registry = new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
 
-            // EnumerateRulesRecursive descends into @media/@supports/@layer/@container and keeps source order,
+            // EnumerateRulesRecursive descends into @layer/@container, a true @supports and an @media that matches the document's medium
+            // (an @keyframes rule has no candidate box to evaluate the query against later), and keeps source order,
             // so a later @keyframes of the same name replaces an earlier one (§4.1: the last one wins).
-            foreach (var rule in cssData.EnumerateRulesRecursive().OfType<KeyframesRule>())
+            foreach (var rule in cssData.EnumerateRulesRecursive(media).OfType<KeyframesRule>())
             {
                 if (string.IsNullOrEmpty(rule.Name)) continue;
                 registry[rule.Name] = Build(rule);
