@@ -7,7 +7,9 @@ namespace PeachDrawing.Core.ColorGlyphs
     /// <summary>
     /// An <see cref="IColorGlyphTarget"/> that draws onto any <see cref="Canvas"/> with the canvas's own path, clip, brush and
     /// blend-mode primitives, so every backend gets color glyphs without implementing anything color-font specific.
-    /// Coordinates are the canvas's own user units.
+    /// Rectangles, brush geometry and the painter's own coordinates are in the canvas's layout units (what <see cref="Canvas.DrawRectangle(Brush, double, double, double, double)"/>
+    /// reads), while a <see cref="GraphicsPath"/> - the glyph outlines, and the bounds a complement clip is cut from - is read by a canvas as
+    /// points, so those are divided by <see cref="Canvas.PixelsPerPoint"/> on the way in (nothing changes on a canvas with one unit to the point).
     /// </summary>
     public sealed class CanvasColorGlyphTarget : IColorGlyphTarget
     {
@@ -48,10 +50,11 @@ namespace PeachDrawing.Core.ColorGlyphs
         {
             GraphicsPath path = BuildPath(outline, transform);
             path.FillMode = FillMode.EvenOdd;
-            path.AddMove(bounds.X, bounds.Y);
-            path.LineTo(bounds.X + bounds.Width, bounds.Y);
-            path.LineTo(bounds.X + bounds.Width, bounds.Y + bounds.Height);
-            path.LineTo(bounds.X, bounds.Y + bounds.Height);
+            double ppp = _canvas.PixelsPerPoint;
+            path.AddMove(bounds.X / ppp, bounds.Y / ppp);
+            path.LineTo((bounds.X + bounds.Width) / ppp, bounds.Y / ppp);
+            path.LineTo((bounds.X + bounds.Width) / ppp, (bounds.Y + bounds.Height) / ppp);
+            path.LineTo(bounds.X / ppp, (bounds.Y + bounds.Height) / ppp);
             path.CloseFigure();
             _clips.Push(path);
             _canvas.PushClip(path);
@@ -114,8 +117,10 @@ namespace PeachDrawing.Core.ColorGlyphs
             return stops;
         }
 
-        private GraphicsPath BuildPath(GlyphOutline outline, Affine2x3 t)
+        private GraphicsPath BuildPath(GlyphOutline outline, Affine2x3 layout)
         {
+            double scale = 1 / _canvas.PixelsPerPoint;
+            Affine2x3 t = new(layout.XX * scale, layout.YX * scale, layout.XY * scale, layout.YY * scale, layout.DX * scale, layout.DY * scale);
             GraphicsPath path = _canvas.GetGraphicsPath();
             path.FillMode = FillMode.Nonzero;
 

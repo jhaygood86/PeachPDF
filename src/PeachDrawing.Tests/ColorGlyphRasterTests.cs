@@ -155,6 +155,50 @@ namespace PeachDrawing.Tests
         }
 
         [Fact]
+        public async Task ColorGlyphOutlinesLandWhereTheyDoOnACanvasWithOneLayoutUnitToThePoint_AtTwoUnitsToThePoint()
+        {
+            // A path is read as points and a rectangle as layout units. The color glyph's outlines used to be handed over in layout
+            // units, so at two units to the point they came out twice the size and place of the plain outline of the same glyph.
+            var (context, font) = await LoadAsync(BundledFonts.ColorV0);
+
+            RasterCanvas Canvas() => new(context, new RasterSurface(300, 220, 0, 0, 1, 1), pixelsPerPoint: 2);
+            using var layered = Canvas();
+            using var plain = Canvas();
+            layered.DrawString("A", font, Black, new PaintPoint(20, 20), new Size(100, 100));
+            plain.DrawString("X", font, Black, new PaintPoint(20, 20), new Size(100, 100)); // the box layer's own outline
+
+            var red = Bounds(layered, IsRed);
+            var box = Bounds(plain, IsBlack);
+            Assert.True(red.Width > 20, "the red box was drawn");
+            Assert.InRange(Math.Abs(red.Left - box.Left), 0, 2);
+            Assert.InRange(Math.Abs(red.Top - box.Top), 0, 2);
+            Assert.InRange(Math.Abs(red.Right - box.Right), 0, 2);
+            Assert.InRange(Math.Abs(red.Bottom - box.Bottom), 0, 2);
+        }
+
+        private static (int Left, int Top, int Right, int Bottom, int Width) Bounds(RasterCanvas canvas, Func<int, int, int, bool> test)
+        {
+            var buffer = canvas.ToPixelBuffer();
+            var span = buffer.PremultipliedRgba.Span;
+            int left = int.MaxValue, top = int.MaxValue, right = -1, bottom = -1;
+            for (var y = 0; y < buffer.Height; y++)
+            {
+                for (var x = 0; x < buffer.Width; x++)
+                {
+                    var i = (y * buffer.Width + x) * 4;
+                    if (span[i + 3] != 255 || !test(span[i], span[i + 1], span[i + 2]))
+                        continue;
+                    left = Math.Min(left, x);
+                    top = Math.Min(top, y);
+                    right = Math.Max(right, x);
+                    bottom = Math.Max(bottom, y);
+                }
+            }
+
+            return (left, top, right, bottom, right - left);
+        }
+
+        [Fact]
         public async Task DrawParagraph_PaintsColorGlyphsToo()
         {
             var set = new FontSet();

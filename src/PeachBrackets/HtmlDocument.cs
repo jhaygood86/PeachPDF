@@ -307,6 +307,46 @@ public sealed class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// Puts the links of one page on <paramref name="canvas"/> - <see cref="Canvas.AddLink"/> for a link to an address,
+    /// <see cref="Canvas.AddDestinationLink"/> for a link to a place in the document - and names on it the places on this page that links
+    /// lead to (<see cref="Canvas.AddDestination"/>), so a canvas for a format with hyperlinks writes them. Call it for each page <b>after every
+    /// page has been painted</b>: where a link is, if a transform moved what it covers, is only known once its page has been painted, and a link
+    /// can lead to a page that comes later. A canvas with no hyperlinks ignores it.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page <paramref name="canvas"/> draws</param>
+    /// <param name="canvas">the canvas of that page</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public void PaintLinks(int pageIndex, Canvas canvas)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        var pages = Pages;
+        if ((uint)pageIndex >= (uint)pages.Count)
+            throw new ArgumentOutOfRangeException(nameof(pageIndex), pageIndex, $"The document has {pages.Count} page(s).");
+
+        var units = _unitsPerPoint;
+        var named = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var link in Annotations.Links)
+        {
+            // The place this link leads to, when it is on this page.
+            if (link.Anchor is { } anchorId && link.Destination is { } destination && destination.PageIndex == pageIndex && named.Add(anchorId))
+                canvas.AddDestination(anchorId, destination.Top * units);
+
+            if (link.PageIndex != pageIndex)
+                continue;
+
+            var bounds = new Rect(link.Bounds.X * units, link.Bounds.Y * units, link.Bounds.Width * units, link.Bounds.Height * units);
+            var quad = link.Quad is { } corners ? corners.Select(c => new PaintPoint(c.X * units, c.Y * units)).ToArray() : null;
+            var handle = link.Anchor is { } anchor && link.Destination is not null
+                ? canvas.AddDestinationLink(bounds, anchor, quad)
+                : canvas.AddLink(bounds, link.Uri ?? string.Empty, quad);
+
+            if (handle is not null && link.Source is { } source)
+                StructureTagSink?.LinkAdded(source, handle);
+        }
+    }
+
+    /// <summary>
     /// What the pages hold besides pixels: the links, the outline and the form controls, positioned on their pages in points.
     /// </summary>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>

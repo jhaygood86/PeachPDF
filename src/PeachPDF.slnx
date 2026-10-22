@@ -4,6 +4,9 @@
   <Project Path="PeachDrawing.Core.Tests/PeachDrawing.Core.Tests.csproj" />
   <Project Path="PeachDrawing.PDF/PeachDrawing.PDF.csproj" />
   <Project Path="PeachDrawing.PDF.Tests/PeachDrawing.PDF.Tests.csproj" />
+  <Project Path="PeachDrawing.Svg/PeachDrawing.Svg.csproj" />
+  <Project Path="PeachDrawing.Svg.Example/PeachDrawing.Svg.Example.csproj" />
+  <Project Path="PeachDrawing.Svg.Tests/PeachDrawing.Svg.Tests.csproj" />
   <Project Path="PeachDrawing.Tests/PeachDrawing.Tests.csproj" />
   <Project Path="PeachDrawing.Text/PeachDrawing.Text.csproj" />
   <Project Path="PeachDrawing.Text.Benchmarks/PeachDrawing.Text.Benchmarks.csproj" />

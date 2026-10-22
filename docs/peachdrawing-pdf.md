@@ -152,7 +152,15 @@ ZUGFeRD invoice XML of an e-invoice.
 
 ## Links, destinations and bookmarks
 
-Positions are in points from the page's top-left corner, y down, and the page does the conversion to PDF's own convention.
+A `PdfCanvas` also writes links when it is asked through the `Canvas` API (see [Links and destinations](peachdrawing-core.md#links-and-destinations)):
+`page.Canvas.AddLink(bounds, uri)` and `AddDestinationLink(bounds, name)` make the same annotations as the composer page's own methods below
+(`AddLink` returns the `PdfLink`), and `page.Canvas.AddDestination(name, top)` names a place with `AddNamedDestination`, with the one
+difference that those three take the canvas's layout units, `PdfRenderContext.PixelsPerPoint` to the point, rather than points. This is what lets
+code that only knows `Canvas` - `PeachBrackets`' `HtmlDocument.PaintLinks`, which PeachPDF uses to write an HTML document's links - drive PDF and
+other formats alike.
+
+The methods of the composer page and the composer take positions in points from the page's top-left corner, y down, and the page does the
+conversion to PDF's own convention.
 
 ```csharp
 composer.AddNamedDestination("terms", pageIndex: 2, topPoints: 120);

@@ -594,15 +594,22 @@ namespace PeachPDF
             document.ClipReport.Append(htmlDocument.ClippedText.Select(w =>
                 new ClippedWord(w.Text, w.DrawnWidth, w.VisibleWidth, w.DrawnHeight, w.VisibleHeight)));
 
-            // Finalizes /ParentTree page-keyed entries before HandleLinks (which, when tagging is
-            // enabled, appends further annotation-keyed entries to the same tree - see
-            // StructureTagBuilder.Finish and HandleLinks's own tagging-aware section below).
+            // Finalizes /ParentTree page-keyed entries before the links (which, when tagging is
+            // enabled, append further annotation-keyed entries to the same tree: the document hands each
+            // link it puts on a page's canvas to the structure builder - see StructureTagBuilder.LinkAdded).
             structureTagBuilder?.Finish();
 
-            // The hyperlinks and the outline, worked out from the laid-out pages in terms of pages and points; the PDF
-            // annotations and outline entries are made from them below.
+            // The hyperlinks, the form controls and the outline, worked out from the laid-out pages in terms of pages and points. The
+            // links go on the canvas of their page like any other drawing call (the PDF canvas writes them as link annotations); the
+            // form fields and outline entries are made from them below.
             var annotations = htmlDocument.Annotations;
-            HandleLinks(document.Composer, annotations, structureTagBuilder);
+            foreach (var htmlPage in htmlDocument.Pages)
+            {
+                // Every page of this call is painted by now, which is when the links' places are known. The pages go in the composer in
+                // order, after whatever an earlier call added.
+                var composerIndex = document.Composer.Pages.Count - htmlDocument.Pages.Count + htmlPage.Index;
+                htmlDocument.PaintLinks(htmlPage.Index, document.Composer.Pages[composerIndex].Canvas);
+            }
 
             if (formFieldBuilder != null)
             {
@@ -698,36 +705,6 @@ namespace PeachPDF
             {
                 throw new ArgumentOutOfRangeException(nameof(config), animationProgress,
                     "PdfGenerateConfig.AnimationProgress must be a number from 0 to 1.");
-            }
-        }
-
-        private static void HandleLinks(PdfComposer composer, DocumentAnnotations annotations, StructureTagBuilder? structureTagBuilder = null)
-        {
-            foreach (var link in annotations.Links)
-            {
-                if (link.PageIndex >= composer.Pages.Count)
-                    continue;
-
-                var page = composer.Pages[link.PageIndex];
-
-                PdfLink pdfLink;
-
-                if (link.Anchor is { } anchorId && link.Destination is { } destination)
-                {
-                    composer.AddNamedDestination(anchorId, destination.PageIndex, destination.Top);
-                    pdfLink = page.AddDestinationLink(link.Bounds, anchorId, link.Quad);
-                }
-                else
-                {
-                    pdfLink = page.AddLink(link.Bounds, link.Uri ?? string.Empty, link.Quad);
-                }
-
-                // The same source box can legitimately gain more than one annotation (once per page its running element was selected
-                // onto) - LinkAnnotationToStructureElement is exercised for a repeated box already.
-                if (structureTagBuilder != null && link.Source is { } source)
-                {
-                    structureTagBuilder.LinkAnnotationToStructureElement(source, pdfLink);
-                }
             }
         }
 

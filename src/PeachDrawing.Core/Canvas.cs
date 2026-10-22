@@ -607,6 +607,43 @@ namespace PeachDrawing.Core
         public abstract void EndVariableText();
 
         /// <summary>
+        /// Makes <paramref name="bounds"/> a clickable link to <paramref name="uri"/> (a web address, or any other URI) on the page this canvas
+        /// draws. A canvas for a format with hyperlinks (PDF, SVG) writes one; the default writes nothing, which is right for a canvas of
+        /// pixels. Call it once the content the link covers has been drawn: where the link sits in the output is up to the format, but it is
+        /// meant to lie over what is already there.
+        /// </summary>
+        /// <param name="bounds">the clickable area, in this canvas's layout units like every other rectangle</param>
+        /// <param name="uri">where the link leads</param>
+        /// <param name="quad">
+        /// the four corners of the clickable shape (top-left, top-right, bottom-left, bottom-right of the rectangle it started as), in the
+        /// same units, when it is not <paramref name="bounds"/> itself - a link over a rotated element - or <see langword="null"/>
+        /// </param>
+        /// <returns>
+        /// a handle the canvas's own format defines for the link it wrote (the PDF canvas returns the link a tagged document attaches to a
+        /// structure element), or <see langword="null"/> when nothing was written or the format has nothing to hand back
+        /// </returns>
+        public virtual object? AddLink(Rect bounds, string uri, IReadOnlyList<PaintPoint>? quad = null) => null;
+
+        /// <summary>
+        /// Makes <paramref name="bounds"/> a clickable link to a place on a page of the document that was named with <see cref="AddDestination"/>
+        /// (on this canvas or on the canvas of another page).
+        /// </summary>
+        /// <param name="bounds">the clickable area, in this canvas's layout units</param>
+        /// <param name="destinationName">the name the destination was given</param>
+        /// <param name="quad">see <see cref="AddLink"/></param>
+        /// <returns>see <see cref="AddLink"/></returns>
+        public virtual object? AddDestinationLink(Rect bounds, string destinationName, IReadOnlyList<PaintPoint>? quad = null) => null;
+
+        /// <summary>
+        /// Names a place on the page this canvas draws, for <see cref="AddDestinationLink"/> to lead to. The default writes nothing.
+        /// </summary>
+        /// <param name="name">the name the place is given; it must be unique in the document</param>
+        /// <param name="top">how far below the top edge of the page the place is, in this canvas's layout units</param>
+        public virtual void AddDestination(string name, double top)
+        {
+        }
+
+        /// <summary>
         /// Measure the width and height of string <paramref name="str"/> when drawn on device context HDC
         /// using the given font <paramref name="font"/>.
         /// </summary>

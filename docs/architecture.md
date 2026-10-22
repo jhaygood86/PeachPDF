@@ -532,7 +532,7 @@ A fragment's *rectangles* were the last thing still derived from the box's singl
 
 ### Graphics abstraction
 
-The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas` (from the [PeachDrawing.PDF](peachdrawing-pdf.md) package), writes every call as PDF content through the embedded engine's `PdfGraphics`. The abstract surface exposes:
+The rendering engine uses an abstract `Canvas` base class so that all painting logic is independent of the underlying output backend. The PDF-specific implementation, `PdfCanvas` (from the [PeachDrawing.PDF](peachdrawing-pdf.md) package), writes every call as PDF content through the embedded engine's `PdfGraphics`. The same painting logic also drives `SvgCanvas` (from the [PeachDrawing.Svg](peachdrawing-svg.md) package), which writes every call as vector SVG; the TestHarness's `--svg` mode renders the showcases through it. A page's hyperlinks reach every such canvas the same way: `HtmlDocument.PaintLinks` makes `Canvas.AddLink`/`AddDestinationLink`/`AddDestination` calls once all pages are painted, and the PDF canvas writes link annotations and named destinations while the SVG canvas writes `<a href>` elements. The abstract surface exposes:
 
 | Method | Purpose |
 |---|---|

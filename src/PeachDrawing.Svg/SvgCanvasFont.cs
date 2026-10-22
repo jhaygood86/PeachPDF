@@ -1,0 +1,274 @@
+using PeachDrawing.Text.OpenType;
+using PeachDrawing.Text.Outlines;
+using PeachDrawing.Text.Shaping;
+using PeachDrawing.Text;
+using PeachDrawing.Text.Unicode;
+using PeachDrawing.Core;
+using System;
+
+namespace PeachDrawing.Svg
+{
+    /// <summary>
+    /// The <see cref="Font"/> a <see cref="SvgCanvas"/> draws with: a <see cref="TypefaceFont"/> whose metrics are scaled to layout units and
+    /// rounded the way the PDF canvas rounds them, so a document laid out for one backend lays out identically for the other.
+    /// </summary>
+    internal sealed class SvgCanvasFont : Font
+    {
+        /// <summary>
+        /// the vertical offset of the font underline location from the top of the font.
+        /// </summary>
+        private readonly double _underlineOffset;
+
+        /// <summary>
+        /// the font's own real underline-stroke thickness (OpenType <c>post.underlineThickness</c>,
+        /// scaled to this font's size) - see <see cref="UnderlineThickness"/>.
+        /// </summary>
+        private readonly double _underlineThickness;
+
+        /// <summary>
+        /// the font's own real preferred underline offset (OpenType <c>post.underlinePosition</c>,
+        /// scaled to this font's size) - see <see cref="UnderlinePosition"/>.
+        /// </summary>
+        private readonly double _underlinePosition;
+
+        /// <summary>
+        /// Cached font height.
+        /// </summary>
+        private readonly double _height;
+
+        /// <summary>
+        /// Cached font ascent.
+        /// </summary>
+        private readonly double _ascent;
+
+        /// <summary>
+        /// Cached `line-height: normal` value (CSS 2.1 §10.8.1) - see <see cref="NormalLineHeight"/>.
+        /// </summary>
+        private readonly double _normalLineHeight;
+
+        /// <summary>
+        /// Cached font whitespace width.
+        /// </summary>
+        private double _whitespaceWidth = -1;
+
+
+        /// <summary>
+        /// Init. Resolves <see cref="Height"/>/<see cref="Ascent"/>/<see cref="UnderlineOffset"/>
+        /// eagerly, right here, rather than lazily on this font's first <c>Canvas.MeasureString</c>
+        /// call (as a previous version of this constructor did): <paramref name="font"/>'s own descriptor/
+        /// metrics are already fully resolved by the time <c>TypefaceFont</c>'s constructor returns
+        /// (<c>TypefaceFont.Initialize</c> calls <c>InitializeFontMetrics</c> synchronously), so
+        /// there was never a real data dependency on "a string having been measured first" - only an
+        /// accident of where this arithmetic used to live. Reading <see cref="Height"/>/<see cref="Ascent"/>
+        /// before this font's first <c>MeasureString</c> call used to read back a stale, pre-resolution
+        /// sentinel, which cost real debugging time in both the HTML and SVG vertical-writing-mode text
+        /// pipelines (see <c>CssLayoutEngine.NaturalWordSize</c>'s and <c>SvgRenderer.LayoutGlyphs</c>'s own
+        /// remarks) before either pipeline had gotten around to actually measuring a string with this font.
+        /// </summary>
+        public SvgCanvasFont(TypefaceFont font, double pixelsPerPoint)
+        {
+            Font = font;
+            PixelsPerPoint = pixelsPerPoint;
+
+            // Read ascent/descent/em-height directly off the font's OWN already-resolved descriptor
+            // instead of re-deriving them per size, which
+            // re-resolve a font by its own internal name (e.g. "Source Code Pro" - not the CSS-facing
+            // family alias that was actually registered) through IFontResolver - for a custom/@font-face-
+            // registered family this can resolve to an entirely unrelated font, and even when it does find
+            // something, it bypasses the per-instance cache routing that keeps two PdfGenerators' same-
+            // named custom fonts from colliding (see TypefaceFont.Descriptor and LoadedTypeface.OwningInstanceResolver).
+            var metrics = font.Typeface.Metrics;
+            var descent = font.Size * metrics.CellDescent / metrics.UnitsPerEm;
+            var ascent = font.Size * metrics.CellAscent / metrics.UnitsPerEm;
+            // `font.Size` is a true (unscaled) point size - see the Ascent/Height property comments below
+            // for why the PixelsPerPoint multiply has to happen separately, at the property/here, not baked
+            // into font.Size itself. Each of ascent/descent/gap is rounded to a whole CSS pixel *in that
+            // true-point space* before summing (not the summed total, and not after the PixelsPerPoint
+            // multiply - rounding post-multiply would round to the wrong granularity whenever
+            // PixelsPerPoint != 1, since RoundToWholeCssPixel's divisor is a fixed pt-per-CSS-px ratio,
+            // not a pt-per-internal-unit one) - this is what makes it land exactly on Chrome's figures
+            // rather than merely close (issue #956). The PixelsPerPoint multiply is applied once, after
+            // rounding, to convert the whole sum into this container's internal layout-unit space -
+            // mirroring Ascent's own single multiply, just applied to the rounded sum instead of a raw value.
+            double ScaleUnits(int designUnits) => font.Size * designUnits / metrics.UnitsPerEm;
+            _normalLineHeight = (RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineAscent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineDescent)) +
+                                 RoundToWholeCssPixel(ScaleUnits(metrics.NormalLineGap))) * pixelsPerPoint;
+            // TypefaceFont.Height (int, System.Drawing.Font-style API) rounds up to a whole point via
+            // Math.Ceiling - harmless at an ordinary font.Size, but collapses to exactly 1 for any
+            // sub-1pt size, discarding all proportional information. This adapter's own Height then
+            // multiplies that lossy value back up by PixelsPerPoint (below) to undo CreateFontInt's own
+            // size/PixelsPerPoint division - a font constructed sub-1pt (any PixelsPerInch/ShrinkToFit/
+            // ScaleToPageSize scale where PixelsPerPoint > ~7) would land on exactly PixelsPerPoint
+            // itself, not the font's real line height (issue #814's line-height family). GetHeight() is
+            // TypefaceFont's own double-precision equivalent, with no such collapse.
+            _height = font.Height;
+            // Height above; UnderlineOffset/Ascent below round to whole points too, but only after
+            // scaling by PixelsPerPoint (in the properties, not here) - rounding this font's own tiny
+            // constructed size first, the same way Height used to via TypefaceFont.Height, would collapse a
+            // sub-1pt ascent/descent to exactly 0 before PixelsPerPoint ever gets a chance to restore
+            // real magnitude, for the identical reason.
+            _underlineOffset = _height - descent + 1f;
+            _ascent = ascent;
+            // Same true-point-space-then-scale ordering as _underlineOffset above (rounded in the
+            // property, not here) - post.underlineThickness is occasionally 0 in a poorly-authored font
+            // (no real stroke-width guidance), which would otherwise paint an invisible decoration line
+            // under text-decoration-thickness: from-font; falling back to the engine's own pre-existing
+            // fixed thickness (Font.UnderlineThickness's own default) is safer than a literal 0.
+            _underlineThickness = metrics.UnderlineThickness > 0 ? ScaleUnits(metrics.UnderlineThickness) : 1d / pixelsPerPoint;
+            // Unlike UnderlineThickness, 0 is a plausible authored value here (an underline sitting
+            // exactly on the baseline) rather than an obvious authoring mistake, so it is not special-
+            // cased - scaled and used as-is, negative sign (below baseline) and all.
+            _underlinePosition = ScaleUnits(metrics.UnderlinePosition);
+        }
+
+        /// <summary>
+        /// the underline win-forms font.
+        /// </summary>
+        public TypefaceFont Font { get; }
+
+        private double PixelsPerPoint { get; set; }
+
+        public override double Size => Font.Size;
+
+        public override Typeface Typeface => Font.Typeface;
+
+        public override SyntheticStyle SyntheticStyle => Font.SyntheticStyle;
+
+        public override double? ObliqueSkewSinus => Font.ObliqueSkewSinus;
+
+        public override double UnderlineOffset => Math.Round(_underlineOffset * PixelsPerPoint);
+
+        public override double UnderlineThickness => Math.Round(_underlineThickness * PixelsPerPoint);
+
+        public override double UnderlinePosition => Math.Round(_underlinePosition * PixelsPerPoint);
+
+        public override double Height => _height * PixelsPerPoint;
+
+        public override double Ascent => Math.Round(_ascent * PixelsPerPoint);
+
+        public override double TextBaselineOffset => _ascent * PixelsPerPoint;
+
+        /// <summary>
+        /// The used value of `line-height: normal`, resolved the way real browsers do: the font's own
+        /// ascent + descent + line-gap (CSS 2.1 §10.8.1) - see the constructor for the rounding-order
+        /// rationale (issue #956).
+        /// </summary>
+        public override double NormalLineHeight => _normalLineHeight;
+
+        private const double PointsPerCssPixel = 72d / 96d;
+
+        private static double RoundToWholeCssPixel(double pt) => Math.Round(pt / PointsPerCssPixel) * PointsPerCssPixel;
+
+        public override double LeftPadding => Height / 6f;
+
+
+        public override double GetWhitespaceWidth(Canvas graphics)
+        {
+            if (_whitespaceWidth < 0)
+            {
+                _whitespaceWidth = graphics.MeasureString(" ", this).Width;
+            }
+
+            return _whitespaceWidth;
+        }
+
+        public override bool HasGlyph(System.Text.Rune rune) => Font.Typeface.HasGlyph(rune);
+
+        public override bool MatchesEmojiPresentation(System.Text.Rune baseCodepoint, EmojiPresentation presentation) =>
+            Font.Typeface.MatchesEmojiPresentation(baseCodepoint, presentation);
+
+        public override bool SupportsFontVariantCaps(CapsMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
+
+        public override bool SupportsFontVariantPosition(SubSuperMode feature) =>
+            Font.Typeface.SupportsFeatures(Shaper.GetFeatureTags(feature));
+
+        public override (double SizeScale, double BaselineShift)? GetSubSuperscriptMetrics(bool superscript) =>
+            Font.Typeface.TryGetScriptPosition(superscript ? ScriptPlacement.Superscript : ScriptPlacement.Subscript, out var position)
+                ? (position.SizeScale, position.BaselineShift)
+                : null;
+
+        public override string FaceKey => _faceKey ??= Font.Typeface.ContentHash + "/" + (int)Font.SyntheticStyle + "/" + Font.Typeface.VariationKey;
+
+        private string? _faceKey;
+
+        // ---- CPAL color-palette query surface --------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor.ColorPalette (the CPAL table). Null for a non-color font,
+        // in which case each member falls back to the Font "no palettes" default.
+
+        private ColorPalette? ColorPalette => Font.Typeface.ColorPalette;
+
+        public override int PaletteCount => ColorPalette?.PaletteCount ?? 0;
+
+        public override int PaletteEntryCount => ColorPalette?.EntriesPerPalette ?? 0;
+
+        public override int? FirstLightPalette() => ColorPalette?.FirstLightPalette();
+
+        public override int? FirstDarkPalette() => ColorPalette?.FirstDarkPalette();
+
+        public override bool TryGetPaletteColor(int paletteIndex, int entryIndex, out PaintColor color)
+        {
+            if (ColorPalette is { } cpal && cpal.TryGetColor(paletteIndex, entryIndex, out var c))
+            {
+                color = PaintColor.FromArgb(c.A, c.R, c.G, c.B);
+                return true;
+            }
+
+            color = PaintColor.Empty;
+            return false;
+        }
+
+        // ---- Vertical metrics query surface -----------------------------------------------------
+        // Backed by the font's OpenTypeDescriptor's real vhea/vmtx/VORG parsing, converted through the
+        // same design-units-to-pixels formula the constructor above already uses for _ascent/_height.
+
+        public override bool HasVerticalMetrics => Font.Typeface.HasVerticalMetrics;
+
+        public override double GetVerticalAdvance(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, static (typeface, glyph) => typeface.GetVerticalAdvance(glyph));
+
+        public override bool HasVerticalOrigin => Font.Typeface.HasVerticalOrigin;
+
+        public override double GetVerticalOriginY(System.Text.Rune rune) =>
+            ScaleDesignUnits(rune, static (typeface, glyph) => typeface.GetVerticalOrigin(glyph).Y);
+
+        /// <summary>
+        /// Shared by <see cref="GetVerticalAdvance"/>/<see cref="GetVerticalOriginY"/> - both resolve
+        /// <paramref name="rune"/> to a glyph and scale a raw design-units value from the typeface by the exact same
+        /// formula the constructor above already uses for <c>_ascent</c>/<c>_height</c>
+        /// (<c>Font.Size * designUnits / UnitsPerEm * PixelsPerPoint</c>); only which typeface accessor supplies the
+        /// design-units value differs between the two callers. A character the font does not map is measured as its
+        /// missing glyph.
+        /// </summary>
+        private double ScaleDesignUnits(System.Text.Rune rune, System.Func<Typeface, ushort, int> designUnits)
+        {
+            Font.Typeface.TryMapRune(rune, out var glyph);
+            return Font.Size * designUnits(Font.Typeface, glyph) / Font.Typeface.Metrics.UnitsPerEm * PixelsPerPoint;
+        }
+
+        // ---- MATH table query surface -----------------------------------------------------------
+        // Backed by the typeface's MATH table (Typeface.MathData).
+
+        public override bool HasMathTable => Font.Typeface.HasMathData;
+
+        public override MathTable? MathTable => Font.Typeface.MathData;
+
+        public override double FontUnitsPerEm => Font.Typeface.Metrics.UnitsPerEm;
+
+        public override int GetGlyphIndex(System.Text.Rune rune) => Font.Typeface.TryMapRune(rune, out var glyph) ? glyph : 0;
+
+        public override int GetGlyphAdvanceWidthDesignUnits(int glyphIndex) => Font.Typeface.GetAdvance((ushort)glyphIndex);
+
+        public override double? XHeightEm =>
+            Font.Typeface.Metrics is { HasMeasuredXHeight: true, UnitsPerEm: > 0 } m ? (double)m.XHeight / m.UnitsPerEm : null;
+
+        // TypefaceMetrics.CapHeight already falls back to the ascender when OS/2 has no sCapHeight - the
+        // fallback CSS Values 4 §6.1.1 prescribes for cap.
+        public override double? CapHeightEm =>
+            Font.Typeface.Metrics is { UnitsPerEm: > 0, CapHeight: > 0 } m ? (double)m.CapHeight / m.UnitsPerEm : null;
+
+        public override double? GetBaselineHeightEm(string baselineTag, bool vertical) =>
+            Font.Typeface.TryGetBaselineHeight(vertical, null, baselineTag, out var ems) ? ems : null;
+    }
+}

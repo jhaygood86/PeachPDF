@@ -189,6 +189,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Rect? GetElementBounds(String elementId)
   method Task LayoutAsync(Canvas measuringCanvas)
   method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
+  method Void PaintLinks(Int32 pageIndex, Canvas canvas)
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
@@ -243,6 +244,7 @@ PeachBrackets.Tagging.IStructureTagSink : interface
   method abstract IDisposable OpenListItemBodyElement(StructureNode node)
   method abstract IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors)
   method abstract Void AttachMathMlSource(StructureNode node, String mathMlSource)
+  method virtual Void LinkAdded(StructureNode node, Object link)
   property Boolean IsInMarkedContent { get; }
 PeachBrackets.Tagging.PhantomAncestor : struct
   ctor(StructureNode Node, String StructureType)

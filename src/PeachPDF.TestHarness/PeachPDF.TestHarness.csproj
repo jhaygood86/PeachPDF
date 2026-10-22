@@ -19,6 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\PeachPDF\PeachPDF.csproj" />
+    <!-- The SVG backend, for the svg flag: every HTML showcase is also rendered onto an SvgCanvas (see Showcases/SvgShowcaseRenderer.cs). -->
+    <ProjectReference Include="..\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
+    <ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
   </ItemGroup>
 
   <!--

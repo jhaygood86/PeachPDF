@@ -66,6 +66,23 @@ namespace PeachDrawing.PDF
         /// <inheritdoc />
         public override double PixelsPerPoint { get; }
 
+        /// <summary>The composer page this canvas draws, or null for a tile or a measuring canvas, which have no page to put a link on.</summary>
+        internal PdfComposerPage? Page { get; set; }
+
+        /// <inheritdoc />
+        public override object? AddLink(Rect bounds, string uri, IReadOnlyList<PaintPoint>? quad = null) =>
+            Page?.AddLink(Units.ToPoints(bounds, PixelsPerPoint), uri, ToPoints(quad));
+
+        /// <inheritdoc />
+        public override object? AddDestinationLink(Rect bounds, string destinationName, IReadOnlyList<PaintPoint>? quad = null) =>
+            Page?.AddDestinationLink(Units.ToPoints(bounds, PixelsPerPoint), destinationName, ToPoints(quad));
+
+        /// <inheritdoc />
+        public override void AddDestination(string name, double top) => Page?.AddDestination(name, top / PixelsPerPoint);
+
+        private PaintPoint[]? ToPoints(IReadOnlyList<PaintPoint>? corners) =>
+            corners is null ? null : [.. corners.Select(corner => Units.ToPoints(corner, PixelsPerPoint))];
+
         /// <inheritdoc />
         public override object? TileCacheOwner => _g.Owner;
 

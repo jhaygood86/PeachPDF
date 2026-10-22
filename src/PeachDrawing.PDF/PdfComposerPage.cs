@@ -49,6 +49,9 @@ namespace PeachDrawing.PDF
         /// <summary>The engine's page, for the rest of the package.</summary>
         internal PdfPage Page => _page;
 
+        /// <summary>Names a place on this page (<paramref name="topPoints"/> below its top edge) for a destination link to lead to.</summary>
+        internal void AddDestination(string name, double topPoints) => _composer.AddNamedDestination(name, Index, topPoints);
+
         /// <summary>
         /// Makes another canvas over this page's content, drawing with <paramref name="renderContext"/>. The canvases of one page share its
         /// content but each keeps its own transform and clip bookkeeping, so one made for a piece of work can be disposed when that is done.
@@ -62,7 +65,7 @@ namespace PeachDrawing.PDF
             if (_finished)
                 throw new InvalidOperationException("The page is finished; its content cannot be drawn on any more.");
 
-            var canvas = new PdfCanvas(renderContext, _graphics, renderContext.PixelsPerPoint);
+            var canvas = new PdfCanvas(renderContext, _graphics, renderContext.PixelsPerPoint) { Page = this };
             _canvases.Add(canvas);
             return canvas;
         }
