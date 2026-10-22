@@ -231,13 +231,16 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("linear-gradient(rgb(255, 0, 0))", 255, 0, 0)]
         [InlineData("linear-gradient(currentcolor)", 0, 0, 255)]
         [InlineData("linear-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)))", 128, 0, 128)]
+        [InlineData("radial-gradient(rgb(255, 0, 0))", 255, 0, 0)]
+        [InlineData("radial-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)))", 128, 0, 128)]
+        [InlineData("conic-gradient(currentcolor)", 0, 0, 255)]
+        [InlineData("conic-gradient(color-mix(in srgb, currentcolor, rgb(255, 0, 0)))", 128, 0, 128)]
         public async Task ASingleStopGradient_PaintsThatColourSolid(string gradient, int r, int g, int b)
         {
             var box = await BuildAsync($@"<div id=""a"" style=""color: rgb(0, 0, 255); width: 200px; height: 100px; background: rgb(255, 204, 204); background-image: {gradient}"">x</div>");
 
-            var image = Assert.IsType<CssImage.LinearGradient>(box.BackgroundImages![0]);
+            Assert.NotNull(box.BackgroundImages);
             var stops = BackgroundBrushStops(box);
-            Assert.NotNull(image);
             Assert.Equal(2, stops.Count);
             AssertStop(stops[0], r, g, b);
             AssertStop(stops[1], r, g, b);

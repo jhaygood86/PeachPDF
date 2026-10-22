@@ -426,7 +426,7 @@ namespace PeachBrackets.Svg
         /// <c>currentColor</c> (resolved against <paramref name="contextColor"/> - the CSS <c>color</c>
         /// property of the inline <c>&lt;svg&gt;</c>'s HTML ancestor for inline SVG, or black for
         /// standalone/<c>&lt;img&gt;</c> SVG, which has no CSS context to inherit from), or a solid
-        /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor"/>).
+        /// color (hex/named, delegated to <see cref="CssValueParser.GetActualColor(string)"/>).
         /// </summary>
         public static SvgPaint ParsePaint(string value, RenderContext renderContext, PaintColor contextColor)
         {
