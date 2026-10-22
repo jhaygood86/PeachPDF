@@ -4559,10 +4559,10 @@ namespace PeachBrackets.Html.Dom
                     // too-tall-for-here-but-fits-on-the-next-page box exactly as before.
                     //
                     // Excludes a box that will actually dispatch to the multi-column engine below (not
-                    // every EstablishesMultiColumnContext box - one holding only inline content takes the
-                    // ContainsInlinesOnly branch above instead, same as any other inlines-only box, and
-                    // must still be suppressed): a column is a real fragmentainer in its own right and
-                    // drives its own (nested) fragmentation regardless of this box's own monolithic status.
+                    // every EstablishesMultiColumnContext box - a multi-column box holding only inline content is
+                    // wrapped by the parser, DomParser.CorrectInlineBoxesParent, so it dispatches here too): a
+                    // column is a real fragmentainer in its own right and drives its own (nested) fragmentation
+                    // regardless of this box's own monolithic status.
                     //
                     // Excludes table-cell/table-caption, and by display rather than by overflow value:
                     // a cell that declares overflow: hidden itself would otherwise read as "monolithic"
@@ -4578,8 +4578,9 @@ namespace PeachBrackets.Html.Dom
                     // ContainsInlinesOnly/CreateLineBoxes branch below instead of the columns engine, which
                     // is what lays those floats out (issue #1203). Only when nothing else is in flow: the
                     // columns engine takes its children as block-level column content, so text sitting
-                    // directly beside a float (which has no anonymous block around it in a multi-column
-                    // parent) is left to the inline flow it always took, instead of being dropped.
+                    // directly beside a float is left to the inline flow it always took, instead of being dropped.
+                    // The parser wraps such text in an anonymous block (DomParser.CorrectInlineBoxesParent) except
+                    // under a vertical writing mode, which keeps that flow.
                     var dispatchesToColumnsEngine = EstablishesMultiColumnContext && Boxes.Count > 0
                         && (!DomUtils.ContainsInlinesOnly(this)
                             || (Boxes.Any(b => b.IsFloated)

@@ -3384,6 +3384,11 @@ namespace PeachBrackets.Html.Dom
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
 
+            // A negative margin-left can leave a right blocker found again with nothing changed and the float still
+            // fitting by the arithmetic below, so the same state would be searched for ever. As in FloatBoxRight, a
+            // repeated state sends the float below its blockers.
+            HashSet<(double Left, double Right, double Top)> triedPositions = [];
+
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
@@ -3405,9 +3410,12 @@ namespace PeachBrackets.Html.Dom
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth > coordinates.Right)
+                if (coordinates.Left + box.ActualWidth > coordinates.Right
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
-                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
+                    triedPositions.Clear();
+
+                    coordinates.DropTo(coordinates.MaxBottom);
                     coordinates.Left = startX + box.ActualMarginLeft;
 
                     // css-break-3 §5.1: this drop may have carried the float onto a fragmentainer of a
@@ -3445,10 +3453,20 @@ namespace PeachBrackets.Html.Dom
                 MulticolRight = EnclosingMulticolRight(containingBox),
                 Top = startY,
                 MaxBottom = startY,
+                MarginTop = box.ActualMarginTop,
+                // The position handed over is read as the margin edge, as it always was for a right float: taking a
+                // negative margin-top back out of it puts a second float with a larger one over the first.
+                OuterTop = startY,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth
             };
+
+            // Blockers on both sides that each move the right edge to a place the other then moves back (two right
+            // floats past the containing block's edge, in a column too narrow for either to clear) leave the search
+            // in a state it has already been in; the same state finds the same blockers, so it would never end. The
+            // float goes below them instead, as it does when it no longer fits beside them.
+            HashSet<(double Left, double Right, double Top)> triedPositions = [];
 
             do
             {
@@ -3472,16 +3490,22 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 // The next float goes below the blocker's margin box (CSS 2.1 §9.5.1 rule 8 puts it as high as
-                // possible, which is the margin edge, not the border edge).
-                var blockerBottom = intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom;
+                // possible, which is the margin edge, not the border edge). Never above its border box, though: that is
+                // the edge the conflict test reads, so a negative margin-bottom would put the drop back inside the
+                // blocker and the same blocker would be found again.
+                var blockerBottom = Math.Max(intersectingFloat.ActualBottom,
+                    intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom);
                 if (blockerBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerBottom;
                 }
 
-                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft)
+                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
-                    coordinates.Top = coordinates.MaxBottom + box.ActualMarginTop;
+                    triedPositions.Clear();
+
+                    coordinates.DropTo(coordinates.MaxBottom);
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
@@ -4314,11 +4338,13 @@ namespace PeachBrackets.Html.Dom
                 var ownFloatsOnly = (leftFloat is null || ColumnsContainerOf(leftFloat) == ColumnsContainerOf(blockBox))
                     && (rightFloat is null || ColumnsContainerOf(rightFloat) == ColumnsContainerOf(blockBox));
 
+                // Never above a float's border-box bottom: the lookup that found the float reads that edge, so a negative
+                // margin-bottom would leave the line below the margin edge and still beside the float.
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
-                    nextY = Math.Min(nextY, leftFloat.ActualBottom + leftFloat.ActualMarginBottom);
+                    nextY = Math.Min(nextY, Math.Max(leftFloat.ActualBottom, leftFloat.ActualBottom + leftFloat.ActualMarginBottom));
                 if (rightFloat is not null)
-                    nextY = Math.Min(nextY, rightFloat.ActualBottom + rightFloat.ActualMarginBottom);
+                    nextY = Math.Min(nextY, Math.Max(rightFloat.ActualBottom, rightFloat.ActualBottom + rightFloat.ActualMarginBottom));
 
                 // The cursor stays where the first lookup left it unless the line really moves down.
                 if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
@@ -4522,13 +4548,48 @@ namespace PeachBrackets.Html.Dom
         /// onto the next page; that is float fragmentation proper (issue #317).
         /// </para>
         /// </remarks>
-        private static async ValueTask FlowFloatChild(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        private static async ValueTask FlowFloatChild(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates,
+            double lineSpacing, double lineStartX, bool isRtl)
         {
             // A speculative wrap may have rejected this box earlier in the same layout generation -
             // reaching real placement is the authoritative point at which it becomes fragment-visible,
             // exactly as for FlowAtomicBlockContentChild's identical call.
             b.AllowFragmentEmissionForCurrentLayout();
 
+            await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+
+            // The words already on this line are moved beside a float placed after them, as a browser lays the
+            // line out again around it. Where they would no longer fit, the float starts the next line instead.
+            // The zero-width marker a <br> leaves on the line it opens is not content to move: counted as words it
+            // sent a float wider than the line to a third line and left the line before it drawn twice.
+            // A line that cannot wrap (white-space: nowrap or pre) stays one line, as in a browser: it may be wider
+            // than the column, and moving it or opening a line after it draws its words twice or on top of each other.
+            if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
+                && FloatOverlapsLineWords(b, coordinates.Line))
+            {
+                if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
+                {
+                    foreach (var word in coordinates.Line.Words)
+                    {
+                        word.Left += shift;
+                    }
+
+                    coordinates.CurrentX += shift;
+                }
+                else
+                {
+                    coordinates.InlineFloats?.Remove(b);
+                    OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
+                        followsForcedBreak: false, isRtl);
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                }
+            }
+
+            await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
+        }
+
+        private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        {
             b.Location = new PaintPoint(
                 blockBox.ClientLeft + b.ActualMarginLeft, coordinates.Line.FlowTop ?? coordinates.CurrentY);
             b.ActualBottom = b.Location.Y;
@@ -4542,8 +4603,38 @@ namespace PeachBrackets.Html.Dom
             FloatBox(b);
 
             (coordinates.InlineFloats ??= []).Add(b);
+        }
 
-            await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
+        private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
+        {
+            var left = floated.Location.X - floated.ActualMarginLeft;
+            var right = floated.ActualRight + floated.ActualMarginRight;
+
+            return line.Words.Any(w => w.Left < right && w.Right > left);
+        }
+
+        // The horizontal move that clears the words on the line from a float placed at its top, or null when the
+        // moved words would leave the line's space.
+        private static double? ShiftLineBesideFloat(CssBox blockBox, CssBox floated, CssLineBoxCoordinates coordinates)
+        {
+            var line = coordinates.Line;
+            var firstLeft = line.Words.Min(w => w.Left);
+            var lastRight = line.Words.Max(w => w.Right);
+
+            if (floated.EffectiveFloatSide == Floating.Right)
+            {
+                var move = floated.Location.X - floated.ActualMarginLeft - lastRight;
+                var leftFloat = LeftFloatAt(coordinates, blockBox);
+                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.ActualRight + leftFloat.ActualMarginRight;
+
+                return firstLeft + move >= leftLimit - LineFitTolerance ? move : null;
+            }
+
+            var shift = floated.ActualRight + floated.ActualMarginRight - firstLeft;
+            var rightFloat = RightFloatAt(coordinates, blockBox);
+            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.Location.X - rightFloat.ActualMarginLeft;
+
+            return lastRight + shift <= rightLimit + LineFitTolerance ? shift : null;
         }
 
         /// <summary>
@@ -5592,7 +5683,7 @@ namespace PeachBrackets.Html.Dom
                     }
                     else
                     {
-                        await FlowFloatChild(g, blockBox, b, coordinates);
+                        await FlowFloatChild(g, blockBox, b, coordinates, lineSpacing, lineStartX, isRtl);
                         (coordinates.FloatsPlacedOnThisLine ??= []).Add(b);
                     }
 
@@ -5823,6 +5914,14 @@ namespace PeachBrackets.Html.Dom
                             if (lastLeftIntersectingFloatBox is not null)
                             {
                                 coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+
+                                // The line the word wrapped onto may have no room beside that float, as when the float is wider
+                                // than the line; the word goes below it, as it would have had it been about to open the line.
+                                if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre))
+                                {
+                                    ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
+                                        clonedTrailing, isRtl, GrowLineToItsExtent);
+                                }
                             }
 
                             if (word.IsImage || word.Equals(b.FirstWord))

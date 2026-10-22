@@ -3575,6 +3575,34 @@ namespace PeachBrackets.Html.Parse
             // normalization must not descend into (and restructure) them. See CssBoxSvg / issue #159.
             if (box is CssBoxSvg or CssBoxMath) return;
 
+            // A multi-column container holding nothing but inline content gets the wrapper an inline run
+            // gets elsewhere, though its own children do not vary: CssBox.LayoutContents would otherwise
+            // read the box as inlines-only and send it to CreateLineBoxes, which knows nothing of columns,
+            // so the text runs as one column across the full measure instead of being fragmented across
+            // the column boxes (css-multicol-1 §3). Widening that dispatch instead does not work: the
+            // columns engine fragments block-level content, and handed a box of bare inline content it
+            // drops words outright. The wrapper gives it the shape it needs.
+            //
+            // A float joins the wrapped run, as it does in any block (CSS 2.1 §9.2.1.1), so it is placed beside the
+            // text in the same inline flow. A box holding only floats is not wrapped: it already reaches the engine
+            // (see CssBox's float disjunct). Nor is a scroll container whose height is bounded: the columns engine
+            // skips words when it fills columns of a bounded height, so such a box keeps the inline flow it had.
+            // Nor does one holding a float inside a table cell: a float that spans the page, or is wider than a column,
+            // leaves the lines after it past the page foot or past the cell, and the words there are lost. That keeps the
+            // inline flow it had until the columns engine places them (see the accepted gap).
+            // Nor under a vertical
+            // writing mode: measured on a 225pt x 90pt `vertical-rl; column-count: 2` box holding one run
+            // of text, CreateVerticalLineBoxes keeps the content inside the box (72pt x 58pt), while the
+            // columns engine stacks it into a single 511pt run that leaves the box entirely.
+            var wrapsInlineRunForColumns =
+                box.EstablishesMultiColumnContext
+                && box.Boxes.Count > 0
+                && DomUtils.ContainsInlinesOnly(box)
+                && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
+                && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+                && !IsHeightBoundedScrollContainer(box)
+                && !(box.Boxes.Any(b => b.IsFloated) && IsInsideTableCell(box));
+
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
             // anonymous block box — a *block container* rule — must not be created inside one. Each child
             // becomes an item instead (css-flexbox-1 §4 / css-grid-2 §6), and only a contiguous run of
@@ -3590,7 +3618,7 @@ namespace PeachBrackets.Html.Parse
             {
                 WrapFlexOrGridTextSequences(box);
             }
-            else if (ContainsVariantBoxes(box))
+            else if (ContainsVariantBoxes(box) || wrapsInlineRunForColumns)
             {
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
@@ -3739,6 +3767,25 @@ namespace PeachBrackets.Html.Parse
         /// </remarks>
         private static bool JoinsTheInlineRun(CssBox box) =>
             (box.IsInline || box.IsFloated || JoinsAsOutOfFlow(box)) && !CssBox.IsOutsideMarker(box);
+
+
+        private static bool IsInsideTableCell(CssBox box)
+        {
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.IsTableCell) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> clips its content (<c>overflow</c> other than <c>visible</c>) and has a
+        /// <c>height</c> or <c>max-height</c> that bounds how much of it shows.
+        /// </summary>
+        private static bool IsHeightBoundedScrollContainer(CssBox box) =>
+            (box.Overflow.Value != Css.Overflow.Visible || box.ClipsWithoutScrolling)
+            && (CssValueParser.IsValidLength(box.Height) || CssValueParser.IsValidLength(box.MaxHeight));
 
         /// <summary>
         /// Whether an absolutely positioned <paramref name="box"/> stays among the inline content around it

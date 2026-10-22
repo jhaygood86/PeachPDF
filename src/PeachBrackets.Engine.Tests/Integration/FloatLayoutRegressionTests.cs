@@ -732,13 +732,13 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(floatBox.Location.Y <= lineTop + 0.001,
                 $"the float belongs on the shared line (top {lineTop}), was at Y={floatBox.Location.Y}");
 
-            // "more" starts right after the float's right edge - on the same line as "XY", not back at
-            // the container's left edge on a line of its own.
+            // "more" follows "XY" after one space, beside the float. The bound is measured from "XY" because the gap from the
+            // float is three monospace advances, which depend on the host's monospace face (Consolas, DejaVu Sans Mono, Menlo).
             var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
             Assert.True(more.Rectangle.Left >= floatRightEdge - 0.5,
                 $"'more' (X={more.Rectangle.Left}) should start at or after the float's right edge ({floatRightEdge})");
-            Assert.True(more.Rectangle.Left < floatRightEdge + 20,
-                $"'more' (X={more.Rectangle.Left}) should start immediately after the float, not further along the line");
+            Assert.True(more.Rectangle.Left - xy.Rectangle.Right < 12,
+                $"'more' (X={more.Rectangle.Left}) should follow 'XY' after one space, not further along the line");
         }
 
         [Fact]
@@ -773,14 +773,71 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.True(floatBox.IsFloated);
 
-            // "more" must start EXACTLY at the float's true right edge: the intervening space collapses
-            // away at the out-of-flow boundary the same way it does before the float (css-text-3 §1.5),
-            // so there is no legitimate gap here for a loose tolerance to hide behind. Confirmed to fail
-            // without the fix (measured 9.79pt too far right for this fixture's own numbers) and pass
-            // with it, by toggling CssLayoutEngine.cs's `excludedFromLineSpacing` guard locally and
-            // re-running this test both ways.
+            // The text before the float is laid out beside it, and "more" follows that text, with only the space
+            // between them. A leaked inset would push "more" about 10pt further along the line.
+            var xy = words.First(w => w.Text is { } t && t.StartsWith("XY"));
             var floatRightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
-            Assert.Equal(floatRightEdge, more.Rectangle.Left, 1);
+            Assert.True(xy.Rectangle.Left >= floatRightEdge - 1,
+                $"XY starts at {xy.Rectangle.Left}, under the float that ends at {floatRightEdge}");
+            Assert.True(more.Rectangle.Left - xy.Rectangle.Right < 12,
+                $"more starts {more.Rectangle.Left - xy.Rectangle.Right}pt after XY, more than a space");
+        }
+
+        [Fact]
+        public async Task FloatAfterTextThatFitsBeside_MovesThatTextBesideIt()
+        {
+            var html = Wrap(@"
+                <div style='width:400px; font:16px monospace;'>XY <span id='float' style='float:left;
+                    width:30px; height:20px;'></span> more words</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var words = CollectAllWords(root);
+            var xy = words.First(w => w.Text is { } t && t.StartsWith("XY"));
+
+            var floatLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+            var floatRight = floatBox.ActualRight + floatBox.ActualMarginRight;
+            Assert.True(xy.Rectangle.Left >= floatRight - 1,
+                $"XY starts at {xy.Rectangle.Left}, under the float that spans {floatLeft}..{floatRight}");
+            Assert.DoesNotContain(words, w =>
+                w.Rectangle.Left < floatRight - 0.5 && w.Rectangle.Right > floatLeft + 0.5
+                && w.Rectangle.Top < floatBox.ActualBottom && w.Rectangle.Bottom > floatBox.Location.Y);
+        }
+
+        [Fact]
+        public async Task FloatAfterTextThatDoesNotFitBeside_StartsTheNextLine()
+        {
+            var html = Wrap(@"
+                <div style='width:120px; font:16px monospace;'>XXXXXXXX <span id='float' style='float:left;
+                    width:100px; height:20px;'></span> tail</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var words = CollectAllWords(root);
+            var xx = words.First(w => w.Text is { } t && t.StartsWith("XX"));
+
+            Assert.True(floatBox.Location.Y >= xx.Rectangle.Bottom - 1,
+                $"the float starts at {floatBox.Location.Y}, on the line of XX (bottom {xx.Rectangle.Bottom})");
+            Assert.Equal(floatBox.Location.X, xx.Rectangle.Left, 1);
+        }
+
+        [Fact]
+        public async Task RightFloatAfterTextThatOverlapsIt_MovesThatTextLeftBesideIt()
+        {
+            var html = Wrap(@"
+                <div style='width:100px; font:16px monospace; text-indent:20px;'>aaaaaa <span id='float'
+                    style='float:right; width:30px; height:20px;'></span> tail</div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var floatBox = FindById(root, "float")!;
+            var words = CollectAllWords(root);
+            var first = words.First(w => w.Text is { } t && t.StartsWith("aaaaaa"));
+
+            var floatLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+            Assert.True(first.Rectangle.Right <= floatLeft + 0.5,
+                $"aaaaaa ends at {first.Rectangle.Right}, over the float that starts at {floatLeft}");
+            Assert.True(first.Rectangle.Left < floatLeft - 1,
+                $"aaaaaa starts at {first.Rectangle.Left}, so it did not move");
         }
 
         [Fact]

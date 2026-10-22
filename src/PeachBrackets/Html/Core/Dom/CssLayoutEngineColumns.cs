@@ -629,21 +629,15 @@ namespace PeachBrackets.Html.Dom
             // tall everything is) and a continuation starts from the full budget and is re-balanced below
             // once the fill has shown that the remainder ends here.
             var balances = columnsBox.ColumnFill.Value != ColumnFillMode.Auto;
-            // The container's own floats, and those of an anonymous block wrapping its bare text: what makes a column
-            // taller than an even share of the content.
+            // The container's own floats: what makes a column taller than an even share of the content. A float among
+            // the text of an anonymous block is not one: it sits wherever the pass that last laid it out put it, which
+            // after a measurement pass is far down a single column of all the text, and the text divides.
             var floats = new List<CssBox>();
             foreach (var b in columnsBox.Boxes)
             {
                 if (b.IsFloated && b.DerivedStyle.ActualDisplay != Keywords.None)
                 {
                     floats.Add(b);
-                }
-                else if (b.HtmlTag is null)
-                {
-                    foreach (var c in b.Boxes)
-                    {
-                        if (c.IsFloated) floats.Add(c);
-                    }
                 }
             }
 

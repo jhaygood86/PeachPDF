@@ -1747,14 +1747,12 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(mc.ClientRight - mc.ClientLeft, abs.ActualRight - abs.Location.X, 1);
         }
 
-        // A known boundary, pre-existing and characterized here rather than left silent. CssBox's own
-        // content dispatch tests ContainsInlinesOnly *before* EstablishesMultiColumnContext, and
-        // ContainsInlinesOnly is "every child is inline" - vacuously true of a box whose children are all
-        // text. So a multi-column container holding nothing but text takes the inline branch and never
-        // reaches this engine at all. Columnizing it needs its inline content wrapped in an anonymous
-        // block first, which is a box-generation question rather than a fragmentation one.
+        // css-multicol-1 §3: a container fragments its content across the column boxes, text included.
+        // The run needs an anonymous block around it first (DomParser.CorrectInlineBoxesParent), since
+        // CssBox's content dispatch tests ContainsInlinesOnly before EstablishesMultiColumnContext, and
+        // the inline branch it picks knows nothing of columns.
         [Fact]
-        public async Task InlineOnlyContent_DoesNotColumnize_KnownBoundary()
+        public async Task InlineOnlyContent_Columnizes()
         {
             var html = Wrap("<div id='mc' style='columns:2; column-gap:0; width:200px'>"
                             + "Plain text with no block child of its own, long enough that two columns "
@@ -1762,14 +1760,550 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await BuildAndLayout(html, pageHeight: 400);
 
             var mc = FindById(root, "mc")!;
-            var xs = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
-                .Select(w => System.Math.Round(w.Left)).DefaultIfEmpty(0).ToList();
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
 
-            // The text uses the container's whole width rather than a column's - two columns of a 150pt
-            // container would each be ~75pt wide. And no rule is drawn, because no column was made.
-            Assert.True(xs.Max() - xs.Min() > 100,
-                $"expected the text to span the whole container rather than one column, got X {xs.Min()}..{xs.Max()}");
-            Assert.Null(mc.ColumnRuleSegments);
+            // Every word is laid out once: the columns engine must not drop any of them.
+            Assert.Equal(20, words.Count);
+
+            // 200px of container is 150pt, so with no gap each column is 75pt.
+            var left = words.Min(w => w.Left);
+            var boundary = left + 75;
+
+            Assert.Contains(words, w => w.Left >= boundary - 1);
+            Assert.All(
+                words.Where(w => w.Left < boundary - 1),
+                w => Assert.True(w.Right <= boundary + 1,
+                    $"a first-column word ran past the column at {boundary}, to {w.Right}"));
+        }
+
+        // The vertical-writing-mode exclusion in DomParser.CorrectInlineBoxesParent: this box keeps its
+        // CreateVerticalLineBoxes path, where its text stays inside the box. Through the columns engine
+        // the same text would leave the box entirely.
+        [Fact]
+        public async Task InlineOnlyContentUnderVerticalWritingMode_StaysInsideTheBox()
+        {
+            var html = Wrap("<div id='mc' style='writing-mode:vertical-rl; columns:2; column-gap:0; width:225pt; height:90pt'>"
+                            + "Plain text with no block child of its own, long enough that two columns "
+                            + "would be visibly different from one.</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.NotEmpty(words);
+            Assert.All(words, w =>
+            {
+                Assert.True(w.Left >= mc.Location.X - 1 && w.Right <= mc.ActualRight + 1,
+                    $"word spans X {w.Left}..{w.Right}, outside the box {mc.Location.X}..{mc.ActualRight}");
+                Assert.True(w.Top >= mc.Location.Y - 1 && w.Bottom <= mc.ActualBottom + 1,
+                    $"word spans Y {w.Top}..{w.Bottom}, outside the box {mc.Location.Y}..{mc.ActualBottom}");
+            });
+        }
+
+        // A float beside the text joins the wrapped run (DomParser.CorrectInlineBoxesParent). The text is still
+        // divided into columns, and the lines beside the float start past its right edge.
+        [Fact]
+        public async Task InlineTextBesideAFloat_Columnizes()
+        {
+            var html = Wrap("<div id='mc' style='columns:2; column-gap:0; width:200px'>"
+                            + "<div id='f' style='float:left; width:40px; height:20px'></div>"
+                            + "Plain text with no block child of its own, long enough that two columns "
+                            + "would be visibly different from one.</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Equal(20, words.Count);
+
+            // 200px of container is 150pt, so with no gap each column is 75pt.
+            var boundary = words.Min(w => w.Left) + 75;
+            Assert.Contains(words, w => w.Left >= boundary - 1);
+            Assert.All(
+                words.Where(w => w.Left < boundary - 1),
+                w => Assert.True(w.Right <= boundary + 1,
+                    $"a first-column word ran past the column at {boundary}, to {w.Right}"));
+
+            Assert.All(
+                words.Where(w => w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left < boundary - 1),
+                w => Assert.True(w.Left >= f.ActualRight - 1,
+                    $"a word beside the float starts at {w.Left}, inside the float's right edge {f.ActualRight}"));
+        }
+
+        // A float in the middle of the text joins the wrapped run (DomParser.CorrectInlineBoxesParent). The words
+        // already on its line move beside it, the lines after it start past its right edge, and no word is drawn
+        // over it.
+        [Fact]
+        public async Task InlineTextBesideAMiddleFloat_StartsPastIt()
+        {
+            var first = string.Join(" ", Enumerable.Range(1, 60).Select(i => $"a{i:D3}"));
+            var rest = string.Join(" ", Enumerable.Range(1, 120).Select(i => $"b{i:D3}"));
+            var html = Wrap("<div id='mc' style='columns:2; column-gap:20px; width:600px'>"
+                            + first + " <div id='f' style='float:left; width:120px; height:80px; margin-right:8px'></div> "
+                            + rest + "</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Contains(words, w =>
+                w.Top < f.ActualBottom && w.Bottom > f.Location.Y && w.Left >= f.ActualRight - 1);
+            var floatLeft = f.Location.X - f.ActualMarginLeft;
+            var floatRight = f.ActualRight + f.ActualMarginRight;
+            // Word boxes overhang their line box by half the leading each way (Arial at 11pt: a 12.64pt box on a 12.00pt
+            // line), so a float placed at a line top sits about 0.3pt inside a neighbouring line's box. The 1pt slack
+            // ignores that overhang and still catches a word box that overlaps the float by more than 1pt.
+            Assert.DoesNotContain(words, w =>
+                w.Left < floatRight - 0.5 && w.Right > floatLeft + 0.5
+                && w.Top < f.ActualBottom - 1 && w.Bottom > f.Location.Y + 1);
+        }
+
+        // Right floats taller than the column, one beyond the other's reach, each moved the search's right edge to a
+        // place the other moved back, so placing the third never ended. Only a bounded layout is asserted: the float
+        // goes below the blockers.
+        [Fact]
+        public async Task RightFloatsTallerThanTheColumn_DoNotStallFloatPlacement()
+        {
+            var floats = new[]
+            {
+                (55, "right", 190, 1383, 9, ""), (66, "left", 189, 1580, 10, ""), (134, "left", 263, 1157, 11, ""),
+                (150, "right", 243, 1225, 9, "clear:both;"), (156, "right", 346, 1200, 6, ""),
+                (214, "right", 48, 1494, 4, "clear:left;"), (247, "left", 66, 1112, 4, "")
+            };
+            var text = new System.Text.StringBuilder();
+            for (var i = 0; i < 249; i++)
+            {
+                foreach (var f in floats.Where(f => f.Item1 == i))
+                {
+                    text.Append($"<div style='float:{f.Item2}; width:{f.Item3}px; height:{f.Item4}px; margin:{f.Item5}px; {f.Item6}'></div>");
+                }
+
+                text.Append($"w{i:D3} ");
+            }
+
+            var html = Wrap("<div id='mc' style='width:700px; columns:2; column-fill:auto; height:300px'>" + text + "</div>");
+
+            // Off the test thread: the stalled search is a synchronous loop, which would otherwise hang the run.
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+        }
+
+        [Fact]
+        public async Task RightFloatWithNegativeMarginTop_DropsBelowWiderLeftFloat()
+        {
+            var html = Wrap(
+                "<div id='c' style='width:200pt'>" +
+                "<div id='a' style='float:left; width:150pt; height:100pt'>A</div>" +
+                "<div id='b' style='float:right; width:100pt; height:50pt; margin-top:-5pt'>B</div>" +
+                "text</div>");
+
+            // Off the test thread: a stalled search is a synchronous loop, which would otherwise hang the run.
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // B cannot sit beside A (150 + 100 > 200), so it goes below A's margin edge; its border box
+            // starts 5pt above that edge because of the negative margin-top.
+            Assert.Equal(a.Location.Y + 100 - 5, b.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task RightFloatWithNegativeMarginTop_InMulticolInlineContent_DoesNotStallFloatPlacement()
+        {
+            var html = Wrap(
+                "<div style='width:700px; columns:3'>" +
+                "<div style='float:right; width:42px; height:67px'>F1</div>" +
+                "w1 w2 w3 w4 w5 w6 w7 w8 w9 w10" +
+                "<div style='float:right; width:274px; height:20px; margin-top:-5px'>F4</div></div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+        }
+
+        // A blocker with a negative margin-bottom has a margin edge above its border box. The search tests for conflicts
+        // against the border box, so dropping the float to the margin edge put it back inside the blocker, and the same
+        // blocker was found again for ever.
+        [Theory]
+        [InlineData("width:600px; columns:2")]
+        [InlineData("width:300px")]
+        public async Task BlockerWithNegativeMarginBottom_DoesNotStallFloatPlacement(string containerStyle)
+        {
+            var html = Wrap(
+                $"<div style='{containerStyle}'>" +
+                "<div id='a' style='float:left; width:200px; height:50px; margin-bottom:-45px'>A</div>" +
+                "<div id='b' style='float:right; width:200px; height:30px; margin-top:-10px'>B</div>" +
+                "w1 w2 w3 w4 w5 w6 w7 w8</div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            // B cannot sit beside A in a column that cannot hold both, so its margin edge is at or below A's border box.
+            Assert.True(b.Location.Y - b.ActualMarginTop >= a.ActualBottom - 0.01,
+                $"B's margin edge at {b.Location.Y - b.ActualMarginTop} is inside A, which ends at {a.ActualBottom}");
+        }
+
+        // The first float's top is the position the layout gave it, with no margin taken out of it, so a second float
+        // with a larger negative margin-top read as starting below the first's bottom and was placed over it.
+        [Fact]
+        public async Task SecondRightFloatWithNegativeMarginTop_SitsBesideTheFirst()
+        {
+            var html = Wrap(
+                "<div style='width:600px'>" +
+                "<div id='f1' style='float:right; width:75px; height:29px; margin-top:-20px'>F1</div>" +
+                "<div id='f2' style='float:right; width:64px; height:33px; margin-top:-40px'>F2</div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var f1 = FindById(root, "f1")!;
+            var f2 = FindById(root, "f2")!;
+
+            Assert.True(f2.ActualRight + f2.ActualMarginRight <= f1.Location.X - f1.ActualMarginLeft + 0.01,
+                $"F2 ends at {f2.ActualRight}, over F1, which starts at {f1.Location.X}");
+        }
+
+        // A float after the text, in a container with a fixed height: the column balance read the float's position from
+        // the measurement pass, which put it after all the text laid out in one column, and sized every column to hold
+        // that. The text then ran down a single column and the scroll container clipped most of it.
+        [Theory]
+        [InlineData("overflow:hidden; height:400px")]
+        [InlineData("overflow:hidden; height:200px")]
+        [InlineData("height:400px")]
+        [InlineData("")]
+        public async Task FloatAfterTheText_DoesNotCollapseTheColumns(string containerStyle)
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 31).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; {containerStyle}'>" + text +
+                            "<div style='float:left; width:50px; height:36px'>F</div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words).Where(w => w.Text is { } text && text.StartsWith('w')).ToList();
+
+            Assert.Equal(31, words.Count);
+
+            // Which third of the container a word starts in; the words per line depend on the font, the thirds do not.
+            var third = (mc.ActualRight - mc.Location.X) / 3;
+            var columns = words.GroupBy(w => (int)((w.Left - mc.Location.X) / third)).ToList();
+            Assert.Equal(3, columns.Count);
+
+            // An even share is about 11 words a column; a column holding half the text again is not balanced.
+            Assert.All(columns, c => Assert.InRange(c.Count(), 1, 16));
+        }
+
+
+        // The columns of a container that holds a float among its text are at least as tall as that float: the text
+        // alone would divide into columns shorter than it. Pins the float's own height in the balance, apart from where
+        // an earlier pass happened to leave it.
+        [Theory]
+        [InlineData(120)]
+        [InlineData(400)]
+        [InlineData(700)]
+        public async Task FloatAmongShortText_ColumnsAreAsTallAsTheFloat(int floatHeight)
+        {
+            var html = Wrap("<div id='mc' style='width:300pt; columns:2'>w00001 w00002 w00003 " +
+                            $"<div id='f' style='float:left; width:30pt; height:{floatHeight}pt'>F</div> w00004 w00005 w00006</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var f = FindById(root, "f")!;
+
+            Assert.True(mc.ActualBottom - mc.Location.Y >= f.ActualBottom - f.Location.Y - 0.5,
+                $"container {mc.ActualBottom - mc.Location.Y} tall, float {f.ActualBottom - f.Location.Y}");
+        }
+
+        // A float wider than the line it follows text on has no room beside that text: the words after it go below it,
+        // not past the edge of the column and the container.
+        [Theory]
+        [InlineData("<div id='mc' style='width:700px;columns:3'><div style='float:right;width:20px;height:20px'>F1</div>" +
+                    "w00045ab w00047ab w00048a w00049abcde w00050abcde w00052abcd w00053abcd w00054a w00055 w00056ab w00057abc " +
+                    "w00059abcde w00060abc w00061ab <div style='float:left;width:344px;height:20px;clear:both'>F3</div>" +
+                    "w00063a w00064abcde w00065abcde</div>", 17)]
+        [InlineData("<table style='width:700px'><tr><td style='width:50%'>x</td><td><div id='mc' style='columns:2'>" +
+                    "w00033 w00034 w00035 w00036 <div style='float:left;width:260px;height:40px;margin:5px -20px -30px -10px'>FL2</div>" +
+                    " w00141 w00142 w00145 w00146</div></td></tr></table>", 8)]
+        public async Task FloatWiderThanItsLine_AfterText_PutsTheTextBelowIt(string content, int expectedWords)
+        {
+            var html = Wrap(content).Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, container) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words).Where(w => w.Text is { } text && text.StartsWith('w')).ToList();
+
+            Assert.Equal(expectedWords, words.Count);
+            Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+
+            foreach (var floated in LayoutHarness.Descendants(mc).Where(x => x.IsFloated && x.Words.Any(w => w.Text == "F3")))
+            {
+                Assert.DoesNotContain(words, w => w.Left < floated.ActualRight && w.Right > floated.Location.X
+                                                  && w.Top < floated.ActualBottom && w.Bottom > floated.Location.Y);
+            }
+        }
+
+
+        // A word that wraps onto the line beside a float wider than the column goes below the float, not to its far edge past
+        // the container. Which length of text puts a word on that line depends on the host's monospace face (Consolas,
+        // DejaVu Sans Mono, Menlo), so every length is tried and only what holds for all of them is asserted.
+        [Theory]
+        [InlineData(16, 500, 200)]
+        [InlineData(13, 500, 344)]
+        public async Task FloatWiderThanTheColumn_NoWordIsPastTheContainer(int fontSize, int width, int floatWidth)
+        {
+            for (var before = 1; before <= 30; before++)
+            {
+                var text = string.Join(" ", Enumerable.Range(0, before).Select(i => $"w{i:D3}xxxx"));
+                var html = Wrap($"<div id='mc' style='width:{width}px; columns:3; font:{fontSize}px/1.3 monospace'>" +
+                                "<div style='float:right; width:10px; height:15px'>R</div>" + text +
+                                $" <div style='float:left; width:{floatWidth}px; height:15px; clear:both'>F</div> w900xxxx w901xxxx w902xxxx</div>");
+                var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+                var mc = FindById(root, "mc")!;
+                var words = LayoutHarness.Descendants(mc)
+                    .SelectMany(b => b.Words).Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+                Assert.Equal(before + 3, words.Count);
+                Assert.All(words, w => Assert.True(w.Left < mc.ActualRight, $"{before}: {w.Text} starts at {w.Left}, past {mc.ActualRight}"));
+            }
+        }
+
+        // Text laid out in a scroll container of bounded height keeps the inline flow it had: the columns engine drops
+        // words when it fills columns of such a height.
+        [Theory]
+        [InlineData("overflow:hidden; height:100px")]
+        [InlineData("overflow:auto; max-height:100px")]
+        [InlineData("overflow:clip; height:100px")]
+        public async Task TextOnlyScrollContainerOfBoundedHeight_IsNotWrappedForColumns(string containerStyle)
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; {containerStyle}'>{text}</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            Assert.DoesNotContain(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+        // A multi-column container that holds a float inside a table cell keeps the inline flow it had: wrapped, a float
+        // that spans the page leaves the lines after it past the page foot or the cell, and those words are lost.
+        // Without a float the same container is wrapped like any other.
+        [Theory]
+        [InlineData("<div style='float:left;width:361px;height:1027px'>F</div>", false)]
+        [InlineData("", true)]
+        public async Task MulticolContainerInATableCell_IsWrappedForColumnsOnlyWithoutAFloat(string floatHtml, bool wrapped)
+        {
+            var words = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap("<table style='width:600px'><tr><td style='width:50%'>x</td><td>" +
+                            $"<div id='mc' style='columns:2'>w00000 {floatHtml}{words}</div></td></tr></table>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            Assert.Equal(wrapped, mc.Boxes.Any(b => b.IsInlineRunWrapper));
+            Assert.Equal(41, LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Count(w => w.Text is { } t && t.StartsWith('w')));
+        }
+
+        // The marker a <br> leaves on the line it opens is not text to move beside a float placed after it. Counted as
+        // text, it sent a float wider than the column to a third line and, under nowrap, drew the line before it twice.
+        [Theory]
+        [InlineData("white-space:nowrap;")]
+        [InlineData("")]
+        public async Task FloatWiderThanTheColumn_AfterABreak_StartsTheLineTheBreakOpened(string whiteSpace)
+        {
+            var html = Wrap($"<div id='mc' style='width:650px;{whiteSpace}columns:3'>w00001 w00002 w00003 w00004 w00005<br>" +
+                            "<div id='f' style='float:right;width:280px;height:60px'>FL1</div>w00006 w00007 w00008 w00009</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(9, words.Count);
+            Assert.Equal(words.Count, words.Select(w => w.Text).Distinct().Count());
+
+            // Without wrapping the break is the only line end, which makes the lines known.
+            if (whiteSpace.Length == 0) return;
+
+            Assert.Equal(words[4].Top, words[0].Top, 1);
+            Assert.True(words[5].Top > words[4].Top, $"the line after the break starts at {words[5].Top}, the one before at {words[4].Top}");
+            Assert.True(FindById(root, "f")!.Location.Y >= words[4].Bottom - 0.5, "the float sits on the line the break opened, not the one before it");
+        }
+
+
+
+        // A line that cannot wrap stays one line, however wide: a float after its text must not move the words beside it or
+        // open a line after them, which drew the last word twice and laid the words after the float over earlier ones.
+        [Theory]
+        [InlineData("nowrap")]
+        [InlineData("pre")]
+        public async Task FloatAfterTextWiderThanTheColumn_UnderNoWrap_DoesNotRepeatOrOverlapWords(string whiteSpace)
+        {
+            var before = string.Join(" ", Enumerable.Range(1, 10).Select(i => $"w{i:D5}"));
+            var after = string.Join(" ", Enumerable.Range(11, 4).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:450px;columns:2;white-space:{whiteSpace}'>{before}" +
+                            $"<div style='float:right;width:60px;height:92px'>FL</div>{after}</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var words = LayoutHarness.Descendants(FindById(root, "mc")!).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(14, words.Count);
+            Assert.Equal(14, words.Select(w => w.Text).Distinct().Count());
+
+            for (var i = 0; i < words.Count; i++)
+            {
+                for (var j = i + 1; j < words.Count; j++)
+                {
+                    var a = words[i];
+                    var b = words[j];
+                    Assert.False(a.Left < b.Right - 0.5 && b.Left < a.Right - 0.5 && a.Top < b.Bottom - 0.5 && b.Top < a.Bottom - 0.5,
+                        $"{a.Text} and {b.Text} overlap");
+                }
+            }
+        }
+
+        // A line moved below the floats that crowd it clears the float's border box, not the margin edge a negative
+        // margin-bottom pulls up inside it: the words would otherwise be drawn over the float.
+        [Theory]
+        [InlineData("left")]
+        [InlineData("right")]
+        public async Task LineBelowACrowdingFloat_WithNegativeMarginBottom_ClearsItsBorderBox(string side)
+        {
+            var html = Wrap("<div id='mc' style='width:400px;columns:2'>w00001 w00002 " +
+                            $"<div id='f' style='float:{side};width:190px;height:60px;margin-bottom:-40px'>FL</div>" +
+                            "w00003 w00004 w00005 w00006 w00007 w00008 w00009 w00010 w00011 w00012</div>")
+                .Replace("<body", "<body style='font:14px/1.3 Arial'");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            var floated = FindById(root, "f")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w')).ToList();
+
+            Assert.Equal(12, words.Count);
+            Assert.DoesNotContain(words, w => w.Left < floated.ActualRight - 0.5 && w.Right > floated.Location.X + 0.5
+                                              && w.Top < floated.ActualBottom - 0.5 && w.Bottom > floated.Location.Y + 0.5);
+        }
+
+        // The height only bounds a container that clips: a visible-overflow container with one still divides its text into
+        // columns, which the bounded scroll container above does not.
+        [Fact]
+        public async Task TextOnlyContainerWithHeightAndVisibleOverflow_IsWrappedForColumns()
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var html = Wrap($"<div id='mc' style='width:300px; columns:3; height:100px; overflow:visible'>{text}</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            Assert.Contains(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+        // Placing a float must end however the floats before it are sized, spaced and cleared. The shape of a hang is
+        // a set of floats and margins, so a seeded sweep of them (both sides, margins of either sign on all four edges,
+        // clear on some, floats taller than the column) catches the next stall that a hand-built case does not.
+        [Theory]
+        [InlineData("width:600px")]
+        [InlineData("width:600px; columns:2")]
+        [InlineData("width:600px; columns:3; overflow:hidden; height:300px")]
+        public async Task FloatsOfAnySizeAndMargin_DoNotStallFloatPlacement(string containerStyle)
+        {
+            var random = new Random(1743);
+
+            for (var document = 0; document < 25; document++)
+            {
+                var body = new System.Text.StringBuilder();
+                var floatCount = random.Next(2, 7);
+                var floatAt = Enumerable.Range(0, floatCount).Select(_ => random.Next(0, 60)).ToList();
+
+                for (var word = 0; word < 60; word++)
+                {
+                    for (var i = 0; i < floatCount; i++)
+                    {
+                        if (floatAt[i] != word) continue;
+
+                        var side = random.Next(2) == 0 ? "left" : "right";
+                        var clear = new[] { "", "", "left", "right", "both" }[random.Next(5)];
+                        int Margin() => random.Next(3) == 0 ? random.Next(-40, 41) : 0;
+
+                        body.Append($"<div style='float:{side}; width:{random.Next(20, 350)}px; height:{random.Next(20, 1200)}px; " +
+                                    $"margin:{Margin()}px {Margin()}px {Margin()}px {Margin()}px; clear:{(clear == "" ? "none" : clear)}'>F{i}</div>");
+                    }
+
+                    body.Append($"w{word:D3} ");
+                }
+
+                var html = Wrap($"<div style='{containerStyle}'>{body}</div>");
+                var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+                Assert.True(
+                    ReferenceEquals(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(20), TestContext.Current.CancellationToken))),
+                    $"floats stalled the layout of document {document}: {html}");
+            }
+        }
+
+        // A left float whose negative margin-left puts its margin edge left of the container, beside a right float too
+        // wide to leave it room: the right blocker was found again with nothing changed, and the arithmetic that sends
+        // a float below its blockers still read the float as fitting, so the search never ended.
+        [Theory]
+        [InlineData("width:268px; height:77px; margin:0px 14px 0px 19px", "width:10px; height:38px; margin:15px 0px 0px -86px; clear:none")]
+        [InlineData("width:311px; height:47px; margin:10px 0px -9px 0px", "width:10px; height:53px; margin:0px 4px 0px -128px")]
+        public async Task LeftFloatWithNegativeMarginLeft_BesideAWideRightFloat_DoesNotStallFloatPlacement(string rightStyle, string leftStyle)
+        {
+            var html = Wrap(
+                "<div style='width:300px'>" +
+                $"<div style='float:right; clear:both; {rightStyle}'>F0</div>" +
+                $"<div style='float:left; clear:both; {leftStyle}'>F4</div>text</div>");
+
+            var layout = Task.Run(() => BuildAndLayout(html, pageHeight: 800));
+
+            Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
+        }
+
+        // A box holding only floats already reaches the columns engine without a wrapper (CssBox's float
+        // disjunct), so the parser must leave its floats as direct children of the container.
+        [Fact]
+        public async Task FloatsOnlyMulticolContainer_IsNotWrapped()
+        {
+            var html = Wrap("<div id='mc' style='columns:2; width:200px'>"
+                            + "<div id='f1' style='float:left; width:40px; height:20px'></div>"
+                            + "<div id='f2' style='float:left; width:40px; height:20px'></div></div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+
+            Assert.All(mc.Boxes, b => Assert.False(b.IsInlineRunWrapper));
+            Assert.Equal(2, mc.Boxes.Count(b => b.IsFloated));
+        }
+
+        // A multi-column container whose children are block-level content (here, a fixed-height scroll
+        // container) must lay its content out across its columns. Each column's words are checked, not just
+        // the page count, so a container whose columns collapse into one fails here.
+        [Fact]
+        public async Task ScrollContainerWithBlockChildren_DistributesWordsAcrossItsColumns()
+        {
+            var paragraphs = string.Concat(Enumerable.Range(0, 6).Select(p =>
+                "<p>" + string.Join(" ", Enumerable.Range(0, 10).Select(i => $"x{p}{i:D2}")) + "</p>"));
+            var html = Wrap("<div id='mc' style='width:500px; height:200px; overflow:hidden; columns:2'>"
+                            + paragraphs + "</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 400);
+
+            var mc = FindById(root, "mc")!;
+            var words = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).ToList();
+
+            Assert.Equal(60, words.Count);
+
+            var boundary = mc.Location.X + (mc.ActualRight - mc.Location.X) / 2;
+            Assert.Contains(words, w => w.Left < boundary - 1);
+            Assert.Contains(words, w => w.Left >= boundary - 1);
         }
 
         // ─── Break values in the column context (css-break-3 §3.1 `column`, §3.2 `avoid-column`) ──────

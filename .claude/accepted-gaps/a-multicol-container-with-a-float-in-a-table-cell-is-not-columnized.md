@@ -1,0 +1,7 @@
+# A multi-column container holding a float inside a table cell is not divided into columns (#1884)
+
+**Gap:** `DomParser.CorrectInlineBoxesParent` does not wrap the inline run of a multi-column container that holds a float and has a table cell among its ancestors (`IsInsideTableCell`). The content keeps the single inline flow it had on `main`, across the container's full width, and the float shortens the lines beside it.
+
+**Why:** wrapped, the lines after a float that spans the page, or is wider than a column, are placed past the page foot or past the cell, and the words there are lost. Two generated documents (44 and 68 words, `columns:2`, a left float taller than the page, inside the second cell of a two-cell table) lost the last words on the PR while `main` kept all of them; about 4 of roughly 1,050 fuzz documents showed it. A plain `div` of the same width does not lose them, and neither does a float shorter than the page, so the interaction is between the row's fragmentation and `CssLayoutEngine.ShiftEmptyLineBelowCrowdingFloats` deferring a line below a float that ends on a later page, in a column of a cell. Keeping the old path leaves such documents as correct as they were.
+
+**Not claimed:** that a multi-column container without a float in a table cell is affected; it is columnized like any other. A fix places the lines after a page-spanning float inside a column of a table cell.
