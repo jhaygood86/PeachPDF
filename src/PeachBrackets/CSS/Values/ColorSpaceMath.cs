@@ -81,7 +81,7 @@ namespace PeachBrackets.Css
                     else if (diff < -180) diff += 360;
                     break;
             }
-            return h1 + t * diff;
+            return NormalizeHue(h1 + t * diff);
         }
 
         // ── sRGB gamma ────────────────────────────────────────────────────────

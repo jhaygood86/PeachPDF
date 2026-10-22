@@ -165,6 +165,36 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.InRange(c.B, 127, 128);
         }
 
+        [Theory]
+        [InlineData("hsl")]
+        [InlineData("hwb")]
+        public void ColorMix_HslAndHwb_RedBlue_TakesTheShorterHueArc(string space)
+        {
+            var c = Parse($"color-mix(in {space}, red, blue)");
+            Assert.Equal(255, c.R);
+            Assert.Equal(0, c.G);
+            Assert.Equal(255, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_Hsl_LongerHue_TakesTheArcThroughGreen()
+        {
+            var c = Parse("color-mix(in hsl longer hue, red, blue)");
+            Assert.Equal(0, c.R);
+            Assert.Equal(255, c.G);
+            Assert.Equal(0, c.B);
+        }
+
+        [Fact]
+        public void ColorMix_Hsl_HueMixedPastZero_StaysInRange()
+        {
+            // 350 -> 30 degrees the short way crosses 0: the mid hue is 10, not 190 or a negative angle.
+            var c = Parse("color-mix(in hsl, hsl(350 100% 50%), hsl(30 100% 50%))");
+            Assert.Equal(255, c.R);
+            Assert.InRange(c.G, 40, 45);
+            Assert.Equal(0, c.B);
+        }
+
         [Fact]
         public void ColorMix_Srgb_WeightedPercentages_ShiftTowardHeavierColor()
         {
