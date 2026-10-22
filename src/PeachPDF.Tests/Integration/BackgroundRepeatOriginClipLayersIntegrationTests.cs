@@ -89,5 +89,29 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains("40 722 120 80 re", pdfText);
             Assert.DoesNotContain("20 702 160 120 re", pdfText);
         }
+
+        [Fact]
+        public async Task TwoValueRepeat_RepeatNoRepeat_TilesHorizontallyOnly()
+        {
+            var pdfText = await GetPdfText(ImageBoxHtml(
+                "background-image: url('data:image/png;base64," + PngBase64 + "'); " +
+                "background-size: 20pt 20pt; background-position: left top; background-repeat: repeat no-repeat;"));
+
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 792 cm"), pdfText);
+            Assert.Matches(new Regex(@"q 20 0 0 20 50 792 cm"), pdfText); // second tile, to the right
+            Assert.DoesNotMatch(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // no second row
+        }
+
+        [Fact]
+        public async Task TwoValueRepeat_NoRepeatRepeat_TilesVerticallyOnly()
+        {
+            var pdfText = await GetPdfText(ImageBoxHtml(
+                "background-image: url('data:image/png;base64," + PngBase64 + "'); " +
+                "background-size: 20pt 20pt; background-position: left top; background-repeat: no-repeat repeat;"));
+
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 792 cm"), pdfText);
+            Assert.Matches(new Regex(@"q 20 0 0 20 30 772 cm"), pdfText); // second tile, below
+            Assert.DoesNotMatch(new Regex(@"q 20 0 0 20 50 792 cm"), pdfText); // no second column
+        }
     }
 }

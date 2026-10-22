@@ -36,6 +36,32 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
+        /// Reduces one <c>background-repeat</c> layer value to the single keyword the painter switches on.
+        /// CSS Backgrounds 3 §3.4: two values are the horizontal then the vertical repeat, so
+        /// <c>repeat no-repeat</c> is <c>repeat-x</c>, <c>no-repeat repeat</c> is <c>repeat-y</c>, and a pair of
+        /// equal values is that value. Anything else is returned trimmed and lowercased, unchanged.
+        /// </summary>
+        internal static string NormalizeRepeat(string repeatLayerValue)
+        {
+            var value = (repeatLayerValue ?? string.Empty).Trim().ToLowerInvariant();
+            var space = value.IndexOf(' ');
+            if (space < 0)
+                return value;
+
+            var horizontal = value[..space];
+            var vertical = value[(space + 1)..].Trim();
+            if (horizontal == vertical)
+                return horizontal;
+
+            return (horizontal, vertical) switch
+            {
+                ("repeat", "no-repeat") => "repeat-x",
+                ("no-repeat", "repeat") => "repeat-y",
+                _ => value
+            };
+        }
+
+        /// <summary>
         /// Per CSS Backgrounds §3.8/3.9: if there are fewer layer-values than background-image
         /// layers, the list of values is repeated (cycled) to match.
         /// </summary>

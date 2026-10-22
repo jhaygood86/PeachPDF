@@ -49,6 +49,7 @@ namespace PeachBrackets.Html.Handlers
             bool intrinsicSizeInCssPixels)
         {
             var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;
+            backgroundRepeat = BackgroundLayerResolver.NormalizeRepeat(backgroundRepeat);
 
             // image-orientation turns a natural bitmap upright; a generated tile (gradient) has no orientation.
             var orientation = intrinsicSizeInCssPixels ? ImageOrientationResolver.Effective(box, image) : ImageOrientation.Upright;
