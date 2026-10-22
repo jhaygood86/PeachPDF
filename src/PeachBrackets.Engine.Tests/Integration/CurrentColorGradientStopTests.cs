@@ -310,7 +310,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task PageBackground_WithoutAColorOfItsOwn_TakesBlack_NotTheRootElementsColor()
+        public async Task PageBackground_WithoutAColorOfItsOwn_TakesTheRootElementsColor()
         {
             var pdf = await RenderPdfAsync("""
                 <!DOCTYPE html><html style="color: #cc0000"><head><style>
@@ -318,7 +318,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </style></head><body>hi</body></html>
                 """);
 
-            Assert.Contains("0 0 0 -> 1 1 1", ShadingColorPairs(pdf));
+            Assert.Contains("0.8 0 0 -> 1 1 1", ShadingColorPairs(pdf));
         }
 
         private static async Task<string> RenderPdfAsync(string html)
