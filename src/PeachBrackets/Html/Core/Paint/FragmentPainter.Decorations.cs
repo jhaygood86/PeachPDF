@@ -27,8 +27,19 @@ namespace PeachBrackets.Html.Paint
         /// the exact same background-image/-position/-size/-repeat/-origin/-clip resolution the box's
         /// own normal paint path uses so canvas-fill behavior matches per-box behavior exactly.
         /// </summary>
-        internal static void PaintCanvasBackground(Canvas g, CssBox box, Rect rect) =>
-            PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect));
+        /// <remarks>
+        /// A background propagated from <c>&lt;body&gt;</c> belongs to the canvas, which takes the root element's properties (CSS Backgrounds 3
+        /// section 2.11.2), so a <c>currentcolor</c> in its gradient is the root element's <c>color</c>, not the body's.
+        /// </remarks>
+        internal static void PaintCanvasBackground(Canvas g, CssBox box, Rect rect)
+        {
+            var root = box;
+            while (root.ParentBox is { } parent && !string.Equals(root.HtmlTag?.Name, "html", StringComparison.OrdinalIgnoreCase))
+                root = parent;
+
+            PaintBackground(g, box, BoxDecorationGeometry.Unbroken(rect),
+                currentColor: ReferenceEquals(root, box) || root.HtmlTag is null ? null : root.ActualColor);
+        }
 
         /// <summary>
         /// Paints the background of a box.
@@ -56,7 +67,9 @@ namespace PeachBrackets.Html.Paint
         /// background, a replaced element's chrome, a form field's chrome) - <c>text</c> degrades to
         /// <c>border-box</c> there, same as an unsupported font/writing-mode does below.
         /// </param>
-        internal static void PaintBackground(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null)
+        /// <param name="currentColor">what <c>currentcolor</c> means in a gradient layer when it is not <paramref name="box"/>'s own <c>color</c>; null for the box's own.</param>
+        internal static void PaintBackground(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null,
+            PaintColor? currentColor = null)
         {
             // Most boxes have no background at all. The work is in PaintBackgroundCore, whose local functions capture its parameters
             // and so cost a closure allocation on every call, whether or not anything is painted; this is asked of every box first.
@@ -77,10 +90,10 @@ namespace PeachBrackets.Html.Paint
                 return;
             }
 
-            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment);
+            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor);
         }
 
-        private static void PaintBackgroundCore(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment)
+        private static void PaintBackgroundCore(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment, PaintColor? currentColor)
         {
             var rect = geometry.DecorationRect;
 
@@ -211,7 +224,7 @@ namespace PeachBrackets.Html.Paint
 
                 CssImagePainter.Paint(g, layerImage, layerIndex, originRect, clipRect,
                     clipShape, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
-                    viewportRect, box, DrawBrush);
+                    viewportRect, box, DrawBrush, currentColor: currentColor);
 
                 if (!shapeShared) clipShape?.Dispose();
             }
