@@ -138,7 +138,9 @@ namespace PeachBrackets.Engine.Tests.Svg
         public async Task NestedAnimatedElementsThatInherit_AreResolvedInTimeLinearInTheirDepth()
         {
             // Each level asks its parent for the value it inherits; asked once per keyword it doubled the work per level (n = 20 took seconds, n = 40 never finished).
-            const int depth = 40;
+            // 24 is deep enough for that (2^24 is out of reach) and fits the 512 KB stack of a macOS thread-pool thread,
+            // which this runs on: the renderer refuses a document the stack cannot hold (see StackGuard).
+            const int depth = 24;
             var document = await Task.Run(() => BuildAsync("@keyframes k { 0%, 50%, 100% { fill: inherit } } g { animation: k 1s linear }",
                 string.Concat(Enumerable.Repeat("<g>", depth)) + "<rect width=\"10\" height=\"10\"/>" + string.Concat(Enumerable.Repeat("</g>", depth)), 0.5), TestContext.Current.CancellationToken);
 

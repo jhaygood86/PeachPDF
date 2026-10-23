@@ -1275,6 +1275,9 @@ namespace PeachBrackets.Css
 
         private Token NewFunction(ReadOnlyMemory<char> value)
         {
+            // A function's arguments are lexed by recursive calls, one level of the stack per nested function.
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             var function = Token.NewFunction(value, _position);
 
             // Tracks paren depth so a bare (non-function) parenthesized group nested inside the

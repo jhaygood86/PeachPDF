@@ -1108,6 +1108,8 @@ namespace PeachBrackets.Html.Parse
         /// one of them (see <see cref="SiblingStyles"/>); null for a box cascaded on its own.</param>
         private static void CascadeApplyStyles(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes = null, List<CssBox>? displayContentsShells = null, SiblingStyles? siblings = null)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             // A text or anonymous box is not an element: no rule or attribute reaches it (CSS Cascade 4 §1.1/§7.2: it only inherits),
             // so what the steps below make of it is a function of the style it comes in with and its parent's. Every text box under
             // a parent of one style gets the same result, which the cascade of a long table was recomputing for each of them. A

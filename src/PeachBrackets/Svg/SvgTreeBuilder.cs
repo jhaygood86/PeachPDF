@@ -843,6 +843,8 @@ namespace PeachBrackets.Svg
         /// </summary>
         private SvgElement? BuildElement(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             // display: none removes the element and everything under it from rendering, wherever it is reached from -
             // the tree walk, a <use> instance, a pattern or marker's content.
             if (IsNotRendered(node))

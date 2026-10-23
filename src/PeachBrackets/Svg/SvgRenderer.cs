@@ -2769,6 +2769,8 @@ namespace PeachBrackets.Svg
 
         private static void RenderElement(Canvas g, SvgDocument document, SvgElement element, double inheritedOpacity, (double Width, double Height) viewport)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             // A backdrop repaint ends where the element it is repainting for begins.
             if (SvgBackdropSlot.Get(g) is { } backdrop && backdrop.ShouldSkip(element))
                 return;

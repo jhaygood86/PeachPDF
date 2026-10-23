@@ -78,6 +78,14 @@ internal static class CliRunner
             await Console.Error.WriteLineAsync($"error: {ex.Message}");
             return 1;
         }
+        catch (HtmlRenderException ex)
+        {
+            // Layout wraps a failure once per box it passed through; the cause is the innermost message.
+            Exception cause = ex;
+            while (cause.InnerException is { } inner) cause = inner;
+            await Console.Error.WriteLineAsync($"error: {cause.Message}");
+            return 1;
+        }
         finally
         {
             foreach (var stream in openedStreams)

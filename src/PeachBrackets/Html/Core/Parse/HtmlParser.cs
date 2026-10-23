@@ -14,6 +14,7 @@ using MimeKit.Text;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.MathML;
+using PeachPDF;
 using System;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -260,6 +261,34 @@ namespace PeachBrackets.Html.Parse
                 {
                     // go one level down, make the new box the current box
                     curBox = CssBox.CreateBox(tag, curBox);
+                    EnsureWithinMaxDepth(curBox);
+                }
+            }
+        }
+
+        /// <summary>
+        /// The deepest an element may sit in the box tree. Cascade, layout, fragment emission and paint all walk the
+        /// tree recursively, and a stack overflow takes down the whole process where a host cannot catch it. Layout's
+        /// recursion is a chain of async state machines of several KB per level, so a 1 MB stack (the default of a
+        /// Windows thread, and of a WebAssembly host) runs out at about 150 levels; layout, fragment emission, paint
+        /// and the SVG walks check the stack themselves (<see cref="Utilities.StackGuard"/>) and fail as an
+        /// <see cref="HtmlRenderException"/> at whatever depth the host's stack allows. This limit is the backstop for
+        /// the walks that do not check - the cascade, which runs before any of them - and keeps a generated document
+        /// of thousands of levels from reaching them. Browsers allow 512, but they do not recurse on the machine stack.
+        /// </summary>
+        internal const int MaxElementDepth = 400;
+
+        private static void EnsureWithinMaxDepth(CssBox box)
+        {
+            var depth = 0;
+
+            for (var ancestor = box; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (++depth > MaxElementDepth)
+                {
+                    throw new HtmlRenderException(
+                        $"The document nests elements more than {MaxElementDepth} levels deep, which the renderer does not support.",
+                        HtmlRenderErrorType.HtmlParsing);
                 }
             }
         }

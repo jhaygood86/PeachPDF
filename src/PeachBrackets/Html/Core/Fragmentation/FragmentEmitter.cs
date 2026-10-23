@@ -2912,6 +2912,7 @@ namespace PeachBrackets.Html.Fragmentation
             bool isFixed,
             bool ownPrunable)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
 
             // Established exactly where a box IS the fixed root (not merely descends from one - only the
             // root's own left/top ever resolve against the page), and inherited unchanged by descendants

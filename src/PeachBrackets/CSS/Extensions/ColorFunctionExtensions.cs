@@ -269,6 +269,11 @@ namespace PeachBrackets.Css
             return true;
         }
 
+        private const int MaxColorMixDepth = 32;
+
+        [ThreadStatic]
+        private static int _colorMixDepth;
+
         private static bool ParseMixOperand(List<Token> segment, out Color color, out double? percent, out double[] oklab, out ColorSpaceMath.WrittenCoords? written)
         {
             color = default;
@@ -303,7 +308,19 @@ namespace PeachBrackets.Css
             // -tagged, or reject when only one is (no naive CMYK<->RGB approximation is computed anywhere
             // in this pipeline, so a mixed CMYK/non-CMYK pair still has no defined result).
             // The operand comes back with the coordinates it was written with too, when it is one that can lie outside the gamut the Color is clipped to.
-            var resolved = ResolveColor(tokens, wantOklab: true, out oklab);
+            // color-mix() operands nest without bound in the grammar, and each level costs several frames of the machine
+            // stack, so past a depth no stylesheet needs the colour is invalid, as any other value that cannot be read.
+            if (_colorMixDepth >= MaxColorMixDepth) return false;
+            Color? resolved;
+            _colorMixDepth++;
+            try
+            {
+                resolved = ResolveColor(tokens, wantOklab: true, out oklab);
+            }
+            finally
+            {
+                _colorMixDepth--;
+            }
             if (resolved is null) return false;
             color = resolved.Value;
             written = WrittenComponents(tokens);

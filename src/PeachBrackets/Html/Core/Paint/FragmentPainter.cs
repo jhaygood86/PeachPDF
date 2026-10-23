@@ -389,6 +389,8 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         internal void PaintFragment(Canvas g, BoxFragment fragment)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             var box = fragment.Box;
 
 #if DEBUG
