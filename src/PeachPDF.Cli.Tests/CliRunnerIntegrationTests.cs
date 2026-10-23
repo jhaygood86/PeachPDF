@@ -37,6 +37,19 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
+    public async Task ADocumentNestedPastTheDepthLimit_ReportsAnErrorInsteadOfCrashing()
+    {
+        var options = ArgumentParser.Parse(["-", "-o", "-"]);
+        using var stdout = new MemoryStream();
+        var html = "<html><body>" + string.Concat(Enumerable.Repeat("<div>", 300)) + "x" + string.Concat(Enumerable.Repeat("</div>", 300)) + "</body></html>";
+
+        var exit = await CliRunner.RunAsync(options, new StringReader(html), stdout);
+
+        Assert.Equal(1, exit);
+        Assert.Equal(0, stdout.Length);
+    }
+
+    [Fact]
     public async Task FileInput_DefaultOutput_DerivesPdfName()
     {
         var dir = CreateTempDir();

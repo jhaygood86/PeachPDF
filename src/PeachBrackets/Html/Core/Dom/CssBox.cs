@@ -3602,6 +3602,8 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         internal async ValueTask LayoutBlockChild(Canvas g, CssBox child, bool framePlacesChild = true)
         {
+            PeachBrackets.Utilities.StackGuard.Ensure();
+
             // Left for the inline flow that owns its positioned-inline containing block when that flow is
             // still mid-walk (issue #1304); it is laid out again from there, once the flow's lines are final.
             if (framePlacesChild && child.IsAbsolutelyPositioned && CssLayoutEngine.TryDeferToEnclosingInlineFlow(child))

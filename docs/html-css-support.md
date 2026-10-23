@@ -43,6 +43,10 @@ The measured units are accepted everywhere a `<length>` is, including inside [`c
 
 A context with no font of its own — a [media query](#css-media-queries) or an `@page` margin, size or margin-box length — has nothing to measure, so there each unit takes the fallback in the last column (and `cap` and `lh` use `0.7em` and `1.2em`).
 
+## Nesting depth
+
+Layout, painting and the SVG renderer walk the document tree recursively, so how deep a document may nest depends on the stack of the thread that renders it. A document nested deeper than that stack allows (roughly 100 to 150 levels of `<div>` on a 1 MB stack, the default of a Windows thread and of a WebAssembly host) fails with an `HtmlRenderException` instead of ending the process with a stack overflow. Elements nested more than 400 levels deep are refused when the HTML is parsed, whatever the stack. `color-mix()` operands nested more than 32 levels deep make the colour invalid, like any other value that cannot be read. Run the render on a thread with a larger stack to allow deeper documents.
+
 ---
 
 ## HTML Elements
