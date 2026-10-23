@@ -41,7 +41,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task ANestedDocument_WithinTheStack_LaysOutAndPlacesItsText()
         {
-            var (root, _) = await LayoutHarness.LayoutAsync(NestedDivs(60));
+            // Shallow enough for the 512 KB stack of a macOS test thread, which cannot hold 60.
+            var (root, _) = await LayoutHarness.LayoutAsync(NestedDivs(20));
 
             Assert.True(root.ActualBottom > 0);
         }
