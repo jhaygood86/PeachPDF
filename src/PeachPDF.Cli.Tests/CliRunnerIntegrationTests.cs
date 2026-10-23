@@ -37,11 +37,11 @@ public class CliRunnerIntegrationTests
     }
 
     [Fact]
-    public async Task ADocumentNestedPastTheDepthLimit_ReportsAnErrorInsteadOfCrashing()
+    public async Task ADocumentNestedPastTheParserLimit_ReportsAnErrorInsteadOfCrashing()
     {
         var options = ArgumentParser.Parse(["-", "-o", "-"]);
         using var stdout = new MemoryStream();
-        var html = "<html><body>" + string.Concat(Enumerable.Repeat("<div>", 300)) + "x" + string.Concat(Enumerable.Repeat("</div>", 300)) + "</body></html>";
+        var html = "<html><body>" + string.Concat(Enumerable.Repeat("<div>", 500)) + "x" + string.Concat(Enumerable.Repeat("</div>", 500)) + "</body></html>";
 
         var exit = await CliRunner.RunAsync(options, new StringReader(html), stdout);
 
