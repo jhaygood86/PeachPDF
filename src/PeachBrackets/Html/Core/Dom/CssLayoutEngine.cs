@@ -3368,6 +3368,12 @@ namespace PeachBrackets.Html.Dom
             return clearance;
         }
 
+        /// <summary>
+        /// The most blockers one float's placement walks past before it stops searching. Every drop moves the float
+        /// further down, so a document needs a blocker per attempt; this is far beyond any real one.
+        /// </summary>
+        internal const int MaxFloatPlacementAttempts = 10_000;
+
         private static void FloatBoxLeft(CssBox box, CssBox containingBox, double startX, double startY)
         {
             var limitRight = ContentRightOf(containingBox, startY);
@@ -3388,12 +3394,17 @@ namespace PeachBrackets.Html.Dom
             // fitting by the arithmetic below, so the same state would be searched for ever. As in FloatBoxRight, a
             // repeated state sends the float below its blockers.
             HashSet<(double Left, double Right, double Top)> triedPositions = [];
+            var attempts = 0;
 
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
 
                 if (intersectingFloat is null) break;
+
+                // Backstop for the progress argument above: a placement that has not settled after this many blockers
+                // is left where it is, a bounded wrong position instead of a layout that never ends.
+                if (++attempts > MaxFloatPlacementAttempts) break;
 
                 switch (intersectingFloat.EffectiveFloatSide)
                 {
@@ -3467,12 +3478,16 @@ namespace PeachBrackets.Html.Dom
             // in a state it has already been in; the same state finds the same blockers, so it would never end. The
             // float goes below them instead, as it does when it no longer fits beside them.
             HashSet<(double Left, double Right, double Top)> triedPositions = [];
+            var attempts = 0;
 
             do
             {
                 var intersectingFloat = DomUtils.GetFirstIntersectingFloatBox(box, coordinates, box.EffectiveFloatSide);
 
                 if (intersectingFloat is null) break;
+
+                // Same backstop as FloatBoxLeft.
+                if (++attempts > MaxFloatPlacementAttempts) break;
 
                 switch (intersectingFloat.EffectiveFloatSide)
                 {

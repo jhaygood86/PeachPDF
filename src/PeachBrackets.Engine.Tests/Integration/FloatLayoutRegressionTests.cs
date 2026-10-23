@@ -1083,6 +1083,85 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Theory]
+        [InlineData("margin-top:-3pt")]
+        [InlineData("margin-top:-12pt")]
+        [InlineData("margin:-3pt")]
+        public async Task RightFloat_WithNegativeMarginTop_DropsBelowAWiderLeftFloatItDoesNotFitBeside(string secondMargin)
+        {
+            // The right float cannot sit beside the 112pt left float in a 150pt container, so it drops below it. The
+            // drop lands its margin edge on the blocker's bottom, which puts a negative margin-top's border box above
+            // that edge; the blocker must not be found again from there.
+            var html = Wrap($@"
+                <div style='width:150pt'>
+                    <div id='a' style='float:left; width:112pt; height:75pt'>a</div>
+                    <div id='b' style='float:right; width:75pt; height:37pt; {secondMargin}'>b</div>text
+                </div>");
+
+            var layout = BuildAndLayout(html);
+            var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(layout, finished);
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.ActualMarginTop < 0);
+            Assert.Equal(a.ActualBottom, b.Location.Y - b.ActualMarginTop, 3);
+        }
+
+        [Theory]
+        [InlineData("left", "margin-bottom:-4pt")]
+        [InlineData("right", "margin-bottom:-4pt")]
+        [InlineData("left", "margin-bottom:-40pt")]
+        [InlineData("right", "margin-bottom:-40pt")]
+        public async Task Float_BelowABlockerWithANegativeMarginBottom_StillEndsItsSearch(string side, string blockerMargin)
+        {
+            // The drop clears the blocker's border box (its margin box would end above it), so a negative margin-bottom
+            // on the blocker must not put the float back inside it.
+            var html = Wrap($@"
+                <div style='width:150pt'>
+                    <div id='a' style='float:{side}; width:112pt; height:75pt; {blockerMargin}'>a</div>
+                    <div id='b' style='float:{side}; width:75pt; height:20pt'>b</div>text
+                </div>");
+
+            var layout = BuildAndLayout(html);
+            var finished = await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(layout, finished);
+
+            var (root, _) = await layout;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.Location.Y >= a.ActualBottom - 0.01);
+        }
+
+        [Fact]
+        public async Task Floats_WithEveryCombinationOfNegativeMargins_AllFinishLayout()
+        {
+            // The class of document the issue came from: two floats of each side pairing whose margins are negative
+            // on one edge or another. Every one has to finish, wherever it ends up.
+            string[] margins = ["", "margin-top:-5pt", "margin-bottom:-5pt", "margin-left:-5pt", "margin-right:-5pt"];
+            string[] sides = ["left", "right"];
+            var layouts = new List<Task<(CssBox root, HtmlContainerInt container)>>();
+
+            foreach (var firstSide in sides)
+            foreach (var secondSide in sides)
+            foreach (var firstMargin in margins)
+            foreach (var secondMargin in margins)
+            {
+                layouts.Add(BuildAndLayout(Wrap($@"
+                    <div style='width:150pt'>
+                        <div style='float:{firstSide}; width:112pt; height:75pt; {firstMargin}'>a</div>
+                        <div style='float:{secondSide}; width:75pt; height:37pt; {secondMargin}'>b</div>text
+                    </div>")));
+            }
+
+            var all = Task.WhenAll(layouts);
+            var finished = await Task.WhenAny(all, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
+            Assert.Same(all, finished);
+        }
+
+        [Theory]
         [InlineData("margin-right:-3pt")]
         [InlineData("margin-right:0pt")]
         public async Task RightFloat_InAColumn_IgnoresAnEarlierRightFloatInAnotherColumn(string margin)
