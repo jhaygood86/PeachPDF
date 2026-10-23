@@ -1,0 +1,83 @@
+PeachDrawing.Svg.SvgCanvas : sealed class
+  method virtual CanvasLayer BeginLayer(LayerOptions options)
+  method virtual GraphicsPath GetGraphicsPath()
+  method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
+  method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
+  method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
+  method virtual Object SetAntiAliasSmoothingMode()
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
+  method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void AddDestination(String name, Double top)
+  method virtual Void BeginArtifact()
+  method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
+  method virtual Void BeginVariableText()
+  method virtual Void Dispose()
+  method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+  method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
+  method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
+  method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
+  method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
+  method virtual Void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
+  method virtual Void DrawImageWithOpacity(Image image, Rect destRect, Double opacity, PaintBlendMode blendMode = Normal)
+  method virtual Void DrawLine(Pen pen, Double x1, Double y1, Double x2, Double y2)
+  method virtual Void DrawPath(Brush brush, GraphicsPath path)
+  method virtual Void DrawPath(Pen pen, GraphicsPath path)
+  method virtual Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method virtual Void DrawRaster(RasterSurface surface)
+  method virtual Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
+  method virtual Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
+  method virtual Void EndMarkedContent()
+  method virtual Void EndVariableText()
+  method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PopTransform()
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushClip(GraphicsPath path)
+  method virtual Void PushClip(Rect rect)
+  method virtual Void PushClipExclude(Rect rect)
+  method virtual Void PushTransform(Matrix3x2 matrix)
+  method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean IsOffscreenTile { get; }
+  property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
+  property Object TileCacheOwner { get; }
+  property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Svg.SvgComposer : sealed class
+  ctor(SvgRenderContext renderContext, Double widthPoints, Double heightPoints, SvgComposerOptions options = null)
+  method String ToSvg()
+  method Void Save(Stream stream)
+  method Void Save(TextWriter writer)
+  property Double HeightPoints { get; }
+  property Double WidthPoints { get; }
+  property SvgCanvas Canvas { get; }
+  property SvgComposerOptions Options { get; }
+  property SvgRenderContext RenderContext { get; }
+PeachDrawing.Svg.SvgComposerOptions : sealed class
+  ctor()
+  property Int32 Precision { get; set; }
+  property PaintColor? Background { get; set; }
+  property String Description { get; set; }
+  property String Title { get; set; }
+  property SvgConicGradientMode ConicGradients { get; set; }
+  property SvgTextMode TextMode { get; set; }
+PeachDrawing.Svg.SvgConicGradientMode : enum Int32
+  Css = 1
+  Wedges = 0
+PeachDrawing.Svg.SvgRenderContext : class
+  ctor()
+  method Task AddFont(Stream stream, String fontFamilyName)
+  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  property Double LayoutUnitsPerPoint { get; }
+  property Double PixelsPerPoint { get; set; }
+PeachDrawing.Svg.SvgTextMode : enum Int32
+  Outlines = 0
+  Text = 1

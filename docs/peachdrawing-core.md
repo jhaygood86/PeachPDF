@@ -12,8 +12,8 @@ dotnet add package PeachDrawing.Core
 ```
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
-> `PublicApi.txt` for the exact, machine-checked snapshot. Two concrete `Canvas`/`RenderContext`
-> implementations exist today: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
+> `PublicApi.txt` for the exact, machine-checked snapshot. Three concrete `Canvas`/`RenderContext`
+> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
 > renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
@@ -265,6 +265,30 @@ default implementation builds a layer from `CreateTile` and the `DrawImage…` m
 canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEffects` (the `PeachDrawing`
 package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`).
 
+## Links and destinations
+
+A format with hyperlinks does not need a side channel for them: they are `Canvas` calls, so whatever draws a page can say what is
+clickable on it.
+
+```csharp
+canvas.AddLink(new Rect(40, 170, 160, 20), "https://example.com/");     // a link to an address
+canvas.AddDestination("terms", top: 120);                                // name a place on this page...
+other.AddDestinationLink(new Rect(40, 200, 90, 14), "terms");           // ...and link to it, from this page or another
+```
+
+- **`AddLink(bounds, uri, quad = null)`** and **`AddDestinationLink(bounds, destinationName, quad = null)`** make `bounds` clickable.
+  The rectangle is in the canvas's layout units, like every other rectangle; `quad` (top-left, top-right, bottom-left, bottom-right of the
+  rectangle the link started as, in the same units) is given when the clickable shape is a rotated rectangle rather than `bounds` itself.
+  Call them after the content the link covers has been drawn: a link is meant to lie over what is there.
+- **`AddDestination(name, top)`** names a place `top` below the top edge of the page the canvas draws. A name is unique in the document,
+  and a destination can be named on the canvas of a page that is drawn after the pages that link to it. A format with no pages (SVG) has one canvas, and a link to a name that is not on it leads nowhere.
+- **The return value** is a handle the canvas's own format defines for the link it wrote, or `null`. The PDF canvas returns the `PdfLink` a
+  tagged document attaches to a structure element; the SVG canvas has nothing to hand back.
+
+All three do nothing by default, which is right for a canvas of pixels. [PeachDrawing.PDF](peachdrawing-pdf.md) writes link annotations
+and named destinations, and [PeachDrawing.Svg](peachdrawing-svg.md) writes `<a href>` elements. A tile or a measuring canvas, which belongs
+to no page, writes nothing.
+
 ## Tile and hatch brushes
 
 A `TileBrush` repeats a picture across the plane, so a shape filled with it shows the part of the grid under it and
@@ -329,7 +353,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), PeachPDF's use of `RasterCanvas`
+[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), PeachPDF's use of `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a

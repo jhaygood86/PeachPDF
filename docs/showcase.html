@@ -4,7 +4,8 @@ title: Showcase
 ---
 <h1>Feature Showcase</h1>
 <p>Every document below is rendered by PeachPDF itself when this site is built, so the
-output always reflects the current release. Each card pairs the exact input — the HTML given to
+output always reflects the current release. Where a card has a <em>View SVG</em> link, the same document was also rendered through the
+<a href="{{ '/peachdrawing-svg.html' | relative_url }}">SVG backend</a> as one continuous sheet - no paper pages, no forced page breaks - as vector content. Each card pairs the exact input — the HTML given to
 <code>PdfGenerator.GeneratePdf</code>, or for the declarative-API showcases the C# given to
 <code>PdfGenerator.CreateDocument</code> — with the PDF that came out. Open both and compare.
 The previews show the first page of each PDF, rendered on Linux with Liberation fonts
@@ -31,6 +32,7 @@ machine, in the page, with no server involved. Prefer the command line or plain 
     <p>{{ s.description | escape }}</p>
     <p class="showcase-links">
       <a href="{{ '/showcase/' | append: s.pdf | relative_url }}">View PDF</a>
+      {% if s.svg %}<a href="{{ '/showcase/' | append: s.svg | relative_url }}">View SVG</a>{% endif %}
       <a href="{{ '/showcase/' | append: s.html | relative_url }}">{% if s.sourceKind == "csharp" %}C# source{% else %}HTML source{% endif %}</a>
     </p>
   </div>

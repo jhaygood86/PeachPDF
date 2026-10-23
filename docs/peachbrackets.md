@@ -104,6 +104,11 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`PaintLinks(pageIndex, canvas)`** puts a page's links on a canvas as `Canvas.AddLink`/`AddDestinationLink`/`AddDestination` calls (see
+  [Links and destinations](peachdrawing-core.md#links-and-destinations)), so a canvas for a format with hyperlinks - the PDF and SVG ones - writes
+  them without the consumer reading `Links` itself. Call it for every page *after all the pages have been painted*: where a link sits under a
+  transform is only known once its page has been painted, and a link can lead to a later page. It also hands each link's handle to the
+  `StructureTagSink`, if there is one, so a tagged format can tie the link to the content it covers.
 - **`Links`** - each `PageLink` has its `PageIndex` and `Bounds`, an optional four-corner `Quad` when the link sits under a transform, and
   either a `Uri` or an `Anchor` with the `Destination` (`PagePosition`: page index and distance from the top) it leads to.
 - **`Bookmarks`** - the outline: each `Bookmark` has a `Level`, a `Title`, whether it starts open, and a `Uri` or `Destination`. Headings

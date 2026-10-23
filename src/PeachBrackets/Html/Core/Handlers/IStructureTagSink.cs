@@ -32,5 +32,15 @@ namespace PeachBrackets.Tagging
 
         /// <summary>Opens an artifact sequence on <paramref name="g"/>: content that is not part of the document structure.</summary>
         IDisposable OpenArtifact(Canvas g);
+
+        /// <summary>
+        /// Called by <c>HtmlDocument.PaintLinks</c> for each link it has put on a canvas whose <c>AddLink</c> handed back a handle, with the
+        /// structure node of the content the link covers, so a tagged format can tie the link to that element. Does nothing by default.
+        /// </summary>
+        /// <param name="node">the content the link covers</param>
+        /// <param name="link">the handle the canvas returned for the link</param>
+        void LinkAdded(StructureNode node, object link)
+        {
+        }
     }
 }

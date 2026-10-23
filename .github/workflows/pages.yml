@@ -106,7 +106,7 @@ jobs:
         run: |
           dotnet run --project src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj \
             --configuration Release --framework net10.0 \
-            -- "$GITHUB_WORKSPACE/docs/showcase"
+            -- "$GITHUB_WORKSPACE/docs/showcase" --svg
           mv docs/showcase/showcases.json docs/_data/showcases.json
 
       - name: Render showcase thumbnails

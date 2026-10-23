@@ -115,7 +115,7 @@ samplings, tile and hatch brushes, and `GetInkCrossings` for text all work on a 
 
 ## Implementing your own `Canvas` instead
 
-If you need a different rendering target entirely - a hardware-accelerated backend, an SVG writer, a
+If you need a different rendering target entirely - a hardware-accelerated backend, an SVG writer (see [PeachDrawing.Svg](peachdrawing-svg.md), which is exactly that), a
 different image library - implement `Canvas`/`RenderContext` directly against `PeachDrawing.Core`
 rather than using this package. See [Implementing your own
 Canvas](peachdrawing-core.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a

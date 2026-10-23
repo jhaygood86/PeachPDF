@@ -43,6 +43,13 @@ namespace PeachPDF.PdfFeatures
         /// </summary>
         public void LinkAnnotationToStructureElement(StructureNode node, PdfLink link) => recorder.LinkAnnotation(node, link);
 
+        /// <inheritdoc/>
+        public void LinkAdded(StructureNode node, object link)
+        {
+            if (link is PdfLink pdfLink)
+                LinkAnnotationToStructureElement(node, pdfLink);
+        }
+
         /// <summary>Completes the structure tree after the whole page-render loop.</summary>
         public void Finish() => recorder.Finish();
     }

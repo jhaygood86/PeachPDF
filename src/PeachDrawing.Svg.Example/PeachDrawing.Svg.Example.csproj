@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A console app that draws a handful of scenes with PeachDrawing.Svg alone - no PeachPDF, no HTML, no PDF - and writes each as an
+    SVG file. It is the "how do I use the package" sample (docs/peachdrawing-svg.md walks through it) and a quick way to look at
+    what the backend writes: run it, open the .svg files in a browser.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
+  </ItemGroup>
+
+  <!-- The font the text scenes draw with, so the output is the same on every machine. -->
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

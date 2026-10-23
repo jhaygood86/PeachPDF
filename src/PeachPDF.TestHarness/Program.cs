@@ -77,11 +77,26 @@ static int RunImportRoundTrip(string inputDir, string outputDir)
 var positionalArgs = new List<string>();
 var benchmarkMode = false;
 var benchmarkIterations = 10;
+// --svg [--svg-text]: alongside every HTML showcase's PDF, also renders the same HTML through the SVG backend
+// (PeachDrawing.Svg) and writes {slug}.svg (one more file, {slug}-pN.svg, per further page) - a direct look at what the SVG
+// canvas does with real documents; the docs site links it from the showcase card. --svg-text writes selectable <text> with
+// embedded subset fonts instead of glyph outlines.
+var svgMode = false;
+var svgTextMode = PeachDrawing.Svg.SvgTextMode.Outlines;
 for (var i = 0; i < args.Length; i++)
 {
     if (args[i] == "--benchmark")
     {
         benchmarkMode = true;
+    }
+    else if (args[i] == "--svg")
+    {
+        svgMode = true;
+    }
+    else if (args[i] == "--svg-text")
+    {
+        svgMode = true;
+        svgTextMode = PeachDrawing.Svg.SvgTextMode.Text;
     }
     else if (args[i] == "--benchmark-iterations" && i + 1 < args.Length
         && int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIterations)
@@ -191,8 +206,9 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
     showcaseDocument.Save(pdfStream);
     File.WriteAllBytes(Path.Combine(outputDir, $"{slug}.pdf"), pdfStream.ToArray());
     File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
-    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html"));
-    Console.WriteLine($"Saved {slug}.pdf + {slug}.html");
+    var svgFile = svgMode ? await SaveSvgAsync(slug, sourceHtml, renderConfig) : null;
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, $"{slug}.pdf", $"{slug}.html", Svg: svgFile));
+    Console.WriteLine($"Saved {slug}.pdf + {slug}.html" + (svgFile is null ? string.Empty : $" + {svgFile}"));
 
     if (pdfASweep)
     {
@@ -208,6 +224,28 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
         {
             Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
         }
+    }
+}
+
+// The SVG counterpart of a showcase (--svg): the same HTML and config rendered onto an SvgCanvas, one file per page. Returns the first
+// page's file name for the manifest, or null when the SVG backend could not render the document - a failure here is reported and
+// skipped, never fatal, so the PDF showcases keep working while the SVG backend is being exercised against them.
+async Task<string?> SaveSvgAsync(string slug, string sourceHtml, PdfGenerateConfig renderConfig)
+{
+    try
+    {
+        var pages = await SvgShowcaseRenderer.RenderPagesAsync(sourceHtml, renderConfig, svgTextMode);
+        for (var i = 0; i < pages.Count; i++)
+        {
+            File.WriteAllText(Path.Combine(outputDir, i == 0 ? $"{slug}.svg" : $"{slug}-p{i + 1}.svg"), pages[i], new UTF8Encoding(false));
+        }
+
+        return pages.Count > 0 ? $"{slug}.svg" : null;
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"SVG RENDER FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
+        return null;
     }
 }
 
@@ -15995,7 +16033,7 @@ else
 // SourceKind says what the "source" file (Html) holds, so docs/showcase.html can label the link
 // accurately: "html" for the markup given to GeneratePdf, "csharp" for the code a declarative-API showcase
 // runs (that file is a minimal HTML page wrapping the C#, purely so the manifest schema stays one shape).
-record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html, string SourceKind = ShowcaseSourceKind.Html);
+record ShowcaseEntry(string Slug, string Category, string Title, string Description, string Pdf, string Html, string SourceKind = ShowcaseSourceKind.Html, string? Svg = null);
 
 static class ShowcaseSourceKind
 {
