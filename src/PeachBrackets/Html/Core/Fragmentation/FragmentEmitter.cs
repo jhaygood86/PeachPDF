@@ -4736,7 +4736,8 @@ namespace PeachBrackets.Html.Fragmentation
             {
                 if (instance.DetachedSourceRoot is not null || instance.Region.Left is null || !HoldsOrDescendsFromAHeld(instance.Geometry, box)
                     || !TryGetWordRect(box, wordIndex, instance.Geometry, out var rect)
-                    || rect.Bottom > instance.Region.Bottom + BandOverlapEpsilon || rect.Top < instance.Region.Top - BandOverlapEpsilon)
+                    || rect.Bottom > instance.Region.Bottom + BandOverlapEpsilon
+                    || (rect.Top < instance.Region.Top - BandOverlapEpsilon && !IsAboveTheFirstBand(rect, instance.Region, slotIndex)))
                 {
                     // Not wholly in this column's band: it is another's, or another fragmentainer's. A line across the band's edge is
                     // placed by the straddle rule the ordinary claim applies, which may give it to the next band; it is no overflow.
@@ -4776,6 +4777,17 @@ namespace PeachBrackets.Html.Fragmentation
 
             return first is { } holder && ReferenceEquals(holder.Self, own.Self);
         }
+
+        /// <summary>
+        /// Whether <paramref name="rect"/> lies wholly above the columns' band on the first page: a block with a negative
+        /// <c>margin-top</c> pulls the text after it above the container, where no column's region reaches.
+        /// </summary>
+        /// <remarks>
+        /// Only the first page: on a later one the words above the band lie in an earlier page's band, which claims them itself,
+        /// and claiming them here as well would draw them twice. Nothing lies before the first page, so nothing else could.
+        /// </remarks>
+        private static bool IsAboveTheFirstBand(Rect rect, FragmentRegion region, int slotIndex) =>
+            slotIndex == 0 && rect.Bottom <= region.Top + BandOverlapEpsilon;
 
         /// <summary>
         /// Whether <paramref name="geometry"/> holds <paramref name="box"/> or a box it lies in: the walk reaches a box through a

@@ -2077,8 +2077,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             }
         }
 
-        // Text laid out in a scroll container of bounded height keeps the inline flow it had: the columns engine drops
-        // words when it fills columns of such a height.
+        // Text laid out in a scroll container of bounded height keeps the inline flow it had (#1849).
         [Theory]
         [InlineData("overflow:hidden; height:100px")]
         [InlineData("overflow:auto; max-height:100px")]
@@ -2090,6 +2089,43 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await BuildAndLayout(html, pageHeight: 800);
 
             Assert.DoesNotContain(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+        }
+
+        // A clipping container of definite height fills columns of that height (css-multicol-1 §7.1), so each
+        // column carries on from the words the one before it ended on and the tail is clipped, not the middle (#1818).
+        [Theory]
+        [InlineData("overflow:hidden; height:100px", 100, 3, true)]
+        [InlineData("overflow:auto; max-height:100px; height:100px", 100, 3, true)]
+        [InlineData("overflow:clip; height:100px", 100, 3, true)]
+        [InlineData("overflow:hidden; height:150px", 150, 2, true)]
+        public async Task ClippingContainerOfDefiniteHeight_ColumnsContinueFromTheWordsBefore(
+            string containerStyle, int heightPx, int columns, bool innerDiv)
+        {
+            var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
+            var content = innerDiv ? $"<div>{text}</div>" : text;
+            var html = Wrap($"<div id='mc' style='width:300px; columns:{columns}; {containerStyle}'>{content}</div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 800);
+
+            var mc = FindById(root, "mc")!;
+            // Only the words that show: the tail beyond the columns is clipped.
+            var words = LayoutHarness.Descendants(mc)
+                .SelectMany(b => b.Words)
+                .Where(w => w.Text is { } t && t.StartsWith('w') && w.Top < mc.Location.Y + heightPx * 0.75)
+                .ToList();
+
+            var columnWidth = (mc.ActualRight - mc.Location.X) / columns;
+            var perColumn = words
+                .GroupBy(w => (int)Math.Floor((w.Left - mc.Location.X) / columnWidth))
+                .OrderBy(g => g.Key)
+                .Select(g => g.Select(w => int.Parse(w.Text!.AsSpan(1))).OrderBy(n => n).ToList())
+                .ToList();
+
+            Assert.Equal(columns, perColumn.Count);
+            Assert.Equal(1, perColumn[0][0]);
+            for (var c = 1; c < perColumn.Count; c++)
+            {
+                Assert.Equal(perColumn[c - 1][^1] + 1, perColumn[c][0]);
+            }
         }
 
         // A multi-column container that holds a float inside a table cell keeps the inline flow it had: wrapped, a float
