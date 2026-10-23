@@ -302,6 +302,24 @@ namespace PeachBrackets.Html.Dom
             var ruleSegments = new List<(double X, double Top, double Bottom)>();
             var contentBottomOverall = boxTop;
 
+            // A container that clips its overflow and has a definite height fills columns of exactly that
+            // height (css-multicol-1 §7.1: a constrained height fixes the column height) - the rest of the
+            // content continues in columns to the right, which the clip hides. Without this cap, balancing
+            // grows the columns until every word fits, and the clip then hides lines from the middle of the
+            // text instead of its tail (#1818). Only the fragment that starts the container: a resumed one
+            // is a continuation of a box that already spans pages.
+            var containerTop = boxTop;
+            var heightCap = double.MaxValue / 4;
+
+            if (resume is null
+                && (columnsBox.Overflow.Value != Overflow.Visible || columnsBox.ClipsWithoutScrolling)
+                && columnsBox.ResolveDefiniteHeightPt() is { } definiteHeight)
+            {
+                heightCap = Math.Max(1, definiteHeight - columnsBox.ActualBoxSizeIncludedHeight);
+            }
+
+            var cappedByHeight = false;
+
             // How many entries this pass has already appended to _nested[(columnsBox, startSlot)] - a
             // later segment's own balance retry must discard only what it itself just recorded there, not
             // an earlier segment's already-finished columns sharing the same slot key.
@@ -344,6 +362,14 @@ namespace PeachBrackets.Html.Dom
                       - htmlContainer.TotalBandEndReservationFor(startSlot)
                       - boxTop
                     : double.MaxValue / 4;
+
+                var heightLeft = Math.Max(1, heightCap - (boxTop - containerTop));
+
+                if (heightLeft < pageBudget)
+                {
+                    pageBudget = heightLeft;
+                    cappedByHeight = true;
+                }
 
                 double contentBottom;
                 int filledColumns;
@@ -410,6 +436,9 @@ namespace PeachBrackets.Html.Dom
                     startAt = null;
                 }
             }
+
+            // What the height cap left over is clipped, not continued: the box is exactly that tall on every page.
+            if (cappedByHeight) carry = null;
 
             // Accumulated, not assigned: this container is laid out once per page fragment, and the last
             // fragment's rules are not the only ones drawn.

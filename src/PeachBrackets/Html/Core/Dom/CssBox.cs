@@ -1171,7 +1171,7 @@ namespace PeachBrackets.Html.Dom
         /// so the caller falls back to the live, by-then-settled read for those.
         /// </para>
         /// </summary>
-        private double? ResolveDefiniteHeightPt()
+        internal double? ResolveDefiniteHeightPt()
         {
             if (!CssValueParser.IsValidLength(Height)) return null;
 
