@@ -6324,7 +6324,11 @@ namespace PeachBrackets.Html.Dom
                     // resumed-pass guard as the inline-flex branch below: this box is treated as monolithic
                     // within the surrounding inline flow, so a pass only walking through it (already placed
                     // on an earlier fragmentainer) places nothing again.
-                    if (!childOpensHere) continue;
+                    if (!childOpensHere)
+                    {
+                        coordinates.WordOrdinal++;
+                        continue;
+                    }
 
                     // Resolve an inline-block's used outer width before laying out its independent
                     // formatting context. An atomic inline is one unbreakable item in this line; when it
@@ -6390,6 +6394,12 @@ namespace PeachBrackets.Html.Dom
 
                     await FlowAtomicBlockContentChild(g, b, coordinates, resolvedInlineBlockWidth);
 
+                    // The box took its place in the walk's order, as a word would. It had none before, so a run of them with
+                    // no word between (`<table style="display:inline-table">` after another) all read as the same position:
+                    // a break between two recorded the position of the first, the next page placed every one of them again
+                    // from the top, and the document never finished paginating.
+                    coordinates.WordOrdinal++;
+
                     // An atomic inline's content is laid out whole and sliced where it crosses a fragmentainer's foot, which
                     // clips a line there. css-break-3 §4.1 lets it be monolithic, and §4.4 breaks before a monolithic box that
                     // fits a fresh fragmentainer rather than slicing it.
@@ -6400,7 +6410,8 @@ namespace PeachBrackets.Html.Dom
                 else if (b.DerivedStyle.ActualDisplay == Keywords.InlineFlex)
                 {
                     // Nothing at all for a box a resumed pass is only walking through. An inline-flex
-                    // contributes no word ordinals, so nothing else here would notice that it belongs to
+                    // contributes no word ordinals of its content's (its one ordinal is its own place in the order), so
+                    // nothing else here would notice that it belongs to
                     // an earlier fragmentainer - and this branch positions the box, re-runs the flex
                     // engine over its children and sets the cursor to the box's own right edge, so
                     // re-entering it moves an already-placed box onto this page and indents everything
@@ -6408,7 +6419,11 @@ namespace PeachBrackets.Html.Dom
                     // recursion below, which would walk the flex container's children as inline content
                     // and advance word ordinals this box never had on the pass that placed it - and the
                     // ordinals have to mean the same thing on every pass for any of these guards to work.
-                    if (!childOpensHere) continue;
+                    if (!childOpensHere)
+                    {
+                        coordinates.WordOrdinal++;
+                        continue;
+                    }
 
                     // inline-flex had no fit check of any kind before issue #1105 - FlowInlineFlexChild
                     // positioned it unconditionally too. ResolveAtomicInlineBlockWidth (see its own
@@ -6430,6 +6445,7 @@ namespace PeachBrackets.Html.Dom
                     if (flexFitResult == AtomicInlineLineFit.ClampedStop) return;
 
                     await FlowInlineFlexChild(g, b, coordinates);
+                    coordinates.WordOrdinal++;
                     if (FoldHeldEmptyInlinesIntoAtomicInlinesLine(blockBox, coordinates)) return;
                 }
                 else

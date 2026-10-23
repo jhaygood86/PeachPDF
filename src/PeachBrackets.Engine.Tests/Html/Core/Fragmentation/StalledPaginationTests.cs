@@ -26,9 +26,14 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
             var (root, container) = await LayoutHarness.LayoutAsync(StallingDocument, configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"));
 
             Assert.True(container.FragmentainerPasses < 100, $"{container.FragmentainerPasses} passes");
-            Assert.Equal(1, container.LastResortRelayouts);
 
-            // The recovery lays the remainder out whole, so no word of the document is lost.
+            // This document stalled because an atomic inline took no place in the walk's order, so a break before one resumed at
+            // the first of a run and every pass placed them again; with each given its own ordinal it paginates without help. The
+            // last-resort relayout is still the way out of a stall that has some other cause, so either way is accepted here, and
+            // the comparison of tokens it relies on is tested directly below.
+            Assert.True(container.LastResortRelayouts <= 1, $"{container.LastResortRelayouts} last-resort relayouts");
+
+            // No word of the document is lost, whichever way it finished.
             var text = string.Join(" ", AllText(root));
             Assert.Contains("beta", text);
             Assert.Contains("epsilon", text);
