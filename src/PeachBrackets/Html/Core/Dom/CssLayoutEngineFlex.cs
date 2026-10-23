@@ -853,6 +853,7 @@ namespace PeachBrackets.Html.Dom
 
         private async ValueTask ResolveFlexibleLengths(Canvas g, FlexLine line, double mainSize)
         {
+            await ResolveAutoMinimums(g, line, mainSize);
             DistributeFlex(line, mainSize);
 
             foreach (var item in line.Items)
@@ -877,6 +878,12 @@ namespace PeachBrackets.Html.Dom
                 i.HypotheticalMainSize + i.MarginBefore + i.MarginAfter);
             double freeSpace = mainSize - usedSpace - totalGapSpace;
 
+            // An item whose automatic minimum size (§4.5) is what stops it shrinking is frozen at that size
+            // and the line's remaining items take up the rest of the shrink (§9.7), so the one pass below
+            // is replaced by the freezing loop. A line with no such item keeps the single pass.
+            var hasAutoMinimum = freeSpace < 0 && line.Items.Any(i => i.AutoMinMainSize > 0);
+            if (hasAutoMinimum) ShrinkAgainstAutoMinimums(line, mainSize, mainSize - totalGapSpace);
+
             foreach (var item in line.Items)
             {
                 double final;
@@ -887,6 +894,10 @@ namespace PeachBrackets.Html.Dom
                     final = totalGrow > 0
                         ? item.HypotheticalMainSize + freeSpace * (grow / totalGrow)
                         : item.HypotheticalMainSize;
+                }
+                else if (hasAutoMinimum)
+                {
+                    final = item.FinalMainSize;
                 }
                 else if (freeSpace < 0)
                 {
@@ -912,6 +923,109 @@ namespace PeachBrackets.Html.Dom
                 // issue #1167) - Height's own CSS string only ever reflects this transiently, inside
                 // ResizeItem's own temporary set/relayout/revert below.
                 if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
+            }
+        }
+
+        /// <summary>
+        /// CSS Flexbox 1 §9.7's resolution of a line that overflows, for a line holding an item with a
+        /// non-zero automatic minimum size: an item that would shrink below its minimum is frozen at it
+        /// (a min violation) and the shrink it cannot take is shared by the items still free to shrink.
+        /// </summary>
+        /// <param name="line">The line; each item's <see cref="FlexItem.FinalMainSize"/> receives its size.</param>
+        /// <param name="mainSize">The container's main size, the basis percentage minimums resolve against.</param>
+        /// <param name="availableForItems">The main size less the gaps between the items.</param>
+        private void ShrinkAgainstAutoMinimums(FlexLine line, double mainSize, double availableForItems)
+        {
+            var items = line.Items;
+            var frozen = new bool[items.Count];
+            var violated = new bool[items.Count];
+            var sizes = new double[items.Count];
+            var minimums = new double[items.Count];
+
+            for (var i = 0; i < items.Count; i++)
+            {
+                sizes[i] = items[i].HypotheticalMainSize;
+                minimums[i] = Math.Max(ClampMainAxis(items[i].Box, 0, mainSize), items[i].AutoMinMainSize);
+            }
+
+            for (var pass = 0; pass <= items.Count; pass++)
+            {
+                double frozenSpace = 0, unfrozenHypothetical = 0, totalShrink = 0;
+                for (var i = 0; i < items.Count; i++)
+                {
+                    var margins = items[i].MarginBefore + items[i].MarginAfter;
+                    if (frozen[i]) { frozenSpace += sizes[i] + margins; continue; }
+                    unfrozenHypothetical += items[i].HypotheticalMainSize + margins;
+                    totalShrink += ParseFloat(items[i].Box.FlexShrink) * items[i].HypotheticalMainSize;
+                }
+
+                var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
+                double totalViolation = 0;
+                for (var i = 0; i < items.Count; i++)
+                {
+                    violated[i] = false;
+                    if (frozen[i]) continue;
+
+                    var factor = ParseFloat(items[i].Box.FlexShrink) * items[i].HypotheticalMainSize;
+                    var tentative = totalShrink > 0
+                        ? items[i].HypotheticalMainSize + remaining * (factor / totalShrink)
+                        : items[i].HypotheticalMainSize;
+                    var clamped = Math.Max(minimums[i], Math.Max(0, tentative));
+                    sizes[i] = clamped;
+                    totalViolation += clamped - tentative;
+                    violated[i] = clamped > tentative + 1e-9;
+                }
+
+                // Only min violations are possible while shrinking. With none, every size is final.
+                if (totalViolation <= 1e-9)
+                    break;
+
+                for (var i = 0; i < items.Count; i++)
+                    if (violated[i]) frozen[i] = true;
+            }
+
+            for (var i = 0; i < items.Count; i++)
+                items[i].FinalMainSize = ClampMainAxis(items[i].Box, sizes[i], mainSize);
+        }
+
+        /// <summary>
+        /// Gives each item of an overflowing row its automatic minimum size (CSS Flexbox 1 §4.5), the size
+        /// <c>min-width: auto</c> stops it shrinking below.
+        /// </summary>
+        /// <remarks>
+        /// Only a row whose main axis is physical X is covered, and only when the line overflows, since
+        /// nothing else shrinks an item. A scroll container's is zero, as is that of any item whose
+        /// <c>min-width</c> is not <c>auto</c>. Otherwise it is the smaller of the specified size (when
+        /// <c>width</c> is a definite length) and the content size suggestion (the min-content width), less
+        /// than the definite <c>max-width</c>; a replaced element with a percentage width is compressible and
+        /// has none. The size is an outer size, like <see cref="FlexItem.HypotheticalMainSize"/>.
+        /// </remarks>
+        private async ValueTask ResolveAutoMinimums(Canvas g, FlexLine line, double mainSize)
+        {
+            if (!_mainAxisIsPhysicalX) return;
+
+            var container = line.MainSize ?? mainSize;
+            var used = line.Items.Count > 1 ? ParseMainGap(container) * (line.Items.Count - 1) : 0;
+            foreach (var item in line.Items)
+                used += item.HypotheticalMainSize + item.MarginBefore + item.MarginAfter;
+            if (used <= container) return;
+
+            foreach (var item in line.Items)
+            {
+                var box = item.Box;
+                if (!string.Equals(box.MinWidth, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                    || box.Overflow.Value != Css.Overflow.Visible
+                    || ParseFloat(box.FlexShrink) <= 0)
+                    continue;
+                if (box.IsImage && box.Width.EndsWith('%')) continue;
+
+                var minimum = await CssLayoutEngine.GetMinContentWidth(g, box);
+                if (CssValueParser.IsValidLength(box.Width) && !box.Width.EndsWith('%'))
+                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Width, container, box) + MainBoxSizeIncluded(box));
+                if (CssValueParser.IsValidLength(box.MaxWidth))
+                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxWidth, container, box) + MainBoxSizeIncluded(box));
+
+                item.AutoMinMainSize = Math.Min(minimum, item.HypotheticalMainSize);
             }
         }
 
@@ -2021,6 +2135,7 @@ namespace PeachBrackets.Html.Dom
                 items.Add(await RederiveItem(g, box, measure));
 
             var line = new FlexLine(items) { MainSize = measure };
+            await ResolveAutoMinimums(g, line, measure);
             DistributeFlex(line, measure);
             ComputeMainOffsets(line, measure, indefiniteMainSize: false);
 
@@ -2776,6 +2891,9 @@ namespace PeachBrackets.Html.Dom
             public double  NaturalMainSize      { get; } = naturalMainSize;
             public double  HypotheticalMainSize { get; } = hypotheticalMainSize;
             public double  FinalMainSize        { get; set; } = hypotheticalMainSize;
+
+            // The size min-width: auto stops the item shrinking below (CSS Flexbox 1 §4.5); 0 when it has none.
+            public double  AutoMinMainSize      { get; set; }
             public double  MainOffset           { get; set; }
             public double  CrossOffset          { get; set; }
 

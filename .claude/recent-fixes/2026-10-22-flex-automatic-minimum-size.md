@@ -1,0 +1,9 @@
+# Flex items keep their automatic minimum size (min-width: auto)
+
+**Idea.** `min-width`'s initial value was `"0"`, so `auto` (css-sizing-3: the initial value) and an authored `0` were the same string and flexbox §4.5's automatic minimum had no way to apply. The initial value is now `auto` in `css-properties.json`. Every other reader already ignores a non-length (`IsValidLength("auto")` is false, `!= "0"` guards) so `auto` is `0` everywhere but a row flex item, which is what css-sizing-3 §3.2 says ("resolves to a used value of 0 unless the layout module defines otherwise"). `ResolveAutoMinimums` (CssLayoutEngineFlex) measures min-content only for items of a line that overflows, and `ShrinkAgainstAutoMinimums` runs the §9.7 freeze loop (min violations only, since only shrink is covered). A line with no floored item keeps the old one-pass arithmetic byte for byte.
+
+**Found by running.** The row case reproduces in a plain 110pt row on v0.9.23 (two 96px images each shrank to 50pt, Chrome 72pt); the grid change in #1793 only exposed it in `blockified_flex_grid_items`. Cases compared with Chrome by script: long unbreakable words 87.8/83.4pt, images 72/72, one `overflow:hidden` item 16.6 against a `nowrap` 83.4, and `overflow_wrap` (the `anywhere` card takes all the shrink, 113.3pt, while the others stay 128pt).
+
+**Not done.** Column containers (`min-height`) and grid items: #1916, see the accepted gap. A replaced item with a percentage `width` has no floor (compressible), as in the spec.
+
+**Evidence.** Engine.Tests 16,195, PeachPDF.Tests 1,490, PeachBrackets.Tests, SourceGenerators.Tests all green (Release, net8.0). Showcase sweep against main over all 226 showcases: four differ (`blockified_flex_grid_items`, `overflow_wrap`, `svg_3d_transforms`, `clip_path`), all matching Chrome; `clip_path` overflowed its page, so it now wraps.

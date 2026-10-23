@@ -2724,6 +2724,104 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(200, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
         }
 
+        // ─── Automatic minimum size (CSS Flexbox 1 §4.5) ─────────────────────────
+        // The widths below are those Chrome gives the same documents (1px = 0.75pt).
+
+        private const string RectImage =
+            "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='96' height='48'%3E%3Crect width='96' height='48' fill='%232980b9'/%3E%3C/svg%3E";
+
+        [Fact]
+        public async Task AutoMinimum_ImageDoesNotShrinkBelowItsNaturalWidth()
+        {
+            var html = Wrap($@"
+                <div style='display:flex; width:110pt; gap:8pt; align-items:flex-start'>
+                    <img id='img' src=""{RectImage}"" style='display:block'><span id='t'>text beside it</span>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(72, FindById(root, "img")!.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_TwoImagesOverflowTheRowAtNaturalSize()
+        {
+            var html = Wrap($@"
+                <div style='display:flex; width:100pt'>
+                    <img id='a' src=""{RectImage}"" width='96' height='48' style='display:block'>
+                    <img id='b' src=""{RectImage}"" width='96' height='48' style='display:block'>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(72, FindById(root, "a")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(72, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_UnbreakableWordsKeepTheirMinContentWidth()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:100pt; font:10pt Arial'>
+                    <span id='a'>unbreakableword12</span><span id='b'>otherlongwordhere</span>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(87.8, FindById(root, "a")!.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(83.4, FindById(root, "b")!.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_ItemsWithNoContentShrinkAsBefore()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:100pt'>
+                    <div id='a' style='width:90pt; height:10pt'></div>
+                    <div id='b' style='width:90pt; height:10pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(50, FindById(root, "a")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(50, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_ZeroMinWidthAndScrollContainerOptOut()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; width:100pt; font:10pt Arial'>
+                    <div id='a' style='min-width:0; white-space:nowrap'>unbreakableword12</div>
+                    <div id='b' style='overflow:hidden; white-space:nowrap'>otherlongwordhere</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            // Both give up what they must in proportion to their widths (88 and 83pt), as in Chrome.
+            Assert.Equal(51.3, FindById(root, "a")!.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(48.7, FindById(root, "b")!.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_ShrinkPassesToTheItemsThatCanTakeIt()
+        {
+            // The first item is frozen at its nowrap min-content (about 83pt); the second, whose
+            // overflow-wrap:anywhere text has a tiny min-content, takes all of the remaining shrink.
+            var html = Wrap(@"
+                <div style='display:flex; width:150pt; font:10pt Arial'>
+                    <div id='a' style='width:120pt; white-space:nowrap'>otherlongwordhere</div>
+                    <div id='b' style='width:120pt; overflow-wrap:anywhere'>flexible text</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!.ActualBoxSizingWidth;
+            var b = FindById(root, "b")!.ActualBoxSizingWidth;
+            Assert.InRange(a, 82, 85);
+            Assert.Equal(150, a + b, 1.0);
+        }
+
+        [Fact]
+        public async Task AutoMinimum_ColumnDirectionIsUnchanged()
+        {
+            var html = Wrap(@"
+                <div style='display:flex; flex-direction:column; width:100pt; height:30pt'>
+                    <div id='a' style='height:40pt'></div>
+                    <div id='b' style='height:40pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            Assert.Equal(100, FindById(root, "a")!.ActualBoxSizingWidth, 0.5);
+        }
+
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body>{body}</body></html>";
 

@@ -1496,7 +1496,7 @@
     {
       "name": "min-width",
       "inherited": false,
-      "initialValue": "0",
+      "initialValue": "auto",
       "cssDataType": [
         "length",
         "keyword"
