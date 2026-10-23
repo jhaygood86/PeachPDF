@@ -3421,7 +3421,7 @@ namespace PeachBrackets.Html.Parse
 
                 if (IsAtomicInlineLevel(child))
                 {
-                    if (child.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+                    if (child.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
                     {
                         CorrectBlockInsideInline(child, inspectInlineBlockFormattingContext: true);
                     }
@@ -3663,9 +3663,11 @@ namespace PeachBrackets.Html.Parse
                 if (IsAtomicInlineLevel(child))
                 {
                     // Flex/grid item generation and anonymous-table generation own the contents of
-                    // their respective formatting contexts. Only inline-block is a block container whose
-                    // mixed children need CSS 2.1 §9.2.1.1 anonymous block wrappers here.
-                    if (child.DerivedStyle.ActualDisplay == Keywords.InlineBlock)
+                    // their respective formatting contexts. An inline-block is a block container whose mixed
+                    // children need CSS 2.1 §9.2.1.1 anonymous block wrappers here, and so is each cell of an
+                    // inline-table (a table-cell is a block container too): the walk reaches the cells through the
+                    // rows, as it does for a block-level table, where nothing wraps the cell's loose text otherwise.
+                    if (child.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
                     {
                         CorrectInlineBoxesParent(child);
                     }
