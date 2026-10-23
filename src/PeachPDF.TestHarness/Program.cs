@@ -10313,7 +10313,7 @@ var clipPathHtml = """
     <style>
         body { font-family: sans-serif; margin: 40px; }
         h1 { font-size: 20pt; }
-        .row { display: flex; gap: 24px; margin-top: 16px; }
+        .row { display: flex; flex-wrap: wrap; gap: 24px; margin-top: 16px; }
         .cell { text-align: center; font-size: 10pt; color: #555; }
         .shape { width: 130px; height: 130px; margin-bottom: 6px; box-sizing: border-box; }
         .poly { clip-path: polygon(50% 0, 100% 38%, 82% 100%, 18% 100%, 0 38%);
