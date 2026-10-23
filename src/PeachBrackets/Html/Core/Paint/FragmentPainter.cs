@@ -900,8 +900,7 @@ namespace PeachBrackets.Html.Paint
         {
             var box = fragment.Box;
 
-            if (box.DerivedStyle.ActualDisplay == Keywords.None ||
-                (box.DerivedStyle.ActualDisplay == Keywords.TableCell && box.EmptyCells.Value == EmptyCellsMode.Hide && box.IsSpaceOrEmpty)) return;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None || HidesAsAnEmptyCell(box)) return;
 
             var (overflowClip, overflowClipCurve) = OverflowClipOf(g, fragment);
             var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
@@ -969,13 +968,20 @@ namespace PeachBrackets.Html.Paint
                 // A box whose background was "promoted" to fill the whole page canvas (see
                 // HtmlContainerInt.ResolveCanvasBackground / PaintCanvasBackground) already had it
                 // painted for every page - skip this box's own normal paint pass so it isn't painted
-                // twice.
-                if (!box.SuppressOwnBackgroundPaint)
+                // twice. A table track's background covers only the cells that originate in it (see
+                // FragmentPainter.TableBackgrounds).
+                if (!box.SuppressOwnBackgroundPaint && IsTableTrack(box))
+                {
+                    // A table box has one rectangle per page; the guard only keeps the areas from being painted once per rectangle.
+                    if (i == 0) PaintTrackBackgroundOverItsCells(g, fragment, geometry);
+                }
+                else if (!box.SuppressOwnBackgroundPaint)
                 {
                     // A sliced background is painted over the whole unbroken box, so this clip is what
                     // keeps it out of the space beside this rectangle - which belongs to other content.
                     if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
+                    if (i == 0) PaintTrackBackgroundsBeneathCell(g, fragment);
                     PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line), fragment);
 
                     if (geometry.NeedsClip) g.PopClip();

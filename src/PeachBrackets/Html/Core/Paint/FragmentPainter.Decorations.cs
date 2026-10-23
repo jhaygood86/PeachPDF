@@ -68,8 +68,14 @@ namespace PeachBrackets.Html.Paint
         /// <c>border-box</c> there, same as an unsupported font/writing-mode does below.
         /// </param>
         /// <param name="currentColor">what <c>currentcolor</c> means in a gradient layer when it is not <paramref name="box"/>'s own <c>color</c>; null for the box's own.</param>
-        internal static void PaintBackground(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null,
-            PaintColor? currentColor = null)
+        /// <param name="paintingArea">
+        /// where the background is painted, when that is not the box's own <c>background-clip</c> area: a table track's
+        /// background covers the area of a cell that originates in it (CSS 2.1 §17.5.1), while
+        /// <paramref name="geometry"/> stays the track's own rectangle, which positions its images.
+        /// </param>
+        internal static void PaintBackground(
+            Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle = null, BoxFragment? fragment = null,
+            PaintColor? currentColor = null, Rect? paintingArea = null)
         {
             // Most boxes have no background at all. The work is in PaintBackgroundCore, whose local functions capture its parameters
             // and so cost a closure allocation on every call, whether or not anything is painted; this is asked of every box first.
@@ -82,18 +88,20 @@ namespace PeachBrackets.Html.Paint
 
             // The commonest one that does - a plain colour filling a square-cornered box's border box - is one fill, which does not
             // need the layer, clip and text-clip machinery below, nor the closure it costs: each striped table row paid for it.
-            if (!hasImages && !box.IsRounded && box.BackgroundClip == Keywords.BorderBox)
+            if (!hasImages && (paintingArea is not null || (!box.IsRounded && box.BackgroundClip == Keywords.BorderBox)))
             {
-                var rect = geometry.DecorationRect;
+                var rect = paintingArea ?? geometry.DecorationRect;
                 if (rect is { Width: > 0, Height: > 0 }) PaintClippedBrush(g, box, g.GetSolidBrush(backgroundColor), rect, null);
 
                 return;
             }
 
-            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor);
+            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea);
         }
 
-        private static void PaintBackgroundCore(Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment, PaintColor? currentColor)
+        private static void PaintBackgroundCore(
+            Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment, PaintColor? currentColor,
+            Rect? paintingArea)
         {
             var rect = geometry.DecorationRect;
 
@@ -167,6 +175,8 @@ namespace PeachBrackets.Html.Paint
             // silently losing the rounding too.
             (Rect ClipRect, GraphicsPath? ClipShape, bool Shared) ResolveClip(string clipValue)
             {
+                if (paintingArea is { } area) return (area, null, false);
+
                 if (clipValue == Keywords.Text)
                 {
                     if (TextClipPath() is { } textPath) return (rect, textPath, true);
