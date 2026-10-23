@@ -43,6 +43,37 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Contains("after", drawn);
         }
 
+        [Theory(Timeout = 60000)]
+        [InlineData(732)]
+        [InlineData(750)]
+        [InlineData(792)]
+        public async Task TheTextAfterATallSvg_IsInTheFragmentTreeOnce(int svgHeight)
+        {
+            // The row plus the reserved footer is taller than a band, so it is sliced into strips. The line holding the text
+            // starts below the first strip's foot (the strip is the band less the footer), but within the band itself, and was
+            // claimed by both strips: the fragment tree held it on the first page and on the second.
+            var html = Markup.Replace("732pt", svgHeight + "pt");
+
+            var (_, container) = await Task.Run(() => LayoutHarness.LayoutAsync(html), TestContext.Current.CancellationToken);
+
+            var textFragments = container.FragmentTree!.Fragmentainers
+                .SelectMany(f => Flatten(f.Root))
+                .SelectMany(b => b.Words)
+                .Count(w => w.Word.Text?.Trim() == "text");
+
+            Assert.Equal(1, textFragments);
+        }
+
+        private static IEnumerable<PeachBrackets.Html.Fragments.BoxFragment> Flatten(PeachBrackets.Html.Fragments.BoxFragment fragment)
+        {
+            yield return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                foreach (var descendant in Flatten(child)) yield return descendant;
+            }
+        }
+
         [Fact(Timeout = 60000)]
         public async Task TallInlineSvgInABodyCell_WithoutAFooter_StillLaysOut()
         {

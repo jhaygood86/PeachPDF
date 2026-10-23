@@ -3505,15 +3505,18 @@ namespace PeachBrackets.Html.Fragmentation
         /// stopping (<see cref="HtmlContainerInt.FallsPast"/>), so the cell's padding and border alone can make its row
         /// one no band holds, which is sliced. Displaced under the next band's repeated header, that line lands a sliver
         /// inside the next strip, and was drawn by both bands: clipped to the sliver on the second, but extracted twice.
-        /// Only the strip's top is asked about: a line starting inside the strip is the strip's however short it is, and
-        /// one running past its foot is the later strip's question.
+        /// A line starting inside the strip is the strip's however short it is, and one running past its foot is the later
+        /// strip's question; but one starting at or past the foot is not this strip's at all. The strip is the band less the
+        /// repeated footer's room, so a line below it can still lie inside the band the membership test asks about, and
+        /// claiming it here as well drew the text after a 732pt svg on two pages (#1325).
         /// </remarks>
         /// <param name="landed">the line's rectangle, displaced to where it draws here</param>
         /// <param name="displacement">the displacement in force here, or null outside a sliced run</param>
         private static bool ReachesIntoItsStrip(Rect landed, (CssBox Root, double Shift, Rect Band)? displacement) =>
             displacement is not { Band: var strip }
-            || landed.Top >= strip.Top
-            || Math.Min(landed.Bottom, strip.Bottom) - strip.Top > HtmlContainerInt.PageBoundaryEpsilon;
+            || (landed.Top >= strip.Top
+                || Math.Min(landed.Bottom, strip.Bottom) - strip.Top > HtmlContainerInt.PageBoundaryEpsilon)
+            && landed.Top < strip.Bottom - HtmlContainerInt.PageBoundaryEpsilon;
 
         /// <summary>
         /// <paramref name="rect"/> where a displacement puts it — the rectangle every membership question
