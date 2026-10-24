@@ -816,8 +816,9 @@ namespace PeachBrackets.Html.Parse
             {
                 if (!string.IsNullOrEmpty(str))
                 {
-                    // The quick readers below take numbers only; a missing component (none) is the token reader's.
-                    var hasNone = length > 5 && str.AsSpan(idx, length).Contains("none", StringComparison.OrdinalIgnoreCase);
+                    // The quick readers below take numbers only; a missing component (none) and relative colour syntax (from) are the token reader's.
+                    var hasNone = length > 5 && (str.AsSpan(idx, length).Contains("none", StringComparison.OrdinalIgnoreCase)
+                        || str.AsSpan(idx, length).Contains("from", StringComparison.OrdinalIgnoreCase));
                     return length switch
                     {
                         > 1 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),

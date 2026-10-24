@@ -650,6 +650,14 @@ namespace PeachBrackets.Css
                     return [DelinearizeExtended(pr), DelinearizeExtended(pg), DelinearizeExtended(pb)];
                 }
 
+                case Space.A98Rgb:
+                case Space.ProphotoRgb:
+                case Space.Rec2020:
+                {
+                    var (x, y, z) = OkLabToXyzD65(oklab[0], oklab[1], oklab[2]);
+                    return ExtraFromXyzD65(cs, x, y, z);
+                }
+
                 default:
                 {
                     var (r, g, b) = FromSpace(oklab, Space.Oklab);

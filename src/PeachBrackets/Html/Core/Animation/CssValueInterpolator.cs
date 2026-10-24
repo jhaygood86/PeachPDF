@@ -804,8 +804,7 @@ namespace PeachBrackets.Html.Animation
         /// Whether a colour takes a mix out of sRGB: anything but the legacy sRGB color formats CSS Color 4 §13.2 lists (hex, named colours,
         /// <c>rgb()</c>, <c>hsl()</c>, <c>hwb()</c>, and <c>transparent</c>, which the spec's own gradient example counts as legacy). That is
         /// <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c>, <c>color()</c>, <c>color-mix()</c> (whatever its space) and relative colour
-        /// syntax (<c>rgb(from ...)</c>), as Chrome mixes them; the last two (<c>color()</c> and relative colour syntax) are not read by the colour
-        /// parser yet, so they never get here.
+        /// syntax (<c>rgb(from ...)</c>), as Chrome mixes them, and a legacy function with a component written as <c>none</c>.
         /// </summary>
         private static bool TakesAMixIntoOklab(string text)
         {

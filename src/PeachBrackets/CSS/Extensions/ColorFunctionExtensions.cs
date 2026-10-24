@@ -14,7 +14,7 @@ namespace PeachBrackets.Css
     /// this consumes the already-parsed, Function-typed <see cref="Token"/> stream (nested functions
     /// arrive as a single token) rather than re-scanning the source text.
     /// </summary>
-    internal static class ColorFunctionExtensions
+    internal static partial class ColorFunctionExtensions
     {
         /// <summary>
         /// Fully resolves a tokenized color value to a concrete <see cref="Color"/> - named colors and
@@ -48,6 +48,9 @@ namespace PeachBrackets.Css
             oklab = null;
             var name = function.Data;
             var args = function.ArgumentTokens;
+
+            // Relative colour syntax (rgb(from red r g b) and the like) is read by whichever function it is written in.
+            if (IsRelative(args)) return ParseRelative(name.ToString(), args, wantOklab, out oklab);
 
             if (name.Equals(FunctionNames.Rgb, StringComparison.OrdinalIgnoreCase) ||
                 name.Equals(FunctionNames.Rgba, StringComparison.OrdinalIgnoreCase))
@@ -413,6 +416,9 @@ namespace PeachBrackets.Css
             var args = tokens[0].ArgumentTokens;
             double[] v;
             int missing;
+
+            // A relative colour's written components are the ones its channel keywords resolved to: the mix takes it from its Oklab coordinates.
+            if (IsRelative(args)) return null;
 
             if (name.Equals(FunctionNames.Lab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 125.0, 100.0, out v, out _, out missing))
                 return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lab, v, missing);
