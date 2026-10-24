@@ -440,22 +440,15 @@ namespace PeachBrackets.Html.Handlers
             }
         }
 
-        private static PaintColor LerpColor(PaintColor a, PaintColor b, double t)
-        {
-            t = Math.Clamp(t, 0.0, 1.0);
-            return PaintColor.FromArgb(
-                (int)Math.Round(a.A + t * (b.A - a.A)),
-                (int)Math.Round(a.R + t * (b.R - a.R)),
-                (int)Math.Round(a.G + t * (b.G - a.G)),
-                (int)Math.Round(a.B + t * (b.B - a.B)));
-        }
+        private static PaintColor LerpColor(PaintColor a, PaintColor b, double t) =>
+            ColorSpaceConverter.LerpPremultiplied(a, b, t);
 
         private static (PaintColor PaintColor, double Position)[] ApplyColorSpaceInterpolation(
             (PaintColor PaintColor, double Position)[] stops,
             GradientColorSpace colorSpace,
             HueInterpolationMethod hueMethod)
         {
-            if (colorSpace == GradientColorSpace.Srgb || stops.Length < 2)
+            if (stops.Length < 2)
                 return stops;
 
             const int kSamples = 15;
@@ -465,6 +458,14 @@ namespace PeachBrackets.Html.Handlers
             {
                 var (c1, p1) = stops[i - 1];
                 var (c2, p2) = stops[i];
+                // sRGB is the backend's own straight lerp, which is only right while the alpha is constant: a segment
+                // whose alpha changes (and which is not a hard stop) is sampled so each sample is premultiplied (CSS Color 4 §12.3).
+                if (colorSpace == GradientColorSpace.Srgb && (c1.A == c2.A || p2 <= p1))
+                {
+                    result.Add(stops[i]);
+                    continue;
+                }
+
                 for (int k = 1; k <= kSamples; k++)
                 {
                     double t = (double)k / (kSamples + 1);
@@ -482,7 +483,7 @@ namespace PeachBrackets.Html.Handlers
             GradientColorSpace colorSpace,
             HueInterpolationMethod hueMethod)
         {
-            if (colorSpace == GradientColorSpace.Srgb || colors.Count < 2)
+            if (colors.Count < 2)
                 return (colors.ToArray(), angles.ToArray());
 
             const int kSamples = 15;
@@ -491,6 +492,12 @@ namespace PeachBrackets.Html.Handlers
             outC.Add(colors[0]); outA.Add(angles[0]);
             for (int i = 1; i < colors.Count; i++)
             {
+                if (colorSpace == GradientColorSpace.Srgb && (colors[i - 1].A == colors[i].A || angles[i] <= angles[i - 1]))
+                {
+                    outC.Add(colors[i]); outA.Add(angles[i]);
+                    continue;
+                }
+
                 for (int k = 1; k <= kSamples; k++)
                 {
                     double t = (double)k / (kSamples + 1);
