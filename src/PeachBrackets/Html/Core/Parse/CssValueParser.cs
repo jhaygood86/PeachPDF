@@ -816,12 +816,14 @@ namespace PeachBrackets.Html.Parse
             {
                 if (!string.IsNullOrEmpty(str))
                 {
+                    // The quick readers below take numbers only; a missing component (none) is the token reader's.
+                    var hasNone = length > 5 && str.AsSpan(idx, length).Contains("none", StringComparison.OrdinalIgnoreCase);
                     return length switch
                     {
                         > 1 when str[idx] == '#' => GetColorByHex(str, idx, length, out color),
-                        > 10 when CommonUtils.SubStringEquals(str, idx, 4, "rgb(") && str[length - 1] == ')' =>
+                        > 10 when !hasNone && CommonUtils.SubStringEquals(str, idx, 4, "rgb(") && str[length - 1] == ')' =>
                             GetColorByRgb(str, idx, length, out color),
-                        > 13 when CommonUtils.SubStringEquals(str, idx, 5, "rgba(") && str[length - 1] == ')' =>
+                        > 13 when !hasNone && CommonUtils.SubStringEquals(str, idx, 5, "rgba(") && str[length - 1] == ')' =>
                             GetColorByRgba(str, idx, length, out color),
                         _ => GetColorByName(str, idx, length, out color)
                     };
@@ -845,6 +847,21 @@ namespace PeachBrackets.Html.Parse
             using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
             List<Token> tokens = pooledTokens;
             return tokens.TryResolveOklab(out oklab);
+        }
+
+        /// <summary>
+        /// A colour as an operand of an animation's mix in Oklab: its Oklab coordinates as written and the components that are missing in them (see
+        /// <see cref="ColorFunctionExtensions.TryResolveMixOperand"/>). False when the text is not a colour this reads.
+        /// </summary>
+        internal bool TryGetMixOperand(string str, out double[] oklab, out int missing)
+        {
+            oklab = [];
+            missing = 0;
+            if (string.IsNullOrEmpty(str) || str.IndexOf('(') < 0) return false;
+
+            using var pooledTokens = GetCssTokensPooled(str, inValueContext: true);
+            List<Token> tokens = pooledTokens;
+            return tokens.TryResolveMixOperand(out oklab, out missing);
         }
 
         /// <summary>

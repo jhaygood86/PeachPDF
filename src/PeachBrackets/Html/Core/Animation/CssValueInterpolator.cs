@@ -37,7 +37,7 @@ namespace PeachBrackets.Html.Animation
         /// <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c>, <c>Oklab</c> (the coordinates it was written with, which can lie outside the sRGB gamut);
         /// <c>Oklab</c> being set does not imply <c>InOklab</c>.
         /// </summary>
-        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false, double[]? Oklab = null);
+        private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false, double[]? Oklab = null, int OklabMissing = 0);
 
         private static readonly HashSet<string> LengthUnits = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -563,12 +563,23 @@ namespace PeachBrackets.Html.Animation
         {
             var from = x.Rgba!;
             var to = y.Rgba!;
-            var alpha = from[3] + (to[3] - from[3]) * t;
+
+            // A missing alpha (written as none) takes the other colour's.
+            var fromAlpha = from[3];
+            var toAlpha = to[3];
+            var alphaBit = ColorSpaceMath.AlphaMissing;
+            if ((x.OklabMissing & alphaBit) != 0 && (y.OklabMissing & alphaBit) == 0) fromAlpha = toAlpha;
+            else if ((y.OklabMissing & alphaBit) != 0 && (x.OklabMissing & alphaBit) == 0) toAlpha = fromAlpha;
+
+            var alpha = fromAlpha + (toAlpha - fromAlpha) * t;
             alpha = Math.Clamp(alpha, 0, 1);
 
             if (alpha <= 0) return "rgba(0, 0, 0, 0)";
 
-            if (x.InOklab || y.InOklab) return MixInOklab(x, y, t, alpha);
+            if (x.InOklab || y.InOklab) return MixInOklab(x, y, t, alpha, fromAlpha, toAlpha);
+
+            from = [from[0], from[1], from[2], fromAlpha];
+            to = [to[0], to[1], to[2], toAlpha];
 
             var channels = new int[3];
             for (var i = 0; i < 3; i++)
@@ -588,16 +599,26 @@ namespace PeachBrackets.Html.Animation
         /// <c>lab()</c>, <c>lch()</c>, <c>oklab()</c>, <c>oklch()</c> or <c>color-mix()</c> colour (which can lie outside the sRGB gamut), and from its
         /// 8-bit sRGB value otherwise.
         /// </summary>
-        private static string MixInOklab(Token x, Token y, double t, double alpha)
+        private static string MixInOklab(Token x, Token y, double t, double alpha, double fromAlpha, double toAlpha)
         {
             var from = x.Rgba!;
             var to = y.Rgba!;
             var a = x.Oklab ?? ColorSpaceMath.ToSpace(from[0] / 255, from[1] / 255, from[2] / 255, ColorSpaceMath.Space.Oklab);
             var b = y.Oklab ?? ColorSpaceMath.ToSpace(to[0] / 255, to[1] / 255, to[2] / 255, ColorSpaceMath.Space.Oklab);
 
+            // A missing component (written as none) takes the other colour's value.
+            a = [.. a];
+            b = [.. b];
+            for (var i = 0; i < 3; i++)
+            {
+                var bit = 1 << i;
+                if ((x.OklabMissing & bit) != 0 && (y.OklabMissing & bit) == 0) a[i] = b[i];
+                else if ((y.OklabMissing & bit) != 0 && (x.OklabMissing & bit) == 0) b[i] = a[i];
+            }
+
             var channels = new double[3];
             for (var i = 0; i < 3; i++)
-                channels[i] = (a[i] * from[3] * (1 - t) + b[i] * to[3] * t) / alpha;
+                channels[i] = (a[i] * fromAlpha * (1 - t) + b[i] * toAlpha * t) / alpha;
 
             // An easing that overshoots can take the lightness past the ends of its range; a browser holds it there (and keeps a and b), where
             // the colour parser would take the value as it comes and wash out to white or black.
@@ -769,8 +790,11 @@ namespace PeachBrackets.Html.Animation
             if (valueParser.TryGetColor(text, 0, text.Length, out var color))
             {
                 var inOklab = TakesAMixIntoOklab(text);
+                double[] oklab = [];
+                var missing = 0;
+                var read = inOklab && valueParser.TryGetMixOperand(text, out oklab, out missing);
                 return new Token(TokenKind.Color, text, Rgba: [color.R, color.G, color.B, color.A / 255d], InOklab: inOklab,
-                    Oklab: inOklab && valueParser.TryGetOklab(text, out var oklab) ? oklab : null);
+                    Oklab: read ? oklab : null, OklabMissing: read ? missing : 0);
             }
 
             return new Token(TokenKind.Word, text);
@@ -792,6 +816,13 @@ namespace PeachBrackets.Html.Animation
             if (name.Equals("lab", StringComparison.OrdinalIgnoreCase) || name.Equals("lch", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("oklab", StringComparison.OrdinalIgnoreCase) || name.Equals("oklch", StringComparison.OrdinalIgnoreCase)
                 || name.Equals("color", StringComparison.OrdinalIgnoreCase) || name.Equals("color-mix", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // A component written as none (a missing one) takes a mix out of sRGB even in a legacy colour function: Chrome mixes it in Oklab.
+            if ((name.Equals("rgb", StringComparison.OrdinalIgnoreCase) || name.Equals("rgba", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("hsl", StringComparison.OrdinalIgnoreCase) || name.Equals("hsla", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("hwb", StringComparison.OrdinalIgnoreCase))
+                && text.AsSpan(open).Contains("none", StringComparison.OrdinalIgnoreCase))
                 return true;
 
             var inside = text.AsSpan(open + 1).TrimStart();
