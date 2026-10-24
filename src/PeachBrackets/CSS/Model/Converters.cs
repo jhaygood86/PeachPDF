@@ -244,6 +244,9 @@ namespace PeachBrackets.Css
             Construct(() => new FunctionValueConverter(FunctionNames.Oklch, Any));
         public static readonly IValueConverter ColorMixConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ColorMix, Any));
+        // https://www.w3.org/TR/css-color-4/#color-function - lenient like the group above: the predefined space and the components are read in the render layer.
+        public static readonly IValueConverter ColorFunctionConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.ColorFunction, Any));
         // https://www.w3.org/TR/css-color-5/#device-cmyk - lenient like the space/lab/oklch group above:
         // the exact grammar check and CMYK-native resolution happen in the render layer
         // (ColorFunctionExtensions.ParseDeviceCmyk), this only needs to preserve the function text.
@@ -611,6 +614,7 @@ namespace PeachBrackets.Css
             .Or(LabColorConverter.Or(OklabColorConverter))
             .Or(LchColorConverter.Or(OklchColorConverter))
             .Or(ColorMixConverter)
+            .Or(ColorFunctionConverter)
             .Or(DeviceCmykColorConverter)
             .Or(RgbLenientConverter.Or(RgbaLenientConverter))
             .Or(HslLenientConverter.Or(HslaLenientConverter))

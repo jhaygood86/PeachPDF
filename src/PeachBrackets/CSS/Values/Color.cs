@@ -342,7 +342,7 @@ namespace PeachBrackets.Css
         public static Color FromOklch(double l, double c, double h, float alpha = 1f)
             => FromSpaceComponents([l, c, h], ColorSpaceMath.Space.Oklch, alpha);
 
-        private static Color FromSpaceComponents(double[] v, ColorSpaceMath.Space cs, float alpha)
+        internal static Color FromSpaceComponents(double[] v, ColorSpaceMath.Space cs, float alpha)
         {
             var (r, g, b) = ColorSpaceMath.FromSpace(v, cs);
             return new Color(ToByte(r), ToByte(g), ToByte(b), Normalize(alpha));
@@ -383,6 +383,20 @@ namespace PeachBrackets.Css
             var v1 = Operand(c1, oklab1, written1, cs);
             var v2 = Operand(c2, oklab2, written2, cs);
             var hueIndex = ColorSpaceMath.HueIndex(cs);
+
+            // A missing component (CSS Color 4 §12.2, written as none) takes the other colour's value, so the mix leaves it as that colour has it; it only
+            // counts where the other space has an analogous component (§12.4). A missing alpha does the same with the alpha.
+            var missing1 = written1 is { } w1 ? ColorSpaceMath.MapMissing(w1.Space, w1.Missing, cs) : 0;
+            var missing2 = written2 is { } w2 ? ColorSpaceMath.MapMissing(w2.Space, w2.Missing, cs) : 0;
+            for (var i = 0; i < 3; i++)
+            {
+                var bit = 1 << i;
+                if ((missing1 & bit) != 0 && (missing2 & bit) == 0) v1[i] = v2[i];
+                else if ((missing2 & bit) != 0 && (missing1 & bit) == 0) v2[i] = v1[i];
+            }
+
+            if ((missing1 & ColorSpaceMath.AlphaMissing) != 0 && (missing2 & ColorSpaceMath.AlphaMissing) == 0) a1 = a2;
+            else if ((missing2 & ColorSpaceMath.AlphaMissing) != 0 && (missing1 & ColorSpaceMath.AlphaMissing) == 0) a2 = a1;
 
             // A gray has no hue of its own: the other colour's stands in for it (CSS Color 4, interpolating with a missing hue), instead of whatever angle the
             // conversion leaves behind.

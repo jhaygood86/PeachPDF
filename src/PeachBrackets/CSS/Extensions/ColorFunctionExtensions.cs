@@ -75,6 +75,9 @@ namespace PeachBrackets.Css
             if (name.Equals(FunctionNames.ColorMix, StringComparison.OrdinalIgnoreCase))
                 return ParseColorMix(args, wantOklab, out oklab);
 
+            if (name.Equals(FunctionNames.ColorFunction, StringComparison.OrdinalIgnoreCase))
+                return ParseColorFunction(args, wantOklab, out oklab);
+
             if (name.Equals(FunctionNames.DeviceCmyk, StringComparison.OrdinalIgnoreCase))
                 return ParseDeviceCmyk(args);
 
@@ -91,7 +94,7 @@ namespace PeachBrackets.Css
             var y = CmykComponent(comps[2]);
             var k = CmykComponent(comps[3]);
             if (c is null || m is null || y is null || k is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            var a = Alpha(alphaTok);
             return Color.FromDeviceCmyk(c.Value, m.Value, y.Value, k.Value, a);
         }
 
@@ -110,11 +113,13 @@ namespace PeachBrackets.Css
         private static Color? ParseRgb(IEnumerable<Token> args)
         {
             if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
-            var r = AsTokens(comps[0]).ToRgbComponent();
-            var g = AsTokens(comps[1]).ToRgbComponent();
-            var b = AsTokens(comps[2]).ToRgbComponent();
+            // none (a missing component) is only part of the space-separated syntax, not the legacy comma one.
+            if (HasComma(args) && (comps.Any(IsNone) || (alphaTok is { } legacyAlpha && IsNone(legacyAlpha)))) return null;
+            var r = RgbComponent(comps[0]);
+            var g = RgbComponent(comps[1]);
+            var b = RgbComponent(comps[2]);
             if (r is null || g is null || b is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            var a = Alpha(alphaTok);
             return new Color(r.Value, g.Value, b.Value, Clamp01Byte(a));
         }
 
@@ -122,12 +127,13 @@ namespace PeachBrackets.Css
         private static Color? ParseHsl(IEnumerable<Token> args)
         {
             if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
+            if (HasComma(args) && (comps.Any(IsNone) || (alphaTok is { } legacyAlpha && IsNone(legacyAlpha)))) return null;
             var hue = HueDegrees(comps[0]);
-            var sat = AsTokens(comps[1]).ToPercent();
-            var light = AsTokens(comps[2]).ToPercent();
+            var sat = PercentValue(comps[1]);
+            var light = PercentValue(comps[2]);
             if (hue is null || sat is null || light is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
-            return Color.FromHsla((float)(hue.Value / 360.0), sat.Value.NormalizedValue, light.Value.NormalizedValue, a);
+            var a = Alpha(alphaTok);
+            return Color.FromHsla((float)(hue.Value / 360.0), sat.Value, light.Value, a);
         }
 
         // ── hwb(): hue angle + whiteness% + blackness% + optional alpha ──────────
@@ -135,11 +141,11 @@ namespace PeachBrackets.Css
         {
             if (!Extract(args, 3, out var comps, out var alphaTok)) return null;
             var hue = HueDegrees(comps[0]);
-            var white = AsTokens(comps[1]).ToPercent();
-            var black = AsTokens(comps[2]).ToPercent();
+            var white = PercentValue(comps[1]);
+            var black = PercentValue(comps[2]);
             if (hue is null || white is null || black is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
-            return Color.FromHwba((float)(hue.Value / 360.0), white.Value.NormalizedValue, black.Value.NormalizedValue, a);
+            var a = Alpha(alphaTok);
+            return Color.FromHwba((float)(hue.Value / 360.0), white.Value, black.Value, a);
         }
 
         // ── gray(): a single lightness component + optional alpha ────────────────
@@ -148,7 +154,7 @@ namespace PeachBrackets.Css
             if (!Extract(args, 1, out var comps, out var alphaTok)) return null;
             var value = AsTokens(comps[0]).ToRgbComponent();
             if (value is null) return null;
-            var a = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            var a = Alpha(alphaTok);
             return Color.FromGray(value.Value, a);
         }
 
@@ -156,21 +162,23 @@ namespace PeachBrackets.Css
         private static Color? ParseRect(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double abReference, double lReference, ColorSpaceMath.Space space, bool wantOklab, out double[] oklab)
         {
             oklab = null;
-            if (!TryRectComponents(args, abReference, lReference, out var v, out var alpha)) return null;
+            if (!TryRectComponents(args, abReference, lReference, out var v, out var alpha, out _)) return null;
             if (wantOklab) oklab = ColorSpaceMath.ToOklab(v, space);
             return build(v[0], v[1], v[2], alpha);
         }
 
-        private static bool TryRectComponents(IEnumerable<Token> args, double abReference, double lReference, out double[] v, out float alpha)
+        private static bool TryRectComponents(IEnumerable<Token> args, double abReference, double lReference, out double[] v, out float alpha, out int missing)
         {
             v = [];
             alpha = 1f;
+            missing = 0;
             if (!Extract(args, 3, out var comps, out var alphaTok)) return false;
             var l = Component(comps[0], lReference);
             var a = Component(comps[1], abReference);
             var b = Component(comps[2], abReference);
             if (l is null || a is null || b is null) return false;
-            alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            alpha = Alpha(alphaTok);
+            missing = MissingMask(comps, alphaTok);
             // CSS Color 4 section 9: the lightness is clamped to its range when the colour is parsed (the reference is 100% of it), before any mix.
             v = [Math.Clamp(l.Value, 0, lReference), a.Value, b.Value];
             return true;
@@ -180,23 +188,68 @@ namespace PeachBrackets.Css
         private static Color? ParsePolar(IEnumerable<Token> args, Func<double, double, double, float, Color> build, double chromaReference, double lReference, ColorSpaceMath.Space space, bool wantOklab, out double[] oklab)
         {
             oklab = null;
-            if (!TryPolarComponents(args, chromaReference, lReference, out var v, out var alpha)) return null;
+            if (!TryPolarComponents(args, chromaReference, lReference, out var v, out var alpha, out _)) return null;
             if (wantOklab) oklab = ColorSpaceMath.ToOklab(v, space);
             return build(v[0], v[1], v[2], alpha);
         }
 
-        private static bool TryPolarComponents(IEnumerable<Token> args, double chromaReference, double lReference, out double[] v, out float alpha)
+        private static bool TryPolarComponents(IEnumerable<Token> args, double chromaReference, double lReference, out double[] v, out float alpha, out int missing)
         {
             v = [];
             alpha = 1f;
+            missing = 0;
             if (!Extract(args, 3, out var comps, out var alphaTok)) return false;
             var l = Component(comps[0], lReference);
             var c = Component(comps[1], chromaReference);
             var h = HueDegrees(comps[2]);
             if (l is null || c is null || h is null) return false;
-            alpha = alphaTok is null ? 1f : AsTokens(alphaTok.Value).ToAlphaValue() ?? 1f;
+            alpha = Alpha(alphaTok);
+            missing = MissingMask(comps, alphaTok);
             // CSS Color 4 section 9: the lightness is clamped to its range and a negative chroma to 0 when the colour is parsed.
             v = [Math.Clamp(l.Value, 0, lReference), Math.Max(c.Value, 0), h.Value];
+            return true;
+        }
+
+        // ── color(<space> c1 c2 c3 [/ alpha]) ────────────────────────────────────
+        // https://www.w3.org/TR/css-color-4/#color-function - the predefined spaces; a colour in a wide-gamut one is clipped to sRGB like the other wide-gamut functions.
+        private static readonly FrozenDictionary<string, ColorSpaceMath.Space> PredefinedSpaces = new Dictionary<string, ColorSpaceMath.Space>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["srgb"] = ColorSpaceMath.Space.Srgb,
+            ["srgb-linear"] = ColorSpaceMath.Space.SrgbLinear,
+            ["display-p3"] = ColorSpaceMath.Space.DisplayP3,
+            ["a98-rgb"] = ColorSpaceMath.Space.A98Rgb,
+            ["prophoto-rgb"] = ColorSpaceMath.Space.ProphotoRgb,
+            ["rec2020"] = ColorSpaceMath.Space.Rec2020,
+            ["xyz"] = ColorSpaceMath.Space.XyzD65,
+            ["xyz-d65"] = ColorSpaceMath.Space.XyzD65,
+            ["xyz-d50"] = ColorSpaceMath.Space.XyzD50,
+        }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
+
+        private static Color? ParseColorFunction(IEnumerable<Token> args, bool wantOklab, out double[] oklab)
+        {
+            oklab = null;
+            if (!TryColorFunctionComponents(args, out var space, out var v, out var alpha, out _)) return null;
+            if (wantOklab) oklab = ColorSpaceMath.ToOklab(v, space);
+            return Color.FromSpaceComponents(v, space, alpha);
+        }
+
+        private static bool TryColorFunctionComponents(IEnumerable<Token> args, out ColorSpaceMath.Space space, out double[] v, out float alpha, out int missing)
+        {
+            space = default;
+            v = [];
+            alpha = 1f;
+            missing = 0;
+            if (!Extract(args, 4, out var comps, out var alphaTok, allowImplicitAlpha: false)) return false;
+            if (comps[0].Type != TokenType.Ident || !PredefinedSpaces.TryGetValue(comps[0].Data.ToString(), out space)) return false;
+
+            // The components of every predefined space are a number or a percentage of 1 (the xyz spaces too).
+            var c1 = Component(comps[1], 1.0);
+            var c2 = Component(comps[2], 1.0);
+            var c3 = Component(comps[3], 1.0);
+            if (c1 is null || c2 is null || c3 is null) return false;
+            v = [c1.Value, c2.Value, c3.Value];
+            alpha = Alpha(alphaTok);
+            missing = MissingMask(comps.GetRange(1, 3), alphaTok);
             return true;
         }
 
@@ -232,6 +285,29 @@ namespace PeachBrackets.Css
 
             oklab = [];
             return false;
+        }
+
+        /// <summary>
+        /// Reads any colour as an operand of a mix in Oklab (an animation between two colours): its Oklab coordinates as written, without the clip to the sRGB gamut, and
+        /// which of them are missing (bits 0 to 2 for L, a and b; <see cref="ColorSpaceMath.AlphaMissing"/> for the alpha) - a component written as none, carried to
+        /// the analogous Oklab component where there is one (CSS Color 4 §12.4). False for a colour that does not resolve, and for a <c>device-cmyk()</c> one.
+        /// </summary>
+        public static bool TryResolveMixOperand(this IReadOnlyList<Token> value, out double[] oklab, out int missing)
+        {
+            missing = 0;
+            var color = ResolveColor(value, wantOklab: true, out oklab);
+            if (color is not { } resolved || resolved.IsDeviceCmyk)
+            {
+                oklab = [];
+                return false;
+            }
+
+            oklab ??= ColorSpaceMath.ToSpace(resolved.R / 255.0, resolved.G / 255.0, resolved.B / 255.0, ColorSpaceMath.Space.Oklab);
+
+            var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToList();
+            if (WrittenComponents(tokens) is { } written)
+                missing = ColorSpaceMath.MapMissing(written.Space, written.Missing, ColorSpaceMath.Space.Oklab);
+            return true;
         }
 
         // The operands, weight and space of a color-mix(), after the CSS Color 5 §3 percentage normalization.
@@ -327,7 +403,8 @@ namespace PeachBrackets.Css
             return true;
         }
 
-        // The components a lab(), lch(), oklab() or oklch() operand was written with (null for any other colour).
+        // The components a color operand was written with (null for any other colour). Those of lab(), lch(), oklab(), oklch() and color() are always
+        // read, for a gray's hue and an out-of-gamut colour; the rest only when one of their components or the alpha is missing (none), as that is all a mix needs.
         private static ColorSpaceMath.WrittenCoords? WrittenComponents(List<Token> tokens)
         {
             if (tokens.Count != 1 || tokens[0].Type != TokenType.Function) return null;
@@ -335,17 +412,56 @@ namespace PeachBrackets.Css
             var name = tokens[0].Data;
             var args = tokens[0].ArgumentTokens;
             double[] v;
+            int missing;
 
-            if (name.Equals(FunctionNames.Lab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 125.0, 100.0, out v, out _))
-                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lab, v);
-            if (name.Equals(FunctionNames.Oklab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 0.4, 1.0, out v, out _))
-                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklab, v);
-            if (name.Equals(FunctionNames.Lch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 150.0, 100.0, out v, out _))
-                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lch, v);
-            if (name.Equals(FunctionNames.Oklch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 0.4, 1.0, out v, out _))
-                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklch, v);
+            if (name.Equals(FunctionNames.Lab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 125.0, 100.0, out v, out _, out missing))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lab, v, missing);
+            if (name.Equals(FunctionNames.Oklab, StringComparison.OrdinalIgnoreCase) && TryRectComponents(args, 0.4, 1.0, out v, out _, out missing))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklab, v, missing);
+            if (name.Equals(FunctionNames.Lch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 150.0, 100.0, out v, out _, out missing))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Lch, v, missing);
+            if (name.Equals(FunctionNames.Oklch, StringComparison.OrdinalIgnoreCase) && TryPolarComponents(args, 0.4, 1.0, out v, out _, out missing))
+                return new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Oklch, v, missing);
+            if (name.Equals(FunctionNames.ColorFunction, StringComparison.OrdinalIgnoreCase) && TryColorFunctionComponents(args, out var space, out v, out _, out missing))
+                return new ColorSpaceMath.WrittenCoords(space, v, missing);
+
+            if (!Extract(args, 3, out var comps, out var alphaTok) || HasComma(args)) return null;
+            missing = MissingMask(comps, alphaTok);
+            if (missing == 0) return null;
+
+            if (name.Equals(FunctionNames.Rgb, StringComparison.OrdinalIgnoreCase) || name.Equals(FunctionNames.Rgba, StringComparison.OrdinalIgnoreCase))
+            {
+                var r = RgbComponent(comps[0]);
+                var g = RgbComponent(comps[1]);
+                var b = RgbComponent(comps[2]);
+                return r is null || g is null || b is null ? null : new ColorSpaceMath.WrittenCoords(ColorSpaceMath.Space.Srgb, [r.Value / 255.0, g.Value / 255.0, b.Value / 255.0], missing);
+            }
+
+            var isHsl = name.Equals(FunctionNames.Hsl, StringComparison.OrdinalIgnoreCase) || name.Equals(FunctionNames.Hsla, StringComparison.OrdinalIgnoreCase);
+            if (isHsl || name.Equals(FunctionNames.Hwb, StringComparison.OrdinalIgnoreCase))
+            {
+                var hue = HueDegrees(comps[0]);
+                var second = PercentValue(comps[1]);
+                var third = PercentValue(comps[2]);
+                return hue is null || second is null || third is null
+                    ? null
+                    : new ColorSpaceMath.WrittenCoords(isHsl ? ColorSpaceMath.Space.Hsl : ColorSpaceMath.Space.Hwb, [hue.Value, second.Value * 100.0, third.Value * 100.0], missing);
+            }
 
             return null;
+        }
+
+        // Which of the three components (bits 0 to 2) and the alpha (ColorSpaceMath.AlphaMissing) were written as none.
+        private static int MissingMask(List<Token> components, Token? alpha)
+        {
+            var mask = 0;
+            for (var i = 0; i < 3 && i < components.Count; i++)
+            {
+                if (IsNone(components[i])) mask |= 1 << i;
+            }
+
+            if (alpha is { } a && IsNone(a)) mask |= ColorSpaceMath.AlphaMissing;
+            return mask;
         }
 
         // ── Token helpers ────────────────────────────────────────────────────────
@@ -414,6 +530,27 @@ namespace PeachBrackets.Css
         }
 
         private static Token[] AsTokens(Token token) => [token];
+
+        private static bool IsNone(Token token) =>
+            token.Type == TokenType.Ident && token.Data.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+        private static bool HasComma(IEnumerable<Token> args) => args.Any(t => t.Type == TokenType.Comma);
+
+        // A missing component (none) is 0 once the colour is used for anything but a mix.
+        private static byte? RgbComponent(Token token) => IsNone(token) ? (byte)0 : AsTokens(token).ToRgbComponent();
+
+        private static float? PercentValue(Token token)
+        {
+            if (IsNone(token)) return 0f;
+            return AsTokens(token).ToPercent()?.NormalizedValue;
+        }
+
+        // The alpha of a colour: a number or percentage; a missing alpha (none) is transparent once the colour is used for anything but a mix.
+        private static float Alpha(Token? token)
+        {
+            if (token is not { } t) return 1f;
+            return IsNone(t) ? 0f : AsTokens(t).ToAlphaValue() ?? 1f;
+        }
 
         // A number (returned as-is) or a percentage resolved against `reference`; "none" resolves to 0.
         private static double? Component(Token token, double reference)

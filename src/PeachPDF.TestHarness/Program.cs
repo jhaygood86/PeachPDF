@@ -7381,6 +7381,40 @@ await SaveShowcaseAsync("cmyk_colors", "Standards & Accessibility", "CMYK Colors
     "CSS device-cmyk() colors, carried through natively as real DeviceCMYK PDF operators (including gradients and color-mix() between two CMYK colors), coexisting on the same page as ordinary RGB colors.",
     cmykColorsHtml, cmykColorsConfig);
 
+// --- color() and missing (none) color components ---
+static string ColorSwatch(string label, string css) =>
+    $"<div class=\"col\"><div class=\"swatch\" style=\"background: {css}\">&nbsp;</div><div class=\"label\">{label}</div></div>";
+
+var colorFunctionHtml =
+    "<!DOCTYPE html><html><head><style>" +
+    "body { font-family: sans-serif; margin: 20pt; } .row { display: flex; gap: 8pt; margin-bottom: 10pt; }" +
+    ".col { width: 120pt; } .swatch { height: 40pt; border: 1pt solid #888; } .label { font-size: 7pt; margin-top: 2pt; }" +
+    "</style></head><body>" +
+    "<h1>color() and missing components</h1>" +
+    "<h2>color(): the predefined spaces</h2>" +
+    "<div class=\"row\">" +
+    ColorSwatch("color(srgb 1 0 0)", "color(srgb 1 0 0)") +
+    ColorSwatch("color(display-p3 0 1 0)", "color(display-p3 0 1 0)") +
+    ColorSwatch("color(a98-rgb 0 0.6 1)", "color(a98-rgb 0 0.6 1)") +
+    ColorSwatch("color(rec2020 0.9 0.3 0.1)", "color(rec2020 0.9 0.3 0.1)") +
+    "</div><div class=\"row\">" +
+    ColorSwatch("color(prophoto-rgb 0.8 0.5 0.2)", "color(prophoto-rgb 0.8 0.5 0.2)") +
+    ColorSwatch("color(xyz-d50 0.4 0.3 0.1)", "color(xyz-d50 0.4 0.3 0.1)") +
+    ColorSwatch("color(srgb-linear 0.2 0.5 0.8 / 50%)", "color(srgb-linear 0.2 0.5 0.8 / 50%)") +
+    ColorSwatch("gradient from color() to color()", "linear-gradient(to right, color(display-p3 1 0 0), color(display-p3 0 0 1))") +
+    "</div>" +
+    "<h2>none: a missing component</h2>" +
+    "<div class=\"row\">" +
+    ColorSwatch("rgb(none 128 255)", "rgb(none 128 255)") +
+    ColorSwatch("lab(50 40 20 / none) is transparent", "lab(50 40 20 / none)") +
+    ColorSwatch("color-mix(in oklab, oklab(none 0.1 0.05), oklab(0.8 -0.1 0.02))", "color-mix(in oklab, oklab(none 0.1 0.05), oklab(0.8 -0.1 0.02))") +
+    ColorSwatch("same, with the lightness written out", "color-mix(in oklab, oklab(0.8 0.1 0.05), oklab(0.8 -0.1 0.02))") +
+    "</div></body></html>";
+
+await SaveShowcaseAsync("color_function_and_none", "Backgrounds & Borders", "color() and Missing Components",
+    "The CSS color() function in every predefined space (sRGB, linear sRGB, Display P3, A98, ProPhoto, Rec. 2020, XYZ), and none as a missing color component that takes the other color's value in a mix.",
+    colorFunctionHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
+
 // --- PDF/X-1a Conformance showcase ---
 // Like PDF/A above, structural value (a CMYK OutputIntent, and PeachPDF's rejection of both live
 // transparency and chromatic RGB under X1a) more than visual - but the TrueBlack/RichBlack achromatic
