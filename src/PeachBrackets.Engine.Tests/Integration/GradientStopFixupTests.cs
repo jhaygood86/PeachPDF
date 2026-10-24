@@ -44,6 +44,37 @@ namespace PeachBrackets.Engine.Tests.Integration
                     Assert.True(bounds[i] >= bounds[i - 1], $"/Bounds decrease at index {i}: [{string.Join(' ', bounds)}]");
         }
 
+        [Fact]
+        public async Task FadeToTransparent_IsSampledSoItCanBePremultiplied()
+        {
+            var plain = AllBounds(await GetPdfText("background: linear-gradient(to right, #f00, #00f);"));
+            var faded = AllBounds(await GetPdfText("background: linear-gradient(to right, #f00, transparent);"));
+
+            // an opaque sRGB gradient stays two stops; a fade to transparent is sampled (CSS Color 4 §12.3)
+            Assert.DoesNotContain(plain, b => b.Length >= 10);
+            Assert.Contains(faded, b => b.Length >= 10);
+        }
+
+        [Fact]
+        public async Task HardStopWithDifferentAlpha_IsNotSampled()
+        {
+            var bounds = AllBounds(await GetPdfText("background: linear-gradient(to right, #f00 50%, transparent 50%);"));
+
+            AssertNonDecreasing(bounds);
+            Assert.DoesNotContain(bounds, b => b.Length >= 10);
+        }
+
+        [Theory]
+        [InlineData("background: conic-gradient(#f00, transparent);")]
+        [InlineData("background: conic-gradient(#f00 0deg 180deg, transparent 180deg 360deg);")]
+        [InlineData("background: conic-gradient(#f00, #00f);")]
+        public async Task ConicGradientAlpha_Generates(string css)
+        {
+            var text = await GetPdfText(css);
+
+            Assert.Contains("%PDF", text);
+        }
+
         [Theory]
         [InlineData(new double[] { 0.25, 0.0 }, new double[] { 0.25, 0.25 })]
         [InlineData(new double[] { 0.0, 0.25, 0.0, 0.5 }, new double[] { 0.0, 0.25, 0.25, 0.5 })]

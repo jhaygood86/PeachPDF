@@ -655,7 +655,8 @@ var html = "<!DOCTYPE html><html><head>" + Css + "</head><body>" +
         Swatch("transparent → color", "linear-gradient(to right, rgba(255,0,0,0), red)"),
         Swatch("color → transparent", "linear-gradient(to right, rgba(0,128,255,1), rgba(0,128,255,0))"),
         Swatch("rgba() 80% opacity", "linear-gradient(to right, rgba(255,0,0,0.8), rgba(0,0,255,0.8))"),
-        Swatch("multi-stop alpha", "linear-gradient(to right, red, rgba(255,255,0,0.5), rgba(0,0,255,0))")
+        Swatch("multi-stop alpha", "linear-gradient(to right, red, rgba(255,255,0,0.5), rgba(0,0,255,0))"),
+        Swatch("red → transparent (premultiplied)", "linear-gradient(to right, red, transparent)")
     ) +
 
     "<h2>4 — repeating-linear-gradient</h2>" +

@@ -160,7 +160,7 @@ namespace PeachPDF.Tests.Integration
             var pdfText = await GetPdfText(GradientHtml("background-image: linear-gradient(to right, red 20%, blue 80%);"));
 
             Assert.Contains("/FunctionType 3", pdfText);
-            Assert.Matches(@"/Bounds\s*\[\s*0\.2\s+0\.8\s*\]", pdfText);
+            Assert.Matches(@"/Bounds\s*\[\s*0\.2\s+[^\]]*\b0\.8\s*\]", pdfText);
         }
 
         [Fact]
@@ -184,9 +184,9 @@ namespace PeachPDF.Tests.Integration
                 "background-image: linear-gradient(to right, rgba(255,0,0,1) 20%, rgba(0,0,255,0.2) 80%);"));
 
             Assert.Contains("/SMask", pdfText);
-            var boundsMatches = Regex.Matches(pdfText, @"/Bounds\s*\[\s*0\.2\s+0\.8\s*\]");
+            var boundsMatches = Regex.Matches(pdfText, @"/Bounds\s*\[\s*0\.2\s+[^\]]*\b0\.8\s*\]");
             Assert.True(boundsMatches.Count >= 2,
-                $"expected both the color and alpha stitching functions to pad to [0.2 0.8], found {boundsMatches.Count} occurrence(s)");
+                $"expected both the color and alpha stitching functions to pad from 0.2 to 0.8 (the translucent segment is sampled between them), found {boundsMatches.Count} occurrence(s)");
         }
     }
 }
