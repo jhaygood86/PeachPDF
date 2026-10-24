@@ -7409,10 +7409,17 @@ var colorFunctionHtml =
     ColorSwatch("lab(50 40 20 / none) is transparent", "lab(50 40 20 / none)") +
     ColorSwatch("color-mix(in oklab, oklab(none 0.1 0.05), oklab(0.8 -0.1 0.02))", "color-mix(in oklab, oklab(none 0.1 0.05), oklab(0.8 -0.1 0.02))") +
     ColorSwatch("same, with the lightness written out", "color-mix(in oklab, oklab(0.8 0.1 0.05), oklab(0.8 -0.1 0.02))") +
+    "</div>" +
+    "<h2>Relative colors</h2>" +
+    "<div class=\"row\">" +
+    ColorSwatch("rgb(from #336699 calc(r + 60) g b)", "rgb(from #336699 calc(r + 60) g b)") +
+    ColorSwatch("hsl(from red calc(h + 120) s l)", "hsl(from red calc(h + 120) s l)") +
+    ColorSwatch("oklch(from #336699 calc(l + 0.2) c h)", "oklch(from #336699 calc(l + 0.2) c h)") +
+    ColorSwatch("rgb(from #336699 r g b / 40%)", "rgb(from #336699 r g b / 40%)") +
     "</div></body></html>";
 
-await SaveShowcaseAsync("color_function_and_none", "Backgrounds & Borders", "color() and Missing Components",
-    "The CSS color() function in every predefined space (sRGB, linear sRGB, Display P3, A98, ProPhoto, Rec. 2020, XYZ), and none as a missing color component that takes the other color's value in a mix.",
+await SaveShowcaseAsync("color_function_and_none", "Backgrounds & Borders", "color(), Missing Components and Relative Colors",
+    "The CSS color() function in every predefined space (sRGB, linear sRGB, Display P3, A98, ProPhoto, Rec. 2020, XYZ), none as a missing color component that takes the other color's value in a mix, and relative color syntax.",
     colorFunctionHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // --- PDF/X-1a Conformance showcase ---
