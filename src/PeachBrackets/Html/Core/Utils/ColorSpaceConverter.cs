@@ -30,10 +30,10 @@ namespace PeachBrackets.Html.Utils
             var v1 = ColorSpaceMath.ToSpace(c1.R / 255.0, c1.G / 255.0, c1.B / 255.0, space);
             var v2 = ColorSpaceMath.ToSpace(c2.R / 255.0, c2.G / 255.0, c2.B / 255.0, space);
 
-            // A gray's lch hue is missing, so the other stop's stands in for it, as in color-mix(). Not done for oklch:
-            // Chrome interpolates a gray's own hue in an oklch gradient (see the accepted gap).
-            if (space == ColorSpaceMath.Space.Lch)
-                ColorSpaceMath.ResolveMissingHues(v1, v2, space);
+            // An achromatic stop's hue is powerless, so it is missing and the other stop's stands in for it (CSS Color 4 §4.4.1 and
+            // Interpolating with Missing Components), as in color-mix(). Chrome interpolates a gray's own noise hue in an oklch gradient;
+            // the specification is followed here rather than that.
+            ColorSpaceMath.ResolveMissingHues(v1, v2, space);
 
             var v = new double[3];
 
