@@ -225,10 +225,15 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         }
 
         [Fact]
-        public void OnlyLchAndOklch_HaveAHueThatCanBePowerless()
+        public void OnlyThePolarSpaces_HaveAHueThatCanBePowerless()
         {
-            Assert.False(ColorSpaceMath.IsHuePowerless([50, 0, 0], ColorSpaceMath.Space.Hsl));
             Assert.False(ColorSpaceMath.IsHuePowerless([0.5, 0, 0], ColorSpaceMath.Space.Oklab));
+            Assert.False(ColorSpaceMath.IsHuePowerless([0, 100, 50], ColorSpaceMath.Space.Hsl));
+            Assert.True(ColorSpaceMath.IsHuePowerless([0, 0, 50], ColorSpaceMath.Space.Hsl));
+            Assert.True(ColorSpaceMath.IsHuePowerless([0, 0.001, 50], ColorSpaceMath.Space.Hsl));
+            Assert.False(ColorSpaceMath.IsHuePowerless([0, 0.01, 50], ColorSpaceMath.Space.Hsl));
+            Assert.True(ColorSpaceMath.IsHuePowerless([0, 60, 40], ColorSpaceMath.Space.Hwb));
+            Assert.False(ColorSpaceMath.IsHuePowerless([0, 20, 40], ColorSpaceMath.Space.Hwb));
 
             // Chrome's own limit, found by bisection: 0.02 is missing, 0.021 is not.
             Assert.True(ColorSpaceMath.IsHuePowerless([0.5, 0, 0], ColorSpaceMath.Space.Oklch));

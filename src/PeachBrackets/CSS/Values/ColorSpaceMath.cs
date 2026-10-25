@@ -38,6 +38,9 @@ namespace PeachBrackets.Css
         public static bool IsHuePowerless(double[] v, Space cs) => cs switch
         {
             Space.Lch or Space.Oklch => v[1] <= 0.02,
+            // CSS Color 4 §7 and §8: an hsl() colour with no saturation, and an hwb() one whose whiteness and blackness fill the whole range, are achromatic.
+            Space.Hsl => v[1] <= 0.001,
+            Space.Hwb => v[1] + v[2] >= 99.999,
             _ => false
         };
 

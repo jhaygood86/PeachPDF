@@ -77,6 +77,33 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
             Assert.InRange((int)mid.B, 127, 128);
         }
 
+        [Theory]
+        [InlineData("Hsl")]
+        [InlineData("Hwb")]
+        public void GrayStopTakesTheOtherStopsHue_AsInColorMix(string spaceName)
+        {
+            var gray = PaintColor.FromArgb(255, 128, 128, 128);
+            var space = System.Enum.Parse<GradientColorSpace>(spaceName);
+
+            var mid = ColorSpaceConverter.Interpolate(gray, Red, 0.5, space, HueInterpolationMethod.Shorter);
+
+            // red stays the only hue in the blend: red is the dominant channel and green and blue match
+            Assert.True(mid.R > mid.G + 20, $"{mid.R},{mid.G},{mid.B}");
+            Assert.InRange((int)mid.G - mid.B, -3, 3);
+        }
+
+        [Fact]
+        public void Oklch_GrayToRed_MatchesColorMixAtTheMidpoint()
+        {
+            var gray = PaintColor.FromArgb(255, 128, 128, 128);
+            var mid = ColorSpaceConverter.Interpolate(gray, Red, 0.5, GradientColorSpace.Oklch, HueInterpolationMethod.Shorter);
+
+            // color-mix(in oklch, #808080, red) is rgb(198, 99, 86)
+            Assert.InRange((int)mid.R, 195, 201);
+            Assert.InRange((int)mid.G, 96, 102);
+            Assert.InRange((int)mid.B, 83, 89);
+        }
+
         [Fact]
         public void Lch_GrayStopTakesTheOtherStopsHue()
         {
