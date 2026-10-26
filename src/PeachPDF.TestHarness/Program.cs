@@ -3110,7 +3110,7 @@ await SaveShowcaseAsync("target_counter_toc", "Paged Media", "Table of Contents 
 // breaks at different heights per page - the deep-margined first page holds visibly fewer
 // paragraphs, mirrored :left/:right pages trade extra top space for extra bottom space,
 // and the running furniture follows each page's own margins. The :first margins use
-// relative units (% of the page width, em against the root font) - per-page rules resolve
+// relative units (% of the page height, em against the root font) - per-page rules resolve
 // them against the same bases the base rule uses (#150), not just absolute lengths.
 var perPageMarginsHtml = """
     <!DOCTYPE html>
@@ -3124,7 +3124,7 @@ var perPageMarginsHtml = """
         @bottom-center { content: "Page " counter(page) " of " counter(pages); font: 8pt Arial; }
     }
     @page :first {
-        margin-top: 38%;      /* of the page width: ~80mm on A4 */
+        margin-top: 38%;      /* of the page height: ~113mm on A4 */
         margin-bottom: 10em;  /* against the root font size */
         @top-center { content: none; }
     }
@@ -3138,7 +3138,7 @@ var perPageMarginsHtml = """
     <body>
       <h1>Per-Page Margin Variation</h1>
       <p class="note">Every page's own @page margins define its content band: the first page's deep
-      margins (declared in relative units - 38% of the page width on top, 10em on the bottom) fit
+      margins (declared in relative units - 38% of the page height on top, 10em on the bottom) fit
       only a few paragraphs, then :right pages (15mm top / 45mm bottom) and :left pages (45mm top /
       15mm bottom) alternate mirrored bands - watch where the text starts, where it breaks, and how
       many paragraphs fit on each page.</p>

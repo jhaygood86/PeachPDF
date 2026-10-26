@@ -11,7 +11,15 @@ namespace PeachBrackets.Html.Entities
     /// <param name="EmPt">Points per 1em: the root element's font size.</param>
     /// <param name="RemPt">Points per 1rem: the root element's font size.</param>
     /// <param name="HundredPercentPt">The point value equivalent to 100% - the layout page width, the
-    /// same basis the base rule uses for all four margins (CSS margin percentages resolve against
-    /// the inline dimension).</param>
-    internal readonly record struct PageLengthContext(double EmPt, double RemPt, double HundredPercentPt);
+    /// basis for left/right margins and every other length.</param>
+    /// <param name="HundredPercentHeightPt">The point value equivalent to 100% for top/bottom margins
+    /// (css-page-3 §6: the height of the containing block); 0 when unset, in which case
+    /// <paramref name="HundredPercentPt"/> is used.</param>
+    internal readonly record struct PageLengthContext(
+        double EmPt, double RemPt, double HundredPercentPt, double HundredPercentHeightPt = 0)
+    {
+        /// <summary>This context with the vertical percentage basis as its 100%.</summary>
+        internal PageLengthContext ForVertical() =>
+            HundredPercentHeightPt > 0 ? this with { HundredPercentPt = HundredPercentHeightPt } : this;
+    }
 }

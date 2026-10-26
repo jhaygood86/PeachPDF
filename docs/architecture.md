@@ -266,7 +266,7 @@ Stylesheets are collected and merged from four sources in cascade order:
 
 ### @page rules
 
-Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from the collected stylesheets and writes their margin values (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`) onto the `HtmlContainerInt`, overriding any margins specified in the `PdfGenerateConfig`. It also captures a `PageLengthContext` snapshot (root em/rem size and page width, in true points) that per-page `@page` rules resolve their relative-unit margins against later, at band-geometry/paint time — the same bases the base rule used, so identical declarations produce identical geometry in base and per-page rules.
+Before style cascading begins, `CascadeApplyPageStyles` reads `@page` rules from the collected stylesheets and writes their margin values (`margin-top`, `margin-right`, `margin-bottom`, `margin-left`) onto the `HtmlContainerInt`, overriding any margins specified in the `PdfGenerateConfig`. It also captures a `PageLengthContext` snapshot (root em/rem size and page width and height, in true points) that per-page `@page` rules resolve their relative-unit margins against later, at band-geometry/paint time — the same bases the base rule used, so identical declarations produce identical geometry in base and per-page rules.
 
 #### Per-page content bands (and full-page bleed)
 

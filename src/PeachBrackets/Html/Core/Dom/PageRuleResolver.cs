@@ -160,13 +160,14 @@ namespace PeachBrackets.Html.Dom
 
             return (
                 Resolve(s.MarginLeft)   ?? baseL,
-                Resolve(s.MarginTop)    ?? baseT,
+                Resolve(s.MarginTop, vertical: true) ?? baseT,
                 Resolve(s.MarginRight)  ?? baseR,
-                Resolve(s.MarginBottom) ?? baseB
+                Resolve(s.MarginBottom, vertical: true) ?? baseB
             );
 
-            double? Resolve(string value) => ctx is { } c
-                ? DomParser.ParseLengthToPdfPoints(value, c)
+            // css-page-3 §6: top/bottom percentages resolve against the page height (issue #1931).
+            double? Resolve(string value, bool vertical = false) => ctx is { } c
+                ? DomParser.ParseLengthToPdfPoints(value, vertical ? c.ForVertical() : c)
                 : DomParser.ParseLengthToPdfPoints(value);
         }
 

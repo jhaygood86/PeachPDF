@@ -734,7 +734,8 @@ namespace PeachBrackets.Html.Parse
             var lengthContext = new PageLengthContext(
                 emPt,
                 root.GetRemHeight() * pixelsPerPoint,
-                htmlContainer.PageSize.Width / pixelsPerPoint);
+                htmlContainer.PageSize.Width / pixelsPerPoint,
+                htmlContainer.PageSize.Height / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;
 
             // Resolve through the same null-aware overload the per-page path uses (see
@@ -744,9 +745,9 @@ namespace PeachBrackets.Html.Parse
             // margin in place, per CSS Syntax error handling (an invalid declaration is dropped,
             // not silently resolved to zero). All previously-supported units (absolute, em/rem/ex/%,
             // calc()) still resolve identically. The once-only PixelsPerPoint scaling is preserved.
-            double? ParseMarginLength(string value)
+            double? ParseMarginLength(string value, bool vertical = false)
             {
-                var pt = ParseLengthToPdfPoints(value, lengthContext);
+                var pt = ParseLengthToPdfPoints(value, vertical ? lengthContext.ForVertical() : lengthContext);
                 return pt.HasValue ? pt.Value * pixelsPerPoint : null;
             }
 
@@ -762,12 +763,12 @@ namespace PeachBrackets.Html.Parse
                     htmlContainer.MarginLeft = left;
                 }
 
-                if (allowMarginTop && pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop) is { } top)
+                if (allowMarginTop && pageRule.Style.MarginTop.Length > 0 && ParseMarginLength(pageRule.Style.MarginTop, vertical: true) is { } top)
                 {
                     htmlContainer.MarginTop = top;
                 }
 
-                if (allowMarginBottom && pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom) is { } bottom)
+                if (allowMarginBottom && pageRule.Style.MarginBottom.Length > 0 && ParseMarginLength(pageRule.Style.MarginBottom, vertical: true) is { } bottom)
                 {
                     htmlContainer.MarginBottom = bottom;
                 }
