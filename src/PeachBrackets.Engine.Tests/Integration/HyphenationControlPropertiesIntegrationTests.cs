@@ -49,6 +49,23 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.DoesNotContain(box.Words, w => w.Text!.EndsWith('-'));
         }
 
+        [Theory]
+        [InlineData("→")]
+        [InlineData("")]
+        public async Task HyphenateCharacter_NonBreakingGlyph_StillBreaksTheLine(string glyph)
+        {
+            var layout = await LayoutHarness.LayoutAsync(EnDoc(
+                $"<p id='p' style='width:70pt;font:14pt serif;hyphens:manual;hyphenate-character:\"{glyph}\"'>un&shy;believ&shy;ably long</p>"));
+            var p = LayoutHarness.FindById(layout.Root, "p")!;
+
+            Assert.True(p.LineBoxes.Count > 1, "expected the soft-hyphen split to break the line");
+            foreach (var line in p.LineBoxes)
+                Assert.True(line.Words.Max(w => w.Right) <= p.Location.X + 70 + 0.5,
+                    "a line overflows the 70pt box");
+            if (glyph.Length > 0)
+                Assert.EndsWith(glyph, p.LineBoxes[0].Words[^1].Text);
+        }
+
         [Fact]
         public async Task HyphenateCharacter_EmptyString_BreaksWithNoVisibleGlyph()
         {
