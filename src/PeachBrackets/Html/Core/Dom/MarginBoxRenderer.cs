@@ -1210,6 +1210,19 @@ namespace PeachBrackets.Html.Dom
             return $"{horizontal} {vertical}";
         }
 
+        /// <summary>
+        /// A margin box's resolved <c>vertical-align</c> reduced to <c>top</c>/<c>middle</c>/<c>bottom</c>
+        /// (css-page-3 §6.2: it behaves as for table cells, and anything else is the <c>middle</c> default),
+        /// for <c>content: element()</c> content laid out as a real box rather than drawn as text.
+        /// </summary>
+        internal static string ResolveVerticalAlign(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName) =>
+            ResolveAlignment(style, pageStyle, boxName).VerticalAlign switch
+            {
+                "top" => "top",
+                "bottom" => "bottom",
+                _ => "middle",
+            };
+
         private static (BoxAlignment Horizontal, BoxAlignment Vertical) BuildAlignment(StyleDeclaration style, StyleDeclaration? pageStyle, string boxName)
         {
             var (textAlign, verticalAlign) = ResolveAlignment(style, pageStyle, boxName);
