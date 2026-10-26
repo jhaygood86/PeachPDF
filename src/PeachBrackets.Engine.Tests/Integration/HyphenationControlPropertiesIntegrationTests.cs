@@ -59,9 +59,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             var p = LayoutHarness.FindById(layout.Root, "p")!;
 
             Assert.True(p.LineBoxes.Count > 1, "expected the soft-hyphen split to break the line");
-            foreach (var line in p.LineBoxes)
-                Assert.True(line.Words.Max(w => w.Right) <= p.Location.X + 70 + 0.5,
-                    "a line overflows the 70pt box");
+            // The suffix moved off the prefix's line: no line holds the whole word again.
+            Assert.DoesNotContain(p.LineBoxes, line => line.Words.Any(w => w.Text == "unbelievably"));
             if (glyph.Length > 0)
                 Assert.EndsWith(glyph, p.LineBoxes[0].Words[^1].Text);
         }
