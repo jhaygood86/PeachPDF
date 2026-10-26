@@ -620,6 +620,17 @@ namespace PeachBrackets.Html.Dom
         public Font ActualFontForCodepoint(System.Text.Rune codepoint, double sizeScale = 1.0, EmojiPresentation presentation = EmojiPresentation.NoPreference) =>
             DerivedStyle.ActualFontForCodepoint(codepoint, sizeScale, presentation);
 
+        /// <summary>
+        /// The font the collapsible space between words is measured and drawn in: <see cref="ActualFont"/>,
+        /// unless a family in the stack carries an explicit <c>unicode-range</c> - then U+0020 is resolved like
+        /// any other character, so a face whose range excludes it does not supply the gap.
+        /// </summary>
+        public Font ActualSpaceFont =>
+            HtmlContainer is { } container
+            && System.Linq.Enumerable.Any(container.FamilyNamesOf(FontFamilyList ?? FontFamily ?? string.Empty),container.RenderContext.FamilyHasExplicitUnicodeRanges)
+                ? ActualFontForCodepoint(new System.Text.Rune(' '))
+                : ActualFont;
+
         /// <summary>This box's <c>font-variant-emoji</c> keyword - see <see cref="DerivedStyle.ActualFontVariantEmoji"/>.</summary>
         public FontVariantEmojiMode ActualFontVariantEmoji => DerivedStyle.ActualFontVariantEmoji;
 

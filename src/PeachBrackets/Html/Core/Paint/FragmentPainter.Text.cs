@@ -412,7 +412,7 @@ namespace PeachBrackets.Html.Paint
         private static void PaintWordSeparator(Canvas g, CssBox styleSource, CssRect word, Rect rect, double baselineShift, SeparatorPlacement placement, double? edge)
         {
             var separatorStyle = word.WordSeparatorStyle ?? styleSource;
-            var font = separatorStyle.ActualFont;
+            var font = separatorStyle.ActualSpaceFont;
             if (!font.HasGlyph(new Rune(' '))) return;
 
             var advance = font.GetWhitespaceWidth(g);
