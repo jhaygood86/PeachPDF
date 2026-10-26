@@ -625,11 +625,22 @@ namespace PeachBrackets.Html.Dom
         /// unless a family in the stack carries an explicit <c>unicode-range</c> - then U+0020 is resolved like
         /// any other character, so a face whose range excludes it does not supply the gap.
         /// </summary>
-        public Font ActualSpaceFont =>
-            HtmlContainer is { } container
-            && System.Linq.Enumerable.Any(container.FamilyNamesOf(FontFamilyList ?? FontFamily ?? string.Empty),container.RenderContext.FamilyHasExplicitUnicodeRanges)
-                ? ActualFontForCodepoint(new System.Text.Rune(' '))
-                : ActualFont;
+        public Font ActualSpaceFont
+        {
+            get
+            {
+                if (HtmlContainer is { } container)
+                {
+                    foreach (var name in container.FamilyNamesOf(FontFamilyList ?? FontFamily ?? string.Empty))
+                    {
+                        if (container.RenderContext.FamilyHasExplicitUnicodeRanges(name))
+                            return ActualFontForCodepoint(new System.Text.Rune(' '));
+                    }
+                }
+
+                return ActualFont;
+            }
+        }
 
         /// <summary>This box's <c>font-variant-emoji</c> keyword - see <see cref="DerivedStyle.ActualFontVariantEmoji"/>.</summary>
         public FontVariantEmojiMode ActualFontVariantEmoji => DerivedStyle.ActualFontVariantEmoji;
