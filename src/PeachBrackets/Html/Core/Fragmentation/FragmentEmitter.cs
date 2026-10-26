@@ -2509,11 +2509,11 @@ namespace PeachBrackets.Html.Fragmentation
 
         private BoxFragment Materialize(Draft draft)
         {
-            var children = new List<BoxFragment>(draft.Children.Length);
+            var children = draft.Children.Length == 0 ? [] : new BoxFragment[draft.Children.Length];
 
-            foreach (var child in draft.Children)
+            for (var i = 0; i < children.Length; i++)
             {
-                children.Add(Materialize(child));
+                children[i] = Materialize(draft.Children[i]);
             }
 
             var span = _spans[draft.Key];
@@ -2643,10 +2643,8 @@ namespace PeachBrackets.Html.Fragmentation
         /// intermediate fragment of a multi-page block lost its background and borders entirely.
         /// </para>
         /// </remarks>
-        private List<LineFragment> LinesOf(Draft draft, Rect bounds)
+        private LineFragment[] LinesOf(Draft draft, Rect bounds)
         {
-            var lines = new List<LineFragment>(draft.Lines.Length + 1);
-
             if (draft.UsesOwnBounds)
             {
                 if (draft.Region.Contains(Displaced(bounds, draft.Shift)))
@@ -2656,26 +2654,49 @@ namespace PeachBrackets.Html.Fragmentation
                     // One rectangle: nothing slices it in the inline axis, so the strip is as wide as the
                     // rectangle. Its block axis is the fragmented one, which is what the concatenated strip,
                     // the band-cut FragmentRect and the two block-axis edge flags carry between them.
-                    lines.Add(new LineFragment(local, null,
-                        new SliceGeometry(
-                            Localize(UnbrokenBlockStripOf(draft, bounds), draft.OriginY),
-                            Localize(BandCut(bounds, draft.Box, draft.Region, draft.Shift), draft.OriginY),
-                            HasLeftEdge: true, HasRightEdge: true,
-                            HasTopEdge: !ResumesAnEarlierFragment(draft),
-                            HasBottomEdge: !ContinuesIntoALaterFragment(draft))));
+                    return
+                    [
+                        new LineFragment(local, null,
+                            new SliceGeometry(
+                                Localize(UnbrokenBlockStripOf(draft, bounds), draft.OriginY),
+                                Localize(BandCut(bounds, draft.Box, draft.Region, draft.Shift), draft.OriginY),
+                                HasLeftEdge: true, HasRightEdge: true,
+                                HasTopEdge: !ResumesAnEarlierFragment(draft),
+                                HasBottomEdge: !ContinuesIntoALaterFragment(draft)))
+                    ];
+                }
+
+                return [];
+            }
+
+            if (draft.Lines.Length == 0) return [];
+
+            var rectangles = _rectangles[draft.Key];
+            var lines = new LineFragment[draft.Lines.Length];
+
+            // Each line's slice depends on its own rectangle alone here, so it is read straight off the
+            // key's rectangle record rather than through a per-draft dictionary of slices.
+            if (SlicesAreIndependent(draft.Box, rectangles))
+            {
+                for (var i = 0; i < lines.Length; i++)
+                {
+                    var (line, rect) = draft.Lines[i];
+                    lines[i] = new LineFragment(
+                        Localize(rect, draft.OriginY),
+                        line,
+                        IndependentSliceOf(rectangles[line], draft.Box, draft.Region, draft.OriginY, draft.Shift));
                 }
 
                 return lines;
             }
 
-            if (draft.Lines.Length == 0) return lines;
-
             var slices = SliceGeometriesOf(
-                draft.Box, _rectangles[draft.Key], draft.Region, draft.OriginY, draft.Shift);
+                draft.Box, rectangles, draft.Region, draft.OriginY, draft.Shift);
 
-            foreach (var (line, rect) in draft.Lines)
+            for (var i = 0; i < lines.Length; i++)
             {
-                lines.Add(new LineFragment(Localize(rect, draft.OriginY), line, slices[line]));
+                var (line, rect) = draft.Lines[i];
+                lines[i] = new LineFragment(Localize(rect, draft.OriginY), line, slices[line]);
             }
 
             return lines;
@@ -4146,19 +4167,11 @@ namespace PeachBrackets.Html.Fragmentation
 
             Rect FragmentRectOf(Rect rect) => Localize(BandCut(rect, box, region, shift), originY);
 
-            var ownsItsLines = false;
-            foreach (var line in rectangles.Keys)
-            {
-                ownsItsLines = ReferenceEquals(line.OwnerBox, box);
-                break;
-            }
-
-            if (rectangles.Count == 1 || ownsItsLines)
+            if (SlicesAreIndependent(box, rectangles))
             {
                 foreach (var (line, rect) in rectangles)
                 {
-                    var local = Localize(rect, originY);
-                    slices[line] = new SliceGeometry(local, FragmentRectOf(rect), HasLeftEdge: true, HasRightEdge: true);
+                    slices[line] = IndependentSliceOf(rect, box, region, originY, shift);
                 }
 
                 return slices;
@@ -4710,6 +4723,24 @@ namespace PeachBrackets.Html.Fragmentation
 
         private static Rect BoundsOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Bounds : box.Bounds;
+
+        /// <summary>Whether each rectangle's slice is a fact about that rectangle alone (see <see cref="SliceGeometriesOf"/>).</summary>
+        private static bool SlicesAreIndependent(CssBox box, IReadOnlyDictionary<CssLineBox, Rect> rectangles)
+        {
+            var ownsItsLines = false;
+            foreach (var line in rectangles.Keys)
+            {
+                ownsItsLines = ReferenceEquals(line.OwnerBox, box);
+                break;
+            }
+
+            return rectangles.Count == 1 || ownsItsLines;
+        }
+
+        private SliceGeometry IndependentSliceOf(Rect rect, CssBox box, FragmentRegion region, double originY, double shift) =>
+            new(Localize(rect, originY),
+                Localize(BandCut(rect, box, region, shift), originY),
+                HasLeftEdge: true, HasRightEdge: true);
 
         private static Dictionary<CssLineBox, Rect> RectanglesOf(CssBox box, BoxGeometrySnapshot? snapshot) =>
             snapshot is not null && snapshot.TryGetGeometry(box, out var geometry) ? geometry.Rectangles : box.RectanglesView;

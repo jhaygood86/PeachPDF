@@ -1,0 +1,9 @@
+# Fragment model allocation was measured and is not a hotspot
+
+Looked for allocation and time wins in the fragment tree (`FragmentEmitter`, `Fragment.cs`). Result: small, and the premises that looked promising did not hold.
+
+- **Caching `Finish()` materialization is pointless.** Every `Finish()` call (`HtmlContainerInt` provisional, final, page correction) runs on a *fresh* `FragmentEmitter` — `LayoutDocument` creates one per invocation — so there is nothing to reuse across calls. Measured: `Finish()` is ~2.3% of render time over the showcase corpus (Materialize 1.7%), and extra calls beyond one per render are rare (920 calls for ~884 renders).
+- **Fragment objects are under 1% of allocation.** A type tally over the corpus put `Draft` at ~0.6% and `TextFragment` ~0.3%; `EmitSlot` (~6% of allocation) and `Finish` (~4%) are mostly bookkeeping, not fragment records. Do not chase more here without a stack-attributed profile saying otherwise.
+- **What landed:** `LinesOf`/`Materialize` build arrays (empty ones shared) and each line's slice is read off the key's rectangle record when it depends on that rectangle alone (`SlicesAreIndependent`), instead of building a per-draft `Dictionary<CssLineBox, SliceGeometry>`. Corpus allocation 2562.1 → 2557.5 MB per pass (-0.2%); PDF output identical across all 455 showcase outputs once per-run values (dates, GUIDs, font-subset tags, hash-suffixed class names) are normalized.
+- **Trap:** `charts_css` showed a one-off +23 MB in a single benchmark run and was back to normal on rerun — rerun before believing a single-showcase outlier.
+- **Larger sources, not investigated:** the tally showed a very large `Enumerator[PeachDrawing.Core.ColorMatrix]` bucket (likely mislabeled), byte/string/float arrays, and CSS selector matching (`CombinatorSelector` arrays, reverse iterators). Needs a stack-attributed profile.
