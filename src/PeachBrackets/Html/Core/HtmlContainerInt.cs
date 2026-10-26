@@ -2334,14 +2334,36 @@ namespace PeachBrackets.Html
                         // running element resolve against the page it is being laid out for. Cleared in a
                         // finally so an exception mid-layout cannot leak a page number into the ordinary
                         // document-counter path.
-                        RunningElementPageContext = (pageNumber, totalPages);
-                        try
+                        async ValueTask LayoutRunning(Rect rect)
                         {
-                            await RunningElementLayout.LayoutRunningElementFor(g, runningBox, pixelRect, this);
+                            RunningElementPageContext = (pageNumber, totalPages);
+                            try
+                            {
+                                await RunningElementLayout.LayoutRunningElementFor(g, runningBox, rect, this);
+                            }
+                            finally
+                            {
+                                RunningElementPageContext = null;
+                            }
                         }
-                        finally
+
+                        await LayoutRunning(pixelRect);
+
+                        // css-page-3 §6.2: vertical-align places the content within the margin box as it
+                        // does in a table cell (default middle). The box is laid out top-aligned first to
+                        // learn its height, then laid out again lower in the rect; content taller than
+                        // the box has no free space and stays at the top.
+                        var verticalAlign = MarginBoxRenderer.ResolveVerticalAlign(marginRule.Style, applicablePageStyle, boxName);
+                        if (verticalAlign != "top")
                         {
-                            RunningElementPageContext = null;
+                            var outerHeight = runningBox.ActualBottom - runningBox.Location.Y
+                                + runningBox.ActualMarginTop + runningBox.ActualMarginBottom;
+                            var free = pixelRect.Height - outerHeight;
+                            var offset = verticalAlign == "bottom" ? free : free / 2;
+                            if (offset > 0)
+                            {
+                                await LayoutRunning(new Rect(pixelRect.X, pixelRect.Y + offset, pixelRect.Width, pixelRect.Height - offset));
+                            }
                         }
 
                         var content = MarginBoxContentFragmentBuilder.Build(runningBox);
