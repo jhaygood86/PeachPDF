@@ -113,6 +113,26 @@ p {{ width: 400px; }}
         }
 
         [Fact]
+        public async Task SpaceOutsideRange_IsDrawnInFallbackFace_NotTheRangedFace()
+        {
+            var rangedFamily = TypefaceFixtures.FamilyNameOf(BundledFonts.Otf); // Source Code Pro
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'Digits'; src: url('data:font/opentype;base64,{B64(BundledFonts.Otf)}') format('opentype'); unicode-range: U+30-39; }}
+body {{ font-family: 'Digits', serif; font-size: 20pt; }}
+</style></head>
+<body><p>ab 123 cd 45</p></body>
+</html>";
+
+            var p = await LayoutParagraph(html);
+            var owner = WordsOf(p)[0].OwnerBox;
+
+            Assert.Equal(rangedFamily, ResolvedFamilyName(owner, '1'));
+            Assert.NotEqual(rangedFamily, owner.ActualSpaceFont.Typeface!.FamilyName);
+            Assert.NotEqual(rangedFamily, ResolvedFamilyName(owner, ' '));
+        }
+
+        [Fact]
         public async Task PlainText_NoUnicodeRange_TakesFastPath_SingleWordNotSplit()
         {
             // A single @font-face with no unicode-range, fully covering the text, must behave exactly as

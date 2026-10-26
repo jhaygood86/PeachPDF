@@ -34,7 +34,7 @@ namespace PeachBrackets.Html.Utils
         /// <returns></returns>
         public static double WhiteSpace(Canvas g, CssBox box)
         {
-            var w = box.ActualFont.GetWhitespaceWidth(g);
+            var w = box.ActualSpaceFont.GetWhitespaceWidth(g);
 
             if (box.WordSpacing.Value is { IsValue: true, Value: { } wordSpacing })
             {
