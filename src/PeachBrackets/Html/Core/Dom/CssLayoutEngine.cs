@@ -7168,7 +7168,10 @@ namespace PeachBrackets.Html.Dom
                 suffix = new CssRectWord(b, suffixText, false, word.HasSpaceAfter)
                 {
                     Width = g.MeasureString(suffixText, b.ActualFont, b.ActualTextShapingFeatures).Width,
-                    Height = b.ActualFont.Height
+                    Height = b.ActualFont.Height,
+                    // The split itself is the break opportunity: re-running UAX #14 over prefix+suffix only allows
+                    // it when the hyphenate-character happens to be a break class (HY), not for "→" or "".
+                    UnicodeBreakBefore = true
                 };
 
                 // Recorded so a discarded fragmentainer line can undo this split rather than carry it
