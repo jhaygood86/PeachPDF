@@ -47,11 +47,12 @@ namespace PeachBrackets.Engine.Tests.Integration
             // 10% must resolve against the CSS-corrected 300pt page width (30pt), not the
             // originally-configured 400pt sheet (40pt) - the wrong-answer value a shortcut that skipped
             // the correction (or applied it after margins were already resolved) would produce.
+            // Top/bottom resolve against the corrected 500pt height (50pt, css-page-3 §6, issue #1931).
             // PixelsPerInch defaults to 72, so pixelsPerPoint == 1 and layout units equal points.
             Assert.Equal(30.0, container.MarginLeft, 3);
-            Assert.Equal(30.0, container.MarginTop, 3);
+            Assert.Equal(50.0, container.MarginTop, 3);
             Assert.Equal(30.0, container.MarginRight, 3);
-            Assert.Equal(30.0, container.MarginBottom, 3);
+            Assert.Equal(50.0, container.MarginBottom, 3);
         }
 
         [Fact]

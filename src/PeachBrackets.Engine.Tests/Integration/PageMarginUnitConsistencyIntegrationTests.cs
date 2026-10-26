@@ -54,6 +54,25 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task FirstPageVerticalPercentageMargin_ResolvesAgainstSheetHeight()
+        {
+            // css-page-3 §6 (issue #1931): top/bottom percentages are relative to the page height
+            // (792), left/right to the width (612).
+            var container = await BuildAsync("""
+                <!DOCTYPE html><html><head><style>
+                @page { margin: 10%; }
+                @page :first { margin-top: 20%; margin-left: 20%; }
+                body { margin: 0; }
+                </style></head><body><p>content</p></body></html>
+                """);
+
+            Assert.Equal(79.2, container.MarginTop, 2);
+            Assert.Equal(79.2, container.MarginBottom, 2);
+            Assert.Equal(61.2, container.MarginLeft, 2);
+            Assert.Equal(158.4, container.PageGeometry.GetPage(0).MarginTopPt, 2);
+        }
+
+        [Fact]
         public async Task BaseRule_PxMargin_ResolvesSpecCorrect()
         {
             // CSS Values & Units §6.2: 1px = 1/96in = 0.75pt -> 96px is exactly 72pt, in the base
