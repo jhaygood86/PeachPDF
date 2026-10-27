@@ -1205,7 +1205,16 @@ namespace PeachBrackets.Html.Fragmentation
         /// <returns>the lowest edge of its content in document space, or null when it has none to measure</returns>
         private static double? SettledBottomOf(CssBox box)
         {
-            if (!box.IsInline || DomUtils.IsAtomicInline(box)) return box.ActualBottom;
+            if (!box.IsInline || DomUtils.IsAtomicInline(box))
+            {
+                // A box with a height of its own ends where that height does, and its lines can run on below it: the
+                // line of a box beside a float that is too narrow for it is placed below the float, far under the box.
+                // Judged by its ActualBottom alone, such a box was concluded to be behind the slots its box lies in
+                // while the line it still held was in a later one, and the line was pruned from it.
+                return box.Height is Keywords.Auto && !CssValueParser.IsValidLength(box.MaxHeight)
+                    ? box.ActualBottom
+                    : CssBox.GetMaximumBottom(box, box.ActualBottom);
+            }
 
             double? bottom = null;
             AddInlineContent(box, ref bottom);
