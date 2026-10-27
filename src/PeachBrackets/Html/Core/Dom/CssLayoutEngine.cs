@@ -3268,10 +3268,23 @@ namespace PeachBrackets.Html.Dom
                 // A capped scroll container that broke across pages reaches its cap where the content it
                 // placed adds up to it, not a cap's distance below its first fragment: the strips the breaks
                 // skipped are not content (css-break-3 §4's consumed block size).
-                var maxBottom = Fragmentation.CappedScrollContainer.IsCapped(box)
-                    && Fragmentation.CappedScrollContainer.CapBottom(box) is { } cappedBottom
-                    ? Math.Max(cappedBottom, box.Location.Y + maxHeight)
-                    : box.Location.Y + maxHeight;
+                var maxBottom = box.Location.Y + maxHeight;
+
+                if (Fragmentation.CappedScrollContainer.IsCapped(box))
+                {
+                    if (Fragmentation.CappedScrollContainer.CapBottom(box) is { } cappedBottom)
+                    {
+                        maxBottom = Math.Max(cappedBottom, maxBottom);
+                    }
+                    else if (box.HtmlContainer is { } html
+                        && html.SlotStartingAt(box.Location.Y) != html.SlotStartingAt(box.ActualBottom - 0.01))
+                    {
+                        // The box broke across pages and its lines have not used up the cap (a widows pull can move
+                        // lines over, so the box ends lower than a cap's distance below its top): clamping at that
+                        // distance would clip the lines the break moved to the next page.
+                        maxBottom = double.PositiveInfinity;
+                    }
+                }
 
                 if (box.ActualBottom > maxBottom)
                 {

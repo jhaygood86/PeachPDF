@@ -14,7 +14,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// it. Read off the tree rather than the painted band so that a heading's first line, whose glyph box rises 0.7pt above
         /// the band at the top of a page, is not mistaken for a lost word.
         /// </summary>
-        private static async Task AssertEveryWordIsInTheTreeOnceAsync(string html)
+        private static async Task AssertEveryWordIsInTheTreeOnceAsync(string html, int? expectedPages = null)
         {
             var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
 
@@ -24,7 +24,14 @@ namespace PeachBrackets.Engine.Tests.Integration
                 .Select(w => w.Word.Text?.Trim() ?? string.Empty)
                 .ToList();
 
-            Assert.True(container.FragmentTree.Fragmentainers.Count > 1, "the document should need several pages");
+            if (expectedPages is { } pages)
+            {
+                Assert.Equal(pages, container.FragmentTree.Fragmentainers.Count);
+            }
+            else
+            {
+                Assert.True(container.FragmentTree.Fragmentainers.Count > 1, "the document should need several pages");
+            }
 
             var expected = PaintedWords.InMarkup(html);
             var lost = expected.Where(w => !inTree.Contains(w)).ToList();
@@ -32,6 +39,49 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.True(lost.Count == 0, $"lost: {string.Join(", ", lost)}");
             Assert.True(doubled.Count == 0, $"doubled: {string.Join(", ", doubled)}");
+
+            // The tree can hold a word once and a page still paint it twice (a fragment reached by two walks).
+            var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
+            var paintedTwice = painted.GroupBy(w => w).Where(g => g.Count() > 1).Select(g => g.Key).ToList();
+            Assert.True(paintedTwice.Count == 0, $"painted twice: {string.Join(", ", paintedTwice)}");
+        }
+
+
+        /// <summary>
+        /// Each authored word must be drawn once and be <i>visible</i>: inside its page's content area and inside the
+        /// overflow clip of the box that holds it. A word the tree holds but a clip or the page foot hides is lost to a
+        /// reader of the PDF, which is what a PDF text extraction (the way the issues were measured) reports.
+        /// </summary>
+        private static async Task AssertEveryWordIsVisibleOnceAsync(string html)
+        {
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
+            var visible = new List<string>();
+
+            foreach (var fragmentainer in container.FragmentTree!.Fragmentainers)
+            {
+                var band = fragmentainer.Rect;
+
+                foreach (var box in Flatten(fragmentainer.Root))
+                {
+                    foreach (var word in box.Words)
+                    {
+                        var r = word.Rect;
+                        // A heading's first line at the top of a page has a glyph box about 0.7pt above its line box.
+                        var inBand = r.Bottom <= band.Bottom + 0.5 && r.Top >= band.Top - 1.0
+                            && r.Left >= band.Left - 1.0 && r.Right <= band.Right + 1.0;
+                        var inClip = box.OverflowClip is not { } clip || (r.Bottom <= clip.Bottom + 0.5 && r.Top >= clip.Top - 1.0
+                            && r.Left >= clip.Left - 1.0 && r.Right <= clip.Right + 1.0);
+                        if (inBand && inClip) visible.Add(word.Word.Text?.Trim() ?? string.Empty);
+                    }
+                }
+            }
+
+            var expected = PaintedWords.InMarkup(html).Distinct().ToList();
+            var lost = expected.Where(w => !visible.Contains(w)).ToList();
+            var doubled = expected.Where(w => visible.Count(v => v == w) > 1).ToList();
+
+            Assert.True(lost.Count == 0, $"not visible on any page: {string.Join(", ", lost)}");
+            Assert.True(doubled.Count == 0, $"visible more than once: {string.Join(", ", doubled)}");
         }
 
         private static IEnumerable<PeachBrackets.Html.Fragments.BoxFragment> Flatten(PeachBrackets.Html.Fragments.BoxFragment fragment)
@@ -86,6 +136,76 @@ body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; } p,h3
         public async Task ABlockBesideAnOverhangingFloat_KeepsEveryWordOnAPage()
         {
             await AssertEveryWordIsInTheTreeOnceAsync(Document1483);
+        }
+
+        private const string Page300x200 = "@page { size: 300pt 200pt; margin: 20pt; } body { margin: 0; font: 10pt/12pt Arial; }";
+
+        private static string Document(string css, string body) =>
+            "<!DOCTYPE html><html><head><style>" + css + "</style></head><body>" + body + "</body></html>";
+
+        private static string Numbered(string prefix, int count, string separator) =>
+            string.Concat(Enumerable.Range(1, count).Select(i => $"w{prefix}_{i}{separator}"));
+
+        [Fact]
+        public async Task ABlockBesideAFloatTallerThanAPage_KeepsEveryLine()
+        {
+            // Issue 1339: the block's first 26 lines were drawn on no page.
+            await AssertEveryWordIsInTheTreeOnceAsync(Document(Page300x200,
+                $"<div style=\"float:right;width:80pt\">{Numbered("1", 30, "<br>")}</div><div>{Numbered("2", 30, "<br>")}</div>"));
+        }
+
+        [Fact]
+        public async Task AnAbsolutelyPositionedColumnsBoxAsItsBlocksFirstChild_KeepsTheLastLines()
+        {
+            // Issue 1376: W18-W20 were drawn on no page.
+            await AssertEveryWordIsInTheTreeOnceAsync(Document(Page300x200 + " p { margin: 0 }",
+                "<div style=\"position:absolute;top:120pt;width:200pt;columns:2\">" +
+                string.Concat(Enumerable.Range(1, 20).Select(i => $"<p>w3_{i}</p>")) + "</div>"));
+        }
+
+        [Fact]
+        public async Task ASubtreeWithContentOnALaterPage_IsNotPrunedFromIt()
+        {
+            // Issue 1487: fragment pruning dropped w384_1172..w384_1183 (and others) from the page that holds them.
+            await AssertEveryWordIsInTheTreeOnceAsync(Document(
+                "@page { size: 300pt 250pt; margin: 20pt; } body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; }",
+                "<div style=\"height:145.5pt\">w384_1</div>" +
+                "<div style=\"display:inline-block;width:150pt\"><table border=\"1\"><tr><td>w384_387 w384_388 lorem w384_389 w384_390 w384_391 w384_392</td><td>w384_393 lorem w384_394 lorem w384_395</td></tr></table></div>" +
+                "<div style=\"column-count:2\"><ul><li>w384_470 lorem w384_471 w384_472 w384_473 w384_474 w384_475</li></ul></div>" +
+                "w384_1097 w384_1098 lorem " +
+                "<div style=\"margin-top:20pt;margin-bottom:20pt;padding:12pt\"><div style=\"display:flex\"><div><div style=\"padding:12pt;border:1pt solid #888;float:left;width:120pt\">" +
+                "<p>w384_1099 lorem w384_1100 lorem w384_1101 w384_1102 lorem w384_1103 w384_1104</p><div style=\"margin-top:4pt;padding:2pt\">" +
+                "<div style=\"margin-top:20pt;break-inside:avoid;display:flow-root\"><ul><li><h3>w384_1117 lorem w384_1118 lorem w384_1119 w384_1120 w384_1121 lorem w384_1122 lorem</h3>" +
+                "w384_1123 w384_1124 w384_1125 lorem w384_1126 lorem<p>w384_1127 w384_1128 w384_1129 w384_1130 w384_1131 lorem w384_1132 w384_1133 w384_1134 w384_1135 w384_1136 w384_1137 lorem</p></li>" +
+                "<li>w384_1138 lorem w384_1139 w384_1140 lorem w384_1141 lorem w384_1142 lorem w384_1143 w384_1144 lorem</li></ul></div>" +
+                "<div>w384_1145 lorem w384_1146 w384_1147 w384_1148 lorem w384_1149 w384_1150 w384_1151 lorem w384_1152 w384_1153 w384_1154 w384_1155 w384_1156" +
+                "<h3>w384_1157 w384_1158 w384_1159 w384_1160 lorem w384_1161 w384_1162 w384_1163</h3>w384_1164 lorem w384_1165 w384_1166 lorem w384_1167 w384_1168 w384_1169 w384_1170 w384_1171</div>" +
+                "w384_1172 lorem w384_1173 w384_1174 lorem w384_1175 lorem w384_1176 lorem w384_1177 lorem w384_1178 lorem w384_1179 w384_1180 w384_1181 w384_1182 lorem w384_1183 lorem</div></div>" +
+                "<div>w384_1254 w384_1255 w384_1256 lorem w384_1257 w384_1258</div></div></div></div>"));
+        }
+
+        [Fact]
+        public async Task AColumnsContainerInABreakInsideAvoidBlock_DrawsEachColumnOnce()
+        {
+            // Issue 1436: text was drawn twice. The three pages against a browser's one is a separate pagination difference.
+            await AssertEveryWordIsInTheTreeOnceAsync(Document(
+                "@page{size:240pt 150.5pt;margin:20pt}body{margin:0;font:10pt/10pt Arial} h2{font-size:13pt}",
+                "<div style='border:1px solid #666;padding:0pt;margin:0 0 4pt;break-inside:avoid;'><div style='columns:2;column-gap:6pt'>" +
+                "w530_147 w530_148 w530_149 w530_150 w530_151 w530_152 w530_153 w530_154 w530_155 " +
+                "<h3 style='font-size:13pt;margin:6pt 0 4pt;'>w530_164 w530_165 w530_166 w530_167 w530_168 w530_169 w530_170 w530_171 w530_172 w530_173 w530_174 w530_175 w530_176</h3></div></div>"));
+        }
+
+        [Fact]
+        public async Task ALineMovedPastTheFootOfACappedScrollContainer_IsNotClippedAway()
+        {
+            // Issue 1373: the box (max-height 50pt) broke at the foot and widows moved lines to the next page, where
+            // the clip still ended a cap's distance below the box's first fragment and hid w4_186.
+            await AssertEveryWordIsVisibleOnceAsync(Document(Page300x200 + " p { margin: 0 }",
+                "w4_0<p>w4_1</p>" + string.Concat(Enumerable.Repeat("<br>", 18)) +
+                "w4_158 w4_159 w4_160 w4_161 w4_162<p>w4_163 w4_164</p>w4_165 w4_166 w4_167 w4_168 w4_169 w4_170" +
+                "<div style=\"overflow:hidden;max-height:50pt\"><br><br><br>w4_186</div>" +
+                "<div style=\"break-inside:avoid\"><ul>w4_187 w4_188 w4_189<li>w4_190 w4_191 w4_192 w4_193</li></ul>" + string.Concat(Enumerable.Repeat("<br>", 5)) +
+                " w4_201 w4_202<div style=\"break-before:page\"></div></div><div style=\"float:right;width:60pt\"></div>"));
         }
     }
 }
