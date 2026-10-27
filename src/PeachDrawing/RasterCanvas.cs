@@ -502,6 +502,18 @@ public sealed partial class RasterCanvas : Canvas
             owner.CompositeRow(y, x0, coverage, paint, clip, mode, opacity);
     }
 
+    /// <summary>The first <paramref name="count"/> bytes of the coverage scratch, growing it (and the pixel scratch) when needed.</summary>
+    private Span<byte> RentCoverageScratch(int count)
+    {
+        if (_coverageScratch.Length < count)
+        {
+            _coverageScratch = new byte[count + 16];
+            _pixelScratch = new byte[(count + 16) * 4];
+        }
+
+        return _coverageScratch.AsSpan(0, count);
+    }
+
     private void CompositeRow(int y, int x0, ReadOnlySpan<byte> coverage, PaintSource paint, ClipState clip, PaintBlendMode mode, int opacity)
     {
         var bounds = clip.Bounds;
@@ -514,23 +526,14 @@ public sealed partial class RasterCanvas : Canvas
         if (count <= 0)
             return;
 
-        if (_coverageScratch.Length < count)
-        {
-            _coverageScratch = new byte[count + 16];
-            _pixelScratch = new byte[(count + 16) * 4];
-        }
-
-        var work = _coverageScratch.AsSpan(0, count);
+        var work = RentCoverageScratch(count);
         coverage.Slice(start - x0, count).CopyTo(work);
 
         if (clip.Mask is { } mask)
             PixelKernels.MultiplyCoverage(work, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
 
         if (opacity < 255)
-        {
-            for (var i = 0; i < work.Length; i++)
-                work[i] = (byte)PixelKernels.Div255(work[i] * opacity);
-        }
+            PixelKernels.ScaleCoverage(work, opacity);
 
         var dst = _surface.Row(y).Slice(start * 4, count * 4);
 

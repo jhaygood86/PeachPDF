@@ -86,11 +86,16 @@ public static partial class FilterOps
         for (var y = 0; y < padded.Height; y++)
         {
             var sy = Reflect(y - padY, h);
-            for (var x = 0; x < padded.Width; x++)
-            {
-                var sx = Reflect(x - padX, w);
-                s.Slice((sy * w + sx) * 4, 4).CopyTo(d.Slice((y * padded.Width + x) * 4, 4));
-            }
+            var sourceRow = s.Slice(sy * w * 4, w * 4);
+            var destRow = d.Slice(y * padded.Width * 4, padded.Width * 4);
+
+            // The middle of the row is the source row itself; only the borders are reflected.
+            sourceRow.CopyTo(destRow.Slice(padX * 4, w * 4));
+            for (var x = 0; x < padX; x++)
+                sourceRow.Slice(Reflect(x - padX, w) * 4, 4).CopyTo(destRow.Slice(x * 4, 4));
+
+            for (var x = padX + w; x < padded.Width; x++)
+                sourceRow.Slice(Reflect(x - padX, w) * 4, 4).CopyTo(destRow.Slice(x * 4, 4));
         }
 
         return padded;
@@ -210,10 +215,14 @@ public static partial class FilterOps
         for (var y = 0; y < destination.Height; y++)
         {
             var sy = tile.Top + PositiveModulo(y - tile.Top, th);
-            for (var x = 0; x < destination.Width; x++)
+
+            // Each run is the rest of the tile's row, or what remains of the destination row, copied in one go.
+            for (var x = 0; x < destination.Width;)
             {
-                var sx = tile.Left + PositiveModulo(x - tile.Left, tw);
-                s.Slice((sy * source.Width + sx) * 4, 4).CopyTo(d.Slice((y * destination.Width + x) * 4, 4));
+                var offset = PositiveModulo(x - tile.Left, tw);
+                var run = Math.Min(tw - offset, destination.Width - x);
+                s.Slice((sy * source.Width + tile.Left + offset) * 4, run * 4).CopyTo(d.Slice((y * destination.Width + x) * 4, run * 4));
+                x += run;
             }
         }
     }
@@ -225,28 +234,15 @@ public static partial class FilterOps
     /// <summary>Porter-Duff <c>over</c>, <c>in</c>, <c>out</c>, <c>atop</c> or <c>xor</c> of <paramref name="a"/> (the <c>in</c> input) with <paramref name="b"/> (<c>in2</c>).</summary>
     public static void PorterDuff(string op, RasterSurface a, RasterSurface b, RasterSurface result)
     {
-        var pa = a.Pixels;
-        var pb = b.Pixels;
-        var pr = result.Pixels;
-        for (var i = 0; i + 3 < pa.Length; i += 4)
+        var kind = op switch
         {
-            var aa = pa[i + 3];
-            var ab = pb[i + 3];
-            for (var c = 0; c < 4; c++)
-            {
-                int ca = pa[i + c];
-                int cb = pb[i + c];
-                int v = op switch
-                {
-                    "in" => PixelKernels.Div255(ca * ab),
-                    "out" => PixelKernels.Div255(ca * (255 - ab)),
-                    "atop" => PixelKernels.Div255(ca * ab) + PixelKernels.Div255(cb * (255 - aa)),
-                    "xor" => PixelKernels.Div255(ca * (255 - ab)) + PixelKernels.Div255(cb * (255 - aa)),
-                    _ => ca + PixelKernels.Div255(cb * (255 - aa)),
-                };
-                pr[i + c] = (byte)Math.Min(v, 255);
-            }
-        }
+            "in" => PorterDuffOp.In,
+            "out" => PorterDuffOp.Out,
+            "atop" => PorterDuffOp.Atop,
+            "xor" => PorterDuffOp.Xor,
+            _ => PorterDuffOp.Over,
+        };
+        PixelKernels.PorterDuff(kind, a.Pixels, b.Pixels, result.Pixels);
     }
 
     /// <summary><c>k1*i1*i2 + k2*i1 + k3*i2 + k4</c> on premultiplied 0-1 channels, clamped, with colour kept within alpha.</summary>
@@ -255,9 +251,9 @@ public static partial class FilterOps
         var pa = a.Pixels;
         var pb = b.Pixels;
         var pr = result.Pixels;
+        Span<double> values = stackalloc double[4];
         for (var i = 0; i + 3 < pa.Length; i += 4)
         {
-            var values = new double[4];
             for (var c = 0; c < 4; c++)
             {
                 var ia = pa[i + c] / 255.0;
@@ -279,21 +275,18 @@ public static partial class FilterOps
         bottom.Pixels.CopyTo(result.Pixels);
         var pt = top.Pixels;
         var pr = result.Pixels;
+        if (mode == PaintBlendMode.Normal)
+        {
+            PixelKernels.PorterDuff(PorterDuffOp.Over, pt, pr, pr, skipTransparentSource: true);
+            return;
+        }
+
         for (var i = 0; i + 3 < pt.Length; i += 4)
         {
             if (pt[i + 3] == 0)
                 continue;
 
-            if (mode == PaintBlendMode.Normal)
-            {
-                int inverse = 255 - pt[i + 3];
-                for (var c = 0; c < 4; c++)
-                    pr[i + c] = (byte)Math.Min(pt[i + c] + PixelKernels.Div255(pr[i + c] * inverse), 255);
-            }
-            else
-            {
-                BlendModes.Blend(mode, pr.Slice(i, 4), pt[i], pt[i + 1], pt[i + 2], pt[i + 3]);
-            }
+            BlendModes.Blend(mode, pr.Slice(i, 4), pt[i], pt[i + 1], pt[i + 2], pt[i + 3]);
         }
     }
 
@@ -301,16 +294,7 @@ public static partial class FilterOps
     public static void OverInPlace(RasterSurface destination, RasterSurface top)
     {
         var pd = destination.Pixels;
-        var pt = top.Pixels;
-        for (var i = 0; i + 3 < pd.Length; i += 4)
-        {
-            int inverse = 255 - pt[i + 3];
-            if (inverse == 255)
-                continue;
-
-            for (var c = 0; c < 4; c++)
-                pd[i + c] = (byte)Math.Min(pt[i + c] + PixelKernels.Div255(pd[i + c] * inverse), 255);
-        }
+        PixelKernels.PorterDuff(PorterDuffOp.Over, top.Pixels, pd, pd, skipTransparentSource: true);
     }
 
     // ---- component transfer -----------------------------------------------------------------------------

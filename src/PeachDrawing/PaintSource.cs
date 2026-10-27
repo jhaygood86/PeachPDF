@@ -1,6 +1,7 @@
 using PeachDrawing.Core;
 using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 
 namespace PeachDrawing;
 
@@ -75,14 +76,8 @@ internal abstract class PaintSource
 
         public override void FillSpan(int x0, int y, int count, Span<byte> destination)
         {
-            var c = _color;
-            for (var i = 0; i < count; i++)
-            {
-                destination[i * 4] = (byte)c;
-                destination[i * 4 + 1] = (byte)(c >> 8);
-                destination[i * 4 + 2] = (byte)(c >> 16);
-                destination[i * 4 + 3] = (byte)(c >> 24);
-            }
+            // One 32-bit store per pixel, which the runtime vectorizes; Pack's byte order is R, G, B, A.
+            MemoryMarshal.Cast<byte, uint>(destination[..(count * 4)]).Fill(_color);
         }
     }
 
