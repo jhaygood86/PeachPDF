@@ -42,8 +42,7 @@ public sealed partial class Win2dCanvas
         charFitWidth = 0;
         for (var length = 1; length <= str.Length; length++)
         {
-            if (char.IsLowSurrogate(str[length - 1]) && length > 1 && char.IsHighSurrogate(str[length - 2]))
-                continue;
+            // A prefix that ends between the halves of a surrogate pair is not a prefix of characters.
             if (char.IsHighSurrogate(str[length - 1]) && length < str.Length)
                 continue;
 

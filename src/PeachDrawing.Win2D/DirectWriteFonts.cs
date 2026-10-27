@@ -85,12 +85,6 @@ internal sealed class DirectWriteFonts : IDisposable
         }
     }
 
-    public bool IsAdded(string family)
-    {
-        lock (_gate)
-            return _added.ContainsKey(family);
-    }
-
     public DirectWriteFont CreateFont(string family, double size, PaintFontStyle style, double weight, double stretch) =>
         new(_context, family, size, style, weight, stretch);
 

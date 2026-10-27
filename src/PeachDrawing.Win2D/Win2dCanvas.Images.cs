@@ -147,21 +147,24 @@ public sealed partial class Win2dCanvas
         using var content = new Transform2DEffect { Source = Source(image), TransformMatrix = Placement(new Rect(0, 0, image.Width, image.Height), dest) };
         using var mask = new Transform2DEffect { Source = Source(maskImage), TransformMatrix = Placement(new Rect(0, 0, maskImage.Width, maskImage.Height), dest) };
 
-        // A luminosity mask reads its values from the mask's brightness, an alpha mask from its opacity; either may be inverted.
-        using var luminance = alphaMask ? null : new LuminanceToAlphaEffect { Source = mask };
-        using var inverted = alphaMask && invert ? InvertAlpha(mask) : null;
-        using var masked = new AlphaMaskEffect { Source = content, AlphaMask = (ICanvasImage?)inverted ?? (ICanvasImage?)luminance ?? mask };
-
         using var clip = _session.CreateLayer(1f, new Windows.Foundation.Rect(dest.X, dest.Y, dest.Width, dest.Height));
+
+        // An inverted alpha mask removes the content wherever the mask is opaque. It is not a colour matrix on the mask: a command list is
+        // transparent beyond what was drawn on it, and an effect cannot turn that infinite transparent area opaque.
+        if (alphaMask && invert)
+        {
+            using var cut = new CompositeEffect { Mode = CanvasComposite.DestinationOut };
+            cut.Sources.Add(content);
+            cut.Sources.Add(mask);
+            _session.DrawImage(cut);
+            return;
+        }
+
+        // A luminosity mask reads its values from the mask's brightness, an alpha mask from its opacity.
+        using var luminance = alphaMask ? null : new LuminanceToAlphaEffect { Source = mask };
+        using var masked = new AlphaMaskEffect { Source = content, AlphaMask = (ICanvasImage?)luminance ?? mask };
         _session.DrawImage(masked);
     }
-
-    private static W2dColorMatrixEffect InvertAlpha(ICanvasImage source) => new()
-    {
-        Source = source,
-        AlphaMode = CanvasAlphaMode.Straight,
-        ColorMatrix = new Matrix5x4 { M11 = 1, M22 = 1, M33 = 1, M44 = -1, M54 = 1 },
-    };
 
     /// <inheritdoc />
     public override void DrawImageBlendedOver(PeachDrawing.Core.Image top, PeachDrawing.Core.Image bottom, Rect destRect, PaintBlendMode blendMode)
