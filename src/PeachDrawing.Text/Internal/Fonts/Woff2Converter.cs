@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.IO;
 using System.IO.Compression;
@@ -600,13 +601,13 @@ namespace PeachDrawing.Text.Internal.Fonts
         // ---------------------------------------------------------------------------
 
         private static uint ReadUInt32BE(byte[] d, int o) =>
-            ((uint)d[o] << 24) | ((uint)d[o + 1] << 16) | ((uint)d[o + 2] << 8) | d[o + 3];
+            BinaryPrimitives.ReadUInt32BigEndian(d.AsSpan(o));
 
         private static ushort ReadUInt16BE(byte[] d, int o) =>
-            (ushort)(((ushort)d[o] << 8) | d[o + 1]);
+            BinaryPrimitives.ReadUInt16BigEndian(d.AsSpan(o));
 
         private static short ReadInt16BE(byte[] d, int o) =>
-            (short)(((ushort)d[o] << 8) | d[o + 1]);
+            BinaryPrimitives.ReadInt16BigEndian(d.AsSpan(o));
 
         private static void WriteUInt32BE(byte[] d, int o, uint v)
         { d[o] = (byte)(v >> 24); d[o + 1] = (byte)(v >> 16); d[o + 2] = (byte)(v >> 8); d[o + 3] = (byte)v; }

@@ -28,7 +28,9 @@
 #endregion
 
 using System;
+using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
 {
@@ -94,18 +96,20 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         public static uint CalcChecksum(byte[] bytes)
         {
             Debug.Assert((bytes.Length & 3) == 0);
-            // Cannot use Buffer.BlockCopy because 32-bit values are Big-endian in fonts.
-            uint byte3, byte2, byte1, byte0;
-            byte3 = byte2 = byte1 = byte0 = 0;
-            int length = bytes.Length;
-            for (int idx = 0; idx < length;)
+            // 32-bit values are big-endian in fonts; the sum wraps modulo 2^32.
+            var words = MemoryMarshal.Cast<byte, uint>(bytes.AsSpan(0, bytes.Length & ~3));
+            uint sum = 0;
+            if (BitConverter.IsLittleEndian)
             {
-                byte3 += bytes[idx++];
-                byte2 += bytes[idx++];
-                byte1 += bytes[idx++];
-                byte0 += bytes[idx++];
+                foreach (uint word in words)
+                    sum += BinaryPrimitives.ReverseEndianness(word);
             }
-            return (byte3 << 24) + (byte2 << 16) + (byte1 << 8) + byte0;
+            else
+            {
+                foreach (uint word in words)
+                    sum += word;
+            }
+            return sum;
         }
     }
 }

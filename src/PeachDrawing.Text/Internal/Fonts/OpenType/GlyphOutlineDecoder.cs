@@ -16,6 +16,7 @@
 using PeachDrawing.Text.Internal.Fonts.OpenType.Variations;
 using PeachDrawing.Text.Outlines;
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Text.Internal.Fonts.OpenType
@@ -428,20 +429,32 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (gvar is not null)
             {
                 int total = numPoints + 4;
-                var originalX = new double[total];
-                var originalY = new double[total];
-                for (int i = 0; i < numPoints; i++)
+                // The glyph's own coordinates are read by gvar and not kept, so they are borrowed (cleared first,
+                // as the phantom points past numPoints must read 0); the deltas outlive the call and are fresh.
+                var originalX = ArrayPool<double>.Shared.Rent(total);
+                var originalY = ArrayPool<double>.Shared.Rent(total);
+                try
                 {
-                    originalX[i] = xs[i];
-                    originalY[i] = ys[i];
-                }
+                    Array.Clear(originalX, 0, total);
+                    Array.Clear(originalY, 0, total);
+                    for (int i = 0; i < numPoints; i++)
+                    {
+                        originalX[i] = xs[i];
+                        originalY[i] = ys[i];
+                    }
 
-                var dx = new double[total];
-                var dy = new double[total];
-                if (gvar.TryAddDeltas(glyphIndex, variation!.Normalized, total, originalX, originalY, endPtsOfContours, dx, dy))
+                    var dx = new double[total];
+                    var dy = new double[total];
+                    if (gvar.TryAddDeltas(glyphIndex, variation!.Normalized, total, originalX, originalY, endPtsOfContours, dx, dy))
+                    {
+                        moveX = dx;
+                        moveY = dy;
+                    }
+                }
+                finally
                 {
-                    moveX = dx;
-                    moveY = dy;
+                    ArrayPool<double>.Shared.Return(originalX);
+                    ArrayPool<double>.Shared.Return(originalY);
                 }
             }
 

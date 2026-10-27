@@ -41,6 +41,9 @@ namespace PeachDrawing.Text.Internal.Fonts
         private readonly Dictionary<string, byte[]> _CustomFonts = [];
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
 
+        /// <summary>Per-family answer of <see cref="HasExplicitRanges"/> (the layout fast path asks it for every word); an entry is dropped when its family is re-registered.</summary>
+        private readonly Dictionary<string, bool> _hasExplicitRangesCache = new(StringComparer.OrdinalIgnoreCase);
+
         /// <summary>
         /// Family names (lowercased, matching <see cref="InstalledFonts"/>'s own key convention)
         /// registered via <see cref="AddFont(Stream, string)"/> on THIS instance - i.e. not just
@@ -93,7 +96,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         internal bool TryGetFamilyName(string familyName, out string displayName)
         {
-            if (InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family))
+            if (InstalledFonts.TryGetValue(familyName, out var family))
             {
                 displayName = family.Name;
                 return true;
@@ -216,7 +219,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         public FontResolver()
         {
-            InstalledFonts = new Dictionary<string, FontFamilyModel>(_systemFamilies);
+            InstalledFonts = new Dictionary<string, FontFamilyModel>(_systemFamilies, StringComparer.OrdinalIgnoreCase);
         }
 
         private readonly struct FontFileInfo
@@ -365,6 +368,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             }
             clonedFamily.Faces.Add(entry);
             InstalledFonts[key] = clonedFamily;
+            _hasExplicitRangesCache.Remove(key);
 
             _CustomFonts[faceName] = fontBytes;
         }
@@ -422,7 +426,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 }
             }
 
-            var families = new Dictionary<string, FontFamilyModel>();
+            var families = new Dictionary<string, FontFamilyModel>(StringComparer.OrdinalIgnoreCase);
 
             // Deserialize all font families
             foreach (var familyGroup in tempFontInfoList.GroupBy(info => info.FamilyName))
@@ -437,7 +441,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                     Debug.WriteLine(e);
                 }
 
-            return (fontPaths.ToFrozenDictionary(), families.ToFrozenDictionary());
+            return (fontPaths.ToFrozenDictionary(), families.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase));
         }
 
 
@@ -523,8 +527,24 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         public bool HasExplicitRanges(string familyName)
         {
-            return InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family)
-                   && family.Faces.Any(f => f.ExplicitRanges is not null);
+            if (_hasExplicitRangesCache.TryGetValue(familyName, out var cached))
+                return cached;
+
+            var has = false;
+            if (InstalledFonts.TryGetValue(familyName, out var family))
+            {
+                foreach (var face in family.Faces)
+                {
+                    if (face.ExplicitRanges is not null)
+                    {
+                        has = true;
+                        break;
+                    }
+                }
+            }
+
+            _hasExplicitRangesCache[familyName] = has;
+            return has;
         }
 
         public bool NullIfFontNotFound { get; set; } = false;
@@ -557,7 +577,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             if (InstalledFonts.Count == 0)
                 throw new System.IO.FileNotFoundException("No Fonts installed on this device!");
 
-            if (InstalledFonts.TryGetValue(familyName.ToLowerInvariant(), out var family))
+            if (InstalledFonts.TryGetValue(familyName, out var family))
             {
                 if (TryFindNearestFace(family, request, out var face))
                 {
