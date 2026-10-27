@@ -54,6 +54,7 @@ namespace PeachBrackets.Html.Dom
         internal bool IsReplacedBlockWrapper;
         internal bool IsInlineBoxSplitByBlock;
         internal Dictionary<int, double>? PageBreakBottoms;
+        internal IPageGrid? SlicedRowGrid;
         internal TableGrid? CollapsedBorderGrid;
         internal CollapsedBorderModel? CollapsedBorders;
         internal List<CollapsedBorderSegment>? CollapsedBorderSegments;

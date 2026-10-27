@@ -49,7 +49,7 @@ namespace PeachBrackets.Html
     /// Set zero for unlimited (width/height separately).<br/>
     /// </para>
     /// </remarks>
-    internal sealed class HtmlContainerInt : IDisposable
+    internal sealed class HtmlContainerInt : IDisposable, IPageGrid
     {
         #region Fields and Consts
 
@@ -4954,6 +4954,18 @@ namespace PeachBrackets.Html
         /// The block-axis band pagination slot <paramref name="slot"/> occupies.
         /// </summary>
         internal PageBand BandOfSlot(int slot) => new(PageTopOf(slot), PageBottomOf(slot));
+
+        double IPageGrid.PageTopOf(int slot) => PageTopOf(slot);
+
+        double IPageGrid.PageBottomOf(int slot) => PageBottomOf(slot);
+
+        double IPageGrid.PageBandHeightOf(int slot) => PageBandHeightOf(slot);
+
+        int IPageGrid.SlotStartingAt(double y) => SlotStartingAt(y);
+
+        int IPageGrid.SlotEndingAt(double y) => SlotEndingAt(y);
+
+        PageBand IPageGrid.BandOfSlot(int slot) => BandOfSlot(slot);
 
         /// <summary>
         /// The band of the fragmentainer a <b>top</b> edge at <paramref name="y"/> starts in.
