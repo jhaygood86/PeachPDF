@@ -2200,6 +2200,61 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>The words of floats drawn from live geometry during the walk of the slot in progress: each is drawn once.</summary>
         private readonly HashSet<(CssBox Box, int Word)> _liveFloatWordsThisWalk = [];
 
+        /// <summary>
+        /// What the copies of <c>rowspan</c> cells kept in the walk of the slot in progress show (#1834): for each fragment and
+        /// the rectangle it lands at, the block-axis span each kept copy shows.
+        /// </summary>
+        private readonly Dictionary<(FragmentKey Key, Rect Displaced), List<(double Top, double Bottom)>> _spanningCellCopiesThisWalk = [];
+
+        /// <summary>
+        /// Whether <paramref name="draft"/> shows something no copy of the same box kept in this walk already shows, recording
+        /// what it shows when it does. Always true for a box that does not span rows.
+        /// </summary>
+        /// <remarks>
+        /// A <c>rowspan</c> cell is reached through its own row and through every placeholder in the rows it spans, and every
+        /// visit reads the same geometry. A copy that lands at the same rectangle as earlier ones (its stated continuation
+        /// shell, or its own bounds, moved by its displacement), and whose whole visible part - inside the fragmentainer and
+        /// inside the band a displaced run confines it to - one of those copies already shows, would paint the same pixels and
+        /// words again, so it is not kept. A copy that lands elsewhere, or shows a part the earlier ones clip away, is: a run
+        /// displaced under a repeated header clips each row's copy to that row's band, so each draws a different part of the
+        /// cell.
+        /// <para>
+        /// Not every part of this is reached by a layout the tests build: the fragment key and the rectangle in the identity,
+        /// the shell rectangle, the fragmentainer's top and the band's bottom in the span, and the bottom half of "already
+        /// shows". Removing any one of them alone leaves every tested page as it is. They are kept because the rule they
+        /// complete - a copy is left out only when a copy at the same place already shows all of it - is the one that stays
+        /// safe for a layout the tests do not build.
+        /// </para>
+        /// </remarks>
+        private bool ShowsSomethingNew(CssBox box, Draft draft)
+        {
+            if (box.Display.Value != DisplayMode.TableCell || CssLayoutEngineTable.GetRowSpan(box) <= 1) return true;
+
+            var displaced = Displaced(draft.ShellRect ?? BoundsOf(box, draft.Snapshot), draft.Shift);
+            var top = Math.Max(displaced.Top, draft.Region.Top);
+            var bottom = Math.Min(displaced.Bottom, draft.Region.Bottom);
+
+            if (draft.ConfinedTo is { } band)
+            {
+                top = Math.Max(top, band.Top);
+                bottom = Math.Min(bottom, band.Bottom);
+            }
+
+            if (!_spanningCellCopiesThisWalk.TryGetValue((draft.Key, displaced), out var shown))
+            {
+                shown = [];
+                _spanningCellCopiesThisWalk.Add((draft.Key, displaced), shown);
+            }
+
+            foreach (var (shownTop, shownBottom) in shown)
+            {
+                if (shownTop <= top + EdgeEpsilon && shownBottom >= bottom - EdgeEpsilon) return false;
+            }
+
+            shown.Add((top, bottom));
+            return true;
+        }
+
         /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
         private static bool IsInAFloat(CssBox box)
         {
@@ -2262,6 +2317,7 @@ namespace PeachBrackets.Html.Fragmentation
             _pruningSuspended = wasSuspended || !mayWrite;
 
             _liveFloatWordsThisWalk.Clear();
+            _spanningCellCopiesThisWalk.Clear();
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -2357,6 +2413,7 @@ namespace PeachBrackets.Html.Fragmentation
             try
             {
                 _liveFloatWordsThisWalk.Clear();
+                _spanningCellCopiesThisWalk.Clear();
                 full = BuildDraft(root, snapshot: null, slot,
                     capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
@@ -3070,6 +3127,14 @@ namespace PeachBrackets.Html.Fragmentation
 
             var children = RentChildren();
 
+            // Whether a child was built here and left out only because it repeats a rowspan cell's copy kept earlier
+            // in this walk (ShowsSomethingNew). This box still holds a draft then, as it did while the copy was kept:
+            // which boxes hold drafts decides which frozen slots layout re-opens when it moves them
+            // (HoldsFragmentsFor), so leaving the repeat out may not change that. Measured as a page in the middle of a
+            // span losing the whole cell: no placeholder held a draft, so moving the rows never re-opened the page
+            // walked while the cell's height was still unsettled.
+            var heldARepeat = false;
+
             // Almost every box is ordinary content: not a rowspan placeholder and holding no captured instance at this slot,
             // so what ChildrenOf would yield is just the shared ordinary walk. Done here as a plain loop, since the iterator
             // costs a state machine and its closure per call, for every box visited, to say that.
@@ -3092,8 +3157,10 @@ namespace PeachBrackets.Html.Fragmentation
 
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null)
-                        children.Add(childDraft);
+                    if (childDraft is null) continue;
+
+                    if (ShowsSomethingNew(childBox, childDraft)) children.Add(childDraft);
+                    else heldARepeat = true;
                 }
             }
             else
@@ -3109,8 +3176,10 @@ namespace PeachBrackets.Html.Fragmentation
 
                     contiguous &= childPrunable;
 
-                    if (childDraft is not null)
-                        children.Add(childDraft);
+                    if (childDraft is null) continue;
+
+                    if (ShowsSomethingNew(childBox, childDraft)) children.Add(childDraft);
+                    else heldARepeat = true;
                 }
             }
 
@@ -3128,7 +3197,7 @@ namespace PeachBrackets.Html.Fragmentation
             var ownBoundsCoverRegion = usesOwnBounds && !CssBox.NeedsAClaimedWordToEstablishMembership(box)
                 && region.Contains(Displaced(Shifted(BoundsOf(box, snapshot)), shift));
 
-            if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion)
+            if (lines.Count == 0 && words.Count == 0 && children.Count == 0 && !ownBoundsCoverRegion && !heldARepeat)
             {
                 // A shell continues a fragment; it never invents one. Requiring the box to already hold a
                 // frozen fragment somewhere is what keeps this from changing _frozen membership, and so
@@ -3654,9 +3723,10 @@ namespace PeachBrackets.Html.Fragmentation
             CssBox box, BoxGeometrySnapshot? snapshot, Slot slot,
             CapturedInstance? capture, int instance)
         {
-            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row.
-            // That cell therefore appears in the tree once per row it spans - the fragments are
-            // distinct objects, so each is painted in its own place.
+            // A rowspan placeholder shows the cell that spans into it, which lives in an earlier row: on a
+            // slot that row did not reach, or in this row's own band where a repeated header displaces the
+            // run. A copy that would repeat one this walk already drew is dropped once it is built
+            // (ShowsSomethingNew), since only then are its displacement and band known.
             if (box is CssSpacingBox spacing)
                 yield return (spacing.ExtendedBox, snapshot, capture, instance);
 
