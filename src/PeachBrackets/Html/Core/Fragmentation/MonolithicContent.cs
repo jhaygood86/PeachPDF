@@ -47,11 +47,27 @@ namespace PeachBrackets.Html.Fragmentation
         private static bool HasConstrainedLogicalHeight(CssBox box) =>
             box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
                 ? CssValueParser.IsValidLength(box.Width) || CssValueParser.IsValidLength(box.MaxWidth)
-                : CssLayoutEngine.HasDefiniteHeight(box)
+                : HasDefiniteAuthoredHeight(box)
                     || (CssValueParser.IsValidLength(box.MaxHeight)
                         && (!CssValueParser.DependsOnPercentage(box.MaxHeight)
                             || CssLayoutEngine.IsHeightDefinite(box.ContainingBlock))
                         && CappedScrollContainer.MustStayWhole(box));
+
+        // A flex or grid item has its used height pinned before its own layout (ItemContentCommit), so the
+        // box's Height would read "definite" for an item whose authored height is auto. The height it had
+        // before the first pin is the style's own answer.
+        private static bool HasDefiniteAuthoredHeight(CssBox box)
+        {
+            if (box.ItemContentSizeEverPinned)
+            {
+                var authored = box.HeightBeforeItemPin;
+
+                if (!CssValueParser.IsValidLength(authored)) return false;
+                if (!CssValueParser.DependsOnPercentage(authored)) return true;
+            }
+
+            return CssLayoutEngine.HasDefiniteHeight(box);
+        }
 
         // A flex or grid item is sized and finally placed by its container's commit pass, which pins the
         // item's used size before its own layout, and a box inside a multi-column container is clipped and
@@ -59,8 +75,6 @@ namespace PeachBrackets.Html.Fragmentation
         // fragmentainer edge when it was allowed to break, so it keeps the unbreakable treatment there.
         private static bool IsLaidOutByAnEngineThatCannotContinueIt(CssBox box)
         {
-            if (CssBox.IsFlexOrGridItem(box)) return true;
-
             for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
             {
                 if (ancestor.EstablishesMultiColumnContext) return true;

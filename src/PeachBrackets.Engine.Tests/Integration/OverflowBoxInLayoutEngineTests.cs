@@ -7,11 +7,12 @@ using PeachPDF.Tests.TestSupport;
 namespace PeachBrackets.Engine.Tests.Integration;
 
 /// <summary>
-/// An auto-height scroll container in ordinary block flow breaks between its lines. One that is a flex or grid
-/// item, or that sits inside a multi-column container, is laid out by an engine that sizes or clips it per
-/// container or column, and letting it break there dropped whole lines at the fragmentainer edge, so it keeps
-/// the unbreakable treatment. One that holds an absolutely positioned box breaks like any other: the box runs
-/// as passes of its own and does not end its container's.
+/// An auto-height scroll container in ordinary block flow breaks between its lines, and so does one that is a
+/// flex or grid item (the classifier reads the height the author wrote, not the one the commit pass pinned). One
+/// that sits inside a multi-column container is clipped and continued per column, and letting it break there
+/// dropped whole lines at the fragmentainer edge, so it keeps the unbreakable treatment. One that holds an
+/// absolutely positioned box breaks like any other: the box runs as passes of its own and does not end its
+/// container's.
 /// </summary>
 public class OverflowBoxInLayoutEngineTests
 {
@@ -59,6 +60,25 @@ public class OverflowBoxInLayoutEngineTests
         Assert.Equal(0, clipped);
         Assert.Equal(Enumerable.Range(900, 88).Concat(Enumerable.Range(1, 32)).Select(i => $"w{i:000}").Order(),
             painted.Order());
+    }
+
+    // The item is taller than the page and straddles its edge with a line of its own: the lines are cut in half
+    // by the clip when the item is kept whole.
+    [Theory]
+    [InlineData("flex", "auto")]
+    [InlineData("flex", "scroll")]
+    [InlineData("grid", "auto")]
+    [InlineData("grid", "scroll")]
+    public async Task TallAutoHeightScrollItem_BreaksBetweenLines(string display, string overflow)
+    {
+        var lines = string.Concat(Enumerable.Range(1, 30).Select(i => $"<div>x{i:00}</div>"));
+        var panel = $"<div style='overflow:{overflow};{(display == "flex" ? "flex:1" : "")}'>{lines}</div>";
+        var html = Document($"<p>Intro</p><div style='display:{display};{(display == "grid" ? "grid-template-columns:1fr 1fr" : "")}'>{panel}<div>Beside</div></div>");
+
+        var (painted, clipped) = await PaintedWordsAsync(html);
+
+        Assert.Equal(0, clipped);
+        Assert.Equal(Enumerable.Range(1, 30).Select(i => $"x{i:00}").Concat(["Intro", "Beside"]).Order(), painted.Order());
     }
 
     // Sized to fit a column: a box taller than the page is sliced whichever way it is classified.
@@ -128,9 +148,10 @@ public class OverflowBoxInLayoutEngineTests
     }
 
     [Theory]
-    [InlineData("<div style='display:flex'><div id='box' style='overflow:hidden'>text</div></div>", true)]
-    [InlineData("<div style='display:grid'><div id='box' style='overflow:auto'>text</div></div>", true)]
-    [InlineData("<div style='display:inline-flex'><div id='box' style='overflow:scroll'>text</div></div>", true)]
+    [InlineData("<div style='display:flex'><div id='box' style='overflow:hidden'>text</div></div>", false)]
+    [InlineData("<div style='display:grid'><div id='box' style='overflow:auto'>text</div></div>", false)]
+    [InlineData("<div style='display:inline-flex'><div id='box' style='overflow:scroll'>text</div></div>", false)]
+    [InlineData("<div style='display:flex'><div id='box' style='overflow:hidden;height:50pt'>text</div></div>", true)]
     [InlineData("<div style='columns:2'><div id='box' style='overflow:hidden'>text</div></div>", true)]
     [InlineData("<div style='column-width:100pt'><div><div id='box' style='overflow:hidden'>text</div></div></div>", true)]
     [InlineData("<div id='box' style='position:relative;overflow:hidden'><div style='position:absolute'>x</div></div>", false)]
