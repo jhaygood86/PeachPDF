@@ -2180,6 +2180,26 @@ namespace PeachBrackets.Html.Dom
             || (usedWidth is not null && box.DerivedStyle.ActualDisplay is Keywords.Table && IsInNormalFlow(box));
 
         /// <summary>
+        /// Whether an in-flow <c>&lt;table&gt;</c> is anchored to its containing block's <i>right</i> edge rather
+        /// than its left: the containing block is <c>rtl</c> and neither horizontal margin is <c>auto</c>, so the
+        /// table is over-constrained and CSS 2.1 §10.3.3 ignores <c>margin-left</c>.
+        /// </summary>
+        /// <remarks>
+        /// The block counterpart is <c>CssBox.ResolveBlockInlineStart</c>, which cannot cover a table because its
+        /// used width is not known until the table engine has settled its columns. An <c>auto</c> margin is not
+        /// this case: the table engine already resolves a single one, or both, from the settled width. Horizontal
+        /// writing modes only, as for a block.
+        /// </remarks>
+        /// <param name="table">the table wrapper box</param>
+        internal static bool AnchorsTableToInlineEnd(CssBox table) =>
+            table.DerivedStyle.ActualDisplay is Keywords.Table
+            && table.ParentBox is not null
+            && table.ContainingBlock is { Direction.Value: DirectionMode.Rtl, WritingMode.Value: Css.WritingMode.HorizontalTb }
+            && table.MarginLeft.Value.IsValue
+            && table.MarginRight.Value.IsValue
+            && IsInNormalFlow(table);
+
+        /// <summary>
         /// Whether <paramref name="box"/> is an ordinary in-flow, block-level box - the only kind CSS 2.1
         /// §10.3.3's margin resolution applies to as written. A float, an absolutely-positioned box, a table,
         /// a flex/grid item or an inline-level box has margin rules of its own.
