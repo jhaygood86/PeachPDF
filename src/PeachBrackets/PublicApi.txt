@@ -186,6 +186,8 @@ PeachBrackets.GenericFontKeyword : struct
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
+  method DocumentElement GetElement(String elementId)
+  method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
@@ -193,10 +195,12 @@ PeachBrackets.HtmlDocument : sealed class
   method String GetText(TextPosition from, TextPosition to)
   method Task LayoutAsync(Canvas measuringCanvas)
   method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
+  method Task PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
+  method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
   method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
@@ -230,6 +234,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
   property Boolean CollectFormFields { get; set; }
+  property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
   property Boolean RecordTextRuns { get; set; }
@@ -306,6 +311,30 @@ PeachBrackets.Text.TextRun : sealed class
   property String ElementId { get; }
   property String LinkUri { get; }
   property String Text { get; }
+PeachBrackets.Updates.DirtyRegion : struct
+  ctor(Int32 PageIndex, Rect Bounds)
+  method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
+  method virtual Boolean Equals(DirtyRegion other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 PageIndex { get; init; }
+  property Rect Bounds { get; init; }
+PeachBrackets.Updates.DocumentElement : sealed class
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  property String Id { get; }
+  property String TagName { get; }
+PeachBrackets.Updates.UpdateResult : struct
+  ctor(Boolean Applied, String Reason, IReadOnlyList<DirtyRegion> DirtyRegions)
+  method Void Deconstruct(out Boolean Applied, out String Reason, out IReadOnlyList<DirtyRegion> DirtyRegions)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(UpdateResult other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Applied { get; init; }
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
+  property String Reason { get; init; }
 PeachPDF.HtmlRenderErrorType : enum Int32
   ContextMenu = 8
   CssParsing = 1

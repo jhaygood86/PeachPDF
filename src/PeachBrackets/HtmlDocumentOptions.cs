@@ -111,6 +111,12 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public bool EnableSelectionStyling { get; set; }
 
+    /// <summary>
+    /// Whether <see cref="HtmlDocument.SetStyle"/> can restyle elements of the laid-out document in place, reporting the regions to repaint
+    /// instead of the document being loaded and laid out again. Off by default.
+    /// </summary>
+    public bool EnableIncrementalUpdates { get; set; }
+
     /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
     public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);
 

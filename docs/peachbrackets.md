@@ -97,6 +97,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
+| `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements of the laid-out document in place. |
 | `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
@@ -169,6 +170,23 @@ to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions
 Limits: text in vertical writing modes, in page margin boxes and in footnotes is not reported, and text moved by a `transform` is reported where
 layout put it, not where it was drawn. The per-character positions come from shaping the word with its font and scaling to the width layout gave
 it, so they follow ligatures and justification but not a custom `letter-spacing` applied unevenly.
+
+## Restyling in place
+
+A consumer that shows a document and changes it - a selection, a hover colour, an editor's highlight - should not load and lay out the
+document again for every change. With `EnableIncrementalUpdates`, `document.SetStyle(element, property, value)` changes one CSS property of
+an element of the laid-out document and returns an `UpdateResult`: whether it was applied, why not if it was not, and the `DirtyRegions`
+(page index and a rectangle in points) that now look different. No layout pass runs, so nothing moves.
+
+- Get the element with `GetElement(id)`, or `GetElementAt(page, x, y)` for the innermost element under a point (what a click hit).
+- Applied in place: `color` (the element's descendants that inherited it follow; one with a colour of its own keeps it), `background-color`,
+  `text-decoration-line`, `text-decoration-style`, `text-decoration-color` and `outline-color`. A border drawn in `currentcolor` follows a `color`
+  change.
+- Not applied, with the reason in `UpdateResult.Reason` and the document untouched: any other property (anything that can move or resize
+  content needs a layout pass), a value that does not parse, and the `background-color` of `html` and `body`, which is the page canvas's.
+- A background or outline set to `currentcolor` earlier keeps the colour it had; only a later write picks up the new one.
+- To show the change, clear each region on the page's canvas and call `PaintPageRegionAsync(page, canvas, region)`, which paints only what
+  lies inside it; or paint the page again.
 
 ## Structure for tagged output
 

@@ -8,8 +8,10 @@ using PeachBrackets.Html.Utils;
 using PeachBrackets.Html.Pages;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.TextGeometry;
+using PeachBrackets.Html.Updates;
 using PeachBrackets.Tagging;
 using PeachBrackets.Text;
+using PeachBrackets.Updates;
 using PeachBrackets.Utilities;
 using PeachDrawing.Core;
 using System;
@@ -52,6 +54,7 @@ public sealed class HtmlDocument : IDisposable
     private IReadOnlyList<TextRun>? _textRuns;
     private bool _recordTextRuns;
     private bool _selectionStyling;
+    private bool _incrementalUpdates;
     private IReadOnlyList<TextRange> _selectedRanges = [];
     private bool _disposed;
 
@@ -492,8 +495,87 @@ public sealed class HtmlDocument : IDisposable
     /// <summary>The ranges last given to <see cref="SetSelectedRanges"/>; empty when nothing is selected.</summary>
     public IReadOnlyList<TextRange> SelectedRanges => _selectedRanges;
 
+    /// <summary>The element with the given <c>id</c>, as a handle for <see cref="SetStyle"/>, or null if there is none.</summary>
+    /// <param name="elementId">the element's <c>id</c></param>
+    /// <returns>the element, or null</returns>
+    public DocumentElement? GetElement(string elementId)
+    {
+        ArgumentNullException.ThrowIfNull(elementId);
+        return DomUtils.GetBoxById(_container.Root, elementId) is { } box ? new DocumentElement(box) : null;
+    }
+
+    /// <summary>
+    /// The innermost element drawn at a point of a page - the one whose text, line or box is under it - or null if there is none. A pointer
+    /// handler uses it to find what was clicked.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the element, or null</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public DocumentElement? GetElementAt(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        return StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? new DocumentElement(box) : null;
+    }
+
+    /// <summary>
+    /// Changes one CSS property of an element of the laid-out document, in place, and reports what has to be repainted - no layout pass runs, and
+    /// the document is not loaded again. Applied for the properties that only change how something is painted: <c>color</c> (which the
+    /// element's descendants that inherited it follow), <c>background-color</c>, <c>text-decoration-line</c>, <c>-style</c> and <c>-color</c>, and
+    /// <c>outline-color</c>. Anything else, a value that does not parse, or the background of <c>html</c> or <c>body</c> is not applied
+    /// and leaves the document untouched; the result says why. Repaint the regions it returns (<see cref="PaintPageRegionAsync"/>).
+    /// </summary>
+    /// <param name="element">the element, from <see cref="GetElement"/> or <see cref="GetElementAt"/></param>
+    /// <param name="property">the CSS property name</param>
+    /// <param name="value">the CSS value, as it would be written in a style sheet</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.EnableIncrementalUpdates"/> was not set</exception>
+    public UpdateResult SetStyle(DocumentElement element, string property, string value)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(property);
+        ArgumentNullException.ThrowIfNull(value);
+        _ = Pages;
+        if (!_incrementalUpdates)
+            throw new InvalidOperationException("Set HtmlDocumentOptions.EnableIncrementalUpdates before loading the document to restyle it in place.");
+
+        return StyleUpdater.Apply(_container, element.Box, property, value, _container.FragmentTree?.Fragmentainers ?? []);
+    }
+
+    /// <summary>
+    /// Paints the part of one page that lies inside <paramref name="region"/>, onto a canvas that already holds the page as it was: the
+    /// way to show an <see cref="UpdateResult"/> without painting the whole page again. The canvas is the same one <see cref="PaintPageAsync"/>
+    /// takes; the region is cleared by the caller (paint the page's background first if it is not opaque).
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="canvas">the canvas of that page</param>
+    /// <param name="region">the area to paint, in points from the top-left of the sheet</param>
+    /// <returns>a task that completes when the region is drawn</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async Task PaintPageRegionAsync(int pageIndex, Canvas canvas, Rect region)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ThrowIfNotAPage(pageIndex);
+
+        canvas.PushClip(new Rect(region.X * _unitsPerPoint, region.Y * _unitsPerPoint, region.Width * _unitsPerPoint, region.Height * _unitsPerPoint));
+        try
+        {
+            await PaintPageAsync(pageIndex, canvas);
+        }
+        finally
+        {
+            canvas.PopClip();
+        }
+    }
+
     private void ApplyTextOptions(HtmlDocumentOptions options)
     {
+        _incrementalUpdates = options.EnableIncrementalUpdates;
         _recordTextRuns = options.RecordTextRuns;
         _selectionStyling = options.EnableSelectionStyling;
         _container.SelectionBackground = options.SelectionBackground;

@@ -48,7 +48,7 @@ namespace PeachBrackets.Html.TextGeometry
             return runs;
         }
 
-        private readonly record struct Frame(double ContentLeftPt, double ContentTopPt, double MarginLeft, double MarginTop, double Ppp)
+        internal readonly record struct Frame(double ContentLeftPt, double ContentTopPt, double MarginLeft, double MarginTop, double Ppp)
         {
             public double X(double x) => ContentLeftPt + (x - MarginLeft) / Ppp;
 
