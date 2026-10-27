@@ -9,6 +9,7 @@ using PeachBrackets.Html.Pages;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.TextGeometry;
 using PeachBrackets.Html.Updates;
+using PeachBrackets.Selection;
 using PeachBrackets.Tagging;
 using PeachBrackets.Text;
 using PeachBrackets.Updates;
@@ -55,6 +56,7 @@ public sealed class HtmlDocument : IDisposable
     private bool _recordTextRuns;
     private bool _selectionStyling;
     private bool _incrementalUpdates;
+    private DocumentSelection? _selection;
     private IReadOnlyList<TextRange> _selectedRanges = [];
     private bool _disposed;
 
@@ -492,6 +494,55 @@ public sealed class HtmlDocument : IDisposable
         _container.SelectionModel = _selectedRanges.Count == 0 ? null : SelectionModel.Build(runs, _selectedRanges);
     }
 
+    /// <summary>
+    /// The document's selection: an anchor and a focus, movement by character, word, line and block, and the text and rectangles of what is
+    /// selected, for a consumer to drive from its pointer and keyboard events. With <see cref="HtmlDocumentOptions.EnableSelectionStyling"/> it paints
+    /// itself through <see cref="SetSelectedRanges"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public DocumentSelection Selection
+    {
+        get
+        {
+            _ = TextRuns;
+            return _selection ??= new DocumentSelection(this);
+        }
+    }
+
+    internal bool SelectionStylingEnabled => _selectionStyling;
+
+    /// <summary>
+    /// The innermost element the text at a position belongs to - the element a character of <see cref="TextRuns"/> was written in - or null if
+    /// the position is not in the text.
+    /// </summary>
+    /// <param name="position">a position in <see cref="TextRuns"/></param>
+    /// <returns>the element, or null</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public DocumentElement? GetElementAt(TextPosition position)
+    {
+        var runs = TextRuns;
+        if ((uint)position.RunIndex >= (uint)runs.Count)
+            return null;
+
+        var run = runs[position.RunIndex];
+        if (run.Slices.Count == 0)
+            return null;
+
+        // The word the character is in (the one before it at an edge between two).
+        var slice = run.Slices[0];
+        foreach (var candidate in run.Slices)
+        {
+            if (candidate.TextStart <= position.CharIndex)
+                slice = candidate;
+        }
+
+        var box = slice.Word.OwnerBox;
+        while (box.HtmlTag is null && box.ParentBox is { } parent)
+            box = parent;
+
+        return box.HtmlTag is null ? null : new DocumentElement(box);
+    }
+
     /// <summary>The ranges last given to <see cref="SetSelectedRanges"/>; empty when nothing is selected.</summary>
     public IReadOnlyList<TextRange> SelectedRanges => _selectedRanges;
 
@@ -528,7 +579,7 @@ public sealed class HtmlDocument : IDisposable
     /// <c>outline-color</c>. Anything else, a value that does not parse, or the background of <c>html</c> or <c>body</c> is not applied
     /// and leaves the document untouched; the result says why. Repaint the regions it returns (<see cref="PaintPageRegionAsync"/>).
     /// </summary>
-    /// <param name="element">the element, from <see cref="GetElement"/> or <see cref="GetElementAt"/></param>
+    /// <param name="element">the element, from <see cref="GetElement"/> or <see cref="GetElementAt(int, double, double)"/></param>
     /// <param name="property">the CSS property name</param>
     /// <param name="value">the CSS value, as it would be written in a style sheet</param>
     /// <returns>whether it was applied and the regions that changed</returns>

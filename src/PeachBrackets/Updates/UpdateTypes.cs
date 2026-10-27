@@ -7,7 +7,7 @@ namespace PeachBrackets.Updates;
 
 /// <summary>
 /// An element of a loaded document, as a handle to restyle it with <see cref="HtmlDocument.SetStyle"/>. Get one from
-/// <see cref="HtmlDocument.GetElement"/> or <see cref="HtmlDocument.GetElementAt"/>.
+/// <see cref="HtmlDocument.GetElement"/> or <see cref="HtmlDocument.GetElementAt(int, double, double)"/>.
 /// </summary>
 public sealed class DocumentElement
 {

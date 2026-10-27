@@ -90,10 +90,21 @@ namespace PeachBrackets.Html.TextGeometry
         public static IReadOnlyList<Rect> SelectionRects(IReadOnlyList<TextRun> runs, TextPosition from, TextPosition to)
         {
             var rects = new List<Rect>();
+            foreach (var (_, rect) in SelectionRegions(runs, from, to))
+                rects.Add(rect);
+
+            return rects;
+        }
+
+        /// <summary><see cref="SelectionRects"/> with the page each rectangle is on.</summary>
+        public static List<(int PageIndex, Rect Rect)> SelectionRegions(IReadOnlyList<TextRun> runs, TextPosition from, TextPosition to)
+        {
+            var rects = new List<(int, Rect)>();
             if (!Normalize(runs, ref from, ref to))
                 return rects;
 
             var lineId = -1;
+            var page = 0;
             var left = 0d;
             var right = 0d;
             var top = 0d;
@@ -102,7 +113,7 @@ namespace PeachBrackets.Html.TextGeometry
             void Flush()
             {
                 if (lineId >= 0)
-                    rects.Add(new Rect(left, top, right - left, bottom - top));
+                    rects.Add((page, new Rect(left, top, right - left, bottom - top)));
             }
 
             for (var i = from.RunIndex; i <= to.RunIndex; i++)
@@ -132,6 +143,7 @@ namespace PeachBrackets.Html.TextGeometry
 
                 Flush();
                 lineId = run.LineId;
+                page = run.PageIndex;
                 left = runLeft;
                 right = runRight;
                 top = runTop;

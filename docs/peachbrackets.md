@@ -167,6 +167,29 @@ to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions
 - Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
   holds that word's text more than once. Selection is meant for interactive output, not for PDF.
 
+### The selection model
+
+`document.Selection` (a `DocumentSelection`, needs `RecordTextRuns`) is the state a pointer and keyboard drive, in the manner of the DOM's
+`Selection`: an `Anchor` and a `Focus` (the caret end) as `TextPosition`s, `IsCollapsed`, `IsBackward`, `GetRange()`, `GetText()`, and
+`GetRegions()`/`GetCaretBounds()` for what to draw. It draws nothing itself; with `EnableSelectionStyling` it hands every change to
+`SetSelectedRanges`, so the next paint shows it in the `::selection` style.
+
+| To | Call |
+| --- | --- |
+| click, shift-click or drag | `SelectAt(page, x, y)`, `ExtendTo(page, x, y)` |
+| double and triple click | `SelectWordAt(page, x, y)`, `SelectBlockAt(page, x, y)` |
+| select a range, or everything | `Select(range)`, `SetBaseAndExtent(anchor, focus)`, `SelectAll()` |
+| collapse, extend, clear | `Collapse`, `CollapseToStart/End`, `Extend`, `RemoveAllRanges` |
+| arrow keys and their modifiers | `Modify(extend, direction, granularity)` |
+
+`Modify` moves by `Character`, `Word`, `Line` (up and down, keeping the caret's horizontal position across lines), `LineBoundary` (Home and
+End), `Block` (paragraph edges) or `Document`. Direction is logical - in right-to-left text the key that moves towards the left is a backward
+move. A move that does not extend, over a selection, first collapses it to the near edge. It returns false at the edge of the document.
+
+`SelectionChanged` fires after a change that moved the anchor or the focus, with the `DirtyRegions` - where the selection or caret was and
+where it is - so only those regions need repainting (`PaintPageRegionAsync`). `document.GetElementAt(position)` gives the element a position's
+text was written in, for a consumer that wants the DOM node behind a selection end.
+
 Limits: text in vertical writing modes, in page margin boxes and in footnotes is not reported, and text moved by a `transform` is reported where
 layout put it, not where it was drawn. The per-character positions come from shaping the word with its font and scaling to the width layout gave
 it, so they follow ligatures and justification but not a custom `letter-spacing` applied unevenly.

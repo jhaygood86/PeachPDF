@@ -188,6 +188,7 @@ PeachBrackets.GenericFontKeyword : struct
 PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
+  method DocumentElement GetElementAt(TextPosition position)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
@@ -207,6 +208,7 @@ PeachBrackets.HtmlDocument : sealed class
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property DocumentAnnotations Annotations { get; }
+  property DocumentSelection Selection { get; }
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
@@ -254,6 +256,45 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
+PeachBrackets.Selection.DocumentSelection : sealed class
+  method Boolean ExtendTo(Int32 pageIndex, Double x, Double y)
+  method Boolean Modify(Boolean extend, SelectionDirection direction, SelectionGranularity granularity)
+  method Boolean SelectAt(Int32 pageIndex, Double x, Double y)
+  method Boolean SelectBlockAt(Int32 pageIndex, Double x, Double y)
+  method Boolean SelectWordAt(Int32 pageIndex, Double x, Double y)
+  method DirtyRegion? GetCaretBounds(Double width = 1)
+  method IReadOnlyList<DirtyRegion> GetRegions()
+  method String GetText()
+  method TextRange? GetRange()
+  method Void Collapse(TextPosition position)
+  method Void CollapseToEnd()
+  method Void CollapseToStart()
+  method Void Extend(TextPosition position)
+  method Void RemoveAllRanges()
+  method Void Select(TextRange range)
+  method Void SelectAll()
+  method Void SetBaseAndExtent(TextPosition anchor, TextPosition focus)
+  method virtual String ToString()
+  property Boolean HasSelection { get; }
+  property Boolean IsBackward { get; }
+  property Boolean IsCollapsed { get; }
+  property Int32 RangeCount { get; }
+  property TextPosition? Anchor { get; }
+  property TextPosition? Focus { get; }
+PeachBrackets.Selection.SelectionChangedEventArgs : sealed class
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; }
+  property TextPosition? Anchor { get; }
+  property TextPosition? Focus { get; }
+PeachBrackets.Selection.SelectionDirection : enum Int32
+  Backward = 0
+  Forward = 1
+PeachBrackets.Selection.SelectionGranularity : enum Int32
+  Block = 4
+  Character = 0
+  Document = 5
+  Line = 2
+  LineBoundary = 3
+  Word = 1
 PeachBrackets.Svg.SvgGlyphPainter : sealed class
   ctor(Canvas host, RenderContext renderContext)
   method virtual Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
