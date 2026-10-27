@@ -37,6 +37,11 @@ public static class ColorMatrixFilter
         if (matrices.Count == 0)
             return;
 
+        // Indexing a snapshot array avoids the enumerator that foreach over the interface would allocate for every pixel.
+        var stages = new ColorMatrix[matrices.Count];
+        for (var s = 0; s < stages.Length; s++)
+            stages[s] = matrices[s];
+
         var pixels = surface.Pixels;
         for (var i = 0; i + 3 < pixels.Length; i += 4)
         {
@@ -53,7 +58,7 @@ public static class ColorMatrixFilter
                 b = Math.Min(1f, pixels[i + 2] / 255f / a);
             }
 
-            foreach (var matrix in matrices)
+            foreach (ref readonly var matrix in stages.AsSpan())
             {
                 var m = matrix.Linear;
                 var o = matrix.Offset;

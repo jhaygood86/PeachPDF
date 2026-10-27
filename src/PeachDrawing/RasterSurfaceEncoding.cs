@@ -19,7 +19,25 @@ public static class RasterSurfaceEncoding
     public static bool IsOpaque(RasterSurface surface)
     {
         var pixels = surface.Pixels;
-        for (var i = 3; i < pixels.Length; i += 4)
+        var done = 0;
+
+        // Four pixels per step: setting the three colour bytes of each leaves 0xFF in every byte only if alpha was 0xFF.
+        if (BitConverter.IsLittleEndian && System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated && pixels.Length >= 16)
+        {
+            var words = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, uint>(pixels);
+            var colourBytes = System.Runtime.Intrinsics.Vector128.Create(0x00FFFFFFu);
+            var vectorWords = words.Length / 4 * 4;
+            for (var w = 0; w < vectorWords; w += 4)
+            {
+                var v = System.Runtime.Intrinsics.Vector128.LoadUnsafe(ref System.Runtime.InteropServices.MemoryMarshal.GetReference(words), (nuint)w) | colourBytes;
+                if (v != System.Runtime.Intrinsics.Vector128<uint>.AllBitsSet)
+                    return false;
+            }
+
+            done = vectorWords * 4;
+        }
+
+        for (var i = done + 3; i < pixels.Length; i += 4)
         {
             if (pixels[i] != 255)
                 return false;

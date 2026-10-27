@@ -49,24 +49,16 @@ public sealed partial class RasterCanvas
 
             var start = Math.Max(x0, bounds.Left);
             var end = Math.Min(x0 + coverage.Length, bounds.Right);
-            var row = owner._surface.Row(y);
+            var count = end - start;
+            if (count <= 0)
+                return;
 
-            for (var x = start; x < end; x++)
-            {
-                int c = coverage[x - x0];
-                if (c == 0)
-                    continue;
+            var work = owner.RentCoverageScratch(count);
+            coverage.Slice(start - x0, count).CopyTo(work);
+            if (clip.Mask is { } mask)
+                PixelKernels.MultiplyCoverage(work, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
 
-                if (clip.Mask is { } mask)
-                    c = PixelKernels.Div255(c * mask[(y - bounds.Top) * bounds.Width + (x - bounds.Left)]);
-
-                var keep = 255 - c;
-                var p = x * 4;
-                row[p] = (byte)PixelKernels.Div255(row[p] * keep);
-                row[p + 1] = (byte)PixelKernels.Div255(row[p + 1] * keep);
-                row[p + 2] = (byte)PixelKernels.Div255(row[p + 2] * keep);
-                row[p + 3] = (byte)PixelKernels.Div255(row[p + 3] * keep);
-            }
+            PixelKernels.EraseSpan(owner._surface.Row(y).Slice(start * 4, count * 4), work);
         }
     }
 }
