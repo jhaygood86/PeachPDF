@@ -2200,6 +2200,10 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>The words of floats drawn from live geometry during the walk of the slot in progress: each is drawn once.</summary>
         private readonly HashSet<(CssBox Box, int Word)> _liveFloatWordsThisWalk = [];
 
+        /// <summary>The rowspan cells already built in this walk: the owning row and every spacing box that
+        /// stands in for the cell reach it, but it has one position, so it is drawn once.</summary>
+        private readonly HashSet<FragmentKey> _rowSpanningCellsThisWalk = [];
+
         /// <summary>Whether <paramref name="box"/> is a float or lies inside one.</summary>
         private static bool IsInAFloat(CssBox box)
         {
@@ -2262,6 +2266,7 @@ namespace PeachBrackets.Html.Fragmentation
             _pruningSuspended = wasSuspended || !mayWrite;
 
             _liveFloatWordsThisWalk.Clear();
+            _rowSpanningCellsThisWalk.Clear();
 
             var hasPrintableContent = false;
             var prunable = true;
@@ -2357,6 +2362,7 @@ namespace PeachBrackets.Html.Fragmentation
             try
             {
                 _liveFloatWordsThisWalk.Clear();
+                _rowSpanningCellsThisWalk.Clear();
                 full = BuildDraft(root, snapshot: null, slot,
                     capture: null, instance: 0, ref fullHadPrintableContent, ref fullPrunable);
             }
@@ -2837,6 +2843,13 @@ namespace PeachBrackets.Html.Fragmentation
         {
             container.RecordBuildDraftCall();
 
+            if (box.IsRowSpanningCell
+                && _rowSpanningCellsThisWalk.Contains(new FragmentKey(box, instance, capture?.Self,
+                    capture is { DetachedSourceRoot: not null } ? capture.Value.Self : null)))
+            {
+                return null;
+            }
+
             // A display:none subtree paints nothing at all, so it produces no fragments either.
             if (box.DerivedStyle.ActualDisplay == Keywords.None) return null;
 
@@ -3235,6 +3248,8 @@ namespace PeachBrackets.Html.Fragmentation
                 || (capture?.ContinuedFrom.Contains(box) ?? false);
             draft.ContinuesIntoTheNext = _continuesInto.Contains((passKey, slot.Index))
                 || (capture?.Continuing.Contains(box) ?? false);
+
+            if (box.IsRowSpanningCell) _rowSpanningCellsThisWalk.Add(draft.Key);
 
             ReleaseScratch(lines, words, children);
             return draft;
