@@ -367,6 +367,46 @@ namespace PeachBrackets.Html.Dom
         private readonly TableBreakToken? _carried;
 
         /// <summary>
+        /// The grid of the sliced row this table is being laid out inside, or null where it is not inside
+        /// one - the page grid of the container then answers every question.
+        /// </summary>
+        private readonly IPageGrid? _enclosingGrid;
+
+        /// <summary>The grid band questions are asked of: the enclosing sliced row's, else the container's.</summary>
+        /// <param name="container">the document's real page grid</param>
+        private IPageGrid Grid(HtmlContainerInt container) => EnclosingGrid ?? container;
+
+        /// <summary>
+        /// The enclosing sliced row's grid, unless this table repeats a group of its own.
+        /// </summary>
+        /// <remarks>
+        /// A group repeated inside a sliced row is a captured instance the emitter draws at the
+        /// coordinates it was laid out at, and nothing displaces it with the row's strips - it would land
+        /// on the enclosing table's own repeated header. Such a table keeps breaking at the real page edges,
+        /// as before (.claude/accepted-gaps/nested-table-with-repeated-group-in-a-sliced-row.md).
+        /// </remarks>
+        private IPageGrid? EnclosingGrid =>
+            RepeatedHeaderRoom > 0 || RepeatedFooterHeight > 0 ? null : _enclosingGrid;
+
+        /// <summary>
+        /// The container whose document-level pass cursor follows this table from band to band, or null
+        /// where the table sits in a sliced row: that row is laid out in one go, so the bands the table
+        /// breaks at are strips of it and not passes the document steps through.
+        /// </summary>
+        /// <param name="container">the document container</param>
+        private HtmlContainerInt? PassCursorOwner(HtmlContainerInt container) => EnclosingGrid is null ? container : null;
+
+        private static IPageGrid? EnclosingSlicedRowGrid(CssBox tableBox)
+        {
+            for (var ancestor = tableBox.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.SlicedRowGrid is { } grid) return grid;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Init.
         /// </summary>
         /// <param name="graphics">The active layout graphics context.</param>
@@ -379,6 +419,7 @@ namespace PeachBrackets.Html.Dom
         {
             _graphics = graphics;
             _tableBox = tableBox;
+            _enclosingGrid = EnclosingSlicedRowGrid(tableBox);
 
             var writingMode = tableBox.WritingMode.Value;
             _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
@@ -3556,11 +3597,11 @@ namespace PeachBrackets.Html.Dom
         /// naming any other names nothing.
         /// </param>
         /// <param name="pageHeight">the page band's height, or <see cref="double.MaxValue"/> when unpaged</param>
-        private static double ResumedRowTop(
+        private double ResumedRowTop(
             HtmlContainerInt? container, TableBreakToken carried, double startY, double pageHeight) =>
             container is null || pageHeight >= double.MaxValue - 1
                 ? startY
-                : Math.Max(startY, container.PageTopOf(carried.ResumeSlotIndex));
+                : Math.Max(startY, Grid(container).PageTopOf(carried.ResumeSlotIndex));
 
         /// <summary>
         /// Lays a row out with its fragmentainer told what the groups this table repeats have already
@@ -3611,6 +3652,44 @@ namespace PeachBrackets.Html.Dom
         /// </param>
         /// <param name="footerRoom">the height the repeated footer holds at the band's foot, or zero</param>
         private async ValueTask LayoutBodyRowInsideTheRepeatedGroups(
+            Canvas g, CssBox row, double startX, TableRowCursor cursor,
+            int slot, double headerRoom, double footerRoom)
+        {
+            // A table nested in this row's cells breaks where the strips this row would be sliced into end,
+            // not at the real page edges - see RunBandGrid. Published for the cells' layout only, and put
+            // back for whatever scope owns it (the row can be laid out again after a retraction).
+            var previousGrid = _tableBox.SlicedRowGrid;
+            _tableBox.SlicedRowGrid = SlicedRowGridFor(cursor.CurrentY);
+
+            try
+            {
+                await LayoutBodyRowReservingTheRepeatedGroups(g, row, startX, cursor, slot, headerRoom, footerRoom);
+            }
+            finally
+            {
+                _tableBox.SlicedRowGrid = previousGrid;
+            }
+        }
+
+        /// <summary>
+        /// The grid a row placed at <paramref name="rowTop"/> is sliced in - the one its cells' own
+        /// tables must break against - or null where this table never slices a row.
+        /// </summary>
+        /// <remarks>
+        /// The same guards as <see cref="SliceARowAcrossTheBandsItOverflows"/>: no grid on a measurement
+        /// pass or a multi-column band, and no strips where neither group takes any room.
+        /// </remarks>
+        /// <param name="rowTop">where the row is placed</param>
+        private RunBandGrid? SlicedRowGridFor(double rowTop)
+        {
+            if (_tableBox.HtmlContainer is not { HasRealPageGrid: true } container) return null;
+            if (container.CurrentFragmentainer is not { HasOwnBand: false }) return null;
+            if (RepeatedHeaderRoom <= 0 && RepeatedFooterHeight <= 0) return null;
+
+            return new RunBandGrid(Grid(container), rowTop, RepeatedHeaderRoom, RepeatedFooterHeight);
+        }
+
+        private async ValueTask LayoutBodyRowReservingTheRepeatedGroups(
             Canvas g, CssBox row, double startX, TableRowCursor cursor,
             int slot, double headerRoom, double footerRoom)
         {
@@ -4127,7 +4206,7 @@ namespace PeachBrackets.Html.Dom
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
                     // CssLayoutEngineColumns.Layout, #573's investigation).
-                    cursor.RestartAt(startY, container.SlotStartingAt(startY), container);
+                    cursor.RestartAt(startY, Grid(container).SlotStartingAt(startY), PassCursorOwner(container));
                 }
             }
 
@@ -4152,7 +4231,7 @@ namespace PeachBrackets.Html.Dom
             {
                 var slot = cursor.SlotIndex;
                 var firstRowHeight = EstimateRowHeight(_bodyRows[0]);
-                var availableHeight = container.PageBandHeightOf(slot) - RepeatedFooterHeight;
+                var availableHeight = Grid(container).PageBandHeightOf(slot) - RepeatedFooterHeight;
                 var afterHeaderY = startY + _headerHeight + VerticalSpacingAt(HeaderRowCountInGrid);
 
                 if (WillCrossPageBoundary(container, afterHeaderY + firstRowHeight, availableHeight, slot, pageHeight))
@@ -4174,7 +4253,7 @@ namespace PeachBrackets.Html.Dom
                     // page, not an arbitrary interior coordinate - the same "top edge flush on a
                     // boundary" case HtmlContainerInt.SlotStartingAt exists for (see the identical fix in
                     // CssLayoutEngineColumns.Layout, #573's investigation).
-                    cursor.RestartAt(startY, container.SlotStartingAt(startY), container);
+                    cursor.RestartAt(startY, Grid(container).SlotStartingAt(startY), PassCursorOwner(container));
                 }
             }
 
@@ -4257,11 +4336,11 @@ namespace PeachBrackets.Html.Dom
                 // content has already passed - which is what made the break offset come out negative and
                 // put the rows after a too-tall row back inside it (issue #432).
                 var slot = container is not null && pageHeight < double.MaxValue - 1
-                    ? cursor.BandReached(container)
+                    ? cursor.BandReached(container, Grid(container))
                     : cursor.SlotIndex;
                 var estimatedRowHeight = EstimateRowHeight(row);
                 // See the identical fix/comment on the pre-check's availableHeight above.
-                var availableHeight = (container?.PageBandHeightOf(slot) ?? pageHeight) - RepeatedFooterHeight;
+                var availableHeight = (container is null ? pageHeight : Grid(container).PageBandHeightOf(slot)) - RepeatedFooterHeight;
 
                 // Check for page break: either the row does not fit, or a break value says the break
                 // falls here regardless (css-break-3 §3.1's class-A break point between two rows).
@@ -4728,7 +4807,7 @@ namespace PeachBrackets.Html.Dom
             List<(int Slot, double Bottom)> pageBreaks = [];
 
             var appliedDelta = 0d;
-            var currentSlot = container.SlotStartingAt(_bodyRows[0].Boxes[0].Location.Y);
+            var currentSlot = Grid(container).SlotStartingAt(_bodyRows[0].Boxes[0].Location.Y);
             var previousColumnBottom = 0d;
 
             for (var c = 0; c < columnCount; c++)
@@ -4737,7 +4816,7 @@ namespace PeachBrackets.Html.Dom
                 var columnTop = referenceCell.Location.Y + appliedDelta;
                 var columnHeight = referenceCell.ActualBottom - referenceCell.Location.Y;
 
-                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, container.BandOfSlot(currentSlot)))
+                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, Grid(container).BandOfSlot(currentSlot)))
                 {
                     if (c == 0)
                     {
@@ -4749,7 +4828,7 @@ namespace PeachBrackets.Html.Dom
                     }
 
                     var nextSlot = currentSlot + 1;
-                    if (columnHeight > container.PageBandHeightOf(nextSlot))
+                    if (columnHeight > Grid(container).PageBandHeightOf(nextSlot))
                     {
                         // No relocation can help a column taller than a whole fresh page - bail out of
                         // the entire pass, unmodified, per this method's own "plan, then commit" remarks.
@@ -4758,9 +4837,9 @@ namespace PeachBrackets.Html.Dom
 
                     pageBreaks.Add((currentSlot, previousColumnBottom));
 
-                    appliedDelta += container.PageTopOf(nextSlot) - columnTop;
+                    appliedDelta += Grid(container).PageTopOf(nextSlot) - columnTop;
                     currentSlot = nextSlot;
-                    columnTop = container.PageTopOf(nextSlot);
+                    columnTop = Grid(container).PageTopOf(nextSlot);
                 }
 
                 plannedDeltas[c] = appliedDelta;
@@ -5327,7 +5406,7 @@ namespace PeachBrackets.Html.Dom
             // after the band the content already placed ends in. Named rather than derived from an offset
             // against CurrentY, which is what could come out negative.
             var target = slot + 1;
-            cursor.MoveToSlot(target, container.PageTopOf(target), container);
+            cursor.MoveToSlot(target, Grid(container).PageTopOf(target), PassCursorOwner(container));
 
             // Create new header proxy for new page. It takes no ResumeContentInset, and does not need one:
             // only a cell whose flow continues from an earlier fragmentainer owes the header its room, only
@@ -5389,12 +5468,12 @@ namespace PeachBrackets.Html.Dom
             if (container is null || !container.HasRealPageGrid) return;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return;
 
-            var slot = cursor.BandReached(container);
+            var slot = cursor.BandReached(container, Grid(container));
             var room = _footerHeight + VerticalSpacingAt(_grid?.RowCount ?? 0);
 
-            if (!HtmlContainerInt.FallsPast(cursor.CurrentY + room, container.BandOfSlot(slot))) return;
-            if (room > container.PageBandHeightOf(slot + 1)) return;
-            if (cursor.CurrentY - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return;
+            if (!HtmlContainerInt.FallsPast(cursor.CurrentY + room, Grid(container).BandOfSlot(slot))) return;
+            if (room > Grid(container).PageBandHeightOf(slot + 1)) return;
+            if (cursor.CurrentY - HtmlContainerInt.PageBoundaryEpsilon <= Grid(container).PageTopOf(slot)) return;
 
             // Where the table's slice on the band being left ends, which is under its last row - the same
             // record TakeBreakBeforeRow writes, and for the same reason: FragmentPainter clips the table's
@@ -5403,7 +5482,7 @@ namespace PeachBrackets.Html.Dom
             _tableBox.PageBreakBottoms[slot] = cursor.MaxBottom;
 
             var target = slot + 1;
-            cursor.MoveToSlot(target, container.PageTopOf(target), container);
+            cursor.MoveToSlot(target, Grid(container).PageTopOf(target), PassCursorOwner(container));
 
             // §6.2 repeats the header on every page the table spans, and the page this break opens is one
             // of them - so the band the footer lands in gets a header too, exactly as one opened by a
@@ -5501,9 +5580,9 @@ namespace PeachBrackets.Html.Dom
             if (container is null || pageHeight >= double.MaxValue - 1) return false;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
 
-            if (!HtmlContainerInt.FallsPast(cursor.MaxBottom, container.BandOfSlot(slot))) return false;
+            if (!HtmlContainerInt.FallsPast(cursor.MaxBottom, Grid(container).BandOfSlot(slot))) return false;
 
-            if (rowTop - HtmlContainerInt.PageBoundaryEpsilon <= container.PageTopOf(slot)) return false;
+            if (rowTop - HtmlContainerInt.PageBoundaryEpsilon <= Grid(container).PageTopOf(slot)) return false;
 
             if (RowHoldsAnInternalForcedBreak(_bodyRows[rowIndex])) return false;
 
@@ -5535,7 +5614,7 @@ namespace PeachBrackets.Html.Dom
             if (container is null || pageHeight >= double.MaxValue - 1) return false;
             if (container.CurrentFragmentainer is { HasOwnBand: true }) return false;
             if (IsInsideATableCell(_tableBox)) return false;
-            if (rowIndex == 0 || container.SlotStartingAt(_bodyRows[rowIndex - 1].Location.Y) != slot) return false;
+            if (rowIndex == 0 || Grid(container).SlotStartingAt(_bodyRows[rowIndex - 1].Location.Y) != slot) return false;
 
             var row = _bodyRows[rowIndex];
             if (RowHoldsAnInternalForcedBreak(row)) return false;
@@ -5607,7 +5686,7 @@ namespace PeachBrackets.Html.Dom
         /// <param name="container">the container whose page grid the band comes from</param>
         /// <param name="slot">the band to measure</param>
         private double RoomForARowIn(HtmlContainerInt container, int slot) =>
-            container.PageBandHeightOf(slot) - RepeatedFooterHeight - RepeatedHeaderRoom;
+            Grid(container).PageBandHeightOf(slot) - RepeatedFooterHeight - RepeatedHeaderRoom;
 
         /// <summary>
         /// One band of a run of content that crosses more than one: which band, where in it the content
@@ -5653,44 +5732,26 @@ namespace PeachBrackets.Html.Dom
         /// <param name="depth">how tall the run is</param>
         private List<SpannedBand> BandsSpannedBy(HtmlContainerInt container, double top, double depth)
         {
-            var slot = container.SlotStartingAt(top);
-            var contentTop = top;
             var remaining = Math.Max(depth, 0);
-            var shift = 0d;
 
             List<SpannedBand> bands = [];
 
-            while (true)
+            // The strips are RunBandGrid's, so a table nested in the row breaks where these end.
+            foreach (var strip in RunBandGrid.Strips(Grid(container), top, RepeatedHeaderRoom, RepeatedFooterHeight))
             {
-                var bandBottom = container.PageBottomOf(slot) - RepeatedFooterHeight;
-                var room = bandBottom - contentTop;
-
-                // §4.3's progress guard, above: a band that leaves this run nothing takes it whole instead.
-                if (room <= 0)
+                // §4.3's progress guard (in Strips): a band that leaves this run nothing took it whole.
+                if (remaining <= strip.Room || strip.Room <= 0)
                 {
-                    bandBottom = container.PageBottomOf(slot);
-                    room = bandBottom - contentTop;
-                }
-
-                if (remaining <= room || room <= 0)
-                {
-                    bands.Add(new SpannedBand(slot, contentTop, remaining, shift));
+                    bands.Add(new SpannedBand(strip.Slot, strip.ContentTop, remaining, strip.Shift));
                     return bands;
                 }
 
-                bands.Add(new SpannedBand(slot, contentTop, room, shift));
+                bands.Add(new SpannedBand(strip.Slot, strip.ContentTop, strip.Room, strip.Shift));
 
-                remaining -= room;
-                slot++;
-
-                var resumesAt = container.PageTopOf(slot) + RepeatedHeaderRoom;
-
-                // What the gap between the two strips costs the box that draws them: the run's own
-                // coordinates are continuous, so the displacement is what makes the second strip pick up
-                // exactly where the first stopped.
-                shift += resumesAt - bandBottom;
-                contentTop = resumesAt;
+                remaining -= strip.Room;
             }
+
+            return bands;
         }
 
         /// <summary>
@@ -5747,14 +5808,14 @@ namespace PeachBrackets.Html.Dom
 
             if (_bandsARowOverflowedInto.Count == 0) return;
 
-            var last = container.SlotEndingAt(cursor.MaxBottom);
+            var last = Grid(container).SlotEndingAt(cursor.MaxBottom);
 
             var headerBands = new HashSet<int>();
             var footerBands = new HashSet<int>();
 
             foreach (var proxy in _tableBox.Boxes.OfType<CssProxyBox>())
             {
-                var slot = container.SlotStartingAt(proxy.Location.Y);
+                var slot = Grid(container).SlotStartingAt(proxy.Location.Y);
 
                 if (proxy.DerivedStyle.ActualDisplay == Keywords.TableHeaderGroup) headerBands.Add(slot);
                 else if (proxy.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup) footerBands.Add(slot);
@@ -5764,7 +5825,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (drawsAHeader && headerBands.Add(slot))
                 {
-                    var headerProxy = CreateHeaderProxy(container.PageTopOf(slot));
+                    var headerProxy = CreateHeaderProxy(Grid(container).PageTopOf(slot));
 
                     if (headerProxy != null)
                     {
@@ -6580,7 +6641,7 @@ namespace PeachBrackets.Html.Dom
                 && container.CurrentFragmentainer is { HasOwnBand: false })
             {
                 var (cellSlot, contentBottom, contentSlot) = SpanningCellBandGeometry(cell, container);
-                var band = cellSlot < slot ? container.BandOfSlot(cellSlot) : default;
+                var band = cellSlot < slot ? Grid(container).BandOfSlot(cellSlot) : default;
 
                 if (cellSlot < slot
                     && HtmlContainerInt.FallsPast(rowMaxBottom, band))
@@ -6606,7 +6667,7 @@ namespace PeachBrackets.Html.Dom
                         // past the table's own edge. Bounded by the foot of the band less the room a
                         // repeated <tfoot> holds there, since that record includes the footer, and never
                         // taken above the cell's own content.
-                        bottom = container.PageBottomOf(contentSlot) - RepeatedFooterHeight;
+                        bottom = Grid(container).PageBottomOf(contentSlot) - RepeatedFooterHeight;
 
                         if (_tableBox.PageBreakBottoms?.TryGetValue(contentSlot, out var sliceBottom) is true)
                             bottom = Math.Min(bottom, sliceBottom);
@@ -6667,12 +6728,12 @@ namespace PeachBrackets.Html.Dom
         /// how its own box closes and where the table's own slice-bottom record belongs. One shared
         /// computation, so the two can never disagree about what a cell's content reaches.
         /// </remarks>
-        private static (int CellSlot, double ContentBottom, int ContentSlot) SpanningCellBandGeometry(
+        private (int CellSlot, double ContentBottom, int ContentSlot) SpanningCellBandGeometry(
             CssBox cell, HtmlContainerInt container)
         {
-            var cellSlot = container.SlotStartingAt(cell.Location.Y);
+            var cellSlot = Grid(container).SlotStartingAt(cell.Location.Y);
             var contentBottom = CssBox.GetMaximumBottom(cell, 0d);
-            var contentSlot = container.SlotEndingAt(contentBottom);
+            var contentSlot = Grid(container).SlotEndingAt(contentBottom);
 
             return (cellSlot, contentBottom, contentSlot);
         }
@@ -6703,7 +6764,7 @@ namespace PeachBrackets.Html.Dom
 
             for (var s = fromSlot + 1; s <= toSlot; s++)
             {
-                var top = container.PageTopOf(s) + RepeatedHeaderRoom;
+                var top = Grid(container).PageTopOf(s) + RepeatedHeaderRoom;
                 var height = s == toSlot ? rowMaxBottom - top : RoomForARowIn(container, s);
 
                 if (height > 0)
@@ -7410,12 +7471,12 @@ namespace PeachBrackets.Html.Dom
         /// boundary and could fire a spurious mid-table break, contradicting the whole-table monolithic
         /// treatment <see cref="MonolithicContent.IsUnresumableVerticalTable"/> gives a vertical table.
         /// </param>
-        private static bool WillCrossPageBoundary(HtmlContainerInt? container, double estimatedBottom, double availableHeight, int currentPageNumber, double pageHeight)
+        private bool WillCrossPageBoundary(HtmlContainerInt? container, double estimatedBottom, double availableHeight, int currentPageNumber, double pageHeight)
         {
             if (container is null || pageHeight >= double.MaxValue - 1)
                 return false;
 
-            var currentPageBottom = container.PageTopOf(currentPageNumber) + availableHeight;
+            var currentPageBottom = Grid(container).PageTopOf(currentPageNumber) + availableHeight;
 
             return estimatedBottom > currentPageBottom;
         }
@@ -7432,7 +7493,7 @@ namespace PeachBrackets.Html.Dom
             // itself excludes both margins - see the availableHeight fix above) - subtracting
             // marginBottom again pulled the footer up an extra marginBottom short of the real
             // page bottom.
-            return container.PageBottomOf(currentPageNumber) - _footerHeight;
+            return Grid(container).PageBottomOf(currentPageNumber) - _footerHeight;
         }
 
         /// <summary>
@@ -7469,12 +7530,12 @@ namespace PeachBrackets.Html.Dom
         /// <summary>
         /// Phase 3: Calculates offset needed to move to the next page
         /// </summary>
-        private static double CalculatePageBreakOffset(HtmlContainerInt container, double currentY, int currentPageNumber)
+        private double CalculatePageBreakOffset(HtmlContainerInt container, double currentY, int currentPageNumber)
         {
             if (container.PageSize.Height >= double.MaxValue - 1)
                 return 0;
 
-            return container.PageTopOf(currentPageNumber + 1) - currentY;
+            return Grid(container).PageTopOf(currentPageNumber + 1) - currentY;
         }
 
         /// <summary>
@@ -7497,7 +7558,7 @@ namespace PeachBrackets.Html.Dom
             // are not placed yet - and carries the move out itself, because there is no laid-out box here
             // for a stated decision to re-place.
             var (run, extraAbove, _) = EarlyBreak.TravellingRun(
-                _tableBox, currentY, container.PageTopOf(currentPageNumber), trailingHeight, availableHeight);
+                _tableBox, currentY, Grid(container).PageTopOf(currentPageNumber), trailingHeight, availableHeight);
 
             if (run.Count == 0) return pageBreakOffset;
 

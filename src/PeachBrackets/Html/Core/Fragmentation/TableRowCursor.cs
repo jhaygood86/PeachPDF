@@ -398,11 +398,14 @@ namespace PeachBrackets.Html.Fragmentation
         /// land inside it.
         /// </remarks>
         /// <param name="container">the container whose page grid resolves the coordinate</param>
-        internal int BandReached(HtmlContainerInt container)
+        /// <param name="grid">the grid to ask instead, where the table is laid out inside a sliced row</param>
+        internal int BandReached(HtmlContainerInt container, IPageGrid? grid = null)
         {
-            if (!HtmlContainerInt.FallsPast(CurrentY, container.BandOfSlot(SlotIndex))) return SlotIndex;
+            grid ??= container;
 
-            var reached = container.SlotStartingAt(CurrentY);
+            if (!HtmlContainerInt.FallsPast(CurrentY, grid.BandOfSlot(SlotIndex))) return SlotIndex;
+
+            var reached = grid.SlotStartingAt(CurrentY);
 
             if (reached > SlotIndex)
             {
@@ -411,7 +414,7 @@ namespace PeachBrackets.Html.Fragmentation
                 // The table's own floor just rose, between rows, with no break recorded for the
                 // crossing - the same silent spill a line's tolerance-boundary case has, one level
                 // down. The document-level pass cursor has to see it too - #435.
-                container.CurrentFragmentainer?.StepOverTo(reached);
+                if (grid == container) container.CurrentFragmentainer?.StepOverTo(reached);
             }
 
             return SlotIndex;

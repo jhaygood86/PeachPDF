@@ -894,6 +894,13 @@ namespace PeachBrackets.Html.Dom
         /// Maps page number → last row bottom Y on that page. Set by CssLayoutEngineTable when rows break across pages.
         /// Used during paint to clip the table box border to the actual content height on each page.
         /// </summary>
+        /// <summary>
+        /// The page grid in the continuous coordinates of the row this table is laying out cells of, set
+        /// only while those cells are laid out and only where the table slices a row across bands - see
+        /// <see cref="RunBandGrid"/>.
+        /// </summary>
+        internal IPageGrid? SlicedRowGrid { get => _rare?.SlicedRowGrid; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.SlicedRowGrid = value; } }
+
         internal Dictionary<int, double>? PageBreakBottoms { get => _rare is null ? default(Dictionary<int, double>?) : _rare.PageBreakBottoms; set { if (_rare is null) { if (EqualityComparer<Dictionary<int, double>?>.Default.Equals(value, default(Dictionary<int, double>?))) return; _rare = new BoxRareState(); } _rare.PageBreakBottoms = value; } }
 
         /// <summary>
