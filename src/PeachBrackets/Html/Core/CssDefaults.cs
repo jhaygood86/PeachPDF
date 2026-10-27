@@ -145,6 +145,7 @@ namespace PeachBrackets.Html
                Blink does: without it a thick <hr size=10 color=red> is two red lines with a white
                gap between them. A bare rule has no content height, so it changes nothing there. */
             hr              { color: gray; border-style: inset; border-width: 1px; margin: 0.5em auto; }
+            iframe          { border: 2px solid #A0A0A0; border-right-color: #E3E3E3; border-bottom-color: #E3E3E3; }
             hr[color],
             hr[noshade]     { border-style: solid; background-color: currentcolor; }
             ol, ul, dir,

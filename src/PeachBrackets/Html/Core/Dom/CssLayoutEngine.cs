@@ -249,7 +249,10 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
-            word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
+            // A frame that is a block container of its own (a blockified flex or grid item) has the block
+            // layout add its border and padding around the word, so the word stays the content height.
+            if (word.OwnerBox is not CssBoxFrame { IsInline: false })
+                word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
         }
 
         /// <summary>
