@@ -96,7 +96,7 @@ namespace PeachBrackets.Svg
                 case "bottom" when !horizontal: component = new SvgOriginComponent(100, true); return true;
             }
 
-            if (token.EndsWith('%') && double.TryParse(token[..^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var percent))
+            if (token.EndsWith('%') && double.TryParse(token.AsSpan()[..^1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var percent))
             {
                 component = new SvgOriginComponent(percent, true);
                 return true;

@@ -47,17 +47,17 @@ namespace PeachBrackets.Html.Dom
             //If no units, has error
             if (length.Length < 3)
             {
-                _ = double.TryParse(length, out _number);
+                _ = double.TryParse(length, NumberStyles.Float | NumberStyles.AllowThousands, CultureInfo.InvariantCulture, out _number);
                 HasError = true;
                 return;
             }
 
             //Get units of the length; "rem" is the one three-letter unit, and its last two letters read as "em"
             var isRem = length.EndsWith(UnitNames.Rem, StringComparison.Ordinal);
-            var u = isRem ? UnitNames.Rem : length.Substring(length.Length - 2, 2);
+            ReadOnlySpan<char> u = isRem ? UnitNames.Rem : length.AsSpan(length.Length - 2, 2);
 
             //Number of the length
-            var number = isRem ? length[..^3] : length[..^2];
+            var number = isRem ? length.AsSpan()[..^3] : length.AsSpan()[..^2];
 
             //TODO: Units behave different in paper and in screen!
             switch (u)

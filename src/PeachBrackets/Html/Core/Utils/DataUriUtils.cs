@@ -23,12 +23,29 @@ namespace PeachBrackets.Html.Utils
             if (comma < 0)
                 return false;
 
-            var header = uri[5..comma];
-            var data = uri[(comma + 1)..];
+            var header = uri.AsSpan(5, comma - 5);
+            var data = uri.AsSpan(comma + 1);
 
-            var headerParts = header.Split(';');
-            mimeType = headerParts.Length > 0 && headerParts[0].Length > 0 ? headerParts[0] : "text/plain";
-            var isBase64 = headerParts.Any(p => p.Equals("base64", StringComparison.OrdinalIgnoreCase));
+            var firstPart = header;
+            var semicolon = header.IndexOf(';');
+            if (semicolon >= 0) firstPart = header[..semicolon];
+            mimeType = firstPart.Length > 0 ? firstPart.ToString() : "text/plain";
+
+            var isBase64 = false;
+            var remaining = header;
+            while (true)
+            {
+                var end = remaining.IndexOf(';');
+                var part = end < 0 ? remaining : remaining[..end];
+                if (part.Equals("base64", StringComparison.OrdinalIgnoreCase))
+                {
+                    isBase64 = true;
+                    break;
+                }
+
+                if (end < 0) break;
+                remaining = remaining[(end + 1)..];
+            }
 
             try
             {
@@ -37,10 +54,29 @@ namespace PeachBrackets.Html.Utils
                 // flag. A base64 payload containing reserved characters (/, +, =) is commonly written
                 // with them percent-escaped (%2F, %2B, %3D) - e.g. the real Acid2 test's embedded PNGs -
                 // and Convert.FromBase64String throws on a literal "%" in its input, so skipping this
-                // step here silently failed to decode every such image.
-                bytes = isBase64
-                    ? Convert.FromBase64String(Uri.UnescapeDataString(data))
-                    : System.Text.Encoding.UTF8.GetBytes(Uri.UnescapeDataString(data));
+                // step here silently failed to decode every such image. A payload with no "%" has
+                // nothing to unescape, so it is decoded in place instead of copied first.
+                string? unescaped = null;
+                if (data.Contains('%'))
+                {
+                    unescaped = Uri.UnescapeDataString(data.ToString());
+                    data = unescaped;
+                }
+
+                if (isBase64)
+                {
+                    // Whitespace (line-wrapped base64) is ignored by TryFromBase64Chars as by FromBase64String;
+                    // the buffer is the upper bound, trimmed to what was written.
+                    var buffer = new byte[(data.Length + 3) / 4 * 3];
+                    if (!Convert.TryFromBase64Chars(data, buffer, out var written))
+                        return false;
+
+                    bytes = written == buffer.Length ? buffer : buffer.AsSpan(0, written).ToArray();
+                }
+                else
+                {
+                    bytes = System.Text.Encoding.UTF8.GetBytes(data.ToString());
+                }
             }
             catch (FormatException)
             {

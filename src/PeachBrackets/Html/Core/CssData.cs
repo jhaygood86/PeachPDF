@@ -482,7 +482,7 @@ namespace PeachBrackets.Html
                     break;
 
                 case ComplexSelector complexSelector:
-                    var last = complexSelector.LastOrDefault().Selector;
+                    var last = complexSelector.Subject;
                     if (last is not null)
                         CollectIndexKeys(last, keys);
                     else
@@ -793,10 +793,9 @@ namespace PeachBrackets.Html
                 var classAttr = node.GetAttribute("class");
                 if (!string.IsNullOrEmpty(classAttr))
                 {
-                    foreach (var className in classAttr.Split(' '))
+                    foreach (var className in new SpaceSeparatedTokens(classAttr))
                     {
-                        if (className.Length == 0) continue;
-                        if (_classIndex!.TryGetValue(className, out var classRules))
+                        if (TryGetByToken(_classIndex!, className, out var classRules))
                             foreach (var indexed in classRules)
                                 Collect(indexed);
                     }
@@ -848,9 +847,9 @@ namespace PeachBrackets.Html
             var classAttr = node.GetAttribute("class");
             if (!string.IsNullOrEmpty(classAttr))
             {
-                foreach (var className in classAttr.Split(' '))
+                foreach (var className in new SpaceSeparatedTokens(classAttr))
                 {
-                    if (className.Length == 0 || !_classIndex!.TryGetValue(className, out var classRules)) continue;
+                    if (!TryGetByToken(_classIndex!, className, out var classRules)) continue;
 
                     for (var i = 0; i < classRules.Count; i++)
                     {
@@ -942,9 +941,9 @@ namespace PeachBrackets.Html
             var classAttr = node.GetAttribute("class");
             if (!string.IsNullOrEmpty(classAttr))
             {
-                foreach (var className in classAttr.Split(' '))
+                foreach (var className in new SpaceSeparatedTokens(classAttr))
                 {
-                    if (className.Length > 0 && _consequentialClassIndex!.TryGetValue(className, out var classRules))
+                    if (TryGetByToken(_consequentialClassIndex!, className, out var classRules))
                     {
                         for (var i = 0; i < classRules.Count; i++)
                         {
@@ -1291,7 +1290,7 @@ namespace PeachBrackets.Html
                 }
 
                 case ComplexSelector complex:
-                    var lastSegmentSelector = complex.LastOrDefault().Selector;
+                    var lastSegmentSelector = complex.Subject;
                     return lastSegmentSelector is not null && HasFirstLineSubject(lastSegmentSelector);
 
                 case CompoundSelector compound:
@@ -1530,8 +1529,27 @@ namespace PeachBrackets.Html
             var classNames = node.GetAttribute("class");
             if (string.IsNullOrEmpty(classNames)) return false;
 
-            return classNames.Split(' ').Any(className =>
-                className.Equals(classSelector.Class, node.NameComparison));
+            var comparison = node.NameComparison;
+            foreach (var className in new SpaceSeparatedTokens(classNames))
+            {
+                if (className.Equals(classSelector.Class, comparison)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Looks a class token up in an index keyed with <see cref="StringComparer.OrdinalIgnoreCase"/> without making a string
+        /// of it, where the runtime can (a span alternate lookup from .NET 9).
+        /// </summary>
+        private static bool TryGetByToken<T>(Dictionary<string, List<T>> index, ReadOnlySpan<char> token,
+            [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out List<T>? rules)
+        {
+#if NET9_0_OR_GREATER
+            return index.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(token, out rules);
+#else
+            return index.TryGetValue(token.ToString(), out rules);
+#endif
         }
 
         private static bool DoesSelectorMatch(IdSelector idSelector, ICssDomNode? node)
@@ -1593,7 +1611,12 @@ namespace PeachBrackets.Html
             var value = node.GetAttribute(s.Attribute);
             if (value is null) return false;
             var comparison = AttributeValueComparison(s, node);
-            return value.Split(' ').Where(x => x.Length > 0).Any(x => x.Equals(s.Value, comparison));
+            foreach (var token in new SpaceSeparatedTokens(value))
+            {
+                if (token.Equals(s.Value, comparison)) return true;
+            }
+
+            return false;
         }
 
         private static bool DoesSelectorMatch(AttrContainsSelector s, ICssDomNode? node)
@@ -1955,7 +1978,7 @@ namespace PeachBrackets.Html
         private static bool MatchesRelativeChain(ICssDomNode anchor, Combinator combinator, ISelector selector)
         {
             if (selector is ComplexSelector complex)
-                return MatchesChainStep(anchor, combinator, complex.ToList(), 0);
+                return MatchesChainStep(anchor, combinator, complex.Entries, 0);
 
             return RelativeCandidates(anchor, combinator).Any(candidate => DoesSelectorMatch(selector, candidate));
         }
@@ -2117,13 +2140,12 @@ namespace PeachBrackets.Html
 
         private static bool DoesSelectorMatch(ComplexSelector complexSelector, ICssDomNode? node)
         {
-            var selectorsInReverse = complexSelector.Reverse().ToList();
-
             var isLowestItem = true;
             ICssDomNode? currentRef = node;
 
-            foreach (var selector in selectorsInReverse)
+            for (var selectorIndex = complexSelector.Length - 1; selectorIndex >= 0; selectorIndex--)
             {
+                var selector = complexSelector[selectorIndex];
                 if (selector.Selector is null) return false;
 
                 if (isLowestItem)

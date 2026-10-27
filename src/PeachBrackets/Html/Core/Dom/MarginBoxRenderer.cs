@@ -1072,7 +1072,7 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
-            if (value.StartsWith("#"))
+            if (value.StartsWith('#'))
             {
                 try { return UnpackArgb(int.Parse(value.Substring(1), System.Globalization.NumberStyles.HexNumber)); }
                 catch { }

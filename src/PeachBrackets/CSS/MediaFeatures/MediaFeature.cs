@@ -1,5 +1,6 @@
 #nullable disable
 
+using System;
 using System.IO;
 using System.Linq;
 
@@ -31,8 +32,8 @@ namespace PeachBrackets.Css
         internal MediaFeature(string name)
         {
             Name = name;
-            IsMinimum = name.StartsWith("min-");
-            IsMaximum = name.StartsWith("max-");
+            IsMinimum = name.StartsWith("min-", StringComparison.Ordinal);
+            IsMaximum = name.StartsWith("max-", StringComparison.Ordinal);
         }
 
         internal abstract IValueConverter Converter { get; }
