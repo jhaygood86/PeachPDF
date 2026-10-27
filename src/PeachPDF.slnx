@@ -5,6 +5,9 @@
   <Project Path="PeachDrawing.PDF/PeachDrawing.PDF.csproj" />
   <Project Path="PeachDrawing.PDF.Tests/PeachDrawing.PDF.Tests.csproj" />
   <Project Path="PeachDrawing.Svg/PeachDrawing.Svg.csproj" />
+  <Project Path="PeachDrawing.Win2D/PeachDrawing.Win2D.csproj" />
+  <Project Path="PeachDrawing.Win2D.Example/PeachDrawing.Win2D.Example.csproj" />
+  <Project Path="PeachDrawing.Win2D.Tests/PeachDrawing.Win2D.Tests.csproj" />
   <Project Path="PeachDrawing.Svg.Example/PeachDrawing.Svg.Example.csproj" />
   <Project Path="PeachDrawing.Svg.Tests/PeachDrawing.Svg.Tests.csproj" />
   <Project Path="PeachDrawing.Tests/PeachDrawing.Tests.csproj" />
