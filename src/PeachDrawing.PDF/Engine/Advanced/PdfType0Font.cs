@@ -74,7 +74,7 @@ internal sealed class PdfType0Font : PdfFont
             //TODO: optimize order of indices
 
             for (int idx = 0; idx < count; idx++)
-                w.AppendFormat("{0}[{1}]", glyphIndices[idx], glyphWidths[idx]);
+                w.Append(System.Globalization.CultureInfo.InvariantCulture, $"{glyphIndices[idx]}[{glyphWidths[idx]}]");
             w.Append("]");
             _descendantFont.Elements.SetValue(PdfCidFont.Keys.W, new PdfLiteral(w.ToString()));
 

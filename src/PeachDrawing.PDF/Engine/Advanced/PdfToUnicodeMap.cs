@@ -80,12 +80,22 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
         // Sorting seems not necessary. The limit is 100 entries, we will see.
         cmap.Append(glyphIndexToText.Count).Append(" beginbfrange\n");
         foreach (KeyValuePair<int, string> entry in glyphIndexToText)
-            cmap.Append($"<{entry.Key:X4}><{entry.Key:X4}><").Append(Utf16BigEndianHex(entry.Value)).Append(">\n");
+        {
+            AppendHex4(cmap.Append('<'), entry.Key).Append("><");
+            AppendHex4(cmap, entry.Key).Append("><");
+            AppendUtf16BigEndianHex(cmap, entry.Value).Append(">\n");
+        }
         cmap.Append("endbfrange\n");
         cmap.Append(suffix);
 
         // The stream starts with a UTF-8 byte order mark, as it always has.
-        byte[] bytes = [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(cmap.ToString())];
+        // The text is all ASCII, so it is encoded chunk by chunk straight into the one buffer.
+        ReadOnlySpan<byte> preamble = Encoding.UTF8.GetPreamble();
+        byte[] bytes = new byte[preamble.Length + cmap.Length];
+        preamble.CopyTo(bytes);
+        int written = preamble.Length;
+        foreach (ReadOnlyMemory<char> chunk in cmap.GetChunks())
+            written += Encoding.UTF8.GetBytes(chunk.Span, bytes.AsSpan(written));
         // Compress like content streams
         if (Owner.Options.CompressContentStreams)
         {
@@ -108,19 +118,37 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
     }
 
     /// <summary>
-    /// Formats <paramref name="text"/> as the UTF-16 (big-endian) hex string a ToUnicode
+    /// Appends <paramref name="text"/> as the UTF-16 (big-endian) hex string a ToUnicode
     /// <c>bfrange</c> destination expects: a single BMP character yields 4 hex digits, an
     /// astral character its 8-hex surrogate pair, and a multi-character string (a GSUB
     /// ligature's source text) the concatenation of all of them - PDF's bfrange destination
     /// syntax accepts a multi-code-unit string for exactly this "one glyph, several characters"
     /// case.
     /// </summary>
-    private static string Utf16BigEndianHex(string text)
+    internal static StringBuilder AppendUtf16BigEndianHex(StringBuilder builder, string text)
     {
-        var hex = new StringBuilder(text.Length * 4);
         foreach (char c in text)
-            hex.Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
-        return hex.ToString();
+            AppendHex4(builder, c);
+        return builder;
+    }
+
+    /// <summary>Appends <paramref name="value"/> as at least four uppercase hex digits (the <c>X4</c> format).</summary>
+    private static StringBuilder AppendHex4(StringBuilder builder, int value)
+    {
+        const string digits = "0123456789ABCDEF";
+        if (value is >= 0 and <= 0xFFFF)
+        {
+            Span<char> buffer = stackalloc char[4];
+            buffer[0] = digits[(value >> 12) & 0xF];
+            buffer[1] = digits[(value >> 8) & 0xF];
+            buffer[2] = digits[(value >> 4) & 0xF];
+            buffer[3] = digits[value & 0xF];
+            return builder.Append(buffer);
+        }
+
+        Span<char> wide = stackalloc char[16];
+        value.TryFormat(wide, out int count, "X4", CultureInfo.InvariantCulture);
+        return builder.Append(wide[..count]);
     }
 
     internal sealed class Keys : PdfStream.Keys

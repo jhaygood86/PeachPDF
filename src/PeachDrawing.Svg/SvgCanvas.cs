@@ -515,7 +515,8 @@ public sealed partial class SvgCanvas : Canvas
         {
             if (i > 0)
                 sb.Append(' ');
-            sb.Append(N(points[i].X)).Append(',').Append(N(points[i].Y));
+            _defs.AppendNum(sb, points[i].X).Append(',');
+            _defs.AppendNum(sb, points[i].Y);
         }
 
         Fill(brush, sb.Append('"').ToString());
@@ -532,18 +533,23 @@ public sealed partial class SvgCanvas : Canvas
         var sb = new StringBuilder();
         foreach (var contour in path.GetCurveContours())
         {
-            sb.Append('M').Append(N(contour.Start.X * _ppp)).Append(' ').Append(N(contour.Start.Y * _ppp));
+            _defs.AppendNum(sb.Append('M'), contour.Start.X * _ppp).Append(' ');
+            _defs.AppendNum(sb, contour.Start.Y * _ppp);
             foreach (var command in contour.Commands)
             {
                 if (command.Kind == PathCommandKind.Line)
                 {
-                    sb.Append('L').Append(N(command.End.X * _ppp)).Append(' ').Append(N(command.End.Y * _ppp));
+                    _defs.AppendNum(sb.Append('L'), command.End.X * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.End.Y * _ppp);
                 }
                 else
                 {
-                    sb.Append('C').Append(N(command.Control1.X * _ppp)).Append(' ').Append(N(command.Control1.Y * _ppp)).Append(' ')
-                        .Append(N(command.Control2.X * _ppp)).Append(' ').Append(N(command.Control2.Y * _ppp)).Append(' ')
-                        .Append(N(command.End.X * _ppp)).Append(' ').Append(N(command.End.Y * _ppp));
+                    _defs.AppendNum(sb.Append('C'), command.Control1.X * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.Control1.Y * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.Control2.X * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.Control2.Y * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.End.X * _ppp).Append(' ');
+                    _defs.AppendNum(sb, command.End.Y * _ppp);
                 }
             }
 

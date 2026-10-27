@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.IO.Compression;
 
@@ -18,7 +19,8 @@ internal static class PdfFlateEncoder
             _ => CompressionLevel.Optimal
         };
 
-        var output = new MemoryStream();
+        // Deflate output is rarely larger than the input and usually far smaller; half of it avoids most of the buffer's doublings.
+        var output = new MemoryStream(Math.Max(64, data.Length / 2));
         using (var zlib = new ZLibStream(output, compressionLevel, leaveOpen: true))
             zlib.Write(data, 0, data.Length);
         return output.ToArray();

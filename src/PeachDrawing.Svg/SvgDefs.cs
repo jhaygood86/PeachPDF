@@ -3,6 +3,7 @@ using PeachDrawing.Text;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 
 namespace PeachDrawing.Svg;
@@ -102,11 +103,15 @@ internal sealed class SvgDefs(int precision)
     /// <summary>A number the way SVG reads it: invariant, rounded to <see cref="Precision"/> decimals, no exponent, no negative zero.</summary>
     public string Num(double value)
     {
-        if (double.IsNaN(value) || double.IsInfinity(value))
-            return "0";
+        Span<char> buffer = stackalloc char[MaxNumberLength];
+        return new string(Format(buffer, value, Precision));
+    }
 
-        var rounded = Math.Round(value, Precision, MidpointRounding.AwayFromZero);
-        return rounded == 0 ? "0" : rounded.ToString("0.#########", CultureInfo.InvariantCulture);
+    /// <summary><see cref="Num"/> appended to <paramref name="builder"/> without the intermediate string.</summary>
+    public StringBuilder AppendNum(StringBuilder builder, double value)
+    {
+        Span<char> buffer = stackalloc char[MaxNumberLength];
+        return builder.Append(Format(buffer, value, Precision));
     }
 
     /// <summary>
@@ -115,12 +120,27 @@ internal sealed class SvgDefs(int precision)
     /// </summary>
     public static string Factor(double value)
     {
+        Span<char> buffer = stackalloc char[MaxNumberLength];
+        return new string(Format(buffer, value, 8));
+    }
+
+    // A rounded double never needs an exponent here, so its digits are bounded by the largest double's 309 integer digits.
+    private const int MaxNumberLength = 340;
+
+    private static ReadOnlySpan<char> Format(Span<char> buffer, double value, int decimals)
+    {
         if (double.IsNaN(value) || double.IsInfinity(value))
             return "0";
 
-        var rounded = Math.Round(value, 8, MidpointRounding.AwayFromZero);
-        return rounded == 0 ? "0" : rounded.ToString("0.########", CultureInfo.InvariantCulture);
+        var rounded = Math.Round(value, decimals, MidpointRounding.AwayFromZero);
+        if (rounded == 0)
+            return "0";
+
+        rounded.TryFormat(buffer, out int written, DecimalFormats[decimals], CultureInfo.InvariantCulture);
+        return buffer[..written];
     }
+
+    private static readonly string[] DecimalFormats = Enumerable.Range(0, 10).Select(n => n == 0 ? "0" : "0." + new string('#', n)).ToArray();
 
     /// <summary>A <c>matrix(...)</c> transform value for <paramref name="m"/>.</summary>
     public string Matrix(Matrix3x2Value m) =>

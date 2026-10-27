@@ -465,4 +465,47 @@ public class SvgDetailTests
 
         public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
+
+    [Theory]
+    [InlineData(0.0, "0")]
+    [InlineData(-0.0000001, "0")]
+    [InlineData(1.0, "1")]
+    [InlineData(-2.5, "-2.5")]
+    [InlineData(1.23456, "1.235")]
+    [InlineData(0.0005, "0.001")]
+    [InlineData(-0.0005, "-0.001")]
+    [InlineData(1e15, "1000000000000000")]
+    [InlineData(double.NaN, "0")]
+    [InlineData(double.PositiveInfinity, "0")]
+    public void Num_RoundsToPrecision_WithNoExponentOrNegativeZero(double value, string expected)
+    {
+        var defs = new SvgDefs(3);
+
+        Assert.Equal(expected, defs.Num(value));
+        Assert.Equal("0", defs.Num(-0.0));
+        Assert.Equal("pre" + expected, defs.AppendNum(new System.Text.StringBuilder("pre"), value).ToString());
+    }
+
+    [Theory]
+    [InlineData(0.0496, "0.0496")]
+    [InlineData(0.123456789, "0.12345679")]
+    [InlineData(-0.000000001, "0")]
+    [InlineData(2.0, "2")]
+    public void Factor_RoundsToEightDecimals(double value, string expected) =>
+        Assert.Equal(expected, SvgDefs.Factor(value));
+
+    [Fact]
+    public void Num_UsesTheInvariantCulture()
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("de-DE");
+            Assert.Equal("-1.5", new SvgDefs(2).Num(-1.5));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
 }

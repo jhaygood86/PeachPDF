@@ -410,8 +410,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                     WriteUInt16(glyfOut, (ushort)instrLen);
 
                     // instructions live in the separate instructionStream (see NOTE above)
-                    for (int b = 0; b < instrLen; b++)
-                        glyfOut.WriteByte(src[iSrc++]);
+                    CopyBytes(glyfOut, src, ref iSrc, instrLen);
 
                     // flags (TTF compressed form: run-length encode identical flags)
                     pt = 0;
@@ -494,20 +493,19 @@ namespace PeachDrawing.Text.Internal.Fonts
                         hasInstructions = hasInstructions || (compFlags & 0x0100) != 0;
                         bool argsAreWords = (compFlags & 0x0001) != 0;
                         int argBytes = argsAreWords ? 4 : 2;
-                        for (int b = 0; b < argBytes; b++)
-                            glyfOut.WriteByte(src[cSrc++]);
+                        CopyBytes(glyfOut, src, ref cSrc, argBytes);
 
                         if ((compFlags & 0x0008) != 0) // WE_HAVE_A_SCALE
                         {
-                            glyfOut.WriteByte(src[cSrc++]); glyfOut.WriteByte(src[cSrc++]);
+                            CopyBytes(glyfOut, src, ref cSrc, 2);
                         }
                         else if ((compFlags & 0x0040) != 0) // WE_HAVE_AN_X_AND_Y_SCALE
                         {
-                            for (int b = 0; b < 4; b++) glyfOut.WriteByte(src[cSrc++]);
+                            CopyBytes(glyfOut, src, ref cSrc, 4);
                         }
                         else if ((compFlags & 0x0080) != 0) // WE_HAVE_A_TWO_BY_TWO
                         {
-                            for (int b = 0; b < 8; b++) glyfOut.WriteByte(src[cSrc++]);
+                            CopyBytes(glyfOut, src, ref cSrc, 8);
                         }
                     } while (moreComponents);
 
@@ -516,8 +514,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                         int instrLen = Read255UInt16(src, ref gSrc);
                         WriteUInt16(glyfOut, (ushort)instrLen);
                         // instructions live in the separate instructionStream (see NOTE above)
-                        for (int b = 0; b < instrLen; b++)
-                            glyfOut.WriteByte(src[iSrc++]);
+                        CopyBytes(glyfOut, src, ref iSrc, instrLen);
                     }
 
                     while ((glyfOut.Length & 3) != 0) glyfOut.WriteByte(0);
@@ -548,6 +545,16 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
 
         // 255UInt16 variable-length encoding (WOFF2 spec §6.2)
+        /// <summary>Copies <paramref name="count"/> bytes of <paramref name="src"/> from <paramref name="pos"/> to <paramref name="output"/> and advances <paramref name="pos"/>, as a loop of <c>WriteByte(src[pos++])</c> would.</summary>
+        private static void CopyBytes(MemoryStream output, byte[] src, ref int pos, int count)
+        {
+            if (count < 0 || pos < 0 || (long)pos + count > src.Length)
+                throw new IndexOutOfRangeException();
+
+            output.Write(src, pos, count);
+            pos += count;
+        }
+
         private static int Read255UInt16(byte[] src, ref int pos)
         {
             const byte wordCode = 253;

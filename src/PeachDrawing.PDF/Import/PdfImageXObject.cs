@@ -426,24 +426,43 @@ internal static class PdfImageXObject
         s.Write(crc);
     }
 
-    static readonly uint[] CrcTable = BuildCrcTable();
+    // Slicing-by-4: table k holds the CRC of a byte followed by k zero bytes, so four input bytes fold in per step.
+    static readonly uint[][] CrcTables = BuildCrcTables();
 
-    static uint[] BuildCrcTable()
+    static uint[][] BuildCrcTables()
     {
-        var t = new uint[256];
+        var tables = new uint[4][];
+        var t = tables[0] = new uint[256];
         for (uint n = 0; n < 256; n++)
         {
             uint c = n;
             for (int k = 0; k < 8; k++) c = (c & 1) != 0 ? 0xEDB88320 ^ (c >> 1) : c >> 1;
             t[n] = c;
         }
-        return t;
+
+        for (int k = 1; k < 4; k++)
+        {
+            tables[k] = new uint[256];
+            for (int n = 0; n < 256; n++)
+                tables[k][n] = t[tables[k - 1][n] & 0xFF] ^ (tables[k - 1][n] >> 8);
+        }
+
+        return tables;
     }
 
-    static uint Crc32(byte[] data)
+    internal static uint Crc32(ReadOnlySpan<byte> data)
     {
+        uint[] t0 = CrcTables[0], t1 = CrcTables[1], t2 = CrcTables[2], t3 = CrcTables[3];
         uint c = 0xFFFFFFFF;
-        foreach (byte b in data) c = CrcTable[(c ^ b) & 0xFF] ^ (c >> 8);
+        int i = 0;
+        for (; i + 4 <= data.Length; i += 4)
+        {
+            c ^= (uint)(data[i] | data[i + 1] << 8 | data[i + 2] << 16 | data[i + 3] << 24);
+            c = t3[c & 0xFF] ^ t2[(c >> 8) & 0xFF] ^ t1[(c >> 16) & 0xFF] ^ t0[c >> 24];
+        }
+
+        for (; i < data.Length; i++)
+            c = t0[(c ^ data[i]) & 0xFF] ^ (c >> 8);
         return c ^ 0xFFFFFFFF;
     }
 }

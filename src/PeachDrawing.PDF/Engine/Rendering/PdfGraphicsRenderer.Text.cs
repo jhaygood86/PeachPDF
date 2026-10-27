@@ -370,11 +370,9 @@ internal sealed partial class PdfGraphicsRenderer
             PaintPoint glyphPos = WorldToView(new PaintPoint(glyphX, glyphY));
             AdjustTdOffset(ref glyphPos, 0, null);
 
-            byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
-            bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-            string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
-
-            _content.Append(glyphPos.X, format2).Append(' ').Append(glyphPos.Y, format2).Append(" Td ").Append(glyphText).Append(" Tj\n");
+            _content.Append(glyphPos.X, format2).Append(' ').Append(glyphPos.Y, format2).Append(" Td <");
+            AppendHexCodeUnit((char)glyph.GlyphIndex);
+            _content.Append("> Tj\n");
 
             // XOffset is a placement-only shift (doesn't move where the next glyph starts) - the
             // pen only ever advances by the natural width plus GPOS's own XAdvanceDelta, matching
@@ -423,11 +421,9 @@ internal sealed partial class PdfGraphicsRenderer
             PaintPoint pos = WorldToView(new PaintPoint(glyph.X, glyph.Y));
             AdjustTdOffset(ref pos, 0, null);
 
-            byte[] bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(((char)glyph.GlyphIndex).ToString());
-            bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
-            string glyphText = PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length);
-
-            _content.Append(pos.X, format2).Append(' ').Append(pos.Y, format2).Append(" Td ").Append(glyphText).Append(" Tj\n");
+            _content.Append(pos.X, format2).Append(' ').Append(pos.Y, format2).Append(" Td <");
+            AppendHexCodeUnit((char)glyph.GlyphIndex);
+            _content.Append("> Tj\n");
         }
     }
 
@@ -515,11 +511,17 @@ internal sealed partial class PdfGraphicsRenderer
     private void AppendHexCodeUnit(char value)
     {
         Span<char> buffer = stackalloc char[4];
+        FormatHexCodeUnit(value, buffer);
+        _content.Append(buffer);
+    }
+
+    /// <summary>Writes <paramref name="value"/> into <paramref name="buffer"/> as four uppercase hex digits (one big-endian UTF-16 code unit).</summary>
+    internal static void FormatHexCodeUnit(char value, Span<char> buffer)
+    {
         buffer[0] = HexDigits[(value >> 12) & 0xF];
         buffer[1] = HexDigits[(value >> 8) & 0xF];
         buffer[2] = HexDigits[(value >> 4) & 0xF];
         buffer[3] = HexDigits[value & 0xF];
-        _content.Append(buffer);
     }
 
     /// <summary>

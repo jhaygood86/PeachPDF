@@ -213,13 +213,22 @@ internal sealed class PdfDecryptor
     byte[] ObjectKey(Method method, int number, int generation)
     {
         if (method == Method.AesV3 || _revision >= 5) return _fileKey;
-        var input = new List<byte>(_fileKey)
+        Span<byte> input = _fileKey.Length + 9 <= 64 ? stackalloc byte[64] : new byte[_fileKey.Length + 9];
+        _fileKey.CopyTo(input);
+        int length = _fileKey.Length;
+        input[length++] = (byte)number;
+        input[length++] = (byte)(number >> 8);
+        input[length++] = (byte)(number >> 16);
+        input[length++] = (byte)generation;
+        input[length++] = (byte)(generation >> 8);
+        if (method == Method.AesV2)
         {
-            (byte)number, (byte)(number >> 8), (byte)(number >> 16), (byte)generation, (byte)(generation >> 8),
-        };
-        if (method == Method.AesV2) input.AddRange("sAlT"u8.ToArray());
-        using var md5 = MD5.Create();
-        var hash = md5.ComputeHash(input.ToArray());
-        return hash.AsSpan(0, Math.Min(_fileKey.Length + 5, 16)).ToArray();
+            "sAlT"u8.CopyTo(input[length..]);
+            length += 4;
+        }
+
+        Span<byte> hash = stackalloc byte[16];
+        MD5.HashData(input[..length], hash);
+        return hash[..Math.Min(_fileKey.Length + 5, 16)].ToArray();
     }
 }
