@@ -3258,7 +3258,7 @@ namespace PeachBrackets.Html.Dom
             var neverShrinksBelowContent = box.IsTableCell
                 || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
                 || (box.ItemContentSizeEverPinned
-                    && !CssValueParser.IsValidLength(box.HeightBeforeItemPin)
+                    && !(box.HeightBeforeItemPin is { } authoredHeight && CssValueParser.IsValidLength(authoredHeight))
                     && Fragmentation.MonolithicContent.IsScrollContainer(box)
                     && !Fragmentation.MonolithicContent.IsMonolithic(box));
 
