@@ -160,8 +160,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         // below its line: drawn on no page. The stale line is not the box's baseline.
         [Theory]
         // A grid item's percentage width is of its grid area, so 120% of the half-width area is the 60% of the
-        // whole container the document was minimized with (the same document at 60% of the area double-draws).
+        // whole container the document was minimized with. At 60% of the area the item is narrower, its line
+        // wraps differently, and the inline-block's ink (line-height: 0 under 26pt type) overflows the page foot
+        // while its own 1.5pt box lies above it: the next page drew the last points of that ink as sliced content.
         [InlineData("display:grid;grid-template-columns:repeat(2,1fr);gap:2pt", "120%")]
+        [InlineData("display:grid;grid-template-columns:repeat(2,1fr);gap:2pt", "60%")]
         [InlineData("display:flex", "60%")]
         public async Task AnInlineBlockInAnEngineItem_IsDrawnOnceAtItsLine(string containerCss, string itemWidth)
         {

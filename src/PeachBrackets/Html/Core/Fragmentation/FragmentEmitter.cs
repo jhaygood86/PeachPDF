@@ -3409,7 +3409,7 @@ namespace PeachBrackets.Html.Fragmentation
             // each showing its own part, so the part past the foot of one page is not lost. Layout moves every
             // other straddling line to the next page, so only a line that still straddles is sliced.
             if (slotIndex > nominalSlot && slicedContentOwner is not null && StraddlesIntoNominalBand(rect, claimTop)
-                && IsInSlicedContent(slicedContentOwner))
+                && IsInSlicedContent(slicedContentOwner, container.BandStartingAt(claimTop)))
             {
                 return true;
             }
@@ -3441,14 +3441,19 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>
         /// Whether <paramref name="box"/> sits in content layout lays out whole and slices where it crosses a
         /// page boundary: a scroll container or replaced box kept monolithic (<see cref="MonolithicContent.IsMonolithic"/>)
-        /// or an inline-block or inline-table (css-break-3 §4.1), at or above <paramref name="box"/>.
+        /// or an inline-block or inline-table (css-break-3 §4.1), at or above <paramref name="box"/>, whose own
+        /// bottom lies below <paramref name="band"/>'s foot.
         /// </summary>
-        private static bool IsInSlicedContent(CssBox box)
+        private static bool IsInSlicedContent(CssBox box, PageBand band)
         {
             for (var ancestor = box; ancestor is not null; ancestor = ancestor.ParentBox)
             {
-                if (MonolithicContent.IsMonolithic(ancestor)
-                    || ancestor.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
+                if ((MonolithicContent.IsMonolithic(ancestor)
+                        || ancestor.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable)
+                    // Only a box that itself runs past the foot is sliced. Ink that overflows a box lying wholly
+                    // above the foot (an inline-block with `line-height: 0` and large type) is not part of any
+                    // box that crosses it, and a second page drew its last points of ink: the word counted twice.
+                    && ancestor.ActualBottom > band.Bottom + HtmlContainerInt.PageBoundaryEpsilon)
                 {
                     return true;
                 }
