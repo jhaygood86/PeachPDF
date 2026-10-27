@@ -1530,7 +1530,10 @@ namespace PeachBrackets.Html.Dom
                             ? defaultSize.Width
                             : await CssLayoutEngine.GetFitContentWidth(g, box,
                                 // A replaced item keeps its natural width even where that overflows its area.
-                                natural is { Width: true } ? double.MaxValue / 4 : cellContentWidth);
+                                natural is { Width: true } ? double.MaxValue / 4 : cellContentWidth)
+                                // The intrinsic width of a replaced item already counts its own padding and
+                                // border, which the content-space `used` must not.
+                                - (natural is { Width: true } ? ownPaddingBorder : 0);
                 box.Width = FormatLayoutUnits(Math.Max(0, used + ownPaddingBorder - box.ActualBoxSizeIncludedWidth), box);
             }
             // A box with only a default size (a video with no poster) is given it where it does not stretch.

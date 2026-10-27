@@ -43,8 +43,6 @@ namespace PeachBrackets.Html.Dom
         {
             _imageWord = new CssRectImage(this);
             Words.Add(_imageWord);
-
-            SetErrorBorder();
         }
 
         /// <summary>
@@ -80,15 +78,6 @@ namespace PeachBrackets.Html.Dom
                 CssLayoutEngine.MeasureImageSize(_imageWord);
 
             return ValueTask.CompletedTask;
-        }
-
-        /// <summary>
-        /// Set error image border on the image box.
-        /// </summary>
-        private void SetErrorBorder()
-        {
-            SetAllBorders(Keywords.Solid, "2px", "#A0A0A0");
-            BorderRightColor = BorderBottomColor = "#E3E3E3";
         }
 
         #endregion

@@ -162,7 +162,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Theory]
-        [InlineData("<iframe id='f' srcdoc='x' style='width:80pt;height:40pt'></iframe>")]
+        [InlineData("<iframe id='f' srcdoc='x' style='box-sizing:border-box;width:80pt;height:40pt'></iframe>")]
         [InlineData("<video id='f' style='width:80pt;height:40pt'></video>")]
         [InlineData("<object id='f' data='x.png' style='width:80pt;height:40pt'></object>")]
         public async Task OtherReplacedItems_KeepTheirDeclaredSize_AndTheirSiblingFollows(string replaced)
@@ -577,13 +577,13 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         // A frame or video has the default object size, 300x150 CSS px, and keeps it in a grid under `normal`;
-        // a browser adds the iframe's 2px default border to that (228 x 115.5pt), which PeachPDF does not draw.
+        // the iframe's 2px default border is added to that (228 x 115.5pt), as in a browser.
         [Theory]
-        [InlineData("<iframe id='i'></iframe>", "", 225, 112.5)]
-        [InlineData("<iframe id='i'></iframe>", "grid-template-rows:80pt", 225, 112.5)]
+        [InlineData("<iframe id='i'></iframe>", "", 228, 115.5)]
+        [InlineData("<iframe id='i'></iframe>", "grid-template-rows:80pt", 228, 115.5)]
         [InlineData("<video id='i'></video>", "", 225, 112.5)]
         [InlineData("<video id='i'></video>", "grid-template-rows:80pt", 225, 112.5)]
-        [InlineData("<iframe id='i' style='justify-self:stretch'></iframe>", "", 100, 112.5)]
+        [InlineData("<iframe id='i' style='justify-self:stretch'></iframe>", "", 100, 115.5)]
         public async Task FrameOrVideoGridItem_KeepsTheDefaultObjectSize(string item, string containerStyle, double width, double height)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(GridWithImage(containerStyle, item)));
