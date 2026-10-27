@@ -31,7 +31,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             for (var page = 0; page < pages.Count; page++)
             {
-                foreach (var word in Flatten(pages[page].Root).SelectMany(f => f.Words).Select(w => w.Word.Text))
+                foreach (var word in Flatten(pages[page].Root).SelectMany(f => f.Words).Select(w => w.Word.Text ?? string.Empty))
                 {
                     if (!word.StartsWith("R010L") || word is "R010L01") continue;
 

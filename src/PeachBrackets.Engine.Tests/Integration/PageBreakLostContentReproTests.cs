@@ -207,5 +207,38 @@ body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; } p,h3
                 "<div style=\"break-inside:avoid\"><ul>w4_187 w4_188 w4_189<li>w4_190 w4_191 w4_192 w4_193</li></ul>" + string.Concat(Enumerable.Repeat("<br>", 5)) +
                 " w4_201 w4_202<div style=\"break-before:page\"></div></div><div style=\"float:right;width:60pt\"></div>"));
         }
+
+        [Fact]
+        public async Task AMiddleAlignedCellInARowTallerThanItsBand_KeepsItsLastHeadingLineOffTheFoot()
+        {
+            // Issue 1485: centring the cell moved the heading's second line 4.5pt over the page foot, so w890_643
+            // was cut by the page and drawn on none.
+            await AssertEveryWordIsVisibleOnceAsync(Document(
+                "@page { size: 300pt 160pt; margin: 20pt; } body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; }",
+                "<p>w890_567 w890_568 lorem w890_569</p>w890_570 w890_571 <div><h3>w890_572 w890_573 w890_574 w890_575 lorem</h3></div>" +
+                "<p>w890_576 w890_577 w890_578 w890_579 w890_580 w890_581 w890_582 w890_583 w890_584 w890_585 lorem</p>" +
+                "w890_586 w890_587 w890_588 lorem w890_589 w890_590 lorem w890_591 w890_592 w890_593" +
+                "<div style=\"margin-top:10pt;margin-bottom:0pt;padding:2pt;\"><p>w890_594 w890_595 w890_596 w890_597 lorem w890_598 w890_599 w890_600 lorem w890_601 w890_602 w890_603 lorem</p>" +
+                "<p>w890_604 w890_605 w890_606 w890_607</p>w890_608 lorem w890_609<p>w890_610 w890_611 lorem w890_612 w890_613</p></div>" +
+                "<h3>w890_614 w890_615 lorem w890_616 lorem w890_617 w890_618 w890_619 w890_620 w890_621 w890_622 w890_623 w890_624 lorem w890_625</h3>" +
+                "<div style=\"margin-top:10pt;border:1pt solid #888\"><h3>w890_626 w890_627 w890_628 w890_629</h3></div>" +
+                "<table border=\"1\"><tr><td><p>w890_630 w890_631 lorem w890_632 w890_633 w890_634 w890_635 w890_636 lorem w890_637 w890_638 w890_639 w890_640 w890_641 lorem</p>" +
+                "<h3>w890_642 lorem w890_643</h3></td><td>w890_644 lorem w890_645 lorem</td></tr></table>"));
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public async Task AFlexItemInColumns_IsNotMovedTwiceWhenItsPassIsLaidOutAgain(bool innerColumns)
+        {
+            // Issue 1525: the last pass of the flex container was resumed twice from the same break token; the second
+            // run moved the already-moved item by the container's move again, from x=20 to x=-158, off the page.
+            // Short words keep the inner columns' text inside the page, which the issue's own words are not.
+            var paragraphs = string.Concat(Enumerable.Range(1, 4).Select(p =>
+                "<p style='margin:0 0 6pt'>" + string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{p}_{i:000}")) + "</p>"));
+            var content = innerColumns ? $"<div style='columns:3;column-gap:8pt'>{paragraphs}</div>" : paragraphs;
+            await AssertEveryWordIsVisibleOnceAsync(Document(Page300x200,
+                $"<div style='columns:3;column-gap:8pt'><div style='display:flex;gap:4pt'><div style='flex:1'>{content}</div></div></div>"));
+        }
     }
 }

@@ -33,7 +33,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 var page = pages[index];
                 var words = Flatten(page.Root).SelectMany(f => f.Words).ToList();
 
-                foreach (var word in words.Where(w => w.Word.Text.StartsWith("w50774_")))
+                foreach (var word in words.Where(w => w.Word.Text?.StartsWith("w50774_") == true))
                 {
                     Assert.True(
                         word.Rect.Bottom <= PageContentBottom + 0.5,

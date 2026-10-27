@@ -1877,9 +1877,49 @@ namespace PeachBrackets.Html.Dom
                 _ => 0d
             };
 
+            // Centring or bottom-aligning a cell in a row taller than its band must not carry a line over the
+            // page foot it was laid out above: the row is laid out as one strip and each page shows a part of
+            // it, so a line the alignment pushes across the foot is cut by the page and its words are drawn on
+            // none (a heading's last line in a cell of a row taller than a page). The content stays closer to
+            // the top by what the nearest foot leaves.
+            if (!isVertical && dist > 0d && cell.HtmlContainer is { HasRealPageGrid: true } html)
+            {
+                dist = Math.Min(dist, RoomAboveTheNextFoot(cell, html));
+            }
+
             OffsetCellContent(cell, dist, isVertical);
 
             return dist;
+        }
+
+        /// <summary>
+        /// How far every line in <paramref name="box"/>'s in-flow content can move down before one that now ends
+        /// inside its page band ends below that band's foot.
+        /// </summary>
+        private static double RoomAboveTheNextFoot(CssBox box, HtmlContainerInt html)
+        {
+            var room = double.PositiveInfinity;
+
+            void Visit(CssBox b)
+            {
+                foreach (var line in b.LineBoxes)
+                {
+                    var foot = html.PageBottomOf(html.SlotStartingAt(line.LineTop));
+
+                    if (line.LineBottom <= foot + 0.01)
+                    {
+                        room = Math.Min(room, Math.Max(0d, foot - line.LineBottom));
+                    }
+                }
+
+                foreach (var child in b.Boxes)
+                {
+                    if (!child.IsOutOfFlow) Visit(child);
+                }
+            }
+
+            Visit(box);
+            return room;
         }
 
         /// <summary>
@@ -6207,6 +6247,7 @@ namespace PeachBrackets.Html.Dom
                         // there, not merely unanswerable), so this is simply skipped rather than falling
                         // back to a relocation - issue #333 retired the last caller of the pre-#321
                         // per-word CssRect.BreakPage mechanism that used to run here.
+                        if (word.Text is "w103_034" or "w103_033") { var chain = new System.Text.StringBuilder(); for (var a = blockBox; a is not null; a = a.ParentBox) chain.Append($"{a.HtmlTag?.Name}(x={a.Location.X:F0},cl={a.ClientLeft:F0}) "); Console.WriteLine($"DBG1525 word={word.Text} left={word.Left} top={word.Top} chain={chain}"); }
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
                             && coordinates.Fragmentainer is not null
                             // A line past a capped scroll container's cap is clipped away or overflows, and
