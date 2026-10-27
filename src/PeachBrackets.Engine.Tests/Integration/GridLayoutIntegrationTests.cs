@@ -1329,6 +1329,68 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"'a' (Y={a.Location.Y}) should have shifted down from the row top ({container.ClientTop})");
         }
 
+        // ─── §12.8 Stretch auto Tracks, row axis ─────────────────────────────────
+
+        [Theory]
+        [InlineData("", 200)]                                 // align-content: normal stretches
+        [InlineData("align-content:stretch;", 200)]
+        [InlineData("align-content:start;", 15)]              // a non-stretch distribution leaves the row alone
+        public async Task AutoRow_StretchesToDefiniteHeight_OnlyForNormalOrStretch(string alignContent, double expected)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:grid; width:300pt; height:200pt; grid-template-columns:100pt; {alignContent}'>
+                    <div id='a'>zz</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(100, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(expected, a.ActualBoxSizingHeight, 4.0);
+        }
+
+        [Fact]
+        public async Task AutoRows_ShareFreeSpaceEqually_AfterFixedRowAndGap()
+        {
+            // Used: 40 (fixed) + 2 * 10 (content) + 2 * 10 (gaps) = 80, leaving 120 of free space, so each
+            // auto row grows by 60 to 70pt: row tops at 0, 50 and 130.
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; height:200pt; gap:10pt; grid-template-rows:40pt auto auto;'>
+                    <div id='f' style='height:40pt'></div>
+                    <div id='a' style='height:10pt'></div>
+                    <div id='b' style='height:10pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var top = FindById(root, "container")!.Location.Y;
+            Assert.Equal(50, FindById(root, "a")!.Location.Y - top, 1.0);
+            Assert.Equal(130, FindById(root, "b")!.Location.Y - top, 1.0);
+        }
+
+        [Fact]
+        public async Task AutoRow_NextToFlexRow_IsNotStretched()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; height:200pt; grid-template-rows:auto 1fr;'>
+                    <div id='a'>zz</div>
+                    <div id='b'>zz</div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.True(a.ActualBoxSizingHeight < 30, $"auto row must stay content-sized, was {a.ActualBoxSizingHeight}");
+        }
+
+        [Fact]
+        public async Task AutoRow_StretchedItem_FillsTheStretchedRow_AndCenteredItemIsCentered()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:300pt; height:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='s'>zz</div>
+                    <div id='c' style='align-self:center; height:20pt'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var c = FindById(root, "c")!;
+            Assert.Equal(90, c.Location.Y - container.Location.Y, 1.0);
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         // ─── §12.6 Maximize Tracks: a track grows toward its limit with the space that is there ──

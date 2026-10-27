@@ -331,6 +331,8 @@ namespace PeachBrackets.Html.Dom
 
                 var rowContainerSize = hasDefiniteHeight ? _gridBox.ClientBottom - _gridBox.ClientTop
                     : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                if (hasDefiniteHeight && !rowSubgrid && IsStretch(_gridBox.AlignContent.ToString()))
+                    StretchAutoRows(rows, rowContainerSize, rowGap);
                 PositionTracks(rows, _gridBox.ClientTop, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
 
                 // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
@@ -899,6 +901,38 @@ namespace PeachBrackets.Html.Dom
             var index = nth < 0 ? lines.Count + nth : nth - 1;   // -1 → last; 1 → first
             return lines[Math.Min(Math.Max(0, index), lines.Count - 1)];
         }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-grid-2/#algo-stretch">CSS Grid §12.8 "Stretch auto Tracks"</see>
+        /// for the row axis: with a definite container height and <c>align-content: normal | stretch</c>, the
+        /// positive free space is shared equally among the rows whose max track sizing function is
+        /// <c>auto</c> (<c>auto</c>, <c>minmax(*, auto)</c>). Rows are never <c>fr</c>-expanded here, so a grid
+        /// holding a flexible row is left as it was rather than stretching rows the flexible one should
+        /// have absorbed the space ahead of (§12.7 runs before §12.8).
+        /// </summary>
+        private static void StretchAutoRows(Track[] rows, double containerHeight, double rowGap)
+        {
+            if (rows.Any(t => IsFlexTrack(t.Def)))
+                return;
+
+            var stretchable = rows.Where(t => t.Def.Kind == GridTrackKind.Auto
+                                              || (t.Def.Kind == GridTrackKind.Minmax && t.Def.Max.Kind == GridTrackKind.Auto))
+                .ToArray();
+            if (stretchable.Length == 0)
+                return;
+
+            var used = rows.Sum(t => t.Size) + (rows.Length > 1 ? rowGap * (rows.Length - 1) : 0);
+            var free = containerHeight - used;
+            if (free <= 0.01)
+                return;
+
+            var share = free / stretchable.Length;
+            foreach (var row in stretchable)
+                row.Size += share;
+        }
+
+        private static bool IsFlexTrack(GridTrackSize def) =>
+            def.Kind == GridTrackKind.Flex || (def.Kind == GridTrackKind.Minmax && def.Max.Kind == GridTrackKind.Flex);
 
         private static double ColumnSpanWidth(Track[] columns, int start, int span, double gap)
         {
