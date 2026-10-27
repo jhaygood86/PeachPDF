@@ -104,4 +104,16 @@ public sealed class HtmlDocumentOptions
     /// layout and painting are the same either way.
     /// </summary>
     public bool RecordTextRuns { get; set; }
+
+    /// <summary>
+    /// Whether <see cref="HtmlDocument.SetSelectedRanges"/> paints the selection, in the document's <c>::selection</c> style. Off by default, and
+    /// then <c>::selection</c> rules are ignored as they always were. Needs <see cref="RecordTextRuns"/>.
+    /// </summary>
+    public bool EnableSelectionStyling { get; set; }
+
+    /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
+    public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);
+
+    /// <summary>The colour selected text is drawn in where no <c>::selection</c> rule applies, or null (the default) to keep the text's own.</summary>
+    public PeachDrawing.Core.PaintColor? SelectionForeground { get; set; }
 }

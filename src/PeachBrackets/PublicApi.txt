@@ -198,6 +198,7 @@ PeachBrackets.HtmlDocument : sealed class
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
+  method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
@@ -205,6 +206,7 @@ PeachBrackets.HtmlDocument : sealed class
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
+  property IReadOnlyList<TextRange> SelectedRanges { get; }
   property IReadOnlyList<TextRun> TextRuns { get; }
   property IStructureTagSink StructureTagSink { get; set; }
   property Size ContentArea { get; }
@@ -228,6 +230,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
   property Boolean CollectFormFields { get; set; }
+  property Boolean EnableSelectionStyling { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
   property Boolean RecordTextRuns { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
@@ -240,6 +243,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property PaintColor SelectionBackground { get; set; }
+  property PaintColor? SelectionForeground { get; set; }
   property String DefaultLanguage { get; set; }
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }

@@ -123,8 +123,17 @@ namespace PeachBrackets.Html.Paint
                 string? logicalText = null;
                 if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
                     logicalText = Bidi.Reverse(rectWord.PreMirrorText);
-                DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new Size(word.Width, word.Height), logicalText: logicalText,
-                    precededBySeparator: word.PrecededByWordSeparator, separatorEdge: PrecedingWordEdge(g, word, wordFragment.Rect));
+                var separatorEdge = PrecedingWordEdge(g, word, wordFragment.Rect);
+                if (container.SelectionModel is { } selection && selection.TryGet(word, out var selectedPart)
+                    && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr))
+                {
+                    PaintSelectedWord(g, box, word, wordFragment.Rect, text, logicalText, separatorEdge, selectedPart);
+                }
+                else
+                {
+                    DrawWordGlyphs(g, box, word, wordFragment.Rect, text, new Size(word.Width, word.Height), logicalText: logicalText,
+                        precededBySeparator: word.PrecededByWordSeparator, separatorEdge: separatorEdge);
+                }
                 RememberPaintedWord(g, word, wordFragment.Rect);
             }
         }
@@ -257,6 +266,9 @@ namespace PeachBrackets.Html.Paint
         /// "…" glyph, neither of which is <paramref name="word"/>'s own full text) and for any word with
         /// no distinct logical-order source to recover.
         /// </param>
+        /// <param name="colorOverride">
+        /// the colour to draw the glyphs in instead of the style's own - a selection's <c>::selection</c> colour - or null to use the style's
+        /// </param>
         /// <param name="precededBySeparator">
         /// whether the flow placed a word separator between this word and the one before it on its line
         /// (<see cref="CssRect.PrecededByWordSeparator"/>) - when set, a real space glyph is shown in that
@@ -267,7 +279,7 @@ namespace PeachBrackets.Html.Paint
         /// (<see cref="PrecedingWordEdge"/>), where the separator is anchored; null to anchor it against
         /// this word instead
         /// </param>
-        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null, bool precededBySeparator = false, double? separatorEdge = null)
+        private static void DrawWordGlyphs(Canvas g, CssBox box, CssRect word, Rect rect, string text, Size textSize, Font? fontOverride = null, string? logicalText = null, bool precededBySeparator = false, double? separatorEdge = null, PaintColor? colorOverride = null)
         {
             // A word on the target's first formatted line, under a ::first-line rule, uses that
             // resolved shadow box's font/color/letter-spacing instead of the box's own - it was
@@ -321,7 +333,7 @@ namespace PeachBrackets.Html.Paint
                     g.PushTransform(rotation);
                     if (precededBySeparator)
                         PaintWordSeparator(g, styleSource, word, new Rect(0, 0, naturalSize.Width, naturalSize.Height), baselineShift, SeparatorPlacement.Inline, null);
-                    g.DrawString(text, font, styleSource.ActualColor, new PaintPoint(0, baselineAdjust), naturalSize,
+                    g.DrawString(text, font, colorOverride ?? styleSource.ActualColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     PaintTextStroke(g, styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
                     g.PopTransform();
@@ -333,7 +345,7 @@ namespace PeachBrackets.Html.Paint
                     PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Inline, separatorEdge);
                 var wordPoint = new PaintPoint(rect.X, rect.Y + baselineAdjust);
                 PaintTextShadows(g, styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
-                g.DrawString(text, font, styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
+                g.DrawString(text, font, colorOverride ?? styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                 PaintTextStroke(g, styleSource, font, text, wordPoint, wordFeatures);
             }
         }

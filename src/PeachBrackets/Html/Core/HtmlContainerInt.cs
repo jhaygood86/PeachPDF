@@ -1288,6 +1288,18 @@ namespace PeachBrackets.Html
         internal bool InteractiveForms { get; set; }
 
         /// <summary>
+        /// The selected words and the parts of them that are selected, painted in their <c>::selection</c> style (or the defaults below).
+        /// Null (the default) paints no selection, so the painter does nothing extra.
+        /// </summary>
+        internal TextGeometry.SelectionModel? SelectionModel { get; set; }
+
+        /// <summary>The background a selection is filled with where no <c>::selection</c> rule applies.</summary>
+        internal PaintColor SelectionBackground { get; set; } = PaintColor.FromArgb(255, 173, 214, 255);
+
+        /// <summary>The colour selected text is drawn in where no <c>::selection</c> rule applies, or null to keep the text's own.</summary>
+        internal PaintColor? SelectionForeground { get; set; }
+
+        /// <summary>
         /// Init with optional document and stylesheet.
         /// </summary>
         /// <param name="htmlSource">the html to init with, init empty if not given</param>

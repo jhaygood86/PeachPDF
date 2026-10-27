@@ -16,8 +16,9 @@ public sealed class TextRun
     internal TextRun(
         int pageIndex, string text, Rect bounds, double baseline, double ascent, double descent,
         double[] characterOffsets, int[] characterBoundaries, bool isRtl, int blockId, string? elementId, string? linkUri,
-        int lineId, bool followsForcedBreak)
+        int lineId, bool followsForcedBreak, IReadOnlyList<PeachBrackets.Html.TextGeometry.TextWordSlice> slices)
     {
+        Slices = slices;
         PageIndex = pageIndex;
         Text = text;
         Bounds = bounds;
@@ -77,6 +78,8 @@ public sealed class TextRun
 
     /// <summary>The address of the link the run is inside, resolved against the document's base, or null if it is not in a link.</summary>
     public string? LinkUri { get; }
+
+    internal IReadOnlyList<PeachBrackets.Html.TextGeometry.TextWordSlice> Slices { get; }
 
     internal int LineId { get; }
 

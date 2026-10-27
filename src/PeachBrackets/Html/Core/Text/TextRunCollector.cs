@@ -105,13 +105,15 @@ namespace PeachBrackets.Html.TextGeometry
         }
 
         private readonly record struct WordGeometry(
-            string Text, double[] Starts, double End, int[] Boundaries, Rect Bounds, double Baseline, double Ascent, double Descent, bool Rtl);
+            string Text, double[] Starts, double End, int[] Boundaries, Rect Bounds, double Baseline, double Ascent, double Descent, bool Rtl, CssRect Word);
 
         private sealed class RunBuilder
         {
             public readonly StringBuilder Text = new();
             public readonly List<double> Offsets = [];
             public readonly List<int> Boundaries = [];
+            public readonly List<TextWordSlice> Slices = [];
+            private double _gapStart, _gapEnd;
             public double End;
             public double Left = double.MaxValue, Top = double.MaxValue, Right = double.MinValue, Bottom = double.MinValue;
             public double Baseline, Ascent, Descent;
@@ -125,6 +127,17 @@ namespace PeachBrackets.Html.TextGeometry
             {
                 var start = Text.Length;
                 Text.Append(word.Text);
+
+                var edges = new double[word.Starts.Length + 1];
+                for (var i = 0; i < word.Starts.Length; i++)
+                    edges[i] = word.Starts[i] - word.Bounds.Left;
+                edges[^1] = word.End - word.Bounds.Left;
+
+                // A separator space was just appended: it ends where this word's text begins.
+                var hasGap = _gapEnd > _gapStart;
+                Slices.Add(new TextWordSlice(word.Word, start, word.Text.Length, edges,
+                    hasGap ? _gapStart - word.Bounds.Left : 0, hasGap ? _gapEnd - word.Bounds.Left : 0));
+                _gapStart = _gapEnd = 0;
                 Offsets.AddRange(word.Starts);
                 foreach (var boundary in word.Boundaries)
                 {
@@ -157,6 +170,8 @@ namespace PeachBrackets.Html.TextGeometry
                 // The run covers the gap the space stands for.
                 Left = Math.Min(Left, Math.Min(End, nextStart));
                 Right = Math.Max(Right, Math.Max(End, nextStart));
+                _gapStart = Math.Min(End, nextStart);
+                _gapEnd = Math.Max(End, nextStart);
                 End = nextStart;
             }
         }
@@ -194,7 +209,7 @@ namespace PeachBrackets.Html.TextGeometry
                     pageIndex, current.Text.ToString(), bounds, current.Baseline, current.Ascent, current.Descent,
                     current.Offsets.ToArray(), current.Boundaries.ToArray(), current.Rtl, blockId,
                     block.HtmlTag?.TryGetAttribute("id") is { Length: > 0 } id ? id : null, current.Link,
-                    lineId, followsForcedBreak && firstOfLine));
+                    lineId, followsForcedBreak && firstOfLine, current.Slices.ToArray()));
                 firstOfLine = false;
                 current = new RunBuilder { Rtl = lineRtl };
             }
@@ -290,7 +305,7 @@ namespace PeachBrackets.Html.TextGeometry
 
             return new WordGeometry(
                 logical, xs[..^1], xs[^1], boundaries, bounds, baseline,
-                font.TextBaselineOffset / frame.Ppp, Math.Max(0, font.Height - font.TextBaselineOffset) / frame.Ppp, rtl);
+                font.TextBaselineOffset / frame.Ppp, Math.Max(0, font.Height - font.TextBaselineOffset) / frame.Ppp, rtl, word);
         }
 
         /// <summary>

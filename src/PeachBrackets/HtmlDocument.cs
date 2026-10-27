@@ -51,6 +51,8 @@ public sealed class HtmlDocument : IDisposable
     private IReadOnlyList<DocumentPage>? _pages;
     private IReadOnlyList<TextRun>? _textRuns;
     private bool _recordTextRuns;
+    private bool _selectionStyling;
+    private IReadOnlyList<TextRange> _selectedRanges = [];
     private bool _disposed;
 
     private HtmlDocument(HtmlContainerInt container, RenderContext renderContext)
@@ -93,7 +95,7 @@ public sealed class HtmlDocument : IDisposable
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
             container.AnimationProgress = options.AnimationProgress;
             container.InteractiveForms = options.CollectFormFields;
-            document._recordTextRuns = options.RecordTextRuns;
+            document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent
             // line-break tailorings need the language then, not after loading returns.
@@ -170,7 +172,7 @@ public sealed class HtmlDocument : IDisposable
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
-            document._recordTextRuns = options.RecordTextRuns;
+            document.ApplyTextOptions(options);
             await container.SetDeclarativeRoot(page.Root.Box, options.DefaultLanguage, styleSheet?.Data, properties.DisplayContentsShells);
 
             if (styleSheet is not null)
@@ -469,6 +471,34 @@ public sealed class HtmlDocument : IDisposable
     /// <returns>the range of the block</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
     public TextRange? GetBlockAt(TextPosition position) => TextRunQueries.BlockAt(TextRuns, position);
+
+    /// <summary>
+    /// Selects the text between pairs of positions of <see cref="TextRuns"/>, painted by <see cref="PaintPageAsync"/> in the document's
+    /// <c>::selection</c> style: the background fills the selected characters (and the spaces between selected words), and a <c>color</c> the
+    /// rules set replaces the text colour. Pass null or no ranges to clear the selection. Repaint the pages to show a change.
+    /// </summary>
+    /// <param name="ranges">the selected ranges, as <see cref="FindText"/>, <see cref="GetWordAt"/> and <see cref="GetBlockAt"/> return them</param>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> or <see cref="HtmlDocumentOptions.EnableSelectionStyling"/> was not set</exception>
+    public void SetSelectedRanges(IEnumerable<TextRange>? ranges)
+    {
+        var runs = TextRuns;
+        if (!_selectionStyling)
+            throw new InvalidOperationException("Set HtmlDocumentOptions.EnableSelectionStyling before loading the document to paint a selection.");
+
+        _selectedRanges = ranges?.ToArray() ?? [];
+        _container.SelectionModel = _selectedRanges.Count == 0 ? null : SelectionModel.Build(runs, _selectedRanges);
+    }
+
+    /// <summary>The ranges last given to <see cref="SetSelectedRanges"/>; empty when nothing is selected.</summary>
+    public IReadOnlyList<TextRange> SelectedRanges => _selectedRanges;
+
+    private void ApplyTextOptions(HtmlDocumentOptions options)
+    {
+        _recordTextRuns = options.RecordTextRuns;
+        _selectionStyling = options.EnableSelectionStyling;
+        _container.SelectionBackground = options.SelectionBackground;
+        _container.SelectionForeground = options.SelectionForeground;
+    }
 
     private void ThrowIfNotAPage(int pageIndex)
     {

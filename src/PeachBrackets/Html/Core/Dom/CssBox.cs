@@ -575,6 +575,16 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal CssBox? ResolvedPlaceholderStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedPlaceholderStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedPlaceholderStyle = value; } }
 
+        /// <summary>
+        /// The style this element's text takes while selected: its <c>::selection</c> rules cascaded into a detached box, inheriting from the
+        /// parent's selection style. Resolved on demand (<c>DomParser.ResolveSelectionStyle</c>), so a document that never shows a selection pays
+        /// nothing; null when no rule applies.
+        /// </summary>
+        internal CssBox? ResolvedSelectionStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedSelectionStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedSelectionStyle = value; } }
+
+        /// <summary>Idempotency guard for <see cref="ResolvedSelectionStyle"/>.</summary>
+        internal bool SelectionStyleProcessed { get => _rare is not null && _rare.SelectionStyleProcessed; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.SelectionStyleProcessed = value; } }
+
         /// <summary>Idempotency guard for <see cref="ResolvedPlaceholderStyle"/> resolution.</summary>
         internal bool PlaceholderStyleProcessed { get; set; }
 

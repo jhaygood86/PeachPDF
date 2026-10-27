@@ -97,6 +97,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
+| `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
 
@@ -149,6 +150,21 @@ On `HtmlDocument`:
 | `GetText(from, to)` | The plain text as it would be copied: a line break between blocks and at a forced break (`<br>`, a `pre` line), a space where a paragraph wrapped, and no space that was not in the text. |
 | `FindText(query, ignoreCase)` | Every occurrence as a `TextRange`; a match can span lines and inline elements. |
 | `GetWordAt(position)`, `GetBlockAt(position)` | The range a double click and a triple click select. |
+
+### Painting a selection and `::selection`
+
+With `EnableSelectionStyling` (and `RecordTextRuns`) set, `document.SetSelectedRanges(ranges)` selects the text between pairs of positions and
+`PaintPageAsync` paints it: the `background-color` of the document's `::selection` rules fills the selected characters and the spaces between
+selected words, and the rule's `color` replaces the text colour inside the selection. `SetSelectedRanges(null)` clears it; repaint the pages
+to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions.SelectionBackground` (light blue) and
+`SelectionForeground` (the text's own colour) are used. With the option off, `::selection` rules are ignored, as they are in a PDF.
+
+- A rule applies to the text of the element it matches (`p::selection`, `.note::selection`, or a bare `::selection` for every element); an
+  element with no rule of its own takes its nearest ancestor's.
+- Only `color` and `background-color` are painted so far, and the highlight is as tall as the word's own line height. A selection never changes
+  layout.
+- Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
+  holds that word's text more than once. Selection is meant for interactive output, not for PDF.
 
 Limits: text in vertical writing modes, in page margin boxes and in footnotes is not reported, and text moved by a `transform` is reported where
 layout put it, not where it was drawn. The per-character positions come from shaping the word with its font and scaling to the width layout gave
