@@ -13,5 +13,4 @@ the drift it replaces.
 
 **To close it:** make the emitter apply the enclosing row's displacement to a captured instance of a table inside
 a displaced run (and record the instance's band in the run frame), then drop the `EnclosingGrid` guard.
-Tracking issue: not yet filed - file one (violates css-tables-3 §6.2 repeated-header placement) and put its
-number here.
+Tracking issue: #1946 (css-tables-3 §6.2 repeated-header placement).
