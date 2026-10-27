@@ -3051,7 +3051,7 @@ namespace PeachBrackets.Html.Fragmentation
                         {
                             var ownRect = Displaced(Shifted(lineRect), shift);
                             var aggregateRect = Displaced(Shifted(AggregateLineRect(line, snapshot, lineRect)), shift);
-                            var lineTop = ownRect.Top + InkRiseAboveLineTop(line, lineRect, snapshot);
+                            var lineTop = ownRect.Top + InkRiseAboveLineTop(box, line, lineRect, snapshot);
                             claims = ClaimsLine(ownRect, aggregateRect, slot.Index, region, isFixed, lineTop,
                                     snapshot is null && capture is null ? box : null)
                                 && ReachesIntoItsStrip(ownRect, displacement);
@@ -3489,8 +3489,21 @@ namespace PeachBrackets.Html.Fragmentation
         /// the live line box describes the last layout, not the captured copy.
         /// </para>
         /// </remarks>
-        private static double InkRiseAboveLineTop(CssLineBox line, Rect lineRect, BoxGeometrySnapshot? snapshot) =>
-            snapshot is null && line.FlowTop is { } flowTop ? Math.Max(0, flowTop - lineRect.Top) : 0;
+        private static double InkRiseAboveLineTop(CssBox box, CssLineBox line, Rect lineRect, BoxGeometrySnapshot? snapshot)
+        {
+            if (line.FlowTop is not { } flowTop) return 0;
+
+            if (snapshot is null) return Math.Max(0, flowTop - lineRect.Top);
+
+            // A captured copy reads the rise off the live pair instead: how far the ink rises above the line is a
+            // property of the line (its glyphs against its line-height), the same wherever the line sits, so the
+            // difference of the live line box's two tops carries over to the copy even though neither top does.
+            // Left at zero, the slot that walks the live line takes its flow top (the line begins just below a
+            // page's top edge) while the slot that walks the captured column takes the ink's (just above it), the
+            // two name different pages, and neither claims the line: a heading in a column that began less than a
+            // point above the foot was drawn on no page.
+            return box.Rectangles.TryGetValue(line, out var live) ? Math.Max(0, flowTop - live.Top) : 0;
+        }
 
         /// <summary>
         /// Whether the fragmentainer of pagination slot <paramref name="slotIndex"/> claims the word at
@@ -4882,7 +4895,7 @@ namespace PeachBrackets.Html.Fragmentation
 
             if (word.Line is { } line && RectanglesOf(box, instance.Geometry).TryGetValue(line, out var lineRect))
             {
-                var lineTop = lineRect.Top + InkRiseAboveLineTop(line, lineRect, instance.Geometry);
+                var lineTop = lineRect.Top + InkRiseAboveLineTop(box, line, lineRect, instance.Geometry);
 
                 return ClaimsLine(lineRect, AggregateLineRect(line, instance.Geometry, lineRect), slotIndex, region, false, lineTop);
             }
