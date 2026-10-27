@@ -96,6 +96,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
+| `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
 
 The options are read when the document is loaded.
 
@@ -119,6 +120,39 @@ top-left corner of the sheet. A consumer that writes a format with these concept
 
 `document.Language` and `document.Metadata` (title, author, subject, keywords, date, generator) report what the document says about itself.
 `GetElementBounds(id)` gives the rectangle of an element by its `id`.
+
+## Where the text is: selection, copy and find
+
+A consumer that paints pages into a bitmap has no text to select unless the engine says where the text landed. With `RecordTextRuns` set,
+`document.TextRuns` (all pages) and `GetTextRuns(pageIndex)` give one `TextRun` per line of a block, in reading order, in points from the
+top-left corner of the sheet - the same space as `Annotations.Links[].Bounds`. Nothing is computed until you read it, and layout and painting
+are identical either way.
+
+A `TextRun` has:
+
+- `Text` - what was drawn, in logical order (bidirectional text is not reordered or mirrored), whitespace as the layout collapsed it, and a
+  space where two words on a line were separated.
+- `Bounds`, `Baseline`, `Ascent`, `Descent` - the line's rectangle and font metrics, enough to fill a highlight as tall as the line.
+- `CharacterOffsets` - the x of the edge before each UTF-16 index and after the last (`Text.Length + 1` values), in the logical order of the
+  text, so a right-to-left run's offsets decrease. `CharacterBoundaries` lists the indices a caret can sit at: the grapheme cluster
+  boundaries, so never inside a surrogate pair, an emoji sequence or a letter with its accents.
+- `IsRtl`, `BlockId` (the same for every run of a paragraph, list item, table cell or `pre`) and `ElementId` of that block, and `LinkUri`
+  when the run is inside a link. A line is split into several runs where a link starts or ends.
+
+On `HtmlDocument`:
+
+| Member | Result |
+| --- | --- |
+| `HitTest(page, x, y)` | A `TextPosition` (`RunIndex`, `CharIndex`): the start of the character under the point. A point in a gap or margin goes to the nearest line, one past a line's end to its nearest character. |
+| `GetCaretPosition(page, x, y)` | The boundary between characters nearest the point - where a cursor, or the end of a drag selection, goes. |
+| `GetSelectionRects(from, to)` | One rectangle per line covering the text between two positions (the end is not included). |
+| `GetText(from, to)` | The plain text as it would be copied: a line break between blocks and at a forced break (`<br>`, a `pre` line), a space where a paragraph wrapped, and no space that was not in the text. |
+| `FindText(query, ignoreCase)` | Every occurrence as a `TextRange`; a match can span lines and inline elements. |
+| `GetWordAt(position)`, `GetBlockAt(position)` | The range a double click and a triple click select. |
+
+Limits: text in vertical writing modes, in page margin boxes and in footnotes is not reported, and text moved by a `transform` is reported where
+layout put it, not where it was drawn. The per-character positions come from shaping the word with its font and scaling to the width layout gave
+it, so they follow ligatures and justification but not a custom `letter-spacing` applied unevenly.
 
 ## Structure for tagged output
 

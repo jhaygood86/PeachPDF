@@ -7,7 +7,9 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Html.Pages;
 using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.TextGeometry;
 using PeachBrackets.Tagging;
+using PeachBrackets.Text;
 using PeachBrackets.Utilities;
 using PeachDrawing.Core;
 using System;
@@ -15,6 +17,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
+using TextPosition = PeachBrackets.Text.TextPosition;
+using TextRange = PeachBrackets.Text.TextRange;
 
 namespace PeachBrackets;
 
@@ -45,6 +49,8 @@ public sealed class HtmlDocument : IDisposable
     private PagePainter? _painter;
     private DocumentAnnotations? _annotations;
     private IReadOnlyList<DocumentPage>? _pages;
+    private IReadOnlyList<TextRun>? _textRuns;
+    private bool _recordTextRuns;
     private bool _disposed;
 
     private HtmlDocument(HtmlContainerInt container, RenderContext renderContext)
@@ -87,6 +93,7 @@ public sealed class HtmlDocument : IDisposable
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
             container.AnimationProgress = options.AnimationProgress;
             container.InteractiveForms = options.CollectFormFields;
+            document._recordTextRuns = options.RecordTextRuns;
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent
             // line-break tailorings need the language then, not after loading returns.
@@ -163,6 +170,7 @@ public sealed class HtmlDocument : IDisposable
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
+            document._recordTextRuns = options.RecordTextRuns;
             await container.SetDeclarativeRoot(page.Root.Box, options.DefaultLanguage, styleSheet?.Data, properties.DisplayContentsShells);
 
             if (styleSheet is not null)
@@ -357,6 +365,116 @@ public sealed class HtmlDocument : IDisposable
             _ = Pages;
             return _annotations ??= DocumentAnnotationCollector.Collect(_container, _container.FragmentTree?.Fragmentainers ?? []);
         }
+    }
+
+    /// <summary>
+    /// The text of the document as it was laid out, one run per line of a block, in reading order, positioned on its page in points (the space
+    /// <see cref="Annotations"/> uses) with the x position of every character: what a consumer needs to build text selection, copy and find.
+    /// Needs <see cref="HtmlDocumentOptions.RecordTextRuns"/>. Text drawn vertically, in a margin box or in a footnote is not included, and
+    /// text moved by a transform is reported where layout put it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<TextRun> TextRuns
+    {
+        get
+        {
+            _ = Pages;
+            if (!_recordTextRuns)
+                throw new InvalidOperationException("Set HtmlDocumentOptions.RecordTextRuns before loading the document to read its text runs.");
+
+            return _textRuns ??= TextRunCollector.Collect(_container, _container.FragmentTree?.Fragmentainers ?? []);
+        }
+    }
+
+    /// <summary>The text runs on one page, in reading order.</summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <returns>the runs of that page</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<TextRun> GetTextRuns(int pageIndex)
+    {
+        ThrowIfNotAPage(pageIndex);
+        return TextRuns.Where(run => run.PageIndex == pageIndex).ToArray();
+    }
+
+    /// <summary>
+    /// The character at a point of a page: the position of the start of the character the point is over, in <see cref="TextRuns"/>. A point
+    /// in a gap or margin is taken to the nearest line, and one beyond a line's end to its nearest character.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the position, or null if the page has no text</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public TextPosition? HitTest(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        return TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: false);
+    }
+
+    /// <summary>
+    /// The place between two characters nearest a point of a page, where a text cursor or the end of a drag selection goes. See
+    /// <see cref="HitTest"/>, which gives the character itself.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the position, or null if the page has no text</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public TextPosition? GetCaretPosition(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        return TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: true);
+    }
+
+    /// <summary>The rectangles, one per line and in points, that cover the text between two positions: what to fill to show a selection.</summary>
+    /// <param name="from">where the selection starts (either end may come first)</param>
+    /// <param name="to">where it ends, not included</param>
+    /// <returns>the rectangles, each as tall as its line's font</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to) => TextRunQueries.SelectionRects(TextRuns, from, to);
+
+    /// <summary>
+    /// The plain text between two positions as it would be copied: a line break between blocks and at a forced break (a <c>pre</c> line, a
+    /// <c>&lt;br&gt;</c>), a single space where a paragraph wrapped, and no space that was not in the text.
+    /// </summary>
+    /// <param name="from">where the text starts (either end may come first)</param>
+    /// <param name="to">where it ends, not included</param>
+    /// <returns>the text</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public string GetText(TextPosition from, TextPosition to) => TextRunQueries.GetText(TextRuns, from, to);
+
+    /// <summary>Finds every place a string occurs in the text of the document, as <see cref="GetText"/> reads it.</summary>
+    /// <param name="query">the text to look for</param>
+    /// <param name="ignoreCase">whether to ignore the case of letters (ordinal, not culture aware)</param>
+    /// <returns>where each occurrence starts and ends, in order; empty if there is none</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="query"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<TextRange> FindText(string query, bool ignoreCase = false)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        return TextRunQueries.Find(TextRuns, query, ignoreCase);
+    }
+
+    /// <summary>The word at a position, as a double click selects it, or null if the position is not in any text.</summary>
+    /// <param name="position">a position in <see cref="TextRuns"/></param>
+    /// <returns>the range of the word</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public TextRange? GetWordAt(TextPosition position) => TextRunQueries.WordAt(TextRuns, position);
+
+    /// <summary>The whole block (paragraph, list item, <c>pre</c>) at a position, as a triple click selects it, or null if the position is not in any text.</summary>
+    /// <param name="position">a position in <see cref="TextRuns"/></param>
+    /// <returns>the range of the block</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public TextRange? GetBlockAt(TextPosition position) => TextRunQueries.BlockAt(TextRuns, position);
+
+    private void ThrowIfNotAPage(int pageIndex)
+    {
+        var pages = Pages;
+        if ((uint)pageIndex >= (uint)pages.Count)
+            throw new ArgumentOutOfRangeException(nameof(pageIndex), pageIndex, $"The document has {pages.Count} page(s).");
     }
 
     /// <summary>

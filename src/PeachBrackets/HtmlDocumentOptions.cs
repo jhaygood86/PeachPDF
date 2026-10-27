@@ -97,4 +97,11 @@ public sealed class HtmlDocumentOptions
     /// interactive. Off by default; the controls are painted either way.
     /// </summary>
     public bool CollectFormFields { get; set; }
+
+    /// <summary>
+    /// Whether the document can report where its text is (<see cref="HtmlDocument.TextRuns"/> and the hit-testing, selection and search that
+    /// build on it), so a consumer can offer text selection, copying and find. Off by default; nothing is worked out unless it is read, and the
+    /// layout and painting are the same either way.
+    /// </summary>
+    public bool RecordTextRuns { get; set; }
 }
