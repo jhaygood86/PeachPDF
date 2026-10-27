@@ -148,6 +148,23 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task OutsetShadow_IsClippedOutOfTheBorderBoxBeforeItIsDrawn()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div id='b' style='margin:20pt;width:100pt;height:50pt;box-shadow:0 0 0 10pt rgba(255,0,0,.5)'></div>"));
+
+            var box = LayoutHarness.FindById(root, "b")!;
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, box, g);
+
+            var clip = g.Log.FindIndex(c => c is TestRecordingGraphics.PushClipCall);
+            var draw = g.Log.FindIndex(c => c is TestRecordingGraphics.DrawRectCall);
+            Assert.True(clip >= 0, "the border box is cut out of the clip");
+            Assert.True(draw > clip, "the shadow is drawn only after the cut");
+            Assert.Contains(g.ClipPaths, p => p.FillMode == FillMode.EvenOdd);
+        }
+
+        [Fact]
         public async Task Slice_WrappingInline_DrawsNoShadowAtABrokenEdge()
         {
             var (root, container) = await LayoutHarness.LayoutAsync(WrappingSpan(

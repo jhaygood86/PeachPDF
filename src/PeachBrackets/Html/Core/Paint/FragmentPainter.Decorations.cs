@@ -534,6 +534,7 @@ namespace PeachBrackets.Html.Paint
 
             var borderBox = geometry.DecorationRect;
             var sliced = PushBreakEdgeClip(g, box, geometry, layers);
+            var excluded = inset ? 0 : PushBorderBoxExclusion(g, box, borderBox);
 
             for (var i = layers.Count - 1; i >= 0; i--)
             {
@@ -552,8 +553,34 @@ namespace PeachBrackets.Html.Paint
                     PaintOutsetShadow(g, box, borderBox, dx, dy, blur, spread, color);
             }
 
+            for (var i = 0; i < excluded; i++)
+                g.PopClip();
+
             if (sliced)
                 g.PopClip();
+        }
+
+        /// <summary>
+        /// An outer shadow is drawn only outside the border edge (CSS Backgrounds 3 §7.1.1), so the
+        /// border-edge shape is cut out of the clip: an even-odd path of a very large rectangle with that
+        /// shape inside it. Every backend honours a path clip, which <see cref="Canvas.PushClipExclude"/>
+        /// (a no-op on some) cannot promise.
+        /// </summary>
+        /// <returns>How many clips were pushed.</returns>
+        private static int PushBorderBoxExclusion(Canvas g, CssBox box, Rect borderBox)
+        {
+            if (borderBox.Width <= 0 || borderBox.Height <= 0) return 0;
+
+            const double reach = 100000;
+            var path = RenderUtils.GetRoundRect(g,
+                new Rect(borderBox.X - reach, borderBox.Y - reach, borderBox.Width + 2 * reach, borderBox.Height + 2 * reach),
+                0, 0, 0, 0, 0, 0, 0, 0);
+            using (var hole = BuildLayerRoundRect(g, borderBox, ShadowCornerRadii(box, borderBox, 0), 0))
+                path.AddPath(hole);
+            path.FillMode = FillMode.EvenOdd;
+            g.PushClip(path);
+            path.Dispose();
+            return 1;
         }
 
         /// <summary>
