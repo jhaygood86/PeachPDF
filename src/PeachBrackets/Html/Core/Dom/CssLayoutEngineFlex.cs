@@ -715,7 +715,8 @@ namespace PeachBrackets.Html.Dom
                             + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
                     }
                     else if (box.Boxes.Count == 0
-                             || box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid)
+                             || (box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid
+                                 && !CssLayoutEngineGrid.TryMeasureIntrinsicWidth(g, box, out _, out _)))
                     {
                         // Two cases the intrinsic measurement below cannot answer, both falling back
                         // to the laid-out width as this always did.
@@ -723,8 +724,11 @@ namespace PeachBrackets.Html.Dom
                         // A leaf with no line boxes has no content to measure -- a replaced element,
                         // where the laid-out width IS the intrinsic width.
                         //
-                        // A nested GRID container places its children on tracks the intrinsic walk
-                        // knows nothing about. A nested flex row is handled: CssBox.IsFlexRowItem
+                        // A nested GRID container whose column axis needs layout to resolve (a subgrid,
+                        // an auto-fill/auto-fit repeat, named areas, column auto-flow) is not something
+                        // the intrinsic walk can sum, see CssLayoutEngineGrid.TryMeasureIntrinsicWidth.
+                        // Every other grid is measured from its tracks below. A nested flex row is
+                        // handled: CssBox.IsFlexRowItem
                         // stops its items each starting a new line, so their widths add up the way
                         // the row lays them out.
                         maxContent = naturalMain;

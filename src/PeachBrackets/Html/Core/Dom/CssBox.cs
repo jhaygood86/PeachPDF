@@ -8856,6 +8856,15 @@ namespace PeachBrackets.Html.Dom
                 // white-space: nowrap (which inherits, so the row need not declare it).
                 trailingSpace = 0;
             }
+            else if (box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid && box.Boxes.Count > 0
+                     && CssLayoutEngineGrid.TryMeasureIntrinsicWidth(g, box, out var gridMin, out var gridMax))
+            {
+                // A grid container's items sit in tracks side by side, so its intrinsic width is the sum of
+                // its tracks (css-grid-2 §5.2), not the one running line total the flat walk carries.
+                maxSum += gridMax;
+                UpdateMinWidth(ref min, ref minDecoration, gridMin, paddingSum);
+                trailingSpace = 0;
+            }
             else if (box.Words.Count > 0)
             {
                 // calculate the min and max sum for all the words in the box
