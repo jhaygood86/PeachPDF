@@ -51,6 +51,7 @@ namespace PeachBrackets.Html.Dom
         internal CssBox? TableGridDecorationBox;
         internal bool IsTableGridDecorationBox;
         internal bool IsInlineRunWrapper;
+        internal bool IsRowSpanningCell;
         internal bool IsReplacedBlockWrapper;
         internal bool IsInlineBoxSplitByBlock;
         internal Dictionary<int, double>? PageBreakBottoms;

@@ -641,6 +641,8 @@ namespace PeachBrackets.Html.Dom
         /// </para>
         /// </summary>
         internal bool IsInlineRunWrapper { get => _rare is null ? default(bool) : _rare.IsInlineRunWrapper; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineRunWrapper = value; } }
+        /// <summary>A table cell that a <see cref="CssSpacingBox"/> stands in for in each later row it spans, so the fragment walk reaches it more than once.</summary>
+        internal bool IsRowSpanningCell { get => _rare is null ? default(bool) : _rare.IsRowSpanningCell; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsRowSpanningCell = value; } }
 
         /// <summary>
         /// True for the anonymous block <see cref="DomParser.CorrectReplacedElementBoxes"/> builds

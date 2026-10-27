@@ -18,6 +18,7 @@ namespace PeachBrackets.Html.Dom
             : base(tableBox, new HtmlTag("none", false, new Dictionary<string, string> { { "colspan", "1" } }))
         {
             ExtendedBox = extendedBox;
+            extendedBox.IsRowSpanningCell = true;
             Display = CssProperty<DisplayMode>.FromValue(Keywords.TableCell, DisplayMode.TableCell);
 
             StartRow = startRow;
