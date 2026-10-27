@@ -8959,7 +8959,7 @@ namespace PeachBrackets.Html.Dom
             // which physical side it ends up on after mirroring.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
             var lineEnd = lineBox.ContentRight - (isRtl ? indent : 0);
-            var leftover = lineEnd - lineBox.Words[^1].Right;
+            var leftover = lineEnd - Math.Max(lineBox.Words[^1].Right, LineContentEnd(lineBox));
 
             // §6.1: an overflowing line is start-aligned and spills past the end edge. Distributing the
             // negative leftover instead would pull each word back through the previous one's trailing
@@ -9077,12 +9077,81 @@ namespace PeachBrackets.Html.Dom
             && CommonUtils.IsAsianCharacter(rune);
 
         /// <summary>
+        /// Whether <paramref name="box"/> is an atomic inline-level box that keeps its content in line boxes
+        /// of its own - an <c>inline-flex</c>, <c>inline-grid</c> or <c>inline-table</c> - rather than as
+        /// words on <paramref name="line"/>, so alignment has to measure and move it as a unit.
+        /// </summary>
+        private static bool IsAtomicLineUnit(CssLineBox line, CssBox box) =>
+            !ReferenceEquals(box, line.OwnerBox)
+            && box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable;
+
+        private static bool HasAtomicLineUnit(CssLineBox line)
+        {
+            foreach (var box in line.Rectangles.Keys)
+            {
+                if (IsAtomicLineUnit(line, box)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The right edge of what <paramref name="line"/> holds: its last word including the inline
+        /// decoration closing after it, or the margin box of an atomic unit that reaches further
+        /// (CSS Text 3 §6.1 aligns the line's atomic inlines at their margin-box width, like characters).
+        /// </summary>
+        private static double LineContentEnd(CssLineBox line)
+        {
+            var end = double.MinValue;
+
+            if (line.Words.Count > 0)
+            {
+                var lastWord = line.Words[^1];
+                end = lastWord.Right + lastWord.OwnerBox.ActualBorderRightWidth + lastWord.OwnerBox.ActualPaddingRight;
+            }
+
+            foreach (var box in line.Rectangles.Keys)
+            {
+                if (IsAtomicLineUnit(line, box))
+                    end = Math.Max(end, box.ActualRight + box.ActualMarginRight);
+            }
+
+            return end;
+        }
+
+        /// <summary>
+        /// Moves everything on <paramref name="line"/> right by <paramref name="diff"/>: its words, its
+        /// rectangles and each atomic unit's whole subtree, which lives in line boxes of its own.
+        /// </summary>
+        private static void ShiftLineContentLeft(CssLineBox line, double diff)
+        {
+            foreach (var word in line.Words)
+            {
+                word.Left += diff;
+            }
+
+            if (line.Rectangles.Count <= 0) return;
+
+            foreach (var b in line.Rectangles.Keys.ToList())
+            {
+                if (IsAtomicLineUnit(line, b))
+                {
+                    b.OffsetLeft(diff);
+                    MoveStaticallyPlacedDescendants(b, b, diff, isVertical: true);
+                }
+
+                var r = line.Rectangles[b];
+                line.Rectangles[b] = new Rect(r.X + diff, r.Y, r.Width, r.Height);
+            }
+        }
+
+        /// <summary>
         /// Applies centered alignment to the text on the line-box
         /// </summary>
         /// <param name="line"></param>
         private static void ApplyCenterAlignment(CssLineBox line)
         {
-            if (line.Words.Count == 0)
+            if (line.Words.Count == 0 && !HasAtomicLineUnit(line))
                 return;
 
             // text-indent's line-start side is physical-left under LTR, where the flow-time CurrentX
@@ -9100,10 +9169,8 @@ namespace PeachBrackets.Html.Dom
             var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
-            var lastWord = line.Words[^1];
             var right = line.ContentRight - (isRtl ? indent : 0);
-            var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
-            diff /= 2;
+            var diff = (right - LineContentEnd(line)) / 2;
 
             // right - lastWord.Right is, by construction, exactly the shift needed to center the line
             // around its target - there is no direction in which a nonzero diff should be discarded. The
@@ -9118,18 +9185,7 @@ namespace PeachBrackets.Html.Dom
             // underlying issue.
             if (!(Math.Abs(diff) > 0)) return;
 
-            foreach (var word in line.Words)
-            {
-                word.Left += diff;
-            }
-
-            if (line.Rectangles.Count <= 0) return;
-
-            foreach (var b in line.Rectangles.Keys.ToList())
-            {
-                var r = line.Rectangles[b];
-                line.Rectangles[b] = new Rect(r.X + diff, r.Y, r.Width, r.Height);
-            }
+            ShiftLineContentLeft(line, diff);
         }
 
         /// <summary>
@@ -9138,7 +9194,7 @@ namespace PeachBrackets.Html.Dom
         /// <param name="line"></param>
         private static void ApplyRightAlignment(CssLineBox line)
         {
-            if (line.Words.Count == 0)
+            if (line.Words.Count == 0 && !HasAtomicLineUnit(line))
                 return;
 
             // ApplyRightAlignment runs for every plain RTL paragraph (RTL's default `text-align: start`
@@ -9158,9 +9214,8 @@ namespace PeachBrackets.Html.Dom
             var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
-            var lastWord = line.Words[^1];
             var right = line.ContentRight - (isRtl ? indent : 0);
-            var diff = right - lastWord.Right - lastWord.OwnerBox.ActualBorderRightWidth - lastWord.OwnerBox.ActualPaddingRight;
+            var diff = right - LineContentEnd(line);
 
             // right - lastWord.Right is, by construction, exactly the shift needed to flush the line to
             // its target right edge - there is no direction in which a nonzero diff should be discarded.
@@ -9173,18 +9228,7 @@ namespace PeachBrackets.Html.Dom
             // (issue #797) for the horizontal axis - see that method's own remarks for the full reasoning.
             if (!(Math.Abs(diff) > 0)) return;
 
-            foreach (var word in line.Words)
-            {
-                word.Left += diff;
-            }
-
-            if (line.Rectangles.Count <= 0) return;
-
-            foreach (var b in line.Rectangles.Keys.ToList())
-            {
-                var r = line.Rectangles[b];
-                line.Rectangles[b] = new Rect(r.X + diff, r.Y, r.Width, r.Height);
-            }
+            ShiftLineContentLeft(line, diff);
         }
 
         private static async ValueTask<double> GetLargestChildWidth(Canvas g, CssBox box, double currentSize)
