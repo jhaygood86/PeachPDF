@@ -318,14 +318,27 @@ namespace PeachDrawing.Text.Layout
 
             UseCategory[]? categories = null;
             KhmerCategory[]? khmerCategories = null;
+            // Script names come from one table, so a run of codepoints in one script shares the string instance:
+            // the set lookups are answered once per run instead of once per codepoint.
+            string? lastScript = null;
+            bool lastUse = false;
+            bool lastKhmer = false;
             for (int c = 0; c < resolved.Count; c++)
             {
-                if (UseShapedScripts.Contains(resolved[c]))
+                var script = resolved[c];
+                if (!ReferenceEquals(script, lastScript))
+                {
+                    lastScript = script;
+                    lastUse = UseShapedScripts.Contains(script);
+                    lastKhmer = !lastUse && KhmerShapedScripts.Contains(script);
+                }
+
+                if (lastUse)
                 {
                     categories ??= new UseCategory[codepoints.Count];
                     categories[c] = UniversalShaping.Classify(codepoints[c]);
                 }
-                else if (KhmerShapedScripts.Contains(resolved[c]))
+                else if (lastKhmer)
                 {
                     khmerCategories ??= new KhmerCategory[codepoints.Count];
                     khmerCategories[c] = KhmerShaping.Classify(codepoints[c]);
@@ -380,36 +393,55 @@ namespace PeachDrawing.Text.Layout
             }
 
             var pieceText = Text.Substring(start, end - start);
-            var forms = new List<ArabicJoiningForm>();
-            // Built only when this piece's own script is actually the shaped one - _use/_khmer are
-            // paragraph-wide arrays (allocated the moment ANY codepoint anywhere in the paragraph needs
-            // one), so a non-USE/non-Khmer piece sharing a paragraph with USE/Khmer text (e.g. an
-            // embedded Latin-numeral run inside Khmer body text) would otherwise build a throwaway list
-            // every time it's shaped, for no reason: neither list is ever read below unless the matching
-            // Contains check on the next line also passes.
-            List<UseCategory>? categories = _use is not null && UseShapedScripts.Contains(atom.Script) ? [] : null;
-            List<KhmerCategory>? khmerCategories = _khmer is not null && KhmerShapedScripts.Contains(atom.Script) ? [] : null;
+            // The per-codepoint lists are built only for the one kind this piece's own script is shaped by
+            // (_use/_khmer are paragraph-wide arrays, allocated the moment ANY codepoint anywhere in the
+            // paragraph needs one, so a non-USE/non-Khmer piece sharing a paragraph with USE/Khmer text
+            // must not build a throwaway list every time it's shaped), and in precedence order: joining
+            // forms, then USE categories, then Khmer categories.
             bool anyJoining = false;
-            for (int i = start; i < end;)
+            for (int i = start; i < end; i++)
             {
-                Rune.DecodeFromUtf16(Text.AsSpan(i), out _, out int consumed);
-                forms.Add(_joining[i]);
-                anyJoining |= _joining[i] != ArabicJoiningForm.None;
-                categories?.Add(_use![i]);
-                khmerCategories?.Add(_khmer![i]);
-                i += consumed;
+                if (_joining[i] != ArabicJoiningForm.None)
+                {
+                    anyJoining = true;
+                    break;
+                }
             }
 
             if (anyJoining)
             {
+                var forms = new List<ArabicJoiningForm>();
+                for (int i = start; i < end;)
+                {
+                    Rune.DecodeFromUtf16(Text.AsSpan(i), out _, out int consumed);
+                    forms.Add(_joining[i]);
+                    i += consumed;
+                }
+
                 settings = settings with { JoiningForms = forms };
             }
-            else if (categories is not null && UseShapedScripts.Contains(atom.Script))
+            else if (_use is not null && UseShapedScripts.Contains(atom.Script))
             {
+                var categories = new List<UseCategory>();
+                for (int i = start; i < end;)
+                {
+                    Rune.DecodeFromUtf16(Text.AsSpan(i), out _, out int consumed);
+                    categories.Add(_use[i]);
+                    i += consumed;
+                }
+
                 settings = settings with { UseCategories = categories };
             }
-            else if (khmerCategories is not null && KhmerShapedScripts.Contains(atom.Script))
+            else if (_khmer is not null && KhmerShapedScripts.Contains(atom.Script))
             {
+                var khmerCategories = new List<KhmerCategory>();
+                for (int i = start; i < end;)
+                {
+                    Rune.DecodeFromUtf16(Text.AsSpan(i), out _, out int consumed);
+                    khmerCategories.Add(_khmer[i]);
+                    i += consumed;
+                }
+
                 settings = settings with { KhmerCategories = khmerCategories };
             }
 

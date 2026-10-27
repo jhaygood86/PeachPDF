@@ -34,10 +34,12 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Text;
 using Fixed = System.Int32;
 
 #pragma warning disable 0649
@@ -740,9 +742,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         public int Seek(string tag)
         {
-            if (TableDictionary.ContainsKey(tag))
+            if (TableDictionary.TryGetValue(tag, out var entry))
             {
-                _pos = TableDictionary[tag].Offset;
+                _pos = entry.Offset;
                 return _pos;
             }
             return -1;
@@ -769,7 +771,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 2;
-            return (short)((_fontSource.Bytes[pos] << 8) | (_fontSource.Bytes[pos + 1]));
+            return BinaryPrimitives.ReadInt16BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -779,7 +781,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 2;
-            return (ushort)((_fontSource.Bytes[pos] << 8) | (_fontSource.Bytes[pos + 1]));
+            return BinaryPrimitives.ReadUInt16BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -789,7 +791,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 4;
-            return (_fontSource.Bytes[pos] << 24) | (_fontSource.Bytes[pos + 1] << 16) | (_fontSource.Bytes[pos + 2] << 8) | (_fontSource.Bytes[pos + 3]);
+            return BinaryPrimitives.ReadInt32BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -799,7 +801,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 4;
-            return (uint)((_fontSource.Bytes[pos] << 24) | (_fontSource.Bytes[pos + 1] << 16) | (_fontSource.Bytes[pos + 2] << 8) | (_fontSource.Bytes[pos + 3]));
+            return BinaryPrimitives.ReadUInt32BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -809,7 +811,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 4;
-            return (_fontSource.Bytes[pos] << 24) | (_fontSource.Bytes[pos + 1] << 16) | (_fontSource.Bytes[pos + 2] << 8) | (_fontSource.Bytes[pos + 3]);
+            return BinaryPrimitives.ReadInt32BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -819,7 +821,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 2;
-            return (short)((_fontSource.Bytes[pos] << 8) | (_fontSource.Bytes[pos + 1]));
+            return BinaryPrimitives.ReadInt16BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -829,7 +831,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 2;
-            return (ushort)((_fontSource.Bytes[pos] << 8) | (_fontSource.Bytes[pos + 1]));
+            return BinaryPrimitives.ReadUInt16BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -839,9 +841,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         {
             int pos = _pos;
             _pos += 8;
-            byte[] bytes = _fontSource.Bytes;
-            return (((long)bytes[pos]) << 56) | (((long)bytes[pos + 1]) << 48) | (((long)bytes[pos + 2]) << 40) | (((long)bytes[pos + 3]) << 32) |
-                   (((long)bytes[pos + 4]) << 24) | (((long)bytes[pos + 5]) << 16) | (((long)bytes[pos + 6]) << 8) | bytes[pos + 7];
+            return BinaryPrimitives.ReadInt64BigEndian(_fontSource.Bytes.AsSpan(pos));
         }
 
         /// <summary>
@@ -888,7 +888,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public string ReadTag()
         {
-            return ReadString(4);
+            // Tags are Latin-1 (a byte is its char), so the 4 bytes decode straight to the string without a char[] in between.
+            int pos = _pos;
+            _pos += 4;
+            return Encoding.Latin1.GetString(_fontSource.Bytes, pos, 4);
         }
 
         /// <summary>

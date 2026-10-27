@@ -36,6 +36,9 @@ namespace PeachDrawing.Text.Internal.Text
         private const int DefaultLeftHyphenMin = 2;
         private const int DefaultRightHyphenMin = 3;
 
+        /// <summary>Longest wrapped word (and gap table) kept on the stack by <see cref="FindHyphenationPoints"/>.</summary>
+        private const int StackLimit = 256;
+
         private static readonly Regex HyphenMinsRegex =
             new(@"hyphenmins:\s*left=(?<left>\d+)\s*right=(?<right>\d+)", RegexOptions.Compiled);
 
@@ -73,25 +76,42 @@ namespace PeachDrawing.Text.Internal.Text
             if (word.Length < patternSet.LeftHyphenMin + patternSet.RightHyphenMin)
                 return [];
 
-            var lower = word.ToLowerInvariant();
-            foreach (var c in lower)
+            // "." + lowercased word + "." and the per-gap digit table live on the stack for any word a
+            // real document holds; only a pathological one falls back to the heap.
+            var wrappedLength = word.Length + 2;
+            Span<char> wrapped = wrappedLength <= StackLimit ? stackalloc char[StackLimit] : new char[wrappedLength];
+            wrapped = wrapped[..wrappedLength];
+            wrapped[0] = '.';
+            wrapped[^1] = '.';
+            word.AsSpan().ToLowerInvariant(wrapped.Slice(1, word.Length));
+            foreach (var c in wrapped.Slice(1, word.Length))
             {
                 if (!char.IsLetter(c)) return [];
             }
 
-            var wrapped = "." + lower + ".";
-            var gapCount = wrapped.Length + 1;
-            var values = new byte[gapCount];
+            var gapCount = wrappedLength + 1;
+            Span<byte> values = gapCount <= StackLimit ? stackalloc byte[StackLimit] : new byte[gapCount];
+            values = values[..gapCount];
+            values.Clear();
             var maxPatternLength = patternSet.MaxPatternLength;
             var patterns = patternSet.Patterns;
+#if NET9_0_OR_GREATER
+            // Looks each (start, len) slice up as a span, so no substring is allocated per probe.
+            var lookup = patterns.GetAlternateLookup<ReadOnlySpan<char>>();
+#endif
 
-            for (var start = 0; start < wrapped.Length; start++)
+            for (var start = 0; start < wrappedLength; start++)
             {
-                var maxLen = Math.Min(maxPatternLength, wrapped.Length - start);
+                var maxLen = Math.Min(maxPatternLength, wrappedLength - start);
                 for (var len = 1; len <= maxLen; len++)
                 {
-                    if (!patterns.TryGetValue(wrapped.Substring(start, len), out var digits))
+#if NET9_0_OR_GREATER
+                    if (!lookup.TryGetValue(wrapped.Slice(start, len), out var digits))
                         continue;
+#else
+                    if (!patterns.TryGetValue(new string(wrapped.Slice(start, len)), out var digits))
+                        continue;
+#endif
 
                     for (var k = 0; k < digits.Length; k++)
                     {
