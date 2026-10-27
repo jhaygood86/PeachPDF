@@ -62,7 +62,7 @@ namespace PeachBrackets.Html.Fragmentation
             {
                 var authored = box.HeightBeforeItemPin;
 
-                if (!CssValueParser.IsValidLength(authored)) return false;
+                if (authored is null || !CssValueParser.IsValidLength(authored)) return false;
                 if (!CssValueParser.DependsOnPercentage(authored)) return true;
             }
 
