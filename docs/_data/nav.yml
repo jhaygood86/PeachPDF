@@ -28,6 +28,8 @@
       url: /peachdrawing-pdf.html
     - title: PeachDrawing.Svg
       url: /peachdrawing-svg.html
+    - title: PeachDrawing.Win2D
+      url: /peachdrawing-win2d.html
     - title: PeachBrackets
       url: /peachbrackets.html
     - title: PeachImage

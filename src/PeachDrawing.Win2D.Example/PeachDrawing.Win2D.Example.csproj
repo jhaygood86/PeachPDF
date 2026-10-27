@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A console app that draws a handful of scenes with PeachDrawing.Win2D alone - no PeachPDF, no HTML, no PDF - and writes each as a
+    PNG file (Windows only: Win2D is). It is the "how do I use the package" sample (docs/peachdrawing-win2d.md walks through it).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Platforms>x64</Platforms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
+  </ItemGroup>
+
+  <!-- The font the text scenes draw with, so the output is the same on every machine. -->
+  <ItemGroup>
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

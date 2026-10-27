@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\Version.props" />
+	<Import Project="..\ApiReference.props" />
+	<PropertyGroup>
+		<!-- Windows-only: Win2D is a Windows App SDK component. The repo-wide net8.0 target is dropped on purpose. -->
+		<TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks Condition="'$(ResolvedNETCoreSdkVersionLooksVersioned)' == 'true' AND $([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
+		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+		<AssemblyName>PeachDrawing.Win2D</AssemblyName>
+		<RootNamespace>PeachDrawing.Win2D</RootNamespace>
+		<PackageId>PeachDrawing.Win2D</PackageId>
+		<Description>A Win2D Canvas for PeachDrawing.Core - draw shapes, gradients, clips, layers, text and images with hardware-accelerated Win2D into a caller's drawing session or an offscreen bitmap, with clickable links, and no PDF, HTML or CSS involved.</Description>
+		<PackageTags>drawing;graphics;canvas;win2d;directx;windows;rendering</PackageTags>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<!-- A library cannot know the consumer's platform; the application referencing it supplies the Win2D native binary. -->
+		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+		<ProjectReference Include="..\PeachDrawing\PeachDrawing.csproj" />
+		<PackageReference Include="PeachImage" />
+		<PackageReference Include="Microsoft.Graphics.Win2D" />
+	</ItemGroup>
+	<ItemGroup>
+		<InternalsVisibleTo Include="PeachDrawing.Win2D.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

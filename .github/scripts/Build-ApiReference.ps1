@@ -10,6 +10,8 @@ order of the references between them:
 
   PeachDrawing.Text -> PeachDrawing.Core -> PeachImage -> PeachDrawing -> PeachDrawing.PDF -> PeachDrawing.Svg -> PeachBrackets -> PeachPDF
 
+PeachDrawing.Win2D is left out on purpose: it builds only for a Windows target, and this job forces net10.0 on every package on a Linux runner.
+
 PeachImage is not part of this repository. Its documentation is generated from the tag of the version PeachPDF's
 PackageReference names, cloned into artifacts/, so the reference describes the PeachImage PeachPDF was actually built with.
 Its project does not reference DefaultDocumentation, so the tool is run directly over the built assembly and its XML
