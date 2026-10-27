@@ -1200,6 +1200,113 @@ namespace PeachBrackets.Html.Dom
             return (min, max);
         }
 
+        /// <summary>
+        /// A grid container's min-content and max-content widths: the sum of its column track sizes plus
+        /// gutters when sized under a min-/max-content constraint (css-grid-2 §5.2). Tracks are sized with no
+        /// definite space: <c>auto</c> and the intrinsic keywords take their measured contributions, a
+        /// <c>fr</c> track takes its items' contribution divided by its flex factor (§7.2.4, indefinite
+        /// space), and a percentage track behaves as <c>auto</c> (§7.2.1). Returns false, so the caller keeps
+        /// its generic walk, for a grid whose column axis needs layout to resolve: a subgrid, an
+        /// <c>auto-fill</c>/<c>auto-fit</c> repeat, <c>grid-template-areas</c>, or column auto-flow.
+        /// </summary>
+        internal static bool TryMeasureIntrinsicWidth(Canvas g, CssBox gridBox, out double minWidth, out double maxWidth) =>
+            new CssLayoutEngineGrid(gridBox).MeasureIntrinsicWidth(g, out minWidth, out maxWidth);
+
+        private bool MeasureIntrinsicWidth(Canvas g, out double minWidth, out double maxWidth)
+        {
+            minWidth = maxWidth = 0;
+            var colTemplate = _gridBox.GridTemplateColumns.Value;
+            var rowTemplate = _gridBox.GridTemplateRows.Value;
+            if (colTemplate is { IsSubgrid: true } || rowTemplate is { IsSubgrid: true }
+                || colTemplate is { AutoRepeat: not GridAutoRepeatKind.None })
+                return false;
+            if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None))
+                return false;
+
+            var flow = _gridBox.GridAutoFlow ?? Keywords.Row;
+            if (flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0)
+                return false;
+
+            var items = _gridBox.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
+            if (items.Count == 0)
+                return false;
+
+            var explicitColDefs = colTemplate?.Tracks.ToList() ?? [];
+            var placements = PlaceItems(items, false, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0,
+                Math.Max(1, explicitColDefs.Count), BuildLineNames(colTemplate), BuildLineNames(rowTemplate));
+            var colCount = Math.Max(1, Math.Max(explicitColDefs.Count,
+                placements.Count == 0 ? 0 : placements.Max(p => p.ColStart + p.ColSpan)));
+            var colDefs = BuildTrackDefs(explicitColDefs, ExpandTrackSizes(_gridBox.GridAutoColumns), colCount)
+                .Select(PercentToAuto).ToList();
+            var gap = ParseGap(_gridBox.FlexColumnGap, 0);
+
+            var min = new double[colCount];
+            var max = new double[colCount];
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsFixed(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
+            {
+                var (mn, mx) = MeasureItemContributionSync(g, p.Box);
+                min[p.ColStart] = Math.Max(min[p.ColStart], mn);
+                max[p.ColStart] = Math.Max(max[p.ColStart], mx);
+            }
+
+            foreach (var p in placements.Where(p => p.ColSpan > 1 && !IsSubgridItem(p.Box)))
+            {
+                var lastCol = Math.Min(p.ColStart + p.ColSpan, colCount);
+                var spanned = Enumerable.Range(p.ColStart, lastCol - p.ColStart).Where(c => !IsFixed(colDefs[c])).ToList();
+                if (spanned.Count == 0) continue;
+
+                var (mn, mx) = MeasureItemContributionSync(g, p.Box);
+                DistributeSpanContribution(min, colDefs, p, lastCol, spanned, mn, 0, gap);
+                DistributeSpanContribution(max, colDefs, p, lastCol, spanned, mx, 0, gap);
+            }
+
+            double minSum = 0, maxSum = 0, minFr = 0, maxFr = 0;
+            var flexTracks = new List<(int Index, double Flex, double Base)>();
+            for (var i = 0; i < colCount; i++)
+            {
+                InitTrack(colDefs[i], 0, min[i], max[i], out var baseSize, out var limit, out var flex, out _);
+                if (flex > 0)
+                {
+                    // §7.2.4: the hypothetical fr size divides by the flex factor only when it exceeds one.
+                    var divisor = Math.Max(flex, 1);
+                    minFr = Math.Max(minFr, Math.Max(min[i], baseSize) / divisor);
+                    maxFr = Math.Max(maxFr, Math.Max(max[i], baseSize) / divisor);
+                    flexTracks.Add((i, flex, baseSize));
+                    continue;
+                }
+
+                minSum += baseSize;
+                maxSum += double.IsPositiveInfinity(limit) ? baseSize : limit;
+            }
+
+            foreach (var (_, flex, baseSize) in flexTracks)
+            {
+                minSum += Math.Max(baseSize, minFr * flex);
+                maxSum += Math.Max(baseSize, maxFr * flex);
+            }
+
+            var gaps = colCount > 1 ? gap * (colCount - 1) : 0;
+            minWidth = minSum + gaps;
+            maxWidth = maxSum + gaps;
+            return true;
+        }
+
+        /// <summary>The synchronous twin of <see cref="MeasureItemContribution"/> for the intrinsic walk, which
+        /// has measured every word already.</summary>
+        private static (double Min, double Max) MeasureItemContributionSync(Canvas g, CssBox box)
+        {
+            double minContent, maxContent;
+            if (CssValueParser.IsValidLength(box.Width))
+                minContent = maxContent = CssValueParser.ParseLength(box.Width, 0, box);
+            else
+                box.GetMinMaxWidth(g, out minContent, out maxContent);
+
+            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight
+                + box.ActualPaddingLeft + box.ActualPaddingRight
+                + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+            return (minContent + outerExtra, maxContent + outerExtra);
+        }
+
         /// <summary>An item's outer min-content and max-content width contributions (content width, plus its
         /// own margin/border/padding). An explicit width supplies both.</summary>
         private static async ValueTask<(double Min, double Max)> MeasureItemContribution(Canvas g, CssBox box)
