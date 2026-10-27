@@ -2,10 +2,10 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Entities;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace PeachBrackets.Html.Dom
 {
@@ -13,11 +13,8 @@ namespace PeachBrackets.Html.Dom
     /// Engine for evaluating and applying CSS string-set properties.
     /// Handles named strings defined by the string-set property from CSS GCPM spec.
     /// </summary>
-    internal static partial class CssNamedStringEngine
+    internal static class CssNamedStringEngine
     {
-        [GeneratedRegex(@"\s+")]
-        private static partial Regex WhitespaceRegex();
-
         /// <summary>
         /// Applies string-set declarations to a CSS box by evaluating content-lists
         /// and storing the resulting named strings in the box's NamedStrings dictionary.
@@ -366,21 +363,58 @@ namespace PeachBrackets.Html.Dom
             if (!string.IsNullOrEmpty(cssBox.Text))
             {
                 // Normalize whitespace: collapse multiple spaces to single space
-                return WhitespaceRegex().Replace(cssBox.Text.Trim(), " ");
+                return CollapseWhitespace(cssBox.Text);
             }
 
             if (!string.IsNullOrEmpty(cssBox.ForeignText))
             {
                 // A MathML token's text held on its element (CssBox.ForeignText): what its one text box carried.
-                return WhitespaceRegex().Replace(cssBox.ForeignText.Trim(), " ");
+                return CollapseWhitespace(cssBox.ForeignText);
             }
 
             // If no direct text, collect text from child boxes
             var textBuilder = new StringBuilder();
             CollectTextFromChildren(cssBox, textBuilder);
 
-            var text = textBuilder.ToString().Trim();
-            return WhitespaceRegex().Replace(text, " ");
+            return CollapseWhitespace(textBuilder.ToString());
+        }
+
+        /// <summary>
+        /// Trims <paramref name="text"/> and collapses each run of whitespace (<c>\s</c>: <see cref="char.IsWhiteSpace(char)"/>) to one space.
+        /// </summary>
+        internal static string CollapseWhitespace(string text)
+        {
+            var span = text.AsSpan().Trim();
+            var needsWork = false;
+            for (var i = 0; i < span.Length; i++)
+            {
+                var c = span[i];
+                if ((c != ' ' && char.IsWhiteSpace(c)) || (c == ' ' && i + 1 < span.Length && char.IsWhiteSpace(span[i + 1])))
+                {
+                    needsWork = true;
+                    break;
+                }
+            }
+
+            if (!needsWork) return span.Length == text.Length ? text : span.ToString();
+
+            var builder = new StringBuilder(span.Length);
+            var inRun = false;
+            foreach (var c in span)
+            {
+                if (char.IsWhiteSpace(c))
+                {
+                    if (!inRun) builder.Append(' ');
+                    inRun = true;
+                }
+                else
+                {
+                    builder.Append(c);
+                    inRun = false;
+                }
+            }
+
+            return builder.ToString();
         }
 
         /// <summary>

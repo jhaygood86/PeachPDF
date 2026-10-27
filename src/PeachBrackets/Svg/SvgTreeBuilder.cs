@@ -2112,7 +2112,7 @@ namespace PeachBrackets.Svg
             var textIndentToken = ResolveStyledAttr(node, "text-indent")?.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()?.ToLowerInvariant();
             if (!string.IsNullOrEmpty(textIndentToken) && textIndentToken != "inherit")
             {
-                if (textIndentToken.EndsWith('%') && double.TryParse(textIndentToken[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out _))
+                if (textIndentToken.EndsWith('%') && double.TryParse(textIndentToken.AsSpan()[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out _))
                     textIndent = textIndentToken;
                 else if (ResolveFontRelativeLength(textIndentToken, ownFont) is { } indentLength)
                     textIndent = indentLength.ToString("R", CultureInfo.InvariantCulture) + "px";
@@ -2287,7 +2287,7 @@ namespace PeachBrackets.Svg
 
             double? resolved;
             if (value.EndsWith('%'))
-                resolved = double.TryParse(value[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
+                resolved = double.TryParse(value.AsSpan()[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * font.Size : null;
             else
                 resolved = SvgValueParsers.ParseLength(value, null, new LengthBasis(this, font));
 
@@ -2329,7 +2329,7 @@ namespace PeachBrackets.Svg
                 null or "" or "baseline" or "inherit" => 0,
                 "super" => font.Size * 0.33,
                 "sub" => -font.Size * 0.2,
-                _ when t.EndsWith('%') && double.TryParse(t[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) => percent / 100 * font.Size,
+                _ when t.EndsWith('%') && double.TryParse(t.AsSpan()[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) => percent / 100 * font.Size,
                 _ => SvgValueParsers.ParseLength(t, null, new LengthBasis(this, font)) ?? 0,
             };
         }
@@ -2772,7 +2772,7 @@ namespace PeachBrackets.Svg
                 if (indent.EndsWith('%'))
                 {
                     var boxWidth = run.ShapeInside is { Length: > 0 } polygon ? polygon.Max(p => p.X) - polygon.Min(p => p.X) : run.InlineSize ?? 0;
-                    run.TextIndent = double.TryParse(indent[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * boxWidth : 0;
+                    run.TextIndent = double.TryParse(indent.AsSpan()[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var percent) ? percent / 100 * boxWidth : 0;
                 }
                 else
                 {
@@ -3742,7 +3742,7 @@ namespace PeachBrackets.Svg
             if (string.IsNullOrWhiteSpace(value))
                 return fallback;
 
-            return double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+            return double.TryParse(value.AsSpan().Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
         }
 
         /// <summary>Builds the renderable children of a pure definition element (<c>&lt;pattern&gt;</c>/<c>&lt;marker&gt;</c>/<c>&lt;mask&gt;</c>/<c>&lt;clipPath&gt;</c>) - same recursion <see cref="BuildGroup"/> uses for an ordinary container, just not itself wrapped in a paintable <see cref="SvgElement"/>. <paramref name="paint"/>/<paramref name="font"/> are what the definition element's own children inherit (see <see cref="EnterDefinition"/>).</summary>

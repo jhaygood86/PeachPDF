@@ -60,7 +60,7 @@ namespace PeachBrackets.Svg
             foreach (var (suffix, suffixUnit) in FontRelativeSuffixes)
             {
                 if (value.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)
-                    && double.TryParse(value[..^suffix.Length], NumberStyles.Float, CultureInfo.InvariantCulture, out number))
+                    && double.TryParse(value.AsSpan()[..^suffix.Length], NumberStyles.Float, CultureInfo.InvariantCulture, out number))
                 {
                     unit = suffixUnit;
                     return true;
@@ -156,7 +156,7 @@ namespace PeachBrackets.Svg
                 if (referenceLength is not { } refLen)
                     return null;
 
-                return double.TryParse(trimmed[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var pct)
+                return double.TryParse(trimmed.AsSpan()[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out var pct)
                     ? refLen * pct / 100.0
                     : null;
             }
@@ -166,11 +166,11 @@ namespace PeachBrackets.Svg
 
             // rem is checked before the shorter em it ends with.
             if (trimmed.EndsWith("rem", StringComparison.OrdinalIgnoreCase)
-                && double.TryParse(trimmed[..^3], NumberStyles.Float, CultureInfo.InvariantCulture, out var rems))
+                && double.TryParse(trimmed.AsSpan()[..^3], NumberStyles.Float, CultureInfo.InvariantCulture, out var rems))
                 return rems * (basis?.RootEmPx ?? DefaultEmPx);
 
             if (trimmed.EndsWith("em", StringComparison.OrdinalIgnoreCase)
-                && double.TryParse(trimmed[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out var ems))
+                && double.TryParse(trimmed.AsSpan()[..^2], NumberStyles.Float, CultureInfo.InvariantCulture, out var ems))
                 return ems * (basis?.EmPx ?? DefaultEmPx);
 
             var scale = 1.0;

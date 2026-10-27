@@ -1905,7 +1905,7 @@ namespace PeachBrackets.Html.Dom
                             // kept alongside so a ::first-line rule's own text-transform (if different
                             // from this box's) can be re-derived later without the information a transform
                             // like uppercase would otherwise destroy. See CssRect.OriginalText.
-                            var rawOriginalWord = sourceText.Substring(startIdx, endIdx - startIdx);
+                            var rawOriginalWord = ReferenceEquals(text, sourceText) ? rawWord : sourceText.Substring(startIdx, endIdx - startIdx);
 
                             List<int>? hyphenationCandidates = null;
                             string cleanWord;
@@ -2124,7 +2124,7 @@ namespace PeachBrackets.Html.Dom
             {
                 var (start, length, isLower) = runs[i];
                 var runText = text.Substring(start, length);
-                var runOriginalText = originalText.Substring(start, length);
+                var runOriginalText = ReferenceEquals(text, originalText) ? runText : originalText.Substring(start, length);
                 var displayText = isLower ? runText.ToUpperInvariant() : runText;
                 // Under all-small-caps, a run that was already uppercase is shrunk too (approximating
                 // c2sc - no case-flip needed, since it's already upper) but only when it actually
@@ -2349,7 +2349,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var fragText = text.Substring(start, index - start);
-                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, originalText.Substring(start, index - start), ToRuneIndexedJoiningForms(textStart + start, fragText), ToRuneIndexedUseCategories(textStart + start, fragText), ToRuneIndexedKhmerCategories(textStart + start, fragText))
+                Words.Add(new CssRectWord(this, fragText, first && hasSpaceBefore, index >= text.Length && hasSpaceAfter, ReferenceEquals(text, originalText) ? fragText : originalText.Substring(start, index - start), ToRuneIndexedJoiningForms(textStart + start, fragText), ToRuneIndexedUseCategories(textStart + start, fragText), ToRuneIndexedKhmerCategories(textStart + start, fragText))
                 {
                     FontSizeScale = fontSizeScale,
                     SuppressWrapBefore = !first || alwaysSuppressWrap,

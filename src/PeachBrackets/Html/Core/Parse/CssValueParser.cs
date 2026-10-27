@@ -467,7 +467,7 @@ namespace PeachBrackets.Html.Parse
             }
 
             var isPercent = trimmed.EndsWith('%');
-            if (!double.TryParse(isPercent ? trimmed[..^1] : trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+            if (!double.TryParse(isPercent ? trimmed.AsSpan()[..^1] : trimmed.AsSpan(), NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
                 || !double.IsFinite(number))
                 return false;
 
@@ -477,7 +477,7 @@ namespace PeachBrackets.Html.Parse
 
         public static bool TryParseNumber(string value, out double result)
         {
-            if (double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
+            if (double.TryParse(value.AsSpan().Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out result) && double.IsFinite(result))
                 return true;
 
             result = 0;
@@ -2654,7 +2654,7 @@ namespace PeachBrackets.Html.Parse
             if (len < 1)
                 return -1d;
 
-            if (!double.TryParse(str.Substring(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
+            if (!double.TryParse(str.AsSpan(startIdx, len), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double val))
                 return -1d;
 
             startIdx += len;

@@ -2073,7 +2073,7 @@ namespace PeachBrackets.Html.Dom
                     : 0;
             }
 
-            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
+            if (box.DerivedStyle.ActualDisplay.StartsWith("table-", StringComparison.Ordinal) && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
                 return 0;
             }
@@ -2109,7 +2109,7 @@ namespace PeachBrackets.Html.Dom
                     : 0;
             }
 
-            if (box.DerivedStyle.ActualDisplay.StartsWith("table-") && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
+            if (box.DerivedStyle.ActualDisplay.StartsWith("table-", StringComparison.Ordinal) && box.DerivedStyle.ActualDisplay != Keywords.TableCaption)
             {
                 return 0;
             }

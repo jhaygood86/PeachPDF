@@ -125,7 +125,7 @@ namespace PeachBrackets.Svg
                     while (pos < s.Length && (char.IsAsciiLetter(s[pos]) || s[pos] == '%'))
                         pos++;
 
-                    args.Add((num, s[unitStart..pos].ToLowerInvariant()));
+                    args.Add((num, pos == unitStart ? string.Empty : s.AsSpan(unitStart, pos - unitStart).ToString().ToLowerInvariant()));
                     continue;
                 }
 
@@ -189,19 +189,33 @@ namespace PeachBrackets.Svg
                 bool LengthOk(int i) => !Plain(i) ? args[i].Unit is not ("deg" or "grad" or "rad" or "turn") : Zero(i);
                 bool AngleOk(int i) => !Plain(i) ? args[i].Unit is "deg" or "grad" or "rad" or "turn" : Zero(i);
 
+                bool PlainOrPercent(int i) => Plain(i) || args[i].Unit == "%";
+
+                // True when every argument in [0, n) passes the check (kind: 0 plain number, 1 length, 2 angle, 3 number or percentage).
+                bool AllOk(int n, int kind)
+                {
+                    for (var i = 0; i < n; i++)
+                    {
+                        var ok = kind switch { 0 => Plain(i), 1 => LengthOk(i), 2 => AngleOk(i), _ => PlainOrPercent(i) };
+                        if (!ok) return false;
+                    }
+
+                    return true;
+                }
+
                 var valid = name.ToLowerInvariant() switch
                 {
-                    "matrix" => count == 6 && Enumerable.Range(0, 6).All(Plain),
-                    "translate" => count is 1 or 2 && Enumerable.Range(0, count).All(LengthOk),
+                    "matrix" => count == 6 && AllOk(6, 0),
+                    "translate" => count is 1 or 2 && AllOk(count, 1),
                     "translatex" or "translatey" or "translatez" => count == 1 && LengthOk(0),
-                    "scale" => count is 1 or 2 && Enumerable.Range(0, count).All(i => Plain(i) || args[i].Unit == "%"),
+                    "scale" => count is 1 or 2 && AllOk(count, 3),
                     "scalex" or "scaley" or "scalez" => count == 1 && (Plain(0) || args[0].Unit == "%"),
                     "rotate" or "rotatex" or "rotatey" or "rotatez" or "skewx" or "skewy" => count == 1 && AngleOk(0),
-                    "skew" => count is 1 or 2 && Enumerable.Range(0, count).All(AngleOk),
-                    "translate3d" => count == 3 && Enumerable.Range(0, 3).All(LengthOk),
-                    "scale3d" => count == 3 && Enumerable.Range(0, 3).All(i => Plain(i) || args[i].Unit == "%"),
-                    "rotate3d" => count == 4 && Enumerable.Range(0, 3).All(Plain) && AngleOk(3),
-                    "matrix3d" => count == 16 && Enumerable.Range(0, 16).All(Plain),
+                    "skew" => count is 1 or 2 && AllOk(count, 2),
+                    "translate3d" => count == 3 && AllOk(3, 1),
+                    "scale3d" => count == 3 && AllOk(3, 3),
+                    "rotate3d" => count == 4 && AllOk(3, 0) && AngleOk(3),
+                    "matrix3d" => count == 16 && AllOk(16, 0),
                     "perspective" => count == 1 && LengthOk(0) && args[0].Value >= 0,
                     _ => true, // anything else: not judged here
                 };
@@ -215,7 +229,8 @@ namespace PeachBrackets.Svg
 
         private static Matrix4x4? BuildMatrix(string name, List<(double Value, string Unit)> args, SvgTransformContext? context, bool allowUnits, bool allowCalc, out bool is3D)
         {
-            is3D = name.ToLowerInvariant() is "translatez" or "translate3d" or "scalez" or "scale3d" or "rotatex" or "rotatey" or "rotate3d" or "matrix3d" or "perspective";
+            var lowerName = name.ToLowerInvariant();
+            is3D = lowerName is "translatez" or "translate3d" or "scalez" or "scale3d" or "rotatex" or "rotatey" or "rotate3d" or "matrix3d" or "perspective";
 
             // Set when an argument has a unit this parser cannot resolve here: the function then does nothing. An argument that was not a
             // number at all (calc(), a nested function) counts, wherever it stands in the list, even where the function reads fewer arguments.
@@ -292,7 +307,6 @@ namespace PeachBrackets.Svg
             }
 
 
-            var lowerName = name.ToLowerInvariant();
             Matrix4x4? matrix;
 
             switch (lowerName)
