@@ -2043,9 +2043,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask ResumeCommitPass(Canvas g, FlexBreakToken resume)
         {
-            var delta = new PaintPoint(
-                _flexBox.Location.X - resume.PlacementOrigin.X,
-                _flexBox.Location.Y - resume.PlacementOrigin.Y);
+            var delta = ItemContentCommit.ResumeDelta(resume, resume.PlacementOrigin, _flexBox.Location);
 
             ItemContentCommit.RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
             for (var lineIndex = resume.ResumeLineIndex + 1; lineIndex < resume.Lines.Count; lineIndex++)
@@ -2478,9 +2476,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask ResumeColumnCommitPass(Canvas g, FlexColumnBreakToken resume)
         {
-            var delta = new PaintPoint(
-                _flexBox.Location.X - resume.PlacementOrigin.X,
-                _flexBox.Location.Y - resume.PlacementOrigin.Y);
+            var delta = ItemContentCommit.ResumeDelta(resume, resume.PlacementOrigin, _flexBox.Location);
 
             foreach (var cursor in resume.UnfinishedLines)
             {

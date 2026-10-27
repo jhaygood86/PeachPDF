@@ -5,6 +5,7 @@ using PeachBrackets.Html.Utils;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
 
 namespace PeachBrackets.Html.Fragmentation
@@ -169,6 +170,30 @@ namespace PeachBrackets.Html.Fragmentation
         private static string FormatLayoutUnits(double value, CssBox box) =>
             (value / (box.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0))
                 .ToString("F4", CultureInfo.InvariantCulture) + "pt";
+
+        /// <summary>
+        /// How far the items a resume <paramref name="token"/> names have to move for a container now at
+        /// <paramref name="containerNow"/>, from where they last sat (its <paramref name="placementOrigin"/> the first
+        /// time), and remembers that they now sit there.
+        /// </summary>
+        /// <param name="token">the break token being resumed</param>
+        /// <param name="placementOrigin">the container's location when the token was published</param>
+        /// <param name="containerNow">the container's location on the pass being resumed</param>
+        /// <returns>the move to apply to every item the token names</returns>
+        internal static PaintPoint ResumeDelta(BreakToken token, PaintPoint placementOrigin, PaintPoint containerNow)
+        {
+            var applied = AppliedOrigins.GetValue(token, _ => new StrongBox<PaintPoint>(placementOrigin));
+            var delta = new PaintPoint(containerNow.X - applied.Value.X, containerNow.Y - applied.Value.Y);
+            applied.Value = containerNow;
+            return delta;
+        }
+
+        // Where the items a token names currently sit relative to the container, by token identity (a token is a
+        // record, so a field on it would join its equality). A pass can be laid out again from the same token - a
+        // column attempt that is redone - and the items were already moved by the first run: measured on a flex
+        // item in a multi-column container, the second run moved them by the container's move a second time,
+        // from x=20 to x=-158.
+        private static readonly ConditionalWeakTable<BreakToken, StrongBox<PaintPoint>> AppliedOrigins = new();
 
         /// <summary>
         /// Moves each of <paramref name="boxes"/> by <paramref name="delta"/> via a direct

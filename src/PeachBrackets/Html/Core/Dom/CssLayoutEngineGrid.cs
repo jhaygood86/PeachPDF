@@ -628,9 +628,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask ResumeCommitPass(Canvas g, GridBreakToken resume)
         {
-            var delta = new PaintPoint(
-                _gridBox.Location.X - resume.PlacementOrigin.X,
-                _gridBox.Location.Y - resume.PlacementOrigin.Y);
+            var delta = ItemContentCommit.ResumeDelta(resume, resume.PlacementOrigin, _gridBox.Location);
 
             ItemContentCommit.RepositionForResume(resume.UnfinishedItems.Select(u => u.Item), delta);
             for (var rowIndex = resume.ResumeRowIndex + 1; rowIndex < resume.Rows.Count; rowIndex++)
