@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 
@@ -221,9 +222,36 @@ namespace PeachBrackets.Html.Fragmentation
 
             var head = TravellingRunHead(tops, subjectTop, ownPageTop, subjectExtent, destinationBand);
 
+            // A table cell is a parallel flow, not a sibling in one: content that is first in its cell has no
+            // break point before it (css-break-3 §4.1 lists no break before a cell), and moving it to the next
+            // fragmentainer leaves the cell empty here while the rest of its row stays - the row's cells no
+            // longer break together. The run is trimmed from the front past such a member, so the break is
+            // taken between the members that remain, or on the subject alone.
+            while (head < run.Count && BeginsATableCell(run[head]))
+            {
+                head++;
+            }
+
             return head < run.Count
                 ? (run.GetRange(head, run.Count - head), subjectTop - run[head].Location.Y, head > 0)
                 : ([], 0, false);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is the first in-flow child of a table cell.
+        /// </summary>
+        /// <param name="box">the candidate head of a keep-with-next run</param>
+        private static bool BeginsATableCell(CssBox box)
+        {
+            if (box.ParentBox is not { } parent || parent.DerivedStyle.ActualDisplay != Keywords.TableCell) return false;
+
+            foreach (var sibling in parent.Boxes)
+            {
+                if (ReferenceEquals(sibling, box)) return true;
+                if (!sibling.IsOutOfFlow) return false;
+            }
+
+            return false;
         }
 
         /// <summary>

@@ -6002,6 +6002,35 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The bottom a cell is vertically aligned against: the row's own, unless the row runs past the foot of the
+        /// band it begins in, and the cell's content fits above that foot.
+        /// </summary>
+        /// <remarks>
+        /// A row taller than the band it starts in is laid out continuously and each fragmentainer shows the strip
+        /// that falls in it. Centring (or bottom-aligning) a short cell in that whole height puts its content
+        /// wherever the middle of the row happens to land, which can be exactly the page edge: one line straddling
+        /// it, cut by the page, while the sibling cell's fragment carries on elsewhere. A cell whose content fits
+        /// the band's remainder is aligned within it instead, so its content stays whole beside the first
+        /// fragment of the row (css-tables-3 §6.1: the cells of a fragmented row break together). A cell whose
+        /// content does not fit is aligned against the row as before, and keeps its lines' own page relocation.
+        /// </remarks>
+        /// <param name="cell">the cell being aligned</param>
+        /// <param name="rowMaxBottom">the row's settled bottom</param>
+        /// <param name="cursor">this pass's row cursor, naming the band being filled</param>
+        private double AlignmentBottomFor(CssBox cell, double rowMaxBottom, TableRowCursor cursor)
+        {
+            if (_isVertical) return rowMaxBottom;
+            if (_tableBox.HtmlContainer is not { HasRealPageGrid: true } container) return rowMaxBottom;
+            if (container.CurrentFragmentainer is not { HasOwnBand: false }) return rowMaxBottom;
+
+            var bandBottom = Grid(container).PageBottomOf(cursor.SlotIndex) - RepeatedFooterHeight;
+
+            return rowMaxBottom > bandBottom && cell.ActualBottom <= bandBottom
+                ? bandBottom
+                : rowMaxBottom;
+        }
+
+        /// <summary>
         /// Discards the continuation geometry an earlier run of this table's row loop stated, from
         /// <paramref name="fromSlot"/> on or — with no slot — in every slot.
         /// </summary>
@@ -6413,7 +6442,7 @@ namespace PeachBrackets.Html.Dom
                     // table - see its own tracking above), so growing the cell to match is ActualRight
                     // there, not ActualBottom.
                     if (_isVertical) cell.ActualRight = rowMaxBottom;
-                    else cell.ActualBottom = rowMaxBottom;
+                    else cell.ActualBottom = AlignmentBottomFor(cell, rowMaxBottom, cursor);
                     CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
                 }
             }
