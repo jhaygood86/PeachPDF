@@ -240,5 +240,24 @@ body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; } p,h3
             await AssertEveryWordIsVisibleOnceAsync(Document(Page300x200,
                 $"<div style='columns:3;column-gap:8pt'><div style='display:flex;gap:4pt'><div style='flex:1'>{content}</div></div></div>"));
         }
+
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        public async Task AHeadingInAColumnsContainerStartingJustAboveTheFoot_IsDrawnOnAPage(int columns)
+        {
+            // Issue 1963: with the spacer at 150 or 150.5pt the container starts 0.3pt above the foot, the heading's
+            // top margin carries its line below it, and the heading was in no fragment of any page. Swept in 0.25pt
+            // steps either side of where the foot falls, since only a sliver of positions lost it. Read off the
+            // tree: the heading's ink then starts 1pt above the page's content top, inside the page's margin.
+            for (var spacer = 146.0; spacer <= 162.0; spacer += 0.25)
+            {
+                var html = Document(Page300x200,
+                    $"<div style='height:{spacer.ToString(System.Globalization.CultureInfo.InvariantCulture)}pt'>w1_1</div>" +
+                    $"<div style='column-count:{columns}'><h3>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6</h3></div>w3_1 w3_2");
+
+                await AssertEveryWordIsInTheTreeOnceAsync(html);
+            }
+        }
     }
 }
