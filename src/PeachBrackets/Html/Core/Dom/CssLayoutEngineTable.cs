@@ -333,6 +333,14 @@ namespace PeachBrackets.Html.Dom
         private double RepeatedFooterHeight => _footerRepeats && _footerHeight > 0 ? _footerHeight : 0;
 
         /// <summary>
+        /// The lowest physical X the column axis may start at: the page's left edge, except for a table anchored to
+        /// its rtl container's right edge, which overflows toward the start edge and so may begin left of it
+        /// (<see cref="CssLayoutEngine.AnchorsTableToInlineEnd"/>).
+        /// </summary>
+        private double ColumnAxisFloor =>
+            !_isVertical && CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox) ? double.NegativeInfinity : 0;
+
+        /// <summary>
         /// What a repeated <c>&lt;thead&gt;</c> takes from the top of every band the table covers, spacing
         /// included, or zero where nothing repeats.
         /// </summary>
@@ -733,6 +741,19 @@ namespace PeachBrackets.Html.Dom
                 _tableBox.Location = _tableBox.Location with
                 {
                     X = _tableBox.Location.X + CssLayoutEngine.GetActualMarginLeft(_tableBox, GetWidthSum())
+                };
+            }
+            else if (!_continuesAPreviousPass && !_isVertical && CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox))
+            {
+                // An over-constrained table in an rtl containing block ignores margin-left (CSS 2.1 §10.3.3),
+                // so it hangs from the right edge: end-aligned when narrower, overflowing toward the start
+                // edge when wider. The block rule is CssBox.ResolveBlockInlineStart; a table's width is only
+                // known here.
+                _tableBox.Location = _tableBox.Location with
+                {
+                    X = CssLayoutEngine.ContentRightOf(_tableBox.ContainingBlock, _tableBox.Location.Y)
+                        - CssLayoutEngine.GetActualMarginRight(_tableBox, null, _tableBox.Location.Y)
+                        - GetWidthSum()
                 };
             }
 
@@ -3178,7 +3199,7 @@ namespace PeachBrackets.Html.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _headerBox, _headerIndex);
-            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
+            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), ColumnAxisFloor);
             proxy.Location = _isVertical ? new PaintPoint(yPosition, columnAxisStart) : new PaintPoint(columnAxisStart, yPosition);
             return proxy;
         }
@@ -3193,7 +3214,7 @@ namespace PeachBrackets.Html.Dom
                 return null;
 
             var proxy = new CssProxyBox(_tableBox, _footerBox, _footerIndex);
-            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
+            var columnAxisStart = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), ColumnAxisFloor);
             proxy.Location = _isVertical ? new PaintPoint(yPosition, columnAxisStart) : new PaintPoint(columnAxisStart, yPosition);
             return proxy;
         }
@@ -3437,7 +3458,7 @@ namespace PeachBrackets.Html.Dom
             // Column-axis start: always physical-min-forward (no rtl support - see the axis-mapping
             // fields' own remarks), so ClientTop for a vertical table (columns run along physical Y),
             // ClientLeft otherwise.
-            var startX = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), 0);
+            var startX = Math.Max((_isVertical ? _tableBox.ClientTop : _tableBox.ClientLeft) + StartXSpacing(), ColumnAxisFloor);
 
             // Lay the top caption(s) out above the row grid before anything else claims this
             // coordinate - once, on the pass that starts the row loop from the top. A continuation
