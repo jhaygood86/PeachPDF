@@ -8862,11 +8862,12 @@ namespace PeachBrackets.Html.Dom
             // earlier pass may already have frozen. Its own rectangle on this line is still moved below:
             // OffsetTop walks CssBox.Rectangles, which CssLineBox.AssignRectanglesToBoxes has not yet
             // populated for this line - it runs after alignment.
-            // An inline-flex box is such a unit even when none of its items holds text (so it has no
-            // baseline to recognise it by): its out-of-flow children are positioned against its Location
-            // during FlowInlineFlexChild and have to travel with it.
+            // An inline-flex, inline-grid or inline-table box is such a unit even when none of its
+            // items holds text (so it has no baseline to recognise it by): its in-flow items and
+            // out-of-flow children are positioned against its Location and have to travel with it.
             if (!ReferenceEquals(lineBox.OwnerBox, box)
-                && (LastOwnLineBaselineOf(box) is not null || box.DerivedStyle.ActualDisplay == Keywords.InlineFlex))
+                && (box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable
+                    || LastOwnLineBaselineOf(box) is not null))
             {
                 box.OffsetTop(delta);
 
