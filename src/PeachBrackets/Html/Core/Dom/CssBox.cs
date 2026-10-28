@@ -378,11 +378,14 @@ namespace PeachBrackets.Html.Dom
 
         internal HashSet<string> FinalizedCounterNames => _finalizedCounterNames ??= [];
 
-        /// <summary>Forgets the counter values resolved for this box, so the next lookup computes them against the tree as it stands.</summary>
-        internal void ResetCounterState()
+        /// <summary>Forgets the counter values and quote depths resolved for this box, so the next lookup computes them against the tree as it stands.</summary>
+        internal void ResetTreeShapeState()
         {
             _counters = null;
             _finalizedCounterNames = null;
+            QuoteDepthAtStart = null;
+            QuoteSubtreeRawDelta = null;
+            QuoteSubtreeLocalMin = null;
         }
 
         /// <summary>

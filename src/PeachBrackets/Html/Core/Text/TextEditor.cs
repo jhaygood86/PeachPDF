@@ -449,7 +449,7 @@ namespace PeachBrackets.Html.TextGeometry
             if (second is not null) DomParser.RecascadeSubtree(container, second);
             for (var i = siblings.IndexOf(last) + 1; i < siblings.Count; i++)
                 DomParser.RecascadeSubtree(container, siblings[i]);
-            DomParser.RefreshListMarkers(last.ParentBox!);
+            DomParser.RefreshGeneratedContent(last.ParentBox!);
         }
 
         /// <summary>The inline elements a range of text can be wrapped in.</summary>
