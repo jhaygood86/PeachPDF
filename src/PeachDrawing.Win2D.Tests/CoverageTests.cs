@@ -484,10 +484,10 @@ public class CoverageTests
     [Fact]
     public void The_link_map_hit_tests_a_quad_with_a_horizontal_edge_and_an_empty_map()
     {
-        var link = new Win2dLink(new Rect(0, 0, 10, 10), [new PaintPoint(0, 0), new PaintPoint(10, 0), new PaintPoint(0, 10), new PaintPoint(10, 10)], "https://example.com/", null);
+        var link = new Win2dLink(new Rect(0, 0, 10, 10), new PaintPoint[] { new(0, 0), new(10, 0), new(0, 10), new(10, 10) }, "https://example.com/", null);
         Assert.True(link.Contains(5, 5));
         Assert.False(link.Contains(15, 5));
-        Assert.False(new Win2dLink(new Rect(0, 0, 10, 10), [new PaintPoint(0, 0)], "x", null).Contains(20, 20));
+        Assert.False(new Win2dLink(new Rect(0, 0, 10, 10), new PaintPoint[] { new(0, 0) }, "x", null).Contains(20, 20));
     }
 
     [Fact]

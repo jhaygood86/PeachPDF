@@ -100,7 +100,7 @@ public class FontAndContextTests
     public async Task Fonts_can_be_added_from_bytes_streams_and_local_faces_and_refuse_unsupported_formats()
     {
         using var context = Win2dRenderContext.CreateSoftware();
-        var bytes = await File.ReadAllBytesAsync(BundledFonts.Ttf);
+        var bytes = await File.ReadAllBytesAsync(BundledFonts.Ttf, TestContext.Current.CancellationToken);
 
         Assert.True(await context.AddFontFromBytes("From Bytes", bytes));
         Assert.True(await context.AddFontFromBytes("Declared", bytes, new FontFaceDescriptors()));
@@ -129,8 +129,8 @@ public class FontAndContextTests
     public void The_media_type_prefers_screen()
     {
         using var context = Win2dRenderContext.CreateSoftware();
-        Assert.Equal("screen", context.GetCssMediaType(["print", "screen"]));
-        Assert.Equal("all", context.GetCssMediaType(["print"]));
+        Assert.Equal("screen", context.GetCssMediaType(new[] { "print", "screen" }));
+        Assert.Equal("all", context.GetCssMediaType(new[] { "print" }));
     }
 
     [Fact]
@@ -268,7 +268,7 @@ public class FontAndContextTests
         var features = new ShapeSettings(
             Ligatures: LigatureSet.None,
             Kerning: false,
-            ExplicitFeatures: [new FeatureSetting("smcp", 1), new FeatureSetting("liga", 0), new FeatureSetting("toolong", 1)]);
+            ExplicitFeatures: new FeatureSetting[] { new("smcp", 1), new("liga", 0), new("toolong", 1) });
 
         Assert.True(scene.Canvas.MeasureString("office fi", font, features).Width > 0);
         Assert.True(scene.Canvas.CountShapedGlyphs("office", font, features) > 0);

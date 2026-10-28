@@ -6,7 +6,7 @@ create one only through `InsertTextAsync(element, ...)`. They then run `PerformL
 Deliberately not done:
 - **Resuming is not always possible.** `HtmlContainerInt.TryResumeLayoutAt` declines (the whole document is laid out again, `ResumedFromPage` is null) when the
   edited paragraph was placed in the first two passes, when the document has per-page widths, footnotes, page floats, container queries, `target-counter(page)`,
-  per-page margin/size overrides, reserved blank slots or a page width not given by the options, and when no pass entry names the paragraph. A resumed layout
+  per-page margin/size overrides, reserved blank slots, flex or grid content (their content extent cannot be reproduced), a page width not given by the options, when no pass entry names the paragraph, and when no earlier pass was entered at a clean block boundary (every break before it falls inside a paragraph). A resumed layout
   starts from the pass before the one that placed the paragraph, so a keep-with-next run that reaches back further than that is handled only by the in-run rewind.
 - **Wrapping a range, and structure edits beyond a plain paragraph.** `SplitParagraphAsync`/`JoinWithNextParagraphAsync` handle only a block in a block
   with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old

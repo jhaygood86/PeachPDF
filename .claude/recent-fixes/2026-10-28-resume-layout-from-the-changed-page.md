@@ -9,6 +9,8 @@ the tail of `PerformLayoutOnePass` is `FinishLayout`, shared by both. `TextEditR
 spent widows/orphans latches, ancestors' stale `ActualBottom`, and `ActualSize`. Each showed up only as a difference from a fresh load - the first as one line
 at a page top after a *second* resumed edit, the others as a content extent too big by one paragraph - which is why every resume test compares with a fresh load.
 
+**Found in review** (a reviewer compared the resumed result with a whole layout of the same tree): the superseded-entry bug above, flex/grid extents, and a new CS8604. The first fix (last entry below the placing slot) still failed the widows-3 sweep, because the record at a mid-paragraph break can encode decisions the resumed layout does not repeat; resuming only at block boundaries fixed it.
+
 **Measured** (Release, net8.0, 1,500 paragraphs, 84 pages): edit on the first pages ~700 ms (whole layout, includes JIT), paragraph 200 175 ms, 700 226 ms,
 1,000 51 ms, 1,400 77 ms. The spike's 2.5x "re-running layout on the same tree is slower than the first" is why the saving comes only from skipping earlier pages.
 

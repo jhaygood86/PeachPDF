@@ -1981,16 +1981,30 @@ namespace PeachBrackets.Html
                 || HasFootnotes || HasPageFloats || HasSizeContainers || MaxReservedBlankSlot is not null
                 || PageGeometry.HasVerticalMarginOverrides || PageGeometry.HasHorizontalMarginOverrides || PageGeometry.HasSizeOverrides
                 || PageGeometry.HasVerticalBorderPaddingOverrides || PageGeometry.HasHorizontalBorderPaddingOverrides
-                || DomUtils.AnyBoxHasTargetPageContent(Root))
+                || DomUtils.AnyBoxHasTargetPageContent(Root) || HasFlexOrGrid(Root))
             {
                 return null;
             }
 
             var placedIn = PassEntryFor(changed);
-            if (placedIn < 2) return null;
+            if (placedIn < 1) return null;
 
-            // One pass earlier than the one that placed it: widows and orphans can move the break before a paragraph back a page.
-            var entry = placedIn - 1;
+            // The last entry for a slot before the one that placed it. A widows rewind records its pass a second time (the rebuilt record,
+            // for the same slot), so an index one back could name the superseded entry and roll the tree back over what the rewind
+            // already cut down; and widows or orphans can move a break back a page, which is why it is the pass before and not that one.
+            var placedSlot = _passEntries[placedIn].Slot;
+            var entry = -1;
+            for (var i = placedIn - 1; i >= 1; i--)
+            {
+                if (_passEntries[i].Slot < placedSlot && _passEntries[i].Token is { } candidate && IsCleanBoundary(candidate))
+                {
+                    entry = i;
+                    break;
+                }
+            }
+
+            if (entry < 1) return null;
+
             var (slot, token) = _passEntries[entry];
             if (token is null) return null;
 
@@ -2022,6 +2036,34 @@ namespace PeachBrackets.Html
             return slot;
         }
 
+        // Whether a pass entered with this record starts at a block boundary: it names a box to begin at and nothing mid-way through a paragraph, table
+        // or flex line. Widows, orphans and keeps decide where a break falls by looking at what is on both sides of it, so a break inside a paragraph is
+        // the one whose record may have been settled by passes this layout does not run again.
+        private static bool IsCleanBoundary(BreakToken token)
+        {
+            while (token is BlockBreakToken block)
+            {
+                if (block.ChildToken is null) return block.IsBreakBefore;
+                token = block.ChildToken;
+            }
+
+            return false;
+        }
+
+        // The content extent a flex or grid container reports includes sizes measured before fragmentation, which reading the boxes afterwards does not
+        // see, so a layout resumed over one would report a smaller document than a whole layout does.
+        private static bool HasFlexOrGrid(CssBox box)
+        {
+            if (box.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (HasFlexOrGrid(child)) return true;
+            }
+
+            return false;
+        }
+
         // The largest bottom of any box in the flow, from the document's top: what the boxes' epilogues accumulate into ActualSize.
         private double FlowBottom(CssBox box)
         {
@@ -2042,7 +2084,7 @@ namespace PeachBrackets.Html
             // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
-                ComputeFlowFlags(Root, includeStackingHoistCandidates: true);
+                ComputeFlowFlags(Root!, includeStackingHoistCandidates: true);
 
             // Only once the reflow loop has settled, since it reads the final document height.
             ReserveTrailingDirectionalBreak();

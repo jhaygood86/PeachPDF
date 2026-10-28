@@ -461,7 +461,7 @@ public class TextEditTests
         Assert.True(result.Applied, result.Reason);
         await AssertLaysOutLike(document, "<p class=box>Hello</p><p class=box> world</p><p>After</p>", head);
     }
-    private static string ManyParagraphs(int count, Func<int, string>? text = null) =>
+    private static string ManyParagraphs(int count, Func<int, string?>? text = null) =>
         string.Concat(Enumerable.Range(0, count).Select(i => $"<p>{text?.Invoke(i) ?? $"Paragraph {i} with some text in it to fill the line."}</p>"));
 
     [Fact]
@@ -522,6 +522,55 @@ public class TextEditTests
         var delete = await document.DeleteTextAsync(new TextPosition(at, 0), new TextPosition(at, 14), canvas);
         Assert.True(delete.Applied, delete.Reason);
         texts[129] = texts[129][14..];
+        await AssertLaysOutLike(document, Markup());
+    }
+    private const string LongLine = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod tempor incididunt ut labore et dolore magna aliqua ut enim ad minim veniam";
+
+    // Every edit of a sweep must lay out like a fresh load of the edited markup, for documents where page breaks are decided by widows,
+    // orphans, keeps and floats - the places a resumed layout can differ from a whole one.
+    [Theory]
+    [InlineData("p { margin: 6pt 0 }")]
+    [InlineData("p { margin: 6pt 0; orphans: 3; widows: 3 }")]
+    [InlineData("p { margin: 6pt 0; break-inside: avoid }")]
+    [InlineData("blockquote { margin: 4pt 0; widows: 3 } p { margin: 6pt 0 }")]
+    [InlineData("p { margin: 6pt 0 } p:nth-child(6n) { break-after: avoid }")]
+    [InlineData("div { border: 2pt solid; padding: 4pt; margin: 3pt 0 } p { margin: 6pt 0 }")]
+    [InlineData("p.f { float: right; width: 60pt; margin: 2pt }")]
+    public async Task ASweepOfEdits_OverPageBreakHeavyDocuments_AlwaysMatchesAFreshLoad(string css)
+    {
+        var head = "<style>body { font-size: 14pt } " + css + "</style>";
+        var texts = Enumerable.Range(0, 80).Select(i => $"P{i} {LongLine}").ToList();
+        string Markup() => string.Concat(texts.Select((t, i) => css.Contains("blockquote") ? $"<blockquote><p>{t}</p></blockquote>"
+            : css.StartsWith("div", StringComparison.Ordinal) ? $"<div><p>{t}</p></div>"
+            : css.Contains("p.f") ? $"<p{(i % 7 == 6 ? " class=f" : string.Empty)}>{t}</p>"
+            : $"<p>{t}</p>"));
+
+        var (_, document, canvas) = await LoadAsync(Markup(), head);
+
+        foreach (var target in new[] { 10, 12, 30, 31, 45, 60, 70, 20 })
+        {
+            var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith($"P{target} ", StringComparison.Ordinal));
+            var result = await document.InsertTextAsync(new TextPosition(run, 3), "Q a few more words here that make it longer ", canvas);
+            Assert.True(result.Applied, result.Reason);
+            texts[target] = texts[target].Insert(3, "Q a few more words here that make it longer ");
+
+            await AssertLaysOutLike(document, Markup(), head);
+        }
+    }
+
+    [Fact]
+    public async Task AFlexDocument_IsLaidOutWhole_SoItsExtentMatchesAFreshLoad()
+    {
+        var texts = Enumerable.Range(0, 40).Select(i => $"P{i} {LongLine}").ToList();
+        string Markup() => string.Concat(texts.Select(t => $"<div style='display:flex'><p style='flex:1'>{t}</p><p style='flex:1'>b</p></div>"));
+        var (_, document, canvas) = await LoadAsync(Markup());
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith("P30 ", StringComparison.Ordinal));
+        var result = await document.InsertTextAsync(new TextPosition(run, 3), "ZZ ", canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        Assert.Null(result.ResumedFromPage);
+        texts[30] = texts[30].Insert(3, "ZZ ");
         await AssertLaysOutLike(document, Markup());
     }
 }

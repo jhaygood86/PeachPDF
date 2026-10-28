@@ -254,8 +254,8 @@ element that holds blocks, an image or a form control.
 
 Layout is picked up from the page before the one the edited paragraph starts on, and the pages before it are kept as they were, so an edit late in a
 long document costs a fraction of a layout (1,500 paragraphs over 84 pages: about 50-80 ms on the last pages, against about 700 ms for one on the
-first); `TextEditResult.ResumedFromPage` says where it picked up, or is null when the whole document was laid out again (an edit on the first pages, or
-a document the shortcut does not cover). An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
+first); `TextEditResult.ResumedFromPage` says where it picked up, or is null when the whole document was laid out again (an edit on the first pages, flex or grid content, or
+another document the shortcut does not cover). An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
 
 ## Structure for tagged output
 
