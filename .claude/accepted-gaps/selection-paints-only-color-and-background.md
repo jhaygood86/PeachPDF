@@ -1,22 +1,24 @@
-# `::selection` paints only `color` and `background-color`
+# Highlights are not painted in vertical text, and a few smaller limits
 
-`HtmlDocument.SetSelectedRanges` (opt-in `EnableSelectionStyling`) paints a selection in the document's `::selection` rules, but reads only
-`color` and `background-color` from them. CSS Pseudo-Elements 4 §3.2 also allows `text-decoration*`, `text-underline-*`, `text-shadow`,
-`-webkit-text-stroke*`/`-webkit-text-fill-color`, `fill`/`stroke` and `caret-color`; those declarations are cascaded and then ignored.
+`HtmlDocument.SetSelectedRanges` and `SetHighlight` (opt-in `EnableSelectionStyling`) paint the selection and the named highlights
+(`::selection`, `::highlight(name)`, `::spelling-error`, `::grammar-error`, `::target-text`) from their rules: `background-color` fills the line box
+behind the highlighted characters, `color`, `text-shadow` and `-webkit-text-stroke*` restyle the text there, and a `text-decoration` the highlight adds
+is drawn under it. An inherited `color` or `text-shadow` an ancestor's highlight declared reaches a child whose own highlight rules do not.
 
-Also not done, all deliberately, to keep the first pass to what cannot change layout:
-- **Highlight inheritance through an intermediate rule.** A selection style is seeded from its element's own style, and an element with no
-  rule takes its nearest ancestor's. A declared `color` on an outer `::selection` is lost on a child whose parent has rules of its own
-  (§3.2's "inherits from the parent's highlight pseudo").
-- **Highlight height.** The fill is as tall as the word's own rectangle, not the full line box (browsers fill the line box).
-- **Named highlights share the same limits.** `::highlight(name)`, `::target-text`, `::spelling-error` and `::grammar-error` are painted (`HtmlDocument.SetHighlight`),
-  but only `color` and `background-color`, with no inheritance through an intermediate rule; `::target-text` is not applied by the engine itself
-  (a host sets it), and a highlight on a text edit is dropped, not moved.
-- **Vertical writing modes and transforms:** a selected word in vertical text is painted unselected.
-- **Duplicate text:** a word whose colour the selection changes is drawn three times (outside, inside, outside, each clipped), so a PDF
-  written with a selection holds that text more than once. Selection is for interactive output.
-
-Closing the first needs the decoration/shadow/stroke painters to take a clipped range; the second needs a tracked "declared" bit per property
-on the shadow style rather than the equality test against the element's own colour used today.
+Deliberately not done:
+- **Vertical writing modes** (#1970). `TextRunCollector` yields no text runs for a `vertical-rl`/`vertical-lr` box, so there is no position to select or
+  highlight and no character edges along the column. Painting it needs the text-geometry model extended to vertical text first (runs, offsets, bounds,
+  hit-testing), then the fill and clips on the block axis; upright (CJK) words also need their own advances, not the shaped ones.
+  A highlight under a CSS transform follows it (the fill is drawn in the element's transformed space; `HighlightTests` pins that).
+- **`fill`, `stroke`, `stroke-width` and `caret-color`** on a highlight (§3.2): not read (no SVG text or caret is painted from the highlight styles).
+- **Decoration geometry of a highlight inside an inline box** is the word's own rectangle: a decoration the highlight adds is drawn per word, so
+  it starts and ends at word edges and skips the space between two highlighted words.
+- **Declared properties are detected by difference**, not tracked: a highlight rule that sets a property to the same value the element already has is
+  read as "not declared", and then an ancestor highlight's inherited value (colour, text-shadow) takes over.
+- **`text-decoration` is not inherited** into a child highlight, as it is not an inherited property; and `background-color` is not either, so a child
+  of an element whose highlight sets a background takes the nearest ancestor's only where it has no highlight rule of its own.
+- **Duplicate text:** a word whose colour, shadow or stroke a highlight changes is drawn once per stretch of one look (clipped), so a PDF written with a
+  highlight holds that text more than once. Highlights are for interactive output.
+- **A highlight is dropped by a text edit**, not moved with the text.
 
 **Hairline seams under MuPDF.** The highlight is one rectangle per word plus one per selected gap, which abut exactly; MuPDF anti-aliases the shared edges and shows faint vertical hairlines between them (PDFium does not). Overlapping them would double a translucent highlight colour, so they are left abutting; coalescing a line's rectangles in the painter would remove the seams.

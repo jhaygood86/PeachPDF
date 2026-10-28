@@ -162,8 +162,9 @@ to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions
 
 - A rule applies to the text of the element it matches (`p::selection`, `.note::selection`, or a bare `::selection` for every element); an
   element with no rule of its own takes its nearest ancestor's.
-- Only `color` and `background-color` are painted so far, and the highlight is as tall as the word's own line height. A selection never changes
-  layout.
+- The `background-color` fills the whole line box behind the selected characters; `color`, `text-shadow` and `-webkit-text-stroke*` restyle the selected
+  text, and a `text-decoration` the rule adds is drawn under it. `color` and `text-shadow` an ancestor's `::selection` declares are inherited by a child
+  with rules of its own. A selection never changes layout, follows a CSS transform of its element, and is not painted in vertical writing modes.
 - Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
   holds that word's text more than once. Selection is meant for interactive output, not for PDF.
 
@@ -179,8 +180,12 @@ Highlight API does for ranges a page registers. The names `spelling-error`, `gra
 - A highlight no rule styles paints nothing (the selection, by contrast, has default colours). Rules apply as for `::selection`: to the text of the
   element they match, falling back to the nearest ancestor's; `::highlight( name )` is the same selector as `::highlight(name)`, and the name is
   case-sensitive.
-- Only `color` and `background-color` are painted, as for the selection. A text edit removes every highlight, since the positions they hold no longer
+- The same properties are painted as for the selection. A text edit removes every highlight, since the positions they hold no longer
   mean the same text.
+
+`document.ApplyTextFragmentDirective(directive)` is what a browser does for a link with a text fragment: it finds the text a `text=[prefix-,]start[,end][,-suffix]`
+directive names (case-insensitive, percent-decoded, the first match with its prefix and suffix around it) and paints it as `::target-text`. It returns the
+range, or null and clears the highlight when nothing matches.
 
 ### The selection model
 
@@ -241,7 +246,7 @@ or a chat composer is built from - and the document is laid out again from the c
 
 Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
 and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
-The new paragraph takes the old one's computed style as it is rather than being cascaded again, so `:nth-child` and `:last-child` rules are not evaluated for it. A paragraph with an `id` leaves two paragraphs with that `id`.
+The paragraph a split or join leaves, the one it creates and the one after them are cascaded again, so `:first-child`, `:last-child` and adjacent-sibling rules match their new positions; `:nth-child` rules of paragraphs further on are not evaluated again. A paragraph with an `id` leaves two paragraphs with that `id`.
 
 `canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
 

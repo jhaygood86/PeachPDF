@@ -1772,6 +1772,22 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// Cascades <paramref name="box"/> and everything under it again, against the document's style sheets, as it stands in the tree now. A
+        /// structural edit (splitting a paragraph, joining two) changes which structural selectors (<c>:first-child</c>, <c>:last-child</c>,
+        /// <c>:nth-child()</c>, sibling combinators) match the boxes around it, and a box copied from another only has the style the other had.
+        /// </summary>
+        /// <returns>false, with nothing changed, when the document keeps no style sheets to cascade against</returns>
+        internal static bool RecascadeSubtree(HtmlContainerInt container, CssBox box)
+        {
+            if (container.CssData is not { } cssData) return false;
+
+            var media = MediaQueryContext.FromContainer(container, container.Media);
+            var valueParser = new CssValueParser(container.RenderContext);
+            CascadeApplyStyles(valueParser, box, cssData, media);
+            return true;
+        }
+
+        /// <summary>
         /// The style a box's text takes while selected: the <c>::selection</c> rules of the element it sits in, cascaded into a detached box the
         /// way <see cref="ResolveFirstLineStyle"/> does it, seeded from the element's own style so an undeclared property reads as the element's.
         /// An element with no rule of its own takes its nearest ancestor's selection style. Resolved the first time a painter asks, so the
@@ -1852,6 +1868,18 @@ namespace PeachBrackets.Html.Parse
             AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: true, null, null, null, null, pendingVarProperties);
             ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
             CssUtils.ApplyCurrentColor(shadowBox, valueParser);
+
+            // A highlight inherits from its parent's highlight (CSS Pseudo-Elements 4 section 3.2), not only from its own element: an inherited property
+            // the ancestor's rules declared, and these rules did not, takes the ancestor's value. "Declared" is read as "differs from the element's own".
+            if (inherited is { ParentBox: { } ancestorElement })
+            {
+                if (shadowBox.ActualColor.Equals(element.ActualColor) && !inherited.ActualColor.Equals(ancestorElement.ActualColor))
+                    CssUtils.SetPropertyValue(valueParser, shadowBox, PropertyNames.Color, inherited.Color);
+
+                if (string.Equals(shadowBox.TextShadow, element.TextShadow, StringComparison.Ordinal)
+                    && !string.Equals(inherited.TextShadow, ancestorElement.TextShadow, StringComparison.Ordinal))
+                    CssUtils.SetPropertyValue(valueParser, shadowBox, PropertyNames.TextShadow, inherited.TextShadow);
+            }
 
             return Store(shadowBox);
         }

@@ -573,4 +573,27 @@ public class TextEditTests
         texts[30] = texts[30].Insert(3, "ZZ ");
         await AssertLaysOutLike(document, Markup());
     }
+    [Fact]
+    public async Task SplittingTheLastParagraph_ReevaluatesStructuralSelectorsForBothHalves()
+    {
+        const string head = Head + "<style>p:last-child { margin-top: 40pt; color: rgb(200, 0, 0) } p:first-child { margin-bottom: 20pt }</style>";
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>Hello world</p>", head);
+
+        var result = await document.SplitParagraphAsync(new TextPosition(1, 5), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>Hello</p><p> world</p>", head);
+    }
+
+    [Fact]
+    public async Task JoiningTheLastTwoParagraphs_ReevaluatesTheSurvivorsStructuralSelectors()
+    {
+        const string head = Head + "<style>p:last-child { margin-top: 40pt }</style>";
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two</p><p>three</p>", head);
+
+        var result = await document.JoinWithNextParagraphAsync(new TextPosition(1, 1), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>twothree</p>", head);
+    }
 }

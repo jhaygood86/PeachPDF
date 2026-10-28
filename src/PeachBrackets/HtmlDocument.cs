@@ -545,6 +545,70 @@ public sealed class HtmlDocument : IDisposable
         RebuildHighlights();
     }
 
+    /// <summary>
+    /// Finds the text a URL text fragment directive names (the <c>text=[prefix-,]start[,end][,-suffix]</c> after <c>#:~:</c>) and paints it in the
+    /// <c>::target-text</c> style - what a browser does when a link carries one. The match is case-insensitive over the document's text, the first
+    /// one whose prefix and suffix are around it; an <c>end</c> extends it to the next occurrence of that text. A directive that matches nothing
+    /// removes the <c>target-text</c> highlight. Several <c>text=</c> terms joined by <c>&amp;</c> are tried in order. Repaint the pages to show it.
+    /// </summary>
+    /// <param name="directive">the directive, such as <c>text=quick%20brown,fox</c>; percent-encoding is decoded</param>
+    /// <returns>the range it matched, or null</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="directive"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> or <see cref="HtmlDocumentOptions.EnableSelectionStyling"/> was not set</exception>
+    public TextRange? ApplyTextFragmentDirective(string directive)
+    {
+        ArgumentNullException.ThrowIfNull(directive);
+        var runs = TextRuns;
+
+        TextRange? match = null;
+        foreach (var term in directive.Split('&'))
+        {
+            if (!term.StartsWith("text=", StringComparison.Ordinal)) continue;
+
+            match = MatchTextDirective(runs, term.Substring(5));
+            if (match is not null) break;
+        }
+
+        SetHighlight("target-text", match is { } found ? [found] : null);
+        return match;
+    }
+
+    private TextRange? MatchTextDirective(IReadOnlyList<TextRun> runs, string term)
+    {
+        if (runs.Count == 0) return null;
+
+        var parts = term.Split(',').Select(Uri.UnescapeDataString).ToList();
+        string? prefix = null;
+        string? suffix = null;
+        if (parts.Count > 1 && parts[0].EndsWith('-')) { prefix = parts[0][..^1]; parts.RemoveAt(0); }
+        if (parts.Count > 1 && parts[^1].StartsWith('-')) { suffix = parts[^1][1..]; parts.RemoveAt(parts.Count - 1); }
+        if (parts.Count is < 1 or > 2 || parts[0].Length == 0) return null;
+
+        var start = parts[0];
+        var end = parts.Count == 2 ? parts[1] : null;
+        var origin = new TextPosition(0, 0);
+        var last = new TextPosition(runs.Count - 1, runs[^1].Text.Length);
+
+        foreach (var candidate in FindText(start, ignoreCase: true))
+        {
+            if (prefix is not null && !GetText(origin, candidate.Start).TrimEnd().EndsWith(prefix.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+
+            var range = candidate;
+            if (end is not null)
+            {
+                var tail = FindText(end, ignoreCase: true).Where(e => e.Start.CompareTo(candidate.End) >= 0).Cast<TextRange?>().FirstOrDefault();
+                if (tail is null) continue;
+                range = new TextRange(candidate.Start, tail.Value.End);
+            }
+
+            if (suffix is not null && !GetText(range.End, last).TrimStart().StartsWith(suffix.Trim(), StringComparison.OrdinalIgnoreCase)) continue;
+
+            return range;
+        }
+
+        return null;
+    }
+
     /// <summary>Removes a named highlight (<see cref="SetHighlight"/> with no ranges).</summary>
     /// <param name="name">the highlight's name</param>
     /// <returns>whether there was one</returns>
@@ -789,7 +853,7 @@ public sealed class HtmlDocument : IDisposable
             if (point is not { } source) return (null, reason);
 
             _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(source.Box);
-            if (TextEditor.Split(source, out reason) is not var (caret, block)) return (null, reason);
+            if (TextEditor.Split(_container, source, out reason) is not var (caret, block)) return (null, reason);
 
             created = block;
             return (caret ?? new TextEditor.SourcePoint(block!, 0), null);
@@ -811,7 +875,7 @@ public sealed class HtmlDocument : IDisposable
             if (point is not { } source) return (null, reason);
 
             _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(source.Box);
-            return TextEditor.Join(source, out reason) is { } joined ? (joined.Caret ?? source, null) : (null, reason);
+            return TextEditor.Join(_container, source, out reason) is { } joined ? (joined.Caret ?? source, null) : (null, reason);
         });
 
     // The paragraph the edit being made starts in, found before it changes anything: layout is picked up from the pass that placed it.
