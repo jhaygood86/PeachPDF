@@ -9,7 +9,7 @@ Deliberately not done:
   per-page margin/size overrides, reserved blank slots, flex or grid content (their content extent cannot be reproduced), a page width not given by the options, when no pass entry names the paragraph, and when no earlier pass was entered at a clean block boundary (every break before it falls inside a paragraph). A resumed layout
   starts from the pass before the one that placed the paragraph, so a keep-with-next run that reaches back further than that is handled only by the in-run rewind.
 - **Wrapping a range, and structure edits beyond a plain paragraph.** `SplitParagraphAsync`/`JoinWithNextParagraphAsync` handle only a block in a block
-  with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
+  with inline-only content (no table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
   one's style, so structural selectors (`:nth-child`, `:last-child`, `:first-line` effects of a different first line) are not re-evaluated, and a join
   merges adjacent plain texts only at the top level of the paragraph. Deleting a range across paragraphs still leaves two paragraphs (`Range.deleteContents`).
   `WrapRangeAsync` wraps only a range inside one run of sibling text boxes (not across inline elements or paragraphs) and `UnwrapElementAsync` only an element
@@ -24,7 +24,6 @@ Deliberately not done:
 - **Failure mid-edit is not rolled back.** The text is spliced before the relayout; an exception from layout leaves the edited tree.
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
-- **Only the paragraphs around a split or join are re-cascaded** (#1972). `DomParser.RecascadeSubtree` re-runs the cascade for the paragraph that is kept, the
-  one a split creates and the one after, so `:first-child`/`:last-child`/adjacent-sibling rules see the new tree; the `:nth-child` position of paragraphs
-  further on is not re-evaluated (that would re-cascade every later sibling), the copy a split makes has no `id`, and the
-  layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.
+- **A split or join re-cascades the paragraphs it touched and every later sibling** (#1972; `TextEditor.RecascadeAround`), so `:nth-child` and sibling
+  combinators follow the edit. Not restyled: elements that are not later siblings (a `:has()` or distant-combinator match), and the layout caches that
+  depend on tree shape (quote depth, finalized counter names). The copy a split makes has no `id`.

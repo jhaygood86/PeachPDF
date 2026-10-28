@@ -252,7 +252,7 @@ other elements or generated content (for unwrap) are refused. The text boxes inv
 exactly like the markup with it. A split paragraph's copy does not keep the `id` of the paragraph it came from.
 
 Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
-and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
+and, for a join, two adjacent paragraphs of the same element; a table cell, flex or grid item, or a block that holds blocks is refused. A list item splits and joins like a paragraph, and the items after it are renumbered.
 The paragraph a split or join leaves, the one it creates and the one after them are cascaded again, so `:first-child`, `:last-child` and adjacent-sibling rules match their new positions; `:nth-child` rules of paragraphs further on are not evaluated again.
 
 `canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:

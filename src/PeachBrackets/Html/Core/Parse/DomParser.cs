@@ -1788,6 +1788,40 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// Resolves the list markers under <paramref name="scope"/> again, after the items before them changed: forgets the counter values of
+        /// everything under it and gives each marker its text and words anew. A structural edit (splitting a list item, joining two) renumbers them.
+        /// </summary>
+        internal static void RefreshListMarkers(CssBox scope)
+        {
+            ResetCounters(scope);
+            RefreshMarkers(scope);
+
+            static void ResetCounters(CssBox box)
+            {
+                box.ResetCounterState();
+                foreach (var child in box.Boxes) ResetCounters(child);
+            }
+
+            static void RefreshMarkers(CssBox box)
+            {
+                foreach (var child in box.Boxes.ToArray())
+                {
+                    if (child is CssBoxMarker marker)
+                    {
+                        CssContentEngine.ApplyContent(marker);
+                        CssBidiParagraphResolver.ResolveOwnTextAsParagraph(marker);
+                        marker.ResolveDefaultContent();
+                        if (!string.IsNullOrEmpty(marker.Text)) marker.ParseToWords();
+                    }
+                    else
+                    {
+                        RefreshMarkers(child);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// The style a box's text takes while selected: the <c>::selection</c> rules of the element it sits in, cascaded into a detached box the
         /// way <see cref="ResolveFirstLineStyle"/> does it, seeded from the element's own style so an undeclared property reads as the element's.
         /// An element with no rule of its own takes its nearest ancestor's selection style. Resolved the first time a painter asks, so the
