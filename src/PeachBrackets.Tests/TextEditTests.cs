@@ -358,11 +358,10 @@ public class TextEditTests
     [Fact]
     public async Task StructureEditsInsideAnythingButAPlainParagraph_AreRefused()
     {
-        var (_, document, canvas) = await LoadAsync("<ul><li>one</li><li>two</li></ul><div>x<p>y</p></div><p>last</p>");
+        var (_, document, canvas) = await LoadAsync("<ul><li>one</li><li>two</li></ul><div style='display:flex'><p>fx</p></div><p>last</p>");
 
-        var inItem = await document.SplitParagraphAsync(new TextPosition(0, 1), canvas);
-        Assert.False(inItem.Applied);
-        Assert.False((await document.JoinWithNextParagraphAsync(new TextPosition(0, 1), canvas)).Applied);
+        var inBlockOfBlocks = await document.SplitParagraphAsync(new TextPosition(Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text == "fx"), 1), canvas);
+        Assert.False(inBlockOfBlocks.Applied);
         var lastParagraph = document.TextRuns.Count - 1;
         var noNext = await document.JoinWithNextParagraphAsync(new TextPosition(lastParagraph, 1), canvas);
         Assert.False(noNext.Applied);
@@ -618,6 +617,32 @@ public class TextEditTests
 
         Assert.True(result.Applied, result.Reason);
         await AssertLaysOutLike(document, "<p>one</p><p>twothree</p><p>four</p><p>five</p>", head);
+    }
+
+    [Theory]
+    [InlineData("ul")]
+    [InlineData("ol")]
+    public async Task SplittingAListItem_LaysOutLikeTheMarkupWithTwoItems(string list)
+    {
+        var (_, document, canvas) = await LoadAsync($"<{list}><li>one</li><li>two words</li><li>three</li></{list}>");
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith("two", StringComparison.Ordinal));
+        var result = await document.SplitParagraphAsync(new TextPosition(run, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, $"<{list}><li>one</li><li>two</li><li> words</li><li>three</li></{list}>");
+    }
+
+    [Fact]
+    public async Task JoiningListItems_LaysOutLikeTheMarkupWithOneItem()
+    {
+        var (_, document, canvas) = await LoadAsync("<ol><li>one</li><li>two</li><li>three</li><li>four</li></ol>");
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith("two", StringComparison.Ordinal));
+        var result = await document.JoinWithNextParagraphAsync(new TextPosition(run, 1), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<ol><li>one</li><li>twothree</li><li>four</li></ol>");
     }
 
     [Fact]

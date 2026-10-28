@@ -328,7 +328,7 @@ namespace PeachBrackets.Html.TextGeometry
             reason = null;
             if (block.ParentBox is not { } parent ||
                 block.IsInline || block.IsFloated || block.IsAbsolutelyPositioned
-                || block.DerivedStyle.ActualDisplay != Keywords.Block || parent.DerivedStyle.ActualDisplay != Keywords.Block
+                || block.DerivedStyle.ActualDisplay is not (Keywords.Block or Keywords.ListItem) || parent.DerivedStyle.ActualDisplay != Keywords.Block
                 || block is CssBoxSvg or CssBoxMath or CssBoxImage or CssBoxFormField || block.IsWithinForeignContent)
             {
                 reason = "The text is not in a plain paragraph (a block in a block, with only inline content).";
@@ -337,6 +337,7 @@ namespace PeachBrackets.Html.TextGeometry
 
             foreach (var child in block.Boxes)
             {
+                if (child.IsMarkerPseudoElement) continue;
                 if (child.IsPseudoElement || child is CssBoxMarker || (!child.IsInline && child.Text is null))
                 {
                     reason = "The paragraph holds generated content or blocks of its own.";
@@ -448,6 +449,7 @@ namespace PeachBrackets.Html.TextGeometry
             if (second is not null) DomParser.RecascadeSubtree(container, second);
             for (var i = siblings.IndexOf(last) + 1; i < siblings.Count; i++)
                 DomParser.RecascadeSubtree(container, siblings[i]);
+            DomParser.RefreshListMarkers(last.ParentBox!);
         }
 
         /// <summary>The inline elements a range of text can be wrapped in.</summary>
@@ -683,7 +685,8 @@ namespace PeachBrackets.Html.TextGeometry
             var last = firstLeaves.Count > 0 ? firstLeaves[^1] : null;
             var lastLength = last?.Text?.Length ?? 0;
 
-            var moved = next.Boxes.ToList();
+            // A list item's marker belongs to the item, so the second one's goes with it.
+            var moved = next.Boxes.Where(b => !b.IsMarkerPseudoElement).ToList();
             foreach (var child in moved)
                 child.ParentBox = first;
 

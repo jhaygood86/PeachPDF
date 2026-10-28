@@ -378,6 +378,13 @@ namespace PeachBrackets.Html.Dom
 
         internal HashSet<string> FinalizedCounterNames => _finalizedCounterNames ??= [];
 
+        /// <summary>Forgets the counter values resolved for this box, so the next lookup computes them against the tree as it stands.</summary>
+        internal void ResetCounterState()
+        {
+            _counters = null;
+            _finalizedCounterNames = null;
+        }
+
         /// <summary>
         /// CSS 2.1 §12.2 quote nesting depth (open-quote/no-open-quote minus close-quote/
         /// no-close-quote occurring earlier in document order) at the point this box's own content

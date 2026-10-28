@@ -9,7 +9,7 @@ Deliberately not done:
   per-page margin/size overrides, reserved blank slots, flex or grid content (their content extent cannot be reproduced), a page width not given by the options, when no pass entry names the paragraph, and when no earlier pass was entered at a clean block boundary (every break before it falls inside a paragraph). A resumed layout
   starts from the pass before the one that placed the paragraph, so a keep-with-next run that reaches back further than that is handled only by the in-run rewind.
 - **Wrapping a range, and structure edits beyond a plain paragraph.** `SplitParagraphAsync`/`JoinWithNextParagraphAsync` handle only a block in a block
-  with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
+  with inline-only content (no table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
   one's style, so structural selectors (`:nth-child`, `:last-child`, `:first-line` effects of a different first line) are not re-evaluated, and a join
   merges adjacent plain texts only at the top level of the paragraph. Deleting a range across paragraphs still leaves two paragraphs (`Range.deleteContents`).
   `WrapRangeAsync` wraps only a range inside one run of sibling text boxes (not across inline elements or paragraphs) and `UnwrapElementAsync` only an element
