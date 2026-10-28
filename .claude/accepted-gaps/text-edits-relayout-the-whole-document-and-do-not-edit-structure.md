@@ -24,7 +24,6 @@ Deliberately not done:
 - **Failure mid-edit is not rolled back.** The text is spliced before the relayout; an exception from layout leaves the edited tree.
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
-- **Only the paragraphs around a split or join are re-cascaded** (#1972). `DomParser.RecascadeSubtree` re-runs the cascade for the paragraph that is kept, the
-  one a split creates and the one after, so `:first-child`/`:last-child`/adjacent-sibling rules see the new tree; the `:nth-child` position of paragraphs
-  further on is not re-evaluated (that would re-cascade every later sibling), the copy a split makes has no `id`, and the
-  layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.
+- **A split or join re-cascades the paragraphs it touched and every later sibling** (#1972; `TextEditor.RecascadeAround`), so `:nth-child` and sibling
+  combinators follow the edit. Not restyled: elements that are not later siblings (a `:has()` or distant-combinator match), and the layout caches that
+  depend on tree shape (quote depth, finalized counter names). The copy a split makes has no `id`.
