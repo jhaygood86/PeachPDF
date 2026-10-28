@@ -21,6 +21,6 @@ Deliberately not done:
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
 Closing the first needs the snapshot above; the second the load-time structure passes made re-runnable for one block.
-- **A split paragraph is cloned, not re-cascaded.** `InheritStyle(original, everything: true)` copies a fixed property list, which omits some non-inherited
-  properties (`min-height`, `box-shadow`, `background-size`, counters); both halves share the `HtmlTag`, so an `id` is duplicated; and the layout caches that depend
-  on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings. Re-cascading the new block from its element is the fix.
+- **A split paragraph is not re-cascaded.** It adopts the original's whole computed style (`AdoptComputedStyle`; `InheritStyle(everything: true)` dropped
+  `min-height` and others), so structural selectors are not evaluated for its new position; both halves share the `HtmlTag`, so an `id` is duplicated; and the
+  layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.

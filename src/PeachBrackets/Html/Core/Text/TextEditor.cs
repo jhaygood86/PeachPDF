@@ -353,7 +353,7 @@ namespace PeachBrackets.Html.TextGeometry
             var parent = original.ParentBox!;
             var index = parent.Boxes.IndexOf(original);
             var clone = CssBox.CreateBox(parent, original.HtmlTag);
-            clone.InheritStyle(original, everything: true);
+            clone.AdoptComputedStyle(original.ComputedStyle);
             parent.Boxes.Remove(clone);
             parent.Boxes.Insert(index + 1, clone);
             return clone;

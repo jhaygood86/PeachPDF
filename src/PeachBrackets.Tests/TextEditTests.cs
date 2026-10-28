@@ -450,4 +450,15 @@ public class TextEditTests
         Assert.True(result.Applied, result.Reason);
         Assert.NotNull(document.GetElement("t"));
     }
+    [Fact]
+    public async Task ASplitParagraph_KeepsEveryStyleOfTheOriginal_IncludingThoseInheritStyleDoesNotCopy()
+    {
+        const string head = Head + "<style>p.box { min-height: 80pt; border-left: 4pt solid red; padding-left: 5pt }</style>";
+        var (_, document, canvas) = await LoadAsync("<p class=box>Hello world</p><p>After</p>", head);
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 5), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p class=box>Hello</p><p class=box> world</p><p>After</p>", head);
+    }
 }
