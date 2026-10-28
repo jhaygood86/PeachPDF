@@ -881,6 +881,58 @@ public sealed class HtmlDocument : IDisposable
     // The paragraph the edit being made starts in, found before it changes anything: layout is picked up from the pass that placed it.
     private CssBox? _editAnchor;
 
+    /// <summary>
+    /// Wraps the text between two positions in a new inline element - <c>strong</c>, <c>em</c>, <c>a</c>, <c>span</c> and the like - the way a rich
+    /// text editor applies bold, italic or a link. The text boxes at the ends are cut where the range ends and the element is cascaded as if it had
+    /// been in the markup. The range must lie in one run of text with the same parent (not across inline elements or paragraphs); anything else, an
+    /// element that is not one of those phrasing elements, or an attribute that is not a plain name (or starts with <c>on</c>) is refused.
+    /// <see cref="TextEditResult.Block"/> is the new element and the caret is at the end of the wrapped text.
+    /// </summary>
+    /// <param name="from">where the wrapped text starts (either end may come first)</param>
+    /// <param name="to">where it ends, not included</param>
+    /// <param name="tagName">the element's name, such as <c>strong</c></param>
+    /// <param name="attributes">its attributes, such as <c>href</c> for <c>a</c>; null for none</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, string tagName, IReadOnlyDictionary<string, string>? attributes, Canvas measuringCanvas)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(tagName);
+        CssBox? created = null;
+        return EditAsync(measuringCanvas, () =>
+        {
+            var runs = TextRuns;
+            var (start, startReason) = TextEditor.ToSource(runs, from, isRangeStart: from.CompareTo(to) <= 0 && from != to);
+            if (start is not { } a) return (null, startReason);
+
+            var (end, endReason) = TextEditor.ToSource(runs, to, isRangeStart: from.CompareTo(to) > 0);
+            if (end is not { } b) return (null, endReason);
+
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf((from.CompareTo(to) <= 0 ? a : b).Box);
+            if (TextEditor.Wrap(_container, a, b, tagName, attributes, out var reason) is not var (caret, element)) return (null, reason);
+
+            created = element;
+            return (caret, null);
+        }, () => created);
+    }
+
+    /// <summary>
+    /// Removes an inline element - <c>strong</c>, <c>em</c>, <c>a</c>, <c>span</c> and the like - leaving what was inside it, as a rich text editor does
+    /// to turn bold or a link off. Text that then touches text is joined. An element that holds blocks, generated content, or is not one of those phrasing
+    /// elements is refused.
+    /// </summary>
+    /// <param name="element">the element, from <see cref="GetElement"/>, <see cref="GetElementAt(int, double, double)"/> or <see cref="TextEditResult.Block"/></param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/>; the caret is the start of what was inside the element</returns>
+    public Task<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        return EditAsync(measuringCanvas, () =>
+        {
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(element.Box);
+            return TextEditor.Unwrap(_container, element.Box, out var reason) is { } done ? (done.Caret ?? new TextEditor.SourcePoint(element.Box, 0), null) : (null, reason);
+        });
+    }
+
     private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change, Func<CssBox?>? createdBlock = null)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);

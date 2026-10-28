@@ -347,12 +347,22 @@ namespace PeachBrackets.Html.TextGeometry
             return true;
         }
 
+        // The tag of a copy of an element: the same, except for the id, which names the element it was copied from (as when a browser splits one).
+        private static HtmlTag? WithoutId(HtmlTag? tag)
+        {
+            if (tag?.Attributes is null || !tag.Attributes.ContainsKey("id")) return tag;
+
+            var attributes = new Dictionary<string, string>(tag.Attributes, StringComparer.OrdinalIgnoreCase);
+            attributes.Remove("id");
+            return new HtmlTag(tag.Name, tag.IsSingle, attributes);
+        }
+
         // A box like <paramref name="original"/> (same tag, same style), as the next sibling of it.
         private static CssBox CloneAfter(CssBox original)
         {
             var parent = original.ParentBox!;
             var index = parent.Boxes.IndexOf(original);
-            var clone = CssBox.CreateBox(parent, original.HtmlTag);
+            var clone = CssBox.CreateBox(parent, WithoutId(original.HtmlTag));
             clone.AdoptComputedStyle(original.ComputedStyle);
             parent.Boxes.Remove(clone);
             parent.Boxes.Insert(index + 1, clone);
@@ -438,6 +448,173 @@ namespace PeachBrackets.Html.TextGeometry
             DomParser.RecascadeSubtree(container, first);
             if (second is not null) DomParser.RecascadeSubtree(container, second);
             if (after is not null) DomParser.RecascadeSubtree(container, after);
+        }
+
+        /// <summary>The inline elements a range of text can be wrapped in.</summary>
+        private static readonly HashSet<string> WrappingTags = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "a", "abbr", "b", "bdi", "bdo", "cite", "code", "del", "dfn", "em", "i", "ins", "kbd", "mark", "q", "s", "samp", "small", "span", "strong", "sub",
+            "sup", "time", "u", "var"
+        };
+
+        // The text box after <paramref name="leaf"/> that takes everything of its text from <paramref name="index"/> on.
+        private static CssBox SplitLeaf(CssBox leaf, int index)
+        {
+            var parent = leaf.ParentBox!;
+            var tail = CssBox.CreateBox(parent);
+            tail.Text = leaf.Text!.Substring(index);
+            leaf.Text = leaf.Text.Substring(0, index);
+            parent.Boxes.Remove(tail);
+            parent.Boxes.Insert(parent.Boxes.IndexOf(leaf) + 1, tail);
+            return tail;
+        }
+
+        /// <summary>
+        /// Wraps the text from <paramref name="start"/> to <paramref name="end"/> in a new inline element: the text boxes at either end are cut where the
+        /// range ends, and the boxes it covers move into the element, which is cascaded as if it had been in the markup. The range must lie in one
+        /// run of text boxes with the same parent (not across inline elements or paragraphs), and the element must be one of <see cref="WrappingTags"/>.
+        /// </summary>
+        /// <returns>the end of the wrapped text and the new element, or null with <paramref name="reason"/></returns>
+        public static (SourcePoint? Caret, CssBox? Element)? Wrap(
+            HtmlContainerInt container, SourcePoint start, SourcePoint end, string tagName, IReadOnlyDictionary<string, string>? attributes, out string? reason)
+        {
+            reason = null;
+            if (!WrappingTags.Contains(tagName)) { reason = $"<{tagName}> is not an element a range of text can be wrapped in."; return null; }
+
+            if (attributes is not null)
+            {
+                foreach (var name in attributes.Keys)
+                {
+                    if (name.Length == 0 || !name.All(c => char.IsAsciiLetterOrDigit(c) || c == '-') || name.StartsWith("on", StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = $"The attribute \"{name}\" cannot be set.";
+                        return null;
+                    }
+                }
+            }
+
+            var leaves = new List<CssBox>();
+            CollectLeaves(container.Root!, leaves);
+            var first = IndexOfBox(leaves, start.Box);
+            var last = IndexOfBox(leaves, end.Box);
+            if (first < 0 || last < 0) { reason = "The text is no longer in the document."; return null; }
+
+            if (first > last || (first == last && start.Index > end.Index))
+            {
+                (start, end) = (end, start);
+                (first, last) = (last, first);
+            }
+
+            var parent = start.Box.ParentBox!;
+            if (!ReferenceEquals(parent, end.Box.ParentBox) || parent.IsWithinForeignContent)
+            {
+                reason = "The range crosses the boundary of an element; wrap text that is in one run of text.";
+                return null;
+            }
+
+            // Everything between the two ends must be plain text of that parent too, not another element's.
+            for (var i = first; i <= last; i++)
+            {
+                if (!ReferenceEquals(leaves[i].ParentBox, parent) || !IsPlainText(leaves[i]))
+                {
+                    reason = "The range crosses the boundary of an element; wrap text that is in one run of text.";
+                    return null;
+                }
+            }
+
+            if (start.Index > start.Box.Text!.Length || end.Index > end.Box.Text!.Length) { reason = "The position is outside the text it names."; return null; }
+            if (first == last && start.Index == end.Index) { reason = "The range is empty."; return null; }
+
+            // Cut the ends: the covered text boxes are then exactly the ones to move.
+            var coveredFirst = start.Box;
+            var coveredLast = end.Box;
+            if (end.Index < end.Box.Text.Length) SplitLeaf(end.Box, end.Index);
+            if (start.Index > 0)
+            {
+                var middle = SplitLeaf(start.Box, start.Index);
+                coveredFirst = middle;
+                if (first == last) coveredLast = middle;
+            }
+
+            var covered = new List<CssBox>();
+            var siblings = parent.Boxes;
+            for (var i = siblings.IndexOf(coveredFirst); i <= siblings.IndexOf(coveredLast); i++)
+                covered.Add(siblings[i]);
+
+            var attributesCopy = attributes?.ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
+            var element = CssBox.CreateBox(new HtmlTag(tagName.ToLowerInvariant(), false, attributesCopy), parent);
+            siblings.Remove(element);
+            siblings.Insert(siblings.IndexOf(covered[0]), element);
+            // New text boxes, not the old ones moved: a box keeps what it derived from its style (its font, for one) and a move changes the style.
+            foreach (var box in covered)
+            {
+                var copy = CssBox.CreateBox(element);
+                copy.Text = box.Text;
+                box.ParentBox = null;
+            }
+
+            DomParser.RecascadeSubtree(container, element);
+            var paragraph = CssBidiParagraphResolver.ParagraphRootOf(element.Boxes[0]);
+            var kept = RedoText([paragraph]);
+
+            var tailBox = element.Boxes[^1];
+            var caret = new SourcePoint(tailBox, tailBox.Text!.Length + (kept.Contains(tailBox) ? 1 : 0));
+            return (caret, element);
+        }
+
+        /// <summary>
+        /// Takes <paramref name="element"/> (an inline element that holds only text and other inline elements) out of the tree, leaving what was inside
+        /// it in its place; text that then touches text is joined, as the markup without the element would have it.
+        /// </summary>
+        /// <returns>the start of what was inside it (null when it held no text), or null with <paramref name="reason"/></returns>
+        public static (SourcePoint? Caret, bool Unwrapped)? Unwrap(HtmlContainerInt container, CssBox element, out string? reason)
+        {
+            reason = null;
+            if (element.HtmlTag is null || element.ParentBox is not { } parent || !element.IsInline || element.IsPseudoElement
+                || element is CssBoxSvg or CssBoxMath or CssBoxImage or CssBoxFormField || element.IsWithinForeignContent
+                || !WrappingTags.Contains(element.HtmlTag.Name))
+            {
+                reason = "Only an inline element that wraps text (strong, em, a, span and the like) can be unwrapped.";
+                return null;
+            }
+
+            var paragraph = CssBidiParagraphResolver.ParagraphRootOf(element);
+            foreach (var child in element.Boxes)
+            {
+                if (!IsPlainText(child))
+                {
+                    reason = "The element holds other elements or generated content; unwrap the inner ones first.";
+                    return null;
+                }
+            }
+
+            var index = parent.Boxes.IndexOf(element);
+
+            // New text boxes in the element's place (see Wrap); the text next to them may now be one text.
+            var moved = new List<CssBox>();
+            foreach (var child in element.Boxes)
+            {
+                var copy = CssBox.CreateBox(parent);
+                copy.Text = child.Text;
+                parent.Boxes.Remove(copy);
+                parent.Boxes.Insert(index++, copy);
+                moved.Add(copy);
+            }
+
+            element.ParentBox = null;
+
+            for (var i = parent.Boxes.Count - 2; i >= 0; i--)
+            {
+                if (IsPlainText(parent.Boxes[i]) && IsPlainText(parent.Boxes[i + 1]))
+                {
+                    parent.Boxes[i].Text += parent.Boxes[i + 1].Text;
+                    parent.Boxes[i + 1].ParentBox = null;
+                }
+            }
+
+            RedoText([paragraph]);
+            var firstMoved = moved.FirstOrDefault(m => m.ParentBox is not null && m.Text is not null);
+            return (firstMoved is null ? null : new SourcePoint(firstMoved, 0), true);
         }
 
         private static bool IsPlainText(CssBox box) =>
