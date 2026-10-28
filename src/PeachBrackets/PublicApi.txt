@@ -206,6 +206,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
+  method TextRange? ApplyTextFragmentDirective(String directive)
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
