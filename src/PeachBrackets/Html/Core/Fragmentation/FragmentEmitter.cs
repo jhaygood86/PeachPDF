@@ -1017,29 +1017,65 @@ namespace PeachBrackets.Html.Fragmentation
         }
 
         /// <summary>
-        /// The scope <paramref name="box"/>'s "emitted nothing" observation is checked against - its
-        /// nearest ancestor that is itself a direct child of the document root, or the box itself when it
-        /// has no such ancestor (already a direct child of root, or reached from outside the layout tree
-        /// entirely).
+        /// The scope <paramref name="box"/>'s "emitted nothing" observation is checked against - the box just
+        /// below the <i>highest</i> ancestor that has more than one child producing anything (the document root,
+        /// for a document of several top-level sections; otherwise the first level at which the content
+        /// actually branches), or its top-level ancestor when nothing above it branches (or when it was reached
+        /// from outside the layout tree entirely).
         /// </summary>
         /// <remarks>
-        /// A cheap, shallow walk bounded by DOM nesting depth, not document size: a table cell's own
-        /// section ancestor is typically a handful of levels up, regardless of how many other sections the
-        /// document has. Deliberately not cached on <see cref="CssBox"/> - see the type's own remarks for
-        /// why a box's scope, once assigned, must be re-derived rather than trusted, and this walk is cheap
-        /// enough that doing so on every call was not worth the extra invalidation surface a cached field
-        /// would need.
+        /// <para>
+        /// Used to be simply the box's ancestor that is a direct child of the document root, which for any HTML
+        /// document is <c>&lt;html&gt;</c>: one scope for everything, so a reopening - which a document under the
+        /// default <c>orphans</c>/<c>widows</c> has at about every page break, at some page heights - retired
+        /// the pruning marks of every box and each emission walked the whole tree (172 MB against 21 MB for the
+        /// same 1000 paragraphs at 842pt against 820pt). A flat list of paragraphs now has one scope each.
+        /// Anything that compares a child's mark with a scope must derive the child's own scope with this method,
+        /// never reuse its parent's - see <see cref="OrdinaryChildrenStart"/>.
+        /// </para>
+        /// <para>
+        /// A cheap, shallow walk bounded by DOM nesting depth, not document size (counting an ancestor's
+        /// children stops at the second visible one). Deliberately not cached on <see cref="CssBox"/> - see the
+        /// type's own remarks for why a box's scope, once assigned, must be re-derived rather than trusted, and
+        /// this walk is cheap enough that doing so on every call was not worth the extra invalidation surface a
+        /// cached field would need. A scope that changes between the write of a mark and its read (a child added
+        /// to a once-single-child ancestor) makes the mark unusable, never wrong:
+        /// <see cref="CssBox.EmittedNothingAtOrBefore"/> compares the scope it was written under.
+        /// </para>
         /// </remarks>
         private static CssBox ScopeOwnerOf(CssBox box)
         {
             var current = box;
+            CssBox? belowHighestBranch = null;
 
             while (current.EffectiveParentBox is { IsRoot: false } parent)
             {
+                // Overwritten on the way up, so what is left is the box just under the HIGHEST ancestor that has
+                // more than one child of its own to scope between.
+                if (Branches(parent)) belowHighestBranch = current;
+
                 current = parent;
             }
 
-            return current;
+            // The document root itself branches (several top-level sections): each is its own scope, as before.
+            if (current.EffectiveParentBox is { IsRoot: true } root && Branches(root)) return current;
+
+            return belowHighestBranch ?? current;
+        }
+
+        /// <summary>Whether <paramref name="parent"/> has two or more children that produce anything at all, so that scoping below it separates something.</summary>
+        private static bool Branches(CssBox parent)
+        {
+            var children = parent.Boxes;
+            if (children.Count < 2) return false;
+
+            var visible = 0;
+            foreach (var child in children)
+            {
+                if (child.DerivedStyle.ActualDisplay != Keywords.None && ++visible == 2) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -3853,8 +3889,6 @@ namespace PeachBrackets.Html.Fragmentation
 
             if (!_forcingUnprunedReferenceWalk)
             {
-                var scopeOwner = ScopeOwnerOf(box);
-                var history = HistoryFor(scopeOwner);
                 startIndex = box.LiveChildStartFor(slot.Index);
 
                 while (startIndex < box.Boxes.Count)
@@ -3880,7 +3914,10 @@ namespace PeachBrackets.Html.Fragmentation
                     // captures have resumed at all. See _capturedInstanceOwners's own remarks.
                     if (_capturedInstanceOwners.Contains(candidate)) break;
 
-                    if (!candidate.EmittedNothingAtOrBefore(slot.Index, scopeOwner, history)) break;
+                    // Each child is judged against its OWN scope and history, the ones its mark was written under (a
+                    // scope can be narrower than its parent's: see ScopeOwnerOf).
+                    var candidateScope = ScopeOwnerOf(candidate);
+                    if (!candidate.EmittedNothingAtOrBefore(slot.Index, candidateScope, HistoryFor(candidateScope))) break;
 
                     startIndex++;
                 }
