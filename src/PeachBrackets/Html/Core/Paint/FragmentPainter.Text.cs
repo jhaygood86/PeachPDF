@@ -270,6 +270,9 @@ namespace PeachBrackets.Html.Paint
         /// <param name="colorOverride">
         /// the colour to draw the glyphs in instead of the style's own - a selection's <c>::selection</c> colour - or null to use the style's
         /// </param>
+        /// <param name="effectsStyle">
+        /// the style whose <c>text-shadow</c> and text stroke are drawn instead of the style's own - a highlight that changes them - or null to use the style's
+        /// </param>
         /// <param name="precededBySeparator">
         /// whether the flow placed a word separator between this word and the one before it on its line
         /// (<see cref="CssRect.PrecededByWordSeparator"/>) - when set, a real space glyph is shown in that
