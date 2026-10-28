@@ -46,3 +46,10 @@ a new place. `border-*-style` already carries one, so it needs a *second* entry
 a list); `display` would need its first; and `InvalidateColor` would have to clear the four border
 caches as well as `_actualColor`. That is a cheap change; the expensive part is noticing it was
 needed.
+
+## The one path that does mutate `color` after paint
+
+`HtmlDocument.SetStyle` (`Html/Core/Updates/StyleUpdater.cs`) writes `color` on a laid-out document, which is exactly the shape this file warns
+about. It is safe only because `PropagateColor` calls `InvalidateBorderTopColor` and its three siblings (and `InvalidateOutlineColor`) on every
+box whose colour it changes; a test (`ABorderThatFollowsTheColour_FollowsItsChange`) fails if that is dropped. Any new in-place writer of `color`,
+`display` or a `border-*-style` has to do the same.

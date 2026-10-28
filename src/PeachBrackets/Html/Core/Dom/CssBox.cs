@@ -575,6 +575,22 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal CssBox? ResolvedPlaceholderStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedPlaceholderStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedPlaceholderStyle = value; } }
 
+        /// <summary>
+        /// The style this element's text takes while selected: its <c>::selection</c> rules cascaded into a detached box, inheriting from the
+        /// parent's selection style. Resolved on demand (<c>DomParser.ResolveSelectionStyle</c>), so a document that never shows a selection pays
+        /// nothing; null when no rule applies.
+        /// </summary>
+        internal CssBox? ResolvedSelectionStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedSelectionStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedSelectionStyle = value; } }
+
+        /// <summary>
+        /// The styles this element's text takes in the other highlights (<c>::highlight(name)</c>, <c>::spelling-error</c>, ...), by pseudo-element name,
+        /// resolved on demand like <see cref="ResolvedSelectionStyle"/>; a name present with a null value has been resolved and no rule applies.
+        /// </summary>
+        internal Dictionary<string, CssBox?> HighlightStyles => (_rare ??= new BoxRareState()).HighlightStyles ??= [];
+
+        /// <summary>Idempotency guard for <see cref="ResolvedSelectionStyle"/>.</summary>
+        internal bool SelectionStyleProcessed { get => _rare is not null && _rare.SelectionStyleProcessed; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.SelectionStyleProcessed = value; } }
+
         /// <summary>Idempotency guard for <see cref="ResolvedPlaceholderStyle"/> resolution.</summary>
         internal bool PlaceholderStyleProcessed { get; set; }
 
@@ -661,6 +677,9 @@ namespace PeachBrackets.Html.Dom
         /// <c>block</c> because it holds a block-level child. The rewrite is how this engine lays the split out; to
         /// the author it is still an inline box, which is what <see cref="DerivedStyle.IsTransformable"/> asks.
         /// </summary>
+        /// <summary>Set when loading removed this text box's leading collapsible white space because the run continued from the box before it, so a text edit can put it back.</summary>
+        internal bool LeadingWhitespaceCollapsed;
+
         internal bool IsInlineBoxSplitByBlock { get => _rare is null ? default(bool) : _rare.IsInlineBoxSplitByBlock; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineBoxSplitByBlock = value; } }
 
         /// <summary>
@@ -1838,7 +1857,9 @@ namespace PeachBrackets.Html.Dom
                         {
                             Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false)
                             {
-                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel
+                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) ? startIdx : -1,
+                                SourceLength = endIdx - startIdx,
                             });
                         }
                     }
@@ -1950,11 +1971,27 @@ namespace PeachBrackets.Html.Dom
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
                             if (Words.Count > wordsBefore)
                                 Words[wordsBefore].UnicodeBreakBefore = breakOpportunities[startIdx] != LineBreakOpportunity.Prohibited;
+                            // Where each fragment starts in this box's own text, for mapping an edit back to it. Only when the
+                            // fragments add up to the source span (an uppercased small-caps run can lengthen, a soft hyphen
+                            // shortens what the fragments hold): otherwise they are left unmappable rather than wrong.
+                            var mappable = ReferenceEquals(sourceText, _text);
+                            var fragmentTotal = 0;
+                            for (var wi = wordsBefore; wi < Words.Count; wi++)
+                                fragmentTotal += Words[wi].Text?.Length ?? 0;
+
+                            var splitFragments = Words.Count - wordsBefore > 1;
+                            mappable &= !splitFragments || fragmentTotal == endIdx - startIdx;
+                            var fragmentStart = startIdx;
                             for (var wi = wordsBefore; wi < Words.Count; wi++)
                             {
                                 Words[wi].BidiLevel = wordBidiLevel;
                                 if (Words[wi] is CssRectWord rectWord)
                                     rectWord.ScriptTag = wordScriptTag;
+
+                                var fragmentLength = splitFragments ? Words[wi].Text?.Length ?? 0 : endIdx - startIdx;
+                                Words[wi].SourceStart = mappable ? fragmentStart : -1;
+                                Words[wi].SourceLength = fragmentLength;
+                                fragmentStart += fragmentLength;
                             }
                         }
                     }
@@ -1967,7 +2004,12 @@ namespace PeachBrackets.Html.Dom
                             : fallbackLevel;
                         endIdx++;
                         if (respectNewLines)
-                            Words.Add(new CssRectWord(this, "\n", false, false) { BidiLevel = newlineBidiLevel });
+                            Words.Add(new CssRectWord(this, "\n", false, false)
+                            {
+                                BidiLevel = newlineBidiLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
+                                SourceLength = 1,
+                            });
                     }
 
                     startIdx = endIdx;
@@ -4138,6 +4180,22 @@ namespace PeachBrackets.Html.Dom
         internal static bool NeedsAClaimedWordToEstablishMembership(CssBox box) =>
             IsOutsideMarker(box) && box.Words.Count > 0
             && box.ParentBox?.DerivedStyle.ActualDisplay == Keywords.ListItem;
+
+        /// <summary>
+        /// Makes this box and every box below it decide its breaks afresh, as a new layout generation would for each of them: the
+        /// once-per-layout corrections (the orphans break conversion, the widows rewind, the relaxed avoid) become available again. Used when
+        /// a layout is resumed part-way (<see cref="HtmlContainerInt.TryResumeLayoutAt"/>), which keeps the generation - and so the boxes the
+        /// resumed passes do not reach - but must not inherit the previous layout's spent corrections for the ones they do.
+        /// </summary>
+        internal void RearmBreakDecisions()
+        {
+            _orphansBreakTaken = false;
+            _avoidRelaxed = false;
+            _widowsRewindTaken = false;
+
+            foreach (var child in Boxes)
+                child.RearmBreakDecisions();
+        }
 
         /// <summary>
         /// Picks up this box's resumption state for the pass that is starting, discarding anything left

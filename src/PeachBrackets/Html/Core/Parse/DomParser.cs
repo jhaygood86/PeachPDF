@@ -1772,6 +1772,91 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// The style a box's text takes while selected: the <c>::selection</c> rules of the element it sits in, cascaded into a detached box the
+        /// way <see cref="ResolveFirstLineStyle"/> does it, seeded from the element's own style so an undeclared property reads as the element's.
+        /// An element with no rule of its own takes its nearest ancestor's selection style. Resolved the first time a painter asks, so the
+        /// cost falls only on documents that show a selection; null when no rule applies to the element or any ancestor.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Not modelled: CSS Pseudo-Elements 4 §3.2's inheritance of a declared property through an intermediate element that has rules of its
+        /// own (the grandparent's selection <c>color</c> is lost on a child whose parent only sets a background).
+        /// </para>
+        /// <para>
+        /// Unlike <c>::first-line</c> this never changes a measurement: the painter reads only <c>color</c> and <c>background-color</c> from the
+        /// result, so a selection can never move text. (<c>text-decoration</c>, <c>text-shadow</c> and the stroke properties of the highlight
+        /// pseudo-elements are not painted yet.)
+        /// </para>
+        /// </remarks>
+        internal static CssBox? ResolveSelectionStyle(HtmlContainerInt container, CssBox box) =>
+            ResolveHighlightStyle(container, box, PseudoElementNames.Selection);
+
+        /// <summary>
+        /// <see cref="ResolveSelectionStyle"/> for any highlight pseudo-element: <paramref name="pseudoName"/> is <c>selection</c>,
+        /// <c>highlight(name)</c>, <c>spelling-error</c>, <c>grammar-error</c> or <c>target-text</c>, as the selector names it.
+        /// </summary>
+        internal static CssBox? ResolveHighlightStyle(HtmlContainerInt container, CssBox box, string pseudoName)
+        {
+            // Text is held by anonymous boxes; the rules belong to the element they are in.
+            var element = box;
+            while (element.HtmlTag is null && element.ParentBox is { } parent)
+                element = parent;
+
+            var isSelection = pseudoName == PseudoElementNames.Selection;
+            if (isSelection)
+            {
+                if (element.SelectionStyleProcessed)
+                    return element.ResolvedSelectionStyle;
+
+                element.SelectionStyleProcessed = true;
+            }
+            else
+            {
+                if (element.HighlightStyles.TryGetValue(pseudoName, out var cached))
+                    return cached;
+
+                element.HighlightStyles[pseudoName] = null;
+            }
+
+            CssBox? Store(CssBox? style)
+            {
+                if (isSelection) element.ResolvedSelectionStyle = style;
+                else element.HighlightStyles[pseudoName] = style;
+
+                return style;
+            }
+
+            var inherited = element.ParentBox is { } parentBox ? ResolveHighlightStyle(container, parentBox, pseudoName) : null;
+
+            var cssData = container.CssData;
+            if (cssData is null || !cssData.HasSelectionRules)
+                return Store(inherited);
+
+            var media = MediaQueryContext.FromContainer(container, container.Media);
+            var uaRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: true, pseudoName).ToList();
+            var authorRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: false, pseudoName).ToList();
+            if (uaRules.Count == 0 && authorRules.Count == 0)
+                return Store(inherited);
+
+            var valueParser = new CssValueParser(container.RenderContext);
+            var shadowBox = new CssBox(element, null);
+            element.Boxes.Remove(shadowBox); // a detached resolution helper, never a real tree member
+            // Seeded from the element's own style: a property the rules do not declare then reads as the element's own (so the text colour
+            // stays the element's unless a rule changes it). The style's ParentBox is the element, which is what the painter compares against.
+            shadowBox.InheritStyle(element);
+
+            var pendingVarProperties = new Dictionary<string, string>();
+            AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, authorRules, importantPass: false, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, authorRules, importantPass: true, null, null, null, null, pendingVarProperties);
+            AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: true, null, null, null, null, pendingVarProperties);
+            ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
+            CssUtils.ApplyCurrentColor(shadowBox, valueParser);
+
+            return Store(shadowBox);
+        }
+
+        /// <summary>
         /// Ensures every box whose <c>Display</c> resolves to <c>list-item</c> has a synthesized
         /// <c>::marker</c> child, per CSS2.1 12.5.1 / CSS Lists Level 3 - marker generation is driven
         /// by the *computed* <c>Display</c> value, not by any particular selector or tag. The common
@@ -3833,7 +3918,7 @@ namespace PeachBrackets.Html.Parse
         /// fight over the same removal.
         /// </para>
         /// </remarks>
-        private static void CollapseWhitespaceAcrossInlineBoundaries(CssBox box)
+        internal static void CollapseWhitespaceAcrossInlineBoundaries(CssBox box)
         {
             // Inline <svg>/<math> are foreign content: their descendants are read directly by
             // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree
@@ -3954,6 +4039,7 @@ namespace PeachBrackets.Html.Parse
             box.UseCategories = box.UseCategories?[count..];
             box.KhmerCategories = box.KhmerCategories?[count..];
             box.Text = text[count..];
+            box.LeadingWhitespaceCollapsed = true;
             box.ParseToWords();
 
             return box.Text.Length == 0;

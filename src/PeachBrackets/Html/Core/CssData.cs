@@ -155,6 +155,22 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool HasFirstLineRules { get; private set; }
 
+        private bool _hasSelectionRules;
+        private bool _indexSawSelectionRule;
+
+        /// <summary>
+        /// True when the document declares any rule whose selector could end in <c>::selection</c> - a superset like
+        /// <see cref="HasFirstLineRules"/>, so false proves <see cref="GetSelectionStyleRules"/> would always return empty.
+        /// </summary>
+        internal bool HasSelectionRules
+        {
+            get
+            {
+                EnsureIndex();
+                return _hasSelectionRules;
+            }
+        }
+
         private int RankOf(string? layerName) =>
             layerName is not null && _layerRanks!.TryGetValue(layerName, out var rank) ? rank : UnlayeredRank;
 
@@ -175,6 +191,7 @@ namespace PeachBrackets.Html
             var layerRegistry = new LayerRegistry();
             var order = 0;
             var hasFirstLineRules = false;
+            _indexSawSelectionRule = false;
 
             foreach (var stylesheet in Stylesheets)
             {
@@ -184,6 +201,7 @@ namespace PeachBrackets.Html
             _layerRanks = layerRegistry.ComputeRanks();
             HasCascadeLayers = _layerRanks.Count > 0;
             HasFirstLineRules = hasFirstLineRules;
+            _hasSelectionRules = _indexSawSelectionRule;
             _tagIndex = tagIndex;
             _classIndex = classIndex;
             _idIndex = idIndex;
@@ -315,6 +333,9 @@ namespace PeachBrackets.Html
 
                         if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
                             hasFirstLineRules = true;
+
+                        if (!_indexSawSelectionRule && CouldEndInHighlightPseudo(styleRule.Selector))
+                            _indexSawSelectionRule = true;
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -593,6 +614,15 @@ namespace PeachBrackets.Html
             GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true, containerSizes: containerSizes);
 
         /// <summary>
+        /// The rules that apply to <paramref name="box"/> through a <c>::selection</c> selector, gathered the way
+        /// <see cref="GetFirstLineStyleRules"/> gathers <c>::first-line</c>'s and for the same reason: the ordinary matcher never
+        /// matches a real box against a selector that ends in <c>::selection</c>, which has no box of its own. See
+        /// <c>DomParser.ResolveSelectionStyle</c>, its only caller.
+        /// </summary>
+        internal IEnumerable<IStyleRule> GetSelectionStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly, string pseudoName = PseudoElementNames.Selection, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true, containerSizes: containerSizes, pseudoName: pseudoName);
+
+        /// <summary>
         /// Author style rules for the HTML cascade, in BOTH the normal-declaration order and the
         /// <c>!important</c> order, each rule paired with its resolved <c>@layer</c> rank. Candidate
         /// matching runs once; the two orderings differ only in how layer rank participates:
@@ -718,9 +748,9 @@ namespace PeachBrackets.Html
             return a.DocumentOrder < b.DocumentOrder;
         }
 
-        private List<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null)
+        private List<IStyleRule> GetStyleRulesByOrigin(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly = false, ContainerQuerySizes? containerSizes = null, string pseudoName = PseudoElementNames.FirstLine)
         {
-            var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly, containerSizes);
+            var matched = GatherMatchedRules(media, node, userAgentOnly, firstLineOnly, containerSizes, pseudoName);
 
             // Stable sort by specificity, tie-broken by DocumentOrder (true source order, including
             // across the plain-rule/@media boundary, assigned once up front by IndexRules) - equal-
@@ -745,7 +775,7 @@ namespace PeachBrackets.Html
         /// apply their own cascade ordering. Extracted so the normal and <c>!important</c> author
         /// orderings can share one matching pass (see <see cref="GetAuthorStyleRulesForCascade"/>).
         /// </summary>
-        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly, ContainerQuerySizes? containerSizes = null)
+        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly, ContainerQuerySizes? containerSizes = null, string pseudoName = PseudoElementNames.FirstLine)
         {
             EnsureIndex();
 
@@ -767,7 +797,7 @@ namespace PeachBrackets.Html
                     return;
                 // firstLineOnly is HTML-cascade-only (DomParser.ResolveFirstLineStyle), always a CssBox.
                 var isMatch = firstLineOnly
-                    ? MatchesAsFirstLineSelector(indexed.Rule.Selector, (CssBox)node)
+                    ? MatchesAsPseudoSubject(indexed.Rule.Selector, (CssBox)node, pseudoName)
                     : DoesSelectorMatch(indexed.Rule.Selector, node);
                 if (!isMatch) return;
                 seen ??= [];
@@ -1273,7 +1303,15 @@ namespace PeachBrackets.Html
         /// <c>selector1, selector2::first-line</c> (the overwhelming majority of real usage) is matched
         /// with full precision via the <see cref="CompoundSelector"/> case below.
         /// </remarks>
-        internal static bool MatchesAsFirstLineSelector(ISelector selector, CssBox box)
+        internal static bool MatchesAsFirstLineSelector(ISelector selector, CssBox box) =>
+            MatchesAsPseudoSubject(selector, box, PseudoElementNames.FirstLine);
+
+        /// <summary>
+        /// <see cref="MatchesAsFirstLineSelector"/> for any pseudo-element that has no box of its own (<c>::first-line</c>,
+        /// <c>::selection</c>): does <paramref name="selector"/> end in <c>::<paramref name="pseudoName"/></c>, with the rest of its
+        /// compound matching <paramref name="box"/>? The same simplification for an ancestor combinator applies.
+        /// </summary>
+        internal static bool MatchesAsPseudoSubject(ISelector selector, CssBox box, string pseudoName)
         {
             switch (selector)
             {
@@ -1284,18 +1322,22 @@ namespace PeachBrackets.Html
                     var order = list.MatchOrder;
                     for (var i = 0; i < order.Length; i++)
                     {
-                        if (MatchesAsFirstLineSelector(list[order[i]], box)) return true;
+                        if (MatchesAsPseudoSubject(list[order[i]], box, pseudoName)) return true;
                     }
                     return false;
                 }
 
                 case ComplexSelector complex:
                     var lastSegmentSelector = complex.Subject;
-                    return lastSegmentSelector is not null && HasFirstLineSubject(lastSegmentSelector);
+                    return lastSegmentSelector is not null && HasPseudoSubject(lastSegmentSelector, pseudoName);
+
+                // A bare pseudo-element selector (`::selection { }`) applies to every element.
+                case PseudoElementSelector bare:
+                    return bare.Name == pseudoName;
 
                 case CompoundSelector compound:
                 {
-                    if (!HasFirstLineSubject(compound)) return false;
+                    if (!HasPseudoSubject(compound, pseudoName)) return false;
 
                     // Indexed via MatchOrder rather than Where().All() - see the plain branch of
                     // DoesSelectorMatch(CompoundSelector, ...) above for the same rewrite and why.
@@ -1324,35 +1366,70 @@ namespace PeachBrackets.Html
         /// <see cref="HasFirstLineRules"/> can safely stay false, and <see cref="GetFirstLineStyleRules"/>
         /// would always return empty.
         /// </summary>
-        private static bool CouldMatchAsFirstLineSelector(ISelector selector) => selector switch
+        private static bool CouldMatchAsFirstLineSelector(ISelector selector) => CouldMatchAsPseudoSubject(selector, PseudoElementNames.FirstLine);
+
+        /// <summary>
+        /// Whether a pseudo-element name is one of the highlights text can be painted in: <c>::selection</c>, <c>::highlight(name)</c>,
+        /// <c>::spelling-error</c>, <c>::grammar-error</c> and <c>::target-text</c>.
+        /// </summary>
+        internal static bool IsHighlightPseudoName(string name) =>
+            name is PseudoElementNames.Selection or PseudoElementNames.SpellingError or PseudoElementNames.GrammarError or PseudoElementNames.TargetText
+            || name.StartsWith("highlight(", StringComparison.Ordinal);
+
+        // CouldMatchAsPseudoSubject for any highlight name: the document-level superset behind HasSelectionRules.
+        private static bool CouldEndInHighlightPseudo(ISelector selector)
         {
-            ListSelector list => AnyCouldMatchAsFirstLineSelector(list),
-            ComplexSelector complex => complex.LastOrDefault().Selector is { } last && HasFirstLineSubject(last),
-            CompoundSelector compound => HasFirstLineSubject(compound),
+            switch (selector)
+            {
+                case ListSelector list:
+                    for (var i = 0; i < list.MatchOrder.Length; i++)
+                    {
+                        if (CouldEndInHighlightPseudo(list[list.MatchOrder[i]])) return true;
+                    }
+
+                    return false;
+                case ComplexSelector complex:
+                    return complex.LastOrDefault().Selector is { } last && CouldEndInHighlightPseudo(last);
+                case CompoundSelector { Length: > 0 } compound:
+                    return compound[compound.Length - 1] is PseudoElementSelector tail && IsHighlightPseudoName(tail.Name);
+                case PseudoElementSelector pseudo:
+                    return IsHighlightPseudoName(pseudo.Name);
+                default:
+                    return false;
+            }
+        }
+
+        /// <summary>The document-level superset test behind <see cref="HasFirstLineRules"/> and <see cref="HasSelectionRules"/>.</summary>
+        private static bool CouldMatchAsPseudoSubject(ISelector selector, string pseudoName) => selector switch
+        {
+            ListSelector list => AnyCouldMatchAsPseudoSubject(list, pseudoName),
+            ComplexSelector complex => complex.LastOrDefault().Selector is { } last && HasPseudoSubject(last, pseudoName),
+            CompoundSelector compound => HasPseudoSubject(compound, pseudoName),
+            PseudoElementSelector pseudo => pseudo.Name == pseudoName,
             _ => false
         };
 
-        // Indexed rather than list.Any(CouldMatchAsFirstLineSelector) - see the DoesSelectorMatch
+        // Indexed rather than list.Any(...) - see the DoesSelectorMatch
         // overloads above for why (Selectors is IEnumerable-only, so Any() allocates). This method runs
         // once per rule at EnsureIndex time rather than per box, so the allocation it used to cause was
         // never actually hot - fixed anyway for consistency now that MatchOrder exists.
-        private static bool AnyCouldMatchAsFirstLineSelector(ListSelector list)
+        private static bool AnyCouldMatchAsPseudoSubject(ListSelector list, string pseudoName)
         {
             var order = list.MatchOrder;
             for (var i = 0; i < order.Length; i++)
             {
-                if (CouldMatchAsFirstLineSelector(list[order[i]])) return true;
+                if (CouldMatchAsPseudoSubject(list[order[i]], pseudoName)) return true;
             }
             return false;
         }
 
-        private static bool HasFirstLineSubject(ISelector selector) => selector switch
+        private static bool HasPseudoSubject(ISelector selector, string pseudoName) => selector switch
         {
             // Indexed rather than LINQ's LastOrDefault() - see the DoesSelectorMatch overloads above
             // for why (Selectors is IEnumerable-only, so LastOrDefault() allocates).
             CompoundSelector { Length: > 0 } compound =>
-                compound[compound.Length - 1] is PseudoElementSelector { Name: PseudoElementNames.FirstLine },
-            PseudoElementSelector pseudo => pseudo.Name == PseudoElementNames.FirstLine,
+                compound[compound.Length - 1] is PseudoElementSelector last && last.Name == pseudoName,
+            PseudoElementSelector pseudo => pseudo.Name == pseudoName,
             _ => false
         };
 

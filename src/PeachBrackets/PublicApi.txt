@@ -186,17 +186,44 @@ PeachBrackets.GenericFontKeyword : struct
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
+  method Boolean RemoveHighlight(String name)
+  method DocumentElement GetElement(String elementId)
+  method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
+  method DocumentElement GetElementAt(TextPosition position)
+  method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
+  method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
+  method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
   method Rect? GetElementBounds(String elementId)
+  method String GetText(TextPosition from, TextPosition to)
   method Task LayoutAsync(Canvas measuringCanvas)
   method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
+  method Task PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region)
+  method Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
+  method Task<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
+  method Task<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
+  method Task<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas)
+  method Task<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, String text, Canvas measuringCanvas)
+  method Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
+  method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
+  method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
+  method TextRange? GetBlockAt(TextPosition position)
+  method TextRange? GetWordAt(TextPosition position)
+  method UpdateResult SetStyle(DocumentElement element, String property, String value)
+  method Void ClearHighlights()
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
+  method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)
+  method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property DocumentAnnotations Annotations { get; }
+  property DocumentSelection Selection { get; }
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
+  property IReadOnlyList<String> HighlightNames { get; }
+  property IReadOnlyList<TextRange> SelectedRanges { get; }
+  property IReadOnlyList<TextRun> TextRuns { get; }
   property IStructureTagSink StructureTagSink { get; set; }
   property Size ContentArea { get; }
   property Size ContentExtent { get; }
@@ -219,7 +246,10 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
   property Boolean CollectFormFields { get; set; }
+  property Boolean EnableIncrementalUpdates { get; set; }
+  property Boolean EnableSelectionStyling { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
+  property Boolean RecordTextRuns { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
@@ -230,10 +260,51 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property PaintColor SelectionBackground { get; set; }
+  property PaintColor? SelectionForeground { get; set; }
   property String DefaultLanguage { get; set; }
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
+PeachBrackets.Selection.DocumentSelection : sealed class
+  method Boolean ExtendTo(Int32 pageIndex, Double x, Double y)
+  method Boolean Modify(Boolean extend, SelectionDirection direction, SelectionGranularity granularity)
+  method Boolean SelectAt(Int32 pageIndex, Double x, Double y)
+  method Boolean SelectBlockAt(Int32 pageIndex, Double x, Double y)
+  method Boolean SelectWordAt(Int32 pageIndex, Double x, Double y)
+  method DirtyRegion? GetCaretBounds(Double width = 1)
+  method IReadOnlyList<DirtyRegion> GetRegions()
+  method String GetText()
+  method TextRange? GetRange()
+  method Void Collapse(TextPosition position)
+  method Void CollapseToEnd()
+  method Void CollapseToStart()
+  method Void Extend(TextPosition position)
+  method Void RemoveAllRanges()
+  method Void Select(TextRange range)
+  method Void SelectAll()
+  method Void SetBaseAndExtent(TextPosition anchor, TextPosition focus)
+  method virtual String ToString()
+  property Boolean HasSelection { get; }
+  property Boolean IsBackward { get; }
+  property Boolean IsCollapsed { get; }
+  property Int32 RangeCount { get; }
+  property TextPosition? Anchor { get; }
+  property TextPosition? Focus { get; }
+PeachBrackets.Selection.SelectionChangedEventArgs : sealed class
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; }
+  property TextPosition? Anchor { get; }
+  property TextPosition? Focus { get; }
+PeachBrackets.Selection.SelectionDirection : enum Int32
+  Backward = 0
+  Forward = 1
+PeachBrackets.Selection.SelectionGranularity : enum Int32
+  Block = 4
+  Character = 0
+  Document = 5
+  Line = 2
+  LineBoundary = 3
+  Word = 1
 PeachBrackets.Svg.SvgGlyphPainter : sealed class
   ctor(Canvas host, RenderContext renderContext)
   method virtual Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
@@ -259,6 +330,78 @@ PeachBrackets.Tagging.StructureNode : struct
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(StructureNode other)
   method virtual Int32 GetHashCode()
+PeachBrackets.Text.TextPosition : struct
+  ctor(Int32 RunIndex, Int32 CharIndex)
+  method Void Deconstruct(out Int32 RunIndex, out Int32 CharIndex)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextPosition other)
+  method virtual Int32 CompareTo(TextPosition other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 CharIndex { get; init; }
+  property Int32 RunIndex { get; init; }
+PeachBrackets.Text.TextRange : struct
+  ctor(TextPosition Start, TextPosition End)
+  method Void Deconstruct(out TextPosition Start, out TextPosition End)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextRange other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property TextPosition End { get; init; }
+  property TextPosition Start { get; init; }
+PeachBrackets.Text.TextRun : sealed class
+  property Boolean IsRtl { get; }
+  property Double Ascent { get; }
+  property Double Baseline { get; }
+  property Double Descent { get; }
+  property IReadOnlyList<Double> CharacterOffsets { get; }
+  property IReadOnlyList<Int32> CharacterBoundaries { get; }
+  property Int32 BlockId { get; }
+  property Int32 PageIndex { get; }
+  property Rect Bounds { get; }
+  property String ElementId { get; }
+  property String LinkUri { get; }
+  property String Text { get; }
+PeachBrackets.Updates.DirtyRegion : struct
+  ctor(Int32 PageIndex, Rect Bounds)
+  method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
+  method virtual Boolean Equals(DirtyRegion other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 PageIndex { get; init; }
+  property Rect Bounds { get; init; }
+PeachBrackets.Updates.DocumentElement : sealed class
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  property String Id { get; }
+  property String TagName { get; }
+PeachBrackets.Updates.TextEditResult : struct
+  ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null, Int32? ResumedFromPage = null)
+  method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block, out Int32? ResumedFromPage)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextEditResult other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Applied { get; init; }
+  property DocumentElement Block { get; init; }
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
+  property Int32 PagesAfter { get; init; }
+  property Int32 PagesBefore { get; init; }
+  property Int32? FirstDirtyPage { get; init; }
+  property Int32? ResumedFromPage { get; init; }
+  property String Reason { get; init; }
+  property TextPosition? Caret { get; init; }
+PeachBrackets.Updates.UpdateResult : struct
+  ctor(Boolean Applied, String Reason, IReadOnlyList<DirtyRegion> DirtyRegions)
+  method Void Deconstruct(out Boolean Applied, out String Reason, out IReadOnlyList<DirtyRegion> DirtyRegions)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(UpdateResult other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Applied { get; init; }
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
+  property String Reason { get; init; }
 PeachPDF.HtmlRenderErrorType : enum Int32
   ContextMenu = 8
   CssParsing = 1

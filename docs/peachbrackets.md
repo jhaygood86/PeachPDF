@@ -96,6 +96,9 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
+| `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
+| `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements, and `ReplaceTextAsync` and its relatives to edit the text, of the laid-out document in place. |
+| `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
 
@@ -119,6 +122,155 @@ top-left corner of the sheet. A consumer that writes a format with these concept
 
 `document.Language` and `document.Metadata` (title, author, subject, keywords, date, generator) report what the document says about itself.
 `GetElementBounds(id)` gives the rectangle of an element by its `id`.
+
+## Where the text is: selection, copy and find
+
+A consumer that paints pages into a bitmap has no text to select unless the engine says where the text landed. With `RecordTextRuns` set,
+`document.TextRuns` (all pages) and `GetTextRuns(pageIndex)` give one `TextRun` per line of a block, in reading order, in points from the
+top-left corner of the sheet - the same space as `Annotations.Links[].Bounds`. Nothing is computed until you read it, and layout and painting
+are identical either way.
+
+A `TextRun` has:
+
+- `Text` - what was drawn, in logical order (bidirectional text is not reordered or mirrored), whitespace as the layout collapsed it, and a
+  space where two words on a line were separated.
+- `Bounds`, `Baseline`, `Ascent`, `Descent` - the line's rectangle and font metrics, enough to fill a highlight as tall as the line.
+- `CharacterOffsets` - the x of the edge before each UTF-16 index and after the last (`Text.Length + 1` values), in the logical order of the
+  text, so a right-to-left run's offsets decrease. `CharacterBoundaries` lists the indices a caret can sit at: the grapheme cluster
+  boundaries, so never inside a surrogate pair, an emoji sequence or a letter with its accents.
+- `IsRtl`, `BlockId` (the same for every run of a paragraph, list item, table cell or `pre`) and `ElementId` of that block, and `LinkUri`
+  when the run is inside a link. A line is split into several runs where a link starts or ends.
+
+On `HtmlDocument`:
+
+| Member | Result |
+| --- | --- |
+| `HitTest(page, x, y)` | A `TextPosition` (`RunIndex`, `CharIndex`): the start of the character under the point. A point in a gap or margin goes to the nearest line, one past a line's end to its nearest character. |
+| `GetCaretPosition(page, x, y)` | The boundary between characters nearest the point - where a cursor, or the end of a drag selection, goes. |
+| `GetSelectionRects(from, to)` | One rectangle per line covering the text between two positions (the end is not included). |
+| `GetText(from, to)` | The plain text as it would be copied: a line break between blocks and at a forced break (`<br>`, a `pre` line), a space where a paragraph wrapped, and no space that was not in the text. |
+| `FindText(query, ignoreCase)` | Every occurrence as a `TextRange`; a match can span lines and inline elements. |
+| `GetWordAt(position)`, `GetBlockAt(position)` | The range a double click and a triple click select. |
+
+### Painting a selection and `::selection`
+
+With `EnableSelectionStyling` (and `RecordTextRuns`) set, `document.SetSelectedRanges(ranges)` selects the text between pairs of positions and
+`PaintPageAsync` paints it: the `background-color` of the document's `::selection` rules fills the selected characters and the spaces between
+selected words, and the rule's `color` replaces the text colour inside the selection. `SetSelectedRanges(null)` clears it; repaint the pages
+to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions.SelectionBackground` (light blue) and
+`SelectionForeground` (the text's own colour) are used. With the option off, `::selection` rules are ignored, as they are in a PDF.
+
+- A rule applies to the text of the element it matches (`p::selection`, `.note::selection`, or a bare `::selection` for every element); an
+  element with no rule of its own takes its nearest ancestor's.
+- Only `color` and `background-color` are painted so far, and the highlight is as tall as the word's own line height. A selection never changes
+  layout.
+- Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
+  holds that word's text more than once. Selection is meant for interactive output, not for PDF.
+
+### Named highlights: `::highlight()`, `::spelling-error`, `::grammar-error`, `::target-text`
+
+With the same options, `document.SetHighlight(name, ranges, priority)` paints text in the rules of `::highlight(name)`, the way the CSS Custom
+Highlight API does for ranges a page registers. The names `spelling-error`, `grammar-error` and `target-text` are the built-in highlights
+(`::spelling-error` and so on), for what an embedder's spell checker or find-in-page marks. `SetHighlight(name, null)`, `RemoveHighlight(name)` and
+`ClearHighlights()` remove them; `HighlightNames` lists them in painting order.
+
+- Highlights are painted lowest first: the built-in ones, then the custom ones by `priority` and then by the order they were first set, then the
+  selection over all of them. Where several change the text colour the one painted last wins, per stretch of the word it covers.
+- A highlight no rule styles paints nothing (the selection, by contrast, has default colours). Rules apply as for `::selection`: to the text of the
+  element they match, falling back to the nearest ancestor's; `::highlight( name )` is the same selector as `::highlight(name)`, and the name is
+  case-sensitive.
+- Only `color` and `background-color` are painted, as for the selection. A text edit removes every highlight, since the positions they hold no longer
+  mean the same text.
+
+### The selection model
+
+`document.Selection` (a `DocumentSelection`, needs `RecordTextRuns`) is the state a pointer and keyboard drive, in the manner of the DOM's
+`Selection`: an `Anchor` and a `Focus` (the caret end) as `TextPosition`s, `IsCollapsed`, `IsBackward`, `GetRange()`, `GetText()`, and
+`GetRegions()`/`GetCaretBounds()` for what to draw. It draws nothing itself; with `EnableSelectionStyling` it hands every change to
+`SetSelectedRanges`, so the next paint shows it in the `::selection` style.
+
+| To | Call |
+| --- | --- |
+| click, shift-click or drag | `SelectAt(page, x, y)`, `ExtendTo(page, x, y)` |
+| double and triple click | `SelectWordAt(page, x, y)`, `SelectBlockAt(page, x, y)` |
+| select a range, or everything | `Select(range)`, `SetBaseAndExtent(anchor, focus)`, `SelectAll()` |
+| collapse, extend, clear | `Collapse`, `CollapseToStart/End`, `Extend`, `RemoveAllRanges` |
+| arrow keys and their modifiers | `Modify(extend, direction, granularity)` |
+
+`Modify` moves by `Character`, `Word`, `Line` (up and down, keeping the caret's horizontal position across lines), `LineBoundary` (Home and
+End), `Block` (paragraph edges) or `Document`. Direction is logical - in right-to-left text the key that moves towards the left is a backward
+move. A move that does not extend, over a selection, first collapses it to the near edge. It returns false at the edge of the document.
+
+`SelectionChanged` fires after a change that moved the anchor or the focus, with the `DirtyRegions` - where the selection or caret was and
+where it is - so only those regions need repainting (`PaintPageRegionAsync`). `document.GetElementAt(position)` gives the element a position's
+text was written in, for a consumer that wants the DOM node behind a selection end.
+
+Limits: text in vertical writing modes, in page margin boxes and in footnotes is not reported, and text moved by a `transform` is reported where
+layout put it, not where it was drawn. The per-character positions come from shaping the word with its font and scaling to the width layout gave
+it, so they follow ligatures and justification but not a custom `letter-spacing` applied unevenly.
+
+## Restyling in place
+
+A consumer that shows a document and changes it - a selection, a hover colour, an editor's highlight - should not load and lay out the
+document again for every change. With `EnableIncrementalUpdates`, `document.SetStyle(element, property, value)` changes one CSS property of
+an element of the laid-out document and returns an `UpdateResult`: whether it was applied, why not if it was not, and the `DirtyRegions`
+(page index and a rectangle in points) that now look different. No layout pass runs, so nothing moves.
+
+- Get the element with `GetElement(id)`, or `GetElementAt(page, x, y)` for the innermost element under a point (what a click hit).
+- Applied in place: `color` (the element's descendants that inherited it follow; one with a colour of its own keeps it), `background-color`,
+  `text-decoration-line`, `text-decoration-style`, `text-decoration-color` and `outline-color`. A border drawn in `currentcolor` follows a `color`
+  change.
+- Not applied, with the reason in `UpdateResult.Reason` and the document untouched: any other property (anything that can move or resize
+  content needs a layout pass), a value that does not parse, and the `background-color` of `html` and `body`, which is the page canvas's.
+- A background or outline set to `currentcolor` earlier keeps the colour it had; only a later write picks up the new one.
+- To show the change, clear each region on the page's canvas and call `PaintPageRegionAsync(page, canvas, region)`, which paints only what
+  lies inside it; or paint the page again.
+
+## Editing the text
+
+With `EnableIncrementalUpdates` and `RecordTextRuns`, the text of the loaded document can be changed in place - the primitive a text editor
+or a chat composer is built from - and the document is laid out again from the changed tree (from the changed page on, where it can be), with no re-parse and no new `HtmlDocument`:
+
+| Call | Does |
+| --- | --- |
+| `ReplaceTextAsync(from, to, text, canvas)` | Replaces the text between two `TextPosition`s (either order) with `text`, which may be empty. |
+| `InsertTextAsync(position, text, canvas)`, `DeleteTextAsync(from, to, canvas)` | The two halves of it. |
+| `InsertTextAsync(element, text, canvas)` | Appends text to an element's own text, or gives an element with no text some - an empty paragraph has no position to insert at. |
+| `SplitParagraphAsync(position, canvas)` | Enter: the text after `position`, and the inline elements it is inside, move to a new paragraph of the same element and style after this one. When the split is at the end the new paragraph is empty: `TextEditResult.Block` is it, for `InsertTextAsync(element, ...)`. |
+| `JoinWithNextParagraphAsync(position, canvas)` | Delete at the end of a paragraph: the next paragraph's content moves to the end of this one and it is removed. The caret is where the two met. |
+
+Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
+and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
+The new paragraph takes the old one's computed style as it is rather than being cascaded again, so `:nth-child` and `:last-child` rules are not evaluated for it. A paragraph with an `id` leaves two paragraphs with that `id`.
+
+`canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
+
+- `Applied` and `Reason`: when an edit cannot be made in place nothing is changed, and `Reason` says why.
+- `PagesBefore`, `PagesAfter` and `FirstDirtyPage`: where the layout now differs. Every page from `FirstDirtyPage` on may look different (a
+  paragraph that grows pushes everything after it), and `DirtyRegions` lists those pages whole. An edit on the last page leaves the earlier
+  ones alone, apart from the page before it, which widows and orphans can reach.
+- `Caret`: a `TextPosition` just after the inserted text in the new `TextRuns`. The document's `Selection` is collapsed to it, so typing
+  is: insert at the caret, use the returned caret for the next key.
+
+What an edit does to the document:
+
+- A range inside one text, or across inline elements and paragraphs, is replaced between its ends. Text left empty has its text box removed (an
+  emptied `<strong>` stays as an empty element). `ReplaceTextAsync` does not join blocks: deleting from the middle of one
+  paragraph to the middle of the next leaves two paragraphs (use the split and join calls for that).
+- Everything loading does to text is redone for the paragraphs the edit touches: bidirectional levels (which depend on the whole paragraph),
+  collapsing of a space that continues across an inline boundary, soft hyphens, and the split into words. A test lays out an edited document and
+  a fresh load of the same markup and requires the same pages, text runs and character positions.
+
+Refused, with the reason in the result and the document untouched: a document whose layout depends on every page (footnotes, page floats,
+`target-counter(page)`, named pages, running elements, multiple columns, container queries, pages of different widths); a document with a
+`StructureTagSink` attached; a position in generated content (`::before`, markers, counters), in `svg` or `math`, or on a `<br>`; and a position
+where layout cut a word in a way that cannot be undone (a small-caps split where a soft hyphen was removed). `InsertTextAsync(element, ...)` refuses an
+element that holds blocks, an image or a form control.
+
+Layout is picked up from the page before the one the edited paragraph starts on, and the pages before it are kept as they were, so an edit late in a
+long document costs a fraction of a layout (1,500 paragraphs over 84 pages: about 50-80 ms on the last pages, against about 700 ms for one on the
+first); `TextEditResult.ResumedFromPage` says where it picked up, or is null when the whole document was laid out again (an edit on the first pages, flex or grid content, or
+another document the shortcut does not cover). An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
 
 ## Structure for tagged output
 

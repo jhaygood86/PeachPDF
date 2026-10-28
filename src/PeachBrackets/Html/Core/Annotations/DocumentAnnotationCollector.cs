@@ -268,7 +268,7 @@ namespace PeachBrackets.Html.Annotations
         /// the document's <c>&lt;base&gt;</c> element or base URI, so an external bookmark target resolves exactly like an equivalent
         /// link. A fragment-only href is left as it is.
         /// </summary>
-        private static string ResolveHref(HtmlContainerInt container, string href)
+        internal static string ResolveHref(HtmlContainerInt container, string href)
         {
             // Read per link, so the document base has to be memoized rather than re-walked - see HtmlContainerInt.DocumentBaseUri.
             var baseUri = container.DocumentBaseUri;
