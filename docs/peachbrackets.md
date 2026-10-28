@@ -221,6 +221,12 @@ or a chat composer is built from - and the document is laid out again from the c
 | `ReplaceTextAsync(from, to, text, canvas)` | Replaces the text between two `TextPosition`s (either order) with `text`, which may be empty. |
 | `InsertTextAsync(position, text, canvas)`, `DeleteTextAsync(from, to, canvas)` | The two halves of it. |
 | `InsertTextAsync(element, text, canvas)` | Appends text to an element's own text, or gives an element with no text some - an empty paragraph has no position to insert at. |
+| `SplitParagraphAsync(position, canvas)` | Enter: the text after `position`, and the inline elements it is inside, move to a new paragraph of the same element and style after this one. When the split is at the end the new paragraph is empty: `TextEditResult.Block` is it, for `InsertTextAsync(element, ...)`. |
+| `JoinWithNextParagraphAsync(position, canvas)` | Delete at the end of a paragraph: the next paragraph's content moves to the end of this one and it is removed. The caret is where the two met. |
+
+Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
+and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
+The new paragraph copies the old one's style, so `:nth-child` and `:last-child` rules are not evaluated again for it.
 
 `canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
 
@@ -234,8 +240,8 @@ or a chat composer is built from - and the document is laid out again from the c
 What an edit does to the document:
 
 - A range inside one text, or across inline elements and paragraphs, is replaced between its ends. Text left empty has its text box removed (an
-  emptied `<strong>` stays as an empty element). Blocks are **not** joined: deleting from the middle of one paragraph to the middle of the next
-  leaves two paragraphs.
+  emptied `<strong>` stays as an empty element). `ReplaceTextAsync` does not join blocks: deleting from the middle of one
+  paragraph to the middle of the next leaves two paragraphs (use the split and join calls for that).
 - Everything loading does to text is redone for the paragraphs the edit touches: bidirectional levels (which depend on the whole paragraph),
   collapsing of a space that continues across an inline boundary, soft hyphens, and the split into words. A test lays out an edited document and
   a fresh load of the same markup and requires the same pages, text runs and character positions.

@@ -200,7 +200,9 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
   method Task<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
   method Task<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
+  method Task<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas)
   method Task<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, String text, Canvas measuringCanvas)
+  method Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
   method TextRange? GetBlockAt(TextPosition position)
@@ -371,13 +373,14 @@ PeachBrackets.Updates.DocumentElement : sealed class
   property String Id { get; }
   property String TagName { get; }
 PeachBrackets.Updates.TextEditResult : struct
-  ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret)
-  method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret)
+  ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null)
+  method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(TextEditResult other)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property Boolean Applied { get; init; }
+  property DocumentElement Block { get; init; }
   property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
   property Int32 PagesAfter { get; init; }
   property Int32 PagesBefore { get; init; }

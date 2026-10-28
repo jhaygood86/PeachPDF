@@ -5,6 +5,7 @@ using PeachBrackets.Html.Utils;
 using PeachBrackets.Text;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using TextPosition = PeachBrackets.Text.TextPosition;
 
 namespace PeachBrackets.Html.TextGeometry
@@ -314,6 +315,186 @@ namespace PeachBrackets.Html.TextGeometry
 
             RedoText([CssBidiParagraphResolver.ParagraphRootOf(target)]);
             return new SourcePoint(target, target.Text!.Length);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="block"/> is a plain paragraph the structure edits can split or join: a block box in a block container,
+        /// holding only inline content, with no generated content, marker, float or positioning of its own.
+        /// </summary>
+        private static bool IsPlainBlock(CssBox block, out string? reason)
+        {
+            reason = null;
+            if (block.ParentBox is not { } parent ||
+                block.IsInline || block.IsFloated || block.IsAbsolutelyPositioned
+                || block.DerivedStyle.ActualDisplay != Keywords.Block || parent.DerivedStyle.ActualDisplay != Keywords.Block
+                || block is CssBoxSvg or CssBoxMath or CssBoxImage or CssBoxFormField || block.IsWithinForeignContent)
+            {
+                reason = "The text is not in a plain paragraph (a block in a block, with only inline content).";
+                return false;
+            }
+
+            foreach (var child in block.Boxes)
+            {
+                if (child.IsPseudoElement || child is CssBoxMarker || (!child.IsInline && child.Text is null))
+                {
+                    reason = "The paragraph holds generated content or blocks of its own.";
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        // A box like <paramref name="original"/> (same tag, same style), as the next sibling of it.
+        private static CssBox CloneAfter(CssBox original)
+        {
+            var parent = original.ParentBox!;
+            var index = parent.Boxes.IndexOf(original);
+            var clone = CssBox.CreateBox(parent, original.HtmlTag);
+            clone.InheritStyle(original, everything: true);
+            parent.Boxes.Remove(clone);
+            parent.Boxes.Insert(index + 1, clone);
+            return clone;
+        }
+
+        /// <summary>
+        /// Splits the paragraph holding <paramref name="at"/> in two there, the way Enter does: the text after it, and the inline elements it
+        /// is inside, go to a new paragraph with the same tag and style after this one.
+        /// </summary>
+        /// <returns>the start of the new paragraph's text (null when it has none), and the new paragraph, or null with <paramref name="reason"/></returns>
+        public static (SourcePoint? Caret, CssBox? Block)? Split(SourcePoint at, out string? reason)
+        {
+            var paragraph = CssBidiParagraphResolver.ParagraphRootOf(at.Box);
+            if (!IsPlainBlock(paragraph, out reason)) return null;
+            if (at.Index > at.Box.Text!.Length) { reason = "The position is outside the text it names."; return null; }
+
+            // The first box that moves: the rest of the text, or the box itself when the split is at its start.
+            CssBox moving;
+            var leaf = at.Box;
+            if (at.Index == 0)
+            {
+                moving = leaf;
+            }
+            else if (at.Index >= leaf.Text!.Length)
+            {
+                moving = NextSibling(leaf)!;
+            }
+            else
+            {
+                var tail = CssBox.CreateBox(leaf.ParentBox!);
+                tail.Text = leaf.Text.Substring(at.Index);
+                leaf.Text = leaf.Text.Substring(0, at.Index);
+                var siblings = leaf.ParentBox!.Boxes;
+                siblings.Remove(tail);
+                siblings.Insert(siblings.IndexOf(leaf) + 1, tail);
+                moving = tail;
+            }
+
+            // Climb out of the inline elements the split is inside, cloning each so the tail keeps its style.
+            var level = moving?.ParentBox ?? leaf.ParentBox!;
+            while (!ReferenceEquals(level, paragraph))
+            {
+                var clone = CloneAfter(level);
+                if (moving is not null)
+                {
+                    foreach (var child in level.Boxes.SkipWhile(b => !ReferenceEquals(b, moving)).ToList())
+                        child.ParentBox = clone;
+                }
+
+                moving = clone;
+                level = level.ParentBox!;
+            }
+
+            var block = CloneAfter(paragraph);
+            if (moving is not null)
+            {
+                foreach (var child in paragraph.Boxes.SkipWhile(b => !ReferenceEquals(b, moving)).ToList())
+                    child.ParentBox = block;
+            }
+
+            RemoveEmptyInlines(paragraph);
+            RedoText([paragraph, block]);
+
+            var leaves = new List<CssBox>();
+            CollectLeaves(block, leaves);
+            SourcePoint? caret = leaves.Count > 0 ? new SourcePoint(leaves[0], 0) : null;
+            return (caret, block);
+        }
+
+        private static bool IsPlainText(CssBox box) =>
+            box.Text is not null && box.Boxes.Count == 0 && box.HtmlTag is null && !box.IsPseudoElement && box is not CssBoxMarker;
+
+        private static CssBox? NextSibling(CssBox box)
+        {
+            var siblings = box.ParentBox!.Boxes;
+            var index = siblings.IndexOf(box);
+            return index + 1 < siblings.Count ? siblings[index + 1] : null;
+        }
+
+        // Inline elements a split left with nothing in them.
+        private static void RemoveEmptyInlines(CssBox box)
+        {
+            for (var i = box.Boxes.Count - 1; i >= 0; i--)
+            {
+                var child = box.Boxes[i];
+                RemoveEmptyInlines(child);
+                if (child.Boxes.Count == 0 && child.Text is null && child.IsInline && child.HtmlTag is { } tag
+                    && child is not (CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxFormField) && !child.IsBrElement
+                    && tag.Name is not (HtmlConstants.Img or "br"))
+                {
+                    child.ParentBox = null;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Joins the paragraph holding <paramref name="at"/> with the one after it, the way Delete at the end of a paragraph (or Backspace at the
+        /// start of the next) does: the next paragraph's content moves to the end of this one and the paragraph is removed.
+        /// </summary>
+        /// <returns>the place where the two met (null when the second had no text), or null with <paramref name="reason"/></returns>
+        public static (SourcePoint? Caret, bool Joined)? Join(SourcePoint at, out string? reason)
+        {
+            var first = CssBidiParagraphResolver.ParagraphRootOf(at.Box);
+            if (!IsPlainBlock(first, out reason)) return null;
+
+            var next = NextSibling(first);
+            if (next is null || !IsPlainBlock(next, out reason))
+            {
+                reason ??= "There is no paragraph after it to join.";
+                return null;
+            }
+
+            if (first.HtmlTag?.Name != next.HtmlTag?.Name)
+            {
+                reason = "The two paragraphs are different kinds of element.";
+                return null;
+            }
+
+            var firstLeaves = new List<CssBox>();
+            CollectLeaves(first, firstLeaves);
+            var nextLeaves = new List<CssBox>();
+            CollectLeaves(next, nextLeaves);
+            var last = firstLeaves.Count > 0 ? firstLeaves[^1] : null;
+            var lastLength = last?.Text?.Length ?? 0;
+
+            var moved = next.Boxes.ToList();
+            foreach (var child in moved)
+                child.ParentBox = first;
+
+            next.ParentBox = null;
+
+            // Two plain texts that now touch are one text node in the markup this describes (and shape as one, across the join).
+            if (last is not null && moved.Count > 0 && ReferenceEquals(last.ParentBox, first) && IsPlainText(last) && IsPlainText(moved[0]))
+            {
+                last.Text += moved[0].Text;
+                moved[0].ParentBox = null;
+            }
+
+            RedoText([first]);
+
+            SourcePoint? caret = last is { Text: not null } && last.ParentBox is not null ? new SourcePoint(last, lastLength)
+                : nextLeaves.Count > 0 ? new SourcePoint(nextLeaves[0], 0) : null;
+            return (caret, true);
         }
 
         private static string FixNewLines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');

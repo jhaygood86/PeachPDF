@@ -666,7 +666,49 @@ public sealed class HtmlDocument : IDisposable
         return EditAsync(measuringCanvas, () => (TextEditor.InsertInto(element.Box, text, out var reason), reason));
     }
 
-    private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change)
+    /// <summary>
+    /// Splits the paragraph at a position into two, as Enter does: the text after it (and the inline elements it is inside) moves to a new
+    /// paragraph of the same element and style after this one. Only a plain paragraph - a block in a block, with only inline content and no
+    /// generated content - is split; anything else is refused. The caret is the start of the new paragraph's text, or null when it has none
+    /// (the split was at the end), in which case <see cref="TextEditResult.Block"/> is the new, empty paragraph.
+    /// Structural selectors (<c>:nth-child</c>, <c>:last-child</c>) are not re-evaluated; the new paragraph copies the style of the old one.
+    /// </summary>
+    /// <param name="at">where to split</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
+    {
+        CssBox? created = null;
+        return EditAsync(measuringCanvas, () =>
+        {
+            var (point, reason) = TextEditor.ToSource(TextRuns, at, isRangeStart: true);
+            if (point is not { } source) return (null, reason);
+
+            if (TextEditor.Split(source, out reason) is not var (caret, block)) return (null, reason);
+
+            created = block;
+            return (caret ?? new TextEditor.SourcePoint(block!, 0), null);
+        }, () => created);
+    }
+
+    /// <summary>
+    /// Joins the paragraph holding a position with the one after it, as Delete at the end of a paragraph does: the next paragraph's content
+    /// moves to the end of this one and the next paragraph is removed. Both must be plain paragraphs (see <see cref="SplitParagraphAsync"/>) of the
+    /// same element, adjacent in their parent. The caret is where the two met.
+    /// </summary>
+    /// <param name="at">a position in the first of the two paragraphs</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas) =>
+        EditAsync(measuringCanvas, () =>
+        {
+            var (point, reason) = TextEditor.ToSource(TextRuns, at, isRangeStart: true);
+            if (point is not { } source) return (null, reason);
+
+            return TextEditor.Join(source, out reason) is { } joined ? (joined.Caret ?? source, null) : (null, reason);
+        });
+
+    private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change, Func<CssBox?>? createdBlock = null)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         var before = TextRuns;
@@ -705,7 +747,8 @@ public sealed class HtmlDocument : IDisposable
         if (caret is { } position) selection.Collapse(position);
         else selection.RemoveAllRanges();
 
-        return new TextEditResult(true, null, pagesBefore, _pages.Count, first, regions, caret);
+        var block = createdBlock?.Invoke() is { } box ? new DocumentElement(box) : null;
+        return new TextEditResult(true, null, pagesBefore, _pages.Count, first, regions, caret, block);
     }
 
     private static List<(string Text, double X, double Y, double Width)>[] Signature(IReadOnlyList<TextRun> runs, int pages)

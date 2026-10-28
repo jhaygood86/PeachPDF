@@ -26,6 +26,12 @@ text and re-lay it out on the same tree; `TextEditResult` reports pages before/a
 `RestoreStructureFromAnyPreviousRun` fixes it; `ATableWithARepeatingHeader_LaysOutLikeAFreshLoadAfterAnEdit` (two successive edits over a header repeated on
 several pages) matches a fresh load.
 
+**Split and join (second slice).** `SplitParagraphAsync` clones the paragraph (`CreateBox(parent, tag)` + `InheritStyle(original, everything: true)`, as
+`CorrectBlockSplitBadBox` does) and, climbing from the split text, each inline element it is inside, moving the following siblings into the clones;
+`JoinWithNextParagraphAsync` reparents the next paragraph's children and detaches it. Trap found by running it: a join leaves two adjacent text boxes
+where a fresh load has one, which shapes without kerning across the seam (0.24pt wider) - they must be merged, and the caret index must be taken
+*before* the merge. Split at the very end leaves a paragraph with no text box, hence `TextEditResult.Block` for `InsertTextAsync(element, ...)`.
+
 **Not done** - see `.claude/accepted-gaps/text-edits-relayout-the-whole-document-and-do-not-edit-structure.md`.
 
 **Evidence.** `TextEditTests` (16): insert, delete, replace, range across inline elements and across paragraphs, emptied inline, growth, multi-page first-dirty-page,

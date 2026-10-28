@@ -289,4 +289,83 @@ public class TextEditTests
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => document.InsertTextAsync(new TextPosition(0, 1), "X", canvas));
     }
+    [Fact]
+    public async Task SplittingAParagraphInTheMiddleOfAWord_LaysOutLikeTwoParagraphs()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>Hello world</p><p>After</p>");
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 5), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>Hello</p><p> world</p><p>After</p>");
+        Assert.Equal(new TextPosition(1, 0), result.Caret);
+    }
+
+    [Fact]
+    public async Task SplittingInsideAnInlineElement_ClonesItForTheTail()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>Lunch <strong>at noon</strong> today</p>");
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 9), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>Lunch <strong>at </strong></p><p><strong>noon</strong> today</p>");
+    }
+
+    [Fact]
+    public async Task SplittingAtTheEnd_GivesAnEmptyParagraph_AndAtTheStartAnEmptyFirstOne()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two</p>");
+
+        var atEnd = await document.SplitParagraphAsync(new TextPosition(0, 3), canvas);
+        Assert.True(atEnd.Applied, atEnd.Reason);
+        Assert.NotNull(atEnd.Block);
+        await AssertLaysOutLike(document, "<p>one</p><p></p><p>two</p>");
+
+        var filled = await document.InsertTextAsync(atEnd.Block!, "new", canvas);
+        Assert.True(filled.Applied, filled.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>new</p><p>two</p>");
+    }
+
+    [Fact]
+    public async Task JoiningWithTheNextParagraph_LaysOutLikeOneParagraph()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one two</p><p>three <em>four</em></p><p>five</p>");
+
+        var result = await document.JoinWithNextParagraphAsync(new TextPosition(0, 2), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one twothree <em>four</em></p><p>five</p>");
+        Assert.Equal(new TextPosition(0, 7), result.Caret);
+    }
+
+    [Fact]
+    public async Task SplitThenJoin_RestoresTheDocument_AndPagesReflow()
+    {
+        var body = string.Concat(Enumerable.Range(0, 60).Select(i => $"<p>Paragraph {i} with some text in it to fill the line.</p>"));
+        var (_, document, canvas) = await LoadAsync(body);
+        var pages = document.Pages.Count;
+
+        var split = await document.SplitParagraphAsync(new TextPosition(0, 9), canvas);
+        Assert.True(split.Applied, split.Reason);
+        Assert.Equal(pages, split.PagesBefore);
+
+        var join = await document.JoinWithNextParagraphAsync(new TextPosition(0, 1), canvas);
+        Assert.True(join.Applied, join.Reason);
+        await AssertLaysOutLike(document, body);
+    }
+
+    [Fact]
+    public async Task StructureEditsInsideAnythingButAPlainParagraph_AreRefused()
+    {
+        var (_, document, canvas) = await LoadAsync("<ul><li>one</li><li>two</li></ul><div>x<p>y</p></div><p>last</p>");
+
+        var inItem = await document.SplitParagraphAsync(new TextPosition(0, 1), canvas);
+        Assert.False(inItem.Applied);
+        Assert.False((await document.JoinWithNextParagraphAsync(new TextPosition(0, 1), canvas)).Applied);
+        var lastParagraph = document.TextRuns.Count - 1;
+        var noNext = await document.JoinWithNextParagraphAsync(new TextPosition(lastParagraph, 1), canvas);
+        Assert.False(noNext.Applied);
+        Assert.NotNull(noNext.Reason);
+    }
 }

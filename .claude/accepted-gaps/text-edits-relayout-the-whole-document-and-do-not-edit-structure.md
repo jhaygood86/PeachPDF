@@ -7,9 +7,11 @@ Deliberately not done:
 - **Resuming from the changed page.** The relayout is the whole fragmentation walk, 70-100 ms for 100 pages of text and over a second for hundreds
   (`.claude/recent-fixes/2026-10-27-tier-b-relayout-spike.md`). Resuming at page k needs a snapshot of the state `LayoutDocument` resets at its
   start; the building blocks (`BreakToken` records, `PassRewind`, `FragmentEmitter.InvalidateFrom`) exist.
-- **Joining blocks, splitting elements, wrapping a range.** Deleting across paragraphs leaves two paragraphs (the DOM's `Range.deleteContents`, not an
-  editor's backspace-joins-paragraphs); Enter does not split a `<p>`. They need box creation and reparenting, and re-running the load-time passes that
-  wrap inline content in anonymous blocks.
+- **Wrapping a range, and structure edits beyond a plain paragraph.** `SplitParagraphAsync`/`JoinWithNextParagraphAsync` handle only a block in a block
+  with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
+  one's style, so structural selectors (`:nth-child`, `:last-child`, `:first-line` effects of a different first line) are not re-evaluated, and a join
+  merges adjacent plain texts only at the top level of the paragraph. Deleting a range across paragraphs still leaves two paragraphs (`Range.deleteContents`).
+  Nothing wraps a range in a new element or re-runs the anonymous-block passes for a block that holds mixed content.
 - **Whitespace-only gaps load dropped.** A text node that was only white space between two blocks is removed at load and cannot come back; typing there
   has to go into one of the blocks (or `InsertTextAsync(element, ...)`).
 - **Generated content, `svg`, `math`, `<br>`** have no editable text position.
