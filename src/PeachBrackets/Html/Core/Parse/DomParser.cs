@@ -1788,35 +1788,34 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
-        /// Resolves the list markers under <paramref name="scope"/> again, after the items before them changed: forgets the counter values of
-        /// everything under it and gives each marker its text and words anew. A structural edit (splitting a list item, joining two) renumbers them.
+        /// Resolves the generated content under <paramref name="scope"/> again, after the boxes before it changed: forgets the counter values and quote
+        /// depths of everything under it and gives each list marker and <c>::before</c>/<c>::after</c> its text and words anew. A structural edit
+        /// (splitting a paragraph or list item, joining two) renumbers the counters and shifts the quote nesting that follows it.
         /// </summary>
-        internal static void RefreshListMarkers(CssBox scope)
+        internal static void RefreshGeneratedContent(CssBox scope)
         {
-            ResetCounters(scope);
-            RefreshMarkers(scope);
+            ResetState(scope);
+            Refresh(scope);
 
-            static void ResetCounters(CssBox box)
+            static void ResetState(CssBox box)
             {
-                box.ResetCounterState();
-                foreach (var child in box.Boxes) ResetCounters(child);
+                box.ResetTreeShapeState();
+                foreach (var child in box.Boxes) ResetState(child);
             }
 
-            static void RefreshMarkers(CssBox box)
+            static void Refresh(CssBox box)
             {
                 foreach (var child in box.Boxes.ToArray())
                 {
-                    if (child is CssBoxMarker marker)
+                    if (child is CssBoxMarker || child.IsBeforePseudoElement || child.IsAfterPseudoElement)
                     {
-                        CssContentEngine.ApplyContent(marker);
-                        CssBidiParagraphResolver.ResolveOwnTextAsParagraph(marker);
-                        marker.ResolveDefaultContent();
-                        if (!string.IsNullOrEmpty(marker.Text)) marker.ParseToWords();
+                        CssContentEngine.ApplyContent(child);
+                        CssBidiParagraphResolver.ResolveOwnTextAsParagraph(child);
+                        if (child is CssBoxMarker marker) marker.ResolveDefaultContent();
+                        if (!string.IsNullOrEmpty(child.Text)) child.ParseToWords();
                     }
-                    else
-                    {
-                        RefreshMarkers(child);
-                    }
+
+                    Refresh(child);
                 }
             }
         }

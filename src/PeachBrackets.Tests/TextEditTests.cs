@@ -645,6 +645,45 @@ public class TextEditTests
         await AssertLaysOutLike(document, "<ol><li>one</li><li>twothree</li><li>four</li></ol>");
     }
 
+    private const string CounterHead = Head + "<style>body { counter-reset: n } p { counter-increment: n } div::before { content: counter(n) '. ' }</style>";
+
+    [Fact]
+    public async Task SplittingAParagraph_RenumbersTheCountersAfterIt()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two words</p><p>three</p><div>end</div>", CounterHead);
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.Contains("two", StringComparison.Ordinal));
+        var result = await document.SplitParagraphAsync(new TextPosition(run, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>two</p><p> words</p><p>three</p><div>end</div>", CounterHead);
+    }
+
+    [Fact]
+    public async Task JoiningParagraphs_RenumbersTheCountersAfterThem()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two</p><p>three</p><div>end</div>", CounterHead);
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.Contains("two", StringComparison.Ordinal));
+        var result = await document.JoinWithNextParagraphAsync(new TextPosition(run, 1), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>twothree</p><div>end</div>", CounterHead);
+    }
+
+    [Fact]
+    public async Task SplittingInsideAQuote_ShiftsTheQuoteNestingAfterIt()
+    {
+        const string head = Head + "<style>q::before { content: open-quote } q::after { content: no-close-quote }</style>";
+        var (_, document, canvas) = await LoadAsync("<p><q>aa bb</q></p><p><q>cc</q></p><p><q>dd</q></p>", head);
+
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.Contains("aa", StringComparison.Ordinal));
+        var result = await document.SplitParagraphAsync(new TextPosition(run, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p><q>aa</q></p><p><q> bb</q></p><p><q>cc</q></p><p><q>dd</q></p>", head);
+    }
+
     [Fact]
     public async Task WrappingAWordInStrong_LaysOutLikeTheMarkupWithIt_AndPutsTheCaretAfterIt()
     {

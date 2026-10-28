@@ -25,5 +25,6 @@ Deliberately not done:
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
 - **A split or join re-cascades the paragraphs it touched and every later sibling** (#1972; `TextEditor.RecascadeAround`), so `:nth-child` and sibling
-  combinators follow the edit. Not restyled: elements that are not later siblings (a `:has()` or distant-combinator match), and the layout caches that
-  depend on tree shape (quote depth, finalized counter names). The copy a split makes has no `id`.
+  combinators follow the edit. Counter values, quote depths and the text of list markers and
+  `::before`/`::after` under the parent are resolved again (`DomParser.RefreshGeneratedContent`). Not restyled: elements that are not later siblings (a
+  `:has()` or distant-combinator match). A paragraph with a `::before`/`::after` of its own is still refused, and the copy a split makes has no `id`.
