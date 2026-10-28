@@ -21,6 +21,6 @@ Deliberately not done:
 - **Failure mid-edit is not rolled back.** The text is spliced before the relayout; an exception from layout leaves the edited tree.
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
-- **A split paragraph is not re-cascaded.** It adopts the original's whole computed style (`AdoptComputedStyle`; `InheritStyle(everything: true)` dropped
+- **A split paragraph is not re-cascaded** (#1972). It adopts the original's whole computed style (`AdoptComputedStyle`; `InheritStyle(everything: true)` dropped
   `min-height` and others), so structural selectors are not evaluated for its new position; both halves share the `HtmlTag`, so an `id` is duplicated; and the
   layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.

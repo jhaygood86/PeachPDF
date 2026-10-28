@@ -2,17 +2,17 @@
 
 `HtmlDocument.SetSelectedRanges` (opt-in `EnableSelectionStyling`) paints a selection in the document's `::selection` rules, but reads only
 `color` and `background-color` from them. CSS Pseudo-Elements 4 §3.2 also allows `text-decoration*`, `text-underline-*`, `text-shadow`,
-`-webkit-text-stroke*`/`-webkit-text-fill-color`, `fill`/`stroke` and `caret-color`; those declarations are cascaded and then ignored.
+`-webkit-text-stroke*`/`-webkit-text-fill-color`, `fill`/`stroke` and `caret-color`; those declarations are cascaded and then ignored (tracked as #1968).
 
 Also not done, all deliberately, to keep the first pass to what cannot change layout:
 - **Highlight inheritance through an intermediate rule.** A selection style is seeded from its element's own style, and an element with no
   rule takes its nearest ancestor's. A declared `color` on an outer `::selection` is lost on a child whose parent has rules of its own
-  (§3.2's "inherits from the parent's highlight pseudo").
+  (§3.2's "inherits from the parent's highlight pseudo"; tracked as #1969, together with the line-box-height fill).
 - **Highlight height.** The fill is as tall as the word's own rectangle, not the full line box (browsers fill the line box).
 - **Named highlights share the same limits.** `::highlight(name)`, `::target-text`, `::spelling-error` and `::grammar-error` are painted (`HtmlDocument.SetHighlight`),
   but only `color` and `background-color`, with no inheritance through an intermediate rule; `::target-text` is not applied by the engine itself
-  (a host sets it), and a highlight on a text edit is dropped, not moved.
-- **Vertical writing modes and transforms:** a selected word in vertical text is painted unselected.
+  (a host sets it; #1971), and a highlight on a text edit is dropped, not moved.
+- **Vertical writing modes and transforms:** a selected word in vertical text is painted unselected (#1970).
 - **Duplicate text:** a word whose colour the selection changes is drawn three times (outside, inside, outside, each clipped), so a PDF
   written with a selection holds that text more than once. Selection is for interactive output.
 
