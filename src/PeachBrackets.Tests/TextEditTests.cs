@@ -597,6 +597,30 @@ public class TextEditTests
         await AssertLaysOutLike(document, "<p>one</p><p>twothree</p>", head);
     }
     [Fact]
+    public async Task SplittingAMiddleParagraph_ReevaluatesNthChildForEveryLaterSibling()
+    {
+        const string head = Head + "<style>p:nth-child(even) { margin-top: 30pt; color: rgb(0, 120, 0) } p:nth-last-child(2) { margin-bottom: 25pt }</style>";
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two words</p><p>three</p><p>four</p><p>five</p>", head);
+
+        var result = await document.SplitParagraphAsync(new TextPosition(1, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>two</p><p> words</p><p>three</p><p>four</p><p>five</p>", head);
+    }
+
+    [Fact]
+    public async Task JoiningParagraphs_ReevaluatesNthChildForEveryLaterSibling()
+    {
+        const string head = Head + "<style>p:nth-child(odd) { margin-top: 30pt; color: rgb(0, 120, 0) } p ~ p + p { padding-left: 12pt }</style>";
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two</p><p>three</p><p>four</p><p>five</p>", head);
+
+        var result = await document.JoinWithNextParagraphAsync(new TextPosition(1, 1), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one</p><p>twothree</p><p>four</p><p>five</p>", head);
+    }
+
+    [Fact]
     public async Task WrappingAWordInStrong_LaysOutLikeTheMarkupWithIt_AndPutsTheCaretAfterIt()
     {
         var (_, document, canvas) = await LoadAsync("<p>The quick brown fox</p>");

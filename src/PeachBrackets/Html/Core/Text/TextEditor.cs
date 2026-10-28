@@ -437,17 +437,17 @@ namespace PeachBrackets.Html.TextGeometry
             return (caret, block);
         }
 
-        // The boxes a structural edit changes the position of: the paragraphs it made or kept, and the one after, whose style may depend on what
-        // comes before it (:first-child, :last-child, adjacent sibling combinators, :nth-child for the paragraphs close to the edit).
+        // The boxes a structural edit changes the position of: the paragraphs it made or kept, and every sibling after them, whose style may depend
+        // on what comes before it (:first-child, :nth-child(), :nth-last-child(), adjacent and general sibling combinators).
         private static void RecascadeAround(HtmlContainerInt container, CssBox first, CssBox? second)
         {
             var last = second ?? first;
             var siblings = last.ParentBox!.Boxes;
-            var after = siblings.IndexOf(last) + 1 < siblings.Count ? siblings[siblings.IndexOf(last) + 1] : null;
 
             DomParser.RecascadeSubtree(container, first);
             if (second is not null) DomParser.RecascadeSubtree(container, second);
-            if (after is not null) DomParser.RecascadeSubtree(container, after);
+            for (var i = siblings.IndexOf(last) + 1; i < siblings.Count; i++)
+                DomParser.RecascadeSubtree(container, siblings[i]);
         }
 
         /// <summary>The inline elements a range of text can be wrapped in.</summary>
