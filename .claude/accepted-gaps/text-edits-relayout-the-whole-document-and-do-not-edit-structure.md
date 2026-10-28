@@ -12,7 +12,10 @@ Deliberately not done:
   with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
   one's style, so structural selectors (`:nth-child`, `:last-child`, `:first-line` effects of a different first line) are not re-evaluated, and a join
   merges adjacent plain texts only at the top level of the paragraph. Deleting a range across paragraphs still leaves two paragraphs (`Range.deleteContents`).
-  Nothing wraps a range in a new element or re-runs the anonymous-block passes for a block that holds mixed content.
+  `WrapRangeAsync` wraps only a range inside one run of sibling text boxes (not across inline elements or paragraphs) and `UnwrapElementAsync` only an element
+  that holds text alone; a range across elements needs the inline ancestors split, which nothing does. Nothing re-runs the anonymous-block passes for a block that
+  holds mixed content. Reused boxes keep what they derived from their old style (the font), which is why wrap and unwrap create new text boxes; a split or join
+  re-cascades the paragraphs around it but moves the existing ones, so a style change that alters a font there is not picked up by them.
 - **Whitespace-only gaps load dropped.** A text node that was only white space between two blocks is removed at load and cannot come back; typing there
   has to go into one of the blocks (or `InsertTextAsync(element, ...)`).
 - **Generated content, `svg`, `math`, `<br>`** have no editable text position.
@@ -23,5 +26,5 @@ Deliberately not done:
 
 - **Only the paragraphs around a split or join are re-cascaded** (#1972). `DomParser.RecascadeSubtree` re-runs the cascade for the paragraph that is kept, the
   one a split creates and the one after, so `:first-child`/`:last-child`/adjacent-sibling rules see the new tree; the `:nth-child` position of paragraphs
-  further on is not re-evaluated (that would re-cascade every later sibling), both halves of a split share the `HtmlTag` so an `id` is duplicated, and the
+  further on is not re-evaluated (that would re-cascade every later sibling), the copy a split makes has no `id`, and the
   layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.
