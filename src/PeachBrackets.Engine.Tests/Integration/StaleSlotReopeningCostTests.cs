@@ -115,17 +115,30 @@ public class StaleSlotReopeningCostTests
     [Fact]
     public async Task ReopeningEveryPage_DoesNotMakeEachEmissionWalkTheWholeDocument()
     {
-        // The same 1000 paragraphs. At 842pt the default orphans/widows move a paragraph after its first lines were
-        // emitted at every page break (109 reopenings), at 820pt almost never (2). When every reopening retired the
-        // pruning marks of the whole document (one scope for everything under <html>), the 842pt layout allocated
-        // 8x what the 820pt one did (172 MB against 21 MB) and visited the whole tree once per page.
-        var body = Paragraphs(1000);
+        // The same 1000 paragraphs at two page heights: where the default orphans/widows move a paragraph after its first lines were emitted at
+        // nearly every page break (109 reopenings at 842pt with Windows' metrics), and where they almost never do (2 at 820pt). When every reopening
+        // retired the pruning marks of the whole document (one scope for everything under <html>), the first layout allocated 8x what the second did
+        // (172 MB against 21 MB) and visited the whole tree once per page.
+        //
+        // Which heights those are depends on the font the platform falls back to, so they are found, on a shorter document, instead of assumed.
+        var probe = Paragraphs(200);
         await LayoutAtHeight(Paragraphs(20), 842); // warm-up: JIT and font loading are not what is measured
-        var (quiet, _) = await LayoutAtHeight(body, 820);
-        var (busy, busyContainer) = await LayoutAtHeight(body, 842);
+        double busyHeight = 0, quietHeight = 0;
+        var most = -1L;
+        var fewest = long.MaxValue;
+        for (var height = 790; height <= 880; height += 3)
+        {
+            var (_, container) = await LayoutAtHeight(probe, height);
+            if (container.CatchUpSlotEmits > most) { most = container.CatchUpSlotEmits; busyHeight = height; }
+            if (container.CatchUpSlotEmits < fewest) { fewest = container.CatchUpSlotEmits; quietHeight = height; }
+        }
 
-        Assert.True(busyContainer.CatchUpSlotEmits > 50, $"the document no longer reopens its pages ({busyContainer.CatchUpSlotEmits}); the test measures nothing");
-        Assert.True(busy < quiet * 3, $"842pt allocated {busy / 1048576} MB, 820pt {quiet / 1048576} MB");
+        var body = Paragraphs(1000);
+        var (quiet, _) = await LayoutAtHeight(body, quietHeight);
+        var (busy, busyContainer) = await LayoutAtHeight(body, busyHeight);
+
+        Assert.True(busyContainer.CatchUpSlotEmits > 50, $"no page height reopens its pages ({busyContainer.CatchUpSlotEmits} at {busyHeight}pt); the test measures nothing");
+        Assert.True(busy < quiet * 3, $"{busyHeight}pt allocated {busy / 1048576} MB, {quietHeight}pt {quiet / 1048576} MB");
     }
 
     private static CssBox? FirstBoxWithPlacedWords(CssBox box)
