@@ -42,9 +42,10 @@ public readonly record struct DirtyRegion(int PageIndex, Rect Bounds);
 /// <param name="DirtyRegions">the pages to repaint: each page from <paramref name="FirstDirtyPage"/> on, whole</param>
 /// <param name="Caret">where a caret just after the inserted text is, in the document's new <see cref="HtmlDocument.TextRuns"/>, or null when no text is left to put it in</param>
 /// <param name="Block">the paragraph a split created (<see cref="HtmlDocument.SplitParagraphAsync"/>), which has no text positions while it is empty; null for other edits</param>
+/// <param name="ResumedFromPage">the page layout was picked up from - every earlier page was kept as it was and was not laid out again - or null when the whole document was laid out again</param>
 public readonly record struct TextEditResult(
     bool Applied, string? Reason, int PagesBefore, int PagesAfter, int? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, Text.TextPosition? Caret,
-    DocumentElement? Block = null)
+    DocumentElement? Block = null, int? ResumedFromPage = null)
 {
     internal static TextEditResult NotApplied(string reason, int pages) => new(false, reason, pages, pages, null, [], null);
 }

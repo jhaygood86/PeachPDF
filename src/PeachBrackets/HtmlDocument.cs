@@ -276,11 +276,18 @@ public sealed class HtmlDocument : IDisposable
     }
 
     // The layout itself, which an edit of the text runs again over the same tree.
-    private async Task LayOutAsync(Canvas measuringCanvas)
+    // With a changed box, the layout is picked up from the pass before the one that placed it when it can be (the slot it resumed in).
+    private async Task<int?> LayOutAsync(Canvas measuringCanvas, CssBox? changed = null)
     {
         var pageSize = Utils.ToPoints(_container.PageSize, _unitsPerPoint);
         _container.MaxSize = Utils.ToPixels(new Size(pageSize.Width, 0), _unitsPerPoint);
-        await _container.PerformLayout(measuringCanvas);
+
+        int? resumedSlot = null;
+        if (changed is not null)
+            resumedSlot = await _container.TryResumeLayoutAt(changed, measuringCanvas);
+
+        if (resumedSlot is null)
+            await _container.PerformLayout(measuringCanvas);
 
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
         _pages = fragmentainers
@@ -288,6 +295,7 @@ public sealed class HtmlDocument : IDisposable
             .ToArray();
         _painter?.Dispose();
         _painter = new PagePainter(_container, _renderContext);
+        return resumedSlot;
     }
 
     /// <summary>The pages of the laid-out document, in order.</summary>
@@ -632,6 +640,7 @@ public sealed class HtmlDocument : IDisposable
             var (end, endReason) = TextEditor.ToSource(runs, to, isRangeStart: from.CompareTo(to) > 0);
             if (end is not { } b) return (null, endReason);
 
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf((from.CompareTo(to) <= 0 ? a : b).Box);
             return (TextEditor.Replace(_container, a, b, text, out var reason), reason);
         });
     }
@@ -663,7 +672,11 @@ public sealed class HtmlDocument : IDisposable
     {
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(text);
-        return EditAsync(measuringCanvas, () => (TextEditor.InsertInto(element.Box, text, out var reason), reason));
+        return EditAsync(measuringCanvas, () =>
+        {
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(element.Box);
+            return (TextEditor.InsertInto(element.Box, text, out var reason), reason);
+        });
     }
 
     /// <summary>
@@ -684,6 +697,7 @@ public sealed class HtmlDocument : IDisposable
             var (point, reason) = TextEditor.ToSource(TextRuns, at, isRangeStart: true);
             if (point is not { } source) return (null, reason);
 
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(source.Box);
             if (TextEditor.Split(source, out reason) is not var (caret, block)) return (null, reason);
 
             created = block;
@@ -705,8 +719,12 @@ public sealed class HtmlDocument : IDisposable
             var (point, reason) = TextEditor.ToSource(TextRuns, at, isRangeStart: true);
             if (point is not { } source) return (null, reason);
 
+            _editAnchor = CssBidiParagraphResolver.ParagraphRootOf(source.Box);
             return TextEditor.Join(source, out reason) is { } joined ? (joined.Caret ?? source, null) : (null, reason);
         });
+
+    // The paragraph the edit being made starts in, found before it changes anything: layout is picked up from the pass that placed it.
+    private CssBox? _editAnchor;
 
     private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change, Func<CssBox?>? createdBlock = null)
     {
@@ -719,6 +737,7 @@ public sealed class HtmlDocument : IDisposable
         if (TextEditor.DocumentRefusal(_container) is { } refusal)
             return TextEditResult.NotApplied(refusal, pagesBefore);
 
+        _editAnchor = null;
         var (caretPoint, reason) = change();
         if (caretPoint is null)
             return TextEditResult.NotApplied(reason ?? "The text could not be changed.", pagesBefore);
@@ -731,7 +750,8 @@ public sealed class HtmlDocument : IDisposable
         _selectedRanges = [];
         _textRuns = null;
         _annotations = null;
-        await LayOutAsync(measuringCanvas);
+        var resumedSlot = await LayOutAsync(measuringCanvas, _editAnchor);
+        _editAnchor = null;
 
         var runs = TextRuns;
         var first = FirstDifferentPage(signature, Signature(runs, _pages!.Count));
@@ -748,7 +768,17 @@ public sealed class HtmlDocument : IDisposable
         else selection.RemoveAllRanges();
 
         var block = createdBlock?.Invoke() is { } box ? new DocumentElement(box) : null;
-        return new TextEditResult(true, null, pagesBefore, _pages.Count, first, regions, caret, block);
+        int? resumedPage = null;
+        if (resumedSlot is { } slot)
+        {
+            var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+            for (var i = 0; i < fragmentainers.Count && resumedPage is null; i++)
+            {
+                if (fragmentainers[i].SlotIndex >= slot) resumedPage = i;
+            }
+        }
+
+        return new TextEditResult(true, null, pagesBefore, _pages.Count, first, regions, caret, block, resumedPage);
     }
 
     private static List<(string Text, double X, double Y, double Width)>[] Signature(IReadOnlyList<TextRun> runs, int pages)

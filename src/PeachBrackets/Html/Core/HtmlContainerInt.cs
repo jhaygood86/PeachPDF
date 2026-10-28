@@ -1961,6 +1961,84 @@ namespace PeachBrackets.Html
                 }
             }
 
+            await FinishLayout(g);
+        }
+
+        /// <summary>
+        /// Lays the document out again after the content of <paramref name="changed"/> (a block box) changed, picking the passes up from the one
+        /// before the pass that placed it instead of from the first: the slots before are kept, exactly as the passes that fill them left them.
+        /// It is the in-run rewind (<see cref="TryRewindForRunPull"/>) made available between layouts - the same emitter, pass entries and
+        /// <see cref="PassRewind.RollBackTo"/> - so what a pass resumed from an earlier entry produces is what the driver already relies on.
+        /// </summary>
+        /// <returns>
+        /// the slot it resumed from, or null when it declined and the document is as it was (the caller lays it out whole). It declines when
+        /// the box was placed in the first two passes (nothing to save), when no pass entry names it, and for documents whose layout depends on
+        /// something other than the passes before it.
+        /// </returns>
+        internal async ValueTask<int?> TryResumeLayoutAt(CssBox changed, Canvas g)
+        {
+            if (Root is null || _emitter is null || !HasRealPageGrid || UseVariableInlineMeasure || MaxSize.Width <= 0.1
+                || HasFootnotes || HasPageFloats || HasSizeContainers || MaxReservedBlankSlot is not null
+                || PageGeometry.HasVerticalMarginOverrides || PageGeometry.HasHorizontalMarginOverrides || PageGeometry.HasSizeOverrides
+                || PageGeometry.HasVerticalBorderPaddingOverrides || PageGeometry.HasHorizontalBorderPaddingOverrides
+                || DomUtils.AnyBoxHasTargetPageContent(Root))
+            {
+                return null;
+            }
+
+            var placedIn = PassEntryFor(changed);
+            if (placedIn < 2) return null;
+
+            // One pass earlier than the one that placed it: widows and orphans can move the break before a paragraph back a page.
+            var entry = placedIn - 1;
+            var (slot, token) = _passEntries[entry];
+            if (token is null) return null;
+
+            _emitter.InvalidateFrom(slot, changed);
+            PassRewind.RollBackTo(token, Root.Boxes);
+            TruncatePassEntries(entry);
+
+            // The boxes the layout continues into were measured by the layout before, and a block's bottom only ever grows (it is the larger of
+            // what it was and what its last child gives it), so one whose content got shorter would keep its old bottom. A whole layout starts
+            // each of them at its top.
+            for (var ancestor = changed.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+                ancestor.ActualBottom = ancestor.Location.Y;
+
+            // A fresh layout starts with every correction available (once per head, once per box); the one this continues has spent some.
+            _passesRewoundFor.Clear();
+            Root.RearmBreakDecisions();
+            _widowsRewind = null;
+            _runPullRewind = null;
+
+            await LayoutDocument(g, _emitter, slot, token);
+
+            // The extent is the largest bottom any box reached while it was laid out, which a layout that resumed part-way cannot
+            // accumulate (the boxes before it were not laid out, and the ones after it passed through positions a whole layout does not):
+            // it is read off the boxes as they now stand. The width is not something an edit changes.
+            ActualSize = new Size(ActualSize.Width, FlowBottom(Root));
+
+            ReapplyPseudoElementContent(Root);
+            await FinishLayout(g);
+            return slot;
+        }
+
+        // The largest bottom of any box in the flow, from the document's top: what the boxes' epilogues accumulate into ActualSize.
+        private double FlowBottom(CssBox box)
+        {
+            var bottom = box.IsFixedOrInRunningElement ? 0 : box.ActualBottom - Root!.Location.Y;
+            foreach (var child in box.Boxes)
+                bottom = Math.Max(bottom, FlowBottom(child));
+
+            return bottom;
+        }
+
+        /// <summary>
+        /// Everything that follows the last fragmentainer pass: the flow flags, the trailing break, the materialized fragment tree and what is
+        /// built on it. Shared by <see cref="PerformLayoutOnePass"/> and <see cref="TryResumeLayoutAt"/>, so a resumed layout ends exactly as a
+        /// whole one does.
+        /// </summary>
+        private async ValueTask FinishLayout(Canvas g)
+        {
             // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
@@ -2542,9 +2620,12 @@ namespace PeachBrackets.Html
         /// document's registrations accumulate <i>across</i> its fragmentainers, and only a whole new
         /// layout invalidates them.
         /// </remarks>
-        private async ValueTask LayoutDocument(Canvas g)
+        private async ValueTask LayoutDocument(Canvas g, FragmentEmitter? resumeEmitter = null, int resumeSlot = 0, BreakToken? resumeToken = null)
         {
-            LayoutGeneration++;
+            // A resumed layout (TryResumeLayoutAt) continues the one that is already there: the same emitter, whose slots before
+            // resumeSlot are frozen and still describe the document, and the pass entries and stamps of the passes before it.
+            var resuming = resumeEmitter is not null;
+            if (!resuming) LayoutGeneration++;
             FragmentainerPasses = 0;
             LastResortRelayouts = 0;
             PassRewinds = 0;
@@ -2555,9 +2636,12 @@ namespace PeachBrackets.Html
             // element, which could spuriously force or suppress the first named-page break. Blank-slot
             // reservations go the same way: each invocation re-decides every one of them from scratch,
             // and only the last invocation's set describes the layout the fragment tree is built from.
-            ClearNamedPageElements();
-            PageGeometry.Reset();
-            ClearBlankSlotReservations();
+            if (!resuming)
+            {
+                ClearNamedPageElements();
+                PageGeometry.Reset();
+                ClearBlankSlotReservations();
+            }
 
             // One footnote-policy: line break per call per LayoutDocument invocation - without this, a
             // call forced off its landing page keeps re-triggering as this same pass's own fragmentainer
@@ -2575,21 +2659,24 @@ namespace PeachBrackets.Html
             // (CssBox.PlacedByPassIfStillValid), so nothing here has to walk the tree resetting those -
             // clearing _passInvalidations is still needed so it does not grow without bound across a
             // document's ShrinkToFit/reflow iterations.
-            _passEntries.Clear();
-            _passEntrySet.Clear();
-            _passesRewoundFor.Clear();
-            _passInvalidations.Clear();
+            if (!resuming)
+            {
+                _passEntries.Clear();
+                _passEntrySet.Clear();
+                _passesRewoundFor.Clear();
+                _passInvalidations.Clear();
+            }
 
             // Each invocation re-decides the whole document, so the fragments an earlier one emitted
-            // describe a layout that no longer exists.
-            var emitter = new FragmentEmitter(this);
+            // describe a layout that no longer exists - unless it is a resumption, which keeps the slots before where it picks up.
+            var emitter = resumeEmitter ?? new FragmentEmitter(this);
             _emitter = emitter;
 
-            BreakToken? token = null;
+            BreakToken? token = resumeToken;
 
             try
             {
-                var slot = 0;
+                var slot = resumeSlot;
                 var maxPasses = MaxFragmentainersOverride ?? MaxFragmentainers;
 
                 // Set before every `break` below, so the code after the loop can tell "the loop reached a

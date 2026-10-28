@@ -373,8 +373,8 @@ PeachBrackets.Updates.DocumentElement : sealed class
   property String Id { get; }
   property String TagName { get; }
 PeachBrackets.Updates.TextEditResult : struct
-  ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null)
-  method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block)
+  ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null, Int32? ResumedFromPage = null)
+  method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block, out Int32? ResumedFromPage)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(TextEditResult other)
   method virtual Int32 GetHashCode()
@@ -385,6 +385,7 @@ PeachBrackets.Updates.TextEditResult : struct
   property Int32 PagesAfter { get; init; }
   property Int32 PagesBefore { get; init; }
   property Int32? FirstDirtyPage { get; init; }
+  property Int32? ResumedFromPage { get; init; }
   property String Reason { get; init; }
   property TextPosition? Caret { get; init; }
 PeachBrackets.Updates.UpdateResult : struct

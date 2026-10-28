@@ -4,9 +4,10 @@
 create one only through `InsertTextAsync(element, ...)`. They then run `PerformLayout` over the whole tree again.
 
 Deliberately not done:
-- **Resuming from the changed page.** The relayout is the whole fragmentation walk, 70-100 ms for 100 pages of text and over a second for hundreds
-  (`.claude/recent-fixes/2026-10-27-tier-b-relayout-spike.md`). Resuming at page k needs a snapshot of the state `LayoutDocument` resets at its
-  start; the building blocks (`BreakToken` records, `PassRewind`, `FragmentEmitter.InvalidateFrom`) exist.
+- **Resuming is not always possible.** `HtmlContainerInt.TryResumeLayoutAt` declines (the whole document is laid out again, `ResumedFromPage` is null) when the
+  edited paragraph was placed in the first two passes, when the document has per-page widths, footnotes, page floats, container queries, `target-counter(page)`,
+  per-page margin/size overrides, reserved blank slots or a page width not given by the options, and when no pass entry names the paragraph. A resumed layout
+  starts from the pass before the one that placed the paragraph, so a keep-with-next run that reaches back further than that is handled only by the in-run rewind.
 - **Wrapping a range, and structure edits beyond a plain paragraph.** `SplitParagraphAsync`/`JoinWithNextParagraphAsync` handle only a block in a block
   with inline-only content (no list item, table cell, flex/grid item, float, generated content, or block holding blocks). The new paragraph copies the old
   one's style, so structural selectors (`:nth-child`, `:last-child`, `:first-line` effects of a different first line) are not re-evaluated, and a join
@@ -20,7 +21,6 @@ Deliberately not done:
 - **Failure mid-edit is not rolled back.** The text is spliced before the relayout; an exception from layout leaves the edited tree.
 - A word a small-caps split cut where a soft hyphen was removed has no source offset (`CssRect.SourceStart == -1`) and refuses the edit.
 
-Closing the first needs the snapshot above; the second the load-time structure passes made re-runnable for one block.
 - **A split paragraph is not re-cascaded.** It adopts the original's whole computed style (`AdoptComputedStyle`; `InheritStyle(everything: true)` dropped
   `min-height` and others), so structural selectors are not evaluated for its new position; both halves share the `HtmlTag`, so an `id` is duplicated; and the
   layout caches that depend on tree shape (quote depth, finalized counter names) are not reset on the paragraph or its later siblings.

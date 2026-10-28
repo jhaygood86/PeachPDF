@@ -461,4 +461,67 @@ public class TextEditTests
         Assert.True(result.Applied, result.Reason);
         await AssertLaysOutLike(document, "<p class=box>Hello</p><p class=box> world</p><p>After</p>", head);
     }
+    private static string ManyParagraphs(int count, Func<int, string>? text = null) =>
+        string.Concat(Enumerable.Range(0, count).Select(i => $"<p>{text?.Invoke(i) ?? $"Paragraph {i} with some text in it to fill the line."}</p>"));
+
+    [Fact]
+    public async Task AnEditOnALatePage_ResumesLayoutThere_AndMatchesAFreshLoad()
+    {
+        var (_, document, canvas) = await LoadAsync(ManyParagraphs(120));
+        Assert.True(document.Pages.Count >= 5);
+
+        // Deep in the document: the run whose text is "Paragraph 100 ...".
+        var index = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith("Paragraph 100 ", StringComparison.Ordinal));
+        var result = await document.InsertTextAsync(new TextPosition(index, 13), " and then a good deal more words that make this one wrap onto a second line", canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        Assert.True(result.ResumedFromPage > 0, $"expected a resumed layout, got {result.ResumedFromPage}");
+        await AssertLaysOutLike(document, ManyParagraphs(120, i => i == 100 ? "Paragraph 100 and then a good deal more words that make this one wrap onto a second line with some text in it to fill the line." : null));
+    }
+
+    [Fact]
+    public async Task SeveralResumedEditsInARow_StayEqualToAFreshLoad()
+    {
+        var (_, document, canvas) = await LoadAsync(ManyParagraphs(150));
+        var expected = Enumerable.Range(0, 150).Select(i => $"Paragraph {i} with some text in it to fill the line.").ToList();
+
+        foreach (var paragraph in new[] { 120, 60, 140, 90 })
+        {
+            var index = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith($"Paragraph {paragraph} ", StringComparison.Ordinal));
+            var result = await document.InsertTextAsync(new TextPosition(index, 4), "XX", canvas);
+            Assert.True(result.Applied, result.Reason);
+            expected[paragraph] = expected[paragraph].Insert(4, "XX");
+        }
+
+        await AssertLaysOutLike(document, ManyParagraphs(150, i => expected[i]));
+    }
+
+    [Fact]
+    public async Task SplittingJoiningAndDeletingOnLatePages_ResumeAndMatchAFreshLoadAfterEachStep()
+    {
+        var (_, document, canvas) = await LoadAsync(ManyParagraphs(150));
+        var texts = Enumerable.Range(0, 150).Select(i => $"Paragraph {i} with some text in it to fill the line.").ToList();
+
+        int RunOf(string start) => Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith(start, StringComparison.Ordinal));
+        string Markup() => string.Concat(texts.Select(t => $"<p>{t}</p>"));
+
+        var split = await document.SplitParagraphAsync(new TextPosition(RunOf("Paragraph 110 "), 14), canvas);
+        Assert.True(split.Applied, split.Reason);
+        Assert.True(split.ResumedFromPage > 0);
+        texts.Insert(111, texts[110][14..]);
+        texts[110] = texts[110][..14];
+        await AssertLaysOutLike(document, Markup());
+
+        var join = await document.JoinWithNextParagraphAsync(new TextPosition(RunOf("Paragraph 70 "), 3), canvas);
+        Assert.True(join.Applied, join.Reason);
+        texts[70] += texts[71];
+        texts.RemoveAt(71);
+        await AssertLaysOutLike(document, Markup());
+
+        var at = RunOf("Paragraph 129 ");
+        var delete = await document.DeleteTextAsync(new TextPosition(at, 0), new TextPosition(at, 14), canvas);
+        Assert.True(delete.Applied, delete.Reason);
+        texts[129] = texts[129][14..];
+        await AssertLaysOutLike(document, Markup());
+    }
 }

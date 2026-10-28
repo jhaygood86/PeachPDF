@@ -214,7 +214,7 @@ an element of the laid-out document and returns an `UpdateResult`: whether it wa
 ## Editing the text
 
 With `EnableIncrementalUpdates` and `RecordTextRuns`, the text of the loaded document can be changed in place - the primitive a text editor
-or a chat composer is built from - and the document is laid out again from the changed tree, with no re-parse and no new `HtmlDocument`:
+or a chat composer is built from - and the document is laid out again from the changed tree (from the changed page on, where it can be), with no re-parse and no new `HtmlDocument`:
 
 | Call | Does |
 | --- | --- |
@@ -252,8 +252,10 @@ Refused, with the reason in the result and the document untouched: a document wh
 where layout cut a word in a way that cannot be undone (a small-caps split where a soft hyphen was removed). `InsertTextAsync(element, ...)` refuses an
 element that holds blocks, an image or a form control.
 
-The whole document is laid out again, so the cost is that of a layout - tens of milliseconds for a page of text, a second or more for hundreds of
-pages. An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
+Layout is picked up from the page before the one the edited paragraph starts on, and the pages before it are kept as they were, so an edit late in a
+long document costs a fraction of a layout (1,500 paragraphs over 84 pages: about 50-80 ms on the last pages, against about 700 ms for one on the
+first); `TextEditResult.ResumedFromPage` says where it picked up, or is null when the whole document was laid out again (an edit on the first pages, or
+a document the shortcut does not cover). An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
 
 ## Structure for tagged output
 

@@ -4176,6 +4176,22 @@ namespace PeachBrackets.Html.Dom
             && box.ParentBox?.DerivedStyle.ActualDisplay == Keywords.ListItem;
 
         /// <summary>
+        /// Makes this box and every box below it decide its breaks afresh, as a new layout generation would for each of them: the
+        /// once-per-layout corrections (the orphans break conversion, the widows rewind, the relaxed avoid) become available again. Used when
+        /// a layout is resumed part-way (<see cref="HtmlContainerInt.TryResumeLayoutAt"/>), which keeps the generation - and so the boxes the
+        /// resumed passes do not reach - but must not inherit the previous layout's spent corrections for the ones they do.
+        /// </summary>
+        internal void RearmBreakDecisions()
+        {
+            _orphansBreakTaken = false;
+            _avoidRelaxed = false;
+            _widowsRewindTaken = false;
+
+            foreach (var child in Boxes)
+                child.RearmBreakDecisions();
+        }
+
+        /// <summary>
         /// Picks up this box's resumption state for the pass that is starting, discarding anything left
         /// over from an earlier layout.
         /// </summary>
