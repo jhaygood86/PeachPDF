@@ -596,4 +596,96 @@ public class TextEditTests
         Assert.True(result.Applied, result.Reason);
         await AssertLaysOutLike(document, "<p>one</p><p>twothree</p>", head);
     }
+    [Fact]
+    public async Task WrappingAWordInStrong_LaysOutLikeTheMarkupWithIt_AndPutsTheCaretAfterIt()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>The quick brown fox</p>");
+
+        var result = await document.WrapRangeAsync(new TextPosition(0, 4), new TextPosition(0, 9), "strong", null, canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        Assert.NotNull(result.Block);
+        await AssertLaysOutLike(document, "<p>The <strong>quick</strong> brown fox</p>");
+        Assert.Equal(new TextPosition(0, 9), result.Caret);
+    }
+
+    [Fact]
+    public async Task WrappingARange_AtTheStartMiddleAndEndOfATextBox_CutsItExactly()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>alpha beta gamma</p>");
+
+        Assert.True((await document.WrapRangeAsync(new TextPosition(0, 0), new TextPosition(0, 5), "em", null, canvas)).Applied);
+        await AssertLaysOutLike(document, "<p><em>alpha</em> beta gamma</p>");
+
+        Assert.True((await document.WrapRangeAsync(new TextPosition(0, 11), new TextPosition(0, 16), "u", null, canvas)).Applied);
+        await AssertLaysOutLike(document, "<p><em>alpha</em> beta <u>gamma</u></p>");
+    }
+
+    [Fact]
+    public async Task WrappingInALink_KeepsItsAttributes_AndALinkIsFoundOnThePage()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>See the docs for more</p>");
+
+        var result = await document.WrapRangeAsync(new TextPosition(0, 8), new TextPosition(0, 12), "a",
+            new Dictionary<string, string> { ["href"] = "https://example.com/" }, canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>See the <a href=\"https://example.com/\">docs</a> for more</p>");
+    }
+
+    [Fact]
+    public async Task UnwrappingAnElement_LeavesItsTextWhereItWas_AndJoinsTheTextAroundIt()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>The <strong id=s>quick</strong> brown</p>");
+
+        var result = await document.UnwrapElementAsync(document.GetElement("s")!, canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>The quick brown</p>");
+    }
+
+    [Fact]
+    public async Task WrapAndUnwrap_RoundTrip_OnALateRepeatedPage()
+    {
+        var body = ManyParagraphs(120);
+        var (_, document, canvas) = await LoadAsync(body);
+        var run = Enumerable.Range(0, document.TextRuns.Count).First(i => document.TextRuns[i].Text.StartsWith("Paragraph 100 ", StringComparison.Ordinal));
+
+        var wrapped = await document.WrapRangeAsync(new TextPosition(run, 0), new TextPosition(run, 9), "strong", null, canvas);
+        Assert.True(wrapped.Applied, wrapped.Reason);
+        Assert.True(wrapped.ResumedFromPage > 0);
+        await AssertLaysOutLike(document, ManyParagraphs(120, i => i == 100 ? "<strong>Paragraph</strong> 100 with some text in it to fill the line." : null));
+
+        var unwrapped = await document.UnwrapElementAsync(wrapped.Block!, canvas);
+        Assert.True(unwrapped.Applied, unwrapped.Reason);
+        await AssertLaysOutLike(document, body);
+    }
+
+    [Fact]
+    public async Task WrapAndUnwrapAreRefused_ForRangesAndElementsTheyCannotHandle()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one <em>two</em> three</p><div id=d><p>x</p></div><p id=p>last</p>");
+
+        // across an element boundary, an empty range, an element that is not phrasing, a script-like attribute
+        Assert.False((await document.WrapRangeAsync(new TextPosition(0, 1), new TextPosition(0, 6), "strong", null, canvas)).Applied);
+        Assert.False((await document.WrapRangeAsync(new TextPosition(0, 1), new TextPosition(0, 1), "strong", null, canvas)).Applied);
+        Assert.False((await document.WrapRangeAsync(new TextPosition(0, 0), new TextPosition(0, 2), "div", null, canvas)).Applied);
+        Assert.False((await document.WrapRangeAsync(new TextPosition(0, 0), new TextPosition(0, 2), "span",
+            new Dictionary<string, string> { ["onclick"] = "x" }, canvas)).Applied);
+        Assert.False((await document.UnwrapElementAsync(document.GetElement("d")!, canvas)).Applied);
+        Assert.False((await document.UnwrapElementAsync(document.GetElement("p")!, canvas)).Applied);
+    }
+
+    [Fact]
+    public async Task ASplitParagraph_DoesNotDuplicateTheId()
+    {
+        var (_, document, canvas) = await LoadAsync("<p id=a>Hello world</p>");
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 5), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        Assert.Equal("a", document.GetElement("a")!.Id);
+        Assert.NotEqual(document.GetElement("a"), result.Block);
+        Assert.True(string.IsNullOrEmpty(result.Block!.Id), "the new paragraph kept the id");
+    }
 }

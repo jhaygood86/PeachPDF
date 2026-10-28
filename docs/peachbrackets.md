@@ -243,10 +243,17 @@ or a chat composer is built from - and the document is laid out again from the c
 | `InsertTextAsync(element, text, canvas)` | Appends text to an element's own text, or gives an element with no text some - an empty paragraph has no position to insert at. |
 | `SplitParagraphAsync(position, canvas)` | Enter: the text after `position`, and the inline elements it is inside, move to a new paragraph of the same element and style after this one. When the split is at the end the new paragraph is empty: `TextEditResult.Block` is it, for `InsertTextAsync(element, ...)`. |
 | `JoinWithNextParagraphAsync(position, canvas)` | Delete at the end of a paragraph: the next paragraph's content moves to the end of this one and it is removed. The caret is where the two met. |
+| `WrapRangeAsync(from, to, tag, attributes, canvas)` | Wraps the text between two positions in a new inline element (`strong`, `em`, `u`, `a`, `span`, `code`, `mark` and the like), as bold, italic or a link is applied. `TextEditResult.Block` is the element; the caret is at the end of the wrapped text. |
+| `UnwrapElementAsync(element, canvas)` | Takes such an element out, leaving its text where it was and joining the text around it: turns bold or a link off. |
+
+A range to wrap must lie in one run of text with the same parent: not across another inline element or across paragraphs (wrap each part, or unwrap the element
+first). An element that is not one of those phrasing elements, an attribute that is not a plain name or starts with `on`, an empty range, and an element that holds
+other elements or generated content (for unwrap) are refused. The text boxes involved are replaced by new ones, so the new element and what is around it lay out
+exactly like the markup with it. A split paragraph's copy does not keep the `id` of the paragraph it came from.
 
 Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
 and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
-The paragraph a split or join leaves, the one it creates and the one after them are cascaded again, so `:first-child`, `:last-child` and adjacent-sibling rules match their new positions; `:nth-child` rules of paragraphs further on are not evaluated again. A paragraph with an `id` leaves two paragraphs with that `id`.
+The paragraph a split or join leaves, the one it creates and the one after them are cascaded again, so `:first-child`, `:last-child` and adjacent-sibling rules match their new positions; `:nth-child` rules of paragraphs further on are not evaluated again.
 
 `canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
 
