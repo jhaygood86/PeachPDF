@@ -3376,7 +3376,37 @@ namespace PeachBrackets.Html
         /// overflows its page — extends past the slot the pass that laid it out was filling.
         /// </summary>
         private int LastSlotAnyGeometryTouches(int from) =>
-            Math.Max(from, SlotEndingAt(MarginTop + ActualSize.Height));
+            Math.Max(from, SlotEndingAt(Math.Max(MarginTop + ActualSize.Height, LowestFlowedLineBottom(Root))));
+
+        /// <summary>
+        /// The lowest bottom of any line in <paramref name="box"/>'s subtree, in document space, or negative infinity when
+        /// it has none; skipping what is painted per page or clipped away.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="ActualSize"/> grows by boxes' bottoms, and a line can lie below the box that holds it: the line
+        /// of a block beside a float too narrow for the line is placed below the float, under a box of fixed height.
+        /// When that lands past the last page the boxes reach, no page was made for it and its words were drawn on none.
+        /// </remarks>
+        private static double LowestFlowedLineBottom(CssBox? box)
+        {
+            if (box is null) return double.NegativeInfinity;
+
+            var bottom = double.NegativeInfinity;
+
+            foreach (var line in box.LineBoxes)
+            {
+                bottom = Math.Max(bottom, line.LineBottom);
+            }
+
+            foreach (var child in box.Boxes)
+            {
+                if (child.IsFixedOrInRunningElement || DomUtils.ClipsItsOverflow(child)) continue;
+
+                bottom = Math.Max(bottom, LowestFlowedLineBottom(child));
+            }
+
+            return bottom;
+        }
 
         /// <summary>
         /// The fragments the current (or last) <see cref="LayoutDocument"/> invocation's passes emitted.

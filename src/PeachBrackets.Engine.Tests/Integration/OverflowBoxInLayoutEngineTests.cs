@@ -81,6 +81,36 @@ public class OverflowBoxInLayoutEngineTests
         Assert.Equal(Enumerable.Range(1, 30).Select(i => $"x{i:00}").Concat(["Intro", "Beside"]).Order(), painted.Order());
     }
 
+    // The commit pass pins the item's height to the unbroken measurement, and each break that moves a line to the next
+    // page adds the strip it left at the foot; the clip taken from the pinned bottom then ended above the last lines,
+    // at some lead lengths only (a sweep, since where the foot falls decides it).
+    [Theory]
+    [InlineData("flex", 0)]
+    [InlineData("flex", 12)]
+    [InlineData("flex", 26)]
+    [InlineData("flex", 38)]
+    [InlineData("flex", 51)]
+    [InlineData("flex", 64)]
+    [InlineData("flex", 77)]
+    [InlineData("flex", 90)]
+    [InlineData("grid", 0)]
+    [InlineData("grid", 17)]
+    [InlineData("grid", 33)]
+    [InlineData("grid", 49)]
+    [InlineData("grid", 65)]
+    [InlineData("grid", 81)]
+    public async Task HiddenScrollItemBrokenOverSeveralPages_KeepsItsLastLines(string display, int leadWords)
+    {
+        var lead = leadWords > 0 ? $"<p>{Words(900, leadWords)}</p>" : "";
+        var html = Document($"{lead}<div style='display:{display}'><div style='overflow:hidden'>{Paragraphs(14)}</div></div>");
+
+        var (painted, clipped) = await PaintedWordsAsync(html);
+
+        Assert.Equal(0, clipped);
+        Assert.Equal(Enumerable.Range(900, leadWords).Concat(Enumerable.Range(1, 112)).Select(i => $"w{i:000}").Order(),
+            painted.Order());
+    }
+
     // Sized to fit a column: a box taller than the page is sliced whichever way it is classified.
     [Theory]
     [InlineData("<div style='columns:2;column-gap:10pt'><div style='overflow:hidden'>{0}</div></div>", 3)]

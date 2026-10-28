@@ -129,8 +129,8 @@ public class FontAndContextTests
     public void The_media_type_prefers_screen()
     {
         using var context = Win2dRenderContext.CreateSoftware();
-        Assert.Equal("screen", context.GetCssMediaType(new[] { "print", "screen" }));
-        Assert.Equal("all", context.GetCssMediaType(new[] { "print" }));
+        Assert.Equal("screen", context.GetCssMediaType(new List<string> { "print", "screen" }));
+        Assert.Equal("all", context.GetCssMediaType(new List<string> { "print" }));
     }
 
     [Fact]
@@ -268,7 +268,7 @@ public class FontAndContextTests
         var features = new ShapeSettings(
             Ligatures: LigatureSet.None,
             Kerning: false,
-            ExplicitFeatures: new FeatureSetting[] { new("smcp", 1), new("liga", 0), new("toolong", 1) });
+            ExplicitFeatures: new List<FeatureSetting> { new("smcp", 1), new("liga", 0), new("toolong", 1) });
 
         Assert.True(scene.Canvas.MeasureString("office fi", font, features).Width > 0);
         Assert.True(scene.Canvas.CountShapedGlyphs("office", font, features) > 0);

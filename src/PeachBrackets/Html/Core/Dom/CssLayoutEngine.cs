@@ -3249,8 +3249,18 @@ namespace PeachBrackets.Html.Dom
             // cell already gets, rather than the general §10.6.3 rule clipping a short explicit height
             // below content that CssLayoutEngineTable.PerformLayout may since have grown to satisfy it
             // (issue #1116).
+            //
+            // So does a flex or grid item that is a scroll container breaking across pages, with an author height of
+            // auto: the commit pass pinned its height to the unbroken measurement, and every break that moved a line to
+            // the next page added the strip it left at the foot, so the pinned bottom (and the overflow clip taken from
+            // it) ended above its last lines. Each ancestor's height pass reached this box again and wrote the pinned
+            // value back over the content's.
             var neverShrinksBelowContent = box.IsTableCell
-                || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable;
+                || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                || (box.ItemContentSizeEverPinned
+                    && !(box.HeightBeforeItemPin is { } authoredHeight && CssValueParser.IsValidLength(authoredHeight))
+                    && Fragmentation.MonolithicContent.IsScrollContainer(box)
+                    && !Fragmentation.MonolithicContent.IsMonolithic(box));
 
             box.ActualBottom = boxHeight is not null && !neverShrinksBelowContent
                 ? box.Location.Y + height

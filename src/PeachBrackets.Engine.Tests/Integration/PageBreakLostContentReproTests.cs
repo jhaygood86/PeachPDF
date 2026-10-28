@@ -240,5 +240,52 @@ body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; } p,h3
             await AssertEveryWordIsVisibleOnceAsync(Document(Page300x200,
                 $"<div style='columns:3;column-gap:8pt'><div style='display:flex;gap:4pt'><div style='flex:1'>{content}</div></div></div>"));
         }
+
+        [Fact]
+        public async Task ABlockBesideATallNestedFloat_KeepsItsLineThatIsPushedBelowTheFloat()
+        {
+            // Issue 1965 (seed 40 of a generated corpus), verbatim in structure: the fixed-height block beside the inner
+            // float has no room for its word, so the line is placed below the float, far under the block's own box.
+            await AssertEveryWordIsInTheTreeOnceAsync(Document(
+                "@page{size:300pt 200pt;margin:20pt} body{margin:0;font-family:Arial;font-size:10pt;line-height:12pt}",
+                "<div style=\"float:right;width:47pt;margin-top:4pt;margin-bottom:3pt;padding:8pt;\"><div style=\"float:left;width:41pt;\">" +
+                "<h3>w40_64 w40_65 w40_66 w40_67</h3>w40_68 w40_69 w40_70 w40_71 lorem w40_72 w40_73 w40_74 w40_75 w40_81 w40_82 w40_83 lorem w40_84 w40_85 w40_86 w40_87 w40_88 lorem w40_89 " +
+                "</div><div style=\"height:44pt\">w40_90</div> </div>"));
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("8pt")]
+        public async Task ALineBelowATallFloatInsideAFloat_GetsAPageWhereverTheFloatEnds(string padding)
+        {
+            // The float's height steps across the page foot one line at a time: the cases that lost the word were the
+            // ones where the float ends at or just past a foot, and the line lands on a page nothing else reaches.
+            for (var lines = 14; lines <= 40; lines++)
+            {
+                var tall = string.Concat(Enumerable.Range(1, lines).Select(i => $"w1_{i} "));
+                await AssertEveryWordIsInTheTreeOnceAsync(Document(
+                    "@page{size:300pt 200pt;margin:20pt} body{margin:0;font-family:Arial;font-size:10pt;line-height:12pt}",
+                    $"<div style=\"float:right;width:47pt;padding:{padding}\"><div style=\"float:left;width:41pt\">{tall}</div><div style=\"height:44pt\">w2_1</div></div>"));
+            }
+        }
+
+        [Theory]
+        [InlineData(2)]
+        [InlineData(3)]
+        public async Task AHeadingInAColumnsContainerStartingJustAboveTheFoot_IsDrawnOnAPage(int columns)
+        {
+            // Issue 1963: with the spacer at 150 or 150.5pt the container starts 0.3pt above the foot, the heading's
+            // top margin carries its line below it, and the heading was in no fragment of any page. Swept in 0.25pt
+            // steps either side of where the foot falls, since only a sliver of positions lost it. Read off the
+            // tree: the heading's ink then starts 1pt above the page's content top, inside the page's margin.
+            for (var spacer = 146.0; spacer <= 162.0; spacer += 0.25)
+            {
+                var html = Document(Page300x200,
+                    $"<div style='height:{spacer.ToString(System.Globalization.CultureInfo.InvariantCulture)}pt'>w1_1</div>" +
+                    $"<div style='column-count:{columns}'><h3>w2_1 w2_2 w2_3 w2_4 w2_5 w2_6</h3></div>w3_1 w3_2");
+
+                await AssertEveryWordIsInTheTreeOnceAsync(html);
+            }
+        }
     }
 }
