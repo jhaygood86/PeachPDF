@@ -272,6 +272,12 @@ public sealed class HtmlDocument : IDisposable
         if (_pages is not null)
             throw new InvalidOperationException("The document is already laid out.");
 
+        await LayOutAsync(measuringCanvas);
+    }
+
+    // The layout itself, which an edit of the text runs again over the same tree.
+    private async Task LayOutAsync(Canvas measuringCanvas)
+    {
         var pageSize = Utils.ToPoints(_container.PageSize, _unitsPerPoint);
         _container.MaxSize = Utils.ToPixels(new Size(pageSize.Width, 0), _unitsPerPoint);
         await _container.PerformLayout(measuringCanvas);
@@ -280,6 +286,7 @@ public sealed class HtmlDocument : IDisposable
         _pages = fragmentainers
             .Select((fragmentainer, index) => new DocumentPage(index, fragmentainer.Geometry.SheetWidthPt, fragmentainer.Geometry.SheetHeightPt))
             .ToArray();
+        _painter?.Dispose();
         _painter = new PagePainter(_container, _renderContext);
     }
 
@@ -595,6 +602,135 @@ public sealed class HtmlDocument : IDisposable
             throw new InvalidOperationException("Set HtmlDocumentOptions.EnableIncrementalUpdates before loading the document to restyle it in place.");
 
         return StyleUpdater.Apply(_container, element.Box, property, value, _container.FragmentTree?.Fragmentainers ?? []);
+    }
+
+    /// <summary>
+    /// Replaces the text between two positions of <see cref="TextRuns"/> with <paramref name="text"/>, in the document itself, and lays it
+    /// out again: the way to type, delete or paste into a document an embedder shows. Text boxes the replacement empties are removed, and a range
+    /// across several text boxes (inline elements, paragraphs) is deleted between its ends, without joining the blocks. Nothing is changed, and the
+    /// result says why, for a document whose layout depends on every page (footnotes, page floats, <c>target-counter</c>, named pages, running
+    /// elements, <c>@page</c> rules, multiple columns, container queries), while a structure tag sink is attached, and for a position in generated
+    /// content, <c>svg</c> or <c>math</c>, or on a line break. The caret in the result is just after the inserted text; the document's
+    /// <see cref="Selection"/> is collapsed to it.
+    /// </summary>
+    /// <param name="from">where the replaced text starts (either end may come first)</param>
+    /// <param name="to">where it ends, not included; the same as <paramref name="from"/> to insert</param>
+    /// <param name="text">the new text, which may be empty</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text; nothing is drawn on it</param>
+    /// <returns>whether it was applied, the page count before and after, and what to repaint</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> or <see cref="HtmlDocumentOptions.EnableIncrementalUpdates"/> was not set</exception>
+    public Task<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, string text, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        return EditAsync(measuringCanvas, () =>
+        {
+            var runs = TextRuns;
+            var (start, startReason) = TextEditor.ToSource(runs, from, isRangeStart: from.CompareTo(to) <= 0 && from != to);
+            if (start is not { } a) return (null, startReason);
+
+            var (end, endReason) = TextEditor.ToSource(runs, to, isRangeStart: from.CompareTo(to) > 0);
+            if (end is not { } b) return (null, endReason);
+
+            return (TextEditor.Replace(_container, a, b, text, out var reason), reason);
+        });
+    }
+
+    /// <summary>Inserts text at a position: <see cref="ReplaceTextAsync"/> over an empty range.</summary>
+    /// <param name="at">where to insert</param>
+    /// <param name="text">the text</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> InsertTextAsync(TextPosition at, string text, Canvas measuringCanvas) => ReplaceTextAsync(at, at, text, measuringCanvas);
+
+    /// <summary>Deletes the text between two positions: <see cref="ReplaceTextAsync"/> with no new text.</summary>
+    /// <param name="from">where the deleted text starts</param>
+    /// <param name="to">where it ends, not included</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas) => ReplaceTextAsync(from, to, string.Empty, measuringCanvas);
+
+    /// <summary>
+    /// Appends text to an element's own text - into its last text, or as a new text when it has none - so an element with no text, which
+    /// has no position to <see cref="InsertTextAsync(TextPosition, string, Canvas)"/> at, can be given some. An element that holds blocks, or is
+    /// <c>svg</c>, <c>math</c>, an image or a form control, is refused.
+    /// </summary>
+    /// <param name="element">the element, from <see cref="GetElement"/> or <see cref="GetElementAt(int, double, double)"/></param>
+    /// <param name="text">the text</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
+    /// <returns>see <see cref="ReplaceTextAsync"/></returns>
+    public Task<TextEditResult> InsertTextAsync(DocumentElement element, string text, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(text);
+        return EditAsync(measuringCanvas, () => (TextEditor.InsertInto(element.Box, text, out var reason), reason));
+    }
+
+    private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        var before = TextRuns;
+        if (!_incrementalUpdates)
+            throw new InvalidOperationException("Set HtmlDocumentOptions.EnableIncrementalUpdates before loading the document to edit its text.");
+
+        var pagesBefore = Pages.Count;
+        if (TextEditor.DocumentRefusal(_container) is { } refusal)
+            return TextEditResult.NotApplied(refusal, pagesBefore);
+
+        var (caretPoint, reason) = change();
+        if (caretPoint is null)
+            return TextEditResult.NotApplied(reason ?? "The text could not be changed.", pagesBefore);
+
+        // What the old layout looked like, to say where the new one differs.
+        var signature = Signature(before, pagesBefore);
+
+        _container.ClipReport.Words.Clear();
+        _container.SelectionModel = null;
+        _selectedRanges = [];
+        _textRuns = null;
+        _annotations = null;
+        await LayOutAsync(measuringCanvas);
+
+        var runs = TextRuns;
+        var first = FirstDifferentPage(signature, Signature(runs, _pages!.Count));
+        var regions = new List<DirtyRegion>();
+        if (first is { } firstPage)
+        {
+            for (var page = firstPage; page < _pages.Count; page++)
+                regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
+        }
+
+        var caret = TextEditor.ToPosition(runs, caretPoint.Value);
+        var selection = Selection;
+        if (caret is { } position) selection.Collapse(position);
+        else selection.RemoveAllRanges();
+
+        return new TextEditResult(true, null, pagesBefore, _pages.Count, first, regions, caret);
+    }
+
+    private static List<(string Text, double X, double Y, double Width)>[] Signature(IReadOnlyList<TextRun> runs, int pages)
+    {
+        var signature = new List<(string, double, double, double)>[pages];
+        for (var i = 0; i < pages; i++) signature[i] = [];
+
+        foreach (var run in runs)
+        {
+            if (run.PageIndex < pages)
+                signature[run.PageIndex].Add((run.Text, Math.Round(run.Bounds.X, 2), Math.Round(run.Bounds.Y, 2), Math.Round(run.Bounds.Width, 2)));
+        }
+
+        return signature;
+    }
+
+    private static int? FirstDifferentPage(List<(string Text, double X, double Y, double Width)>[] before, List<(string Text, double X, double Y, double Width)>[] after)
+    {
+        for (var page = 0; page < Math.Max(before.Length, after.Length); page++)
+        {
+            if (page >= before.Length || page >= after.Length || !before[page].SequenceEqual(after[page]))
+                return page;
+        }
+
+        return null;
     }
 
     /// <summary>

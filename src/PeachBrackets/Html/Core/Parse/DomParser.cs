@@ -3891,7 +3891,7 @@ namespace PeachBrackets.Html.Parse
         /// fight over the same removal.
         /// </para>
         /// </remarks>
-        private static void CollapseWhitespaceAcrossInlineBoundaries(CssBox box)
+        internal static void CollapseWhitespaceAcrossInlineBoundaries(CssBox box)
         {
             // Inline <svg>/<math> are foreign content: their descendants are read directly by
             // SvgTreeBuilder/MathTreeBuilder and are never laid out as HTML boxes, so HTML box-tree

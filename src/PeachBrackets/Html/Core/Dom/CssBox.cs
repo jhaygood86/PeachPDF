@@ -1848,7 +1848,9 @@ namespace PeachBrackets.Html.Dom
                         {
                             Words.Add(new CssRectWord(this, text.Substring(startIdx, endIdx - startIdx), false, false)
                             {
-                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel
+                                BidiLevel = BidiLevels is { } wsLevels ? wsLevels[startIdx] : fallbackLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) ? startIdx : -1,
+                                SourceLength = endIdx - startIdx,
                             });
                         }
                     }
@@ -1960,11 +1962,27 @@ namespace PeachBrackets.Html.Dom
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
                             if (Words.Count > wordsBefore)
                                 Words[wordsBefore].UnicodeBreakBefore = breakOpportunities[startIdx] != LineBreakOpportunity.Prohibited;
+                            // Where each fragment starts in this box's own text, for mapping an edit back to it. Only when the
+                            // fragments add up to the source span (an uppercased small-caps run can lengthen, a soft hyphen
+                            // shortens what the fragments hold): otherwise they are left unmappable rather than wrong.
+                            var mappable = ReferenceEquals(sourceText, _text);
+                            var fragmentTotal = 0;
+                            for (var wi = wordsBefore; wi < Words.Count; wi++)
+                                fragmentTotal += Words[wi].Text?.Length ?? 0;
+
+                            var splitFragments = Words.Count - wordsBefore > 1;
+                            mappable &= !splitFragments || fragmentTotal == endIdx - startIdx;
+                            var fragmentStart = startIdx;
                             for (var wi = wordsBefore; wi < Words.Count; wi++)
                             {
                                 Words[wi].BidiLevel = wordBidiLevel;
                                 if (Words[wi] is CssRectWord rectWord)
                                     rectWord.ScriptTag = wordScriptTag;
+
+                                var fragmentLength = splitFragments ? Words[wi].Text?.Length ?? 0 : endIdx - startIdx;
+                                Words[wi].SourceStart = mappable ? fragmentStart : -1;
+                                Words[wi].SourceLength = fragmentLength;
+                                fragmentStart += fragmentLength;
                             }
                         }
                     }
@@ -1977,7 +1995,12 @@ namespace PeachBrackets.Html.Dom
                             : fallbackLevel;
                         endIdx++;
                         if (respectNewLines)
-                            Words.Add(new CssRectWord(this, "\n", false, false) { BidiLevel = newlineBidiLevel });
+                            Words.Add(new CssRectWord(this, "\n", false, false)
+                            {
+                                BidiLevel = newlineBidiLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
+                                SourceLength = 1,
+                            });
                     }
 
                     startIdx = endIdx;

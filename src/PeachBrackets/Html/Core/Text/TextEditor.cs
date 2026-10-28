@@ -1,0 +1,367 @@
+using PeachBrackets.Css;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Parse;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Text;
+using System;
+using System.Collections.Generic;
+using TextPosition = PeachBrackets.Text.TextPosition;
+
+namespace PeachBrackets.Html.TextGeometry
+{
+    /// <summary>
+    /// Changes the text of a loaded document in place: maps positions in the laid-out text back to the text boxes they came from, splices the
+    /// new text in (removing text boxes it empties), and redoes for the affected paragraphs what loading does to text - bidi levels, whitespace
+    /// collapsing across inline boundaries, splitting into words. It does not lay anything out; the caller does.
+    /// </summary>
+    internal static class TextEditor
+    {
+        private const char SoftHyphen = '­';
+
+        /// <summary>A place in the source text of one text box.</summary>
+        /// <param name="Box">the text box (a leaf that holds <see cref="CssBox.Text"/>)</param>
+        /// <param name="Index">the UTF-16 index in that text, from 0 to its length</param>
+        internal readonly record struct SourcePoint(CssBox Box, int Index);
+
+        /// <summary>Why the whole document cannot be re-laid out in place, or null when it can.</summary>
+        public static string? DocumentRefusal(HtmlContainerInt container)
+        {
+            if (container.Root is null) return "The document has no content.";
+            if (container.StructureTagBuilder is not null) return "A structure tag sink is attached; its structure would describe the document as it was.";
+            if (container.HasFootnotes) return "The document has footnotes, whose placement depends on every page.";
+            if (container.HasPageFloats) return "The document has page floats, whose placement depends on every page.";
+            if (container.HasSizeContainers) return "The document uses container queries, which are resolved by loading it again.";
+            if (container.UseVariableInlineMeasure) return "The document gives pages different widths.";
+            if (container.NamedPageElements.Count > 0) return "The document uses named pages.";
+            if (container.RunningElements.Count > 0) return "The document has running elements.";
+            if (DomUtils.AnyBoxHasTargetPageContent(container.Root)) return "The document refers to page numbers (target-counter), which depend on every page.";
+            if (HasMultiColumn(container.Root)) return "The document has multi-column content.";
+
+            return null;
+        }
+
+        private static bool HasMultiColumn(CssBox box)
+        {
+            if (box.EstablishesMultiColumnContext) return true;
+
+            foreach (var child in box.Boxes)
+            {
+                if (HasMultiColumn(child)) return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// The source text a position in <paramref name="runs"/> stands for. A position between two words of one run, or at the join of two
+        /// runs of a line, can be the end of the earlier word or the start of the later one; <paramref name="isRangeStart"/> picks the later.
+        /// </summary>
+        public static (SourcePoint? Point, string? Reason) ToSource(IReadOnlyList<TextRun> runs, TextPosition position, bool isRangeStart)
+        {
+            if ((uint)position.RunIndex >= (uint)runs.Count)
+                return (null, "The position is not in the document's text.");
+
+            var run = runs[position.RunIndex];
+            if ((uint)position.CharIndex > (uint)run.Text.Length)
+                return (null, "The position is not in the text of its run.");
+
+            TextWordSlice? chosen = null;
+            foreach (var slice in run.Slices)
+            {
+                if (position.CharIndex < slice.TextStart || position.CharIndex > slice.TextStart + slice.Length)
+                    continue;
+
+                chosen = slice;
+                if (!isRangeStart) break;
+            }
+
+            if (chosen is not { } found)
+                return (null, "The position is between words and cannot be mapped to a text box.");
+
+            var word = found.Word;
+            var box = word.OwnerBox;
+            if (!IsEditable(box, out var reason))
+                return (null, reason);
+
+            if (word.SourceStart < 0 || box.Text is not { } text)
+                return (null, "The text there was changed by layout (a small-caps or soft-hyphen split) and cannot be mapped back.");
+
+            var index = SourceIndexInWord(word, text, position.CharIndex - found.TextStart, found.Length);
+            return index < 0 ? (null, "The position cannot be mapped to the source text.") : (new SourcePoint(box, index), null);
+        }
+
+        // Offset k into the word's own text -> index into the box's text, which is longer by the soft hyphens layout removed from the word.
+        private static int SourceIndexInWord(CssRect word, string text, int k, int wordLength)
+        {
+            if (word.SourceLength == wordLength)
+                return word.SourceStart + k;
+
+            var index = word.SourceStart;
+            var counted = 0;
+            while (counted < k && index < text.Length)
+            {
+                if (text[index] != SoftHyphen) counted++;
+                index++;
+            }
+
+            return counted == k ? index : -1;
+        }
+
+        /// <summary>Whether text edits may touch <paramref name="box"/>: ordinary document text, not generated content or foreign markup.</summary>
+        private static bool IsEditable(CssBox box, out string? reason)
+        {
+            reason = null;
+            if (box.Text is null) { reason = "The text is generated content."; }
+            else if (box.IsPseudoElement || box is CssBoxMarker) reason = "The text is generated content.";
+            else if (box.IsWithinForeignContent) reason = "The text is inside SVG or MathML.";
+            else if (box.IsBrElement) reason = "The position is on a line break.";
+
+            return reason is null;
+        }
+
+        /// <summary>Where a place in some box's text is in the laid-out text, or null when that box shows nothing.</summary>
+        public static TextPosition? ToPosition(IReadOnlyList<TextRun> runs, SourcePoint point)
+        {
+            TextPosition? nearest = null;
+            var nearestDistance = int.MaxValue;
+
+            for (var r = 0; r < runs.Count; r++)
+            {
+                foreach (var slice in runs[r].Slices)
+                {
+                    var word = slice.Word;
+                    if (!ReferenceEquals(word.OwnerBox, point.Box) || word.SourceStart < 0) continue;
+
+                    var start = word.SourceStart;
+                    var end = start + word.SourceLength;
+                    if (point.Index >= start && point.Index <= end)
+                    {
+                        return new TextPosition(r, slice.TextStart + WordOffset(word, point.Box.Text!, point.Index, slice.Length));
+                    }
+
+                    // Not in a word (in the white space between two): the nearest edge of one.
+                    var distance = point.Index < start ? start - point.Index : point.Index - end;
+                    if (distance < nearestDistance)
+                    {
+                        nearestDistance = distance;
+                        nearest = new TextPosition(r, point.Index < start ? slice.TextStart : slice.TextStart + slice.Length);
+                    }
+                }
+            }
+
+            return nearest;
+        }
+
+        private static int WordOffset(CssRect word, string text, int sourceIndex, int wordLength)
+        {
+            if (word.SourceLength == wordLength)
+                return sourceIndex - word.SourceStart;
+
+            var counted = 0;
+            for (var i = word.SourceStart; i < sourceIndex && i < text.Length; i++)
+            {
+                if (text[i] != SoftHyphen) counted++;
+            }
+
+            return counted;
+        }
+
+        /// <summary>
+        /// Replaces the text from <paramref name="start"/> to <paramref name="end"/> (in document order, either way round) with
+        /// <paramref name="insert"/>, which goes where the range began. Text boxes the replacement empties are removed from the tree.
+        /// </summary>
+        /// <returns>the place just after the inserted text, or null with <paramref name="reason"/> when nothing was changed</returns>
+        public static SourcePoint? Replace(HtmlContainerInt container, SourcePoint start, SourcePoint end, string insert, out string? reason)
+        {
+            reason = null;
+            var leaves = new List<CssBox>();
+            CollectLeaves(container.Root!, leaves);
+
+            var first = IndexOfBox(leaves, start.Box);
+            var last = IndexOfBox(leaves, end.Box);
+            if (first < 0 || last < 0)
+            {
+                reason = "The text is no longer in the document.";
+                return null;
+            }
+
+            if (first > last || (first == last && start.Index > end.Index))
+            {
+                (start, end) = (end, start);
+                (first, last) = (last, first);
+            }
+
+            if (start.Index > start.Box.Text!.Length || end.Index > end.Box.Text!.Length)
+            {
+                reason = "The position is outside the text it names.";
+                return null;
+            }
+
+            var paragraphs = new List<CssBox>();
+            void Touch(CssBox leaf)
+            {
+                var paragraph = CssBidiParagraphResolver.ParagraphRootOf(leaf);
+                if (!paragraphs.Contains(paragraph)) paragraphs.Add(paragraph);
+            }
+
+            var emptied = new List<CssBox>();
+            var cleaned = FixNewLines(insert);
+
+            if (first == last)
+            {
+                var text = start.Box.Text!;
+                start.Box.Text = string.Concat(text.AsSpan(0, start.Index), cleaned, text.AsSpan(end.Index));
+                Touch(start.Box);
+                if (start.Box.Text.Length == 0) emptied.Add(start.Box);
+            }
+            else
+            {
+                start.Box.Text = string.Concat(start.Box.Text!.AsSpan(0, start.Index), cleaned);
+                Touch(start.Box);
+                if (start.Box.Text.Length == 0) emptied.Add(start.Box);
+
+                // What lies between is deleted whole, except generated content, which is not part of the text.
+                for (var i = first + 1; i < last; i++)
+                {
+                    var middle = leaves[i];
+                    if (middle.IsPseudoElement || middle is CssBoxMarker) continue;
+
+                    Touch(middle);
+                    middle.Text = string.Empty;
+                    emptied.Add(middle);
+                }
+
+                end.Box.Text = end.Box.Text!.Substring(end.Index);
+                Touch(end.Box);
+                if (end.Box.Text.Length == 0) emptied.Add(end.Box);
+            }
+
+            // Just after what was inserted: inside the box the range began in.
+            var caret = new SourcePoint(start.Box, first == last ? start.Index + cleaned.Length : start.Box.Text!.Length);
+
+            // A box with nothing left is gone. When the caret was in it, it falls back to what is next to it.
+            foreach (var box in emptied)
+                box.ParentBox = null;
+
+            if (emptied.Contains(caret.Box))
+                caret = CaretAfterRemoval(leaves, first, last, emptied, end, start);
+
+            RedoText(paragraphs);
+            return caret;
+        }
+
+        // The caret when the box it was in has been removed: the start of the next surviving text box, else the end of the previous one.
+        private static SourcePoint CaretAfterRemoval(List<CssBox> leaves, int first, int last, List<CssBox> emptied, SourcePoint end, SourcePoint start)
+        {
+            for (var i = last; i < leaves.Count; i++)
+            {
+                if (!emptied.Contains(leaves[i]) && leaves[i].Text is { Length: > 0 } && ReferenceEquals(leaves[i], end.Box))
+                    return new SourcePoint(leaves[i], 0);
+
+                if (i > last && !emptied.Contains(leaves[i]) && leaves[i].Text is { Length: > 0 } && !leaves[i].IsPseudoElement)
+                    return new SourcePoint(leaves[i], 0);
+            }
+
+            for (var i = first; i >= 0; i--)
+            {
+                if (!emptied.Contains(leaves[i]) && leaves[i].Text is { Length: > 0 } text && !leaves[i].IsPseudoElement)
+                    return new SourcePoint(leaves[i], text.Length);
+            }
+
+            return new SourcePoint(start.Box, 0);
+        }
+
+        /// <summary>
+        /// Inserts <paramref name="text"/> at the end of <paramref name="element"/>'s own text - into its last text box when it has one, else
+        /// into a new one - so an element with no text, whose text positions do not exist, can be given some.
+        /// </summary>
+        public static SourcePoint? InsertInto(CssBox element, string text, out string? reason)
+        {
+            reason = null;
+            if (element.HtmlTag is null) { reason = "The element is not an element of the document."; return null; }
+            if (element.IsPseudoElement || element is CssBoxSvg or CssBoxMath or CssBoxImage or CssBoxFormField) { reason = "Text cannot be put in that kind of element."; return null; }
+            if (element.IsWithinForeignContent) { reason = "The element is inside SVG or MathML."; return null; }
+            if (element.DerivedStyle.ActualDisplay == Keywords.None) { reason = "The element is not displayed."; return null; }
+
+            foreach (var child in element.Boxes)
+            {
+                // Mixed block and inline children would need the inline text wrapped in an anonymous block, which loading does.
+                if (!child.IsInline && child.Text is null) { reason = "The element contains blocks; put the text in one of them."; return null; }
+            }
+
+            var cleaned = FixNewLines(text);
+            CssBox? target = null;
+            for (var i = element.Boxes.Count - 1; i >= 0; i--)
+            {
+                if (element.Boxes[i].Text is not null && !element.Boxes[i].IsPseudoElement && !element.Boxes[i].IsBrElement)
+                {
+                    target = element.Boxes[i];
+                    break;
+                }
+
+                if (!element.Boxes[i].IsPseudoElement) break;
+            }
+
+            if (target is null)
+            {
+                target = CssBox.CreateBox(element);
+                target.Text = cleaned;
+            }
+            else
+            {
+                target.Text += cleaned;
+            }
+
+            RedoText([CssBidiParagraphResolver.ParagraphRootOf(target)]);
+            return new SourcePoint(target, target.Text!.Length);
+        }
+
+        private static string FixNewLines(string text) => text.Replace("\r\n", "\n").Replace('\r', '\n');
+
+        // Everything loading does to text that depends on its neighbours, redone for each paragraph a change touched: the bidi levels (a text
+        // box's depend on the whole paragraph), the collapsing of a space run that crosses an inline boundary, and the split into words.
+        private static void RedoText(List<CssBox> paragraphs)
+        {
+            foreach (var paragraph in paragraphs)
+            {
+                CssBidiParagraphResolver.AssignBidiLevels(paragraph);
+
+                var leaves = new List<CssBox>();
+                CollectLeaves(paragraph, leaves);
+                foreach (var leaf in leaves)
+                {
+                    if (!leaf.IsPseudoElement && leaf is not CssBoxMarker && leaf.Text is not null)
+                        leaf.ParseToWords();
+                }
+
+                DomParser.CollapseWhitespaceAcrossInlineBoundaries(paragraph);
+            }
+        }
+
+        private static int IndexOfBox(List<CssBox> boxes, CssBox box)
+        {
+            for (var i = 0; i < boxes.Count; i++)
+            {
+                if (ReferenceEquals(boxes[i], box)) return i;
+            }
+
+            return -1;
+        }
+
+        /// <summary>The text boxes under <paramref name="box"/> in document order.</summary>
+        private static void CollectLeaves(CssBox box, List<CssBox> leaves)
+        {
+            if (box is CssBoxSvg or CssBoxMath) return;
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return;
+
+            if (box.Text is not null && box.Boxes.Count == 0)
+            {
+                leaves.Add(box);
+                return;
+            }
+
+            foreach (var child in box.Boxes)
+                CollectLeaves(child, leaves);
+        }
+    }
+}

@@ -152,6 +152,16 @@ namespace PeachBrackets.Html.Dom
         internal bool PrecededByWordSeparator { get; set; }
 
         /// <summary>
+        /// Where this word's text begins in its <see cref="OwnerBox"/>'s own <see cref="CssBox.Text"/>, or -1 when that cannot be said (a word
+        /// of generated content, or one a small-caps split cut where a soft hyphen was removed). What a text edit maps a position in the
+        /// laid-out text back to; set by <see cref="CssBox.ParseToWords"/>.
+        /// </summary>
+        internal int SourceStart { get; set; } = -1;
+
+        /// <summary>How many characters of the owner box's text this word covers; more than its own text when soft hyphens were removed from it.</summary>
+        internal int SourceLength { get; set; }
+
+        /// <summary>
         /// The box whose font measured the word separator in front of this word - set alongside
         /// <see cref="PrecededByWordSeparator"/>, null when that is false. The separator's advance comes
         /// from whichever source produced it: the previous word's own trailing space (its

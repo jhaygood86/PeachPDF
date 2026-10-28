@@ -98,6 +98,19 @@ namespace PeachBrackets.Html.Dom
         // it had been replaced in the element tree by its contents"). A block-level child of it still
         // establishes its own paragraph and reaches the parent's as one placeholder, exactly as a block
         // inside an inline does.
+        /// <summary>
+        /// The box whose paragraph <paramref name="box"/>'s own text belongs to: the nearest ancestor-or-self that establishes one. What a text
+        /// edit re-resolves, since the levels of a text box depend on the whole paragraph it is in.
+        /// </summary>
+        internal static CssBox ParagraphRootOf(CssBox box)
+        {
+            var current = box;
+            while (!EstablishesOwnParagraph(current) && current.ParentBox is { } parent)
+                current = parent;
+
+            return current;
+        }
+
         private static bool EstablishesOwnParagraph(CssBox box) =>
             box.IsRoot || box.DerivedStyle.ActualDisplay is not (Keywords.Inline or Keywords.Contents) || box is CssBoxMarker;
 

@@ -97,7 +97,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
-| `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements of the laid-out document in place. |
+| `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements, and `ReplaceTextAsync` and its relatives to edit the text, of the laid-out document in place. |
 | `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
@@ -210,6 +210,44 @@ an element of the laid-out document and returns an `UpdateResult`: whether it wa
 - A background or outline set to `currentcolor` earlier keeps the colour it had; only a later write picks up the new one.
 - To show the change, clear each region on the page's canvas and call `PaintPageRegionAsync(page, canvas, region)`, which paints only what
   lies inside it; or paint the page again.
+
+## Editing the text
+
+With `EnableIncrementalUpdates` and `RecordTextRuns`, the text of the loaded document can be changed in place - the primitive a text editor
+or a chat composer is built from - and the document is laid out again from the changed tree, with no re-parse and no new `HtmlDocument`:
+
+| Call | Does |
+| --- | --- |
+| `ReplaceTextAsync(from, to, text, canvas)` | Replaces the text between two `TextPosition`s (either order) with `text`, which may be empty. |
+| `InsertTextAsync(position, text, canvas)`, `DeleteTextAsync(from, to, canvas)` | The two halves of it. |
+| `InsertTextAsync(element, text, canvas)` | Appends text to an element's own text, or gives an element with no text some - an empty paragraph has no position to insert at. |
+
+`canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
+
+- `Applied` and `Reason`: when an edit cannot be made in place nothing is changed, and `Reason` says why.
+- `PagesBefore`, `PagesAfter` and `FirstDirtyPage`: where the layout now differs. Every page from `FirstDirtyPage` on may look different (a
+  paragraph that grows pushes everything after it), and `DirtyRegions` lists those pages whole. An edit on the last page leaves the earlier
+  ones alone, apart from the page before it, which widows and orphans can reach.
+- `Caret`: a `TextPosition` just after the inserted text in the new `TextRuns`. The document's `Selection` is collapsed to it, so typing
+  is: insert at the caret, use the returned caret for the next key.
+
+What an edit does to the document:
+
+- A range inside one text, or across inline elements and paragraphs, is replaced between its ends. Text left empty has its text box removed (an
+  emptied `<strong>` stays as an empty element). Blocks are **not** joined: deleting from the middle of one paragraph to the middle of the next
+  leaves two paragraphs.
+- Everything loading does to text is redone for the paragraphs the edit touches: bidirectional levels (which depend on the whole paragraph),
+  collapsing of a space that continues across an inline boundary, soft hyphens, and the split into words. A test lays out an edited document and
+  a fresh load of the same markup and requires the same pages, text runs and character positions.
+
+Refused, with the reason in the result and the document untouched: a document whose layout depends on every page (footnotes, page floats,
+`target-counter(page)`, named pages, running elements, multiple columns, container queries, pages of different widths); a document with a
+`StructureTagSink` attached; a position in generated content (`::before`, markers, counters), in `svg` or `math`, or on a `<br>`; and a position
+where layout cut a word in a way that cannot be undone (a small-caps split where a soft hyphen was removed). `InsertTextAsync(element, ...)` refuses an
+element that holds blocks, an image or a form control.
+
+The whole document is laid out again, so the cost is that of a layout - tens of milliseconds for a page of text, a second or more for hundreds of
+pages. An edit also discards `ClipReport` and any selection painted through `SetSelectedRanges`.
 
 ## Structure for tagged output
 
