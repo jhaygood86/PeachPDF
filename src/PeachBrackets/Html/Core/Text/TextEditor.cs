@@ -364,7 +364,7 @@ namespace PeachBrackets.Html.TextGeometry
         /// is inside, go to a new paragraph with the same tag and style after this one.
         /// </summary>
         /// <returns>the start of the new paragraph's text (null when it has none), and the new paragraph, or null with <paramref name="reason"/></returns>
-        public static (SourcePoint? Caret, CssBox? Block)? Split(SourcePoint at, out string? reason)
+        public static (SourcePoint? Caret, CssBox? Block)? Split(HtmlContainerInt container, SourcePoint at, out string? reason)
         {
             var paragraph = CssBidiParagraphResolver.ParagraphRootOf(at.Box);
             if (!IsPlainBlock(paragraph, out reason)) return null;
@@ -418,12 +418,26 @@ namespace PeachBrackets.Html.TextGeometry
             }
 
             RemoveEmptyInlines(paragraph, emptyBefore);
+            RecascadeAround(container, paragraph, block);
             RedoText([paragraph, block]);
 
             var leaves = new List<CssBox>();
             CollectLeaves(block, leaves);
             SourcePoint? caret = leaves.Count > 0 ? new SourcePoint(leaves[0], 0) : null;
             return (caret, block);
+        }
+
+        // The boxes a structural edit changes the position of: the paragraphs it made or kept, and the one after, whose style may depend on what
+        // comes before it (:first-child, :last-child, adjacent sibling combinators, :nth-child for the paragraphs close to the edit).
+        private static void RecascadeAround(HtmlContainerInt container, CssBox first, CssBox? second)
+        {
+            var last = second ?? first;
+            var siblings = last.ParentBox!.Boxes;
+            var after = siblings.IndexOf(last) + 1 < siblings.Count ? siblings[siblings.IndexOf(last) + 1] : null;
+
+            DomParser.RecascadeSubtree(container, first);
+            if (second is not null) DomParser.RecascadeSubtree(container, second);
+            if (after is not null) DomParser.RecascadeSubtree(container, after);
         }
 
         private static bool IsPlainText(CssBox box) =>
@@ -467,7 +481,7 @@ namespace PeachBrackets.Html.TextGeometry
         /// start of the next) does: the next paragraph's content moves to the end of this one and the paragraph is removed.
         /// </summary>
         /// <returns>the place where the two met (null when the second had no text), or null with <paramref name="reason"/></returns>
-        public static (SourcePoint? Caret, bool Joined)? Join(SourcePoint at, out string? reason)
+        public static (SourcePoint? Caret, bool Joined)? Join(HtmlContainerInt container, SourcePoint at, out string? reason)
         {
             var first = CssBidiParagraphResolver.ParagraphRootOf(at.Box);
             if (!IsPlainBlock(first, out reason)) return null;
@@ -505,6 +519,7 @@ namespace PeachBrackets.Html.TextGeometry
                 moved[0].ParentBox = null;
             }
 
+            RecascadeAround(container, first, null);
             var kept = RedoText([first]);
             if (last is not null && kept.Contains(last)) lastLength++;
 
