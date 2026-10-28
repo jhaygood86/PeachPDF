@@ -368,4 +368,86 @@ public class TextEditTests
         Assert.False(noNext.Applied);
         Assert.NotNull(noNext.Reason);
     }
+    [Fact]
+    public async Task ARangeGivenBackwards_IsTheSameEdit()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one two</p><p>three four</p>");
+
+        var result = await document.DeleteTextAsync(new TextPosition(1, 6), new TextPosition(0, 4), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>one </p><p>four</p>");
+    }
+
+    [Fact]
+    public async Task DeletingWholeParagraphsOfText_RemovesTheirBoxes_AndKeepsACaret()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one</p><p>two</p><p>three</p>");
+
+        var result = await document.DeleteTextAsync(new TextPosition(0, 0), new TextPosition(1, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p></p><p></p><p>three</p>");
+        Assert.NotNull(result.Caret);
+    }
+
+    [Fact]
+    public async Task PositionsOutsideTheDocument_AreRefused()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one</p>");
+
+        Assert.False((await document.InsertTextAsync(new TextPosition(5, 0), "x", canvas)).Applied);
+        Assert.False((await document.InsertTextAsync(new TextPosition(0, 99), "x", canvas)).Applied);
+        Assert.False((await document.SplitParagraphAsync(new TextPosition(5, 0), canvas)).Applied);
+        Assert.False((await document.JoinWithNextParagraphAsync(new TextPosition(5, 0), canvas)).Applied);
+    }
+
+    [Fact]
+    public async Task InsertingIntoAnElement_AppendsToItsText_OrRefusesWhatCannotHoldText()
+    {
+        var (_, document, canvas) = await LoadAsync("<p id=a>one</p><div id=b><p>x</p></div><p id=c></p><img id=d width=10 height=10><p id=e style='display:none'>h</p>");
+
+        var appended = await document.InsertTextAsync(document.GetElement("a")!, " more", canvas);
+        Assert.True(appended.Applied, appended.Reason);
+
+        Assert.False((await document.InsertTextAsync(document.GetElement("b")!, "y", canvas)).Applied);
+        Assert.False((await document.InsertTextAsync(document.GetElement("d")!, "y", canvas)).Applied);
+        Assert.False((await document.InsertTextAsync(document.GetElement("e")!, "y", canvas)).Applied);
+
+        var filled = await document.InsertTextAsync(document.GetElement("c")!, "filled", canvas);
+        Assert.True(filled.Applied, filled.Reason);
+    }
+
+    [Fact]
+    public async Task SplittingAtTheStartOfAParagraph_MovesEverythingToTheNewOne()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>one <em>two</em></p><p>after</p>");
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 0), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p></p><p>one <em>two</em></p><p>after</p>");
+    }
+    [Fact]
+    public async Task DeletingASpaceBeforeAnInlineBoundary_KeepsTheSpaceLoadingHadCollapsedIntoIt()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>ab <b> cd</b></p>");
+        Assert.Equal("ab cd", Assert.Single(document.TextRuns).Text);
+
+        var result = await document.DeleteTextAsync(new TextPosition(0, 2), new TextPosition(0, 3), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        await AssertLaysOutLike(document, "<p>ab<b> cd</b></p>");
+    }
+
+    [Fact]
+    public async Task SplittingAParagraph_KeepsTheEmptyAnchorsItAlreadyHad()
+    {
+        var (_, document, canvas) = await LoadAsync("<p>ab <a id=t></a>cd ef</p>");
+
+        var result = await document.SplitParagraphAsync(new TextPosition(0, 5), canvas);
+
+        Assert.True(result.Applied, result.Reason);
+        Assert.NotNull(document.GetElement("t"));
+    }
 }

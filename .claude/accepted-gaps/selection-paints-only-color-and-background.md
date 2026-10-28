@@ -16,3 +16,5 @@ Also not done, all deliberately, to keep the first pass to what cannot change la
 
 Closing the first needs the decoration/shadow/stroke painters to take a clipped range; the second needs a tracked "declared" bit per property
 on the shadow style rather than the equality test against the element's own colour used today.
+
+**Hairline seams under MuPDF.** The highlight is one rectangle per word plus one per selected gap, which abut exactly; MuPDF anti-aliases the shared edges and shows faint vertical hairlines between them (PDFium does not). Overlapping them would double a translucent highlight colour, so they are left abutting; coalescing a line's rectangles in the painter would remove the seams.

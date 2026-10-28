@@ -247,7 +247,9 @@ namespace PeachBrackets.Html.TextGeometry
             if (emptied.Contains(caret.Box))
                 caret = CaretAfterRemoval(leaves, first, last, emptied, end, start);
 
-            RedoText(paragraphs);
+            if (RedoText(paragraphs).Contains(caret.Box))
+                caret = caret with { Index = caret.Index + 1 };
+
             return caret;
         }
 
@@ -368,6 +370,9 @@ namespace PeachBrackets.Html.TextGeometry
             if (!IsPlainBlock(paragraph, out reason)) return null;
             if (at.Index > at.Box.Text!.Length) { reason = "The position is outside the text it names."; return null; }
 
+            var emptyBefore = new HashSet<CssBox>();
+            CollectEmptyInlines(paragraph, emptyBefore);
+
             // The first box that moves: the rest of the text, or the box itself when the split is at its start.
             CssBox moving;
             var leaf = at.Box;
@@ -412,7 +417,7 @@ namespace PeachBrackets.Html.TextGeometry
                     child.ParentBox = block;
             }
 
-            RemoveEmptyInlines(paragraph);
+            RemoveEmptyInlines(paragraph, emptyBefore);
             RedoText([paragraph, block]);
 
             var leaves = new List<CssBox>();
@@ -431,14 +436,24 @@ namespace PeachBrackets.Html.TextGeometry
             return index + 1 < siblings.Count ? siblings[index + 1] : null;
         }
 
+        // Inline elements with nothing in them before a split (link targets, empty spans): they are not the split's to remove.
+        private static void CollectEmptyInlines(CssBox box, HashSet<CssBox> into)
+        {
+            foreach (var child in box.Boxes)
+            {
+                CollectEmptyInlines(child, into);
+                if (child.Boxes.Count == 0 && child.Text is null) into.Add(child);
+            }
+        }
+
         // Inline elements a split left with nothing in them.
-        private static void RemoveEmptyInlines(CssBox box)
+        private static void RemoveEmptyInlines(CssBox box, HashSet<CssBox> keep)
         {
             for (var i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var child = box.Boxes[i];
-                RemoveEmptyInlines(child);
-                if (child.Boxes.Count == 0 && child.Text is null && child.IsInline && child.HtmlTag is { } tag
+                RemoveEmptyInlines(child, keep);
+                if (!keep.Contains(child) && child.Boxes.Count == 0 && child.Text is null && child.IsInline && child.HtmlTag is { } tag
                     && child is not (CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxFormField) && !child.IsBrElement
                     && tag.Name is not (HtmlConstants.Img or "br"))
                 {
@@ -490,7 +505,8 @@ namespace PeachBrackets.Html.TextGeometry
                 moved[0].ParentBox = null;
             }
 
-            RedoText([first]);
+            var kept = RedoText([first]);
+            if (last is not null && kept.Contains(last)) lastLength++;
 
             SourcePoint? caret = last is { Text: not null } && last.ParentBox is not null ? new SourcePoint(last, lastLength)
                 : nextLeaves.Count > 0 ? new SourcePoint(nextLeaves[0], 0) : null;
@@ -501,8 +517,27 @@ namespace PeachBrackets.Html.TextGeometry
 
         // Everything loading does to text that depends on its neighbours, redone for each paragraph a change touched: the bidi levels (a text
         // box's depend on the whole paragraph), the collapsing of a space run that crosses an inline boundary, and the split into words.
-        private static void RedoText(List<CssBox> paragraphs)
+        private static HashSet<CssBox> RedoText(List<CssBox> paragraphs)
         {
+            // Loading removed the leading space of a text box whose run continued from the box before it. An edit may have ended that run, so
+            // each such space is put back first and the collapse below decides again; the ones that stay are returned (their indices moved by one).
+            var kept = new HashSet<CssBox>();
+            var restored = new List<(CssBox Box, int Length)>();
+
+            foreach (var paragraph in paragraphs)
+            {
+                var all = new List<CssBox>();
+                CollectLeaves(paragraph, all);
+                foreach (var leaf in all)
+                {
+                    if (!leaf.LeadingWhitespaceCollapsed || leaf.Text is null) continue;
+
+                    restored.Add((leaf, leaf.Text.Length));
+                    leaf.LeadingWhitespaceCollapsed = false;
+                    leaf.Text = " " + leaf.Text;
+                }
+            }
+
             foreach (var paragraph in paragraphs)
             {
                 CssBidiParagraphResolver.AssignBidiLevels(paragraph);
@@ -517,6 +552,13 @@ namespace PeachBrackets.Html.TextGeometry
 
                 DomParser.CollapseWhitespaceAcrossInlineBoundaries(paragraph);
             }
+
+            foreach (var (box, length) in restored)
+            {
+                if (box.Text!.Length > length) kept.Add(box);
+            }
+
+            return kept;
         }
 
         private static int IndexOfBox(List<CssBox> boxes, CssBox box)

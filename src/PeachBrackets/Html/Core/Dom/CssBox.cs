@@ -671,6 +671,9 @@ namespace PeachBrackets.Html.Dom
         /// <c>block</c> because it holds a block-level child. The rewrite is how this engine lays the split out; to
         /// the author it is still an inline box, which is what <see cref="DerivedStyle.IsTransformable"/> asks.
         /// </summary>
+        /// <summary>Set when loading removed this text box's leading collapsible white space because the run continued from the box before it, so a text edit can put it back.</summary>
+        internal bool LeadingWhitespaceCollapsed;
+
         internal bool IsInlineBoxSplitByBlock { get => _rare is null ? default(bool) : _rare.IsInlineBoxSplitByBlock; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineBoxSplitByBlock = value; } }
 
         /// <summary>

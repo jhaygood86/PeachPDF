@@ -32,6 +32,11 @@ several pages) matches a fresh load.
 where a fresh load has one, which shapes without kerning across the seam (0.24pt wider) - they must be merged, and the caret index must be taken
 *before* the merge. Split at the very end leaves a paragraph with no text box, hence `TextEditResult.Block` for `InsertTextAsync(element, ...)`.
 
+**Found in review.** Loading strips a text box's leading space when the run continues from the box before it, so deleting that earlier space lost
+it for good (`ab <b> cd</b>` became `abcd`). `CssBox.LeadingWhitespaceCollapsed` now records the strip and `RedoText` puts the space back before collapsing
+again (returning the boxes where it stays, whose caret index moves by one). A split also removed empty inlines that were empty *before* it (`<a id>` targets);
+it now removes only the ones it emptied.
+
 **Not done** - see `.claude/accepted-gaps/text-edits-relayout-the-whole-document-and-do-not-edit-structure.md`.
 
 **Evidence.** `TextEditTests` (16): insert, delete, replace, range across inline elements and across paragraphs, emptied inline, growth, multi-page first-dirty-page,

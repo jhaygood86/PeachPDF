@@ -226,7 +226,7 @@ or a chat composer is built from - and the document is laid out again from the c
 
 Splitting and joining work on a plain paragraph only - a block in a block, with only inline content, no generated content, float or positioning -
 and, for a join, two adjacent paragraphs of the same element; a list item, table cell, flex or grid item, or a block that holds blocks is refused.
-The new paragraph copies the old one's style, so `:nth-child` and `:last-child` rules are not evaluated again for it.
+The new paragraph is given the old one's computed style rather than being cascaded again, so `:nth-child` and `:last-child` rules are not evaluated for it, and a property the engine does not copy between boxes (for example `min-height`, `box-shadow`) is missing from it. A paragraph with an `id` leaves two paragraphs with that `id`.
 
 `canvas` is a measuring canvas from the render context, as `LayoutAsync` takes. Each call returns a `TextEditResult`:
 

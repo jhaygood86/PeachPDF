@@ -4012,6 +4012,7 @@ namespace PeachBrackets.Html.Parse
             box.UseCategories = box.UseCategories?[count..];
             box.KhmerCategories = box.KhmerCategories?[count..];
             box.Text = text[count..];
+            box.LeadingWhitespaceCollapsed = true;
             box.ParseToWords();
 
             return box.Text.Length == 0;
