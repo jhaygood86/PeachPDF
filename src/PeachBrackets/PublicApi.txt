@@ -186,6 +186,7 @@ PeachBrackets.GenericFontKeyword : struct
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
+  method Boolean RemoveHighlight(String name)
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
@@ -208,7 +209,9 @@ PeachBrackets.HtmlDocument : sealed class
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
+  method Void ClearHighlights()
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
+  method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)
   method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
@@ -218,6 +221,7 @@ PeachBrackets.HtmlDocument : sealed class
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
+  property IReadOnlyList<String> HighlightNames { get; }
   property IReadOnlyList<TextRange> SelectedRanges { get; }
   property IReadOnlyList<TextRun> TextRuns { get; }
   property IStructureTagSink StructureTagSink { get; set; }

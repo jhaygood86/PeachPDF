@@ -1293,6 +1293,15 @@ namespace PeachBrackets.Html
         /// </summary>
         internal TextGeometry.SelectionModel? SelectionModel { get; set; }
 
+        /// <summary>One highlight laid over the text: the pseudo-element whose rules style it and the words it covers.</summary>
+        internal sealed record HighlightLayer(string PseudoName, TextGeometry.SelectionModel Model);
+
+        /// <summary>
+        /// The highlights besides the selection (<c>::highlight(name)</c>, <c>::spelling-error</c>, ...), lowest priority first; the selection is
+        /// painted over all of them. Empty paints none.
+        /// </summary>
+        internal IReadOnlyList<HighlightLayer> HighlightLayers { get; set; } = [];
+
         /// <summary>The background a selection is filled with where no <c>::selection</c> rule applies.</summary>
         internal PaintColor SelectionBackground { get; set; } = PaintColor.FromArgb(255, 173, 214, 255);
 

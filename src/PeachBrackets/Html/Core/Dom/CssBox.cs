@@ -582,6 +582,12 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal CssBox? ResolvedSelectionStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedSelectionStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedSelectionStyle = value; } }
 
+        /// <summary>
+        /// The styles this element's text takes in the other highlights (<c>::highlight(name)</c>, <c>::spelling-error</c>, ...), by pseudo-element name,
+        /// resolved on demand like <see cref="ResolvedSelectionStyle"/>; a name present with a null value has been resolved and no rule applies.
+        /// </summary>
+        internal Dictionary<string, CssBox?> HighlightStyles => (_rare ??= new BoxRareState()).HighlightStyles ??= [];
+
         /// <summary>Idempotency guard for <see cref="ResolvedSelectionStyle"/>.</summary>
         internal bool SelectionStyleProcessed { get => _rare is not null && _rare.SelectionStyleProcessed; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.SelectionStyleProcessed = value; } }
 

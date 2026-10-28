@@ -509,6 +509,97 @@ public sealed class HtmlDocument : IDisposable
         _container.SelectionModel = _selectedRanges.Count == 0 ? null : SelectionModel.Build(runs, _selectedRanges);
     }
 
+    private readonly List<(string Name, int Priority, int Order, TextRange[] Ranges)> _highlights = [];
+    private int _highlightOrder;
+
+    /// <summary>
+    /// Paints the text between pairs of positions of <see cref="TextRuns"/> in a named highlight: the rules of <c>::highlight(<i>name</i>)</c> style
+    /// it, as the CSS Custom Highlight API does for ranges a page registers. The names <c>spelling-error</c>, <c>grammar-error</c> and
+    /// <c>target-text</c> are the built-in highlights (<c>::spelling-error</c> and so on), which an embedder applies to what its checker or find
+    /// finds. A highlight with no rule matching paints nothing. Highlights are painted lowest <paramref name="priority"/> first, equal priorities in
+    /// the order they were first set, the built-in ones below the custom ones, and the selection over all of them; where several change the text
+    /// colour the one painted last wins. Setting a name again replaces its ranges. Repaint the pages to show a change; a text edit removes every
+    /// highlight, since the positions they hold no longer mean the same text.
+    /// </summary>
+    /// <param name="name">the highlight's name: a CSS identifier, without the <c>::highlight()</c> around it</param>
+    /// <param name="ranges">the highlighted ranges; null or none removes the highlight</param>
+    /// <param name="priority">where it is painted among the custom highlights; higher is painted later, over the others</param>
+    /// <exception cref="ArgumentException"><paramref name="name"/> is empty or is not a CSS identifier</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> or <see cref="HtmlDocumentOptions.EnableSelectionStyling"/> was not set</exception>
+    public void SetHighlight(string name, IEnumerable<TextRange>? ranges, int priority = 0)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+        if (!IsCssIdentifier(name))
+            throw new ArgumentException("A highlight name is a CSS identifier.", nameof(name));
+
+        _ = TextRuns;
+        if (!_selectionStyling)
+            throw new InvalidOperationException("Set HtmlDocumentOptions.EnableSelectionStyling before loading the document to paint highlights.");
+
+        var existing = _highlights.FindIndex(h => h.Name == name);
+        var order = existing >= 0 ? _highlights[existing].Order : _highlightOrder++;
+        var array = ranges?.ToArray() ?? [];
+        if (existing >= 0) _highlights.RemoveAt(existing);
+        if (array.Length > 0) _highlights.Add((name, priority, order, array));
+
+        RebuildHighlights();
+    }
+
+    /// <summary>Removes a named highlight (<see cref="SetHighlight"/> with no ranges).</summary>
+    /// <param name="name">the highlight's name</param>
+    /// <returns>whether there was one</returns>
+    public bool RemoveHighlight(string name)
+    {
+        var removed = _highlights.RemoveAll(h => h.Name == name) > 0;
+        if (removed) RebuildHighlights();
+        return removed;
+    }
+
+    /// <summary>Removes every named highlight; the selection is not one.</summary>
+    public void ClearHighlights()
+    {
+        _highlights.Clear();
+        RebuildHighlights();
+    }
+
+    /// <summary>The names of the highlights set, in the order they are painted.</summary>
+    public IReadOnlyList<string> HighlightNames => OrderedHighlights().Select(h => h.Name).ToArray();
+
+    private IEnumerable<(string Name, int Priority, int Order, TextRange[] Ranges)> OrderedHighlights() => _highlights
+        .OrderBy(h => BuiltInHighlightRank(h.Name) is { } rank ? rank : int.MaxValue / 2)
+        .ThenBy(h => h.Priority)
+        .ThenBy(h => h.Order);
+
+    // The built-in highlights sit below every custom one, in the order CSS Pseudo-Elements 4 lists them.
+    private static int? BuiltInHighlightRank(string name) => name switch
+    {
+        "spelling-error" => 0,
+        "grammar-error" => 1,
+        "target-text" => 2,
+        _ => null
+    };
+
+    private static string HighlightPseudoName(string name) => BuiltInHighlightRank(name) is not null ? name : $"highlight({name})";
+
+    private void RebuildHighlights()
+    {
+        var runs = TextRuns;
+        _container.HighlightLayers = _highlights.Count == 0
+            ? []
+            : OrderedHighlights().Select(h => new HtmlContainerInt.HighlightLayer(HighlightPseudoName(h.Name), SelectionModel.Build(runs, h.Ranges))).ToArray();
+    }
+
+    private static bool IsCssIdentifier(string name)
+    {
+        if (name.Length == 0 || char.IsDigit(name[0]) || (name[0] == '-' && name.Length > 1 && char.IsDigit(name[1])) || name == "-") return false;
+        foreach (var c in name)
+        {
+            if (!(char.IsLetterOrDigit(c) || c == '-' || c == '_' || c > 0x7F)) return false;
+        }
+
+        return true;
+    }
+
     /// <summary>
     /// The document's selection: an anchor and a focus, movement by character, word, line and block, and the text and rectangles of what is
     /// selected, for a consumer to drive from its pointer and keyboard events. With <see cref="HtmlDocumentOptions.EnableSelectionStyling"/> it paints
@@ -748,6 +839,8 @@ public sealed class HtmlDocument : IDisposable
         _container.ClipReport.Words.Clear();
         _container.SelectionModel = null;
         _selectedRanges = [];
+        _highlights.Clear();
+        _container.HighlightLayers = [];
         _textRuns = null;
         _annotations = null;
         var resumedSlot = await LayOutAsync(measuringCanvas, _editAnchor);

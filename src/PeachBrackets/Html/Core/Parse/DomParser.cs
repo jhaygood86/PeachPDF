@@ -1788,28 +1788,55 @@ namespace PeachBrackets.Html.Parse
         /// pseudo-elements are not painted yet.)
         /// </para>
         /// </remarks>
-        internal static CssBox? ResolveSelectionStyle(HtmlContainerInt container, CssBox box)
+        internal static CssBox? ResolveSelectionStyle(HtmlContainerInt container, CssBox box) =>
+            ResolveHighlightStyle(container, box, PseudoElementNames.Selection);
+
+        /// <summary>
+        /// <see cref="ResolveSelectionStyle"/> for any highlight pseudo-element: <paramref name="pseudoName"/> is <c>selection</c>,
+        /// <c>highlight(name)</c>, <c>spelling-error</c>, <c>grammar-error</c> or <c>target-text</c>, as the selector names it.
+        /// </summary>
+        internal static CssBox? ResolveHighlightStyle(HtmlContainerInt container, CssBox box, string pseudoName)
         {
             // Text is held by anonymous boxes; the rules belong to the element they are in.
             var element = box;
             while (element.HtmlTag is null && element.ParentBox is { } parent)
                 element = parent;
 
-            if (element.SelectionStyleProcessed)
-                return element.ResolvedSelectionStyle;
+            var isSelection = pseudoName == PseudoElementNames.Selection;
+            if (isSelection)
+            {
+                if (element.SelectionStyleProcessed)
+                    return element.ResolvedSelectionStyle;
 
-            element.SelectionStyleProcessed = true;
-            var inherited = element.ParentBox is { } parentBox ? ResolveSelectionStyle(container, parentBox) : null;
+                element.SelectionStyleProcessed = true;
+            }
+            else
+            {
+                if (element.HighlightStyles.TryGetValue(pseudoName, out var cached))
+                    return cached;
+
+                element.HighlightStyles[pseudoName] = null;
+            }
+
+            CssBox? Store(CssBox? style)
+            {
+                if (isSelection) element.ResolvedSelectionStyle = style;
+                else element.HighlightStyles[pseudoName] = style;
+
+                return style;
+            }
+
+            var inherited = element.ParentBox is { } parentBox ? ResolveHighlightStyle(container, parentBox, pseudoName) : null;
 
             var cssData = container.CssData;
             if (cssData is null || !cssData.HasSelectionRules)
-                return element.ResolvedSelectionStyle = inherited;
+                return Store(inherited);
 
             var media = MediaQueryContext.FromContainer(container, container.Media);
-            var uaRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: true).ToList();
-            var authorRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: false).ToList();
+            var uaRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: true, pseudoName).ToList();
+            var authorRules = cssData.GetSelectionStyleRules(media, element, userAgentOnly: false, pseudoName).ToList();
             if (uaRules.Count == 0 && authorRules.Count == 0)
-                return element.ResolvedSelectionStyle = inherited;
+                return Store(inherited);
 
             var valueParser = new CssValueParser(container.RenderContext);
             var shadowBox = new CssBox(element, null);
@@ -1826,7 +1853,7 @@ namespace PeachBrackets.Html.Parse
             ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
             CssUtils.ApplyCurrentColor(shadowBox, valueParser);
 
-            return element.ResolvedSelectionStyle = shadowBox;
+            return Store(shadowBox);
         }
 
         /// <summary>

@@ -124,10 +124,11 @@ namespace PeachBrackets.Html.Paint
                 if (word.FirstLineText is null && word is CssRectWord { } rectWord && rectWord.PreMirrorText != text)
                     logicalText = Bidi.Reverse(rectWord.PreMirrorText);
                 var separatorEdge = PrecedingWordEdge(g, word, wordFragment.Rect);
-                if (container.SelectionModel is { } selection && selection.TryGet(word, out var selectedPart)
-                    && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr))
+                if ((container.SelectionModel is not null || container.HighlightLayers.Count > 0)
+                    && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+                    && HighlightLayersOf(word) is { } highlightLayers)
                 {
-                    PaintSelectedWord(g, box, word, wordFragment.Rect, text, logicalText, separatorEdge, selectedPart);
+                    PaintHighlightedWord(g, box, word, wordFragment.Rect, text, logicalText, separatorEdge, highlightLayers);
                 }
                 else
                 {

@@ -396,6 +396,17 @@ namespace PeachBrackets.Css
             _valid = false;
         }
 
+        // `::highlight( name )` and `::highlight(name)` are the same selector, and a highlight is looked up by its text: the name is trimmed
+        // and the function keyword lowercased (the name itself is a case-sensitive custom ident).
+        private static string NormalizeFunctionalPseudoElement(string value)
+        {
+            if (!value.StartsWith("highlight(", StringComparison.OrdinalIgnoreCase)) return value;
+
+            var open = value.IndexOf('(');
+            var close = value.LastIndexOf(')');
+            return close > open ? $"highlight({value.Substring(open + 1, close - open - 1).Trim()})" : value;
+        }
+
         private void OnPseudoElement(Token token)
         {
             _state = State.Data;
@@ -410,7 +421,7 @@ namespace PeachBrackets.Css
                 // selector's name - which no branch of CssData's pseudo-element matcher answers, hence
                 // it selects nothing. See UnmatchableSelectors.
                 TokenType.Function when UnmatchableSelectors.IsFunctionalPseudoElement(token.Data.ToString()) =>
-                    PseudoElementSelector.Create(token.ToValue()),
+                    PseudoElementSelector.Create(NormalizeFunctionalPseudoElement(token.ToValue())),
                 _ => null
             };
 

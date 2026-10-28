@@ -334,7 +334,7 @@ namespace PeachBrackets.Html
                         if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
                             hasFirstLineRules = true;
 
-                        if (!_indexSawSelectionRule && CouldMatchAsPseudoSubject(styleRule.Selector, PseudoElementNames.Selection))
+                        if (!_indexSawSelectionRule && CouldEndInHighlightPseudo(styleRule.Selector))
                             _indexSawSelectionRule = true;
 
                         keys.Clear();
@@ -619,8 +619,8 @@ namespace PeachBrackets.Html
         /// matches a real box against a selector that ends in <c>::selection</c>, which has no box of its own. See
         /// <c>DomParser.ResolveSelectionStyle</c>, its only caller.
         /// </summary>
-        internal IEnumerable<IStyleRule> GetSelectionStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly, ContainerQuerySizes? containerSizes = null) =>
-            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true, containerSizes: containerSizes, pseudoName: PseudoElementNames.Selection);
+        internal IEnumerable<IStyleRule> GetSelectionStyleRules(MediaQueryContext media, CssBox box, bool userAgentOnly, string pseudoName = PseudoElementNames.Selection, ContainerQuerySizes? containerSizes = null) =>
+            GetStyleRulesByOrigin(media, box, userAgentOnly, firstLineOnly: true, containerSizes: containerSizes, pseudoName: pseudoName);
 
         /// <summary>
         /// Author style rules for the HTML cascade, in BOTH the normal-declaration order and the
@@ -1367,6 +1367,37 @@ namespace PeachBrackets.Html
         /// would always return empty.
         /// </summary>
         private static bool CouldMatchAsFirstLineSelector(ISelector selector) => CouldMatchAsPseudoSubject(selector, PseudoElementNames.FirstLine);
+
+        /// <summary>
+        /// Whether a pseudo-element name is one of the highlights text can be painted in: <c>::selection</c>, <c>::highlight(name)</c>,
+        /// <c>::spelling-error</c>, <c>::grammar-error</c> and <c>::target-text</c>.
+        /// </summary>
+        internal static bool IsHighlightPseudoName(string name) =>
+            name is PseudoElementNames.Selection or PseudoElementNames.SpellingError or PseudoElementNames.GrammarError or PseudoElementNames.TargetText
+            || name.StartsWith("highlight(", StringComparison.Ordinal);
+
+        // CouldMatchAsPseudoSubject for any highlight name: the document-level superset behind HasSelectionRules.
+        private static bool CouldEndInHighlightPseudo(ISelector selector)
+        {
+            switch (selector)
+            {
+                case ListSelector list:
+                    for (var i = 0; i < list.MatchOrder.Length; i++)
+                    {
+                        if (CouldEndInHighlightPseudo(list[list.MatchOrder[i]])) return true;
+                    }
+
+                    return false;
+                case ComplexSelector complex:
+                    return complex.LastOrDefault().Selector is { } last && CouldEndInHighlightPseudo(last);
+                case CompoundSelector { Length: > 0 } compound:
+                    return compound[compound.Length - 1] is PseudoElementSelector tail && IsHighlightPseudoName(tail.Name);
+                case PseudoElementSelector pseudo:
+                    return IsHighlightPseudoName(pseudo.Name);
+                default:
+                    return false;
+            }
+        }
 
         /// <summary>The document-level superset test behind <see cref="HasFirstLineRules"/> and <see cref="HasSelectionRules"/>.</summary>
         private static bool CouldMatchAsPseudoSubject(ISelector selector, string pseudoName) => selector switch

@@ -167,6 +167,21 @@ to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions
 - Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
   holds that word's text more than once. Selection is meant for interactive output, not for PDF.
 
+### Named highlights: `::highlight()`, `::spelling-error`, `::grammar-error`, `::target-text`
+
+With the same options, `document.SetHighlight(name, ranges, priority)` paints text in the rules of `::highlight(name)`, the way the CSS Custom
+Highlight API does for ranges a page registers. The names `spelling-error`, `grammar-error` and `target-text` are the built-in highlights
+(`::spelling-error` and so on), for what an embedder's spell checker or find-in-page marks. `SetHighlight(name, null)`, `RemoveHighlight(name)` and
+`ClearHighlights()` remove them; `HighlightNames` lists them in painting order.
+
+- Highlights are painted lowest first: the built-in ones, then the custom ones by `priority` and then by the order they were first set, then the
+  selection over all of them. Where several change the text colour the one painted last wins, per stretch of the word it covers.
+- A highlight no rule styles paints nothing (the selection, by contrast, has default colours). Rules apply as for `::selection`: to the text of the
+  element they match, falling back to the nearest ancestor's; `::highlight( name )` is the same selector as `::highlight(name)`, and the name is
+  case-sensitive.
+- Only `color` and `background-color` are painted, as for the selection. A text edit removes every highlight, since the positions they hold no longer
+  mean the same text.
+
 ### The selection model
 
 `document.Selection` (a `DocumentSelection`, needs `RecordTextRuns`) is the state a pointer and keyboard drive, in the manner of the DOM's
