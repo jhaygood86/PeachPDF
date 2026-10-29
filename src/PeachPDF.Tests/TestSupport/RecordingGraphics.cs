@@ -19,11 +19,13 @@ namespace PeachPDF.Tests.TestSupport
         PushTransform,
         PopTransform,
         DrawString,
-        DrawGlyphs
+        DrawGlyphs,
+        BeginLayer,
+        EndLayer
     }
 
-    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> (and optionally <see cref="LogicalText"/>) only for <see cref="PaintOpKind.DrawString"/>.</summary>
-    internal readonly record struct PaintOp(PaintOpKind Kind, Rect Bounds, Matrix3x2? Matrix = null, string? Text = null, string? LogicalText = null);
+    /// <summary>One paint call, in the order it happened - the single ordered log <see cref="RecordingGraphics.Log"/> keeps, per this repo's own preference (CLAUDE.md's testing conventions) for one ordered log over parallel per-call-type counts/lists when order across different call types matters. <see cref="Matrix"/> is set only for <see cref="PaintOpKind.PushTransform"/>, <see cref="Text"/> (and optionally <see cref="LogicalText"/>) only for <see cref="PaintOpKind.DrawString"/>, <see cref="Brush"/> only for <see cref="PaintOpKind.FillRect"/>, <see cref="Opacity"/> only for <see cref="PaintOpKind.BeginLayer"/>.</summary>
+    internal readonly record struct PaintOp(PaintOpKind Kind, Rect Bounds, Matrix3x2? Matrix = null, string? Text = null, string? LogicalText = null, Brush? Brush = null, double? Opacity = null);
 
     /// <summary>
     /// Minimal <see cref="Canvas"/> implementation that records paint calls so tests can verify paint
@@ -97,6 +99,22 @@ namespace PeachPDF.Tests.TestSupport
         /// <see cref="DrawImage(Image, Rect)"/>, in order - e.g. to confirm a
         /// <c>background-attachment: fixed</c> layer's positioning area actually reached the image draw.</summary>
         public List<Rect> DrawnImageRects { get; } = [];
+
+        /// <summary>
+        /// When set, <see cref="BeginLayer"/> logs a <see cref="PaintOpKind.BeginLayer"/> (with its opacity) and, when the layer is
+        /// disposed, a <see cref="PaintOpKind.EndLayer"/>, and the layer draws straight onto this canvas - so a test can tell which
+        /// draws an <c>opacity</c> or <c>filter</c> applies to. Off by default: the base canvas has no tile to build a layer from and
+        /// answers null, which every other consumer of this mock relies on.
+        /// </summary>
+        public bool RecordsLayers { get; set; }
+
+        public override CanvasLayer? BeginLayer(LayerOptions options)
+        {
+            if (!RecordsLayers) return base.BeginLayer(options);
+
+            Log.Add(new PaintOp(PaintOpKind.BeginLayer, options.Bounds ?? default, Opacity: options.Opacity));
+            return new CanvasLayer(this, () => Log.Add(new PaintOp(PaintOpKind.EndLayer, default)));
+        }
 
         /// <summary>
         /// Settable so a test can exercise a non-default <c>PixelsPerPoint</c> (issue #814) without a
@@ -223,7 +241,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void DrawRectangle(Pen pen, double x, double y, double width, double height) { }
 
         public override void DrawRectangle(Brush brush, double x, double y, double width, double height) =>
-            Log.Add(new PaintOp(PaintOpKind.FillRect, new Rect(x, y, width, height)));
+            Log.Add(new PaintOp(PaintOpKind.FillRect, new Rect(x, y, width, height), Brush: brush));
 
         public override void DrawImage(Image image, Rect destRect, Rect srcRect) => DrawnImageRects.Add(destRect);
         public override void DrawImage(Image image, Rect destRect) => DrawnImageRects.Add(destRect);

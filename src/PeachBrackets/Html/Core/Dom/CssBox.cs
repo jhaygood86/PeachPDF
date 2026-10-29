@@ -942,6 +942,14 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal TableGrid? CollapsedBorderGrid { get => _rare is null ? default(TableGrid?) : _rare.CollapsedBorderGrid; set { if (_rare is null) { if (EqualityComparer<TableGrid?>.Default.Equals(value, default(TableGrid?))) return; _rare = new BoxRareState(); } _rare.CollapsedBorderGrid = value; } }
 
+        /// <summary>
+        /// The table's own logical row×column grid wherever paint needs to know which column a cell starts in: a
+        /// <c>collapse</c> table (the same grid as <see cref="CollapsedBorderGrid"/>) and any table with column boxes, whose
+        /// backgrounds each cell paints over its own area (CSS 2.1 §17.5.1). Null for a <c>separate</c> table without
+        /// <c>&lt;col&gt;</c>/<c>&lt;colgroup&gt;</c>, which has no column background to paint.
+        /// </summary>
+        internal TableGrid? TableGrid { get => _rare is null ? default(TableGrid?) : _rare.TableGrid; set { if (_rare is null) { if (EqualityComparer<TableGrid?>.Default.Equals(value, default(TableGrid?))) return; _rare = new BoxRareState(); } _rare.TableGrid = value; } }
+
         /// <summary>CSS 2.1 §17.6.2's resolution of <see cref="CollapsedBorderGrid"/> - see its own remarks.</summary>
         internal CollapsedBorderModel? CollapsedBorders { get => _rare is null ? default(CollapsedBorderModel?) : _rare.CollapsedBorders; set { if (_rare is null) { if (EqualityComparer<CollapsedBorderModel?>.Default.Equals(value, default(CollapsedBorderModel?))) return; _rare = new BoxRareState(); } _rare.CollapsedBorders = value; } }
 

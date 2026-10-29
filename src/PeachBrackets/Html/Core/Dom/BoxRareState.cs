@@ -60,6 +60,7 @@ namespace PeachBrackets.Html.Dom
         internal Dictionary<int, double>? PageBreakBottoms;
         internal IPageGrid? SlicedRowGrid;
         internal TableGrid? CollapsedBorderGrid;
+        internal TableGrid? TableGrid;
         internal CollapsedBorderModel? CollapsedBorders;
         internal List<CollapsedBorderSegment>? CollapsedBorderSegments;
         internal TableBreakToken? TableContinuation;

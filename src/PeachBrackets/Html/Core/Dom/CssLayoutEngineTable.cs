@@ -728,6 +728,10 @@ namespace PeachBrackets.Html.Dom
             _tableBox.CollapsedBorderGrid = _grid;
             _tableBox.CollapsedBorders = _collapsedBorders;
 
+            // Each cell paints the backgrounds of the column and column group it starts in (CSS 2.1 §17.5.1), so paint has to
+            // know that column; only a table with column boxes has such a background to paint.
+            _tableBox.TableGrid = _grid ?? (_columns.Count > 0 ? BuildTableGrid() : null);
+
             // Must run before any cell is measured/laid out (CalculateColumnWidths/GetAvailableCellWidth
             // read the table's own used border widths; cell content insets read each cell's own).
             ApplyCollapsedUsedBorderWidths();
@@ -4948,16 +4952,14 @@ namespace PeachBrackets.Html.Dom
         /// laid out at all, so <c>CssBox</c>'s paint-time visibility-culling optimization (intersecting a
         /// still-default <c>(0,0,0,0)</c> <c>Bounds</c> against the current clip) silently drops them from
         /// painting - which, since neither box has painted anything at all until now, has hidden the fact
-        /// that they never got real geometry in the first place. Once they have it, their own background
-        /// paints through the ordinary <c>FragmentPainter</c> path with no new mechanism (their border
-        /// paint still goes through <see cref="CssBox.CollapsedBorderSegments"/> like every other collapse
-        /// participant, gated on <c>border-collapse: collapse</c> the same way) - CSS 2.1 §17.5.1's
-        /// column-group-then-column-then-row-group-then-row-then-cell background layering falls out of
-        /// DOM tree order for free, since a <c>&lt;colgroup&gt;</c> structurally always precedes its own
-        /// <c>&lt;col&gt;</c> children and both always precede <c>&lt;tbody&gt;</c>/<c>&lt;tr&gt;</c>/
-        /// <c>&lt;td&gt;</c>. Runs for every table, not just <c>collapse</c> ones - unlike border
-        /// participation, background layering is an ordinary CSS 2.1 feature this gap affected regardless
-        /// of <c>border-collapse</c>.
+        /// that they never got real geometry in the first place. Their background is not painted over that
+        /// geometry, though: CSS 2.1 §17.5.1 has a column's or column group's background cover only the
+        /// cells that originate in it, so each such cell paints it over its own area
+        /// (<c>FragmentPainter.TableBackgrounds</c>), and the box's rectangle only positions its images.
+        /// Their border paint still goes through <see cref="CssBox.CollapsedBorderSegments"/> like every
+        /// other collapse participant, gated on <c>border-collapse: collapse</c>. Runs for every table, not
+        /// just <c>collapse</c> ones - background positioning is an ordinary CSS 2.1 feature regardless of
+        /// <c>border-collapse</c>.
         /// </summary>
         private void SetColumnBoxDimensions()
         {
