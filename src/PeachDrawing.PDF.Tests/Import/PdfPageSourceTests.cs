@@ -30,6 +30,44 @@ namespace PeachDrawing.PDF.Tests.Import
         }
 
         [Fact]
+        public void CustomString_InAssociatedDictionary_RoundTrips()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(100, 100);
+            page.SetCustomString("/ApplicationData", "/Employee", "æmployee-1");
+            page.SetCustomString("/ApplicationData", "/Department", "R&D");
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+
+            var source = PdfPageSource.Open(stream.ToArray());
+
+            Assert.True(source.TryGetCustomString(0, "/ApplicationData", "/Employee", out var employee));
+            Assert.Equal("æmployee-1", employee);
+            Assert.True(source.TryGetCustomString(0, "/ApplicationData", "/Department", out var department));
+            Assert.Equal("R&D", department);
+        }
+
+        [Fact]
+        public void TryGetCustomString_MissingOrNonStringValue_ReturnsFalse()
+        {
+            var missingDictionary = PdfPageSource.Open(Document());
+            var missingValue = PdfPageSource.Open(
+                TestPdf.Build("", pageExtras: "/ApplicationData << /Other (value) >>"));
+            var nonStringValue = PdfPageSource.Open(
+                TestPdf.Build("", pageExtras: "/ApplicationData << /Employee 42 >>"));
+
+            Assert.False(missingDictionary.TryGetCustomString(
+                0, "/ApplicationData", "/Employee", out var fromMissingDictionary));
+            Assert.Null(fromMissingDictionary);
+            Assert.False(missingValue.TryGetCustomString(
+                0, "/ApplicationData", "/Employee", out var missing));
+            Assert.Null(missing);
+            Assert.False(nonStringValue.TryGetCustomString(
+                0, "/ApplicationData", "/Employee", out var nonString));
+            Assert.Null(nonString);
+        }
+
+        [Fact]
         public void Paint_DrawsOntoTheCanvas_AndReturnsWhatItCouldNotDraw()
         {
             var source = PdfPageSource.Open(Document("1 0 0 rg 0 0 50 50 re f /Sh0 sh"));
@@ -54,6 +92,10 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.Throws<ArgumentOutOfRangeException>(() => source.Paint(1, canvas));
             Assert.Throws<ArgumentOutOfRangeException>(() => source.GetPageSize(-1));
             Assert.Throws<InvalidDataException>(() => PdfPageSource.Open([1, 2, 3]));
+            Assert.Throws<ArgumentException>(() =>
+                source.TryGetCustomString(0, "", "/Employee", out _));
+            Assert.Throws<ArgumentException>(() =>
+                source.TryGetCustomString(0, "/ApplicationData", "", out _));
         }
     }
 }

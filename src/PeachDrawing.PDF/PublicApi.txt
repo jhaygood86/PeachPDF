@@ -186,6 +186,7 @@ PeachDrawing.PDF.PdfComposerPage : sealed class
   method PdfLink AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method PdfLink AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method Void Finish()
+  method Void SetCustomString(String dictionaryKey, String key, String value)
   property Double HeightPoints { get; }
   property Double WidthPoints { get; }
   property Int32 Index { get; }
@@ -255,6 +256,7 @@ PeachDrawing.PDF.PdfFormOption : struct
   property String Value { get; }
 PeachDrawing.PDF.PdfLink : sealed class
 PeachDrawing.PDF.PdfPageSource : sealed class
+  method Boolean TryGetCustomString(Int32 pageIndex, String dictionaryKey, String key, out String value)
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas, PdfAnnotationPaint annotations, PdfTagSession tags = null)
   method IReadOnlyDictionary<String, PdfSourceDestination> GetNamedDestinations()

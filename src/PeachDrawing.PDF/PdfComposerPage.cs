@@ -49,6 +49,27 @@ namespace PeachDrawing.PDF
         /// <summary>The engine's page, for the rest of the package.</summary>
         internal PdfPage Page => _page;
 
+        /// <summary>Sets a custom string entry in a dictionary associated with the page.</summary>
+        /// <param name="dictionaryKey">the PDF name of the dictionary entry in the page, including its leading slash</param>
+        /// <param name="key">the PDF name of the string entry in the dictionary, including its leading slash</param>
+        /// <param name="value">the string value to store</param>
+        public void SetCustomString(string dictionaryKey, string key, string value)
+        {
+            ArgumentException.ThrowIfNullOrEmpty(dictionaryKey);
+            ArgumentException.ThrowIfNullOrEmpty(key);
+            ArgumentNullException.ThrowIfNull(value);
+
+            var dictionary = _page.Elements.GetDictionary(dictionaryKey);
+            if (dictionary is null)
+            {
+                dictionary = new PdfDictionary(_page.Owner);
+                _page.Owner.Internals.AddObject(dictionary);
+                _page.Elements.SetReference(dictionaryKey, dictionary);
+            }
+
+            dictionary.Elements.SetString(key, value, PdfStringEncoding.Unicode);
+        }
+
         /// <summary>Names a place on this page (<paramref name="topPoints"/> below its top edge) for a destination link to lead to.</summary>
         internal void AddDestination(string name, double topPoints) => _composer.AddNamedDestination(name, Index, topPoints);
 
