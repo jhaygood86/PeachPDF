@@ -84,8 +84,8 @@ namespace PeachDrawing.PDF
             string key,
             [NotNullWhen(true)] out string? value)
         {
-            ArgumentException.ThrowIfNullOrEmpty(dictionaryKey);
-            ArgumentException.ThrowIfNullOrEmpty(key);
+            PdfCustomString.ValidateName(dictionaryKey, nameof(dictionaryKey));
+            PdfCustomString.ValidateName(key, nameof(key));
             var dictionary = Page(pageIndex).Elements.GetDictionary(dictionaryKey);
             if (dictionary?.Elements.TryGetString(key, out var rawValue) ?? false)
             {

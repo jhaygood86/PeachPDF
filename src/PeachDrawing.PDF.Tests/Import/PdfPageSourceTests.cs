@@ -34,6 +34,7 @@ namespace PeachDrawing.PDF.Tests.Import
         {
             using var composer = new PdfComposer(new PdfRenderContext());
             var page = composer.AddPage(100, 100);
+            page.SetCustomString("/ApplicationData", "/Employee", "replaced");
             page.SetCustomString("/ApplicationData", "/Employee", "æmployee-1");
             page.SetCustomString("/ApplicationData", "/Department", "R&D");
             using var stream = new MemoryStream();
@@ -65,6 +66,71 @@ namespace PeachDrawing.PDF.Tests.Import
             Assert.False(nonStringValue.TryGetCustomString(
                 0, "/ApplicationData", "/Employee", out var nonString));
             Assert.Null(nonString);
+        }
+
+        [Fact]
+        public void TryGetCustomString_ReadsTextEncodingsWrittenOutsidePeachPdf()
+        {
+            var source = PdfPageSource.Open(TestPdf.Build(
+                "",
+                pageExtras: "/ApplicationData 5 0 R",
+                extraObjects:
+                [
+                    "<< /PdfDoc (æmployee) /Utf16 <FEFF00E6006D0070006C006F007900650065> >>"
+                ]));
+
+            Assert.True(source.TryGetCustomString(0, "/ApplicationData", "/PdfDoc", out var pdfDoc));
+            Assert.Equal("æmployee", pdfDoc);
+            Assert.True(source.TryGetCustomString(0, "/ApplicationData", "/Utf16", out var utf16));
+            Assert.Equal("æmployee", utf16);
+        }
+
+        [Theory]
+        [InlineData("/MediaBox")]
+        [InlineData("/Contents")]
+        public void SetCustomString_ExistingPageEntry_ThrowsWithoutDamagingThePage(string dictionaryKey)
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(100, 100);
+
+            var exception = Assert.Throws<ArgumentException>(() =>
+                page.SetCustomString(dictionaryKey, "/Value", "text"));
+
+            Assert.Contains(dictionaryKey, exception.Message);
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Theory]
+        [InlineData("ApplicationData")]
+        [InlineData("/")]
+        [InlineData("/My Data")]
+        [InlineData("/K\t1")]
+        [InlineData("/K(1")]
+        [InlineData("/K)1")]
+        [InlineData("/K<1")]
+        [InlineData("/K>1")]
+        [InlineData("/K[1")]
+        [InlineData("/K]1")]
+        [InlineData("/K{1")]
+        [InlineData("/K}1")]
+        [InlineData("/K/1")]
+        [InlineData("/K%1")]
+        public void CustomString_InvalidPdfName_Throws(string invalidName)
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(100, 100);
+            var source = PdfPageSource.Open(Document());
+
+            Assert.Throws<ArgumentException>(() =>
+                page.SetCustomString(invalidName, "/Value", "text"));
+            Assert.Throws<ArgumentException>(() =>
+                page.SetCustomString("/ApplicationData", invalidName, "text"));
+            Assert.Throws<ArgumentException>(() =>
+                source.TryGetCustomString(0, invalidName, "/Value", out _));
+            Assert.Throws<ArgumentException>(() =>
+                source.TryGetCustomString(0, "/ApplicationData", invalidName, out _));
         }
 
         [Fact]
