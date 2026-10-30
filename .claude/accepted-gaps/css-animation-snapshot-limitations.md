@@ -70,8 +70,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   not expanded (`font` is); content reached through `<use>` mixes from the referenced tree's value; an ancestor's `em`/`%` underlying value
   is read raw; unequal `stroke-dasharray` lists flip; a negative `r` in a keyframe is not rejected; `currentcolor` in a keyframe
   is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed frames (which use the element's own `color`) and not by the end
-  points (#1798). `visibility` is not read by the SVG renderer at all (#1797); a comma-separated `stroke-dasharray` and a bare
-  geometry number in a stylesheet or keyframe are dropped by the CSS-OM grammar (#1800).
+  points (#1798).
 - **Gradients, `calc()` of another shape and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
   way; `calc()` against a value of another shape flips; `@-webkit-keyframes` and `-webkit-animation` are ignored.
 - **`prefers-reduced-motion` is reported as `reduce`** (a static PDF has no motion), so the common

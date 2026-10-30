@@ -1752,6 +1752,7 @@ namespace PeachBrackets.Svg
             ["transform"] = "none",
             ["stop-color"] = "black",
             ["stop-opacity"] = "1",
+            ["visibility"] = "visible",
             ["display"] = "inline",
             // The geometry and the text spacing the registry does not describe: what an element that declares none of them has.
             ["x"] = "0",
