@@ -8,4 +8,4 @@ the initial value in both forms.
 In a stylesheet rule, `initial` for `writing-mode`, `text-orientation`, `direction`, `letter-spacing` and `word-spacing` also kept the inherited value (the rule path has no initial value for them), and now resolves to
 `horizontal-tb`, `mixed`, `ltr`, `0` and `0`. The other properties already did in a rule.
 
-`direction` with an invalid value (`direction="bogus"`) was `ltr`; it is now the parent's direction, as for every other inherited property.
+`direction` with a value that is not `ltr` or `rtl` (`direction="bogus"`, and `unset` or `revert` as an attribute or `style` value) was `ltr`; it is now the parent's direction, as for every other inherited property.

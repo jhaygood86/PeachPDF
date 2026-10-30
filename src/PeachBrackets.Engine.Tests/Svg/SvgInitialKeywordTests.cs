@@ -20,24 +20,21 @@ namespace PeachBrackets.Engine.Tests.Svg
 
         // direction, writing-mode and text-orientation are stored only on the text element, which has the pen model that consumes them.
         private static string ChildMarkup(string property, string childAttributes) =>
-            Array.IndexOf(TextProperties, property) >= 0
+            TextProperties.Contains(property)
                 ? $"<text class=\"r\" {childAttributes} x=\"0\" y=\"10\">A</text>"
                 : $"<rect class=\"r\" {childAttributes} width=\"10\" height=\"10\"/>";
 
-        private static SvgDocument Build(string element, string rule)
+        private static SvgDocument Parse(string content, string rule)
         {
-            var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><style>{rule}</style>{element}</svg>";
+            var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><style>{rule}</style>{content}</svg>";
             var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
+            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new HtmlRenderContext());
             return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
         }
 
         private static SvgElement BuildChild(string property, string parentAttribute, string childAttributes, string rule = "")
         {
-            var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><style>{rule}</style><g {parentAttribute}>{ChildMarkup(property, childAttributes)}</g></svg>";
-            var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
-            var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
+            var document = Parse($"<g {parentAttribute}>{ChildMarkup(property, childAttributes)}</g>", rule);
             return Assert.IsType<SvgGroupElement>(document.Children.Single()).Children.Single();
         }
 
@@ -89,22 +86,16 @@ namespace PeachBrackets.Engine.Tests.Svg
             AssertInitial(property, InForm(form, property, parentValue, "  INITIAL "));
 
         // A stylesheet rule beats the presentation attribute, so initial in a rule must replace what the attribute says with the initial value.
-        private static SvgElement Single(string element, string rule)
-        {
-            var markup = $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"100\" height=\"100\"><style>{rule}</style>{element}</svg>";
-            var root = XDocument.Parse(markup).Root!;
-            var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
-            return SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext).Children.Single();
-        }
+        private static SvgElement OnlyChild(string element, string rule) => Parse(element, rule).Children.Single();
 
         [Fact]
         public void InAStylesheetRule_TransformInitialIsNone() =>
-            Assert.Null(Single("<rect class=\"c\" transform=\"translate(50 0)\" width=\"10\" height=\"10\"/>", ".c { transform: initial }").Transform);
+            Assert.Null(OnlyChild("<rect class=\"c\" transform=\"translate(50 0)\" width=\"10\" height=\"10\"/>", ".c { transform: initial }").Transform);
 
         [Fact]
         public void InAStylesheetRule_DisplayInitialShowsAnElementTheAttributeHides()
         {
-            var document = Build("<rect class=\"c\" display=\"none\" width=\"10\" height=\"10\"/>", ".c { display: initial }");
+            var document = Parse("<rect class=\"c\" display=\"none\" width=\"10\" height=\"10\"/>", ".c { display: initial }");
 
             Assert.Single(document.Children);
         }
@@ -112,7 +103,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         [Fact]
         public void InAStylesheetRule_RectGeometryInitialIsZero()
         {
-            var rect = Assert.IsType<SvgRectElement>(Single("<rect class=\"c\" x=\"50\" y=\"50\" width=\"10\" height=\"10\" rx=\"4\"/>",
+            var rect = Assert.IsType<SvgRectElement>(OnlyChild("<rect class=\"c\" x=\"50\" y=\"50\" width=\"10\" height=\"10\" rx=\"4\"/>",
                 ".c { x: initial; y: initial; width: initial; height: initial; rx: initial }"));
 
             Assert.Equal(0, rect.X);
@@ -125,11 +116,30 @@ namespace PeachBrackets.Engine.Tests.Svg
         [Fact]
         public void InAStylesheetRule_CircleGeometryInitialIsZero()
         {
-            var circle = Assert.IsType<SvgCircleElement>(Single("<circle class=\"c\" cx=\"50\" cy=\"50\" r=\"5\"/>", ".c { cx: initial; cy: initial; r: initial }"));
+            var circle = Assert.IsType<SvgCircleElement>(OnlyChild("<circle class=\"c\" cx=\"50\" cy=\"50\" r=\"5\"/>", ".c { cx: initial; cy: initial; r: initial }"));
 
             Assert.Equal(0, circle.Cx);
             Assert.Equal(0, circle.Cy);
             Assert.Equal(0, circle.R);
+        }
+
+        [Fact]
+        public void InAStylesheetRule_FontSizeInitialLeavesTheEmBasisAlone()
+        {
+            // font-size has no initial value in the lookup a declared initial reads (it is not measured yet), so a rule that says initial changes nothing, as before.
+            var rect = Assert.IsType<SvgRectElement>(OnlyChild("<rect class=\"c\" width=\"1em\" height=\"1em\"/>", "svg, .c { font-size: initial }"));
+
+            Assert.Equal(16, rect.Width);
+            Assert.Equal(16, rect.Height);
+        }
+
+        [Fact]
+        public void InAStylesheetRule_ACustomPropertyHoldingInitialIsNotTheKeyword()
+        {
+            // --c: initial makes --c guaranteed-invalid, so fill: var(--c) is invalid at computed-value time and the inherited red stays.
+            var rect = BuildChild("fill", "fill=\"red\"", "", ".r { --c: initial; fill: var(--c) }");
+
+            Assert.Equal(PaintColor.FromArgb(255, 0, 0), rect.Fill.PaintColor);
         }
 
         private static SvgTextElement Text(SvgElement element) => Assert.IsType<SvgTextElement>(element);
