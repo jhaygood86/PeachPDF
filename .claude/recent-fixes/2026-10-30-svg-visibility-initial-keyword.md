@@ -1,13 +1,22 @@
 # SVG `visibility: initial` resolves to `visible`
 
-**Defect.** In `SvgTreeBuilder` the `visibility` chain mapped `visible` to true, `hidden`/`collapse` to false and *everything else* to the inherited value. For `initial` that is wrong: it is
-`visible`. The keyword is rare, so nothing caught it until the animation work made the same builder read `visibility` from keyframes (the animated `initial` was already right, because the animation
-path resolves CSS-wide keywords itself; only the static declaration was wrong).
+**Defect.** Two separate paths resolved `visibility: initial` to the inherited value, and `initial` is `visible`:
+- the attribute and inline-`style` forms, where the `visibility` chain in `SvgTreeBuilder` mapped `visible` to true, `hidden`/`collapse` to false and *everything else* to the inherited value;
+- the stylesheet form, where `SvgCssDomNodes.GetMatchedDeclarations` resolves `initial` through `SvgPropertyRegistry.GetInitialValue`, and `visibility` has no `svg` binding in `css-properties.json`, so the lookup gives
+  null and a null-present declaration means inherited.
 
-**Fix.** `initial` joins `visible` in the one place the chain is written. `inherit`, `unset` and `revert` keep falling through to the inherited value, which is correct for an inherited property
-(`revert` rolls back to the user-agent value, which for `visibility` is the inherited one).
+The animated `initial` was already right: the animation path resolves CSS-wide keywords through `InitialValuesOutsideTheRegistry`.
 
-**Trap.** Only a test that puts the keyword *inside a hidden ancestor* shows the bug: at the top of the tree "inherited" and `visible` are the same value. `SvgVisibilityTests`'
-`ACssWideKeyword_InsideAHiddenGroup_ResolvesAsTheSpecSays` does that for all four keywords, as an attribute and as a `style`. With the fix reverted exactly the `initial` case fails.
+**Fix.** `initial` joins `visible` in the `SvgTreeBuilder` chain, and the stylesheet branch falls back to `visible` for `visibility` only. Routing it through `InitialValuesOutsideTheRegistry` for every property was
+not done: it would also change what a stylesheet `initial` means for `display`, `transform` and the geometry properties, which needs its own measurement. `inherit`, `unset` and `revert` keep resolving to the
+inherited value, which is correct for an inherited property.
 
-**Evidence.** Chrome (computed `visibility` of the rect: `initial` visible; `inherit`/`unset`/`revert` hidden); `SvgVisibilityTests` 11/11.
+**Trap.** Fixing the first path alone looks complete: a test of the attribute and `style` forms passes while a class rule still hides the element. Only a test that puts the keyword *inside a hidden ancestor* shows the
+bug at all (at the top of the tree "inherited" and `visible` are the same value). `SvgVisibilityTests`' `ACssWideKeyword_InsideAHiddenGroup_ResolvesAsTheSpecSays` does that for all four keywords in all three forms;
+with each half of the fix reverted, exactly the `initial` case of the forms that half serves fails.
+
+**Not done.** The same "unrecognised value means inherited" shape holds for `fill: initial` written as an attribute or in a `style` attribute (Chrome black, PeachPDF the inherited colour; measured for `fill` only) and is
+tracked in #1982.
+
+**Evidence.** Chrome across 150 cells (10 keywords x attribute/style/rule x 5 placements: shape, `<tspan>`, `<use>` twice, nested `<svg>`), rasterized through PDFium and MuPDF with identical results: the
+attribute and `style` forms agreed after the first half of the fix, the stylesheet form after the second. `SvgVisibilityTests` 11/11.

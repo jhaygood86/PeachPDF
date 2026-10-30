@@ -63,8 +63,11 @@ namespace PeachBrackets.Engine.Tests.Svg
             var asAttribute = Render($"<g visibility=\"hidden\"><rect width=\"10\" height=\"10\" visibility=\"{keyword}\"/></g>");
             var asStyle = Render($"<g visibility=\"hidden\"><rect width=\"10\" height=\"10\" style=\"visibility: {keyword}\"/></g>");
 
+            var asRule = Render("<g visibility=\"hidden\"><rect class=\"k\" width=\"10\" height=\"10\"/></g>", $".k {{ visibility: {keyword} }}");
+
             Assert.Equal(expectedPaths, Paths(asAttribute));
             Assert.Equal(expectedPaths, Paths(asStyle));
+            Assert.Equal(expectedPaths, Paths(asRule));
         }
 
         [Fact]
