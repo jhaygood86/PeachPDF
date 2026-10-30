@@ -220,9 +220,7 @@ namespace PeachBrackets.Svg
                             || trimmed.Equals(Keywords.Unset, StringComparison.OrdinalIgnoreCase))
                             resolved = null;
                         else if (trimmed.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase))
-                            // visibility has no SVG binding in the registry, and null-present would mean inherited: hidden inside a hidden group.
-                            resolved = SvgPropertyRegistry.GetInitialValue(property.Name)
-                                ?? (property.Name.Equals("visibility", StringComparison.OrdinalIgnoreCase) ? "visible" : null);
+                            resolved = SvgPropertyRegistry.GetInitialValue(property.Name);
                         else
                             resolved = CssVarResolver.Resolve(node, property.Value, varContext);
 

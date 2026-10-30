@@ -71,6 +71,13 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         [Fact]
+        public void AnInvalidValue_KeepsTheInheritedVisibility()
+        {
+            Assert.Equal(0, Paths(Render("<g visibility=\"hidden\"><rect width=\"10\" height=\"10\" visibility=\"bogus\"/></g>")));
+            Assert.Equal(1, Paths(Render("<g visibility=\"visible\"><rect width=\"10\" height=\"10\" visibility=\"bogus\"/></g>")));
+        }
+
+        [Fact]
         public void AHiddenShape_StillSizesAClipPath()
         {
             var g = Render("<defs><clipPath id=\"c\"><rect width=\"10\" height=\"10\" visibility=\"hidden\"/></clipPath></defs><rect width=\"50\" height=\"50\" clip-path=\"url(#c)\"/>");

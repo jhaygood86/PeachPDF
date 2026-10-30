@@ -2453,6 +2453,14 @@
         "csharpDataType": "CssProperty<Visibility>",
         "area": "TextArea",
         "getterExpression": "{box}.Visibility.ToString()"
+      },
+      "svg": {
+        "propertyPath": "Visible",
+        "csharpDataType": "bool",
+        "inheritedFrom": "Visible",
+        "invalidBehavior": "inherit",
+        "customValidator": "global::PeachBrackets.Svg.SvgValueParsers.TryParseVisibility({value}, out _)",
+        "customSetter": "global::PeachBrackets.Svg.SvgValueParsers.TryParseVisibility({value}, out var parsed);\n{element}.Visible = parsed;"
       }
     },
     {

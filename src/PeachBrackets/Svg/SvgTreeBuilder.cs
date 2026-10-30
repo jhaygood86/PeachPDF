@@ -1557,11 +1557,13 @@ namespace PeachBrackets.Svg
 
             // visibility is inherited; hidden and collapse (outside a table or flex item, where collapse means hidden) stop the element painting but
             // leave it in the rendering tree, so a descendant can set visible again and the element still sizes a clip path or a bounding box.
+            // initial is the registry's own initial value (visible), so a stylesheet rule, an attribute and a style attribute all reach TrySet with the same text.
             var visibilityAttr = Attr("visibility")?.Trim();
-            element.Visible = visibilityAttr is null ? inherited.Visible
-                : visibilityAttr.Equals("visible", StringComparison.OrdinalIgnoreCase) || visibilityAttr.Equals("initial", StringComparison.OrdinalIgnoreCase) ? true
-                : visibilityAttr.Equals("hidden", StringComparison.OrdinalIgnoreCase) || visibilityAttr.Equals("collapse", StringComparison.OrdinalIgnoreCase) ? false
-                : inherited.Visible;
+            if (visibilityAttr is not null && visibilityAttr.Equals("initial", StringComparison.OrdinalIgnoreCase))
+                visibilityAttr = SvgPropertyRegistry.GetInitialValue("visibility");
+            if (visibilityAttr is null || visibilityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
+                || !SvgPropertyRegistry.TrySet(element, "visibility", visibilityAttr, in ctx))
+                element.Visible = inherited.Visible;
 
             // A display: contents element has no box, so what a box does - its own opacity, transform, clip, mask and filter - is
             // gone; its inherited properties still reach its content through the paint returned below.
@@ -1752,7 +1754,6 @@ namespace PeachBrackets.Svg
             ["transform"] = "none",
             ["stop-color"] = "black",
             ["stop-opacity"] = "1",
-            ["visibility"] = "visible",
             ["display"] = "inline",
             // The geometry and the text spacing the registry does not describe: what an element that declares none of them has.
             ["x"] = "0",
