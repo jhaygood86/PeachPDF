@@ -52,6 +52,21 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(1, Paths(g));
         }
 
+        [Theory]
+        [InlineData("initial", 1)]
+        [InlineData("inherit", 0)]
+        [InlineData("unset", 0)]
+        [InlineData("revert", 0)]
+        public void ACssWideKeyword_InsideAHiddenGroup_ResolvesAsTheSpecSays(string keyword, int expectedPaths)
+        {
+            // initial is visible, so the rect shows; the three inheriting keywords keep it hidden like its group.
+            var asAttribute = Render($"<g visibility=\"hidden\"><rect width=\"10\" height=\"10\" visibility=\"{keyword}\"/></g>");
+            var asStyle = Render($"<g visibility=\"hidden\"><rect width=\"10\" height=\"10\" style=\"visibility: {keyword}\"/></g>");
+
+            Assert.Equal(expectedPaths, Paths(asAttribute));
+            Assert.Equal(expectedPaths, Paths(asStyle));
+        }
+
         [Fact]
         public void AHiddenShape_StillSizesAClipPath()
         {

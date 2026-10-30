@@ -1559,7 +1559,7 @@ namespace PeachBrackets.Svg
             // leave it in the rendering tree, so a descendant can set visible again and the element still sizes a clip path or a bounding box.
             var visibilityAttr = Attr("visibility")?.Trim();
             element.Visible = visibilityAttr is null ? inherited.Visible
-                : visibilityAttr.Equals("visible", StringComparison.OrdinalIgnoreCase) ? true
+                : visibilityAttr.Equals("visible", StringComparison.OrdinalIgnoreCase) || visibilityAttr.Equals("initial", StringComparison.OrdinalIgnoreCase) ? true
                 : visibilityAttr.Equals("hidden", StringComparison.OrdinalIgnoreCase) || visibilityAttr.Equals("collapse", StringComparison.OrdinalIgnoreCase) ? false
                 : inherited.Visible;
 
