@@ -1,4 +1,5 @@
 using PeachDrawing;
+using PeachDrawing.Core;
 
 namespace PeachDrawing.PDF.Tests.Import
 {
@@ -88,6 +89,18 @@ namespace PeachDrawing.PDF.Tests.Import
         [Theory]
         [InlineData("/MediaBox")]
         [InlineData("/Contents")]
+        [InlineData("/Group")]
+        [InlineData("/Resources")]
+        [InlineData("/Rotate")]
+        [InlineData("/Tabs")]
+        [InlineData("/StructParents")]
+        [InlineData("/CropBox")]
+        [InlineData("/BleedBox")]
+        [InlineData("/TrimBox")]
+        [InlineData("/ArtBox")]
+        [InlineData("/Metadata")]
+        [InlineData("/LastModified")]
+        [InlineData("/PieceInfo")]
         public void SetCustomString_ExistingPageEntry_ThrowsWithoutDamagingThePage(string dictionaryKey)
         {
             using var composer = new PdfComposer(new PdfRenderContext());
@@ -97,6 +110,22 @@ namespace PeachDrawing.PDF.Tests.Import
                 page.SetCustomString(dictionaryKey, "/Value", "text"));
 
             Assert.Contains(dictionaryKey, exception.Message);
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+            Assert.True(stream.Length > 0);
+        }
+
+        [Fact]
+        public void SetCustomString_ReservedAnnotationEntry_ThrowsWithoutPreventingLinks()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext());
+            var page = composer.AddPage(100, 100);
+
+            var exception = Assert.Throws<ArgumentException>(() =>
+                page.SetCustomString("/Annots", "/Value", "text"));
+
+            Assert.Contains("/Annots", exception.Message);
+            page.AddLink(new Rect(10, 10, 20, 20), "https://example.com/");
             using var stream = new MemoryStream();
             composer.Save(stream);
             Assert.True(stream.Length > 0);
