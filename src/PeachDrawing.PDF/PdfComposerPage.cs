@@ -23,6 +23,40 @@ namespace PeachDrawing.PDF
         private readonly PdfPage _page;
         private readonly PdfGraphics _graphics;
         private readonly List<PdfCanvas> _canvases = [];
+        private readonly HashSet<string> _customStringDictionaries = new(StringComparer.Ordinal);
+        private static readonly HashSet<string> ReservedPageKeys =
+        [
+            PdfPage.Keys.Type,
+            PdfPage.Keys.Parent,
+            PdfPage.Keys.LastModified,
+            PdfPage.Keys.Resources,
+            PdfPage.Keys.MediaBox,
+            PdfPage.Keys.CropBox,
+            PdfPage.Keys.BleedBox,
+            PdfPage.Keys.TrimBox,
+            PdfPage.Keys.ArtBox,
+            PdfPage.Keys.BoxColorInfo,
+            PdfPage.Keys.Contents,
+            PdfPage.Keys.Rotate,
+            PdfPage.Keys.Group,
+            PdfPage.Keys.Thumb,
+            PdfPage.Keys.B,
+            PdfPage.Keys.Dur,
+            PdfPage.Keys.Trans,
+            PdfPage.Keys.Annots,
+            PdfPage.Keys.AA,
+            PdfPage.Keys.Metadata,
+            PdfPage.Keys.PieceInfo,
+            PdfPage.Keys.StructParents,
+            PdfPage.Keys.ID,
+            PdfPage.Keys.PZ,
+            PdfPage.Keys.SeparationInfo,
+            PdfPage.Keys.Tabs,
+            PdfPage.Keys.TemplateInstantiated,
+            PdfPage.Keys.PresSteps,
+            PdfPage.Keys.UserUnit,
+            PdfPage.Keys.VP
+        ];
         private bool _finished;
 
         internal PdfComposerPage(PdfComposer composer, PdfPage page, int index, PdfRenderContext renderContext)
@@ -48,6 +82,51 @@ namespace PeachDrawing.PDF
 
         /// <summary>The engine's page, for the rest of the package.</summary>
         internal PdfPage Page => _page;
+
+        /// <summary>Sets a custom string entry in a dictionary associated with the page.</summary>
+        /// <remarks>
+        /// The dictionary is created as an indirect object on first use. Another call with the same
+        /// <paramref name="dictionaryKey"/> adds an entry to that dictionary; setting the same <paramref name="key"/>
+        /// again replaces its value.
+        /// </remarks>
+        /// <param name="dictionaryKey">the PDF name of the dictionary entry in the page, including its leading slash</param>
+        /// <param name="key">the PDF name of the string entry in the dictionary, including its leading slash</param>
+        /// <param name="value">the string value to store</param>
+        public void SetCustomString(string dictionaryKey, string key, string value)
+        {
+            PdfCustomString.ValidateName(dictionaryKey, nameof(dictionaryKey));
+            PdfCustomString.ValidateName(key, nameof(key));
+            ArgumentNullException.ThrowIfNull(value);
+
+            if (ReservedPageKeys.Contains(dictionaryKey))
+            {
+                throw new ArgumentException(
+                    $"The page already contains an entry named '{dictionaryKey}'.",
+                    nameof(dictionaryKey));
+            }
+
+            PdfDictionary dictionary;
+            if (_customStringDictionaries.Contains(dictionaryKey))
+            {
+                dictionary = _page.Elements.GetDictionary(dictionaryKey)!;
+            }
+            else
+            {
+                if (_page.Elements.ContainsKey(dictionaryKey))
+                {
+                    throw new ArgumentException(
+                        $"The page already contains an entry named '{dictionaryKey}'.",
+                        nameof(dictionaryKey));
+                }
+
+                dictionary = new PdfDictionary(_page.Owner);
+                _page.Owner.Internals.AddObject(dictionary);
+                _page.Elements.SetReference(dictionaryKey, dictionary);
+                _customStringDictionaries.Add(dictionaryKey);
+            }
+
+            dictionary.Elements.SetString(key, value, PdfStringEncoding.Unicode);
+        }
 
         /// <summary>Names a place on this page (<paramref name="topPoints"/> below its top edge) for a destination link to lead to.</summary>
         internal void AddDestination(string name, double topPoints) => _composer.AddNamedDestination(name, Index, topPoints);

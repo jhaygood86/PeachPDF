@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using PeachDrawing.Core;
 using PeachDrawing.PDF.Engine;
@@ -70,6 +71,31 @@ namespace PeachDrawing.PDF
         /// <returns>the width and height in points</returns>
         public (double Width, double Height) GetPageSize(int pageIndex) =>
             PdfPagePainter.GetPageSize(_document, Page(pageIndex));
+
+        /// <summary>Tries to read a custom string entry from a dictionary associated with a page.</summary>
+        /// <param name="pageIndex">the zero-based page number</param>
+        /// <param name="dictionaryKey">the PDF name of the dictionary entry in the page, including its leading slash</param>
+        /// <param name="key">the PDF name of the string entry in the dictionary, including its leading slash</param>
+        /// <param name="value">the string value when the entry exists and contains a string; otherwise <see langword="null"/></param>
+        /// <returns><see langword="true"/> when the entry exists and contains a string; otherwise <see langword="false"/></returns>
+        public bool TryGetCustomString(
+            int pageIndex,
+            string dictionaryKey,
+            string key,
+            [NotNullWhen(true)] out string? value)
+        {
+            PdfCustomString.ValidateName(dictionaryKey, nameof(dictionaryKey));
+            PdfCustomString.ValidateName(key, nameof(key));
+            var dictionary = Page(pageIndex).Elements.GetDictionary(dictionaryKey);
+            if (dictionary?.Elements.TryGetString(key, out var rawValue) ?? false)
+            {
+                value = PdfSourceNavigation.TextOf(rawValue);
+                return true;
+            }
+
+            value = null;
+            return false;
+        }
 
         /// <summary>
         /// Paints a page onto <paramref name="canvas"/>, whose origin is the top-left of the area the page is to occupy and whose
