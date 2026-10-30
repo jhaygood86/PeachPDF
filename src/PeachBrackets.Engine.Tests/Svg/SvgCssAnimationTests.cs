@@ -364,6 +364,50 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal([6d, 12d], document.Children[0].StrokeDashArray);
         }
 
+        private static SvgTextElement SpacingText(SvgDocument document) =>
+            Assert.IsType<SvgTextElement>(Assert.IsType<SvgGroupElement>(document.Children[0]).Children[0]);
+
+        private static double Spacing(SvgTextElement text, string property) => property == "letter-spacing" ? text.LetterSpacing : text.WordSpacing;
+
+        [Theory]
+        [InlineData("letter-spacing", 0.25, 5)]
+        [InlineData("letter-spacing", 0.5, 10)]
+        [InlineData("letter-spacing", 0.75, 15)]
+        [InlineData("word-spacing", 0.25, 5)]
+        [InlineData("word-spacing", 0.5, 10)]
+        [InlineData("word-spacing", 0.75, 15)]
+        public async Task AnInitialRule_MixesFromZero_WhenAKeyframeLeavesOutItsFirstStep(string property, double progress, double expected)
+        {
+            // Chrome: a rule that says initial is normal, which is the zero length, so 0 to 20px; the parent's 5px is not what the animation starts from.
+            var document = await BuildAsync($".c {{ {property}: initial }} @keyframes k {{ to {{ {property}: 20px }} }} .t {{ animation: k 1s linear }}",
+                $"<g {property}=\"5px\"><text class=\"t c\" x=\"5\" y=\"30\">Ab cd ef</text></g>", progress);
+
+            Assert.Equal(expected, Spacing(SpacingText(document), property), 2);
+        }
+
+        [Theory]
+        [InlineData("letter-spacing")]
+        [InlineData("word-spacing")]
+        public async Task AnInitialRuleOnTheParent_MixesToZero_WhenAKeyframeLeavesOutItsLastStep(string property)
+        {
+            var document = await BuildAsync($"g {{ {property}: initial }} @keyframes k {{ from {{ {property}: 20px }} }} .t {{ animation: k 1s linear }}",
+                $"<g><text class=\"t\" x=\"5\" y=\"30\">Ab cd ef</text></g>", 0.5);
+
+            Assert.Equal(10, Spacing(SpacingText(document), property), 2);
+        }
+
+        [Theory]
+        [InlineData("letter-spacing")]
+        [InlineData("word-spacing")]
+        public async Task ANormalKeyframe_BlendsWithALength(string property)
+        {
+            // normal against a length used to flip at the midpoint; Chrome blends it as the zero length.
+            var document = await BuildAsync($"@keyframes k {{ from {{ {property}: normal }} to {{ {property}: 20px }} }} .t {{ animation: k 1s linear }}",
+                "<g><text class=\"t\" x=\"5\" y=\"30\">Ab cd ef</text></g>", 0.25);
+
+            Assert.Equal(5, Spacing(SpacingText(document), property), 2);
+        }
+
         [Fact]
         public async Task ATextPropertyNothingDeclares_MixesFromItsInitialValue()
         {

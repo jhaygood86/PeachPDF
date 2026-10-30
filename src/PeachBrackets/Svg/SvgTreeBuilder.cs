@@ -1753,11 +1753,10 @@ namespace PeachBrackets.Svg
             return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
         }
 
-        // What an animation starts from when a keyframe leaves the property out: the registry's initial value, except that the spacings' normal is the zero length the
-        // interpolator can mix with a length, and font-size is the resting text size, which a declared initial does not read (font-size initial is the CSS medium, 16px).
+        // What an animation starts from when a keyframe leaves the property out: the registry's initial value, except font-size, which is the resting text size, because a
+        // declared initial does not read it (font-size initial is the CSS medium, 16px).
         private static string? AnimatedInitialValue(string name) =>
-            name.Equals("letter-spacing", StringComparison.OrdinalIgnoreCase) || name.Equals("word-spacing", StringComparison.OrdinalIgnoreCase) ? "0"
-            : name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px")
+            name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px")
             : SvgPropertyRegistry.GetInitialValue(name);
 
         // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).

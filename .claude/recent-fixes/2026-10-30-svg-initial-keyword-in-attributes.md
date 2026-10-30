@@ -15,8 +15,11 @@ as `direction` already was): `transform`, `display`, `width`, `height`, `writing
 possible: the SVG `InitialValues` dictionary now includes manual entries (it used to skip them, so `direction`'s own value never reached `GetInitialValue`), and a manual entry no longer needs a `propertyPath`,
 `customSetter` or `inheritedFrom` (PPG005 still fires for a common one). `all` still excludes `direction`, as the spec says, through `AllShorthandTests.IsReviewedExclusion`.
 
-**The spacings' `normal`.** The registry says `normal`, the old table said `0`. A declared `initial` reads `normal` fine (`ResolveSpacingLength` returns 0), but the animation's interpolator only mixes a length with a
-length, so `AnimatedInitialValue` maps the two spacings to `0`, and keeps its `font-size` resting size (11px). A declared `initial` for `font-size` is deliberately **not** in the lookup (see below).
+**The spacings' `normal`.** The registry says `normal`, the old table said `0`. A declared `initial` reads `normal` fine (`ResolveSpacingLength` returns 0), but the animation's interpolator only mixes a length
+with a length, and a stylesheet `letter-spacing: initial` reaches the animation as the registry's `normal`. A first version mapped the two spacings to `0` in `AnimatedInitialValue`, which covers only a keyframe that
+leaves out its first or last step with the property read from an attribute: a rule that says `initial`, plus keyframes that leave out an end, made the value jump at the midpoint (found by the maintainer's differential,
+84 cases against Chrome). The fix is where every animated value is normalised, `AnimationApplier.InUserUnits`: for `letter-spacing` and `word-spacing`, `normal` is `0px`. That covers the rule, the omitted end
+and an explicit `from { letter-spacing: normal }`, which also used to flip. `AnimatedInitialValue` keeps only its `font-size` resting size (a declared `initial` for `font-size` is deliberately **not** in the lookup, see below).
 
 **Found by running it.** The issue said "paint properties". A 15-property x 3-form matrix (`SvgInitialKeywordTests`, one case per property and form so a failure names the cell) showed 60 of its 180 cases failing before the
 fix: the eleven paint/stroke properties in the attribute and `style` forms, and `writing-mode`/`text-orientation` in **all three** forms, rule included. `direction` passed by accident as an attribute (`initial` is not

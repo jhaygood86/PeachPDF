@@ -11,3 +11,5 @@ In a stylesheet rule, `initial` for `writing-mode`, `text-orientation`, `directi
 `direction` with a value that is not `ltr` or `rtl` (`direction="bogus"`, and `unset` or `revert` as an attribute or `style` value) was `ltr`; it is now the parent's direction, as for every other inherited property.
 
 `text-orientation="initial"` as a presentation attribute is now `mixed`. A browser ignores `text-orientation` as an attribute (SVG 2 does not list it as a presentation attribute) and keeps the parent's value; PeachPDF has always read it as an attribute, so `initial` follows the same reading as `upright`.
+
+In an SVG animation, `letter-spacing: normal` and `word-spacing: normal` are the zero length, so a keyframe such as `from { letter-spacing: normal } to { letter-spacing: 20px }`, or a keyframe that leaves out its first or last step on an element whose rule says `initial`, blends smoothly. The first used to jump to the other value at the midpoint (`v0.9.25-preview1` reads `normal` as a keyword the interpolator cannot mix with a length).
