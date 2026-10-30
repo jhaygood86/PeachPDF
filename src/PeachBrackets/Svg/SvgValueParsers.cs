@@ -266,6 +266,21 @@ namespace PeachBrackets.Svg
             return false;
         }
 
+        /// <summary>
+        /// Parses a <c>visibility</c> value: <see langword="true"/> for <c>visible</c>, <see langword="false"/> for <c>hidden</c> and <c>collapse</c>
+        /// (outside a table or flex item, where <c>collapse</c> means <c>hidden</c>). The return value is the same validity signal as <see cref="TryParseFillRule"/>'s.
+        /// </summary>
+        public static bool TryParseVisibility(string? value, out bool visible)
+        {
+            var trimmed = value?.Trim();
+
+            if (string.Equals(trimmed, "visible", StringComparison.OrdinalIgnoreCase)) { visible = true; return true; }
+            if (string.Equals(trimmed, "hidden", StringComparison.OrdinalIgnoreCase) || string.Equals(trimmed, "collapse", StringComparison.OrdinalIgnoreCase)) { visible = false; return true; }
+
+            visible = true;
+            return false;
+        }
+
         /// <summary>Parses a <c>stroke-linecap</c> value (<c>butt</c>/<c>round</c>/<c>square</c>), defaulting to <c>butt</c>.</summary>
         public static LineCap ParseLineCap(string? value)
         {

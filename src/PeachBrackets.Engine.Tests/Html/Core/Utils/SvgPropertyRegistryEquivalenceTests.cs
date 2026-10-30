@@ -228,6 +228,32 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         }
 
         [Theory]
+        [InlineData("visible")]
+        [InlineData("hidden")]
+        [InlineData("collapse")]
+        [InlineData(" HIDDEN ")]
+        [InlineData("bogus")]
+        public void Visibility_Matches_SvgValueParsers(string value)
+        {
+            var expectedApplies = SvgValueParsers.TryParseVisibility(value, out var expectedVisible);
+
+            var element = new SvgGroupElement();
+            var renderContext = new HtmlRenderContext();
+            var ctx = new SvgPropertyContext(renderContext, PaintColor.Black, ViewportDiagonal, static p => p);
+            var applied = SvgPropertyRegistry.TrySet(element, "visibility", value, in ctx);
+
+            Assert.Equal(expectedApplies, applied);
+            if (expectedApplies)
+                Assert.Equal(expectedVisible, element.Visible);
+        }
+
+        [Fact]
+        public void Visibility_InitialValue_IsVisible()
+        {
+            Assert.Equal("visible", SvgPropertyRegistry.GetInitialValue("visibility"));
+        }
+
+        [Theory]
         [InlineData("butt")]
         [InlineData("round")]
         [InlineData("square")]
