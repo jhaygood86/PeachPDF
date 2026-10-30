@@ -310,6 +310,51 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(PaintColor.FromArgb(255, (byte)red, (byte)green, (byte)blue), document.Children[0].Fill.PaintColor);
         }
 
+        [Theory]
+        [InlineData(0, true)]
+        [InlineData(0.25, true)]
+        [InlineData(0.75, true)]
+        [InlineData(1, false)]
+        public async Task VisibilityToHidden_IsVisibleUntilTheEnd(double progress, bool visible)
+        {
+            // Visibility is discrete: between visible and anything else it is visible for the whole run (CSS Transitions 1 section 3). The omitted 0% is the
+            // initial value, `visible`; without it the keyframe's own `hidden` held from the very start. Chrome agrees at every sample.
+            var document = await BuildAsync("@keyframes k { to { visibility: hidden } } rect { animation: k 1s linear }", "<rect width=\"10\" height=\"10\"/>", progress);
+
+            Assert.Equal(visible, document.Children[0].Visible);
+        }
+
+        [Theory]
+        [InlineData(0, false)]
+        [InlineData(0.25, true)]
+        [InlineData(0.75, true)]
+        public async Task VisibilityFromHiddenToVisible_ShowsAfterTheFirstInstant(double progress, bool visible)
+        {
+            var document = await BuildAsync("@keyframes k { from { visibility: hidden } to { visibility: visible } } rect { animation: k 1s linear }", "<rect width=\"10\" height=\"10\"/>", progress);
+
+            Assert.Equal(visible, document.Children[0].Visible);
+        }
+
+        [Fact]
+        public async Task VisibilityAnimatedOnAGroup_IsInheritedByItsChildren()
+        {
+            var document = await BuildAsync("@keyframes k { to { visibility: hidden } } g { animation: k 1s linear }", "<g><rect width=\"10\" height=\"10\"/></g>", 1);
+
+            Assert.False(Assert.IsType<SvgGroupElement>(document.Children[0]).Children[0].Visible);
+        }
+
+        [Fact]
+        public async Task ABareNumberAndACommaListWrittenInAKeyframe_AreRead()
+        {
+            // A keyframe's own bare number (r: 10) and comma-separated dash list (2,4) used to be dropped by the stylesheet grammar, so these never animated.
+            var document = await BuildAsync("@keyframes k { from { r: 10; stroke-dasharray: 2,4 } to { r: 30px; stroke-dasharray: 10,20 } } circle { animation: k 1s linear }",
+                "<circle cx=\"50\" cy=\"50\" r=\"5\" stroke=\"black\"/>", 0.5);
+
+            var circle = Assert.IsType<SvgCircleElement>(document.Children[0]);
+            Assert.Equal(20, circle.R, 2);
+            Assert.Equal(new[] { 6d, 12d }, circle.StrokeDashArray);
+        }
+
         [Fact]
         public async Task AStrokeDasharrayWithBareNumbers_MixesWithLengthsInPixels()
         {
