@@ -511,7 +511,7 @@ namespace PeachPDF.SourceGenerators.Model
                 applyIn = SvgApplyIn.Manual;
 
             var isUnsupported = dataTypes.Count == 1 && dataTypes[0].Kind == DataTypeKind.Unsupported;
-            if (!isUnsupported && propertyPath is null && customSetter is null && inheritedFrom is null)
+            if (!isUnsupported && applyIn == SvgApplyIn.Common && propertyPath is null && customSetter is null && inheritedFrom is null)
             {
                 diagnostics.Add(Error(DiagnosticCode.BindingMissingTarget,
                     $"\"{name}\".svg declares no propertyPath, customSetter, or inheritedFrom.", json));

@@ -1750,43 +1750,15 @@ namespace PeachBrackets.Svg
         private static string? DeclaredOrInitial(ISvgSourceNode node, string name)
         {
             var text = ResolveStyledAttr(node, name);
-            return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? InitialValueOf(name) : text;
+            return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
         }
 
-        /// <summary>The initial value of a property the builder can resolve a declared <c>initial</c> to: the registry's, else the table's. Null when it has none.</summary>
-        internal static string? InitialValueOf(string name) =>
-            SvgPropertyRegistry.GetInitialValue(name) ?? (InitialValuesOutsideTheRegistry.TryGetValue(name, out var initial) ? initial : null);
-
-        // What an animation starts from when a keyframe leaves the property out: the same values, plus the resting text size, which a declared initial does not read
-        // (font-size initial is the CSS medium, 16px, not the builder's resting size).
+        // What an animation starts from when a keyframe leaves the property out: the registry's initial value, except that the spacings' normal is the zero length the
+        // interpolator can mix with a length, and font-size is the resting text size, which a declared initial does not read (font-size initial is the CSS medium, 16px).
         private static string? AnimatedInitialValue(string name) =>
-            InitialValueOf(name) ?? (name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px") : null);
-
-        // Properties the SVG builder reads through ResolveStyledAttr that the generated registry holds no initial value for.
-        private static readonly Dictionary<string, string> InitialValuesOutsideTheRegistry = new(StringComparer.OrdinalIgnoreCase)
-        {
-            ["transform"] = "none",
-            ["stop-color"] = "black",
-            ["stop-opacity"] = "1",
-            ["display"] = "inline",
-            // The text properties the builder keeps by hand: they live on the text element, which the registry does not describe.
-            ["direction"] = "ltr",
-            ["writing-mode"] = "horizontal-tb",
-            ["text-orientation"] = "mixed",
-            // The geometry and the text spacing the registry does not describe: what an element that declares none of them has.
-            ["x"] = "0",
-            ["y"] = "0",
-            ["cx"] = "0",
-            ["cy"] = "0",
-            ["r"] = "0",
-            // auto, which a length does not mix with: the animation flips at its midpoint, as for an explicit auto.
-            ["width"] = "auto",
-            ["height"] = "auto",
-            ["rx"] = "auto",
-            ["ry"] = "auto",
-            ["letter-spacing"] = "0",
-            ["word-spacing"] = "0",
-        };
+            name.Equals("letter-spacing", StringComparison.OrdinalIgnoreCase) || name.Equals("word-spacing", StringComparison.OrdinalIgnoreCase) ? "0"
+            : name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px")
+            : SvgPropertyRegistry.GetInitialValue(name);
 
         // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).
         private static readonly HashSet<string> InheritedSvgProperties = new(StringComparer.OrdinalIgnoreCase)

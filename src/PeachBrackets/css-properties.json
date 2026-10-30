@@ -34,6 +34,11 @@
         "invalidates": "InvalidateTransform",
         "csharpDataType": "string",
         "area": "VisualEffectsArea"
+      },
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
       }
     },
     {
@@ -1470,6 +1475,11 @@
         "propertyPath": "Width",
         "csharpDataType": "string",
         "area": "BoxModelArea"
+      },
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
       }
     },
     {
@@ -1533,6 +1543,11 @@
         "propertyPath": "Height",
         "csharpDataType": "string",
         "area": "BoxModelArea"
+      },
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
       }
     },
     {
@@ -1960,6 +1975,11 @@
         "csharpDataType": "CssProperty<DisplayMode>",
         "area": "DisplayPositioningArea",
         "getterExpression": "{box}.Display.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
       }
     },
     {
@@ -2439,6 +2459,128 @@
       }
     },
     {
+      "name": "x",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "y",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "cx",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "cy",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "r",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "0",
+      "cssDataType": "length",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "rx",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "ry",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "auto",
+      "cssDataType": [
+        "length",
+        "keyword"
+      ],
+      "supportedValues": [
+        "auto"
+      ],
+      "keywordComparison": "ordinal-ignore-case",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "stop-color",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "black",
+      "cssDataType": "color",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "stop-opacity",
+      "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
+      "inherited": false,
+      "initialValue": "1",
+      "cssDataType": "svg-opacity",
+      "svg": {
+        "propertyPath": null,
+        "invalidBehavior": "leave-unset",
+        "applyIn": "manual"
+      }
+    },
+    {
       "name": "visibility",
       "inherited": true,
       "initialValue": "visible",
@@ -2481,6 +2623,12 @@
         "area": "TextArea",
         "valueComputation": "no-ems",
         "getterExpression": "{box}.WordSpacing.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "WordSpacing",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
       }
     },
     {
@@ -2501,6 +2649,12 @@
         "area": "TextArea",
         "valueComputation": "no-ems",
         "getterExpression": "{box}.LetterSpacing.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "LetterSpacing",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
       }
     },
     {
@@ -2562,6 +2716,12 @@
         "csharpDataType": "CssProperty<WritingMode>",
         "area": "TextArea",
         "getterExpression": "{box}.WritingMode.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "WritingMode",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
       }
     },
     {
@@ -2580,6 +2740,12 @@
         "csharpDataType": "CssProperty<TextOrientation>",
         "area": "TextArea",
         "getterExpression": "{box}.TextOrientation.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "TextOrientation",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
       }
     },
     {

@@ -9,3 +9,5 @@ In a stylesheet rule, `initial` for `writing-mode`, `text-orientation`, `directi
 `horizontal-tb`, `mixed`, `ltr`, `0` and `0`. The other properties already did in a rule.
 
 `direction` with a value that is not `ltr` or `rtl` (`direction="bogus"`, and `unset` or `revert` as an attribute or `style` value) was `ltr`; it is now the parent's direction, as for every other inherited property.
+
+`text-orientation="initial"` as a presentation attribute is now `mixed`. A browser ignores `text-orientation` as an attribute (SVG 2 does not list it as a presentation attribute) and keeps the parent's value; PeachPDF has always read it as an attribute, so `initial` follows the same reading as `upright`.

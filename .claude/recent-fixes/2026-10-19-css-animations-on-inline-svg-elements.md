@@ -33,7 +33,7 @@ sets the property. `AnimationApplier` is now `partial`: `PlanElement` works out 
 
 - An `inherit` keyframe on nested animated elements was exponential (each level asked the parent twice); the parent's value is now memoised per element and property (`ApplyAnimation`).
 - A keyword declared on an ancestor (`<g fill="inherit">` above the animated rect) reached the child raw: `ResolveEffectiveValue` now normalises it as the element's own declaration is.
-- A property nothing declares and the registry has no initial for (`x`, `y`, `cx`, `cy`, `r`, `letter-spacing`, `word-spacing`, `font-size`) had no underlying value, so the animation held its keyframe value for the whole run; they now have one (`InitialValuesOutsideTheRegistry`; `font-size` is the builder's resting size).
+- A property nothing declares and the registry has no initial for (`x`, `y`, `cx`, `cy`, `r`, `letter-spacing`, `word-spacing`, `font-size`) had no underlying value, so the animation held its keyframe value for the whole run; they now have one (`InitialValuesOutsideTheRegistry` (since folded into the registry, see [the invariant](../invariants/svg-a-property-the-builder-reads-needs-an-svg-registry-entry.md)); `font-size` is the builder's resting size).
 - The test for an all-steps-dropped animation used `fill`, for which the px-normalised copy equals the raw value, so it pinned nothing (found by mutation); it now uses an ancestor's `200%` font size.
 
 ## Not done

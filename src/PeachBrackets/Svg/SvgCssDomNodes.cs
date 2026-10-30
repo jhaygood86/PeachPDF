@@ -220,7 +220,7 @@ namespace PeachBrackets.Svg
                             || trimmed.Equals(Keywords.Unset, StringComparison.OrdinalIgnoreCase))
                             resolved = null;
                         else if (trimmed.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase))
-                            resolved = SvgTreeBuilder.InitialValueOf(property.Name);
+                            resolved = SvgPropertyRegistry.GetInitialValue(property.Name);
                         else
                             resolved = CssVarResolver.Resolve(node, property.Value, varContext);
 

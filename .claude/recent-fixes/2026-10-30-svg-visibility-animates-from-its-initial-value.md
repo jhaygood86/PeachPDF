@@ -5,14 +5,14 @@ value is `visible`). Measured through the builder (`element.Visible`) and agains
 
 ## Cause: a cleanup that was right when it was made
 
-`SvgTreeBuilder.InitialValuesOutsideTheRegistry` is what an element that declares a property gets as the value of a keyframe's omitted 0% or 100%. It had a `visibility` entry, which a review of the SVG animation change removed because the SVG builder never read
+`SvgTreeBuilder.InitialValuesOutsideTheRegistry` (since removed, see below) is what an element that declares a property gets as the value of a keyframe's omitted 0% or 100%. It had a `visibility` entry, which a review of the SVG animation change removed because the SVG builder never read
 `visibility` then (a dead entry, so the animation docs were corrected to say it was not animated). The renderer gained `visibility` afterwards, which put the property on the animation path (`ResolveStyledAttr` asks for it), with no initial value left: the
 keyframe's `hidden` was the only value known, so it held for the whole run.
 
 ## Fix and rule
 
 The entry is back (`visible`). `visibility` needs no entry in `InheritedSvgProperties`: it is inherited in `css-properties.json`, so `CssDefaults.InheritedProperties` already supplies it and an animated `<g>` reaches its children. A property the builder starts reading through `ResolveStyledAttr` has to be given its initial value and inheritance in
-`SvgTreeBuilder` (the registry knows neither for a property that is not in `css-properties.json`'s SVG bindings), or its keyframes lose the omitted end: grep `InitialValuesOutsideTheRegistry` when a property is added.
+`SvgTreeBuilder` (the registry knows neither for a property that is not in `css-properties.json`'s SVG bindings), or its keyframes lose the omitted end: the table named above has since been folded into the registry: a property needs an `svg` entry in `css-properties.json` (carrier-only if `SvgElement` stores nothing), see [the invariant](../invariants/svg-a-property-the-builder-reads-needs-an-svg-registry-entry.md).
 
 ## Evidence
 
