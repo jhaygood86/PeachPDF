@@ -57,6 +57,9 @@
     - title: PeachDrawing.Svg
       url: /api/PeachDrawing.Svg/
       prefix: /api/PeachDrawing.Svg/
+    - title: PeachDrawing.Win2D
+      url: /api/PeachDrawing.Win2D/
+      prefix: /api/PeachDrawing.Win2D/
     - title: PeachBrackets
       url: /api/PeachBrackets/
       prefix: /api/PeachBrackets/
