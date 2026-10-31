@@ -646,7 +646,7 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
-        public void Does_Not_Emit_Anything_For_An_Svg_Binding_With_ApplyIn_Manual()
+        public void Emits_Only_The_Initial_Value_For_An_Svg_Binding_With_ApplyIn_Manual()
         {
             var json = """
                 {
@@ -662,7 +662,27 @@ namespace PeachPDF.SourceGenerators.Tests
             var generated = result.Results.Single().GeneratedSources
                 .Single(s => s.HintName == "SvgPropertyRegistry.g.cs").SourceText.ToString();
 
-            Assert.DoesNotContain("\"direction\"", generated);
+            // Applied by hand, so no setter or validator; but a declared initial still resolves to its initial value.
+            Assert.Contains("[\"direction\"] = \"ltr\"", generated);
+            Assert.DoesNotContain("Set_Direction", generated);
+            Assert.DoesNotContain("Validate_Direction", generated);
+        }
+
+        [Fact]
+        public void A_Manual_Svg_Binding_Needs_No_Target()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "x", "inherited": false, "initialValue": "0", "cssDataType": "length",
+                      "svg": { "propertyPath": null, "invalidBehavior": "leave-unset", "applyIn": "manual" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            Assert.Empty(result.Diagnostics);
         }
 
         [Fact]

@@ -1374,12 +1374,12 @@ namespace PeachBrackets.Svg
             // already use. opacity is the one exception (see its own comment below): it is not inherited,
             // so an invalid value simply leaves the field at its hardcoded default.
 
-            var fillAttr = ResolveIcc(Attr("fill"));
+            var fillAttr = ResolveIcc(DeclaredOrInitial(node, "fill"));
             if (fillAttr is null || fillAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "fill", fillAttr, in ctx))
                 element.Fill = inherited.Fill;
 
-            var strokeAttr = ResolveIcc(Attr("stroke"));
+            var strokeAttr = ResolveIcc(DeclaredOrInitial(node, "stroke"));
             if (strokeAttr is null || strokeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke", strokeAttr, in ctx))
                 element.Stroke = inherited.Stroke;
@@ -1391,12 +1391,12 @@ namespace PeachBrackets.Svg
             // stroke-width/-miterlimit/-dashoffset/-dasharray fall back to the INHERITED value (not a
             // hardcoded default) on an invalid value, unlike the properties above - TrySet's return is
             // checked explicitly here.
-            var strokeWidthAttr = Attr("stroke-width");
+            var strokeWidthAttr = DeclaredOrInitial(node, "stroke-width");
             if (strokeWidthAttr is null || strokeWidthAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-width", strokeWidthAttr, in ctx))
                 element.StrokeWidth = inherited.StrokeWidth;
 
-            var strokeMiterLimitAttr = Attr("stroke-miterlimit");
+            var strokeMiterLimitAttr = DeclaredOrInitial(node, "stroke-miterlimit");
             if (strokeMiterLimitAttr is null || strokeMiterLimitAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-miterlimit", strokeMiterLimitAttr, in ctx))
                 element.StrokeMiterLimit = inherited.StrokeMiterLimit;
@@ -1450,37 +1450,37 @@ namespace PeachBrackets.Svg
 
             // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded
             // default) on an invalid value, per SVG 1.1 §11.4 - same shape as stroke-width/etc. above.
-            var fillRuleAttr = Attr("fill-rule");
+            var fillRuleAttr = DeclaredOrInitial(node, "fill-rule");
             if (fillRuleAttr is null || fillRuleAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "fill-rule", fillRuleAttr, in ctx))
                 element.FillRule = inherited.FillRule;
 
-            var fillOpacityAttr = Attr("fill-opacity");
+            var fillOpacityAttr = DeclaredOrInitial(node, "fill-opacity");
             if (fillOpacityAttr is null || fillOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "fill-opacity", fillOpacityAttr, in ctx))
                 element.FillOpacity = inherited.FillOpacity;
 
-            var strokeOpacityAttr = Attr("stroke-opacity");
+            var strokeOpacityAttr = DeclaredOrInitial(node, "stroke-opacity");
             if (strokeOpacityAttr is null || strokeOpacityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-opacity", strokeOpacityAttr, in ctx))
                 element.StrokeOpacity = inherited.StrokeOpacity;
 
-            var lineCapAttr = Attr("stroke-linecap");
+            var lineCapAttr = DeclaredOrInitial(node, "stroke-linecap");
             if (lineCapAttr is null || lineCapAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-linecap", lineCapAttr, in ctx))
                 element.StrokeLineCap = inherited.StrokeLineCap;
 
-            var lineJoinAttr = Attr("stroke-linejoin");
+            var lineJoinAttr = DeclaredOrInitial(node, "stroke-linejoin");
             if (lineJoinAttr is null || lineJoinAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-linejoin", lineJoinAttr, in ctx))
                 element.StrokeLineJoin = inherited.StrokeLineJoin;
 
-            var dashArrayAttr = Attr("stroke-dasharray");
+            var dashArrayAttr = DeclaredOrInitial(node, "stroke-dasharray");
             if (dashArrayAttr is null || dashArrayAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-dasharray", dashArrayAttr, in ctx))
                 element.StrokeDashArray = inherited.StrokeDashArray;
 
-            var dashOffsetAttr = Attr("stroke-dashoffset");
+            var dashOffsetAttr = DeclaredOrInitial(node, "stroke-dashoffset");
             if (dashOffsetAttr is null || dashOffsetAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-dashoffset", dashOffsetAttr, in ctx))
                 element.StrokeDashOffset = inherited.StrokeDashOffset;
@@ -1528,10 +1528,12 @@ namespace PeachBrackets.Svg
             // resolves separately, per-node, with no inheritance) - threaded through InheritedPaint the
             // same way font-family/font-size are threaded through FontContext, so a <text>/<tspan>
             // inherits it from ANY ancestor, not just its own text-run ancestors.
-            var directionAttr = Attr("direction");
+            var directionAttr = DeclaredOrInitial(node, "direction");
             var direction = directionAttr is null || directionAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.Direction
-                : directionAttr.Trim().Equals("rtl", StringComparison.OrdinalIgnoreCase) ? "rtl" : "ltr";
+                : directionAttr.Trim().Equals("rtl", StringComparison.OrdinalIgnoreCase) ? "rtl"
+                : directionAttr.Trim().Equals("ltr", StringComparison.OrdinalIgnoreCase) ? "ltr"
+                : inherited.Direction;
 
             // writing-mode/text-orientation are real inherited CSS properties too, carried the same way
             // direction is - resolved once here and stored only on the SvgTextElement that actually
@@ -1545,22 +1547,19 @@ namespace PeachBrackets.Svg
             // other inherited property above. sideways-rl/sideways-lr DO parse (Map.WritingModes defines
             // them) but render as horizontal-tb throughout, same as the HTML pipeline's own scope -
             // SvgRenderer.IsVerticalWritingMode only recognizes vertical-rl/vertical-lr as vertical.
-            var writingModeAttr = Attr("writing-mode");
+            var writingModeAttr = DeclaredOrInitial(node, "writing-mode");
             var writingMode = writingModeAttr is null || writingModeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.WritingMode
                 : Map.WritingModes.GetValueOrDefault(writingModeAttr.Trim(), inherited.WritingMode);
 
-            var textOrientationAttr = Attr("text-orientation");
+            var textOrientationAttr = DeclaredOrInitial(node, "text-orientation");
             var textOrientation = textOrientationAttr is null || textOrientationAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.TextOrientation
                 : Map.TextOrientations.GetValueOrDefault(textOrientationAttr.Trim(), inherited.TextOrientation);
 
             // visibility is inherited; hidden and collapse (outside a table or flex item, where collapse means hidden) stop the element painting but
             // leave it in the rendering tree, so a descendant can set visible again and the element still sizes a clip path or a bounding box.
-            // initial is the registry's own initial value (visible), so a stylesheet rule, an attribute and a style attribute all reach TrySet with the same text.
-            var visibilityAttr = Attr("visibility")?.Trim();
-            if (visibilityAttr is not null && visibilityAttr.Equals("initial", StringComparison.OrdinalIgnoreCase))
-                visibilityAttr = SvgPropertyRegistry.GetInitialValue("visibility");
+            var visibilityAttr = DeclaredOrInitial(node, "visibility")?.Trim();
             if (visibilityAttr is null || visibilityAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "visibility", visibilityAttr, in ctx))
                 element.Visible = inherited.Visible;
@@ -1744,31 +1743,21 @@ namespace PeachBrackets.Svg
         private static string? InheritedOrInitialValue(ISvgSourceNode node, string name) =>
             IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(name);
 
-        private static string? AnimatedInitialValue(string name) =>
-            SvgPropertyRegistry.GetInitialValue(name) ?? (InitialValuesOutsideTheRegistry.TryGetValue(name, out var initial) ? initial
-                : name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px") : null);
-
-        // Properties the SVG builder reads through ResolveStyledAttr that the generated registry holds no initial value for.
-        private static readonly Dictionary<string, string> InitialValuesOutsideTheRegistry = new(StringComparer.OrdinalIgnoreCase)
+        /// <summary>
+        /// The value an element declares for <paramref name="name"/>, with <c>initial</c> replaced by the property's initial value rather than left to be read as an
+        /// invalid value, which would leave the inherited one: <c>TrySet</c> and the keyword tables reject a CSS-wide keyword.
+        /// </summary>
+        private static string? DeclaredOrInitial(ISvgSourceNode node, string name)
         {
-            ["transform"] = "none",
-            ["stop-color"] = "black",
-            ["stop-opacity"] = "1",
-            ["display"] = "inline",
-            // The geometry and the text spacing the registry does not describe: what an element that declares none of them has.
-            ["x"] = "0",
-            ["y"] = "0",
-            ["cx"] = "0",
-            ["cy"] = "0",
-            ["r"] = "0",
-            // auto, which a length does not mix with: the animation flips at its midpoint, as for an explicit auto.
-            ["width"] = "auto",
-            ["height"] = "auto",
-            ["rx"] = "auto",
-            ["ry"] = "auto",
-            ["letter-spacing"] = "0",
-            ["word-spacing"] = "0",
-        };
+            var text = ResolveStyledAttr(node, name);
+            return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
+        }
+
+        // What an animation starts from when a keyframe leaves the property out: the registry's initial value, except font-size, which is the resting text size, because a
+        // declared initial does not read it (font-size initial is the CSS medium, 16px).
+        private static string? AnimatedInitialValue(string name) =>
+            name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px")
+            : SvgPropertyRegistry.GetInitialValue(name);
 
         // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).
         private static readonly HashSet<string> InheritedSvgProperties = new(StringComparer.OrdinalIgnoreCase)
@@ -1882,8 +1871,8 @@ namespace PeachBrackets.Svg
             // just-computed `size` above), unlike font-size's own em/ex (which resolve against the
             // PARENT's) - see ResolveSpacingLength's own remarks.
             var ownFont = inherited with { Family = family, Size = size, Bold = bold, Italic = italic, Stretch = stretch, SizeDeclared = inherited.SizeDeclared || declaredSize is not null };
-            var letterSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "letter-spacing"), ownFont, inherited.LetterSpacing);
-            var wordSpacing = ResolveSpacingLength(ResolveStyledAttr(node, "word-spacing"), ownFont, inherited.WordSpacing);
+            var letterSpacing = ResolveSpacingLength(DeclaredOrInitial(node, "letter-spacing"), ownFont, inherited.LetterSpacing);
+            var wordSpacing = ResolveSpacingLength(DeclaredOrInitial(node, "word-spacing"), ownFont, inherited.WordSpacing);
 
             var textTransformAttr = ResolveStyledAttr(node, "text-transform");
             var textTransform = textTransformAttr is null || textTransformAttr.Trim().Equals("inherit", StringComparison.OrdinalIgnoreCase)

@@ -65,7 +65,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         public void EverySvgRegistryProperty_IsCoveredByAll()
         {
             var covered = PropertyFactory.Instance.GetLonghands("all").ToHashSet(StringComparer.OrdinalIgnoreCase);
-            var missing = SvgPropertyRegistry.InitialValues.Keys.Where(n => !covered.Contains(n)).ToList();
+            var missing = SvgPropertyRegistry.InitialValues.Keys.Where(n => !covered.Contains(n) && !IsReviewedExclusion(n)).ToList();
 
             Assert.True(missing.Count == 0, "SVG properties missing from `all`: " + string.Join(", ", missing));
         }

@@ -5,7 +5,7 @@
 - the stylesheet form, where `SvgCssDomNodes.GetMatchedDeclarations` resolves `initial` through `SvgPropertyRegistry.GetInitialValue`, and `visibility` had no `svg` binding in `css-properties.json`, so the lookup gave null
   and a null-present declaration means inherited.
 
-The animated `initial` was already right: the animation path resolves CSS-wide keywords through `AnimatedInitialValue`, which had a hand-kept `visibility` row in `InitialValuesOutsideTheRegistry`.
+The animated `initial` was already right: the animation path resolves CSS-wide keywords through `AnimatedInitialValue`, which had a hand-kept `visibility` row in `InitialValuesOutsideTheRegistry` (since folded into the registry, see [the invariant](../invariants/svg-a-property-the-builder-reads-needs-an-svg-registry-entry.md)).
 
 **Fix.** `visibility` now has an `svg` binding in `css-properties.json` (`Visible`, `bool`, `invalidBehavior: inherit`, `customValidator`/`customSetter` over the shared `SvgValueParsers.TryParseVisibility`, which maps
 `collapse` to hidden). That one entry is the single source of the initial value for the stylesheet path, the animation path and the attribute path, so the `InitialValuesOutsideTheRegistry` row and any per-property

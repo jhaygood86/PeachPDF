@@ -146,8 +146,17 @@ namespace PeachBrackets.Html.Animation
 
         private static readonly Regex BareNumber = new(@"(?<![\w.%#-])[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w.%])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-        private static string? InUserUnits(string property, string? value) =>
-            value is not null && UserUnitProperties.Contains(property) && value.IndexOf('(') < 0 ? BareNumber.Replace(value, "$0px") : value;
+        private static string? InUserUnits(string property, string? value)
+        {
+            if (value is null || !UserUnitProperties.Contains(property)) return value;
+
+            // normal is the zero length for the two spacings (CSS Text 3 section 8.1 and 8.2), and the interpolator only mixes a length with a length.
+            if ((property.Equals("letter-spacing", StringComparison.OrdinalIgnoreCase) || property.Equals("word-spacing", StringComparison.OrdinalIgnoreCase))
+                && value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase))
+                return "0px";
+
+            return value.IndexOf('(') < 0 ? BareNumber.Replace(value, "$0px") : value;
+        }
 
         /// <summary>The CSS-wide keywords in a keyframe, resolved against the element as <see cref="ResolveGlobalKeyword"/> does for an HTML box.</summary>
         private static string? ResolveElementKeyword(string value, string? underlying, Func<string?> parent, Func<string?> initial, bool inherited)
