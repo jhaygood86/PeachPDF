@@ -47,9 +47,9 @@ function Invoke-Checked {
 }
 
 function Invoke-PackageReference {
-    param([string]$Project, [string]$Framework = 'net10.0')
-    Invoke-Checked 'dotnet' @('build', (Join-Path $src "$Project/$Project.csproj"), '--configuration', 'Release',
-        "-p:TargetFramework=$Framework", '-p:EnableWindowsTargeting=true', '-p:DisableDefaultDocumentation=false', '--nologo', '-v:q')
+    param([string]$Project, [string]$Framework = 'net10.0', [string[]]$ExtraArguments = @())
+    Invoke-Checked 'dotnet' (@('build', (Join-Path $src "$Project/$Project.csproj"), '--configuration', 'Release',
+        "-p:TargetFramework=$Framework", '-p:EnableWindowsTargeting=true', '-p:DisableDefaultDocumentation=false', '--nologo', '-v:q') + $ExtraArguments)
 }
 
 # The version of PeachImage PeachPDF is built with, and the DefaultDocumentation the rest of the reference is built with.
@@ -105,7 +105,9 @@ Invoke-PeachImageReference
 Invoke-PackageReference 'PeachDrawing'
 Invoke-PackageReference 'PeachDrawing.PDF'
 Invoke-PackageReference 'PeachDrawing.Svg'
-Invoke-PackageReference 'PeachDrawing.Win2D' 'net10.0-windows10.0.19041.0'
+# The Windows App SDK build tools generate a .pri resource index with MakePri.exe, which does not run on Linux and which the
+# reference does not need (it reads the assembly and its XML documentation), so the generation is emptied out.
+Invoke-PackageReference 'PeachDrawing.Win2D' 'net10.0-windows10.0.19041.0' @('-p:_GenerateProjectPriFileDependsOn=')
 Invoke-PackageReference 'PeachBrackets'
 Invoke-PackageReference 'PeachPDF'
 
