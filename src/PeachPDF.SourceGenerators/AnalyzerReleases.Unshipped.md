@@ -21,3 +21,4 @@ PPG014 | PeachPDF.SourceGenerators | Error | Invalid logical-category entry
 PPG015 | PeachPDF.SourceGenerators | Error | html.propertyPath reused across different html.area values
 PPG016 | PeachPDF.SourceGenerators | Error | "cssom-grammar" data type requires member
 PPG017 | PeachPDF.SourceGenerators | Error | "parsed" data type requires converter and resultType
+PPG018 | PeachPDF.SourceGenerators | Error | "cssom" block requires a converter

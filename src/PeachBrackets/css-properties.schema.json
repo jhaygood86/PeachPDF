@@ -84,6 +84,20 @@
             "side": { "type": "string", "enum": ["start", "end"] }
           }
         },
+        "cssom": {
+          "type": "object",
+          "required": ["converter"],
+          "description": "Generates this longhand's CSS-OM Property class (CssomProperties.g.cs) and its PropertyFactory registration. Inheritance is this entry's own \"inherited\", and the CSS-OM \"initial\" keyword carries no typed value (only this file's initialValue is read, by the render layer), so neither is restated here. An entry without this block keeps a hand-written class under CSS/StyleProperties (PPG018 if the block is present without a converter).",
+          "properties": {
+            "converter": { "type": "string", "description": "C# expression for the grammar, compiled inside PeachBrackets.Css, e.g. \"Converters.CaptionSideConverter\". The generator appends .OrDefault() (the CSS-wide keywords)." },
+            "className": { "type": "string", "description": "Only when the class is not the PascalCased property name plus \"Property\"." },
+            "animatable": { "type": "boolean", "default": false, "description": "PropertyFlags.Animatable on the class." },
+            "hashless": { "type": "boolean", "default": false, "description": "PropertyFlags.Hashless (a colour that may omit its #)." },
+            "unitless": { "type": "boolean", "default": false, "description": "PropertyFlags.Unitless (a length that may omit its unit)." },
+            "registryAnimatable": { "type": "boolean", "default": false, "description": "Registered with PropertyFactory's animatable list (a list distinct from the class's own flag)." },
+            "font": { "type": "boolean", "default": false, "description": "Registered with PropertyFactory's @font-face descriptor set." }
+          }
+        },
         "html": { "$ref": "#/definitions/htmlBinding" },
         "svg": { "$ref": "#/definitions/svgBinding" }
       }

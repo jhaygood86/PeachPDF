@@ -204,6 +204,15 @@ equivalence proof (`CssPropertyRegistryEquivalenceTests.cs`/`CssPropertyRegistry
 no longer exists as a separate file — since `CssUtils` forwards directly to `CssPropertyRegistry`,
 `CssUtilsTests.cs` exercising `CssUtils`'s public API already covers it end-to-end.
 
+**CSS-OM classes**: a longhand's `Property` class under `src/PeachBrackets/CSS/StyleProperties/` is generated
+(`CssomProperties.g.cs`, plus `PropertyFactory.RegisterGeneratedLonghands`) when its JSON entry has a `cssom`
+block (`converter`, and `animatable`/`hashless`/`unitless`/`registryAnimatable`/`font`/`className` when they apply;
+`PPG018` if the converter is missing). Inheritance comes from the entry's own `inherited`, never restated. The
+CSS-OM `initial` keyword carries no typed value, so there is no initial to declare there. A class that exposes a
+grammar member (`ValueGrammar`) or is not `<expr>.OrDefault(...)` stays hand-written, and
+`CssomInheritanceDriftTests` holds it to the JSON's `inherited`; `CssomLonghandBaselineTests` pins every longhand's
+CSS-OM behaviour (regenerate with `PEACH_UPDATE_BASELINE=1` and review the diff).
+
 **Adding a property**: add one object to `css-properties.json`'s `properties` array. `cssDataType` names
 a grammar (`length`, `color`, `keyword` + `supportedValues`, `integer`, `{type:"enum-keyword", ...}` for a
 `CssProperty<T>`-backed property, `svg-paint`, etc. — see the schema file for the full list) that the

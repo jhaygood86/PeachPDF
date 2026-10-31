@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.TextAnchorConverter.OrDefault();
 
         public TextAnchorProperty()
-            : base(PropertyNames.TextAnchor)
+            : base(PropertyNames.TextAnchor, PropertyFlags.Inherited)
         {
         }
 

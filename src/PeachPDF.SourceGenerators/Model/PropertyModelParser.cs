@@ -226,9 +226,11 @@ namespace PeachPDF.SourceGenerators.Model
             var html = ParseHtmlBinding(name, json, dataTypes, diagnostics);
             var svg = ParseSvgBinding(name, json, dataTypes, diagnostics);
 
+            var cssom = ParseCssomBinding(name, json, diagnostics);
+
             return new PropertyEntry(name, inherited, initialValueKind, initialValueText, category, dataTypes,
                 supportedValues, keywordComparison, aliasOf, resolvesTo, html, svg, json.Line, json.Column,
-                supportsDataTypes, supportsSupportedValues, supportsKeywordComparison);
+                supportsDataTypes, supportsSupportedValues, supportsKeywordComparison, cssom);
         }
 
         private static (InitialValueKind Kind, string? Text, bool Ok) ParseInitialValue(string name, JsonValue json, List<ModelDiagnostic> diagnostics)
@@ -541,6 +543,29 @@ namespace PeachPDF.SourceGenerators.Model
 
                 i = afterIndex;
             }
+        }
+
+        private static CssomBinding? ParseCssomBinding(string name, JsonValue json, List<ModelDiagnostic> diagnostics)
+        {
+            if (!json.TryGetProperty("cssom", out var cssomJson) || cssomJson.IsNull) return null;
+            if (!cssomJson.IsObject)
+            {
+                diagnostics.Add(Error(DiagnosticCode.JsonMalformed, $"\"{name}\".cssom must be an object.", json));
+                return null;
+            }
+
+            var converter = GetOptionalString(cssomJson, "converter");
+            if (string.IsNullOrWhiteSpace(converter))
+            {
+                diagnostics.Add(Error(DiagnosticCode.CssomMissingConverter,
+                    $"\"{name}\".cssom is missing its \"converter\" expression.", json));
+                return null;
+            }
+
+            bool Flag(string key) => cssomJson.TryGetProperty(key, out var v) && v.IsBool && v.BoolValue;
+
+            return new CssomBinding(converter!, GetOptionalString(cssomJson, "className"), Flag("animatable"),
+                Flag("hashless"), Flag("unitless"), Flag("registryAnimatable"), Flag("font"));
         }
 
         private static string? GetOptionalString(JsonValue json, string property) =>
