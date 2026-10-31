@@ -69,6 +69,8 @@ namespace PeachPDF.SourceGenerators
 
             var stylePropertiesSource = StylePropertiesEmitter.Emit(document.Entries);
             context.AddSource("CssBox.StyleProperties.g.cs", stylePropertiesSource);
+
+            context.AddSource("CssomProperties.g.cs", CssomPropertiesEmitter.Emit(document.Entries));
         }
 
         private static bool IsError(DiagnosticCode code) => Diagnostics.For(code).DefaultSeverity == DiagnosticSeverity.Error;

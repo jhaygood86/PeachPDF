@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.NonNegativeLengthOrPercentOrNumberConverter.OrGlobalValue();
 
         internal StrokeWidthProperty()
-            : base(PropertyNames.StrokeWidth, PropertyFlags.Animatable)
+            : base(PropertyNames.StrokeWidth, PropertyFlags.Inherited | PropertyFlags.Animatable)
         {
         }
 

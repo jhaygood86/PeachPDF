@@ -6,6 +6,7 @@
       "name": "border-bottom-width",
       "comment": "Accepts a valid length, or the auto keyword (compared case-insensitively — an existing inconsistency vs. most other keyword checks in this codebase, encoded as-is rather than silently fixed).",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": [
         "length",
@@ -26,6 +27,7 @@
       "name": "transform",
       "comment": "cssDataType 'transform-list' is a span-based (no tokenizer) permissive syntactic check (CssValueParser.IsSyntacticallyValidTransformList) matching the exact accept/reject set of the real Converters.TransformConverter.Many() grammar today - matching actual CSS transform-list semantics: a value with one unimplemented function, e.g. perspective(), is still syntactically valid and its implemented functions still apply (see TransformIntegrationTests.Perspective_IsUnsupported_TreatedAsIdentity). It does not validate each function's own argument grammar - an argument-shape mismatch inside a recognized function is already caught defensively by BuildFunctionMatrix at paint time, treated as a no-op rather than throwing. supportsDataType 'transform' is the stricter, @supports-only grammar (CssValueParser.IsValidTransformValue): the real set of transform functions BuildFunctionMatrix implements at paint time. perspective() parses as valid CSS but is silently dropped at paint time, so it must not report as @supports-true even though it's still accepted and stored by real dispatch.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TransformConverter.Many().OrNone()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": "transform-list",
       "supportsDataType": "transform",
@@ -63,6 +65,7 @@
       "name": "direction",
       "comment": "TrySet/SupportsDeclaration validate the value against Map.DirectionModes' own keys (ltr/rtl, case-insensitive) via the enum-keyword data type; an unrecognized value is rejected. CssProperty<T>.FromCssText itself never rejects once a value reaches the setter — it falls back to the keyword default (ltr) — so the fallback only applies to a value that already passed validation upstream. The svg binding is a carrier-only, hand-written entry (applyIn: manual) — SVG never stores direction on SvgElement, only threads it through SvgInheritedPaint for text runs, so it is deliberately excluded from the generated SVG dispatch (see SvgTreeBuilder.ApplyCommon's manual-property section).",
       "inherited": true,
+      "cssom": {"converter": "Converters.DirectionModeConverter"},
       "initialValue": "ltr",
       "cssDataType": {
         "type": "enum-keyword",
@@ -87,6 +90,7 @@
       "name": "page-break-after",
       "comment": "Legacy alias of break-after, sharing its storage. Deliberately narrower than break-after's own css-break-3 keyword set: PageBreakAfterProperty/Map.PageBreakModes implement the older CSS2.1 §13.3.1 page-break-after grammar (auto/always/avoid/left/right only), not break-after's full css-break-3 set - see CssPageBreakAfterIllegalAvoidColumn in PeachPDF.Tests/CSS/Property.cs. The CSS2.1 'always' keyword remaps to break-after's 'page'.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PageBreakModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -107,6 +111,7 @@
       "name": "font-family",
       "comment": "Multi-field write: the resolved family (FontFamily) and the raw authored list (FontFamilyList) both come from one declaration. The initial value is UA/platform-defined (DefaultFontResolver.DefaultFont is computed per-platform at runtime), hence an {expression} rather than a string literal. cssDataType 'cssom-grammar' calls the already-public Converters.FontFamiliesConverter.Convert directly instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontFamiliesConverter", "font": true},
       "initialValue": {
         "expression": "DefaultFontResolver.DefaultFont"
       },
@@ -122,6 +127,7 @@
       "name": "margin-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space — CssBox.LogicalProperties.cs. Read exactly once by CssBox.ResolveLogicalProperties, which maps it to one of margin-top/-right/-bottom/-left depending on this box's own resolved direction/writing-mode; that cross-property resolution stays hand-written (a single JSON entry cannot express a function of two other properties' resolved values). No initial value by design: the physical property it resolves into already has one. Validation mirrors margin-top's (none).",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -263,6 +269,7 @@
       "name": "fill-opacity",
       "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #675; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.FillOpacity on failure, the same shape stroke-width/etc. use.",
       "inherited": true,
+      "cssom": {"converter": "Converters.NumberConverter.Or(Converters.PercentConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "1",
       "cssDataType": "svg-opacity",
       "svg": {
@@ -276,6 +283,7 @@
       "name": "stroke-opacity",
       "comment": "Same shape as fill-opacity (see its comment) — see #675.",
       "inherited": true,
+      "cssom": {"converter": "Converters.NumberConverter.Or(Converters.PercentConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "1",
       "cssDataType": "svg-opacity",
       "svg": {
@@ -330,6 +338,7 @@
     {
       "name": "border-left-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": [
         "length",
@@ -349,6 +358,7 @@
     {
       "name": "border-right-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": [
         "length",
@@ -368,6 +378,7 @@
     {
       "name": "border-top-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": [
         "length",
@@ -459,6 +470,7 @@
     {
       "name": "border-bottom-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -474,6 +486,7 @@
     {
       "name": "border-left-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -489,6 +502,7 @@
     {
       "name": "border-right-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -504,6 +518,7 @@
     {
       "name": "border-top-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -572,6 +587,7 @@
       "name": "border-image-source",
       "comment": "CSS Backgrounds and Borders 3 <13>: none | <image>. Parses into a structurally different field (a single CssImage, not a list) via a custom setter, mirroring background-image's own custom-setter pattern; cssDataType 'cssom-grammar' calls the same Converters.OptionalImageSourceConverter.Convert real grammar background-image and this property's own CSS-OM BorderImageSourceProperty already use, so validation and application share one parser rather than a second, independently-derived one.",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalImageSourceConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.OptionalImageSourceConverter.Convert" },
       "html": {
@@ -635,6 +651,7 @@
       "name": "box-shadow",
       "comment": "cssDataType 'cssom-grammar' calls BoxShadowGrammar.TryParse directly - the same grammar CssBox.PaintBoxShadows already calls at render time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none' - see its own doc comment).",
       "inherited": false,
+      "cssom": {"converter": "new BoxShadowValueConverter()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BoxShadowGrammar.TryParse" },
       "html": {
@@ -647,6 +664,7 @@
       "name": "text-shadow",
       "comment": "cssDataType 'cssom-grammar' calls TextShadowGrammar.TryParse directly - the same grammar FragmentPainter's text-shadow paint calls at render time (none-aware, like box-shadow's). Inherited, per CSS Text Decoration 3 section 4.1.",
       "inherited": true,
+      "cssom": {"converter": "Converters.MultipleShadowConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TextShadowGrammar.TryParse" },
       "html": {
@@ -658,6 +676,7 @@
     {
       "name": "outline-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.InvertedColorConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": ["color", "current-color", "keyword"],
       "supportedValues": ["invert"],
@@ -691,6 +710,7 @@
       "name": "outline-width",
       "comment": "thin/medium/thick are real <line-width> keywords (CSS-UI-4 §4). An authored value (e.g. \"outline-width: thin\") never reaches this layer as the literal keyword - the CSS-OM's LineWidthConverter already resolves it to a literal px Length, and Property.Value serializes that resolved length, so Validate_OutlineWidth only ever sees e.g. \"1px\" (which the plain \"length\" clause already accepts). These three keywords are listed here for the *initial-value* defaulting path instead: DomParser.CascadeApplyStyles re-applies each property's literal css-properties.json initialValue (\"medium\" here) via CssUtils.SetPropertyValue every cascade pass, which - unlike the record's own C# default field initializer - does run through this same Validate_OutlineWidth gate.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": ["length", "keyword"],
       "supportedValues": ["thin", "medium", "thick"],
@@ -705,6 +725,7 @@
     {
       "name": "outline-offset",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -731,6 +752,7 @@
       "name": "clip-path",
       "comment": "cssDataType 'cssom-grammar' calls BasicShapeGrammar.TryParse directly - the same grammar CssClipPathResolver already calls at render time (see its own doc comment), avoiding the full cssom PropertyFactory/StylesheetParser round trip. acceptsNoneLiteral: true because TryParse returns null for the literal 'none' the same as for an invalid value (its own doc comment explains why), so the validator must accept it separately.",
       "inherited": false,
+      "cssom": {"converter": "new ClipPathValueConverter()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BasicShapeGrammar.TryParse", "acceptsNoneLiteral": true },
       "html": {
@@ -743,6 +765,7 @@
       "name": "clip",
       "comment": "Legacy CSS 2.1 clipping (https://www.w3.org/TR/CSS21/visufx.html#clipping), superseded by clip-path above but kept for compatibility. String-stored, like clip-path - CssClipRectResolver re-tokenizes the raw declared text itself. cssDataType 'cssom-grammar' calls Converters.ShapeConverter.Convert directly (the same converter ClipProperty's own real grammar uses, already .OrAuto()-composed so the 'auto' initial value needs no acceptsNoneLiteral-style special case) instead of the full cssom round trip. ShapeConverter's own rect()-grammar duplication vs CssClipRectResolver's hand-rolled walk is a separate, pre-existing 'one parser' gap, not introduced here.",
       "inherited": false,
+      "cssom": {"converter": "Converters.ShapeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ShapeConverter.Convert" },
       "html": {
@@ -755,6 +778,7 @@
       "name": "aspect-ratio",
       "comment": "cssDataType 'ratio' validates span-based via AspectRatioGrammar.TryParseFast (the same grammar AspectRatioValueConverter's real TryParse(tokens, out _) call uses, just against the raw string with no tokenizer) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "new AspectRatioValueConverter()"},
       "initialValue": "auto",
       "cssDataType": "ratio",
       "html": {
@@ -788,6 +812,7 @@
       "name": "mix-blend-mode",
       "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.PaintBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to PaintBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachBrackets.Css, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; PeachBrackets.Css.BlendMode is mapped to PaintBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
       "inherited": false,
+      "cssom": {"converter": "Converters.MixBlendModeConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -806,6 +831,7 @@
       "name": "filter",
       "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachBrackets.Html.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. opacity()/brightness()/contrast()/invert() have a native PDF path; blur()/grayscale()/sepia()/saturate()/hue-rotate()/drop-shadow() are rendered into a bitmap by the raster backend (FilterEffectResolver.Resolved.RequiresRaster).",
       "inherited": false,
+      "cssom": {"converter": "new FilterValueConverter()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FilterGrammar.TryParse" },
       "html": {
@@ -844,6 +870,7 @@
       "name": "backface-visibility",
       "comment": "visible | hidden (CSS Transforms 2 section 14): whether the box is painted while its back faces the viewer. FragmentPainter decides facing from the sign of the transformed normal.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BackfaceVisibilityConverter"},
       "initialValue": "visible",
       "cssDataType": {
         "type": "enum-keyword",
@@ -862,6 +889,7 @@
       "name": "transform-style",
       "comment": "flat | preserve-3d (CSS Transforms 2 section 6.1): whether a box's children share its 3D rendering context. Not inherited. The used value also depends on grouping properties (overflow, opacity, filter, ...), which force flat: see DomUtils.EstablishesPreserve3d. Read at paint time by FragmentPainter.Preserve3D and by DomUtils.IsStackingContextBox.",
       "inherited": false,
+      "cssom": {"converter": "Converters.Toggle(Keywords.Flat, Keywords.Preserve3d)"},
       "initialValue": "flat",
       "cssDataType": {
         "type": "enum-keyword",
@@ -880,6 +908,7 @@
       "name": "backdrop-filter",
       "comment": "The same function grammar as filter (Filter Effects 2 section 3.1), applied to what was painted behind the element rather than to the element. Always rendered by the raster backend: FragmentPainter.PaintBackdropFilter re-paints the earlier content of the backdrop root into a bitmap, filters it, and draws it under the element's own background.",
       "inherited": false,
+      "cssom": {"converter": "new FilterValueConverter()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FilterGrammar.TryParse" },
       "html": {
@@ -1159,6 +1188,7 @@
       "name": "bookmark-label",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-label). A <content-list> - the same string/counter()/attr()/content()/string() grammar `content` accepts, minus url()/gradients (image content, not applicable to a label) and the quote-modes/element() (meaningful only within flowing generated content, not a standalone label string) - see the shared Converters.ContentListItemConverter both properties' CSS-OM converters reference (this property's own is Converters.BookmarkLabelConverter, already public - cssDataType 'cssom-grammar' calls its .Convert directly), and CssContentEngine.ResolveContentTokens/ResolveBookmarkLabel for the shared resolver. Initial value content(text) means \"the element's own rendered text\", resolved via the same content()/\"text\" branch content() itself uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkLabelConverter"},
       "initialValue": "content(text)",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLabelConverter.Convert" },
       "html": {
@@ -1208,6 +1238,7 @@
       "name": "-prince-bookmark-label",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-label spelling - translates to the real spec property bookmark-label at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLabelConverter.Convert bookmark-label's own real grammar uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkLabelConverter"},
       "initialValue": "content(text)",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLabelConverter.Convert" },
       "aliasOf": "bookmark-label",
@@ -1260,6 +1291,7 @@
       "name": "margin-bottom",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1279,6 +1311,7 @@
       "name": "margin-left",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1298,6 +1331,7 @@
       "name": "margin-right",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1317,6 +1351,7 @@
       "name": "margin-top",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1335,6 +1370,7 @@
     {
       "name": "padding-bottom",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -1347,6 +1383,7 @@
     {
       "name": "padding-left",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -1359,6 +1396,7 @@
     {
       "name": "padding-right",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -1371,6 +1409,7 @@
     {
       "name": "padding-top",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -1384,6 +1423,7 @@
       "name": "left",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1403,6 +1443,7 @@
       "name": "top",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1422,6 +1463,7 @@
       "name": "right",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1441,6 +1483,7 @@
       "name": "bottom",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -1459,6 +1502,7 @@
     {
       "name": "width",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentOrStretchConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -1506,6 +1550,7 @@
     {
       "name": "min-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -1527,6 +1572,7 @@
     {
       "name": "height",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentOrStretchConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -1574,6 +1620,7 @@
     {
       "name": "min-height",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": [
         "length",
@@ -1627,6 +1674,7 @@
       "name": "break-inside",
       "comment": "avoid-region is stored (real dispatch) like break-before/-after's region/avoid-region, but excluded from supportsDataType's stricter @supports-only list for the same reason - see break-before's comment.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BreakInsideModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1683,6 +1731,7 @@
       "name": "page-break-before",
       "comment": "Legacy alias of break-before, sharing its storage. Deliberately narrower than break-before's own css-break-3 keyword set - see PageBreakBeforeProperty/Map.PageBreakModes and page-break-after's comment. The CSS2.1 'always' keyword remaps to break-before's 'page'.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PageBreakModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1703,6 +1752,7 @@
       "name": "page-break-inside",
       "comment": "Legacy alias of break-inside, sharing its storage - no value remap on this axis. Deliberately narrower than break-inside's own css-break-3 keyword set - see PageBreakInsideProperty/Map.PageBreakInsideModes and page-break-after's comment.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PageBreakInsideModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1722,6 +1772,7 @@
       "name": "box-decoration-break",
       "comment": "CssProperty<BoxDecorationBreakMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
+      "cssom": {"converter": "Converters.BoxDecorationConverter", "className": "BoxDecorationBreak"},
       "initialValue": "slice",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1739,6 +1790,7 @@
     {
       "name": "orphans",
       "inherited": true,
+      "cssom": {"converter": "Converters.NaturalIntegerConverter"},
       "initialValue": "2",
       "cssDataType": {
         "type": "integer",
@@ -1753,6 +1805,7 @@
     {
       "name": "widows",
       "inherited": true,
+      "cssom": {"converter": "Converters.IntegerConverter"},
       "initialValue": "2",
       "cssDataType": {
         "type": "integer",
@@ -1768,6 +1821,7 @@
       "name": "footnote-policy",
       "comment": "css-gcpm-3 §2.8 - forces a break when a footnote's own note area can't be placed on the page its call landed on.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FootnotePolicyConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1798,6 +1852,7 @@
       "name": "background-repeat",
       "comment": "<repeat-style># where <repeat-style> = repeat-x | repeat-y | [repeat|space|round|no-repeat]{1,2}, matching the real Converters.BackgroundRepeatsConverter grammar. cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList (comma/whitespace splitting, no tokenizer), reusing the same Map.BackgroundRepeats dictionary the real converter uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundRepeatsConverter.FromList()"},
       "initialValue": "repeat",
       "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BackgroundRepeats", "maxPerSegment": 2, "aliasKeywords": ["repeat-x", "repeat-y"] },
       "html": {
@@ -1822,6 +1877,7 @@
       "name": "background-origin",
       "comment": "<box># where <box> = padding-box | border-box | content-box, matching the real Converters.BoxModelConverter grammar. cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList, reusing the same Map.BoxModels dictionary.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BoxModelConverter.FromList()"},
       "initialValue": "padding-box",
       "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BoxModels" },
       "html": {
@@ -1834,6 +1890,7 @@
       "name": "background-clip",
       "comment": "<box># where <box> = padding-box | border-box | content-box | text, matching the real Converters.BackgroundClipConverter grammar - a dedicated keyword map (Map.BackgroundClips), not the shared Map.BoxModels background-origin/box-sizing use, so 'text' can't leak into those. cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundClipConverter.FromList()"},
       "initialValue": "border-box",
       "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BackgroundClips" },
       "html": {
@@ -1846,6 +1903,7 @@
       "name": "background-attachment",
       "comment": "<attachment># where <attachment> = scroll | fixed | local, one per background layer (the painter resolves each layer's own with BackgroundLayerResolver.LayerAt, so a list such as 'fixed, scroll' - which the background shorthand exports when only some layers name an attachment - must be accepted). cssDataType 'keyword-list' validates span-based via CssValueParser.IsValidCommaKeywordList, reusing the Map.BackgroundAttachments dictionary the real converter uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundAttachmentConverter.FromList()"},
       "initialValue": "scroll",
       "cssDataType": {
         "type": "keyword-list",
@@ -1860,6 +1918,7 @@
     {
       "name": "object-fit",
       "inherited": false,
+      "cssom": {"converter": "Converters.ObjectFittingConverter"},
       "initialValue": "fill",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1878,6 +1937,7 @@
       "name": "image-rendering",
       "comment": "CSS Images 3 5.3. Inherited. Chooses how a raster image is resampled when it is drawn at a size other than its own: auto and smooth filter, high-quality filters with a sharper curve, crisp-edges and pixelated keep hard pixel edges.",
       "inherited": true,
+      "cssom": {"converter": "Converters.ImageRenderingConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1896,6 +1956,7 @@
       "name": "image-orientation",
       "comment": "CSS Images 4 5.2. Inherited. from-image applies the raster's own Exif orientation, none ignores it, and [ <angle> || flip ] replaces it with a rotation (rounded to a quarter turn) and optional horizontal flip. Stored as the declaration text and read at use with the same ImageOrientation.TryParse grammar the CSS-OM converter validates with (no second parser); the angle accepts calc(), folded to a quarter turn by the same grammar.",
       "inherited": true,
+      "cssom": {"converter": "Converters.ImageOrientationConverter"},
       "initialValue": "from-image",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ImageOrientationConverter.Convert" },
       "html": {
@@ -1908,6 +1969,7 @@
       "name": "object-position",
       "comment": "Unlike background-position, object-position is a single <position> (no comma list, no FromList()), so cssDataType 'cssom-grammar' calls the already-public Converters.PointConverter.Convert directly - the same converter ObjectPositionProperty's own real grammar uses - instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PointConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "50% 50%",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PointConverter.Convert" },
       "html": {
@@ -1919,6 +1981,7 @@
     {
       "name": "background-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "animatable": true, "hashless": true, "registryAnimatable": true},
       "initialValue": "transparent",
       "cssDataType": [
         "color",
@@ -1933,6 +1996,7 @@
     {
       "name": "color",
       "inherited": true,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "hashless": true, "registryAnimatable": true},
       "initialValue": "black",
       "cssDataType": [
         "color",
@@ -1949,6 +2013,7 @@
       "name": "background-image",
       "comment": "Parses into a structurally different field (image list) via a custom setter; cssDataType 'cssom-grammar' calls Converters.MultipleImageSourceConverter.Convert directly (the same converter BackgroundImageProperty's own real grammar uses, already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.MultipleImageSourceConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.MultipleImageSourceConverter.Convert" },
       "html": {
@@ -1963,6 +2028,7 @@
     {
       "name": "display",
       "inherited": false,
+      "cssom": {"converter": "Converters.DisplayModeConverter"},
       "initialValue": "inline",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1986,6 +2052,7 @@
       "name": "container-type",
       "comment": "CSS Containment 3 SS2. Establishes this box as a query container for @container: 'size' contains both axes (inline + block), 'inline-size' only the inline axis, 'normal' establishes no size query container (but still a style-query container - see CssBox.FindNearestQueryContainer's QueryKind.Style branch). Not inherited.",
       "inherited": false,
+      "cssom": {"converter": "Converters.ContainerTypeConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2016,6 +2083,7 @@
       "name": "float-reference",
       "comment": "CSS Page Floats - which fragmentation context a float is positioned relative to. Consumed by a float: footnote source and by a float: top/bottom/top-bottom/snap page float, where `column` routes it to the note area / block edge of the column its anchor sits in (falling back to the page outside a multi-column container); `inline` (the initial value), `region` and `page` resolve against the page. Inert on any other element.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FloatReferenceConverter"},
       "initialValue": "inline",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2033,6 +2101,7 @@
     {
       "name": "float",
       "inherited": false,
+      "cssom": {"converter": "Converters.FloatingConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2051,6 +2120,7 @@
       "name": "footnote-display",
       "comment": "css-gcpm-3 §2.3 - how an already-detached float: footnote body stacks inside the note area.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FootnoteDisplayConverter"},
       "initialValue": "block",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2086,6 +2156,7 @@
       "name": "position",
       "comment": "Multi-field write, mirroring font-family's precedent: css-gcpm-3 extends the keyword grammar with a running(<custom-ident>) function form, which the plain enum-keyword data type can't express. customValidator/customSetter delegate to the shared PositionValueGrammar.TryParse (also used by the CSS-OM PositionProperty converter's RunningFunctionConverter) so the two never independently re-derive the grammar; the resolved custom-ident is stored on the hand-written CssBox.RunningElementName companion field (see ComputedStyleAreas.cs's DisplayPositioningArea partial), not in this enum.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PositionModeConverter.Or(new RunningFunctionConverter())"},
       "initialValue": "static",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2142,6 +2213,7 @@
       "name": "z-index",
       "comment": "CssKeywordOrValue<AutoKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalIntegerConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2160,6 +2232,7 @@
     {
       "name": "border-collapse",
       "inherited": true,
+      "cssom": {"converter": "Converters.BorderCollapseConverter"},
       "initialValue": "separate",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2178,6 +2251,7 @@
       "name": "border-spacing",
       "comment": "<length>{1,2}, no percentage (matches the real Converters.LengthConverter.Many(1,2) grammar). cssDataType 'length-list' validates span-based via CssValueParser.IsValidLengthList (no tokenizer at all) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LengthConverter.Many(1, 2)"},
       "initialValue": "0",
       "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": false },
       "html": {
@@ -2189,6 +2263,7 @@
     {
       "name": "empty-cells",
       "inherited": true,
+      "cssom": {"converter": "Converters.EmptyCellsConverter"},
       "initialValue": "show",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2206,6 +2281,7 @@
     {
       "name": "caption-side",
       "inherited": true,
+      "cssom": {"converter": "Converters.CaptionSideConverter"},
       "initialValue": "top",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2224,6 +2300,7 @@
       "name": "table-layout",
       "comment": "CSS 2.1 §17.5.2's algorithm selector. Plain-string like its TableArea siblings (border-collapse/empty-cells/caption-side) rather than enum-keyword: CssLayoutEngineTable consumes every table keyword by comparing against a Keywords constant (tableBox.BorderCollapse == Keywords.Collapse), and Keywords.Auto/Keywords.Fixed already exist. Not inherited (unlike the other TableArea entries) - CSS 2.1 §17.5.2 defines it as non-inherited.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TableLayoutConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2242,6 +2319,7 @@
       "name": "line-height",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrUnitless>-backed (issue #598's follow-up) - the tenth and final keyword-or-value batch. Fixes a real pre-existing bug along the way: a bare unitless multiplier (e.g. 'line-height: 1.5') previously validated but silently collapsed ActualLineHeight to 0 (the old string-based ParseLength had no case for a number with no unit token); LengthOrUnitless's Unitless side now resolves it correctly (CSS2.1 §10.8.1: the number times the element's own font size). 'auto' is deliberately not in supportedValues - CSS Inline Layout 3's grammar is 'normal | <number> | <length-percentage>', auto was never part of it.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LineHeightConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2262,6 +2340,7 @@
       "name": "vertical-align",
       "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see Keywords.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
       "inherited": false,
+      "cssom": {"converter": "LengthOrPercentConverter.Or( VerticalAlignmentConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "baseline",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2281,6 +2360,7 @@
       "name": "text-indent",
       "comment": "cssDataType 'cssom-grammar' calls TextIndentValueConverter.Instance.Convert directly (the same shared TextIndentGrammar the real converter uses) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "TextIndentValueConverter.Instance", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TextIndentValueConverter.Instance.Convert" },
       "html": {
@@ -2294,6 +2374,7 @@
       "name": "text-align-all",
       "comment": "css-text-3 §6.2. The longhand text-align's shorthand actually resolves to (PeachBrackets.Css.TextAlignProperty) - a plain text-align value sets this and resets text-align-last to auto; justify-all/match-parent set both. See .claude/recent-fixes/ for the shorthand conversion.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HorizontalAlignmentConverter"},
       "initialValue": "start",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2332,6 +2413,7 @@
       "name": "text-overflow",
       "comment": "Only 'clip'/'ellipsis' are recognized - CSS Overflow 3's ratified grammar is exactly these two keywords; the two-value edge syntax, '<string>' replacement, and 'fade()' are non-standard/Level-4-experimental (MDN) and out of scope. An unrecognized value falls back to the initial 'clip'. Applied at paint time (FragmentPainter.Text.cs), per overflowing line box, in whichever writing mode/direction the box uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TextOverflowConverter"},
       "initialValue": "clip",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2350,6 +2432,7 @@
       "name": "text-transform",
       "comment": "cssDataType's own Map.TextTransforms includes full-width, mapped to CssBox.cs's ApplyTextTransform which converts characters to their Unicode fullwidth compatibility form. full-size-kana is not implemented (not in the TextTransform enum or Map.TextTransforms) so it's rejected outright and excluded from supportsSupportedValues below, same shape as word-break's keep-all split.",
       "inherited": true,
+      "cssom": {"converter": "Converters.TextTransformConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2375,6 +2458,7 @@
     {
       "name": "white-space",
       "inherited": true,
+      "cssom": {"converter": "Converters.WhitespaceConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2572,6 +2656,7 @@
       "name": "stop-opacity",
       "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
       "inherited": false,
+      "cssom": {"converter": "Converters.NumberConverter.Or(Converters.PercentConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "1",
       "cssDataType": "svg-opacity",
       "svg": {
@@ -2583,6 +2668,7 @@
     {
       "name": "visibility",
       "inherited": true,
+      "cssom": {"converter": "Converters.VisibilityConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "visible",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2635,6 +2721,7 @@
       "name": "letter-spacing",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). Same no-ems eager em-resolution as word-spacing — see its comment.",
       "inherited": true,
+      "cssom": {"converter": "Converters.OptionalLengthConverter", "unitless": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2661,6 +2748,7 @@
       "name": "line-clamp",
       "comment": "CSS Overflow 4 §line-clamp (CSS Overflow 3 explicitly deferred this feature to Level 4; it's a shorthand for max-lines + continue: discard + block-ellipsis there, modeled here as one property): none | <integer [1,∞]>. CssKeywordOrValue<NoneKeyword, int>-backed, mirroring z-index's <integer>|<keyword> shape. Consumed directly by CssLayoutEngine.CreateLineBoxes's per-word wrap loop (not by paint) - once a clamped block has produced this many lines, layout stops rather than starting another, and splices a generated ellipsis word onto the last one; there is deliberately no separate paint-time enforcement (see FragmentPainter's own remarks on why this differs from text-overflow's paint-time-only truncation).",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineClampConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2680,6 +2768,7 @@
       "name": "block-ellipsis",
       "comment": "CSS Overflow 4 §block-ellipsis: auto | none | <string> - customizes line-clamp's own generated ellipsis text (CssLayoutEngine.TryApplyLineClamp), in place of the UA-default '…'. cssDataType 'cssom-grammar' calls Converters.BlockEllipsisConverter.Convert directly - the same shared-converter shape hyphenate-character's own near-identical 'auto | <string>' grammar uses - instead of a second, independently-reimplemented grammar here. The raw declared text is stored as-is (still carrying its quotes, same convention as hyphenate-character); CssLayoutEngine.TryApplyLineClamp re-parses it (via CssValueParser.TryParseSingleString, the shared <string>-token parser) to get the actual ellipsis text/none decision. inherited: true matches the real spec table (confirmed against the W3C draft) even though line-clamp's own longhands (max-lines/continue) are not inherited - a parent's custom marker is meant to apply to any descendant's own line-clamp, not just a box that redeclares it itself. initialValue is a deliberate divergence from the spec's own bare per-property initial ('none') - the spec's line-clamp grammar is 'none | <integer> <block-ellipsis>?', and its own text says the single-value shorthand form ('line-clamp: 3', with no second component) sets block-ellipsis to auto, not to its own bare initial; this engine models line-clamp as one property rather than a true 3-way shorthand (see line-clamp's own comment above), so there is no separate expansion step to carry that 'implies auto' rule - defaulting block-ellipsis's OWN initial to auto reproduces the shorthand's documented result for the only case where this value is ever actually consulted (TryApplyLineClamp never reads it unless line-clamp itself is already active).",
       "inherited": true,
+      "cssom": {"converter": "Converters.BlockEllipsisConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockEllipsisConverter.Convert" },
       "html": {
@@ -2704,6 +2793,7 @@
     {
       "name": "writing-mode",
       "inherited": true,
+      "cssom": {"converter": "Converters.WritingModeConverter"},
       "initialValue": "horizontal-tb",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2728,6 +2818,7 @@
       "name": "text-orientation",
       "comment": "Parses, cascades, and inherits correctly; consumed by layout and paint under a vertical writing-mode (mixed/upright/sideways all drive real per-character glyph orientation - see the no-vertical-writing-mode-layout accepted gap, issue #547, for what's still out of scope).",
       "inherited": true,
+      "cssom": {"converter": "Converters.TextOrientationConverter"},
       "initialValue": "mixed",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2751,6 +2842,7 @@
     {
       "name": "unicode-bidi",
       "inherited": false,
+      "cssom": {"converter": "Converters.UnicodeModeConverter", "className": "UnicodeBidirectionalProperty"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2768,6 +2860,7 @@
     {
       "name": "hyphens",
       "inherited": true,
+      "cssom": {"converter": "Converters.Assign(Keywords.None, Keywords.None) .Or(Keywords.Manual, Keywords.Manual) .Or(Keywords.Auto, Keywords.Auto)"},
       "initialValue": "manual",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2786,6 +2879,7 @@
       "name": "hyphenate-character",
       "comment": "CSS Text 4 §6.3.1: auto | <string>. cssDataType 'cssom-grammar' calls the already-public Converters.HyphenateCharacterConverter.Convert directly instead of the full cssom round trip; layout resolves the raw stored text (list-style-type's own <string>-storage convention - still carries its quotes) to the actual glyph, defaulting auto to '-' (see docs/html-css-support.md and the accepted-gaps note on script-appropriate auto selection).",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateCharacterConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateCharacterConverter.Convert" },
       "html": {
@@ -2798,6 +2892,7 @@
       "name": "hyphenate-limit-chars",
       "comment": "CSS Text 4 §6.3.4: [ auto | <integer> ]{1,3}. cssDataType 'cssom-grammar' calls Converters.HyphenateLimitCharsConverter.Convert directly (the real, already-public converter HyphenateLimitCharsProperty itself uses) instead of the full cssom round trip; layout re-parses the raw stored text to get the word/before/after minimums (CssLayoutEngine.TryHyphenateWord).",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateLimitCharsConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateLimitCharsConverter.Convert" },
       "html": {
@@ -2810,6 +2905,7 @@
       "name": "hyphenate-limit-lines",
       "comment": "CSS Text 4 §6.3.5: no-limit | <integer [0,∞]>. CssKeywordOrValue<NoLimitKeyword,int>-backed, the z-index/column-width shape.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateLimitLinesConverter"},
       "initialValue": "no-limit",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2830,6 +2926,7 @@
       "name": "hyphenate-limit-last",
       "comment": "CSS Text 4 §6.3.5: none | always | column | page | spread. Parsed, cascaded and inherited; CssLayoutEngine.EnforceHyphenateLimitLastBeforeBreak enforces it at the fragmentainer-boundary discard point in CreateLineBoxes. spread is treated the same as page (no facing-page layout in this engine).",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateLimitLastConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2848,6 +2945,7 @@
       "name": "hyphenate-limit-zone",
       "comment": "CSS Text 4 §6.3.3: <length-percentage>, percentages resolved against the line box's own length. Initial 0 preserves the pre-existing behavior of always preferring a hyphenated break over leaving any unfilled space.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "unitless": true},
       "initialValue": "0",
       "cssDataType": "length",
       "html": {
@@ -2985,6 +3083,7 @@
       "name": "text-decoration-line",
       "comment": "cssDataType 'cssom-grammar' calls Converters.TextDecorationLinesConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. 'blink' validates-and-accepts here exactly as it did under cssom, but paint currently renders it as a plain line - a separate, already-accepted, non-perf-related gap; this change doesn't touch that.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TextDecorationLinesConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextDecorationLinesConverter.Convert" },
       "html": {
@@ -2997,6 +3096,7 @@
       "name": "text-decoration-style",
       "comment": "CSS Text Decoration 3 §3.2, single keyword. 'double'/'wavy' validate-and-accept here exactly as they did under cssom, but paint currently renders every style as solid - a separate, already-accepted, non-perf-related gap; this change doesn't touch that.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TextDecorationStyleConverter"},
       "initialValue": "solid",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3015,6 +3115,7 @@
       "name": "text-decoration-color",
       "comment": "Real color grammar now validated (was previously a documented gap: no color validation despite being a color property).",
       "inherited": false,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -3030,6 +3131,7 @@
       "name": "text-decoration-thickness",
       "comment": "CSS Text Decoration 4 §3.3. CssKeywordOrValue<TextDecorationThicknessKeyword, LengthOrCalc>-backed, mirroring vertical-align's shape - valueType \"length\" already covers percentages (CssValueParser.IsValidLength/ValueExtensions.ToDistance), and CSS Text Decoration 4 defines the percentage basis as the element's own font-size. 'auto' (the initial value) preserves this engine's pre-existing fixed decoration-line thickness exactly (FragmentPainter.PaintDecoration used a hardcoded pen width before this property existed) rather than deriving a UA thickness from the font; 'from-font' is the only way to opt into the font's own real underlineThickness metric (Font.UnderlineThickness).",
       "inherited": false,
+      "cssom": {"converter": "Converters.TextDecorationThicknessConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3049,6 +3151,7 @@
       "name": "text-decoration-skip-ink",
       "comment": "CSS Text Decoration 4 §2.5. Inherited, single keyword. 'auto' (the initial value) is defined as UA discretion and PeachPDF exercises it by skipping, which is what browsers do - so this property changes the default rendering of every underline and overline in every document (see .claude/migration-notes/). 'none' is the opt-out that restores an unbroken line. The skip itself is done at paint time by FragmentPainter, which subtracts the glyph ink crossing the line's band from the span it draws (DecorationSegments) - line-through is never skipped, per the spec. A CFF/OTF-outline font yields no decodable ink (GlyphOutlineDecoder reads glyf/loca only), so nothing is skipped in one; that is conformant for 'auto' and an accepted gap for 'all'. Lives in TextArea rather than TextDecorationArea because this is the one text-decoration-* longhand that inherits, and TextArea is the area CssBox.InheritStyle whole-adopts from the parent - TextDecorationArea is copied only for a structural duplicate of the same element, so an inherited property placed there would silently never inherit (confirmed by a test that failed exactly that way).",
       "inherited": true,
+      "cssom": {"converter": "Converters.TextDecorationSkipInkConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3072,7 +3175,8 @@
     {
       "name": "text-underline-offset",
       "comment": "CSS Text Decoration 4 §2.8 (https://www.w3.org/TR/css-text-decor-4/#underline-offset). CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>-backed, mirroring text-decoration-thickness's own shape exactly - same valueType \"length\" (covers <length>/<percentage>, the percentage resolving against 1em per §2.8), same not-inherited/TextDecorationArea placement. 'auto' (the initial value) is a 0 offset from whatever position text-underline-position establishes; a length/percentage moves the line further from the text in that position's own positive direction (toward 'under' for the auto/from-font/under positions this engine implements - see FragmentPainter.ResolveDecorationOffset). Only affects underline, never overline/line-through, per §2.8.",
-      "inherited": false,
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextUnderlineOffsetConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3092,6 +3196,7 @@
       "name": "text-underline-position",
       "comment": "css-text-decor-4 §2.5 (https://www.w3.org/TR/css-text-decor-4/#text-underline-position-property). NOT css-text-decor-3: that level's own grammar is only 'auto | [ under || [ left | right ] ]' - 'from-font' does not exist there at all, so the full compound grammar this property implements ('auto | [ from-font | under ] || [ left | right ]') is entirely a level-4 addition (verified against the live published text of both levels). Multi-field write (issue #1146), mirroring position's own precedent: the || combinator has no plain cssDataType shape (a single enum-keyword can't carry two independently-combining keyword groups), so customValidator/customSetter delegate to the shared TextUnderlinePositionGrammar.TryParse (also used by the CSS-OM TextUnderlinePositionProperty converter) so the two never independently re-derive the grammar. The from-font/under half is stored in this enum (TextUnderlinePosition); the left/right half - meaningful only under a vertical writing-mode, where it can make an overline/underline switch sides per §2.5's note - is stored on the hand-written CssBox.TextUnderlineSide companion field (see ComputedStyleAreas.cs's TextArea partial), not in this enum. cssDataType is kept as the old auto/from-font/under-only enum-keyword shape purely so the generator can still synthesize this field's own default expression from the 'auto' initialValue; customValidator/customSetter override it for real dispatch, same as position. 'auto' must resolve at or under the alphabetic baseline (this engine's existing FragmentPainter.ResolveAutomaticUnderlineClearance basis); 'from-font' reads the font's own underlinePosition metric (Font.UnderlinePosition) and uses it as-is, even when it is exactly 0 (at the baseline) - 0 is a plausible authored metric, not a clear 'no data' signal, so it is not special-cased into falling back to auto's basis; 'under' sits below the line's descent so as not to cross descenders. Inherited, so - like text-decoration-skip-ink - this lives in TextArea rather than TextDecorationArea (CssBox.InheritStyle's area-copy split only whole-adopts TextArea from the parent).",
       "inherited": true,
+      "cssom": {"converter": "new TextUnderlinePositionCompoundConverter()"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3112,6 +3217,7 @@
       "name": "font-size",
       "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontSizeConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3132,6 +3238,7 @@
       "name": "font-style",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontStyleConverter.Convert directly (the real grammar; per the accepted-gap file, oblique <angle> is genuinely implemented via FontObliqueAngleResolver, so there's no parse/render mismatch to preserve here unlike transform's perspective()).",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontStyleConverter"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontStyleConverter.Convert" },
       "html": {
@@ -3144,6 +3251,7 @@
       "name": "font-variant-caps",
       "comment": "CSS Fonts 3 §6.2, single mutually-exclusive keyword (not a space-separated combination, despite superficially reading like one of the other font-variant-* longhands).",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantCapsConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3162,6 +3270,7 @@
       "name": "font-variant-position",
       "comment": "CSS Fonts 4 §6.4, single mutually-exclusive keyword like font-variant-caps (not a space-separated combination). sub/super map to the OpenType 'subs'/'sups' GSUB features, with a synthesized fallback when the resolved font lacks them.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantPositionConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3180,6 +3289,7 @@
       "name": "font-variant-emoji",
       "comment": "CSS Fonts 4 §9.3, single mutually-exclusive keyword. Only Emoji Presentation Participating Code Points (the bases in emoji-variation-sequences.txt) are affected; the value acts as an implied U+FE0E/U+FE0F on each of them, and an explicit variation selector in the content overrides it. It selects among fonts (colour vs outline) at per-character font resolution - it is not a GSUB feature.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantEmojiConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3210,6 +3320,7 @@
       "name": "font-variant-ligatures",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantLigaturesConverter.Convert directly - the real converter enforces each ligature axis (common/discretionary/historical/contextual) appears at most once, which a naive keyword-set grammar would not; reusing it directly preserves that.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantLigaturesConverter"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantLigaturesConverter.Convert" },
       "html": {
@@ -3234,6 +3345,7 @@
       "name": "font-optical-sizing",
       "comment": "CSS Fonts 4 section 6.5, single keyword.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontOpticalSizingModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3264,6 +3376,7 @@
       "name": "font-synthesis-weight",
       "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking bold when the matched face is lighter than requested.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontSynthesisModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3282,6 +3395,7 @@
       "name": "font-synthesis-style",
       "comment": "CSS Fonts 4 section 3.5, auto | none. none stops the renderer faking italic/oblique when the matched face is upright.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontSynthesisModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3300,6 +3414,7 @@
       "name": "font-synthesis-small-caps",
       "comment": "CSS Fonts 4 section 3.5, auto | none. none stops small-caps being synthesized from reduced-size capitals.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontSynthesisModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3318,6 +3433,7 @@
       "name": "font-synthesis-position",
       "comment": "CSS Fonts 4 section 3.5, auto | none. none stops sub/superscript being synthesized from a reduced-size face and baseline shift.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontSynthesisModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3336,6 +3452,7 @@
       "name": "font-kerning",
       "comment": "CSS Fonts 3 §7.3, single keyword.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontKerningModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3366,6 +3483,7 @@
       "name": "text-rendering",
       "comment": "SVG 1.1 section 10.15 / the CSS Fonts hint, auto | optimizeSpeed | optimizeLegibility | geometricPrecision. Inherited. The only value with an effect here is optimizeSpeed, which turns off kerning and the optional ligatures where font-kerning and font-variant-ligatures are left at their initial values (TextShapingFeatureResolver.ApplyTextRendering); PDF output is unhinted vector content, so the other values change nothing.",
       "inherited": true,
+      "cssom": {"converter": "Converters.TextRenderingModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3384,6 +3502,7 @@
       "name": "-webkit-text-stroke-width",
       "comment": "Compatibility Standard, <line-width>. Inherited. thin/medium/thick resolve to literal lengths in the CSS-OM (see outline-width); they are listed for the initial-value defaulting path. Read by DerivedStyle.ActualTextStrokeWidth.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": ["length", "keyword"],
       "supportedValues": ["thin", "medium", "thick"],
@@ -3398,6 +3517,7 @@
       "name": "-webkit-text-stroke-color",
       "comment": "Compatibility Standard, <color>. Inherited; currentcolor (the initial value) is the element's own colour. Read by DerivedStyle.ActualTextStrokeColor.",
       "inherited": true,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": ["color", "current-color"],
       "html": {
@@ -3410,6 +3530,7 @@
       "name": "font-variant-numeric",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantNumericConverter.Convert directly - same per-axis-exclusivity shape as font-variant-ligatures, which a naive keyword-set grammar would not enforce.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantNumericConverter"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantNumericConverter.Convert" },
       "html": {
@@ -3422,6 +3543,7 @@
       "name": "font-variant-east-asian",
       "comment": "cssDataType 'cssom-grammar' calls Converters.FontVariantEastAsianConverter.Convert directly - same per-axis-exclusivity shape as font-variant-ligatures, which a naive keyword-set grammar would not enforce.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontVariantEastAsianConverter"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.FontVariantEastAsianConverter.Convert" },
       "html": {
@@ -3446,6 +3568,7 @@
       "name": "font-weight",
       "comment": "CssKeywordOrValue<FontWeightKeyword, double>-backed (typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. CSS Fonts 4 section 3.2's <number [1,1000]> form is validated as a plain number in [1,1000] (min/max below), fractions included (350.5), matching ValueExtensions.IsWeight on the Layer A CSS-OM side.",
       "inherited": true,
+      "cssom": {"converter": "FontWeightConverter.Or( WeightNumberConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3467,6 +3590,7 @@
       "name": "font-stretch",
       "comment": "CssKeywordOrValue<FontStretch, double>-backed: the nine keywords (reusing the FontStretch enum/Map.FontStretches map) or a non-negative <percentage> of the normal width (CSS Fonts 4 section 3.3), which FontStretchResolver turns into the percentage every font-creation call takes.",
       "inherited": true,
+      "cssom": {"converter": "Converters.FontStretchConverter.Or(Converters.NonNegativePercentConverter)", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3486,6 +3610,7 @@
       "name": "font-palette",
       "comment": "cssDataType 'cssom-grammar' calls FontPaletteValueConverter.Instance.Convert directly (the real grammar) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "FontPaletteValueConverter.Instance"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontPaletteValueConverter.Instance.Convert" },
       "html": {
@@ -3498,6 +3623,7 @@
     {
       "name": "list-style-position",
       "inherited": true,
+      "cssom": {"converter": "Converters.ListPositionConverter"},
       "initialValue": "outside",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3528,6 +3654,7 @@
       "name": "list-style-image",
       "comment": "Parses into a structured field via a custom setter; cssDataType 'cssom-grammar' calls Converters.OptionalImageSourceConverter.Convert directly (the same converter ListStyleImageProperty's own real grammar uses, already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "Converters.OptionalImageSourceConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.OptionalImageSourceConverter.Convert" },
       "html": {
@@ -3577,6 +3704,7 @@
       "name": "justify-content",
       "comment": "Map.JustifyContentKeywords carries the full CSS Box Alignment 3 <content-distribution>/<content-position> grammar - CssLayoutEngineFlex.ComputeMainOffsets and CssLayoutEngineGrid.PositionTracks dispatch every keyword here (issue #645).",
       "inherited": false,
+      "cssom": {"converter": "Converters.JustifyContentConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3595,6 +3723,7 @@
       "name": "align-items",
       "comment": "Map.AlignItemKeywords carries the full <self-position> grammar including self-start (issue #644) - CssLayoutEngineFlex.ComputeCrossOffsets and CssLayoutEngineGrid.AlignmentOffset both dispatch it. align-items serves both flex and grid layout modes and this entry can't tell which one a given box uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AlignItemsConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3693,6 +3822,7 @@
     {
       "name": "order",
       "inherited": false,
+      "cssom": {"converter": "Converters.IntegerConverter .OrGlobalValue()", "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "integer",
       "html": {
@@ -3705,6 +3835,7 @@
       "name": "row-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3724,6 +3855,7 @@
       "name": "column-gap",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). See CssLayoutEngineColumns.ResolveColumns for multicol's spec-mandated 'normal' => 1em special case (flex/grid instead resolve 'normal' to 0) — unaffected by this storage change, just a call-site consumption detail to preserve.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentOrNormalConverter .OrGlobalValue()", "animatable": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3743,6 +3875,7 @@
       "name": "grid-template-columns",
       "comment": "cssDataType 'parsed' shares one GridTemplateValueConverter.TryParseForRegistry call between Validate_/Set_ (RegistryEmitter's dedicated Parsed codegen) instead of the former cssom Validate_ pass (PropertyFactory+StylesheetParser) followed by a second, independent FromCssText parse in customSetter. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression. typedValueType is deliberately left unset - reserved schema surface for that future extension, not an oversight here.",
       "inherited": false,
+      "cssom": {"converter": "new GridTemplateValueConverter()"},
       "initialValue": "none",
       "cssDataType": { "type": "parsed", "converter": "PeachBrackets.Css.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
       "html": {
@@ -3756,6 +3889,7 @@
       "name": "grid-template-rows",
       "comment": "cssDataType 'parsed' shares one GridTemplateValueConverter.TryParseForRegistry call between Validate_/Set_ (RegistryEmitter's dedicated Parsed codegen) instead of the former cssom Validate_ pass (PropertyFactory+StylesheetParser) followed by a second, independent FromCssText parse in customSetter. TrySetTypedPropertyValue's existing hand-written _typedPropertySetters entry for this property is unaffected by this migration and is not yet superseded by a generated typed dispatch — a tracked follow-up, not a regression.",
       "inherited": false,
+      "cssom": {"converter": "new GridTemplateValueConverter()"},
       "initialValue": "none",
       "cssDataType": { "type": "parsed", "converter": "PeachBrackets.Css.GridTemplateValueConverter.TryParseForRegistry", "resultType": "CssProperty<GridTemplate>" },
       "html": {
@@ -3769,6 +3903,7 @@
       "name": "grid-template-areas",
       "comment": "cssDataType 'cssom-grammar' calls GridTemplateAreasGrammar.TryParse directly (the same grammar GridTemplateAreasValueConverter's real grammar uses) instead of the full cssom round trip. acceptsNoneLiteral: true because TryParse returns null for the literal 'none' the same as for an invalid value (its own doc comment states this explicitly), so the validator must accept it separately.",
       "inherited": false,
+      "cssom": {"converter": "new GridTemplateAreasValueConverter()"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTemplateAreasGrammar.TryParse", "acceptsNoneLiteral": true },
       "html": {
@@ -3781,6 +3916,7 @@
       "name": "grid-auto-columns",
       "comment": "cssDataType 'cssom-grammar' calls GridTrackListGrammar.TryParseTrackSizeList directly - the same trimmed-down (<track-size>+, no repeat()/line-names) entry point GridAutoTracksValueConverter itself calls - instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "new GridAutoTracksValueConverter()"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTrackListGrammar.TryParseTrackSizeList" },
       "html": {
@@ -3793,6 +3929,7 @@
       "name": "grid-auto-rows",
       "comment": "cssDataType 'cssom-grammar' calls GridTrackListGrammar.TryParseTrackSizeList directly - same as grid-auto-columns - instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "new GridAutoTracksValueConverter()"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridTrackListGrammar.TryParseTrackSizeList" },
       "html": {
@@ -3805,6 +3942,7 @@
       "name": "grid-auto-flow",
       "comment": "[ row | column ] || dense. cssDataType 'cssom-grammar' calls the real GridAutoFlowValueConverter.Instance.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "GridAutoFlowValueConverter.Instance"},
       "initialValue": "row",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.GridAutoFlowValueConverter.Instance.Convert" },
       "html": {
@@ -3852,6 +3990,7 @@
       "name": "grid-column-start",
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.GridLineConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
@@ -3864,6 +4003,7 @@
       "name": "grid-column-end",
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.GridLineConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
@@ -3876,6 +4016,7 @@
       "name": "grid-row-start",
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.GridLineConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
@@ -3888,6 +4029,7 @@
       "name": "grid-row-end",
       "comment": "CSS Grid §8.3 grid-line grammar. cssDataType 'cssom-grammar' calls the already-public Converters.GridLineConverter.Convert (shared GridLineGrammar) directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.GridLineConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.GridLineConverter.Convert" },
       "html": {
@@ -3900,6 +4042,7 @@
       "name": "column-count",
       "comment": "CssKeywordOrValue<AutoKeyword, int>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. Unlike z-index (this mechanism's pilot, whose <integer> is unconstrained), column-count's <integer> must be >= 1 (CSS Multi-column Layout 1 - 0/negative is invalid); min narrows the keyword-or-value grammar's integer clause the same way plain \"integer\" entries' own min does (see KeywordOrValueGrammar).",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalIntegerConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3939,6 +4082,7 @@
       "name": "column-fill",
       "comment": "CssProperty<ColumnFillMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
+      "cssom": {"converter": "Converters.ColumnFillConverter"},
       "initialValue": "balance",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3957,6 +4101,7 @@
       "name": "column-span",
       "comment": "CssProperty<ColumnSpanMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
+      "cssom": {"converter": "Converters.ColumnSpanConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3974,6 +4119,7 @@
     {
       "name": "column-rule-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "medium",
       "cssDataType": [
         "length",
@@ -4009,6 +4155,7 @@
     {
       "name": "column-rule-color",
       "inherited": false,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "currentcolor",
       "cssDataType": [
         "color",
@@ -4024,6 +4171,7 @@
       "name": "margin-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4049,6 +4197,7 @@
       "name": "margin-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4074,6 +4223,7 @@
       "name": "margin-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4099,6 +4249,7 @@
       "name": "padding-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": "length",
@@ -4117,6 +4268,7 @@
       "name": "padding-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": "length",
@@ -4135,6 +4287,7 @@
       "name": "padding-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": "length",
@@ -4153,6 +4306,7 @@
       "name": "padding-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": "length",
@@ -4171,6 +4325,7 @@
       "name": "inset-block-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4196,6 +4351,7 @@
       "name": "inset-block-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4221,6 +4377,7 @@
       "name": "inset-inline-start",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4246,6 +4403,7 @@
       "name": "inset-inline-end",
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unconditional (any), matching its physical sibling's own lack of validation.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "category": "logical",
       "cssDataType": [
@@ -4272,6 +4430,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-width",
@@ -4297,6 +4456,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-style",
@@ -4328,6 +4488,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-color",
@@ -4349,6 +4510,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-width",
@@ -4374,6 +4536,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-style",
@@ -4405,6 +4568,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-color",
@@ -4426,6 +4590,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-width",
@@ -4451,6 +4616,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-style",
@@ -4482,6 +4648,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-color",
@@ -4503,6 +4670,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineWidthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-width",
@@ -4528,6 +4696,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-style",
@@ -4559,6 +4728,7 @@
       "comment": "CSS Logical Properties (css-logical-1) resolution scratch space - see the margin-block-start entry for the full explanation. Read exactly once by CssBox.ResolveLogicalProperties. Unlike margin/padding/inset's logical longhands, this one DOES validate - through the exact same shared helper its physical sibling uses.",
       "category": "logical",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "registryAnimatable": true},
       "initialValue": null,
       "resolvesTo": {
         "group": "border-color",

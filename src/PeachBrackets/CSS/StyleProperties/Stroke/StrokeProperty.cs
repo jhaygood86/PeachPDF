@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.PaintConverter.OrGlobalValue();
 
         internal StrokeProperty()
-            : base(PropertyNames.Stroke, PropertyFlags.Animatable)
+            : base(PropertyNames.Stroke, PropertyFlags.Inherited | PropertyFlags.Animatable)
         {
         }
 

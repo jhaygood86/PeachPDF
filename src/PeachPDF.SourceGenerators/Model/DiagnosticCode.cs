@@ -27,5 +27,6 @@ namespace PeachPDF.SourceGenerators.Model
         PropertyPathAreaConflict = 15, // PPG015
         CssOmGrammarMissingMember = 16, // PPG016
         ParsedMissingConverterOrResultType = 17, // PPG017
+        CssomMissingConverter = 18, // PPG018
     }
 }
