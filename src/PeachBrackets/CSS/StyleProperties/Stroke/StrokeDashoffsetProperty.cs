@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.LengthOrPercentOrNumberConverter.OrGlobalValue();
 
         public StrokeDashoffsetProperty()
-            : base(PropertyNames.StrokeDashoffset, PropertyFlags.Animatable)
+            : base(PropertyNames.StrokeDashoffset, PropertyFlags.Inherited | PropertyFlags.Animatable)
         {
         }
 

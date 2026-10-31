@@ -84,7 +84,7 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
             Assert.False(property.IsImportant);
             Assert.IsType<FillProperty>(property);
             var concrete = (FillProperty)property;
-            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.IsInherited);
             Assert.False(concrete.HasValue);
         }
 
@@ -125,7 +125,7 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
             Assert.False(property.IsImportant);
             Assert.IsType<FillOpacityProperty>(property);
             var concrete = (FillOpacityProperty)property;
-            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.IsInherited);
             Assert.False(concrete.HasValue);
         }
 
@@ -166,7 +166,7 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
             Assert.False(property.IsImportant);
             Assert.IsType<FillRuleProperty>(property);
             var concrete = (FillRuleProperty)property;
-            Assert.False(concrete.IsInherited);
+            Assert.True(concrete.IsInherited);
             Assert.False(concrete.HasValue);
         }
     }

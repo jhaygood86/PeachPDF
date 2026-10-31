@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.PaintConverter.OrGlobalValue();
 
         internal FillProperty()
-            : base(PropertyNames.Fill, PropertyFlags.Animatable)
+            : base(PropertyNames.Fill, PropertyFlags.Inherited | PropertyFlags.Animatable)
         {
         }
 

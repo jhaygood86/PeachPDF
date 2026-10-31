@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.LineBreakConverter.OrDefault();
 
         public LineBreakProperty()
-            : base(PropertyNames.LineBreak)
+            : base(PropertyNames.LineBreak, PropertyFlags.Inherited)
         {
         }
 

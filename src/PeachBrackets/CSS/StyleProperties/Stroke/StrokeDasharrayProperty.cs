@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.StrokeDasharrayConverter.OrGlobalValue();
 
         public StrokeDasharrayProperty()
-            : base(PropertyNames.StrokeDasharray, PropertyFlags.Animatable | PropertyFlags.Unitless)
+            : base(PropertyNames.StrokeDasharray, PropertyFlags.Inherited | PropertyFlags.Animatable | PropertyFlags.Unitless)
         {
         }
 

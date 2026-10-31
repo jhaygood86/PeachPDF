@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.StrokeLinejoinConverter.OrGlobalValue();
 
         public StrokeLinejoinProperty()
-            : base(PropertyNames.StrokeLinejoin, PropertyFlags.Animatable)
+            : base(PropertyNames.StrokeLinejoin, PropertyFlags.Inherited | PropertyFlags.Animatable)
         {
         }
 

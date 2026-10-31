@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.WordBreakConverter.OrDefault();
 
         public WordBreakProperty()
-            : base(PropertyNames.WordBreak)
+            : base(PropertyNames.WordBreak, PropertyFlags.Inherited)
         {
         }
 
