@@ -1572,7 +1572,7 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>Resolves a grid item's used self-alignment: <c>auto</c>/<c>normal</c> defer to the
-        /// container's <c>*-items</c> value, which itself defaults to <c>normal</c>. <c>normal</c> is kept
+        /// container's <c>*-items</c> value, which itself defaults to <c>normal</c> (or <c>legacy</c>, which lays out the same). <c>normal</c> is kept
         /// distinct from an explicit <c>stretch</c>, because it stretches a non-replaced item but lets a
         /// replaced item with a natural size keep it (see <see cref="PlaceItemInCell"/>).</summary>
         private static string ResolveSelfAlignment(string self, string items)
@@ -1580,7 +1580,11 @@ namespace PeachBrackets.Html.Dom
             var value = self;
             if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Auto) || value.Isi(Keywords.Normal))
                 value = items;
-            if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Normal) || value.Isi(Keywords.Auto))
+            // `legacy [left|right|center]` (justify-items' initial value) only differs from `normal` in a block
+            // container, where it is passed on to children; in grid layout it behaves as `normal` (Box Alignment 3 §6.1).
+            if (string.IsNullOrEmpty(value) || value.Isi(Keywords.Normal) || value.Isi(Keywords.Auto)
+                || value.StartsWith(Keywords.Legacy, StringComparison.OrdinalIgnoreCase)
+                || value.EndsWith(Keywords.Legacy, StringComparison.OrdinalIgnoreCase))
                 value = Keywords.Normal;
             return value;
         }

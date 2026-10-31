@@ -1211,7 +1211,14 @@ namespace PeachBrackets.Css
                 { Keywords.Right, JustifyItem.Right },
                 { Keywords.Baseline, JustifyItem.Baseline },
                 { "first baseline", JustifyItem.Baseline },
-                { "last baseline", JustifyItem.LastBaseline }
+                { "last baseline", JustifyItem.LastBaseline },
+                { Keywords.Legacy, JustifyItem.Legacy },
+                { "legacy left", JustifyItem.LegacyLeft },
+                { "left legacy", JustifyItem.LegacyLeft },
+                { "legacy right", JustifyItem.LegacyRight },
+                { "right legacy", JustifyItem.LegacyRight },
+                { "legacy center", JustifyItem.LegacyCenter },
+                { "center legacy", JustifyItem.LegacyCenter }
             }.Freeze();
 
         public static readonly KeywordMap<JustifyItem> JustifySelfKeywords =

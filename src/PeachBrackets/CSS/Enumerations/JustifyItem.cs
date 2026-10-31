@@ -22,6 +22,23 @@ namespace PeachBrackets.Css
         /// §5.3). Not a valid <c>justify-items</c> value; never produced by <c>Map.JustifyItemKeywords</c>,
         /// only by <c>Map.JustifySelfKeywords</c>.
         /// </summary>
-        Auto
+        Auto,
+
+        /// <summary>
+        /// <c>justify-items</c> only - <c>legacy</c>, the property's initial value (CSS Box Alignment 3 §6.1):
+        /// <c>normal</c> in grid layout (flex containers ignore <c>justify-items</c>), and the container's
+        /// alignment passed down to a block-level child's <c>justify-self: auto</c> in a block container
+        /// (not reachable here: block-level <c>justify-self</c> is not applied).
+        /// </summary>
+        Legacy,
+
+        /// <summary><c>legacy left</c>: <c>legacy</c> plus the companion keyword.</summary>
+        LegacyLeft,
+
+        /// <summary><c>legacy right</c>.</summary>
+        LegacyRight,
+
+        /// <summary><c>legacy center</c>.</summary>
+        LegacyCenter
     }
 }

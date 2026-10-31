@@ -467,7 +467,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task Initial_JustifyItems_ResetsToNormal()
+        public async Task Initial_JustifyItems_ResetsToLegacy()
         {
             // Same class of gap as flex-grow above, for a Grid-area property.
             var html = """
@@ -482,7 +482,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var el = FindById(root, "el");
 
             Assert.NotNull(el);
-            Assert.Equal(JustifyItem.Normal, el!.JustifyItems.Value);
+            Assert.Equal(JustifyItem.Legacy, el!.JustifyItems.Value);
         }
 
         [Fact]

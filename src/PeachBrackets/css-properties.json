@@ -3816,12 +3816,12 @@
     {
       "name": "justify-items",
       "inherited": false,
-      "initialValue": "normal",
+      "initialValue": "legacy",
       "cssDataType": {
         "type": "enum-keyword",
         "enumType": "JustifyItem",
         "keywordMap": "Map.JustifyItemKeywords",
-        "fallback": "JustifyItem.Normal"
+        "fallback": "JustifyItem.Legacy"
       },
       "html": {
         "propertyPath": "JustifyItems",
