@@ -46,7 +46,7 @@ namespace PeachBrackets.Css
 
             var result = _converter.Convert(remainingTokens);
 
-            if (result != null && result.CssText != _when)
+            if (result is null || result.CssText != _when)
                 return null;
 
             return new ConditionalStartValue(consumedPrefix, result, value);

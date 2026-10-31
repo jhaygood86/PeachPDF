@@ -77,6 +77,40 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task JustifyItems_DefaultsToLegacy()
+        {
+            var box = await GetBoxAsync("<div id='el' style='display:grid'></div>");
+            Assert.Equal(JustifyItem.Legacy, box.JustifyItems.Value);
+        }
+
+        [Theory]
+        [InlineData("legacy", "Legacy")]
+        [InlineData("LEGACY", "Legacy")]
+        [InlineData("legacy left", "LegacyLeft")]
+        [InlineData("right legacy", "LegacyRight")]
+        [InlineData("legacy  center", "LegacyCenter")]
+        [InlineData("center legacy", "LegacyCenter")]
+        public async Task JustifyItems_ParsesLegacyForms(string css, string expected)
+        {
+            var box = await GetBoxAsync($"<div id='el' style='display:grid; justify-items:{css}'></div>");
+            Assert.Equal(expected, box.JustifyItems.Value.ToString());
+        }
+
+        [Fact]
+        public async Task JustifyItems_LegacyWithUnrelatedKeyword_IsInvalid()
+        {
+            var box = await GetBoxAsync("<div id='el' style='display:grid; justify-items:end; justify-items:legacy start'></div>");
+            Assert.Equal(JustifyItem.End, box.JustifyItems.Value);
+        }
+
+        [Fact]
+        public async Task JustifySelf_RejectsLegacy()
+        {
+            var box = await GetBoxAsync("<div style='display:grid'><div id='el' style='justify-self:end; justify-self:legacy'></div></div>");
+            Assert.Equal(JustifyItem.End, box.JustifySelf.Value);
+        }
+
+        [Fact]
         public async Task JustifySelf_StoresTypedValue_CaseInsensitively()
         {
             var box = await GetBoxAsync("<div style='display:grid'><div id='el' style='justify-self:RIGHT'></div></div>");
