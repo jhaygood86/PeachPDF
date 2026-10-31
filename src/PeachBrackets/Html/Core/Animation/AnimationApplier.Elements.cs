@@ -150,11 +150,6 @@ namespace PeachBrackets.Html.Animation
         {
             if (value is null || !UserUnitProperties.Contains(property)) return value;
 
-            // normal is the zero length for the two spacings (CSS Text 3 section 8.1 and 8.2), and the interpolator only mixes a length with a length.
-            if ((property.Equals("letter-spacing", StringComparison.OrdinalIgnoreCase) || property.Equals("word-spacing", StringComparison.OrdinalIgnoreCase))
-                && value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase))
-                return "0px";
-
             return value.IndexOf('(') < 0 ? BareNumber.Replace(value, "$0px") : value;
         }
 

@@ -408,6 +408,46 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(5, Spacing(SpacingText(document), property), 2);
         }
 
+        [Theory]
+        [InlineData("letter-spacing", 0.25, 5)]
+        [InlineData("letter-spacing", 0.5, 10)]
+        [InlineData("letter-spacing", 0.75, 15)]
+        [InlineData("word-spacing", 0.25, 5)]
+        [InlineData("word-spacing", 0.5, 10)]
+        [InlineData("word-spacing", 0.75, 15)]
+        public async Task ANormalKeyframe_BlendsWithACalcLength(string property, double progress, double expected)
+        {
+            // Chrome: normal to calc(10px + 0.5em) at font-size 20 is 0 to 20px, so 5, 10 and 15 at the quarter points.
+            var document = await BuildAsync($"@keyframes k {{ from {{ {property}: normal }} to {{ {property}: calc(10px + 0.5em) }} }} .t {{ animation: k 1s linear }}",
+                "<g><text class=\"t\" x=\"5\" y=\"30\" font-size=\"20\">Ab cd ef</text></g>", progress);
+
+            Assert.Equal(expected, Spacing(SpacingText(document), property), 2);
+        }
+
+        [Fact]
+        public async Task ALengthKeyframe_BlendsWithACalcLength()
+        {
+            // 4px to calc(10px + 0.5em) = 20px at font-size 20: 4 + 16 * 0.5
+            var document = await BuildAsync("@keyframes k { from { letter-spacing: 4px } to { letter-spacing: calc(10px + 0.5em) } } .t { animation: k 1s linear }",
+                "<g><text class=\"t\" x=\"5\" y=\"30\" font-size=\"20\">Ab cd ef</text></g>", 0.5);
+
+            Assert.Equal(12, Spacing(SpacingText(document), "letter-spacing"), 2);
+        }
+
+        [Theory]
+        [InlineData("letter-spacing", 0.25, 3.75)]
+        [InlineData("letter-spacing", 0.5, 2.5)]
+        [InlineData("letter-spacing", 0.75, 1.25)]
+        [InlineData("word-spacing", 0.5, 2.5)]
+        public async Task AnInvalidSpacing_StartsTheAnimationFromTheInheritedOne(string property, double progress, double expected)
+        {
+            // Chrome: an invalid value computes to the inherited 5px, which is what the keyframe-less start of the animation is.
+            var document = await BuildAsync($"@keyframes k {{ to {{ {property}: normal }} }} .t {{ animation: k 1s linear }}",
+                $"<g {property}=\"5px\"><text class=\"t\" {property}=\"x\" x=\"5\" y=\"30\">Ab cd ef</text></g>", progress);
+
+            Assert.Equal(expected, Spacing(SpacingText(document), property), 2);
+        }
+
         [Fact]
         public async Task ATextPropertyNothingDeclares_MixesFromItsInitialValue()
         {

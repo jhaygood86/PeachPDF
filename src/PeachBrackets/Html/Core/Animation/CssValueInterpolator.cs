@@ -54,6 +54,8 @@ namespace PeachBrackets.Html.Animation
             "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix"
         };
 
+        private static readonly HashSet<string> SpacingProperties = new(StringComparer.OrdinalIgnoreCase) { "letter-spacing", "word-spacing" };
+
         // The opacities: a percentage is the number it stands for (CSS Color 4 section 3.2), which Interpolate puts in before mixing.
         private static readonly HashSet<string> OpacityProperties = new(StringComparer.OrdinalIgnoreCase) { "opacity", "fill-opacity", "stroke-opacity", "stop-opacity" };
 
@@ -94,6 +96,17 @@ namespace PeachBrackets.Html.Animation
             }
 
             if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return from;
+
+            // CSS Text 3 §8.1 and §8.2: normal is the zero length for the two spacings, and a keyword does not mix with a length as it is.
+            if (SpacingProperties.Contains(property))
+            {
+                if (from.Equals("normal", StringComparison.OrdinalIgnoreCase)) from = "0px";
+                if (to.Equals("normal", StringComparison.OrdinalIgnoreCase)) to = "0px";
+            }
+
+            // CSS Values 4 §10.1 / CSS Transitions 1: a calc() against a length is mixed as the calc() of the two terms, resolved at layout.
+            // (A dash list is split on spaces, which a calc() holds, so it keeps flipping.)
+            if (!OpacityProperties.Contains(property) && !property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase) && TryMixWithCalc(valueParser, property, from, to, t, out var calcMixed)) return calcMixed;
 
             // CSS Transitions 1 §3 (visibility): visible for the whole of the way between visible and anything else.
             if (property.Equals("visibility", StringComparison.OrdinalIgnoreCase) && t > 0 && t < 1)
@@ -145,6 +158,56 @@ namespace PeachBrackets.Html.Animation
                 return matrix;
 
             return t < 0.5 ? from : to;
+        }
+
+        /// <summary>
+        /// A calc() against a length (or another calc()) mixed as <c>calc(from * (1 - t) + to * t)</c> (CSS Values 4 §10.1), which layout resolves like
+        /// any other calc(): the two cannot be added up before it, as a calc() can hold a percentage or a font-relative unit. False when either value is not
+        /// a whole calc() or a single number with a length unit (a unitless number is not one, so a calc() of numbers is left to the generic mix).
+        /// </summary>
+        private static bool TryMixWithCalc(CssValueParser valueParser, string property, string from, string to, double t, out string result)
+        {
+            result = string.Empty;
+
+            // A calc() of lengths is the only one a length can be added to: a bare 0 is a zero length beside it (CSS Values 4 §5.2), where beside a calc() of numbers it is a number.
+            var zeroIsLength = HoldsALength(valueParser, from) || HoldsALength(valueParser, to);
+
+            if (!TryCalcTerm(valueParser, from, 1 - t, zeroIsLength, out var fromTerm, out var fromIsCalc) || !TryCalcTerm(valueParser, to, t, zeroIsLength, out var toTerm, out var toIsCalc)) return false;
+            if (!fromIsCalc && !toIsCalc) return false;
+
+            // Two calc() of the same shape are mixed term by term, as they always were.
+            if (fromIsCalc && toIsCalc && SameShape(Scan(valueParser, from), Scan(valueParser, to))) return false;
+
+            var mixed = $"calc({fromTerm} + {toTerm})";
+
+            // The properties that take no negative value clamp the mix, as the numbers do, which an easing that overshoots would take below zero.
+            result = NonNegativeProperties.Contains(property) ? $"max(0px, {mixed})" : mixed;
+            return true;
+        }
+
+        private static bool HoldsALength(CssValueParser valueParser, string value) =>
+            value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && Scan(valueParser, value).Any(token => token.Kind == TokenKind.Number && LengthUnits.Contains(token.Unit));
+
+        private static bool TryCalcTerm(CssValueParser valueParser, string value, double weight, bool zeroIsLength, out string term, out bool isCalc)
+        {
+            term = string.Empty;
+            isCalc = false;
+
+            if (value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length)
+            {
+                isCalc = true;
+                term = $"({value[5..^1]}) * {Format(weight)}";
+                return true;
+            }
+
+            var tokens = Scan(valueParser, value);
+            if (tokens is not [{ Kind: TokenKind.Number } number]) return false;
+
+            if (number.Unit.Length == 0 && number.Number == 0 && zeroIsLength) term = "0px";
+            else if (LengthUnits.Contains(number.Unit)) term = Format(number.Number * weight) + number.Unit;
+            else return false;
+
+            return true;
         }
 
         /// <summary>
