@@ -109,6 +109,15 @@ Invoke-PackageReference 'PeachDrawing.Win2D' 'net10.0-windows10.0.19041.0'
 Invoke-PackageReference 'PeachBrackets'
 Invoke-PackageReference 'PeachPDF'
 
+# DefaultDocumentation writes an assembly page (index.md, which the site serves at /api/<package>/) only for an assembly with more than one
+# namespace. A package with a single namespace named like the package (PeachDrawing.PDF, PeachDrawing.Svg, PeachDrawing.Win2D) would
+# otherwise have no page at its folder's address, so its namespace page stands in for it.
+foreach ($folder in Get-ChildItem -Path $apiRoot -Directory) {
+    $index = Join-Path $folder.FullName 'index.md'
+    $namespacePage = Join-Path $folder.FullName "$($folder.Name).md"
+    if (-not (Test-Path $index) -and (Test-Path $namespacePage)) { Copy-Item $namespacePage $index }
+}
+
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Text')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Core')
 # A few of PeachImage's public members are documented with references to its internal types, which have no page to link to.
