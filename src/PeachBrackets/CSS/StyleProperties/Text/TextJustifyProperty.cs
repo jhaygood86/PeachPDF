@@ -5,7 +5,7 @@
         private static readonly IValueConverter StyleConverter = Converters.TextJustifyConverter.OrDefault();
 
         public TextJustifyProperty()
-            : base(PropertyNames.TextJustify)
+            : base(PropertyNames.TextJustify, PropertyFlags.Inherited)
         {
         }
 

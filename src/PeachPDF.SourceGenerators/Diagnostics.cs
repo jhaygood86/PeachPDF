@@ -63,6 +63,9 @@ namespace PeachPDF.SourceGenerators
         public static readonly DiagnosticDescriptor ParsedMissingConverterOrResultType =
             D("PPG017", "\"parsed\" data type requires converter and resultType", DiagnosticSeverity.Error);
 
+        public static readonly DiagnosticDescriptor CssomMissingConverter =
+            D("PPG018", "\"cssom\" block requires a converter", DiagnosticSeverity.Error);
+
         public static DiagnosticDescriptor For(DiagnosticCode code) => code switch
         {
             DiagnosticCode.JsonMalformed => JsonMalformed,
@@ -81,6 +84,7 @@ namespace PeachPDF.SourceGenerators
             DiagnosticCode.PropertyPathAreaConflict => PropertyPathAreaConflict,
             DiagnosticCode.CssOmGrammarMissingMember => CssOmGrammarMissingMember,
             DiagnosticCode.ParsedMissingConverterOrResultType => ParsedMissingConverterOrResultType,
+            DiagnosticCode.CssomMissingConverter => CssomMissingConverter,
             _ => JsonMalformed,
         };
     }

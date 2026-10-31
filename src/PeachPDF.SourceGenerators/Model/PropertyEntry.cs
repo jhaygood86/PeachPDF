@@ -67,6 +67,7 @@ namespace PeachPDF.SourceGenerators.Model
         public LogicalTarget? ResolvesTo { get; }
         public HtmlBinding? Html { get; }
         public SvgBinding? Svg { get; }
+        public CssomBinding? Cssom { get; }
 
         /// <summary>Source location of this entry's JSON object, for diagnostics raised after initial parsing (e.g. cross-entry alias checks, symbol validation).</summary>
         public int Line { get; }
@@ -77,7 +78,7 @@ namespace PeachPDF.SourceGenerators.Model
             KeywordComparison keywordComparison, string? aliasOf, LogicalTarget? resolvesTo,
             HtmlBinding? html, SvgBinding? svg, int line, int column,
             IReadOnlyList<DataTypeSpec>? supportsCssDataTypes = null, IReadOnlyList<string>? supportsSupportedValues = null,
-            KeywordComparison? supportsKeywordComparison = null)
+            KeywordComparison? supportsKeywordComparison = null, CssomBinding? cssom = null)
         {
             Name = name;
             Inherited = inherited;
@@ -94,6 +95,7 @@ namespace PeachPDF.SourceGenerators.Model
             ResolvesTo = resolvesTo;
             Html = html;
             Svg = svg;
+            Cssom = cssom;
             Line = line;
             Column = column;
         }
