@@ -23,6 +23,7 @@ namespace PeachBrackets.Html.Dom
     internal sealed class BoxRareState
     {
         internal bool _tableFixed;
+        internal LogicalDeclarationOrder? LogicalOrder;
         internal CssImage? ContentImage;
         internal bool HasPendingTargetPageContent;
         internal CssBox? DomParentBox;

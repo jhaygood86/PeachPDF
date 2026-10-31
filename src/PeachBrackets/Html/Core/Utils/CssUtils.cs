@@ -89,7 +89,10 @@ namespace PeachBrackets.Html.Utils
         /// <param name="value">the value to set</param>
         public static void SetPropertyValue(CssValueParser valueParser, CssBox cssBox, string propName, string value)
         {
-            CssPropertyRegistry.TrySet(valueParser, cssBox, propName, value);
+            // Stamp after the set so a logical/physical conflict on one edge can later be settled by which
+            // was declared last (CssBox.ResolveLogicalProperties). Cheap for the 99% of properties it ignores.
+            if (CssPropertyRegistry.TrySet(valueParser, cssBox, propName, value))
+                cssBox.NoteDeclarationOrder(propName);
         }
 
         /// <summary>

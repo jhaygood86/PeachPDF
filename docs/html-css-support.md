@@ -303,8 +303,6 @@ The [CSS logical box-model properties](https://developer.mozilla.org/en-US/docs/
 
 Each logical longhand keeps its own identity through the cascade and is resolved to a physical edge once the box's own `direction`/`writing-mode` are known, rather than being aliased directly onto a physical longhand at parse time. When a declaration block is serialized back to CSS, the logical longhands are used as declared — a logical shorthand (e.g. `margin-block`) is never reconstructed from them.
 
-> **Limitation:** when a logical and a physical declaration target the same edge on the same box (e.g. both `margin-left` and `margin-inline-start` set, under `direction: ltr`), the logical value always wins regardless of which was actually declared later, rather than true last-declared-wins cascade order.
-
 ### Borders
 
 | Property | MDN Reference | Notes |
