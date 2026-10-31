@@ -425,6 +425,51 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(container.ClientLeft + 160, a.Location.X, 1.5);
         }
 
+        [Theory]
+        [InlineData("legacy")]
+        [InlineData("legacy center")]
+        [InlineData("right legacy")]
+        public async Task JustifyItemsLegacy_BehavesAsNormal_StretchingTheItem(string value)
+        {
+            var html = Wrap($@"
+                <div id='container' style='display:grid; justify-items:{value}; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            Assert.Equal(container.ClientLeft, a.Location.X, 1.0);
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task JustifyItemsInitial_IsLegacy_AndStretchesLikeNormal()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; width:200pt; grid-template-columns:200pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var a = FindById(root, "a")!;
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+        }
+
+        [Fact]
+        public async Task JustifySelfAuto_UnderLegacyItems_StretchesWhileExplicitSelfStillWins()
+        {
+            var html = Wrap(@"
+                <div id='container' style='display:grid; justify-items:legacy left; width:200pt; grid-template-columns:200pt 200pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt; width:40pt; justify-self:end;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var container = FindById(root, "container")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            Assert.Equal(200, a.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(container.ClientLeft + 200 + 160, b.Location.X, 1.5);
+        }
+
         [Fact]
         public async Task JustifyItemsRight_ItemWithNoOverride_SitsAtCellEnd()
         {

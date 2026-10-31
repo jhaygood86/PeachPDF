@@ -425,6 +425,7 @@
         public const string Unset = "unset";
         public const string FlexStart = "flex-start";
         public const string FlexEnd = "flex-end";
+        public const string Legacy = "legacy";
         public const string Safe = "safe";
         public const string Unsafe = "unsafe";
         public const string First = "first";

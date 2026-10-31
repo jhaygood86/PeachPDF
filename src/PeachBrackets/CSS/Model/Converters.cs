@@ -490,8 +490,18 @@ namespace PeachBrackets.Css
         // justify-items / justify-self share align-items/align-self's <self-position> grammar, plus the
         // physical left/right keywords (CSS Box Alignment Level 3 §5) that are only valid on the inline
         // (justify) axis - which is why align-items/align-self themselves don't accept them.
-        public static readonly IValueConverter JustifyItemsConverter =
-            AlignItemsConverter.Or(Keywords.Left).Or(Keywords.Right);
+        // justify-items additionally takes `legacy [left | right | center]` (§6.1, either order); `legacy` is its
+        // initial value.
+        public static readonly IValueConverter JustifyItemsConverter = Construct(() =>
+        {
+            static IValueConverter Ident(string keyword) => new IdentifierValueConverter<string>(keyword, keyword);
+            var companion = new[] { Keywords.Left, Keywords.Right, Keywords.Center };
+            return AlignItemsConverter.Or(Keywords.Left).Or(Keywords.Right).Or(Keywords.Legacy)
+                .Or(Ident(Keywords.Legacy).ConditionalStartsWithKeyword(Keywords.Legacy, companion))
+                .Or(Ident(Keywords.Left).ConditionalStartsWithKeyword(Keywords.Left, Keywords.Legacy))
+                .Or(Ident(Keywords.Right).ConditionalStartsWithKeyword(Keywords.Right, Keywords.Legacy))
+                .Or(Ident(Keywords.Center).ConditionalStartsWithKeyword(Keywords.Center, Keywords.Legacy));
+        });
         public static readonly IValueConverter JustifySelfConverter =
             AlignSelfConverter.Or(Keywords.Left).Or(Keywords.Right);
 
