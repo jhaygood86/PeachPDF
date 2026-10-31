@@ -1621,7 +1621,7 @@
       "name": "min-height",
       "inherited": false,
       "cssom": {"converter": "Converters.LengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
-      "initialValue": "0",
+      "initialValue": "auto",
       "cssDataType": [
         "length",
         "keyword"
@@ -3174,7 +3174,7 @@
     },
     {
       "name": "text-underline-offset",
-      "comment": "CSS Text Decoration 4 §2.8 (https://www.w3.org/TR/css-text-decor-4/#underline-offset). CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>-backed, mirroring text-decoration-thickness's own shape exactly - same valueType \"length\" (covers <length>/<percentage>, the percentage resolving against 1em per §2.8), same not-inherited/TextDecorationArea placement. 'auto' (the initial value) is a 0 offset from whatever position text-underline-position establishes; a length/percentage moves the line further from the text in that position's own positive direction (toward 'under' for the auto/from-font/under positions this engine implements - see FragmentPainter.ResolveDecorationOffset). Only affects underline, never overline/line-through, per §2.8.",
+      "comment": "CSS Text Decoration 4 §2.8 (https://www.w3.org/TR/css-text-decor-4/#underline-offset). CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>-backed, mirroring text-decoration-thickness's own shape exactly - same valueType \"length\" (covers <length>/<percentage>, the percentage resolving against 1em per §2.8), but inherited (text-underline-offset is Inherited: yes in css-text-decor-4), so it lives in TextArea - the whole-area adoption in CssBox.InheritStyle is what inherits it - rather than TextDecorationArea like text-decoration-thickness. 'auto' (the initial value) is a 0 offset from whatever position text-underline-position establishes; a length/percentage moves the line further from the text in that position's own positive direction (toward 'under' for the auto/from-font/under positions this engine implements - see FragmentPainter.ResolveDecorationOffset). Only affects underline, never overline/line-through, per §2.8.",
       "inherited": true,
       "cssom": {"converter": "Converters.TextUnderlineOffsetConverter"},
       "initialValue": "auto",
@@ -3188,7 +3188,7 @@
       "html": {
         "propertyPath": "TextUnderlineOffset",
         "csharpDataType": "CssProperty<CssKeywordOrValue<TextUnderlineOffsetKeyword, LengthOrCalc>>",
-        "area": "TextDecorationArea",
+        "area": "TextArea",
         "getterExpression": "{box}.TextUnderlineOffset.ToString()"
       }
     },
