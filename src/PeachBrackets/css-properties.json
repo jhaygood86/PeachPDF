@@ -2789,9 +2789,9 @@
     },
     {
       "name": "letter-spacing",
-      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). Same no-ems eager em-resolution as word-spacing — see its comment.",
+      "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up). Same no-ems eager em-resolution as word-spacing — see its comment. CSS Text 4 §4.2 also allows a <percentage>; the spec leaves its basis to the UA, so DerivedStyle.MeasureLetterSpacing resolves it against the box's own font size.",
       "inherited": true,
-      "cssom": {"converter": "Converters.OptionalLengthConverter", "unitless": true},
+      "cssom": {"converter": "Converters.LengthOrPercentConverter.Or(Keywords.Normal)", "unitless": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",

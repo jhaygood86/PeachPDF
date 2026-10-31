@@ -91,6 +91,30 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(plain + 4 * 10, spaced, 1);
         }
 
+        [Theory]
+        [InlineData("10%", "0.1em")]
+        [InlineData("50%", "10pt")]
+        [InlineData("-25%", "-5pt")]
+        public async Task LetterSpacing_Percentage_ResolvesAgainstOwnFontSize(string percentage, string equivalent)
+        {
+            // CSS Text 4 leaves the percentage basis to the UA; the box's own font size (20pt here) is it.
+            var pct = await FirstWordWidthAsync($"<p id='p' style='font-size:20pt; letter-spacing:{percentage}'>AAAA</p>");
+            var abs = await FirstWordWidthAsync($"<p id='p' style='font-size:20pt; letter-spacing:{equivalent}'>AAAA</p>");
+            var plain = await FirstWordWidthAsync("<p id='p' style='font-size:20pt'>AAAA</p>");
+
+            Assert.NotEqual(plain, pct);
+            Assert.Equal(abs, pct, 1);
+        }
+
+        [Fact]
+        public async Task LetterSpacing_CalcWithPercentage_ResolvesAgainstOwnFontSize()
+        {
+            var calc = await FirstWordWidthAsync("<p id='p' style='font-size:20pt; letter-spacing:calc(10% + 1pt)'>AAAA</p>");
+            var abs = await FirstWordWidthAsync("<p id='p' style='font-size:20pt; letter-spacing:3pt'>AAAA</p>");
+
+            Assert.Equal(abs, calc, 1);
+        }
+
         // Direct regression test for the reported bug: "REMIT PAYMENT TO" style all-caps letter-spaced
         // labels rendered as "REMITPAYMENTTO" once letter-spacing reached the natural space width, since
         // each word painted one letter-spacing unit wider than its reserved box and ate into the next

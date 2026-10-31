@@ -1112,8 +1112,13 @@ namespace PeachBrackets.Html.Dom
         {
             if (!double.IsNaN(ActualLetterSpacing)) return;
 
+            // A percentage is a fraction of the box's own font size (CSS Text 4 leaves the basis to the UA).
+            // GetEmHeight() is in the device-scaled font-measurement space, so undo that scaling the same
+            // way NoEms does before using it as the 100% basis in layout units.
+            var fontSizeBasis = Owner.GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+
             _actualLetterSpacing = Style.Text.LetterSpacing.Value is { IsValue: true, Value: { } letterSpacing }
-                ? CssValueParser.ParseLength(letterSpacing, 1, Owner)
+                ? CssValueParser.ParseLength(letterSpacing, fontSizeBasis, Owner)
                 : 0;
         }
 
