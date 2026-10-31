@@ -67,6 +67,7 @@ namespace PeachBrackets.Html.Animation
         {
             "width", "height", "min-width", "min-height", "max-width", "max-height",
             "padding-top", "padding-right", "padding-bottom", "padding-left",
+            "padding-block-start", "padding-block-end", "padding-inline-start", "padding-inline-end", "column-rule-width",
             "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "outline-width",
             "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
             "font-size", "line-height", "column-width", "row-gap", "column-gap", "flex-grow", "flex-shrink", "stroke-width"
@@ -104,9 +105,8 @@ namespace PeachBrackets.Html.Animation
                 if (to.Equals("normal", StringComparison.OrdinalIgnoreCase)) to = "0px";
             }
 
-            // CSS Values 4 §10.1 / CSS Transitions 1: a calc() against a length is mixed as the calc() of the two terms, resolved at layout.
-            // (A dash list is split on spaces, which a calc() holds, so it keeps flipping.)
-            if (!OpacityProperties.Contains(property) && !property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase) && TryMixWithCalc(valueParser, property, from, to, t, out var calcMixed)) return calcMixed;
+            // CSS Values 4 §10.1: a calc() against a length is mixed as the calc() of the two terms, resolved at layout.
+            if (SupportsCalcMix(property) && TryMixWithCalc(valueParser, property, from, to, t, out var calcMixed)) return calcMixed;
 
             // CSS Transitions 1 §3 (visibility): visible for the whole of the way between visible and anything else.
             if (property.Equals("visibility", StringComparison.OrdinalIgnoreCase) && t > 0 && t < 1)
@@ -169,10 +169,16 @@ namespace PeachBrackets.Html.Animation
         {
             result = string.Empty;
 
-            // A calc() of lengths is the only one a length can be added to: a bare 0 is a zero length beside it (CSS Values 4 §5.2), where beside a calc() of numbers it is a number.
-            var zeroIsLength = HoldsALength(valueParser, from) || HoldsALength(valueParser, to);
+            // Only a calc() of lengths can be added to a length, and a bare 0 is a zero length beside one (CSS Values 4 §5.2), where beside a calc() of numbers it is a number.
+            var fromIsCalc = IsWholeCalc(from);
+            var toIsCalc = IsWholeCalc(to);
+            if (!fromIsCalc && !toIsCalc) return false;
 
-            if (!TryCalcTerm(valueParser, from, 1 - t, zeroIsLength, out var fromTerm, out var fromIsCalc) || !TryCalcTerm(valueParser, to, t, zeroIsLength, out var toTerm, out var toIsCalc)) return false;
+            if ((fromIsCalc && !HoldsALength(valueParser, from)) || (toIsCalc && !HoldsALength(valueParser, to))) return false;
+
+            var zeroIsLength = fromIsCalc || toIsCalc;
+
+            if (!TryCalcTerm(valueParser, from, 1 - t, zeroIsLength, out var fromTerm) || !TryCalcTerm(valueParser, to, t, zeroIsLength, out var toTerm)) return false;
             if (!fromIsCalc && !toIsCalc) return false;
 
             // Two calc() of the same shape are mixed term by term, as they always were.
@@ -185,17 +191,22 @@ namespace PeachBrackets.Html.Animation
             return true;
         }
 
-        private static bool HoldsALength(CssValueParser valueParser, string value) =>
-            value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && Scan(valueParser, value).Any(token => token.Kind == TokenKind.Number && LengthUnits.Contains(token.Unit));
+        private static bool IsWholeCalc(string value) =>
+            value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length;
 
-        private static bool TryCalcTerm(CssValueParser valueParser, string value, double weight, bool zeroIsLength, out string term, out bool isCalc)
+        // The mix is a calc() of lengths: the opacities are numbers, and a dash list is split on spaces, which a calc() holds, so it keeps flipping.
+        private static bool SupportsCalcMix(string property) =>
+            !OpacityProperties.Contains(property) && !property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase);
+
+        private static bool HoldsALength(CssValueParser valueParser, string value) =>
+            IsWholeCalc(value) && Scan(valueParser, value).Any(token => token.Kind == TokenKind.Number && LengthUnits.Contains(token.Unit));
+
+        private static bool TryCalcTerm(CssValueParser valueParser, string value, double weight, bool zeroIsLength, out string term)
         {
             term = string.Empty;
-            isCalc = false;
 
-            if (value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length)
+            if (IsWholeCalc(value))
             {
-                isCalc = true;
                 term = $"({value[5..^1]}) * {Format(weight)}";
                 return true;
             }

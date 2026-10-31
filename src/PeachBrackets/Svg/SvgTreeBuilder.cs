@@ -1690,6 +1690,7 @@ namespace PeachBrackets.Svg
             return animated is not null && !IsImportantDeclaration(node, name) ? animated : declared;
         }
 
+        /// <summary>A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length; anything else computes to the inherited value.</summary>
         private static bool IsSpacingValue(string value) =>
             value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value) is not null;
 

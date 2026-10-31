@@ -60,7 +60,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task ACalcAgainstANumber_IsNotMixedAsALength()
         {
-            // calc(1 + 1) against 0 is a pair of numbers: z-index takes the whole-number mix of it, not a length mix.
+            // calc(1 + 3) against 0 is a pair of numbers: z-index takes the whole-number mix of it, not a length mix.
             var box = await BoxAt("from { z-index: calc(1 + 3) } to { z-index: 0 }", 0.5);
 
             Assert.Equal("2", box.ZIndex.ToString());
