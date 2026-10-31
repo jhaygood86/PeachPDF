@@ -60,7 +60,9 @@ namespace PeachPDF.SourceGenerators.Tests
             var source = Generated(json);
 
             Assert.Contains("internal sealed class CaptionSideProperty : Property", source);
-            Assert.Contains("(Converters.CaptionSideConverter).OrDefault();", source);
+            Assert.Contains("IValueConverter ValueGrammar =", source);
+            Assert.Contains("Converters.CaptionSideConverter;", source);
+            Assert.Contains("StyleConverter = ValueGrammar.OrDefault();", source);
             Assert.Contains(": base(\"caption-side\", PropertyFlags.Inherited)", source);
             Assert.Contains(": base(\"border-top-color\", PropertyFlags.Animatable)", source);
             Assert.Contains("AddLonghand(\"caption-side\", () => new CaptionSideProperty());", source);
@@ -85,6 +87,34 @@ namespace PeachPDF.SourceGenerators.Tests
             Assert.Contains("internal sealed class CustomName : Property", source);
             Assert.Contains("PropertyFlags.Inherited | PropertyFlags.Hashless | PropertyFlags.Unitless | PropertyFlags.Animatable", source);
             Assert.Contains("AddLonghand(\"-webkit-x\", () => new CustomName(), false, true);", source);
+        }
+
+        [Fact]
+        public void Globals_None_Leaves_The_Grammar_Unwrapped_And_Still_Exposes_It()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "flex-grow", "inherited": false, "initialValue": "0", "cssDataType": "length",
+                      "cssom": { "converter": "Converters.FlexGrowShrinkConverter", "globals": "none" } },
+                    { "name": "opacity", "inherited": false, "initialValue": "1", "cssDataType": "length",
+                      "cssom": { "converter": "Converters.OptionalPercentOrNumberConverter", "globals": "default" } }
+                  ]
+                }
+                """;
+
+            var source = Generated(json);
+
+            Assert.Contains("Converters.FlexGrowShrinkConverter;", source);
+            Assert.Contains("class FlexGrowProperty", source);
+            var flexGrow = source.Substring(source.IndexOf("class FlexGrowProperty", System.StringComparison.Ordinal));
+            flexGrow = flexGrow.Substring(0, flexGrow.IndexOf("internal FlexGrowProperty", System.StringComparison.Ordinal));
+            Assert.Contains("StyleConverter = ValueGrammar;", flexGrow);
+            Assert.DoesNotContain("OrDefault", flexGrow);
+
+            var opacity = source.Substring(source.IndexOf("class OpacityProperty", System.StringComparison.Ordinal));
+            opacity = opacity.Substring(0, opacity.IndexOf("internal OpacityProperty", System.StringComparison.Ordinal));
+            Assert.Contains("StyleConverter = ValueGrammar.OrDefault();", opacity);
         }
 
         [Fact]

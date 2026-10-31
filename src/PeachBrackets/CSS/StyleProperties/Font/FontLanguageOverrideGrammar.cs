@@ -6,22 +6,13 @@ using System.Linq;
 namespace PeachBrackets.Css
 {
     /// <summary>
-    /// CSS Fonts 4 §6.6 <c>font-language-override</c>: <c>normal | &lt;string&gt;</c>. Inherited. The authored text is kept;
-    /// <see cref="FontLanguageOverrideGrammar.Resolve"/> turns it into an OpenType language-system tag where the text is shaped.
+    /// The shared grammar for <c>font-language-override</c>: validates at parse time (CSS-OM) and resolves the authored text to the
+    /// OpenType language-system tag at shaping time, so the two layers cannot disagree.
     /// </summary>
-    internal sealed class FontLanguageOverrideProperty : Property
+    internal static class FontLanguageOverrideGrammar
     {
-        // Exposed for css-properties.json's "cssom-grammar" validator.
-        internal static readonly IValueConverter ValueGrammar = new LanguageOverrideValueConverter();
-
-        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault();
-
-        internal FontLanguageOverrideProperty()
-            : base(PropertyNames.FontLanguageOverride, PropertyFlags.Inherited)
-        {
-        }
-
-        internal override IValueConverter Converter => StyleConverter;
+        /// <summary>The CSS-OM grammar of <c>font-language-override</c> (<c>normal | &lt;string&gt;</c>, CSS Fonts 4 §6.6); the authored text is kept.</summary>
+        internal static readonly IValueConverter Value = new LanguageOverrideValueConverter();
 
         private sealed class LanguageOverrideValueConverter : IValueConverter
         {
@@ -44,14 +35,7 @@ namespace PeachBrackets.Css
                 public TokenValue ExtractFor(string name) => Original;
             }
         }
-    }
 
-    /// <summary>
-    /// The shared grammar for <c>font-language-override</c>: validates at parse time (CSS-OM) and resolves the authored text to the
-    /// OpenType language-system tag at shaping time, so the two layers cannot disagree.
-    /// </summary>
-    internal static class FontLanguageOverrideGrammar
-    {
         /// <summary>
         /// Parses a value. Returns false when invalid. On success <paramref name="tag"/> is null for <c>normal</c>; otherwise the
         /// string's one to four printable ASCII characters, padded with spaces to the four characters of an OpenType tag.

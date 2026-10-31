@@ -204,14 +204,23 @@ equivalence proof (`CssPropertyRegistryEquivalenceTests.cs`/`CssPropertyRegistry
 no longer exists as a separate file — since `CssUtils` forwards directly to `CssPropertyRegistry`,
 `CssUtilsTests.cs` exercising `CssUtils`'s public API already covers it end-to-end.
 
-**CSS-OM classes**: a longhand's `Property` class under `src/PeachBrackets/CSS/StyleProperties/` is generated
-(`CssomProperties.g.cs`, plus `PropertyFactory.RegisterGeneratedLonghands`) when its JSON entry has a `cssom`
-block (`converter`, and `animatable`/`hashless`/`unitless`/`registryAnimatable`/`font`/`className` when they apply;
-`PPG018` if the converter is missing). Inheritance comes from the entry's own `inherited`, never restated. The
-CSS-OM `initial` keyword carries no typed value, so there is no initial to declare there. A class that exposes a
-grammar member (`ValueGrammar`) or is not `<expr>.OrDefault(...)` stays hand-written, and
-`CssomInheritanceDriftTests` holds it to the JSON's `inherited`; `CssomLonghandBaselineTests` pins every longhand's
-CSS-OM behaviour (regenerate with `PEACH_UPDATE_BASELINE=1` and review the diff).
+**CSS-OM classes**: every longhand's `Property` class under `src/PeachBrackets/CSS/StyleProperties/` is generated
+(`CssomProperties.g.cs`, plus `PropertyFactory.RegisterGeneratedLonghands`) from its JSON entry's `cssom` block
+(`converter`, and `globals`/`animatable`/`hashless`/`unitless`/`registryAnimatable`/`font`/`className` when they
+apply; `PPG018` if the converter is missing). Each class exposes `internal static readonly IValueConverter
+ValueGrammar` (the grammar before the CSS-wide keywords - what `cssom-grammar` validators call, e.g.
+`PeachBrackets.Css.QuotesProperty.ValueGrammar.Convert`) and wraps it in `.OrDefault()` for `Converter`, unless
+`"globals": "none"` (flex-grow, align-self, opacity... whose grammar already takes the keywords). Inheritance comes
+from the entry's own `inherited`, never restated. The CSS-OM `initial` keyword carries no typed value, so there is
+no initial to declare there. A grammar longer than one expression over `Converters` is hoisted by name into
+`CssomGrammars` (or the property's own grammar type, e.g. `FontSizeAdjustGrammar.Value`) and referenced from
+`cssom.converter`; the JSON keeps one line per property. An entry with no render-layer binding is written with
+`"cssDataType": "unsupported"` and only a `cssom` block. `CssomInheritanceDriftTests` fails if a JSON entry has no
+`cssom` block and is not on its short reviewed exclusion list (vendor aliases and the `SvgOnlyProperty` geometry
+properties, each with its reason); `CssomLonghandBaselineTests` pins every longhand's CSS-OM behaviour (regenerate
+with `PEACH_UPDATE_BASELINE=1` and review the diff). The only hand-written `Property` subclasses left are the ones
+that are not a named longhand: `CustomProperty`, `UnknownProperty`, `FeatureProperty`, `SvgOnlyProperty`,
+`LegacyBoxProperty` and the `@font-face` descriptor classes.
 
 **Adding a property**: add one object to `css-properties.json`'s `properties` array. `cssDataType` names
 a grammar (`length`, `color`, `keyword` + `supportedValues`, `integer`, `{type:"enum-keyword", ...}` for a

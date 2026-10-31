@@ -6,8 +6,8 @@ namespace PeachBrackets.Engine.Tests.CSS
 {
     /// <summary>
     /// <c>css-properties.json</c> is the one place a longhand's inheritance and CSS-OM shape are declared. The
-    /// classes generated from its <c>cssom</c> blocks cannot disagree with it; these guard the hand-written
-    /// remainder (properties whose class carries extra grammar members) and the registration itself.
+    /// classes generated from its <c>cssom</c> blocks cannot disagree with it; these guard the registration itself and
+    /// that no longhand slips back to a hand-written class.
     /// </summary>
     public class CssomInheritanceDriftTests
     {
@@ -50,13 +50,46 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.Empty(missing);
         }
 
-        // Spec inheritance of properties css-properties.json does not (yet) describe: CSS Text 3 text-justify
-        // and SVG 2 text-anchor are both inherited.
-        [Theory]
-        [InlineData("text-justify")]
-        [InlineData("text-anchor")]
-        [InlineData("cursor")]
-        public void SpecInheritedLonghandsOutsideTheJson_AreInherited(string name) =>
-            Assert.True(PropertyFactory.Instance.CreateLonghand(name)!.CanBeInherited);
+        /// <summary>
+        /// The entries that deliberately have no <c>cssom</c> block, each with the reason it cannot be generated.
+        /// Everything else in the JSON generates its CSS-OM class.
+        /// </summary>
+        private static readonly Dictionary<string, string> NotGenerated = new()
+        {
+            ["-webkit-backdrop-filter"] = "a vendor alias, canonicalized to backdrop-filter before any class is created",
+            ["word-wrap"] = "a legacy alias, canonicalized to overflow-wrap before any class is created",
+            ["x"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["y"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["cx"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["cy"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["r"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["rx"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+            ["ry"] = "an SvgOnlyProperty instance: DeclarationCondition tells those apart by type",
+        };
+
+        [Fact]
+        public void EveryJsonEntry_GeneratesItsCssomClass_ExceptTheReviewedExclusions()
+        {
+            var ungenerated = Entries()
+                .Where(e => !e.TryGetProperty("cssom", out _))
+                .Select(e => e.GetProperty("name").GetString()!)
+                .Where(n => !NotGenerated.ContainsKey(n))
+                .ToList();
+
+            Assert.True(ungenerated.Count == 0,
+                "Give these a \"cssom\" block in css-properties.json (or a reviewed reason in NotGenerated): " + string.Join(", ", ungenerated));
+        }
+
+        [Fact]
+        public void TheExclusions_StillHaveNoCssomBlock()
+        {
+            var stale = Entries()
+                .Where(e => e.TryGetProperty("cssom", out _))
+                .Select(e => e.GetProperty("name").GetString()!)
+                .Where(NotGenerated.ContainsKey)
+                .ToList();
+
+            Assert.Empty(stale);
+        }
     }
 }
