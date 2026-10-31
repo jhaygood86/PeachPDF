@@ -26,9 +26,17 @@ namespace PeachPDF.SourceGenerators.Model
         /// <summary>Registered with <c>PropertyFactory</c>'s <c>@font-face</c> descriptor set.</summary>
         public bool Font { get; }
 
+        /// <summary>
+        /// The grammar's own value converter is the property's converter as it stands, without the CSS-wide keywords
+        /// (<c>"globals": "none"</c>): <c>flex-grow</c> and the like, whose grammar accepts them itself. Otherwise the
+        /// generated class wraps the grammar in <c>OrDefault()</c>.
+        /// </summary>
+        public bool NoGlobals { get; }
+
         public CssomBinding(string converter, string? className, bool animatable, bool hashless, bool unitless,
-            bool registryAnimatable, bool font)
+            bool registryAnimatable, bool font, bool noGlobals = false)
         {
+            NoGlobals = noGlobals;
             Converter = converter;
             ClassName = className;
             Animatable = animatable;

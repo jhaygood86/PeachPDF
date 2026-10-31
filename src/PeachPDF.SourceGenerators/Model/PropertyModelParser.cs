@@ -565,7 +565,8 @@ namespace PeachPDF.SourceGenerators.Model
             bool Flag(string key) => cssomJson.TryGetProperty(key, out var v) && v.IsBool && v.BoolValue;
 
             return new CssomBinding(converter!, GetOptionalString(cssomJson, "className"), Flag("animatable"),
-                Flag("hashless"), Flag("unitless"), Flag("registryAnimatable"), Flag("font"));
+                Flag("hashless"), Flag("unitless"), Flag("registryAnimatable"), Flag("font"),
+                GetOptionalString(cssomJson, "globals") == "none");
         }
 
         private static string? GetOptionalString(JsonValue json, string property) =>

@@ -89,7 +89,8 @@
           "required": ["converter"],
           "description": "Generates this longhand's CSS-OM Property class (CssomProperties.g.cs) and its PropertyFactory registration. Inheritance is this entry's own \"inherited\", and the CSS-OM \"initial\" keyword carries no typed value (only this file's initialValue is read, by the render layer), so neither is restated here. An entry without this block keeps a hand-written class under CSS/StyleProperties (PPG018 if the block is present without a converter).",
           "properties": {
-            "converter": { "type": "string", "description": "C# expression for the grammar, compiled inside PeachBrackets.Css, e.g. \"Converters.CaptionSideConverter\". The generator appends .OrDefault() (the CSS-wide keywords)." },
+            "converter": { "type": "string", "description": "C# expression for the grammar, compiled inside PeachBrackets.Css, e.g. \"Converters.CaptionSideConverter\". Emitted as the class's ValueGrammar member (what a \"cssom-grammar\" validator calls); the generator appends .OrDefault() (the CSS-wide keywords) for the Converter unless globals is \"none\"." },
+            "globals": { "enum": ["default", "none"], "default": "default", "description": "\"none\" when the grammar already accepts the CSS-wide keywords itself (flex-grow, align-self...) and must not be wrapped in .OrDefault()." },
             "className": { "type": "string", "description": "Only when the class is not the PascalCased property name plus \"Property\"." },
             "animatable": { "type": "boolean", "default": false, "description": "PropertyFlags.Animatable on the class." },
             "hashless": { "type": "boolean", "default": false, "description": "PropertyFlags.Hashless (a colour that may omit its #)." },

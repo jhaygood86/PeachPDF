@@ -18,7 +18,7 @@ namespace PeachBrackets.Html.Utils
     /// <see cref="CssBox"/> as their raw declared strings, like <c>background-size</c>/<c>background-repeat</c>
     /// already are - into concrete geometry/keywords at paint time, against the border-image-source's own
     /// natural size and the box's real border widths/border-box. Grammar/tokenization for each is shared with
-    /// the CSS-OM layer's own <c>BorderImage*Property.TheConverter</c> fields (used to validate the declared
+    /// the CSS-OM layer's own <c>BorderImage*Property.ValueGrammar</c> fields (used to validate the declared
     /// string when it's cascaded onto <see cref="CssBox"/> in the first place) - this class does only the
     /// pixel arithmetic that can't happen until paint time, per this repo's "don't write two independent
     /// parsers for the same CSS value grammar" convention.

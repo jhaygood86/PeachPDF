@@ -7,14 +7,14 @@
         private static readonly IValueConverter ImageConverter = WithAny(
             OptionalImageSourceConverter.Option().For(PropertyNames.BorderImageSource),
             WithOrder(
-                BorderImageSliceProperty.TheConverter.Option().For(PropertyNames.BorderImageSlice),
-                BorderImageWidthProperty.TheConverter.StartsWithDelimiter()
+                BorderImageSliceProperty.ValueGrammar.Option().For(PropertyNames.BorderImageSlice),
+                BorderImageWidthProperty.ValueGrammar.StartsWithDelimiter()
                     .Option()
                     .For(PropertyNames.BorderImageWidth),
-                BorderImageOutsetProperty.TheConverter.StartsWithDelimiter()
+                BorderImageOutsetProperty.ValueGrammar.StartsWithDelimiter()
                     .Option()
                     .For(PropertyNames.BorderImageOutset)),
-            BorderImageRepeatProperty.TheConverter.Option().For(PropertyNames.BorderImageRepeat)).OrDefault();
+            BorderImageRepeatProperty.ValueGrammar.Option().For(PropertyNames.BorderImageRepeat)).OrDefault();
 
         internal BorderImageProperty()
             : base(PropertyNames.BorderImage)
