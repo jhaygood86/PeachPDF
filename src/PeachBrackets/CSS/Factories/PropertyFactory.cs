@@ -52,8 +52,6 @@ namespace PeachBrackets.Css
         {
             RegisterGeneratedLonghands();
 
-            AddLonghand(PropertyNames.AlignContent, () => new AlignContentProperty());
-            AddLonghand(PropertyNames.AlignSelf, () => new AlignSelfProperty());
             AddShorthand(PropertyNames.Animation, () => new AnimationProperty(),
                 PropertyNames.AnimationName,
                 PropertyNames.AnimationDuration,
@@ -63,14 +61,6 @@ namespace PeachBrackets.Css
                 PropertyNames.AnimationFillMode,
                 PropertyNames.AnimationIterationCount,
                 PropertyNames.AnimationPlayState);
-            AddLonghand(PropertyNames.AnimationDelay, () => new AnimationDelayProperty());
-            AddLonghand(PropertyNames.AnimationDirection, () => new AnimationDirectionProperty());
-            AddLonghand(PropertyNames.AnimationDuration, () => new AnimationDurationProperty());
-            AddLonghand(PropertyNames.AnimationFillMode, () => new AnimationFillModeProperty());
-            AddLonghand(PropertyNames.AnimationIterationCount, () => new AnimationIterationCountProperty());
-            AddLonghand(PropertyNames.AnimationName, () => new AnimationNameProperty());
-            AddLonghand(PropertyNames.AnimationPlayState, () => new AnimationPlayStateProperty());
-            AddLonghand(PropertyNames.AnimationTimingFunction, () => new AnimationTimingFunctionProperty());
 
             AddShorthand(PropertyNames.Background, () => new BackgroundProperty(),
                 PropertyNames.BackgroundAttachment,
@@ -81,10 +71,7 @@ namespace PeachBrackets.Css
                 PropertyNames.BackgroundPosition,
                 PropertyNames.BackgroundRepeat,
                 PropertyNames.BackgroundSize);
-            AddLonghand(PropertyNames.BackgroundSize, () => new BackgroundSizeProperty(), true);
-            AddLonghand(PropertyNames.BackgroundPosition, () => new BackgroundPositionProperty(), true);
 
-            AddLonghand(PropertyNames.BoxSizing, () => new BoxSizingProperty());
             foreach (var legacyPrefix in LegacyBoxProperty.Prefixes)
             {
                 foreach (var legacyBase in new[] { LegacyBoxProperty.Orient, LegacyBoxProperty.Direction, LegacyBoxProperty.Pack, LegacyBoxProperty.Align })
@@ -94,18 +81,12 @@ namespace PeachBrackets.Css
                     AddLonghand(prefix + baseName, () => new LegacyBoxProperty(prefix, baseName));
                 }
             }
-            AddLonghand(PropertyNames.BreakAfter, () => new BreakAfterProperty());
-            AddLonghand(PropertyNames.BreakBefore, () => new BreakBeforeProperty());
 
             AddShorthand(PropertyNames.BorderRadius, () => new BorderRadiusProperty(),
                 PropertyNames.BorderTopLeftRadius,
                 PropertyNames.BorderTopRightRadius,
                 PropertyNames.BorderBottomRightRadius,
                 PropertyNames.BorderBottomLeftRadius);
-            AddLonghand(PropertyNames.BorderTopLeftRadius, () => new BorderTopLeftRadiusProperty(), true);
-            AddLonghand(PropertyNames.BorderTopRightRadius, () => new BorderTopRightRadiusProperty(), true);
-            AddLonghand(PropertyNames.BorderBottomLeftRadius, () => new BorderBottomLeftRadiusProperty(), true);
-            AddLonghand(PropertyNames.BorderBottomRightRadius, () => new BorderBottomRightRadiusProperty(), true);
 
             AddShorthand(PropertyNames.BorderImage, () => new BorderImageProperty(),
                 PropertyNames.BorderImageOutset,
@@ -113,10 +94,6 @@ namespace PeachBrackets.Css
                 PropertyNames.BorderImageSlice,
                 PropertyNames.BorderImageSource,
                 PropertyNames.BorderImageWidth);
-            AddLonghand(PropertyNames.BorderImageOutset, () => new BorderImageOutsetProperty());
-            AddLonghand(PropertyNames.BorderImageRepeat, () => new BorderImageRepeatProperty());
-            AddLonghand(PropertyNames.BorderImageSlice, () => new BorderImageSliceProperty());
-            AddLonghand(PropertyNames.BorderImageWidth, () => new BorderImageWidthProperty());
 
             AddShorthand(PropertyNames.BorderColor, () => new BorderColorProperty(),
                 PropertyNames.BorderTopColor,
@@ -163,16 +140,11 @@ namespace PeachBrackets.Css
                 PropertyNames.BorderLeftWidth,
                 PropertyNames.BorderLeftStyle,
                 PropertyNames.BorderLeftColor);
-            AddLonghand(PropertyNames.BorderTopStyle, () => new BorderTopStyleProperty());
-            AddLonghand(PropertyNames.BorderLeftStyle, () => new BorderLeftStyleProperty());
-            AddLonghand(PropertyNames.BorderRightStyle, () => new BorderRightStyleProperty());
-            AddLonghand(PropertyNames.BorderBottomStyle, () => new BorderBottomStyleProperty());
 
 
             AddShorthand(PropertyNames.Columns, () => new ColumnsProperty(),
                 PropertyNames.ColumnWidth,
                 PropertyNames.ColumnCount);
-            AddLonghand(PropertyNames.ColumnWidth, () => new ColumnWidthProperty(), true);
 
 
 
@@ -194,8 +166,6 @@ namespace PeachBrackets.Css
                 PropertyNames.GridTemplateRows, PropertyNames.GridTemplateColumns, PropertyNames.GridTemplateAreas,
                 PropertyNames.GridAutoFlow, PropertyNames.GridAutoRows, PropertyNames.GridAutoColumns);
 
-            AddLonghand(PropertyNames.JustifyItems, () => new JustifyItemsProperty());
-            AddLonghand(PropertyNames.JustifySelf, () => new JustifySelfProperty());
             AddShorthand(PropertyNames.PlaceItems, () => new PlaceItemsProperty(),
                 PropertyNames.AlignItems, PropertyNames.JustifyItems);
             AddShorthand(PropertyNames.PlaceContent, () => new PlaceContentProperty(),
@@ -207,31 +177,16 @@ namespace PeachBrackets.Css
                 PropertyNames.ColumnRuleWidth,
                 PropertyNames.ColumnRuleStyle,
                 PropertyNames.ColumnRuleColor);
-            AddLonghand(PropertyNames.ColumnRuleStyle, () => new ColumnRuleStyleProperty());
 
-            AddLonghand(PropertyNames.Clear, () => new ClearProperty());
             AddShorthand(PropertyNames.Container, () => new ContainerProperty(),
                 PropertyNames.ContainerName, PropertyNames.ContainerType);
-            AddLonghand(PropertyNames.ContainerName, () => new ContainerNameProperty());
-            AddLonghand(PropertyNames.Content, () => new ContentProperty());
-            AddLonghand(PropertyNames.CounterIncrement, () => new CounterIncrementProperty());
-            AddLonghand(PropertyNames.CounterReset, () => new CounterResetProperty());
-            AddLonghand(PropertyNames.CounterSet, () => new CounterSetProperty());
-            AddLonghand(PropertyNames.Cursor, () => new CursorProperty());
-            AddLonghand(PropertyNames.Fill, () => new FillProperty(), true);
-            AddLonghand(PropertyNames.FillRule, () => new FillRuleProperty(), true);
             AddShorthand(PropertyNames.Flex, () => new FlexProperty(),
                 PropertyNames.FlexGrow,
                 PropertyNames.FlexShrink,
                 PropertyNames.FlexBasis);
-            AddLonghand(PropertyNames.FlexBasis, () => new FlexBasisProperty(), true);
-            AddLonghand(PropertyNames.FlexDirection, () => new FlexDirectionProperty());
             AddShorthand(PropertyNames.FlexFlow, () => new FlexFlowProperty(),
                 PropertyNames.FlexDirection,
                 PropertyNames.FlexWrap);
-            AddLonghand(PropertyNames.FlexGrow, () => new FlexGrowProperty());
-            AddLonghand(PropertyNames.FlexShrink, () => new FlexShrinkProperty());
-            AddLonghand(PropertyNames.FlexWrap, () => new FlexWrapProperty());
 
             // CSS Fonts 4 §7.7 "Reset Implicitly": the font-variant-* longhands (and
             // font-feature-settings) reset to their initial value whenever `font` is set, even though
@@ -256,7 +211,6 @@ namespace PeachBrackets.Css
                 PropertyNames.FontVariationSettings,
                 PropertyNames.FontWeight,
                 PropertyNames.LineHeight);
-            AddLonghand(PropertyNames.FontSizeAdjust, () => new FontSizeAdjustProperty(), true);
             AddShorthand(PropertyNames.FontSynthesis, () => new FontSynthesisProperty(),
                 PropertyNames.FontSynthesisWeight,
                 PropertyNames.FontSynthesisStyle,
@@ -275,25 +229,14 @@ namespace PeachBrackets.Css
                 PropertyNames.FontVariantEmoji,
                 PropertyNames.FontVariantAlternates,
                 PropertyNames.FontFeatureSettings);
-            AddLonghand(PropertyNames.FontVariantAlternates, () => new FontVariantAlternatesProperty());
-            AddLonghand(PropertyNames.FontFeatureSettings, () => new FontFeatureSettingsProperty());
-            AddLonghand(PropertyNames.FontLanguageOverride, () => new FontLanguageOverrideProperty());
             AddShorthand(PropertyNames.WebkitTextStroke, () => new WebkitTextStrokeProperty(),
                 PropertyNames.WebkitTextStrokeWidth,
                 PropertyNames.WebkitTextStrokeColor);
-            AddLonghand(PropertyNames.FontVariationSettings, () => new FontVariationSettingsProperty());
 
             AddShorthand(PropertyNames.Gap, () => new GapProperty(),
                 PropertyNames.RowGap,
                 PropertyNames.ColumnGap);
 
-            AddLonghand(PropertyNames.PrinceHyphenateCharacter, () => new PrinceHyphenateCharacterProperty());
-            AddLonghand(PropertyNames.HyphenateLines, () => new HyphenateLinesProperty());
-            AddLonghand(PropertyNames.PrinceHyphenateLimitLines, () => new PrinceHyphenateLimitLinesProperty());
-            AddLonghand(PropertyNames.HyphenateBefore, () => new HyphenateBeforeProperty());
-            AddLonghand(PropertyNames.PrinceHyphenateBefore, () => new PrinceHyphenateBeforeProperty());
-            AddLonghand(PropertyNames.HyphenateAfter, () => new HyphenateAfterProperty());
-            AddLonghand(PropertyNames.PrinceHyphenateAfter, () => new PrinceHyphenateAfterProperty());
 
 
 
@@ -301,7 +244,6 @@ namespace PeachBrackets.Css
                 PropertyNames.ListStyleType,
                 PropertyNames.ListStyleImage,
                 PropertyNames.ListStylePosition);
-            AddLonghand(PropertyNames.ListStyleType, () => new ListStyleTypeProperty());
 
             AddShorthand(PropertyNames.Margin, () => new MarginProperty(),
                 PropertyNames.MarginTop,
@@ -309,22 +251,15 @@ namespace PeachBrackets.Css
                 PropertyNames.MarginBottom,
                 PropertyNames.MarginLeft);
 
-            AddLonghand(PropertyNames.MaxHeight, () => new MaxHeightProperty(), true);
-            AddLonghand(PropertyNames.MaxWidth, () => new MaxWidthProperty(), true);
-            AddLonghand(PropertyNames.Opacity, () => new OpacityProperty(), true);
 
             AddShorthand(PropertyNames.Outline, () => new OutlineProperty(),
                 PropertyNames.OutlineWidth,
                 PropertyNames.OutlineStyle,
                 PropertyNames.OutlineColor);
-            AddLonghand(PropertyNames.OutlineStyle, () => new OutlineStyleProperty());
 
             AddShorthand(PropertyNames.Overflow, () => new OverflowProperty(),
                 PropertyNames.OverflowX,
                 PropertyNames.OverflowY);
-            AddLonghand(PropertyNames.OverflowX, () => new OverflowXProperty());
-            AddLonghand(PropertyNames.OverflowY, () => new OverflowYProperty());
-            AddLonghand(PropertyNames.OverflowWrap, () => new OverflowWrapProperty());
 
             AddShorthand(PropertyNames.Padding, () => new PaddingProperty(),
                 PropertyNames.PaddingTop,
@@ -332,9 +267,6 @@ namespace PeachBrackets.Css
                 PropertyNames.PaddingBottom,
                 PropertyNames.PaddingLeft);
 
-            AddLonghand(PropertyNames.Perspective, () => new PerspectiveProperty(), true);
-            AddLonghand(PropertyNames.PerspectiveOrigin, () => new PerspectiveOriginProperty(), true);
-            AddLonghand(PropertyNames.Quotes, () => new QuotesProperty());
             AddLonghand(PropertyNames.FloodColor, () => new SvgOnlyProperty(PropertyNames.FloodColor, Converters.CurrentColorConverter.OrGlobalValue()), true);
             AddLonghand(PropertyNames.LightingColor, () => new SvgOnlyProperty(PropertyNames.LightingColor, Converters.CurrentColorConverter.OrGlobalValue()), true);
             AddLonghand(PropertyNames.FloodOpacity, () => new SvgOnlyProperty(PropertyNames.FloodOpacity, Converters.NumberConverter.Or(Converters.PercentConverter).OrDefault(1f)), true);
@@ -361,35 +293,10 @@ namespace PeachBrackets.Css
             AddLonghand(PropertyNames.X, () => new SvgOnlyProperty(PropertyNames.X, SvgOnlyProperty.GeometryLength), true);
             AddLonghand(PropertyNames.Y, () => new SvgOnlyProperty(PropertyNames.Y, SvgOnlyProperty.GeometryLength), true);
             AddLonghand(PropertyNames.D, () => new SvgOnlyProperty(PropertyNames.D, Converters.Any), true);
-            AddLonghand(PropertyNames.StopColor, () => new StopColorProperty(), true);
-            AddLonghand(PropertyNames.Stroke, () => new StrokeProperty(), true);
-            AddLonghand(PropertyNames.StrokeDasharray, () => new StrokeDasharrayProperty(), true);
-            AddLonghand(PropertyNames.StrokeDashoffset, () => new StrokeDashoffsetProperty(), true);
-            AddLonghand(PropertyNames.StrokeLinecap, () => new StrokeLinecapProperty(), true);
-            AddLonghand(PropertyNames.StrokeLinejoin, () => new StrokeLinejoinProperty(), true);
-            AddLonghand(PropertyNames.StrokeMiterlimit, () => new StrokeMiterlimitProperty(), true);
-            AddLonghand(PropertyNames.StrokeWidth, () => new StrokeWidthProperty(), true);
-            AddLonghand(PropertyNames.StringSet, () => new StringSetProperty());
-            AddLonghand(PropertyNames.PageName, () => new PageNameProperty());
-            AddLonghand(PropertyNames.PdfTagType, () => new PdfTagTypeProperty());
-            AddLonghand(PropertyNames.PdfFormField, () => new PdfFormFieldProperty());
-            AddLonghand(PropertyNames.PdfFormFieldAutoFontSize, () => new PdfFormFieldAutoFontSizeProperty());
-            AddLonghand(PropertyNames.PdfFormFieldComb, () => new PdfFormFieldCombProperty());
-            AddLonghand(PropertyNames.PdfFormFieldDoNotScroll, () => new PdfFormFieldDoNotScrollProperty());
             AddShorthand(PropertyNames.PrincePdfFormFieldSettings, () => new PrincePdfFormFieldSettingsProperty(),
                 PropertyNames.PdfFormField, PropertyNames.PdfFormFieldAutoFontSize, PropertyNames.PdfFormFieldComb, PropertyNames.PdfFormFieldDoNotScroll);
-            AddLonghand(PropertyNames.BookmarkLevel, () => new BookmarkLevelProperty());
-            AddLonghand(PropertyNames.BookmarkState, () => new BookmarkStateProperty());
-            AddLonghand(PropertyNames.PeachPdfBookmarkTarget, () => new BookmarkTargetProperty());
-            AddLonghand(PropertyNames.PrinceBookmarkLevel, () => new PrinceBookmarkLevelProperty());
-            AddLonghand(PropertyNames.PrinceBookmarkState, () => new PrinceBookmarkStateProperty());
-            AddLonghand(PropertyNames.PrinceBookmarkTarget, () => new PrinceBookmarkTargetProperty());
-            AddLonghand(PropertyNames.BookmarkTarget, () => new BookmarkTargetAliasProperty());
-            AddLonghand(PropertyNames.TabSize, () => new TabSizeProperty());
-            AddLonghand(PropertyNames.TextAlignLast, () => new TextAlignLastProperty());
             AddShorthand(PropertyNames.TextAlign, () => new TextAlignProperty(),
                 PropertyNames.TextAlignAll, PropertyNames.TextAlignLast);
-            AddLonghand(PropertyNames.TextAnchor, () => new TextAnchorProperty());
 
             AddShorthand(PropertyNames.TextDecoration, () => new TextDecorationProperty(),
                 PropertyNames.TextDecorationLine,
@@ -398,23 +305,13 @@ namespace PeachBrackets.Css
                 PropertyNames.TextDecorationThickness);
             // Not part of the text-decoration shorthand (CSS Text Decoration 4 doesn't add it there).
 
-            AddLonghand(PropertyNames.TextJustify, () => new TextJustifyProperty());
-            AddLonghand(PropertyNames.TransformOrigin, () => new TransformOriginProperty(), true);
 
             AddShorthand(PropertyNames.Transition, () => new TransitionProperty(),
                 PropertyNames.TransitionProperty,
                 PropertyNames.TransitionDuration,
                 PropertyNames.TransitionTimingFunction,
                 PropertyNames.TransitionDelay);
-            AddLonghand(PropertyNames.TransitionDelay, () => new TransitionDelayProperty());
-            AddLonghand(PropertyNames.TransitionDuration, () => new TransitionDurationProperty());
-            AddLonghand(PropertyNames.TransitionTimingFunction, () => new TransitionTimingFunctionProperty());
-            AddLonghand(PropertyNames.TransitionProperty, () => new TransitionPropertyProperty());
 
-            AddLonghand(PropertyNames.LineBreak, () => new LineBreakProperty(), true);
-            AddLonghand(PropertyNames.WordBreak, () => new WordBreakProperty(), true);
-            AddLonghand(PropertyNames.WordSpacing, () => new WordSpacingProperty(), true);
-            AddLonghand(PropertyNames.Size, () => new PageSizeProperty());
 
             // CSS Logical Properties and Values Level 1. Each logical longhand is its own genuine,
             // distinctly-identified Property (CSS/StyleProperties/Logical/) rather than an alias onto a

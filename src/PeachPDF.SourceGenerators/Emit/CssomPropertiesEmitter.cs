@@ -36,8 +36,14 @@ namespace PeachPDF.SourceGenerators.Emit
                 var className = ClassNameOf(entry);
                 sb.AppendLine($"    internal sealed class {className} : Property");
                 sb.AppendLine("    {");
-                sb.AppendLine("        private static readonly IValueConverter StyleConverter =");
-                sb.AppendLine($"            ({cssom.Converter}).OrDefault();");
+                sb.AppendLine("        // The property's own grammar, without the CSS-wide keywords: what css-properties.json's");
+                sb.AppendLine("        // \"cssom-grammar\" validators call directly.");
+                sb.AppendLine("        internal static readonly IValueConverter ValueGrammar =");
+                sb.AppendLine($"            {cssom.Converter};");
+                sb.AppendLine();
+                sb.AppendLine(cssom.NoGlobals
+                    ? "        private static readonly IValueConverter StyleConverter = ValueGrammar;"
+                    : "        private static readonly IValueConverter StyleConverter = ValueGrammar.OrDefault();");
                 sb.AppendLine();
                 sb.AppendLine($"        internal {className}()");
                 sb.AppendLine($"            : base({Literal(entry.Name)}, {FlagsOf(entry)})");

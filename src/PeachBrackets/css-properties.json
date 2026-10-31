@@ -47,6 +47,7 @@
       "name": "box-sizing",
       "comment": "Replaces the old CssUtils.IsValidBoxSizing helper. CssProperty<BoxSizingMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
+      "cssom": {"converter": "Converters.BoxSizingConverter"},
       "initialValue": "content-box",
       "cssDataType": {
         "type": "enum-keyword",
@@ -153,6 +154,7 @@
       "name": "overflow-wrap",
       "comment": "CSS Text 3 §5.4. break-word and anywhere create emergency soft-wrap opportunities only when an otherwise-unbreakable sequence cannot fit; anywhere additionally contributes those opportunities to min-content sizing.",
       "inherited": true,
+      "cssom": {"converter": "Converters.OverflowWrapConverter"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -171,6 +173,7 @@
       "name": "fill",
       "comment": "SVG <paint> (svg-shapes-1.1 §13.2): none | url(#id) | currentColor | <color>. Produces a structured SvgPaint, not a string, so it needs its own data type rather than HTML's plain 'color'. No customSetter needed — the generated default svg-paint setter already reclassifies a url() reference from gradient to pattern against the current document's id registries via ctx.ResolveUrlPaintKind (SvgTreeBuilder.ResolveUrlPaintKind bound as a delegate); SvgValueParsers.TryParsePaint has no document context of its own and always classifies url(#id) as GradientRef.",
       "inherited": true,
+      "cssom": {"converter": "Converters.PaintConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "black",
       "cssDataType": "svg-paint",
       "svg": {
@@ -184,6 +187,7 @@
       "name": "stroke",
       "comment": "Same SVG <paint> grammar and url()-reclassification need as fill (see its comment) — stroke just targets a different SvgElement field and a different initial value/inherited carrier.",
       "inherited": true,
+      "cssom": {"converter": "Converters.PaintConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": "svg-paint",
       "svg": {
@@ -197,6 +201,7 @@
       "name": "stroke-width",
       "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal via ctx.ViewportDiagonal. Falls back to the inherited value on an invalid value, matching SvgTreeBuilder.ApplyCommon's existing '?? inherited.StrokeWidth' behavior.",
       "inherited": true,
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentOrNumberConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "1",
       "cssDataType": "svg-length",
       "svg": {
@@ -210,6 +215,7 @@
       "name": "stroke-miterlimit",
       "comment": "SVG <number> (svg-strokeprops-1.1 §11.4), parsed via the shared SvgValueParsers.ParseLength grammar with no reference length (a plain unitless number is what the spec actually allows here, and ParseLength already accepts a bare number). Falls back to the inherited value on an invalid value.",
       "inherited": true,
+      "cssom": {"converter": "Converters.StrokeMiterlimitConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "4",
       "cssDataType": "svg-length",
       "svg": {
@@ -223,6 +229,7 @@
       "name": "stroke-dashoffset",
       "comment": "SVG <length> (svg-strokeprops-1.1 §11.4), percentages resolved against the viewport diagonal. Falls back to the inherited value on an invalid value.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LengthOrPercentOrNumberConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": "svg-length",
       "svg": {
@@ -236,6 +243,7 @@
       "name": "stroke-dasharray",
       "comment": "SVG <length># | none (svg-strokeprops-1.1 §11.4) — SvgValueParsers.ParseDashArray already returns null (invalid) vs. an array, so this is its own data type (svg-length-list) rather than a plain length. Falls back to the inherited value on an invalid value.",
       "inherited": true,
+      "cssom": {"converter": "Converters.StrokeDasharrayConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": "svg-length-list",
       "svg": {
@@ -249,6 +257,7 @@
       "name": "fill-rule",
       "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.FillRule on failure, the same shape stroke-width/etc. use. supportedValues/keywordComparison document the real grammar; customValidator/customSetter reuse the shared TryParseFillRule parser directly rather than re-deriving a keyword→enum mapping (customSetter code runs only after Validate_FillRule already passed, so the second TryParseFillRule call here can never itself fail).",
       "inherited": true,
+      "cssom": {"converter": "Converters.FillRuleConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "nonzero",
       "cssDataType": "keyword",
       "supportedValues": [
@@ -297,6 +306,7 @@
       "name": "stroke-linecap",
       "comment": "Falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599; SvgTreeBuilder.ApplyCommon checks TrySet's return value and assigns inherited.StrokeLineCap on failure, the same shape stroke-width/etc. use. customValidator/customSetter reuse the shared TryParseLineCap parser directly (see the fill-rule entry's identical note) instead of the inline enum-mapping switch this entry used before the SVG cutover.",
       "inherited": true,
+      "cssom": {"converter": "Converters.StrokeLinecapConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "butt",
       "cssDataType": "keyword",
       "supportedValues": [
@@ -318,6 +328,7 @@
       "name": "stroke-linejoin",
       "comment": "Same shape as stroke-linecap (see its comment) — falls back to the inherited value on an invalid value (invalidBehavior: inherit), per SVG 1.1 §11.4 — see #599.",
       "inherited": true,
+      "cssom": {"converter": "Converters.StrokeLinejoinConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "miter",
       "cssDataType": "keyword",
       "supportedValues": [
@@ -398,6 +409,7 @@
     {
       "name": "border-bottom-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -416,6 +428,7 @@
     {
       "name": "border-left-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -434,6 +447,7 @@
     {
       "name": "border-right-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -452,6 +466,7 @@
     {
       "name": "border-top-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -535,6 +550,7 @@
       "name": "border-top-left-radius",
       "comment": "<length-percentage>{1,2}. cssDataType 'length-list' validates span-based via CssValueParser.IsValidLengthList (no tokenizer at all) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BorderRadiusConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": true },
       "html": {
@@ -548,6 +564,7 @@
       "name": "border-top-right-radius",
       "comment": "<length-percentage>{1,2}. cssDataType 'length-list' validates span-based via CssValueParser.IsValidLengthList (no tokenizer at all) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BorderRadiusConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": true },
       "html": {
@@ -561,6 +578,7 @@
       "name": "border-bottom-right-radius",
       "comment": "<length-percentage>{1,2}. cssDataType 'length-list' validates span-based via CssValueParser.IsValidLengthList (no tokenizer at all) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BorderRadiusConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": true },
       "html": {
@@ -574,6 +592,7 @@
       "name": "border-bottom-left-radius",
       "comment": "<length-percentage>{1,2}. cssDataType 'length-list' validates span-based via CssValueParser.IsValidLengthList (no tokenizer at all) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BorderRadiusConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "0",
       "cssDataType": { "type": "length-list", "min": 1, "max": 2, "allowPercentage": true },
       "html": {
@@ -601,10 +620,11 @@
     },
     {
       "name": "border-image-slice",
-      "comment": "CSS Backgrounds and Borders 3 <13>: [<number-percentage>{1,4} && fill?]. Stored as the raw declared string (like background-size/background-repeat) rather than eagerly resolved - a slice value has no meaning until border-image-source's own natural/concretized size is known at paint time, which BorderImageLayerResolver.ResolveSlice re-derives from this same string using the identical component grammar BorderImageSliceProperty.TheConverter (this cssDataType's own validator) already parses, per the 'don't write two independent parsers' convention.",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<number-percentage>{1,4} && fill?]. Stored as the raw declared string (like background-size/background-repeat) rather than eagerly resolved - a slice value has no meaning until border-image-source's own natural/concretized size is known at paint time, which BorderImageLayerResolver.ResolveSlice re-derives from this same string using the identical component grammar BorderImageSliceProperty.ValueGrammar (this cssDataType's own validator) already parses, per the 'don't write two independent parsers' convention.",
       "inherited": false,
+      "cssom": {"converter": "WithAny( BorderSliceConverter.Option(new Length(100f, Length.Unit.Percent)), BorderSliceConverter.Option(), BorderSliceConverter.Option(), BorderSliceConverter.Option(), Assign(Keywords.Fill, true).Option(false))"},
       "initialValue": "100%",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageSliceProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageSliceProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BorderImageSlice",
         "csharpDataType": "string",
@@ -613,10 +633,11 @@
     },
     {
       "name": "border-image-width",
-      "comment": "CSS Backgrounds and Borders 3 <13>: [<length-percentage> | <number> | auto]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveWidth resolves it against the box's own border widths/border-box size at paint time, reusing BorderImageWidthProperty.TheConverter's grammar.",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<length-percentage> | <number> | auto]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveWidth resolves it against the box's own border widths/border-box size at paint time, reusing BorderImageWidthProperty.ValueGrammar's grammar.",
       "inherited": false,
+      "cssom": {"converter": "Converters.ImageBorderWidthConverter.Periodic()"},
       "initialValue": "1",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageWidthProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageWidthProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BorderImageWidth",
         "csharpDataType": "string",
@@ -625,10 +646,11 @@
     },
     {
       "name": "border-image-outset",
-      "comment": "CSS Backgrounds and Borders 3 <13>: [<length> | <number>]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveOutset resolves it against the box's own border widths at paint time, reusing BorderImageOutsetProperty.TheConverter's grammar. That CSS-OM grammar also accepts a percentage (pre-existing, tested CSS-OM-layer behavior broader than the spec's own length|number grammar - not introduced or corrected here); the resolver honors one if declared, against the same axis's border width.",
+      "comment": "CSS Backgrounds and Borders 3 <13>: [<length> | <number>]{1,4}. Stored as the raw declared string for the same reason border-image-slice is - BorderImageLayerResolver.ResolveOutset resolves it against the box's own border widths at paint time, reusing BorderImageOutsetProperty.ValueGrammar's grammar. That CSS-OM grammar also accepts a percentage (pre-existing, tested CSS-OM-layer behavior broader than the spec's own length|number grammar - not introduced or corrected here); the resolver honors one if declared, against the same axis's border width.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter.Periodic()"},
       "initialValue": "0",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageOutsetProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageOutsetProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BorderImageOutset",
         "csharpDataType": "string",
@@ -639,8 +661,9 @@
       "name": "border-image-repeat",
       "comment": "CSS Backgrounds and Borders 3 <13>: [stretch | repeat | round | space]{1,2}. All four keywords are recognized (Map.BorderRepeatModes/the BorderRepeat enum). Stored as the raw declared string for the same reason border-image-slice is.",
       "inherited": false,
+      "cssom": {"converter": "Map.BorderRepeatModes.ToConverter().Many(1, 2)"},
       "initialValue": "stretch",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageRepeatProperty.TheConverter.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BorderImageRepeatProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "BorderImageRepeat",
         "csharpDataType": "string",
@@ -691,6 +714,7 @@
     {
       "name": "outline-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.OutlineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -739,6 +763,7 @@
       "name": "transform-origin",
       "comment": "cssDataType 'cssom-grammar' calls TransformOriginProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "CssomGrammars.TransformOrigin", "animatable": true, "registryAnimatable": true},
       "initialValue": "50% 50% 0",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransformOriginProperty.ValueGrammar.Convert" },
       "html": {
@@ -791,6 +816,7 @@
       "name": "opacity",
       "comment": "customValidator implements <alpha-value> (css-color-4 §14): a plain number or a percentage, matching CssValueParser.TryParseAlphaValue (which the html setter's ActualOpacity resolution calls too, and which also accepts a calc() that resolves to a number or percentage) rather than the cssDataType 'number' clause alone, which doesn't accept a percentage.",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalPercentOrNumberConverter", "globals": "none", "animatable": true, "registryAnimatable": true},
       "initialValue": "1",
       "cssDataType": "number",
       "html": {
@@ -845,6 +871,7 @@
       "name": "perspective",
       "comment": "none | <length>: how far the viewer is from the z=0 plane, for this box's children (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveProperty.ValueGrammar directly. Read at paint time by FragmentPainter's projective path (a child with a transform that moves out of the plane); no cascade-time work.",
       "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter.OrNone()", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.PerspectiveProperty.ValueGrammar.Convert" },
       "html": {
@@ -858,6 +885,7 @@
       "name": "perspective-origin",
       "comment": "<position>: the vanishing point of perspective, relative to this box (CSS Transforms 2 section 13). cssDataType 'cssom-grammar' calls PerspectiveOriginProperty.ValueGrammar directly.",
       "inherited": false,
+      "cssom": {"converter": "CssomGrammars.PerspectiveOrigin", "animatable": true, "registryAnimatable": true},
       "initialValue": "50% 50%",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.PerspectiveOriginProperty.ValueGrammar.Convert" },
       "html": {
@@ -936,6 +964,7 @@
       "name": "content",
       "comment": "cssDataType 'cssom-grammar' calls ContentProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "CssomGrammars.Content"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContentProperty.ValueGrammar.Convert" },
       "html": {
@@ -948,6 +977,7 @@
       "name": "quotes",
       "comment": "cssDataType 'cssom-grammar' calls QuotesProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "Converters.EvenStringsConverter.OrNone()"},
       "initialValue": "\"«\" \"»\"",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.QuotesProperty.ValueGrammar.Convert" },
       "html": {
@@ -960,6 +990,7 @@
       "name": "counter-increment",
       "comment": "cssDataType 'cssom-grammar' calls CounterIncrementProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Continuous( WithOrder(IdentifierConverter.Required(), IntegerConverter.Option(1)))"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterIncrementProperty.ValueGrammar.Convert" },
       "html": {
@@ -972,6 +1003,7 @@
       "name": "counter-reset",
       "comment": "cssDataType 'cssom-grammar' calls CounterResetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Continuous( WithOrder(IdentifierConverter.Required(), IntegerConverter.Option(0)))"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterResetProperty.ValueGrammar.Convert" },
       "html": {
@@ -984,6 +1016,7 @@
       "name": "counter-set",
       "comment": "cssDataType 'cssom-grammar' calls CounterSetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip. See .claude/migration-notes/2026-08-02-counter-set-now-actually-parses.md for why this property's validation was historically fragile - verify against real declarations carefully if touching this again.",
       "inherited": false,
+      "cssom": {"converter": "Continuous( WithOrder(IdentifierConverter.Required(), IntegerConverter.Option(0)))"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CounterSetProperty.ValueGrammar.Convert" },
       "html": {
@@ -996,6 +1029,7 @@
       "name": "string-set",
       "comment": "cssDataType 'cssom-grammar' calls StringSetProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "new StringSetValueConverter()"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.StringSetProperty.ValueGrammar.Convert" },
       "html": {
@@ -1008,6 +1042,7 @@
       "name": "page",
       "comment": "page-name (CSS Paged Media 3 §4.2: auto | <custom-ident>), validated span-based via CssValueParser.IsValidPageName (cssDataType 'custom-ident-or-auto'). This property has no real PropertyFactory registration at all, so its former 'cssom' clause was unconditionally true (an unregistered name short-circuits without ever tokenizing) - this is a deliberate, real narrowing from 'accept any string' to the actual spec grammar, not a pure perf change; see the counter-set migration note for the same 'unregistered name defaults to accept-anything' shape this property used to have.",
       "inherited": false,
+      "cssom": {"converter": "IdentifierConverter", "className": "PageNameProperty"},
       "initialValue": "auto",
       "cssDataType": "custom-ident-or-auto",
       "html": {
@@ -1020,6 +1055,7 @@
       "name": "animation-name",
       "comment": "CSS Animations 1 §3.2. Stored as the raw comma-separated list (cssDataType 'cssom-grammar' validates it through AnimationNameProperty.ValueGrammar, the same grammar the CSS-OM uses). It is read by AnimationApplier at the end of the author-normal cascade phase and never by layout or paint: PeachPDF has no timeline, so an animation is sampled once at PdfGenerateConfig.AnimationProgress and its result written onto the box as ordinary declarations. The animation-* longhands are all non-inherited.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AnimationNameConverter.FromList().OrNone()"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationNameProperty.ValueGrammar.Convert" },
       "html": {
@@ -1032,6 +1068,7 @@
       "name": "animation-duration",
       "comment": "CSS Animations 1 §3.3. Raw comma-separated <time> list; see animation-name.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TimeConverter.FromList()"},
       "initialValue": "0s",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDurationProperty.ValueGrammar.Convert" },
       "html": {
@@ -1044,6 +1081,7 @@
       "name": "animation-timing-function",
       "comment": "CSS Animations 1 §3.4 / CSS Easing 1. Raw comma-separated <easing-function> list; see animation-name.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TransitionConverter.FromList()"},
       "initialValue": "ease",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationTimingFunctionProperty.ValueGrammar.Convert" },
       "html": {
@@ -1056,6 +1094,7 @@
       "name": "animation-delay",
       "comment": "CSS Animations 1 §3.5. Raw comma-separated <time> list; see animation-name. Parsed and stored for completeness - a snapshot samples an animation relative to the start of its active interval, so the delay never moves it.",
       "inherited": false,
+      "cssom": {"converter": "Converters.TimeConverter.FromList()"},
       "initialValue": "0s",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDelayProperty.ValueGrammar.Convert" },
       "html": {
@@ -1068,6 +1107,7 @@
       "name": "animation-iteration-count",
       "comment": "CSS Animations 1 §3.6. Raw comma-separated <number [0,inf]> | infinite list; see animation-name.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PositiveOrInfiniteNumberConverter.FromList()"},
       "initialValue": "1",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationIterationCountProperty.ValueGrammar.Convert" },
       "html": {
@@ -1080,6 +1120,7 @@
       "name": "animation-direction",
       "comment": "CSS Animations 1 §3.7. Raw comma-separated normal | reverse | alternate | alternate-reverse list; see animation-name.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AnimationDirectionConverter.FromList()"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationDirectionProperty.ValueGrammar.Convert" },
       "html": {
@@ -1092,6 +1133,7 @@
       "name": "animation-fill-mode",
       "comment": "CSS Animations 1 §3.9. Raw comma-separated none | forwards | backwards | both list; see animation-name. Stored for completeness - a snapshot is always taken inside the active interval, so the fill mode never changes what is rendered.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AnimationFillStyleConverter.FromList()"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationFillModeProperty.ValueGrammar.Convert" },
       "html": {
@@ -1104,6 +1146,7 @@
       "name": "animation-play-state",
       "comment": "CSS Animations 1 §3.8. Raw comma-separated running | paused list; see animation-name. Stored for completeness - a snapshot has no playback to pause.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PlayStateConverter.FromList()"},
       "initialValue": "running",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationPlayStateProperty.ValueGrammar.Convert" },
       "html": {
@@ -1116,6 +1159,7 @@
       "name": "-peachpdf-pdf-tag-type",
       "comment": "cssDataType 'cssom-grammar' calls Converters.PdfTagTypeConverter.Convert directly (Map.PdfTagTypes.ToConverter(), which already includes \"auto\" as a real keyword) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PdfTagTypeConverter", "className": "PdfTagTypeProperty"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfTagTypeConverter.Convert" },
       "html": {
@@ -1128,6 +1172,7 @@
       "name": "-peachpdf-pdf-form-field",
       "comment": "PeachPDF's PDF-output extension for interactive form fields (no W3C spec - see issue #709). auto infers the field kind from the element (tag name + <input type=>) via FormFieldMapper.Classify; text/checkbox/radio/select force a kind regardless of the element's own type. Inert unless PdfGenerateConfig.EnableInteractivePdfForms is set, and only ever applies to a real <input>/<select> element - a declaration on any other element is simply ignored. String-stored, like -peachpdf-pdf-tag-type - FormFieldMapper re-resolves the raw string via Map.PdfFormFieldKinds. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PdfFormFieldConverter", "className": "PdfFormFieldProperty"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldConverter.Convert" },
       "html": {
@@ -1140,6 +1185,7 @@
       "name": "-peachpdf-pdf-form-field-auto-font-size",
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'auto-font-size' sub-option (see the shorthand's own entry) - when auto, a generated text field's /DA font size is written as 0 (PDF's own auto-size convention) instead of a fixed size. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldAutoFontSizeConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PdfFormFieldAutoFontSizeConverter", "className": "PdfFormFieldAutoFontSizeProperty"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldAutoFontSizeConverter.Convert" },
       "html": {
@@ -1152,6 +1198,7 @@
       "name": "-peachpdf-pdf-form-field-comb",
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'comb(<integer>)' sub-option (see the shorthand's own entry) - none | <integer>, the number of evenly-spaced character cells. Sets the PDF field flag bit Comb and /MaxLen. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldCombConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PdfFormFieldCombConverter", "className": "PdfFormFieldCombProperty"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldCombConverter.Convert" },
       "html": {
@@ -1164,6 +1211,7 @@
       "name": "-peachpdf-pdf-form-field-do-not-scroll",
       "comment": "PeachPDF's own spelling of Prince's -prince-pdf-form-field-settings 'do-not-scroll' sub-option (see the shorthand's own entry) - sets the PDF field flag bit DoNotScroll. No appearance-stream effect, just a flag PDF readers use for their own editing UI. Only meaningful when the element also classifies to a text field. cssDataType 'cssom-grammar' calls Converters.PdfFormFieldDoNotScrollConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.PdfFormFieldDoNotScrollConverter", "className": "PdfFormFieldDoNotScrollProperty"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfFormFieldDoNotScrollConverter.Convert" },
       "html": {
@@ -1176,6 +1224,7 @@
       "name": "bookmark-level",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). String-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType). cssDataType 'cssom-grammar' calls Converters.BookmarkLevelConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkLevelConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLevelConverter.Convert" },
       "html": {
@@ -1201,6 +1250,7 @@
       "name": "bookmark-state",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-state). String-stored, like bookmark-level - BookmarkOutlineBuilder parses the raw open/closed string itself via Map.BookmarkStates. cssDataType 'cssom-grammar' calls Converters.BookmarkStateConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkStateConverter"},
       "initialValue": "open",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkStateConverter.Convert" },
       "html": {
@@ -1213,6 +1263,7 @@
       "name": "-peachpdf-bookmark-target",
       "comment": "NOT a css-content-3 property - css-content-3 defines only bookmark-level/-label/-state (verified against the spec source directly; an earlier draft of this issue assumed bookmark-target was part of the same spec and it is not). This is Prince's own extension (prince-bookmark-target, self | url() | attr(), default self) - PeachPDF's own documented spelling follows the -peachpdf-pdf-tag-type precedent for a PDF-output feature with no real spec-track name, rather than the unprefixed spelling Prince itself uses. See BookmarkOutlineBuilder.ResolveTargetValue for self/url()/attr() resolution and the in-document-fragment-vs-external-URL split. cssDataType 'cssom-grammar' calls the already-public Converters.BookmarkTargetConverter.Convert directly instead of the full cssom round trip.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkTargetConverter", "className": "BookmarkTargetProperty"},
       "initialValue": "self",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "html": {
@@ -1225,6 +1276,7 @@
       "name": "-prince-bookmark-level",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-level spelling (Prince documents both an unprefixed and a -prince- prefixed form for all four bookmark-* properties) - translates to the real spec property bookmark-level at parse time. Not documented in docs/, same pattern as the other PDF-output extensions' Prince/prefixed compat shims. cssDataType 'cssom-grammar' calls the same Converters.BookmarkLevelConverter.Convert bookmark-level's own real grammar uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkLevelConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkLevelConverter.Convert" },
       "aliasOf": "bookmark-level",
@@ -1252,6 +1304,7 @@
       "name": "-prince-bookmark-state",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-state spelling - translates to the real spec property bookmark-state at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkStateConverter.Convert bookmark-state's own real grammar uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkStateConverter"},
       "initialValue": "open",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkStateConverter.Convert" },
       "aliasOf": "bookmark-state",
@@ -1265,6 +1318,7 @@
       "name": "-prince-bookmark-target",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-bookmark-target spelling - translates to -peachpdf-bookmark-target (a PeachPDF extension, not a real spec property - see that entry) at parse time. cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert PrinceBookmarkTargetProperty's own real grammar uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkTargetConverter"},
       "initialValue": "self",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
@@ -1278,6 +1332,7 @@
       "name": "bookmark-target",
       "comment": "Hidden, undocumented compat alias for Prince's own bookmark-target spelling (Prince's convenience alias for its prince-bookmark-target extension) - translates to -peachpdf-bookmark-target at parse time. The one place in this file an unprefixed name is NOT a real spec property: css-content-3 defines no bookmark-target at all (see -peachpdf-bookmark-target's own comment). cssDataType 'cssom-grammar' calls the same Converters.BookmarkTargetConverter.Convert BookmarkTargetAliasProperty's own real grammar uses.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BookmarkTargetConverter", "className": "BookmarkTargetAliasProperty"},
       "initialValue": "self",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BookmarkTargetConverter.Convert" },
       "aliasOf": "-peachpdf-bookmark-target",
@@ -1529,6 +1584,7 @@
     {
       "name": "max-width",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalLengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": [
         "length",
@@ -1599,6 +1655,7 @@
     {
       "name": "max-height",
       "inherited": false,
+      "cssom": {"converter": "Converters.OptionalLengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": [
         "length",
@@ -1643,6 +1700,7 @@
       "name": "break-before",
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BreakModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1700,6 +1758,7 @@
       "name": "break-after",
       "comment": "cssDataType's own supportedValues includes region/avoid-region because real dispatch stores any css-break-4-valid keyword (CssUtilsTests.Cascade_BreakBefore_StoresOnlySpecValues) even though BreakValues.cs's fragmentation logic doesn't act on them - no FragmentationContext.Region exists, consistent with this repo's lack of multi-column-region support. supportsDataType is the stricter, @supports-only list excluding region/avoid-region for exactly that reason.",
       "inherited": false,
+      "cssom": {"converter": "Converters.BreakModeConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1840,6 +1899,7 @@
       "name": "background-position",
       "comment": "background-position is <position># (comma-separated per layer), so cssDataType 'cssom-grammar' calls BackgroundPositionProperty.ValueGrammar.Convert directly - the real Converters.PointConverter.FromList() composition, exposed alongside the property's own .OrDefault()-wrapped Converter - instead of the full cssom round trip. (BackgroundPositionGrammar.TryParse alone only understands a single position, not the comma list; BackgroundPositionValueConverter/BackgroundLayerResolver call it per-layer after FromList() has already split the groups.)",
       "inherited": false,
+      "cssom": {"converter": "Converters.PointConverter.FromList()", "animatable": true, "registryAnimatable": true},
       "initialValue": "0% 0%",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundPositionProperty.ValueGrammar.Convert" },
       "html": {
@@ -1865,6 +1925,7 @@
       "name": "background-size",
       "comment": "background-size is <bg-size># (comma-separated per layer), so cssDataType 'cssom-grammar' calls BackgroundSizeProperty.ValueGrammar.Convert directly - the real Converters.BackgroundSizeConverter.FromList() composition, exposed alongside the property's own .OrDefault()-wrapped Converter - instead of the full cssom round trip. (BackgroundSizeGrammar.TryParse alone only understands a single layer, not the comma list.)",
       "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundSizeConverter.FromList()", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundSizeProperty.ValueGrammar.Convert" },
       "html": {
@@ -2071,6 +2132,7 @@
       "name": "container-name",
       "comment": "CSS Containment 3 SS2. Raw space-separated <custom-ident>+ list (or 'none'), stored as text - PeachBrackets.Css.ContainerNameProperty does not yet validate full custom-ident grammar (an existing simplification). cssDataType 'cssom-grammar' calls ContainerNameProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) rather than re-deriving a second parser (see CLAUDE.md's 'one parser' rule), instead of the full cssom round trip. Splitting on whitespace and matching against an @container rule's queried name happens at container-resolution time (CssBox.FindNearestQueryContainer), not here.",
       "inherited": false,
+      "cssom": {"converter": "CssomGrammars.ContainerName"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainerNameProperty.ValueGrammar.Convert" },
       "html": {
@@ -2138,6 +2200,7 @@
     {
       "name": "clear",
       "inherited": false,
+      "cssom": {"converter": "Converters.ClearModeConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2177,6 +2240,7 @@
       "name": "overflow-x",
       "comment": "One axis of the css-overflow-3 pair. CssBox.Overflow is the used value read from both axes (visible turns into auto beside a scroll container, clip into hidden); a lone clip axis stays out of it and is read through CssBox.ClipsWithoutScrolling.",
       "inherited": false,
+      "cssom": {"converter": "Converters.OverflowModeConverter"},
       "initialValue": "visible",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2195,6 +2259,7 @@
       "name": "overflow-y",
       "comment": "One axis of the css-overflow-3 pair. CssBox.Overflow is the used value read from both axes (visible turns into auto beside a scroll container, clip into hidden); a lone clip axis stays out of it and is read through CssBox.ClipsWithoutScrolling.",
       "inherited": false,
+      "cssom": {"converter": "Converters.OverflowModeConverter"},
       "initialValue": "visible",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2394,6 +2459,7 @@
       "name": "text-align-last",
       "comment": "css-text-3 §6.3. Selects the alignment of a line that ends a paragraph - the block's last line, and the last line before a forced break (CssLineBox.PrecedesForcedBreak) - and, per §6.4.3, of any justified line with no justification opportunity to expand at. 'auto' means 'whatever text-align-all says, except that justify becomes start'.",
       "inherited": true,
+      "cssom": {"converter": "Converters.TextAlignLastConverter"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2477,6 +2543,7 @@
       "name": "line-break",
       "comment": "CSS Text 3 section 5.3: how strictly characters that should not start a line are kept off it. All five keywords are implemented by the strictness tailoring of the Unicode line breaking algorithm (UnicodeLineBreaks); auto is the same as normal. anywhere lets a line end after every typographic character unit (grapheme cluster), which also narrows min-content.",
       "inherited": true,
+      "cssom": {"converter": "Converters.LineBreakConverter", "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2503,6 +2570,7 @@
       "name": "word-break",
       "comment": "All three keywords are implemented: the line breaking of a box's text comes from the Unicode line breaking algorithm (UAX #14) with word-break applied (UnicodeLineBreaks), where break-all treats letters and digits as ideographs and keep-all forbids breaks between letter units.",
       "inherited": true,
+      "cssom": {"converter": "Converters.WordBreakConverter", "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -2644,6 +2712,7 @@
       "name": "stop-color",
       "comment": "Carrier-only (applyIn: manual): SVG reads this property from the cascade in the builder that owns it (SvgTreeBuilder, through ResolveStyledAttr), not through the generated dispatch. The entry exists so SvgPropertyRegistry.GetInitialValue is the one source of its initial value, which a declared initial resolves to.",
       "inherited": false,
+      "cssom": {"converter": "Converters.CurrentColorConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "black",
       "cssDataType": "color",
       "svg": {
@@ -2695,6 +2764,7 @@
       "name": "word-spacing",
       "comment": "CssKeywordOrValue<NormalKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. The eager em-to-pt resolution (valueComputation \"no-ems\") that used to run in the CssBox setter now runs in RegistryEmitter.BuildHtmlAssignment against the raw text before FromCssText parses it — see StylePropertiesEmitter's doc comment.",
       "inherited": true,
+      "cssom": {"converter": "Converters.OptionalLengthConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2781,6 +2851,7 @@
       "name": "tab-size",
       "comment": "CSS Text 4 §3.6 (https://www.w3.org/TR/css-text-4/#tab-size-property): <number [0,∞]> | <length [0,∞]> - no percentage. No keyword side, so this doesn't fit the keyword-or-value shape (line-height/word-spacing/letter-spacing) — plain array-union cssDataType instead, same shape as flex-grow/flex-shrink. A bare number isn't resolved here (unlike line-height's bare multiplier, which scales font-size) — the spec defines it as a multiple of the *space glyph's* advance width, which is only known once the tab's actual font is resolved, so DerivedStyle.ResolvedTabSize defers that to CssBox.MeasureWordsSize (see its ExpandTabs helper). Neither the plain \"number\" nor \"length\" DataTypeKind enforces a lower bound on its own (see orphans/flex-grow precedent), so customValidator adds the >=0 check for both union sides; it also explicitly excludes Length.Unit.Percent - unlike the CSS-OM's own ValueExtensions.ToLength (which the generated \"length\" DataTypeKind's base check would otherwise defer to for Layer A), PeachBrackets.Css.Length.TryParse used here accepts percentages, and without this exclusion a value like \"50%\" would validate, then DerivedStyle.ResolvedTabSize would resolve it against a hundredPercent basis of 0 (tab-size has no percentage basis to resolve against) and silently collapse to a zero-width tab-stop instead of being rejected. A calc() length is accepted without a sign check (matching CssValueParser.IsCalcFunction's existing permissiveness for other length properties) since evaluating it needs layout-time context this validator doesn't have.",
       "inherited": true,
+      "cssom": {"converter": "Converters.TabSizeConverter", "globals": "none"},
       "initialValue": "8",
       "cssDataType": ["number", "length"],
       "html": {
@@ -2958,6 +3029,7 @@
       "name": "-prince-hyphenate-character",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-character spelling (Prince also documents an unprefixed \"hyphenate-character\" that is spelled identically to the real CSS Text 4 property, so needs no separate alias entry of its own) - translates to hyphenate-character at parse time. Not documented in docs/. cssDataType 'cssom-grammar' calls the same Converters.HyphenateCharacterConverter.Convert hyphenate-character's own real grammar uses.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateCharacterConverter"},
       "initialValue": "auto",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HyphenateCharacterConverter.Convert" },
       "aliasOf": "hyphenate-character",
@@ -2971,6 +3043,7 @@
       "name": "hyphenate-lines",
       "comment": "Hidden, undocumented compat alias for Prince's own \"hyphenate-lines\" spelling of hyphenate-limit-lines (not a css-text-4 property name; Prince's own, same no-limit | <integer> grammar) - see princexml.com/doc/css-props. Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateLimitLinesConverter"},
       "initialValue": "no-limit",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -2992,6 +3065,7 @@
       "name": "-prince-hyphenate-limit-lines",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-limit-lines spelling - translates to hyphenate-limit-lines at parse time. Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateLimitLinesConverter"},
       "initialValue": "no-limit",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3013,6 +3087,7 @@
       "name": "hyphenate-before",
       "comment": "Hidden, undocumented compat alias for Prince's own standalone \"hyphenate-before\" property (<integer>, initial 2). Prince has no combined hyphenate-limit-chars of its own, so this composes into the real property's \"before\" component via HyphenateLimitCharsGrammar.WithBefore rather than aliasing a longhand 1:1 (aliasOf requires an identical grammar, which this genuinely isn't). initialValue is deliberately null (a property genuinely not participating in the cascade's defaulting store), NOT Prince's own \"2\": DomParser.CascadeApplyStyles's defaulting loop unconditionally re-asserts every CssDefaults-registered property's own initial value on any box that already diverges from ComputedStyle.Default, and this property's only effect is a side effect on a DIFFERENT property's storage (HyphenateLimitChars) - a real initialValue here would silently compose 'before: 2' into every such box's hyphenate-limit-chars even when the author never wrote hyphenate-before at all. Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateBeforeAfterConverter"},
       "initialValue": null,
       "cssDataType": {
         "type": "integer",
@@ -3030,6 +3105,7 @@
       "name": "-prince-hyphenate-before",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-before spelling - see hyphenate-before, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateBeforeAfterConverter"},
       "initialValue": null,
       "cssDataType": {
         "type": "integer",
@@ -3048,6 +3124,7 @@
       "name": "hyphenate-after",
       "comment": "Hidden, undocumented compat alias for Prince's own standalone \"hyphenate-after\" property (<integer>, initial 2) - composes into hyphenate-limit-chars's \"after\" component via HyphenateLimitCharsGrammar.WithAfter - see hyphenate-before, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateBeforeAfterConverter"},
       "initialValue": null,
       "cssDataType": {
         "type": "integer",
@@ -3065,6 +3142,7 @@
       "name": "-prince-hyphenate-after",
       "comment": "Hidden, undocumented compat alias for Prince's own -prince-hyphenate-after spelling - see hyphenate-after, including why initialValue is null rather than Prince's own \"2\". Not documented in docs/.",
       "inherited": true,
+      "cssom": {"converter": "Converters.HyphenateBeforeAfterConverter"},
       "initialValue": null,
       "cssDataType": {
         "type": "integer",
@@ -3308,6 +3386,7 @@
       "name": "font-variant-alternates",
       "comment": "cssDataType 'cssom-grammar' calls FontVariantAlternatesGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip - CSS Fonts 4 §6.8's seven-clause `||` combinator grammar isn't expressible as a plain keyword/value-list. Cross-referencing a clause's ident(s) against an @font-feature-values registration happens later, at resolve time (DerivedStyle.ActualFontVariantAlternates), not here.",
       "inherited": true,
+      "cssom": {"converter": "new FontVariantAlternatesGrammar()"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontVariantAlternatesProperty.ValueGrammar.Convert" },
       "html": {
@@ -3333,6 +3412,7 @@
       "name": "font-variation-settings",
       "comment": "CSS Fonts 4 section 6.10. cssDataType 'cssom-grammar' calls FontVariationSettingsProperty.ValueGrammar.Convert, like font-feature-settings. The cascaded string is turned into axis settings by FontVariationSettingsResolver and reaches the font through the variations argument of the font-creation chain (see DerivedStyle.ActualFontVariationSettings).",
       "inherited": true,
+      "cssom": {"converter": "CssomGrammars.FontVariationSettings"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontVariationSettingsProperty.ValueGrammar.Convert" },
       "html": {
@@ -3364,6 +3444,7 @@
       "name": "font-size-adjust",
       "comment": "CSS Fonts 5 section 3.2. cssDataType 'cssom-grammar' calls FontSizeAdjustProperty.ValueGrammar.Convert. The authored text is resolved to a metric and factor by FontSizeAdjustGrammar.Resolve where the font is created (DerivedStyle.ActualFont; SvgTreeBuilder.ComputeFontContext). It never changes the computed font-size or em resolution, only the size glyph fonts are created at.",
       "inherited": true,
+      "cssom": {"converter": "FontSizeAdjustGrammar.Value", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontSizeAdjustProperty.ValueGrammar.Convert" },
       "html": {
@@ -3471,6 +3552,7 @@
       "name": "font-language-override",
       "comment": "CSS Fonts 4 section 6.6, normal | <string>. cssDataType 'cssom-grammar' calls FontLanguageOverrideProperty.ValueGrammar.Convert. The authored text is resolved to an OpenType language-system tag by FontLanguageOverrideGrammar.Resolve where the text is shaped (DerivedStyle.ActualTextShapingFeatures; SvgTreeBuilder), where it becomes ShapeSettings.LanguageSystemTag and wins over the tag derived from lang.",
       "inherited": true,
+      "cssom": {"converter": "FontLanguageOverrideGrammar.Value"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontLanguageOverrideProperty.ValueGrammar.Convert" },
       "html": {
@@ -3556,6 +3638,7 @@
       "name": "font-feature-settings",
       "comment": "cssDataType 'cssom-grammar' calls FontFeatureSettingsProperty.ValueGrammar.Convert directly (the real grammar, exposed alongside the property's own .OrDefault()-wrapped Converter) instead of the full cssom round trip.",
       "inherited": true,
+      "cssom": {"converter": "CssomGrammars.FontFeatureSettings"},
       "initialValue": "normal",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.FontFeatureSettingsProperty.ValueGrammar.Convert" },
       "html": {
@@ -3642,6 +3725,7 @@
       "name": "list-style-type",
       "comment": "cssDataType 'cssom-grammar' calls the already-public Converters.ListStyleConverter.Convert directly (Map.ListStyles - the full predefined-counter-style keyword set - plus a literal <string> marker) rather than re-deriving a second, independently-maintained keyword list here (this repo's 'one parser' rule), instead of the full cssom round trip. CssCounterEngine/CommonUtils.ConvertToAlphaNumber and CssBoxMarker.ResolveDefaultContent are the downstream consumers that turn a stored keyword or quoted-string value into an actual marker.",
       "inherited": true,
+      "cssom": {"converter": "Converters.ListStyleConverter"},
       "initialValue": "disc",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ListStyleConverter.Convert" },
       "html": {
@@ -3669,6 +3753,7 @@
     {
       "name": "flex-direction",
       "inherited": false,
+      "cssom": {"converter": "Converters.FlexDirectionConverter", "globals": "none"},
       "initialValue": "row",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3686,6 +3771,7 @@
     {
       "name": "flex-wrap",
       "inherited": false,
+      "cssom": {"converter": "Converters.FlexWrapConverter", "globals": "none"},
       "initialValue": "nowrap",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3742,6 +3828,7 @@
       "name": "align-content",
       "comment": "Map.AlignContentKeywords carries the full CSS Box Alignment 3 <content-distribution>/<content-position> grammar including start/baseline (issue #645) - CssLayoutEngineFlex.DistributeCrossSpace and CssLayoutEngineGrid.PositionTracks both fall back to their existing start-packing default for start/baseline, which is spec-correct (baseline's content-distribution fallback alignment is start, CSS Box Alignment 3 §8.3).",
       "inherited": false,
+      "cssom": {"converter": "Converters.AlignContentConverter", "globals": "none"},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3760,6 +3847,7 @@
       "name": "flex-grow",
       "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.1 defines flex-grow as a non-negative number, and CssLayoutEngineFlex.cs sums ParseFloat(box.FlexGrow) directly into free-space distribution math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FlexGrowShrinkConverter", "globals": "none"},
       "initialValue": "0",
       "cssDataType": "number",
       "html": {
@@ -3773,6 +3861,7 @@
       "name": "flex-shrink",
       "comment": "customValidator rejects a negative <number> - css-flexbox-1 §7.1.2 defines flex-shrink as a non-negative number, and CssLayoutEngineFlex.cs multiplies ParseFloat(box.FlexShrink) directly into shrink-factor math with no clamp, so an accepted negative value would corrupt that calculation rather than being merely inert.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FlexGrowShrinkConverter", "globals": "none"},
       "initialValue": "1",
       "cssDataType": "number",
       "html": {
@@ -3786,6 +3875,7 @@
       "name": "flex-basis",
       "comment": "CssKeywordOrValue<FlexBasisKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText.",
       "inherited": false,
+      "cssom": {"converter": "Converters.FlexBasisConverter", "globals": "none", "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -3805,6 +3895,7 @@
       "name": "align-self",
       "comment": "Same enum/keyword set as align-items (see its own comment), plus 'auto' (Map.AlignSelfKeywords adds it to Map.AlignItemKeywords) - 'auto' defers to the container's align-items, resolved ad hoc at every read site in CssLayoutEngineFlex.ComputeCrossOffsets/CssLayoutEngineGrid.ResolveSelfAlignment rather than a DerivedStyle accessor.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AlignSelfConverter", "globals": "none"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3954,6 +4045,7 @@
     {
       "name": "justify-items",
       "inherited": false,
+      "cssom": {"converter": "Converters.JustifyItemsConverter", "globals": "none"},
       "initialValue": "legacy",
       "cssDataType": {
         "type": "enum-keyword",
@@ -3972,6 +4064,7 @@
       "name": "justify-self",
       "comment": "Same enum/keyword set as justify-items, plus 'auto' (Map.JustifySelfKeywords adds it to Map.JustifyItemKeywords) - 'auto' defers to the container's justify-items, resolved ad hoc via CssLayoutEngineGrid.ResolveSelfAlignment (justify-self has no meaning in flex layout).",
       "inherited": false,
+      "cssom": {"converter": "Converters.JustifySelfConverter", "globals": "none"},
       "initialValue": "auto",
       "cssDataType": {
         "type": "enum-keyword",
@@ -4063,6 +4156,7 @@
       "name": "column-width",
       "comment": "CssKeywordOrValue<AutoKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. Reuses word-spacing/letter-spacing/row-gap/column-gap's LengthOrCalc value side so a relative-unit calc() still evaluates lazily at consumption time instead of being rejected.",
       "inherited": false,
+      "cssom": {"converter": "Converters.AutoLengthConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": {
         "type": "keyword-or-value",
@@ -4138,6 +4232,7 @@
     {
       "name": "column-rule-style",
       "inherited": false,
+      "cssom": {"converter": "Converters.LineStyleConverter"},
       "initialValue": "none",
       "cssDataType": {
         "type": "enum-keyword",
@@ -4744,6 +4839,70 @@
         "csharpDataType": "string?",
         "area": null
       }
+    },
+    {
+      "name": "cursor",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": true,
+      "cssom": {"converter": "ImageSourceConverter.Or( WithOrder( ImageSourceConverter.Required(), NumberConverter.Required(), NumberConverter.Required())).RequiresEnd( Map.Cursors.ToConverter())"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "size",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "IdentifierConverter.Or(LengthConverter).Many(1, 2)", "className": "PageSizeProperty"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "text-anchor",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextAnchorConverter"},
+      "initialValue": "start",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "text-justify",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextJustifyConverter"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "transition-delay",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimeConverter.FromList()"},
+      "initialValue": "0s",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "transition-duration",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimeConverter.FromList()"},
+      "initialValue": "0s",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "transition-property",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AnimatableConverter.FromList().OrNone()"},
+      "initialValue": "all",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "transition-timing-function",
+      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TransitionConverter.FromList()"},
+      "initialValue": "ease",
+      "cssDataType": "unsupported"
     }
   ]
 }
