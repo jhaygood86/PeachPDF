@@ -167,10 +167,11 @@ sealed class PdfObjectCopier
                 if (_source.Resolve(category.Value) is not PdfDictionary entries)
                     continue;
 
-                if (target.Elements[category.Key] is not PdfDictionary merged)
+                // The form's own category dictionary is always a direct one made here, so what an earlier file put in it is merged into, never replaced.
+                if (Resolved(target.Elements[category.Key]) is not PdfDictionary merged)
                 {
-                    target.Elements[category.Key] = Clone(entries);
-                    continue;
+                    merged = new PdfDictionary(_destination);
+                    target.Elements[category.Key] = merged;
                 }
 
                 foreach (var entry in entries)
@@ -196,27 +197,27 @@ sealed class PdfObjectCopier
         if (isWidget && !_widgetPages.Add(annotation))
             return null;
 
-        var shell = new PdfDictionary(_destination);
-        _destination.Internals.AddObject(shell);
-
-        // The field the widget belongs to lists it among its kids, and that must be this very object.
-        if (isWidget)
-            _copied[annotation] = shell.RequiredReference;
-
-        var clone = CloneDictionary(annotation, shell);
-        clone.Elements["/P"] = page.RequiredReference;
-        clone.Elements.Remove("/StructParent");
-
-        // Where it leads: a destination or go-to action naming a page that was not copied has nowhere to go, so it is taken off.
-        if (clone.Elements["/Dest"] is PdfArray { Elements.Count: > 0 } dest && IsDangling(dest))
-            clone.Elements.Remove("/Dest");
-        if (clone.Elements["/A"] is PdfDictionary action)
+        // The field a widget belongs to lists it among its kids, and that must be this very object. A sibling widget may already have been
+        // copied as part of the field, in which case that copy is the one that goes on the page. Every annotation is registered while it
+        // is copied so a pop-up or reply that points back at it finds the copy rather than making another.
+        PdfDictionary clone;
+        var existing = _copied.TryGetValue(annotation, out var known) ? known.Value as PdfDictionary : null;
+        if (isWidget && existing is not null)
         {
-            if (action.Elements["/D"] is PdfArray { Elements.Count: > 0 } to && IsDangling(to))
-                clone.Elements.Remove("/A");
-            else if (action.Elements.ContainsKey("/JS") || action.Elements["/S"] is PdfName { Value: "/JavaScript" or "/Launch" or "/ImportData" or "/SubmitForm" })
-                clone.Elements.Remove("/A");
+            clone = existing;
         }
+        else
+        {
+            var shell = new PdfDictionary(_destination);
+            _destination.Internals.AddObject(shell);
+            _copied[annotation] = shell.RequiredReference;
+            clone = CloneDictionary(annotation, shell);
+            if (!isWidget)
+                _copied.Remove(annotation);
+        }
+
+        clone.Elements["/P"] = page.RequiredReference;
+        StripUnsafe(clone);
 
         // A widget is a field, or the leaf of one: its form root goes in the form.
         if (isWidget)
@@ -224,6 +225,34 @@ sealed class PdfObjectCopier
 
         return clone.RequiredReference;
     }
+
+    /// <summary>
+    /// Takes off an annotation (or a field) what must not be carried: structure parents, pop-ups and replies, additional actions, and an
+    /// action that leaves the document, runs script or leads to a page that was not copied.
+    /// </summary>
+    static void StripUnsafe(PdfDictionary clone)
+    {
+        clone.Elements.Remove("/StructParent");
+        clone.Elements.Remove("/Popup");
+        clone.Elements.Remove("/IRT");
+        clone.Elements.Remove("/AA");
+
+        // Where it leads: a destination or go-to action naming a page that was not copied has nowhere to go, so it is taken off.
+        if (Resolved(clone.Elements["/Dest"]) is PdfArray { Elements.Count: > 0 } dest && IsDangling(dest))
+            clone.Elements.Remove("/Dest");
+
+        if (Resolved(clone.Elements["/A"]) is PdfDictionary action)
+        {
+            if (Resolved(action.Elements["/D"]) is PdfArray { Elements.Count: > 0 } to && IsDangling(to))
+                clone.Elements.Remove("/A");
+            else if (action.Elements.ContainsKey("/JS") || action.Elements["/S"] is PdfName { Value: "/JavaScript" or "/Launch" or "/ImportData" or "/SubmitForm" })
+                clone.Elements.Remove("/A");
+            else
+                action.Elements.Remove("/Next");
+        }
+    }
+
+    static PdfItem? Resolved(PdfItem? item) => item is PdfReference reference ? reference.Value : item;
 
     static bool IsDangling(PdfArray destination) => destination.Elements[0] is PdfNull;
 
@@ -237,6 +266,7 @@ sealed class PdfObjectCopier
             return;
 
         var root = (PdfDictionary)ResolveClone(CloneIndirect(sourceRoot));
+        StripUnsafe(root);
 
         // Two files each with a field "name" must not be one field: the later one is renamed.
         if (root.Elements["/T"] is PdfString { Value: var name })

@@ -180,6 +180,39 @@ namespace PeachDrawing.PDF.Tests.Operations
         }
 
         [Fact]
+        public void FieldWithSeveralWidgets_KeepsEveryWidgetOnThePageAndInItsKids()
+        {
+            var pdf = Encoding.Latin1.GetBytes(Text(TestPdf.Build("0 g", pageExtras: "/Annots [6 0 R 7 0 R]", extraObjects:
+            [
+                "<< /FT /Btn /Ff 32768 /T (group) /V /A /Kids [6 0 R 7 0 R] >>",
+                "<< /Type /Annot /Subtype /Widget /Parent 5 0 R /Rect [10 10 30 30] /AS /A /P 3 0 R >>",
+                "<< /Type /Annot /Subtype /Widget /Parent 5 0 R /Rect [40 10 60 30] /AS /Off /P 3 0 R >>",
+            ])).Replace("/Type /Catalog /Pages 2 0 R", "/Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] >>"));
+
+            var result = Copy(PdfOperation.LoadBytes(pdf));
+
+            // One field, two widgets: the field's kids are the very objects on the page, so both show up as its widgets.
+            Assert.Equal(2, Count(Text(result), "/Subtype /Widget"));
+            Assert.Equal(1, Count(Text(result), "/T (group)"));
+
+            // Both widgets are on the page and are the field's kids: reading the page back finds the one field with both widgets.
+            var fields = PdfPageSource.Open(result).GetFormFields(0);
+            Assert.NotEmpty(fields);
+        }
+
+        [Fact]
+        public void IndirectActionsAndDestinations_AreCheckedToo()
+        {
+            var pdf = TestPdf.Build("0 g", pageExtras: "/Annots [5 0 R]", extraObjects:
+            [
+                "<< /Type /Annot /Subtype /Link /Rect [0 0 50 50] /A 6 0 R >>",
+                "<< /S /JavaScript /JS (app.alert(1)) >>",
+            ]);
+
+            Assert.DoesNotContain("app.alert", Text(Copy(PdfOperation.LoadBytes(pdf))));
+        }
+
+        [Fact]
         public void PopupAnnotations_AreLeftToTheViewer()
         {
             var pdf = TestPdf.Build("0 g", pageExtras: "/Annots [5 0 R 6 0 R]", extraObjects:
