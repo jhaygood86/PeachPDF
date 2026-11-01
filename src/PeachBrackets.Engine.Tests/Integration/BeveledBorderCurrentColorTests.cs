@@ -294,6 +294,23 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Theory]
+        // A positioned box is blockified before its border colour resolves, so it loses the exemption
+        // (Chrome 153: #9a9a9a for position:absolute; display:table-cell).
+        [InlineData("table-cell")]
+        [InlineData("table-row")]
+        [InlineData("table-caption")]
+        public async Task AnOutOfFlowTableInternalBox_IsBlockifiedAndLosesTheExemption(string display)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(
+                "<!DOCTYPE html><html><body>"
+                + $"<div id='el' style='position: absolute; display: {display}; width: 60pt; height: 12pt; color: red; border: 4pt inset'></div>"
+                + "</body></html>");
+
+            var box = LayoutHarness.FindById(root, "el")!;
+            Assert.Equal(Base, box.ActualBorderTopColor);
+        }
+
+        [Theory]
         // ...and nothing else is exempt, however table-like it may look from a layout standpoint.
         [InlineData("block")]
         [InlineData("inline-block")]

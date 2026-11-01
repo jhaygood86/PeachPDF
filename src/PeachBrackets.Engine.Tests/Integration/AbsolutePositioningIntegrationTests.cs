@@ -73,6 +73,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("table-cell")]
         [InlineData("table-column")]
         [InlineData("table-column-group")]
+        [InlineData("table-caption")]
         public async Task OutOfFlow_TableInternalDisplay_BlockifiesToBlock(string display)
         {
             foreach (var position in new[] { "absolute", "fixed" })
