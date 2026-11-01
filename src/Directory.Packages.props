@@ -23,6 +23,8 @@
     <PackageVersion Include="PeachImage" Version="0.6.2" />
     <PackageVersion Include="ScottPlot" Version="5.1.59" />
     <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Android" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.Views" Version="3.119.0" />
     <PackageVersion Include="SkiaSharp.HarfBuzz" Version="3.119.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0" />
     <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="3.119.0" />

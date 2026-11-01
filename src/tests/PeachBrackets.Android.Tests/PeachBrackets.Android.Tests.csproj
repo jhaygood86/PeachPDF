@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the parts of the Android view that need no Android: the pointer-icon mapping, the pointing devices a set of devices
+    amounts to, page hit mapping, which links may be launched, the scroll and zoom arithmetic and the touch-action pan filter. Their source
+    is compiled into this plain .NET project, so they run on any machine without an emulator. The view itself is exercised on an emulator
+    by the example app (see docs/peachbrackets-android.md).
+  -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks />
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.MTP" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <PackageReference Include="xunit.analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\engine\PeachBrackets.Android\Logic\*.cs" Link="Logic\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

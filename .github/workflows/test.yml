@@ -213,6 +213,13 @@ jobs:
       if: matrix.suite == 'small' && runner.os == 'Windows'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Win2D.Tests/PeachDrawing.Win2D.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename win2d-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix win2d-test-results --results-directory coverage
 
+    # The Android view needs the android workload to build, so only its Android-free logic is tested here (compiled into a plain project).
+    - name: Test Android view logic (PeachBrackets.Android)
+      if: matrix.suite == 'small'
+      run: |
+        dotnet build src/tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj --configuration Release
+        dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename android-logic-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix android-logic-test-results --results-directory coverage
+
     # The WinUI control is a Windows component too: its logic is tested on the Windows leg (the control itself needs a desktop session).
     - name: Build WinUI control tests
       if: matrix.suite == 'small' && runner.os == 'Windows'

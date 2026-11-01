@@ -33,7 +33,10 @@ namespace PeachBrackets.Css
         /// A colour stop's colour: any <c>&lt;color&gt;</c>, which includes <c>currentcolor</c> (CSS Color 4). The render layer reads
         /// that stop as the painting box's own color (<c>CssImagePainter.ResolveCurrentColorStops</c>).
         /// </summary>
-        private static readonly IValueConverter StopColorConverter = ColorConverter.WithCurrentColor();
+        // Built on first use, not in this type's own initializer: Converters constructs gradient converters while it is itself still being
+        // initialized, so on a runtime that reaches Converters first (Mono on Android) ColorConverter would still be null here.
+        private static IValueConverter s_stopColorConverter;
+        private static IValueConverter StopColorConverter => s_stopColorConverter ??= ColorConverter.WithCurrentColor();
 
         private IPropertyValue[] ToGradientStops(List<List<Token>> values, int offset)
         {
