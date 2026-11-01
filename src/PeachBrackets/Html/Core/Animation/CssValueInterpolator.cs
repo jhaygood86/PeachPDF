@@ -70,7 +70,17 @@ namespace PeachBrackets.Html.Animation
             "padding-block-start", "padding-block-end", "padding-inline-start", "padding-inline-end", "column-rule-width",
             "border-top-width", "border-right-width", "border-bottom-width", "border-left-width", "outline-width",
             "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
-            "font-size", "line-height", "column-width", "row-gap", "column-gap", "flex-grow", "flex-shrink", "stroke-width"
+            "font-size", "line-height", "column-width", "row-gap", "column-gap", "flex-grow", "flex-shrink", "stroke-width",
+            "r", "rx", "ry"
+        };
+
+        /// <summary>
+        /// Properties that take a number or a length, where a bare <c>0</c> is the number: against a calc() of lengths it is not a zero length, and
+        /// the pair flips half way as in a browser (<c>0px</c> is a length, and blends).
+        /// </summary>
+        private static readonly HashSet<string> ZeroIsANumberProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "line-height", "tab-size", "border-image-width", "border-image-outset"
         };
 
         private static readonly HashSet<string> IntegerProperties = new(StringComparer.OrdinalIgnoreCase)
@@ -169,14 +179,14 @@ namespace PeachBrackets.Html.Animation
         {
             result = string.Empty;
 
-            // Only a calc() of lengths can be added to a length, and a bare 0 is a zero length beside one (CSS Values 4 §5.2), where beside a calc() of numbers it is a number.
+            // Only a calc() of lengths can be added to a length, and a bare 0 is a zero length beside one (CSS Values 4 §5.2), except where the property takes a number too.
             var fromIsCalc = IsWholeCalc(from);
             var toIsCalc = IsWholeCalc(to);
             if (!fromIsCalc && !toIsCalc) return false;
 
             if ((fromIsCalc && !HoldsALength(valueParser, from)) || (toIsCalc && !HoldsALength(valueParser, to))) return false;
 
-            var zeroIsLength = fromIsCalc || toIsCalc;
+            var zeroIsLength = !ZeroIsANumberProperties.Contains(property);
 
             if (!TryCalcTerm(valueParser, from, 1 - t, zeroIsLength, out var fromTerm) || !TryCalcTerm(valueParser, to, t, zeroIsLength, out var toTerm)) return false;
             if (!fromIsCalc && !toIsCalc) return false;
@@ -195,8 +205,11 @@ namespace PeachBrackets.Html.Animation
             value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length;
 
         // The mix is a calc() of lengths: the opacities are numbers, and a dash list is split on spaces, which a calc() holds, so it keeps flipping.
+        // A browser does not mix a calc() for the text stroke's width either (it flips, even against 0px), so that one stays as it was.
         private static bool SupportsCalcMix(string property) =>
-            !OpacityProperties.Contains(property) && !property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase);
+            !OpacityProperties.Contains(property)
+            && !property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase)
+            && !property.Equals("-webkit-text-stroke-width", StringComparison.OrdinalIgnoreCase);
 
         private static bool HoldsALength(CssValueParser valueParser, string value) =>
             IsWholeCalc(value) && Scan(valueParser, value).Any(token => token.Kind == TokenKind.Number && LengthUnits.Contains(token.Unit));

@@ -448,6 +448,43 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(expected, Spacing(SpacingText(document), property), 2);
         }
 
+        [Theory]
+        [InlineData("letter-spacing", 0.25)]
+        [InlineData("letter-spacing", 0.75)]
+        [InlineData("word-spacing", 0.25)]
+        public async Task APercentageSpacing_IsNotReadAsInvalid(string property, double progress)
+        {
+            // A percentage is a valid spacing (Chrome: relative to the font size, 6.5px at the quarter), so the animation does not start from the parent's 5px
+            // as it does for an invalid value. A percentage spacing is not resolved (reading it as 0, the animation runs 0 to 20px: 5 at the quarter), which is
+            // the gap this pins; the start has to be the declared text and not the inherited one.
+            var document = await BuildAsync($"@keyframes k {{ to {{ {property}: 20px }} }} .t {{ animation: k 1s linear }}",
+                $"<g {property}=\"5px\"><text class=\"t\" {property}=\"10%\" x=\"5\" y=\"30\" font-size=\"20\">Ab cd ef</text></g>", progress);
+
+            Assert.Equal(20 * progress, Spacing(SpacingText(document), property), 2);
+        }
+
+        [Theory]
+        [InlineData("r")]
+        [InlineData("rx")]
+        [InlineData("ry")]
+        public async Task AnOvershootingEasing_DoesNotTakeARadiusBelowZero(string property)
+        {
+            // Chrome clamps the radius to 0 and draws nothing; cubic-bezier(.5, -1, .5, 2) is below zero at the quarter, where 0 to calc(30px + 1em) would be negative.
+            var element = property == "r" ? "circle" : "ellipse";
+            var otherRadius = property == "rx" ? "ry=\"10\"" : property == "ry" ? "rx=\"10\"" : string.Empty;
+            var document = await BuildAsync($"@keyframes k {{ from {{ {property}: 0 }} to {{ {property}: calc(30px + 1em) }} }} .t {{ animation: k 1s cubic-bezier(.5, -1, .5, 2) }}",
+                $"<{element} class=\"t\" cx=\"150\" cy=\"70\" {otherRadius} style=\"font-size: 20px\"/>", 0.25);
+
+            var radius = document.Children[0] switch
+            {
+                SvgCircleElement circle => circle.R,
+                SvgEllipseElement ellipse => property == "rx" ? ellipse.Rx : ellipse.Ry,
+                var unexpected => throw new Xunit.Sdk.XunitException($"Unexpected element {unexpected.GetType().Name}")
+            };
+
+            Assert.Equal(0, radius, 2);
+        }
+
         [Fact]
         public async Task ATextPropertyNothingDeclares_MixesFromItsInitialValue()
         {

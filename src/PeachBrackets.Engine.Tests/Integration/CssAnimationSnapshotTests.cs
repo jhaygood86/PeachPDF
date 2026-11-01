@@ -459,6 +459,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("line-height", "calc((1.5 * 1))", "150%", 0.4, "calc((1.5 * 1))")]            // a calc() of numbers (a var() that held one) against a percentage: a number beside a length is not a mix
         [InlineData("width", "10px", "calc(1 + 3)", 0.6, "calc(1 + 3)")]                         // a calc() of numbers is not a length either
         [InlineData("z-index", "calc(1 + 3)", "calc(2)", 0.4, "calc(1 + 3)")]                    // nor is a pair of them: no length mix, and the whole-number rounding is not lost to one
+        [InlineData("-webkit-text-stroke-width", "0px", "calc(10px + 1em)", 0.4, "0px")]       // a browser flips this one, even against 0px
+        [InlineData("line-height", "0", "calc(1em + 10px)", 0.4, "0")]                          // a bare 0 is the number on these, so it is no zero length to blend from
+        [InlineData("line-height", "calc(1em + 10px)", "0", 0.6, "0")]
+        [InlineData("tab-size", "0", "calc(10px + 1em)", 0.6, "calc(10px + 1em)")]
+        [InlineData("border-image-width", "0", "calc(10px + 1em)", 0.4, "0")]
+        [InlineData("border-image-outset", "calc(10px + 1em)", "0", 0.6, "0")]
         public void Interpolate_WhatCannotBeMixed_FlipsHalfWay(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
 
@@ -467,6 +473,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("padding-block-end", "100px", "10px", 1.5, "0px")]
         [InlineData("column-rule-width", "100px", "10px", 1.5, "0px")]
         [InlineData("padding-inline-start", "calc(100px + 2em)", "10px", 1.5, "max(0px, calc((100px + 2em) * -0.5 + 15px))")]
+        [InlineData("r", "0", "30", -0.5, "0")]
+        [InlineData("rx", "20", "10", 3.0, "0")]
+        [InlineData("ry", "0px", "calc(30px + 1em)", -0.5, "max(0px, calc(0px + (30px + 1em) * -0.5))")]
         public void Interpolate_ANonNegativeProperty_IsClampedWhenAnEasingOvershoots(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
 

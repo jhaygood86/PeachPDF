@@ -1690,9 +1690,12 @@ namespace PeachBrackets.Svg
             return animated is not null && !IsImportantDeclaration(node, name) ? animated : declared;
         }
 
-        /// <summary>A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length; anything else computes to the inherited value.</summary>
+        /// <summary>
+        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length-percentage; anything else computes to the inherited value.
+        /// A percentage is valid (it is relative to the font size), which the reference length of 1 lets through: with none the parser reads it as absent.
+        /// </summary>
         private static bool IsSpacingValue(string value) =>
-            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value) is not null;
+            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
 
         /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a

@@ -57,6 +57,17 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(pixels * PointsPerPx, (await BoxAt(keyframes, progress)).ActualMarginLeft, 2);
         }
 
+        [Theory]
+        [InlineData("from { line-height: 0 } to { line-height: calc(1em + 10px) }", 0.25, 0)]
+        [InlineData("from { line-height: 0 } to { line-height: calc(1em + 10px) }", 0.75, 30)]
+        [InlineData("from { line-height: calc(1em + 10px) } to { line-height: 0 }", 0.25, 30)]
+        public async Task ABareZeroAgainstACalc_FlipsWhereThePropertyTakesANumber(string keyframes, double progress, double pixels)
+        {
+            // line-height takes a number, so a bare 0 is the number and not a zero length: Chrome switches between the two at the middle
+            // (0 for the first half, 30px for the second). The box is as tall as one line.
+            Assert.Equal(pixels * PointsPerPx, (await BoxAt(keyframes, progress)).Size.Height, 2);
+        }
+
         [Fact]
         public async Task ACalcAgainstANumber_IsNotMixedAsALength()
         {
