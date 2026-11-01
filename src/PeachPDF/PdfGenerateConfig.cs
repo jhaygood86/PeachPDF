@@ -97,12 +97,13 @@ namespace PeachPDF
         public PdfDocumentMetadata? Metadata { get; set; } = null;
 
         /// <summary>
-        /// the page size to use for each page in the generated pdf
+        /// the page size to use for each page in the generated pdf. When left <see cref="PageSize.Undefined"/> and no
+        /// <see cref="ManualPageWidth"/>/<see cref="ManualPageHeight"/> are set, pages are US Letter; an <c>@page { size }</c> rule in the document still overrides it.
         /// </summary>
         public PageSize PageSize { get; set; }
 
         /// <summary>
-        /// if the page size is undefined this allows you to set manually the page width in points
+        /// if the page size is undefined this allows you to set manually the page width in points (both dimensions must be positive, else the page is US Letter)
         /// </summary>
         public double ManualPageWidth { get; set; }
 

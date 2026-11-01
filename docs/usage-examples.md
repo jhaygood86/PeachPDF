@@ -88,6 +88,8 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
+When the config names no page size (neither `PageSize` nor both `ManualPageWidth` and `ManualPageHeight`), pages are US Letter; an `@page { size }` rule in the document still takes precedence, and setting `PageSize` or the manual dimensions overrides the default.
+
 ## Rendering a local HTML file
 
 `FileUriNetworkLoader` renders a local `.html` file and every resource it references (stylesheets, images, fonts) from disk. It sets the base URL to the file's own location — exactly like opening the file in a browser — so relative references resolve against the file's directory. Pass `null` as the HTML argument to load the root document from the file.
