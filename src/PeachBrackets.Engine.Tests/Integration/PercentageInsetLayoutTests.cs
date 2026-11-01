@@ -92,5 +92,21 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Border-box 200pt, borders 10pt each: the padding box is 180pt tall and starts 10pt in.
             Assert.Equal(10 + 18, box.Location.Y - container.Location.Y, 3);
         }
+        [Theory]
+        [InlineData("position:absolute;top:10%", 20)]
+        [InlineData("position:absolute;top:calc(10% + 5pt)", 25)]
+        [InlineData("position:absolute;bottom:10%", 170)]
+        public async Task AbsoluteTopAndBottomPercentages_WithAnAutoHeightContainingBlock_UseItsFinalHeight(string boxStyle, double expectedY)
+        {
+            // The containing block is as tall as its in-flow child (200pt), which is only known once its children are placed.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                $"<div id='c' style='position:relative;width:400pt;margin:0'><div style='height:200pt'></div><div id='t' style='margin:0;width:10pt;height:10pt;{boxStyle}'></div></div>"));
+
+            var container = LayoutHarness.FindById(root, "c")!;
+            var box = LayoutHarness.FindById(root, "t")!;
+
+            Assert.Equal(200, container.ActualBoxSizingHeight, 3);
+            Assert.Equal(expectedY, box.Location.Y - container.Location.Y, 3);
+        }
     }
 }
