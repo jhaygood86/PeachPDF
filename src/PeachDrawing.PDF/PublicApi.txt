@@ -191,6 +191,9 @@ PeachDrawing.PDF.PdfComposerPage : sealed class
   property Double WidthPoints { get; }
   property Int32 Index { get; }
   property PdfCanvas Canvas { get; }
+PeachDrawing.PDF.PdfCopyMode : enum Int32
+  ObjectCopy = 1
+  Redraw = 0
 PeachDrawing.PDF.PdfEmbeddedFile : sealed class
   ctor()
   property Byte[] Data { get; set; }
@@ -288,6 +291,7 @@ PeachDrawing.PDF.PdfOperation : sealed class
   method PdfOperation RemoveRestrictions()
   method PdfOperation TakePages(String pageSelector)
   method PdfOperation UnderlayFile(PdfLayerConfiguration layer)
+  method PdfOperation WithCopyMode(PdfCopyMode mode)
   method Void Save(Stream stream)
   method Void Save(String filePath)
   method static PdfOperation LoadBytes(Byte[] pdf, String password = null)

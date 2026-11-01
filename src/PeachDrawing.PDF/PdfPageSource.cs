@@ -81,6 +81,9 @@ namespace PeachDrawing.PDF
             return Open(copy.ToArray(), password);
         }
 
+        /// <summary>The reader behind this source, for the rest of the package.</summary>
+        internal PdfSourceDocument Document => _document;
+
         /// <summary>The number of pages in the file.</summary>
         public int PageCount => _document.Pages.Count;
 

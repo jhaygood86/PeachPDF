@@ -178,7 +178,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            return string.Create(CultureInfo.InvariantCulture, $"/F{_fontNumber++}");
+            return Unused(Fonts, "/F", ref _fontNumber);
         }
     }
     int _fontNumber;
@@ -190,7 +190,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            return string.Create(CultureInfo.InvariantCulture, $"/I{_imageNumber++}");
+            return Unused(XObjects, "/I", ref _imageNumber);
         }
     }
     int _imageNumber;
@@ -202,7 +202,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            return string.Create(CultureInfo.InvariantCulture, $"/Fm{_formNumber++}");
+            return Unused(XObjects, "/Fm", ref _formNumber);
         }
     }
     int _formNumber;
@@ -214,7 +214,7 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            return string.Create(CultureInfo.InvariantCulture, $"/GS{_extGStateNumber++}");
+            return Unused(ExtGStates, "/GS", ref _extGStateNumber);
         }
     }
     int _extGStateNumber;
@@ -226,10 +226,27 @@ internal sealed class PdfResources : PdfDictionary
     {
         get
         {
-            return string.Create(CultureInfo.InvariantCulture, $"/Pa{_patternNumber++}");
+            return Unused(Patterns, "/Pa", ref _patternNumber);
         }
     }
     int _patternNumber;
+
+    /// <summary>
+    /// The next name of the form <paramref name="prefix"/> and a number that <paramref name="map"/> does not already use. A page whose
+    /// resources came from a file copied into the document has names of its own (<c>/F0</c> is some font of that file), and what is
+    /// drawn on such a page afterwards must not take them over.
+    /// </summary>
+    static string Unused(PdfResourceMap map, string prefix, ref int number)
+    {
+        string name;
+        do
+        {
+            name = string.Create(CultureInfo.InvariantCulture, $"{prefix}{number++}");
+        }
+        while (map.Elements.ContainsKey(name));
+
+        return name;
+    }
 
     /// <summary>
     /// Maps all PDFsharp resources to their local resource names.

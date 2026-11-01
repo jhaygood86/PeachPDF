@@ -34,6 +34,7 @@ namespace PeachDrawing.PDF
         private readonly List<XElement> _metadata = [];
         private readonly List<string> _warnings = [];
         private PdfEncryptionOptions? _encryption;
+        private PdfCopyMode _copyMode;
 
         private PdfOperation()
         {
@@ -200,6 +201,18 @@ namespace PeachDrawing.PDF
         /// <returns>this operation</returns>
         public PdfOperation RemoveRestrictions() => Decrypt();
 
+        /// <summary>Chooses how the pages of the loaded files are carried into the output.</summary>
+        /// <param name="mode">the mode; <see cref="PdfCopyMode.Redraw"/> until this is called</param>
+        /// <returns>this operation</returns>
+        public PdfOperation WithCopyMode(PdfCopyMode mode)
+        {
+            if (!Enum.IsDefined(mode))
+                throw new ArgumentOutOfRangeException(nameof(mode), mode, null);
+
+            _copyMode = mode;
+            return this;
+        }
+
         /// <summary>Writes the output to a file, replacing it.</summary>
         /// <param name="filePath">where to write</param>
         public void Save(string filePath)
@@ -300,6 +313,8 @@ namespace PeachDrawing.PDF
         internal IReadOnlyList<XElement> MetadataElements => _metadata;
 
         internal PdfEncryptionOptions? EncryptionOptions => _encryption;
+
+        internal PdfCopyMode CopyMode => _copyMode;
 
         internal List<string> WarningsList => _warnings;
     }

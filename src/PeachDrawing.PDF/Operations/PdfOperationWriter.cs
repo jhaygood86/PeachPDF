@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using PeachDrawing.PDF.Engine;
+using PeachDrawing.PDF.Engine.Advanced;
+using PeachDrawing.PDF.Import;
 
 namespace PeachDrawing.PDF
 {
@@ -28,24 +31,33 @@ namespace PeachDrawing.PDF
             using var composer = new PdfComposer(context, options);
             var warnings = new SortedSet<string>(StringComparer.Ordinal);
 
-            // Where each page of each file was drawn; the first place wins, so a link to it has one place to lead to.
+            // Where each page of each file was put; the first place wins, so a link to it has one place to lead to.
             var drawnAt = new Dictionary<(PdfPageSource, int), int>();
             for (var i = 0; i < pages.Count; i++)
+                drawnAt.TryAdd((pages[i].Source, pages[i].SourcePage), i);
+
+            var copy = operation.CopyMode == PdfCopyMode.ObjectCopy;
+            if (copy)
             {
-                var entry = pages[i];
-                drawnAt.TryAdd((entry.Source, entry.SourcePage), i);
+                CopyPages(composer, context, pages, sources, warnings);
+            }
+            else
+            {
+                foreach (var entry in pages)
+                {
+                    var (width, height) = entry.Source.GetPageSize(entry.SourcePage);
+                    var page = composer.AddPage(width, height);
 
-                var (width, height) = entry.Source.GetPageSize(entry.SourcePage);
-                var page = composer.AddPage(width, height);
-
-                foreach (var layer in entry.Layers.Where(l => l.Underlay))
-                    Draw(layer.Source, layer.SourcePage, page, warnings);
-                Draw(entry.Source, entry.SourcePage, page, warnings);
-                foreach (var layer in entry.Layers.Where(l => !l.Underlay))
-                    Draw(layer.Source, layer.SourcePage, page, warnings);
+                    foreach (var layer in entry.Layers.Where(l => l.Underlay))
+                        Draw(layer.Source, layer.SourcePage, page, warnings);
+                    Draw(entry.Source, entry.SourcePage, page, warnings);
+                    foreach (var layer in entry.Layers.Where(l => !l.Underlay))
+                        Draw(layer.Source, layer.SourcePage, page, warnings);
+                }
             }
 
-            CarryNavigation(composer, context, pages, sources, drawnAt);
+            // Copied pages carry their own links, form fields and annotations; drawn ones have them added here.
+            CarryNavigation(composer, context, pages, sources, drawnAt, carryPageFeatures: !copy);
 
             foreach (var warning in warnings)
                 operation.WarningsList.Add(warning);
@@ -107,6 +119,93 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// Puts the objects of each page into the new file as they are (see <see cref="PdfObjectCopier"/>), then draws the layers a page has over
+        /// and under what was copied.
+        /// </summary>
+        private static void CopyPages(
+            PdfComposer composer,
+            PdfRenderContext context,
+            IReadOnlyList<PdfOperation.OutputPage> pages,
+            List<PdfPageSource> sources,
+            SortedSet<string> warnings)
+        {
+            var fieldNames = new HashSet<string>(StringComparer.Ordinal);
+            var copiers = sources.ToDictionary(s => s, s => new PdfObjectCopier(s.Document, composer.Document, fieldNames));
+
+            // Every page is made before any is filled, so a link on an early page can lead to a later one.
+            var made = new List<PdfComposerPage>(pages.Count);
+            foreach (var entry in pages)
+            {
+                var (width, height) = entry.Source.GetPageSize(entry.SourcePage);
+                var page = composer.AddPage(width, height);
+                made.Add(page);
+                copiers[entry.Source].RegisterPage(entry.Source.Document.Pages[entry.SourcePage], page.Page);
+            }
+
+            for (var i = 0; i < pages.Count; i++)
+            {
+                var entry = pages[i];
+                var page = made[i];
+                var sourcePage = entry.Source.Document.Pages[entry.SourcePage];
+                var layered = entry.Layers.Count > 0;
+                if (layered)
+                    EnsureLayerCanBeDrawn(entry.Source.Document, sourcePage);
+
+                // The page's content goes in first, so what the layers add to the resources takes names the copied content does not use. The page's
+                // own canvas is the first content stream: underlays drawn on it go beneath what is copied in after it, and the overlays are drawn last,
+                // once that canvas is closed, into a content stream added after everything.
+                var streams = copiers[entry.Source].FillPage(page.Page, sourcePage);
+                var contents = page.Page.Contents.Elements;
+                var at = 1;
+                if (layered)
+                    contents.Insert(at++, ContentStream(composer, "q\n"));
+                foreach (var stream in streams)
+                    contents.Insert(at++, stream);
+                if (layered)
+                    contents.Insert(at, ContentStream(composer, "\nQ"));
+
+                foreach (var layer in entry.Layers.Where(l => l.Underlay))
+                    DrawOn(layer.Source, layer.SourcePage, page.Canvas, warnings);
+                page.Finish();
+
+                var overlays = entry.Layers.Where(l => !l.Underlay).ToList();
+                if (overlays.Count > 0)
+                    page.DrawAppended(context, canvas => overlays.ForEach(layer => DrawOn(layer.Source, layer.SourcePage, canvas, warnings)));
+            }
+            foreach (var copier in copiers.Values)
+                copier.FinishForm();
+        }
+
+        private static PdfItem ContentStream(PdfComposer composer, string text)
+        {
+            var content = new PdfContent(composer.Document);
+            composer.Document.Internals.AddObject(content);
+            content.CreateStream(System.Text.Encoding.ASCII.GetBytes(text));
+            return content.RequiredReference;
+        }
+
+        /// <summary>A layer is drawn in the page's own top-left-origin space, which is the space of the copied content only when nothing moves it.</summary>
+        private static void EnsureLayerCanBeDrawn(PdfSourceDocument source, PdfDictionary page)
+        {
+            var rotated = source.InheritedAttribute(page, "/Rotate") is { } rotate && source.IntOf(rotate) % 360 != 0;
+            var cropped = source.InheritedAttribute(page, "/CropBox") is not null;
+            var offset = source.InheritedAttribute(page, "/MediaBox") is PdfArray { Elements.Count: >= 2 } box
+                && (source.NumberOf(box.Elements[0]) != 0 || source.NumberOf(box.Elements[1]) != 0);
+            if (rotated || cropped || offset)
+            {
+                throw new NotSupportedException(
+                    "A layer cannot be drawn on a page copied as objects when the page is rotated, has a crop box, or has a media box that does not start " +
+                    "at the origin. Use PdfCopyMode.Redraw for this file.");
+            }
+        }
+
+        private static void DrawOn(PdfPageSource source, int sourcePage, PdfCanvas canvas, SortedSet<string> warnings)
+        {
+            foreach (var warning in source.Paint(sourcePage, canvas, PdfAnnotationPaint.None))
+                warnings.Add(warning);
+        }
+
+        /// <summary>
         /// Carries across what the drawn pages had that is not drawing: links (now leading to the pages their targets were drawn on), form
         /// fields, annotations, named destinations and the outline. Whatever leads to a page that was not taken is left out.
         /// </summary>
@@ -115,14 +214,15 @@ namespace PeachDrawing.PDF
             PdfRenderContext context,
             IReadOnlyList<PdfOperation.OutputPage> pages,
             List<PdfPageSource> sources,
-            Dictionary<(PdfPageSource, int), int> drawnAt)
+            Dictionary<(PdfPageSource, int), int> drawnAt,
+            bool carryPageFeatures)
         {
             var annotations = composer.CreateAnnotationBuilder(context);
             var forms = composer.CreateFormBuilder(context, "PeachPDFMergedField");
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
             var destinationNames = new HashSet<string>(StringComparer.Ordinal);
 
-            for (var i = 0; i < pages.Count; i++)
+            for (var i = 0; carryPageFeatures && i < pages.Count; i++)
             {
                 var entry = pages[i];
                 var target = composer.Pages[i];
