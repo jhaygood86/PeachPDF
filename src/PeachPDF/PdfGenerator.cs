@@ -375,17 +375,99 @@ namespace PeachPDF
         /// declarative counterpart of <see cref="AddPdfPages(PeachPdfDocument, string?, PdfGenerateConfig, PeachPdfCssContent?)"/>,
         /// callable more than once to add further declaratively-built pages to the same document.
         /// </summary>
-        public async Task AddPages(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null)
+        public Task AddPages(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig? config = null) =>
+            AddPagesCore(document, handler, config, null);
+
+        /// <summary>
+        /// Creates a PDF document from several declarative documents, one after another. See <see cref="DocumentMerge"/> for how the
+        /// page numbers of the parts run.
+        /// </summary>
+        /// <param name="merge">the documents to merge and how to number their pages</param>
+        /// <param name="config">the configuration for every part; the same defaults as <see cref="CreateDocument"/> when omitted</param>
+        public async Task<PeachPdfDocument> CreateMergedDocument(DocumentMerge merge, PdfGenerateConfig? config = null)
+        {
+            var document = new PeachPdfDocument(new PdfComposer(_renderContext));
+            await AddMergedPages(document, merge, config);
+            return document;
+        }
+
+        /// <summary>Builds the documents of a <see cref="DocumentMerge"/> and appends their pages to <paramref name="document"/>.</summary>
+        /// <param name="document">the document to add to</param>
+        /// <param name="merge">the documents to merge and how to number their pages</param>
+        /// <param name="config">the configuration for every part</param>
+        public async Task AddMergedPages(PeachPdfDocument document, DocumentMerge merge, PdfGenerateConfig? config = null)
+        {
+            ArgumentNullException.ThrowIfNull(document);
+            ArgumentNullException.ThrowIfNull(merge);
+            config ??= DefaultDeclarativeConfig();
+            ValidateAnimationProgress(config);
+
+            // The pages each part's page sections lay out to, counted before anything is drawn so that a footer can say "of 5" on its
+            // first page. A part with a single page section numbers itself from 1 on its own, so counting is only needed when the
+            // parts run on from one another or a part has several sections.
+            var counts = new List<int[]?>();
+            foreach (var part in merge.Parts)
+            {
+                var probe = new DocumentBuilder();
+                part(probe);
+                counts.Add(merge.Numbering == MergePageNumbering.Continuous || probe.PageHandlers.Count > 1
+                    ? await CountPages(probe, config)
+                    : null);
+            }
+
+            var grandTotal = counts.Sum(c => c?.Sum() ?? 0);
+            var before = 0;
+            for (var i = 0; i < merge.Parts.Count; i++)
+            {
+                var sections = counts[i];
+                var partBefore = before;
+                var partTotal = sections?.Sum() ?? 0;
+                before += partTotal;
+
+                Func<int, (int Offset, int? Total)>? numbering = sections is null
+                    ? null
+                    : section =>
+                    {
+                        var within = sections.Take(section).Sum();
+                        return merge.Numbering == MergePageNumbering.Continuous
+                            ? (partBefore + within, grandTotal)
+                            : (within, partTotal);
+                    };
+
+                await AddPagesCore(document, merge.Parts[i], config, numbering);
+            }
+        }
+
+        private async Task<int[]> CountPages(DocumentBuilder builder, PdfGenerateConfig config)
+        {
+            var buildContext = new DocumentBuildContext(_renderContext);
+            var counts = new List<int>();
+            foreach (var pageHandler in builder.PageHandlers)
+            {
+                var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, builder.DocumentStylesheet);
+                using (htmlDocument)
+                using (measure)
+                {
+                    counts.Add(htmlDocument.Pages.Count);
+                }
+            }
+
+            return [.. counts];
+        }
+
+        private static PdfGenerateConfig DefaultDeclarativeConfig() => new()
+        {
+            PageSize = PageSize.A4,
+            MarginTop = 20,
+            MarginBottom = 20,
+            MarginLeft = 20,
+            MarginRight = 20
+        };
+
+        private async Task AddPagesCore(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig? config, Func<int, (int Offset, int? Total)>? numbering)
         {
             ArgumentNullException.ThrowIfNull(handler);
-            config ??= new PdfGenerateConfig
-            {
-                PageSize = PageSize.A4,
-                MarginTop = 20,
-                MarginBottom = 20,
-                MarginLeft = 20,
-                MarginRight = 20
-            };
+            config ??= DefaultDeclarativeConfig();
 
             ValidateAnimationProgress(config);
 
@@ -400,9 +482,10 @@ namespace PeachPDF
 
             if (documentBuilder.FileLayers.Count == 0)
             {
+                var section = 0;
                 foreach (var pageHandler in documentBuilder.PageHandlers)
                 {
-                    var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet);
+                    var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(section++));
                     using (htmlDocument)
                     using (measure)
                     {
@@ -419,9 +502,10 @@ namespace PeachPDF
             var prepared = new List<(HtmlDocument Document, PdfCanvas Measure)>();
             try
             {
+                var section = 0;
                 foreach (var pageHandler in documentBuilder.PageHandlers)
                 {
-                    prepared.Add(await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet));
+                    prepared.Add(await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(section++)));
                 }
 
                 var totalPages = document.Composer.Pages.Count + prepared.Sum(p => p.Document.Pages.Count);
@@ -448,7 +532,7 @@ namespace PeachPDF
         /// Builds one declarative page's tree, lays it out and renders it. The tree is built in code (see <c>PeachBrackets.Building</c>), so there
         /// is no HTML to parse: the style sheet, the page's own margin boxes and the geometry its builder fixed explicitly go to the document as given.
         /// </summary>
-        private async Task<(HtmlDocument Document, PdfCanvas Measure)> PrepareDeclarativePage(Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, DocumentBuildContext context, PeachPdfCssContent? stylesheet)
+        private async Task<(HtmlDocument Document, PdfCanvas Measure)> PrepareDeclarativePage(Action<IPageDescriptor> pageHandler, PdfGenerateConfig config, DocumentBuildContext context, PeachPdfCssContent? stylesheet, (int Offset, int? Total)? numbering = null)
         {
             var pageDescriptor = DocumentBuilder.BuildPage(pageHandler, context);
             var page = pageDescriptor.Page;
@@ -480,6 +564,8 @@ namespace PeachPDF
                 SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
                 DefaultLanguage = config.DefaultLanguage,
                 CollectFormFields = config.EnableInteractivePdfForms,
+                PageNumberOffset = numbering?.Offset ?? 0,
+                TotalPagesOverride = numbering?.Total,
             };
 
             var htmlDocument = await HtmlDocument.CreateAsync(page, options, stylesheet?.StyleSheet);

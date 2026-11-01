@@ -263,6 +263,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property Int32 PageNumberOffset { get; set; }
+  property Int32? TotalPagesOverride { get; set; }
   property PaintColor SelectionBackground { get; set; }
   property PaintColor? SelectionForeground { get; set; }
   property String DefaultLanguage { get; set; }
