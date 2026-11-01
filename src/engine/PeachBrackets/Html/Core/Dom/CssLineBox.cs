@@ -95,6 +95,17 @@ namespace PeachBrackets.Html.Dom
         public double ContentRight { get; internal set; }
 
         /// <summary>
+        /// The left edge of the nearest right float that shortened this line while its words were placed, or null when none did
+        /// (<see href="https://www.w3.org/TR/CSS21/visuren.html#floats">CSS 2.1 §9.5</see>). The line's available end edge is the lesser of this and
+        /// <see cref="ContentRight"/>, which <c>text-align</c> aligns to (css-text-3 §6.1) so a justified, centered or end-aligned line stops at the float
+        /// instead of running under it.
+        /// </summary>
+        internal double? FloatLimitRight { get; set; }
+
+        /// <summary>The edge <c>text-align</c> aligns this line's content to: <see cref="ContentRight"/>, pulled in to a right float beside the line.</summary>
+        internal double AlignmentRight => FloatLimitRight is { } limit ? Math.Min(ContentRight, limit) : ContentRight;
+
+        /// <summary>
         /// The counterpart left edge. Always <c>OwnerBox.ClientLeft</c> today - layout stays anchored at
         /// the base left origin and only the right edge varies per page (see
         /// <c>HtmlContainerInt.PageContentRightOf</c>'s own remarks) - recorded here too so a future

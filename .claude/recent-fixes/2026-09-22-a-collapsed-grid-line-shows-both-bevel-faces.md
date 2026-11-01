@@ -61,14 +61,7 @@ with PIL:
 
 ## Deliberately not done
 
-- **A page/margin box's border corners still overlap rather than mitre**, and giving its four edges
-  different faces for the first time is what made that conspicuous: with `border: 20px inset` the
-  top-right corner comes out entirely lit and the bottom-left entirely dark, because `PaintBorder`
-  paints four full-span rects in the order top, bottom, left, right. Pre-existing and more general
-  than the bevel — `border-top: solid red; border-right: solid blue` already paints a fully blue
-  corner, and `AllFourEdges_PaintTheirOwnIndependentlyResolvedWidthAndColor` *pins* the full-span
-  rects — so closing it is a rewrite of that test, not a passing-test change. Issue #1258, with
-  [../accepted-gaps/margin-box-border-corners-overlap-instead-of-mitring.md](../accepted-gaps/margin-box-border-corners-overlap-instead-of-mitring.md).
+- **A page/margin box's border corners used to overlap rather than mitre** (issue #1258): fixed by painting the four edges through `BoxEdgesDrawHandler.DrawBoxEdges`, the same primitive an ordinary box's border uses.
 - **A collapsed table's outermost grid lines still sit half outside the table's border box**, so at
   the page/container edge the outer half is clipped and the four outer corner squares go unpainted.
   Chrome sizes the table to contain the whole outer line and fills those corners: measured over one
