@@ -89,6 +89,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `Language` | The document's natural language (BCP 47, such as `en-US`), which the accessible PDF/A levels (PDF/A-1A, 2A and 3A) require. |
 | `Producer` | The software that wrote the file. Defaults to this package. |
 | `Version` | `Pdf20` (the default) or `Pdf17`. A 1.7 file whose content needs nothing newer is written with a 1.4 header. |
+| `Linearize` | Writes the file in the linearized ("fast web view") layout of ISO 32000-1 Annex F: the first page's objects first, then the other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has arrived. Off by default; works with AES-256 encryption. `PdfOperation.Linearize()` sets it for an operation's output, and `PdfGenerateConfig.Linearize` / the CLI's `--linearize` for PeachPDF's. |
 | `CompressContentStreams`, `BrotliCompression` | Content streams are Flate-compressed by default. Turn compression off to read the drawing operators in a text editor; Brotli (PDF 2.0) is opt-in, because not every reader decodes it yet. |
 | `Conformance`, `XConformance` | The PDF/A and PDF/X level the file claims - see [Archival and print conformance](#archival-and-print-conformance). |
 | `ColorOptions` | Colour management: the output intent profile and how colours are converted to it. |
@@ -262,6 +263,7 @@ PdfOperation
 - `OverlayFile` and `UnderlayFile` draw pages of another PDF over or under pages of the output. `TargetPages` says which pages receive the layer (all when unset), `SourcePages` which pages of the layer file are drawn, one for each target page in turn (all of them, in order, when unset), and `RepeatSourcePages` which to cycle through once those run out. A layer lands on the pages the output has at the moment it is added, and travels with its page through a later `TakePages`.
 - `AddAttachment` attaches a file (a path, or `Data` with a `Key` or `AttachmentName`). Its `Key` identifies it: an attachment the output already has under that key is an error unless `Replace` is set. `Relationship` is what PDF/A-3 asks for.
 - `ExtendMetadata` adds XML elements, each in its own schema's namespace, inside the XMP packet's `rdf:Description`.
+- `Linearize` writes the output in the linearized ("fast web view") layout; see `PdfComposerOptions.Linearize` in the options table above.
 - `Encrypt` protects the output with AES-256. `Decrypt` (and `RemoveRestrictions`, the same step) writes it with no protection even though the pages came from a protected file: a file is read with its password when it is loaded, so there is nothing else to remove.
 - `Save` writes a file or a stream; `ToArray` returns the bytes. `Warnings` names what the importer could not draw, after a save.
 

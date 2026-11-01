@@ -750,6 +750,7 @@ namespace PeachPDF
                 FacturX = embeddings.FacturX,
                 Encryption = config.Encryption.ToEngine(),
                 CompressContentStreams = config.CompressContentStreams,
+                Linearize = config.Linearize,
                 BrotliCompression = config.BrotliCompression,
                 JxlPassthrough = config.JxlPassthrough,
                 ImageCompression = config.ImageCompression.ToEngine(),

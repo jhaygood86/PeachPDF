@@ -17,7 +17,7 @@ namespace PeachDrawing.PDF
             var pages = operation.OutputPages;
             var sources = pages.Select(p => p.Source).Distinct().ToList();
 
-            var options = new PdfComposerOptions { Encryption = operation.EncryptionOptions };
+            var options = new PdfComposerOptions { Encryption = operation.EncryptionOptions, Linearize = operation.LinearizeOutput };
             ApplyDocumentInformation(options, sources);
             AddAttachments(options, sources, operation.Attachments);
             if (operation.MetadataElements.Count > 0)

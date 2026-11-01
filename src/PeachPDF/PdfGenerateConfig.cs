@@ -221,6 +221,13 @@ namespace PeachPDF
         public bool CompressContentStreams { get; set; } = true;
 
         /// <summary>
+        /// Gets or sets whether the PDF is written in the linearized layout ("fast web view"): the first page's objects come first, then the
+        /// other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has
+        /// arrived. Defaults to <c>false</c>. A linearized file is slightly larger.
+        /// </summary>
+        public bool Linearize { get; set; }
+
+        /// <summary>
         /// When set to <c>true</c>, PeachPDF emits a PDF/UA-style tagged structure tree
         /// (StructTreeRoot, MarkInfo, per-element structure elements and marked content)
         /// alongside the visual content, mapping the HTML element tree to standard PDF structure

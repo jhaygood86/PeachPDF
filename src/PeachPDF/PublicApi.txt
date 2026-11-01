@@ -448,6 +448,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Boolean EnableXmpMetadata { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
   property Boolean JxlPassthrough { get; set; }
+  property Boolean Linearize { get; set; }
   property Boolean PortableColorFilters { get; set; }
   property Boolean RasterAntiAliasing { get; set; }
   property Boolean ScaleToPageSize { get; set; }

@@ -159,6 +159,7 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property Boolean DownscaleImages { get; set; }
   property Boolean FlattenTransparency { get; set; }
   property Boolean JxlPassthrough { get; set; }
+  property Boolean Linearize { get; set; }
   property Boolean PortableColorFilters { get; set; }
   property Boolean WriteXmpMetadata { get; set; }
   property ColorOptions ColorOptions { get; set; }
@@ -284,6 +285,7 @@ PeachDrawing.PDF.PdfOperation : sealed class
   method PdfOperation Decrypt()
   method PdfOperation Encrypt(PdfEncryptionOptions options)
   method PdfOperation ExtendMetadata(String xml)
+  method PdfOperation Linearize()
   method PdfOperation MergeBytes(Byte[] pdf, String pageSelector = null, String password = null)
   method PdfOperation MergeFile(String filePath, String pageSelector = null, String password = null)
   method PdfOperation MergeStream(Stream pdf, String pageSelector = null, String password = null)

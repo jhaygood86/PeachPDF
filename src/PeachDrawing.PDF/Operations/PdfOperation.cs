@@ -35,6 +35,7 @@ namespace PeachDrawing.PDF
         private readonly List<string> _warnings = [];
         private PdfEncryptionOptions? _encryption;
         private PdfCopyMode _copyMode;
+        private bool _linearize;
 
         private PdfOperation()
         {
@@ -201,6 +202,17 @@ namespace PeachDrawing.PDF
         /// <returns>this operation</returns>
         public PdfOperation RemoveRestrictions() => Decrypt();
 
+        /// <summary>
+        /// Writes the output in the linearized layout ("fast web view"), so a viewer fetching it over a network can show the first page before
+        /// the rest has arrived. See <see cref="PdfComposerOptions.Linearize"/>.
+        /// </summary>
+        /// <returns>this operation</returns>
+        public PdfOperation Linearize()
+        {
+            _linearize = true;
+            return this;
+        }
+
         /// <summary>Chooses how the pages of the loaded files are carried into the output.</summary>
         /// <param name="mode">the mode; <see cref="PdfCopyMode.Redraw"/> until this is called</param>
         /// <returns>this operation</returns>
@@ -315,6 +327,8 @@ namespace PeachDrawing.PDF
         internal PdfEncryptionOptions? EncryptionOptions => _encryption;
 
         internal PdfCopyMode CopyMode => _copyMode;
+
+        internal bool LinearizeOutput => _linearize;
 
         internal List<string> WarningsList => _warnings;
     }
