@@ -474,7 +474,7 @@ public sealed class HtmlDocument : IDisposable
     public TextPosition? HitTest(int pageIndex, double x, double y)
     {
         ThrowIfNotAPage(pageIndex);
-        return TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: false);
+        return Selectable(TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: false));
     }
 
     /// <summary>
@@ -490,7 +490,7 @@ public sealed class HtmlDocument : IDisposable
     public TextPosition? GetCaretPosition(int pageIndex, double x, double y)
     {
         ThrowIfNotAPage(pageIndex);
-        return TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: true);
+        return Selectable(TextRunQueries.HitTest(TextRuns, pageIndex, x, y, caret: true));
     }
 
     /// <summary>The rectangles, one per line and in points, that cover the text between two positions: what to fill to show a selection.</summary>
@@ -508,7 +508,53 @@ public sealed class HtmlDocument : IDisposable
     /// <param name="to">where it ends, not included</param>
     /// <returns>the text</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
-    public string GetText(TextPosition from, TextPosition to) => TextRunQueries.GetText(TextRuns, from, to);
+    public string GetText(TextPosition from, TextPosition to) =>
+        TextRunQueries.GetText(TextRuns, from, to, slice => slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None);
+
+    /// <summary>
+    /// A position the reader may start a selection at: <see langword="null"/> over text whose <c>user-select</c> is <c>none</c>, so a host that
+    /// begins a selection from <see cref="HitTest"/> or <see cref="GetCaretPosition"/> never starts one there. <see cref="GetText"/> likewise
+    /// leaves such text out of what it returns.
+    /// </summary>
+    private TextPosition? Selectable(TextPosition? position)
+    {
+        if (position is not { } p || (uint)p.RunIndex >= (uint)TextRuns.Count)
+            return position;
+
+        var run = TextRuns[p.RunIndex];
+        if (run.Slices.Count == 0)
+            return position;
+
+        var slice = run.Slices[0];
+        foreach (var candidate in run.Slices)
+        {
+            if (candidate.TextStart <= p.CharIndex)
+                slice = candidate;
+        }
+
+        return slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None ? null : position;
+    }
+
+    /// <summary>The colour of the text caret at a position (<c>caret-color</c>; <c>auto</c> is the text colour), for a host that draws one.</summary>
+    /// <param name="position">a position in <see cref="TextRuns"/></param>
+    /// <returns>the colour, or <see langword="null"/> when the position is not in the text</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public PaintColor? GetCaretColor(TextPosition position)
+    {
+        var runs = TextRuns;
+        if ((uint)position.RunIndex >= (uint)runs.Count || runs[position.RunIndex].Slices.Count == 0)
+            return null;
+
+        var run = runs[position.RunIndex];
+        var slice = run.Slices[0];
+        foreach (var candidate in run.Slices)
+        {
+            if (candidate.TextStart <= position.CharIndex)
+                slice = candidate;
+        }
+
+        return slice.Word.OwnerBox.ActualCaretColor;
+    }
 
     /// <summary>Finds every place a string occurs in the text of the document, as <see cref="GetText"/> reads it.</summary>
     /// <param name="query">the text to look for</param>

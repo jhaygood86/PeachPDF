@@ -23,12 +23,12 @@ namespace PeachBrackets.Html.Paint.Content
             BordersDrawHandler.DrawBoxBorders(g, box, rect, hasLeftEdge: true, hasRightEdge: true);
         }
 
-        /// <summary>The check mark glyph, in the box's resolved text color - only drawn when checked.</summary>
+        /// <summary>The check mark glyph, in the box's <c>accent-color</c> (its text color for <c>auto</c>) - only drawn when checked.</summary>
         internal static void PaintCheckboxGlyph(Canvas g, CssBox box, Rect rect, bool isChecked)
         {
             if (!isChecked) return;
 
-            var mark = g.GetPen(box.ActualColor);
+            var mark = g.GetPen(box.ActualAccentColor ?? box.ActualColor);
             mark.Width = System.Math.Max(rect.Width, rect.Height) * 0.12;
             var inset = System.Math.Min(rect.Width, rect.Height) * 0.2;
             g.DrawLine(mark, rect.X + inset, rect.Y + rect.Height * 0.5, rect.X + rect.Width * 0.42, rect.Y + rect.Height - inset);
@@ -63,7 +63,7 @@ namespace PeachBrackets.Html.Paint.Content
             }
         }
 
-        /// <summary>The filled inner dot, in the box's resolved text color - only drawn when checked.</summary>
+        /// <summary>The filled inner dot, in the box's <c>accent-color</c> (its text color for <c>auto</c>) - only drawn when checked.</summary>
         internal static void PaintRadioGlyph(Canvas g, CssBox box, Rect rect, bool isChecked)
         {
             if (!isChecked) return;
@@ -73,7 +73,7 @@ namespace PeachBrackets.Html.Paint.Content
             var dx = dotRect.Width / 2;
             var dy = dotRect.Height / 2;
             using var dotPath = RenderUtils.GetRoundRect(g, dotRect, dx, dy, dx, dy, dx, dy, dx, dy);
-            using var brush = g.GetSolidBrush(box.ActualColor);
+            using var brush = g.GetSolidBrush(box.ActualAccentColor ?? box.ActualColor);
             g.DrawPath(brush, dotPath);
         }
     }

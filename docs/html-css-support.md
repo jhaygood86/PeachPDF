@@ -866,6 +866,14 @@ Two properties describe how a document is meant to be pointed at. A PDF page has
 | `cursor` | [cursor](https://developer.mozilla.org/en-US/docs/Web/CSS/cursor) | Parsed and inherited, otherwise ignored: a PDF has nowhere to put a pointer. | `HtmlDocument.GetCursorAt(page, x, y)` gives the pointer at a point: the `cursor` of the innermost element that receives pointer events, with any `url()` images (and their hotspots) ahead of the keyword. `auto` is the link pointer over a link, the text pointer over text and the default pointer elsewhere. `HtmlDocument.PaintCursors` puts the areas that ask for a pointer on a canvas (`Canvas.AddCursor`): the Skia and Win2D link maps answer `CursorAt`, and the SVG canvas writes a `cursor` style on an unpainted rectangle under the links. |
 | `pointer-events` | [pointer-events](https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events) | `none` takes a link out of what can be clicked: no link annotation is written for it. | `none` lets a point fall through to what is beneath: `GetElementAt` and `GetCursorAt` skip the element (a child that sets `auto` again still receives events), and it is left out of the cursor areas and the links. |
 
+Three more properties from the same module serve a screen host and have no effect on a plain PDF page, except as noted:
+
+| Property | MDN | Behavior |
+|---|---|---|
+| `user-select` | [user-select](https://developer.mozilla.org/en-US/docs/Web/CSS/user-select) | `none` keeps a selection from starting on the text: `HtmlDocument.HitTest` and `GetCaretPosition` return `null` over it, `GetText` leaves it out, and `cursor: auto` is not the text pointer there. `auto` is `none` or `all` when the parent's is, and `text` otherwise; `contain` is `text`. `all` is read as `text` (the whole element is not selected as one unit). The vendor spellings are not accepted. |
+| `caret-color` | [caret-color](https://developer.mozilla.org/en-US/docs/Web/CSS/caret-color) | The colour of the text caret, which `HtmlDocument.GetCaretColor(position)` gives a host that draws one; `auto` is the text colour. |
+| `accent-color` | [accent-color](https://developer.mozilla.org/en-US/docs/Web/CSS/accent-color) | Colours the check mark of a checked check box and the dot of a checked radio button, in the painted page and in the PDF form widget appearances alike; `auto` keeps the text colour. Range and progress controls are not drawn by PeachPDF, so they are unaffected. |
+
 The keywords that only mean something for the painted parts of an SVG shape (`visiblePainted`, `visibleFill`, `visibleStroke`, `visible`, `painted`, `fill`, `stroke`, `all`) are accepted but read as `auto`: a shape inside an inline `<svg>` is not a separate hit target.
 
 ### Stacking Context

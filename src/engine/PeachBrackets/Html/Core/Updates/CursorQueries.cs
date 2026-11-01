@@ -168,7 +168,7 @@ namespace PeachBrackets.Html.Updates
 
             var shape = keyword switch
             {
-                SystemCursor.Auto => IsLink(box) ? CursorShape.Pointer : overText ? CursorShape.Text : CursorShape.Default,
+                SystemCursor.Auto => IsLink(box) ? CursorShape.Pointer : overText && box.EffectiveUserSelect != UserSelect.None ? CursorShape.Text : CursorShape.Default,
                 _ => ToShape(keyword),
             };
             return new DocumentCursor(shape, images);

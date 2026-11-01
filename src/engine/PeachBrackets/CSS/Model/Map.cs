@@ -288,6 +288,15 @@ namespace PeachBrackets.Css
                 {Keywords.Stroke, PointerEvents.Stroke},
                 {Keywords.All, PointerEvents.All}
             }.Freeze();
+        public static readonly KeywordMap<UserSelect> UserSelectModes =
+            new KeywordMap<UserSelect>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, UserSelect.Auto},
+                {Keywords.None, UserSelect.None},
+                {Keywords.Text, UserSelect.Text},
+                {Keywords.All, UserSelect.All},
+                {Keywords.Contain, UserSelect.Contain}
+            }.Freeze();
         public static readonly KeywordMap<Hyphens> HyphensModes =
             new KeywordMap<Hyphens>(StringComparer.OrdinalIgnoreCase)
             {
