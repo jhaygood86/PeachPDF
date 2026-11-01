@@ -36,10 +36,15 @@ namespace PeachDrawing.PDF
             for (var i = 0; i < pages.Count; i++)
                 drawnAt.TryAdd((pages[i].Source, pages[i].SourcePage), i);
 
+            // The names the sources' named destinations have in the output (a name two files both define keeps the first file's, the second's is
+            // numbered), settled before any page is filled so that a copied link can be pointed at its file's own destination.
+            var destinationNames = new HashSet<string>(StringComparer.Ordinal);
+            var nameMap = AssignDestinationNames(sources, drawnAt, destinationNames);
+
             var copy = operation.CopyMode == PdfCopyMode.ObjectCopy;
             if (copy)
             {
-                CopyPages(composer, context, pages, sources, warnings);
+                CopyPages(composer, context, pages, sources, nameMap, warnings);
             }
             else
             {
@@ -57,7 +62,7 @@ namespace PeachDrawing.PDF
             }
 
             // Copied pages carry their own links, form fields and annotations; drawn ones have them added here.
-            CarryNavigation(composer, context, pages, sources, drawnAt, carryPageFeatures: !copy);
+            CarryNavigation(composer, context, pages, sources, drawnAt, nameMap, destinationNames, carryPageFeatures: !copy);
 
             foreach (var warning in warnings)
                 operation.WarningsList.Add(warning);
@@ -127,10 +132,12 @@ namespace PeachDrawing.PDF
             PdfRenderContext context,
             IReadOnlyList<PdfOperation.OutputPage> pages,
             List<PdfPageSource> sources,
+            Dictionary<PdfPageSource, Dictionary<string, string>> nameMap,
             SortedSet<string> warnings)
         {
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
-            var copiers = sources.ToDictionary(s => s, s => new PdfObjectCopier(s.Document, composer.Document, fieldNames));
+            var copiers = sources.ToDictionary(s => s, s => new PdfObjectCopier(s.Document, composer.Document, fieldNames,
+                name => nameMap[s].TryGetValue(name, out var renamed) ? renamed : null));
 
             // Every page is made before any is filled, so a link on an early page can lead to a later one.
             var made = new List<PdfComposerPage>(pages.Count);
@@ -206,6 +213,34 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// The output name of each named destination of each source whose page was taken: the name itself, or numbered (<c>name_2</c>) when an
+        /// earlier source already has it. A destination whose page was not taken has no entry.
+        /// </summary>
+        private static Dictionary<PdfPageSource, Dictionary<string, string>> AssignDestinationNames(
+            List<PdfPageSource> sources, Dictionary<(PdfPageSource, int), int> drawnAt, HashSet<string> taken)
+        {
+            var map = new Dictionary<PdfPageSource, Dictionary<string, string>>();
+            foreach (var source in sources)
+            {
+                var names = new Dictionary<string, string>(StringComparer.Ordinal);
+                foreach (var (name, to) in source.GetNamedDestinations())
+                {
+                    if (!drawnAt.ContainsKey((source, to.PageIndex)))
+                        continue;
+
+                    var unique = name;
+                    for (var n = 2; !taken.Add(unique); n++)
+                        unique = name + "_" + n;
+                    names[name] = unique;
+                }
+
+                map[source] = names;
+            }
+
+            return map;
+        }
+
+        /// <summary>
         /// Carries across what the drawn pages had that is not drawing: links (now leading to the pages their targets were drawn on), form
         /// fields, annotations, named destinations and the outline. Whatever leads to a page that was not taken is left out.
         /// </summary>
@@ -215,12 +250,13 @@ namespace PeachDrawing.PDF
             IReadOnlyList<PdfOperation.OutputPage> pages,
             List<PdfPageSource> sources,
             Dictionary<(PdfPageSource, int), int> drawnAt,
+            Dictionary<PdfPageSource, Dictionary<string, string>> nameMap,
+            HashSet<string> destinationNames,
             bool carryPageFeatures)
         {
             var annotations = composer.CreateAnnotationBuilder(context);
             var forms = composer.CreateFormBuilder(context, "PeachPDFMergedField");
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
-            var destinationNames = new HashSet<string>(StringComparer.Ordinal);
 
             for (var i = 0; carryPageFeatures && i < pages.Count; i++)
             {
@@ -267,13 +303,8 @@ namespace PeachDrawing.PDF
                 var source = sources[s];
                 foreach (var (name, to) in source.GetNamedDestinations())
                 {
-                    if (!drawnAt.TryGetValue((source, to.PageIndex), out var toPage))
-                        continue;
-
-                    var unique = name;
-                    for (var n = 2; !destinationNames.Add(unique); n++)
-                        unique = name + "_" + n;
-                    composer.AddNamedDestination(unique, toPage, to.TopPoints);
+                    if (nameMap[source].TryGetValue(name, out var unique) && drawnAt.TryGetValue((source, to.PageIndex), out var toPage))
+                        composer.AddNamedDestination(unique, toPage, to.TopPoints);
                 }
 
                 var outline = CarryOutline(source.GetOutline(), page => drawnAt.TryGetValue((source, page), out var toPage) ? toPage : -1);

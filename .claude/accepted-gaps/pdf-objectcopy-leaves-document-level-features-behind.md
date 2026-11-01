@@ -29,10 +29,6 @@ the entries above it kept as headings.
 
 **Found by review and left as they are:**
 
-- A copied link that uses a *named* destination (`/Dest (name)` or `/A /D (name)`) keeps the name as written. Two merged
-  files that both define `intro` therefore send the second file's links to the first file's `intro` (the second file's own
-  name is stored as `intro_2`, unused by its links), and a name whose page was not taken is not filtered.
-  `Redraw` rewrites links to generated unique names and does not have this.
 - Taking some pages of a form field that spans pages copies the whole field tree through `/Kids`; widgets on pages that
   were not taken stay in the field with no page.
 - In `Redraw`, a field whose widgets sit on several pages is renamed per page when it clashes with another file's field
