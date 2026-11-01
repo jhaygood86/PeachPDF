@@ -52,6 +52,12 @@ namespace PeachBrackets.Html.Dom
         public Dictionary<string, string>? Attributes { get; private set; }
 
         /// <summary>
+        /// The element's position in the source, in document order, numbered once the document is parsed (-1 before that and for an element the
+        /// parser did not read). It names the element across the re-parse that applies a change of <c>:hover</c>/<c>:focus</c> state.
+        /// </summary>
+        public int SourceOrdinal { get; internal set; } = -1;
+
+        /// <summary>
         /// Gets if the tag is single placed; in other words it doesn't have a separate closing tag; <br/>
         /// e.g. &lt;br&gt;
         /// </summary>

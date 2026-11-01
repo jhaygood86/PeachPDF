@@ -1389,7 +1389,7 @@ Because PeachPDF renders a static PDF with no live browsing state, most state-ba
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-State-based pseudo-classes other than `:link`/`:any-link` and the generation-time `:placeholder-shown` state (`:hover`, `:focus`, `:active`, `:visited`, `:checked`, `:disabled`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
+`:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` match only when a host that shows the document on a screen tells it where the pointer and focus are (`HtmlDocument.SetPointerStateAsync`, `ClearPointerStateAsync` and `SetFocusAsync` in [PeachBrackets](peachbrackets.md#interaction-state)); in a PDF they select nothing. The other state-based pseudo-classes besides `:link`/`:any-link` and the generation-time `:placeholder-shown` state (`:visited`, `:checked`, `:disabled`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 
