@@ -7,7 +7,7 @@ embedded resource in a multi-targeted assembly is physically duplicated once per
 The Bidi/Script/Use/VerticalOrientation/ArabicJoining Unicode tables, the `hyph-utf8` hyphenation patterns, the
 OpenType/BCP-47 language tag lists, and the Thai/Lao/Khmer/Burmese dictionary word lists are all read-only data with
 no target-framework-specific behavior, so none of it needs to be triplicated. It lives instead in
-`PeachDrawing.Text.Data` (`src/PeachDrawing.Text.Data/`), a single-target (`netstandard2.0`) sibling package that
+`PeachDrawing.Text.Data` (`src/drawing/PeachDrawing.Text.Data/`), a single-target (`netstandard2.0`) sibling package that
 `PeachDrawing.Text` takes an ordinary `<ProjectReference>` on — one copy of the data, shipped once, regardless of how
 many frameworks the engine itself targets.
 

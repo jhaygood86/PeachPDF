@@ -1,0 +1,173 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="HtmlAgilityPack" />
+    <!-- Showcase-only dependency (for the declarative_api showcase's ScottPlot examples) - never
+         referenced by the shipping PeachPDF library or its tests. -->
+    <PackageReference Include="ScottPlot" />
+    <!-- Showcase-only dependency (for the zugferd_* showcases, which generate their Cross Industry Invoice
+         XML with an open-source e-invoicing library rather than hand-writing it) - never referenced by
+         the shipping PeachPDF library, its tests or the CLI. Apache-2.0. Pinned exactly: the library's API
+         changes between major versions, and the showcase source is published on the docs site. -->
+    <PackageReference Include="ZUGFeRD-csharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\PeachPDF\PeachPDF.csproj" />
+    <!-- The SVG backend, for the svg flag: every HTML showcase is also rendered onto an SvgCanvas (see Showcases/SvgShowcaseRenderer.cs). -->
+    <ProjectReference Include="..\..\drawing\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
+    <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+  </ItemGroup>
+
+  <!--
+    Font assets live in the repository-root assets/fonts/ directory, shared with PeachPDF.Tests
+    and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several times. Each is
+    <Link>ed to the output root, so the showcases' AppContext.BaseDirectory lookups are
+    unchanged. Listed one by one rather than globbed, so this project still declares exactly
+    which fonts it needs.
+  -->
+  <ItemGroup>
+    <None Include="..\..\tests\PeachPDF.Tests\TestSupport\Jxl\*.jxl" LinkBase="jxl">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\SvgTest.ttf" Link="SvgTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableCff2Test.otf" Link="VariableCff2Test.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableTest.ttf" Link="VariableTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableColorTest.ttf" Link="VariableColorTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableAvar2Test.ttf" Link="VariableAvar2Test.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableVerticalTest.ttf" Link="VariableVerticalTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\VariableSlantTest.ttf" Link="VariableSlantTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\ColorTestCff.otf" Link="ColorTestCff.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoColorEmojiSequences-Subset.ttf" Link="NotoColorEmojiSequences-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoColorEmoji-Subset.ttf" Link="NotoColorEmoji-Subset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NablaSubset.ttf" Link="NablaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\StixTwoMath-Regular.ttf" Link="StixTwoMath-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\RecursiveSubset.ttf" Link="RecursiveSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoEmoji-Regular.ttf" Link="NotoEmoji-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\LiberationMono-Regular.woff" Link="LiberationMono-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\LiberationSans-Regular.woff" Link="LiberationSans-Regular.woff">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\SourceCodePro-Regular.otf" Link="SourceCodePro-Regular.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\HintingCff2Boxes.otf" Link="HintingCff2Boxes.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansHebrewSubset.ttf" Link="NotoSansHebrewSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansJPSubset.ttf" Link="NotoSansJPSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\LineBreakTest.ttf" Link="LineBreakTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansArabicSubset.ttf" Link="NotoSansArabicSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\ArefRuqaaSubset.ttf" Link="ArefRuqaaSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansDevanagariSubset.ttf" Link="NotoSansDevanagariSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansBengaliSubset.ttf" Link="NotoSansBengaliSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansGujaratiSubset.ttf" Link="NotoSansGujaratiSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansTamilSubset.ttf" Link="NotoSansTamilSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansThaiSubset.ttf" Link="NotoSansThaiSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansLaoSubset.ttf" Link="NotoSansLaoSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\..\assets\fonts\NotoSansKhmerSubset.ttf" Link="NotoSansKhmerSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
+    The zugferd_* showcases publish the C# of this file as their source, so it is copied to the output
+    directory (where Program.cs reads it) as well as compiled - the displayed code is the executed code.
+  -->
+  <ItemGroup>
+    <None Include="Showcases\ZugferdInvoiceShowcase.cs">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="4uiwmf4z.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="acid2.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="charts.css">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="rfc2324.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="tables.htm">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="vantaca.mhtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="wikipedia.mhtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="zillow.mhtml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
