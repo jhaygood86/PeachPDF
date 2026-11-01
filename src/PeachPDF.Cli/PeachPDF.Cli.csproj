@@ -46,9 +46,9 @@
   <ItemGroup>
     <EmbeddedResource Include="..\..\LICENSE" LogicalName="PeachPDF.Cli.LICENSE" />
     <EmbeddedResource Include="..\..\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.THIRD-PARTY-LICENSES.md" />
-    <EmbeddedResource Include="..\PeachDrawing.Text\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.PeachDrawing.Text.THIRD-PARTY-LICENSES.md" />
-    <EmbeddedResource Include="..\PeachDrawing.Text.Data\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.PeachDrawing.Text.Data.THIRD-PARTY-LICENSES.md" />
-    <EmbeddedResource Include="..\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" LogicalName="PeachPDF.Cli.FTL.TXT" />
+    <EmbeddedResource Include="..\drawing\PeachDrawing.Text\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.PeachDrawing.Text.THIRD-PARTY-LICENSES.md" />
+    <EmbeddedResource Include="..\drawing\PeachDrawing.Text.Data\THIRD-PARTY-LICENSES.md" LogicalName="PeachPDF.Cli.PeachDrawing.Text.Data.THIRD-PARTY-LICENSES.md" />
+    <EmbeddedResource Include="..\drawing\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" LogicalName="PeachPDF.Cli.FTL.TXT" />
   </ItemGroup>
 
 </Project>

@@ -55,11 +55,11 @@
 		<PackageReference Include="PeachImage" />
 	</ItemGroup>
 	<ItemGroup>
-		<ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
-		<ProjectReference Include="..\PeachDrawing\PeachDrawing.csproj" />
-		<ProjectReference Include="..\PeachDrawing.Core\PeachDrawing.Core.csproj" />
-		<ProjectReference Include="..\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
-		<ProjectReference Include="..\PeachDrawing.Text\PeachDrawing.Text.csproj" />
+		<ProjectReference Include="..\engine\PeachBrackets\PeachBrackets.csproj" />
+		<ProjectReference Include="..\drawing\PeachDrawing\PeachDrawing.csproj" />
+		<ProjectReference Include="..\drawing\PeachDrawing.Core\PeachDrawing.Core.csproj" />
+		<ProjectReference Include="..\drawing\PeachDrawing.PDF\PeachDrawing.PDF.csproj" />
+		<ProjectReference Include="..\drawing\PeachDrawing.Text\PeachDrawing.Text.csproj" />
 	</ItemGroup>
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachPDF.Tests" />
@@ -72,7 +72,7 @@
 		<None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
 		<!-- The FreeType Project License, unaltered: the credit line in THIRD-PARTY-LICENSES.md refers to it, and the text engine this package depends on ports FreeType's TrueType interpreter. -->
-		<None Include="..\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
+		<None Include="..\drawing\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
 		<None Include="..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
 	<Target Name="GeneratePeachPdfProductInfo" BeforeTargets="BeforeBuild">

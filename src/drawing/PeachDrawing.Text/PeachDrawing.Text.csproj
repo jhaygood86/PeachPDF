@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<Import Project="..\..\Version.props" />
+	<Import Project="..\..\ApiReference.props" />
+	<PropertyGroup>
+		<AssemblyName>PeachDrawing.Text</AssemblyName>
+		<RootNamespace>PeachDrawing.Text</RootNamespace>
+		<PackageId>PeachDrawing.Text</PackageId>
+		<Description>Font loading and matching, OpenType shaping (including variable fonts, colour glyphs and SVG glyphs), bidirectional text, Unicode line breaking and segmentation, and paragraph layout for .NET, with no third-party dependencies.</Description>
+		<PackageTags>fonts;opentype;truetype;woff;text;shaping;bidi;unicode;hyphenation;typography</PackageTags>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<PackageIcon>peach.png</PackageIcon>
+		<PackageProjectUrl>https://peachpdf.net/</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/jhaygood86/PeachPDF.git</RepositoryUrl>
+		<PackageLicenseExpression>BSD-3-Clause</PackageLicenseExpression>
+		<IncludeSymbols>true</IncludeSymbols>
+		<GenerateDocumentationFile>true</GenerateDocumentationFile>
+		<WarningsAsErrors>$(WarningsAsErrors);CS1591</WarningsAsErrors>
+		<GeneratePackageOnBuild>True</GeneratePackageOnBuild>
+		<GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+		<GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+		<GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+		<GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+		<GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+		<GenerateAssemblyTitleVersionAttribute>false</GenerateAssemblyTitleVersionAttribute>
+		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<IsTrimmable>true</IsTrimmable>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<IsAotCompatible>true</IsAotCompatible>
+		<!-- The LibraryImport source generator emits unsafe marshalling code (SYSLIB1062) for the fontconfig binding. No hand-written unsafe blocks exist in this project. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+	<ItemGroup>
+		<!--
+			The Unicode, hyphenation and dictionary data this project reads at runtime lives in its own sibling package,
+			PeachDrawing.Text.Data (see that project's own file header, and
+			.claude/invariants/text-data-package-avoids-lib-tfm-triplication.md, for why): embedding it here directly would embed it
+			again in every one of this project's own target frameworks, inside the same nupkg.
+		-->
+		<ProjectReference Include="..\PeachDrawing.Text.Data\PeachDrawing.Text.Data.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<!--
+			PeachPDF and PeachPDF.Tests read only this library's public API, and the compiler enforces it: the only
+			assembly granted InternalsVisibleTo is the engine's own test project.
+		-->
+		<InternalsVisibleTo Include="PeachDrawing.Text.Tests" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- The notices the licences of the code and data in this package require it to carry. -->
+		<None Include="README.md" Pack="true" PackagePath="\" />
+		<None Include="THIRD-PARTY-LICENSES.md" Pack="true" PackagePath="\" />
+		<!-- The FreeType Project License, unaltered, and the record of what was changed from FreeType's files (FTL section 2). -->
+		<None Include="Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
+		<None Include="Internal\Hinting\FreeType\PORTING-NOTES.md" Pack="true" PackagePath="\FreeType-PORTING-NOTES.md" />
+		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
+		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+</Project>

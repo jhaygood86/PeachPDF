@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates src/PeachDrawing.Text/Internal/Text/Segmentation/SegmentationData.g.cs from the Unicode Character Database
+"""Generates src/drawing/PeachDrawing.Text/Internal/Text/Segmentation/SegmentationData.g.cs from the Unicode Character Database
 (Unicode 18.0.0): the property values that UAX #14 (line breaking) and UAX #29 (grapheme cluster, word and sentence
 boundaries) read.
 
@@ -24,7 +24,7 @@ import re
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_PATH = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Segmentation", "SegmentationData.g.cs"))
+    SCRIPT_DIR, "..", "..", "src", "drawing", "PeachDrawing.Text", "Internal", "Text", "Segmentation", "SegmentationData.g.cs"))
 
 MAX = 0x110000
 LINE_RE = re.compile(r'^([0-9A-Fa-f]{4,6})(?:\.\.([0-9A-Fa-f]{4,6}))?\s*;\s*([^#;]+?)\s*(?:;\s*([^#]+?)\s*)?(?:#\s*(\S+).*)?$')
