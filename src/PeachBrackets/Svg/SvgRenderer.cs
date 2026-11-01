@@ -848,9 +848,11 @@ namespace PeachBrackets.Svg
         /// <paramref name="opacityFactor"/> is the product of the run-chain's <c>opacity</c> below the root
         /// <c>&lt;text&gt;</c> (whose own opacity is already folded into the caller's base opacity).
         /// </summary>
-        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths, List<EmbeddingSpan> overrides)
+        private static void FlattenRun(SvgTextElement run, double opacityFactor, List<GlyphInfo> glyphs, List<(SvgTextElement, double)> textPaths, List<EmbeddingSpan> overrides, List<(int GlyphPosition, int Count)>? textPathGaps = null)
         {
             var startIndex = glyphs.Count;
+            textPathGaps ??= [];
+            var gapsStart = textPathGaps.Count;
 
             foreach (var item in run.Content)
             {
@@ -868,10 +870,13 @@ namespace PeachBrackets.Svg
 
                     case SvgTextSpan span when span.Run.PathData is not null:
                         textPaths.Add((span.Run, opacityFactor));
+                        // The textPath's characters are still addressable characters of this run (SVG 2 section 11.5), so
+                        // the lists of the runs around it step over them even though they are laid out on the path.
+                        textPathGaps.Add((glyphs.Count, CountAddressableCharacters(span.Run)));
                         break;
 
                     case SvgTextSpan span:
-                        FlattenRun(span.Run, opacityFactor * span.Run.Opacity, glyphs, textPaths, overrides);
+                        FlattenRun(span.Run, opacityFactor * span.Run.Opacity, glyphs, textPaths, overrides, textPathGaps);
                         break;
                 }
             }
@@ -891,21 +896,52 @@ namespace PeachBrackets.Svg
                     (glyphs[k].Decorators ??= []).Add(run);
             }
 
-            AssignPositionLists(run, glyphs, startIndex);
+            AssignPositionLists(run, glyphs, startIndex, textPathGaps, gapsStart);
         }
 
-        /// <summary>Assigns <paramref name="run"/>'s x/y/dx/dy/rotate lists to the characters it contributed (from <paramref name="startIndex"/>) by subtree-relative index; <c>rotate</c>'s last value persists for the remaining characters. Only fills slots a nested run hasn't already claimed (innermost-wins).</summary>
-        private static void AssignPositionLists(SvgTextElement run, List<GlyphInfo> glyphs, int startIndex)
+        /// <summary>The characters in <paramref name="run"/> and its descendants, one per Rune.</summary>
+        private static int CountAddressableCharacters(SvgTextElement run)
+        {
+            var count = 0;
+            foreach (var item in run.Content)
+            {
+                switch (item)
+                {
+                    case SvgTextFragment fragment:
+                        foreach (var _ in fragment.Text.EnumerateRunes())
+                            count++;
+                        break;
+                    case SvgTextSpan span:
+                        count += CountAddressableCharacters(span.Run);
+                        break;
+                }
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// Assigns <paramref name="run"/>'s x/y/dx/dy/rotate lists to the characters it contributed (from <paramref name="startIndex"/>) by subtree-relative index; <c>rotate</c>'s last value persists for the remaining characters.
+        /// Only fills slots a nested run hasn't already claimed (innermost-wins, which is also SVG 2's "nearest ancestor has precedence" for <c>rotate</c>: it is not added to an outer value).
+        /// <paramref name="textPathGaps"/> (from <paramref name="gapsStart"/>) lists the <c>&lt;textPath&gt;</c> characters inside the run, which take list entries without being in <paramref name="glyphs"/>.
+        /// </summary>
+        private static void AssignPositionLists(SvgTextElement run, List<GlyphInfo> glyphs, int startIndex, List<(int GlyphPosition, int Count)> textPathGaps, int gapsStart)
         {
             var count = glyphs.Count - startIndex;
+            var gap = gapsStart;
+            var skipped = 0;
             for (var k = 0; k < count; k++)
             {
+                while (gap < textPathGaps.Count && textPathGaps[gap].GlyphPosition <= startIndex + k)
+                    skipped += textPathGaps[gap++].Count;
+
+                var listIndex = k + skipped;
                 var gi = glyphs[startIndex + k];
-                if (run.XList is { } xl && k < xl.Length) gi.X ??= xl[k];
-                if (run.YList is { } yl && k < yl.Length) gi.Y ??= yl[k];
-                if (run.DxList is { } dxl && k < dxl.Length) gi.Dx ??= dxl[k];
-                if (run.DyList is { } dyl && k < dyl.Length) gi.Dy ??= dyl[k];
-                if (run.RotateList is { Length: > 0 } rl) gi.Rotate ??= k < rl.Length ? rl[k] : rl[^1];
+                if (run.XList is { } xl && listIndex < xl.Length) gi.X ??= xl[listIndex];
+                if (run.YList is { } yl && listIndex < yl.Length) gi.Y ??= yl[listIndex];
+                if (run.DxList is { } dxl && listIndex < dxl.Length) gi.Dx ??= dxl[listIndex];
+                if (run.DyList is { } dyl && listIndex < dyl.Length) gi.Dy ??= dyl[listIndex];
+                if (run.RotateList is { Length: > 0 } rl) gi.Rotate ??= listIndex < rl.Length ? rl[listIndex] : rl[^1];
             }
         }
 
