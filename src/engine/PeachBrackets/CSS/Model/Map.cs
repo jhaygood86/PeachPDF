@@ -274,6 +274,20 @@ namespace PeachBrackets.Css
                 {Keywords.Hidden, Visibility.Hidden},
                 {Keywords.Collapse, Visibility.Collapse}
             }.Freeze();
+        public static readonly KeywordMap<PointerEvents> PointerEventsModes =
+            new KeywordMap<PointerEvents>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, PointerEvents.Auto},
+                {Keywords.None, PointerEvents.None},
+                {Keywords.VisiblePainted, PointerEvents.VisiblePainted},
+                {Keywords.VisibleFill, PointerEvents.VisibleFill},
+                {Keywords.VisibleStroke, PointerEvents.VisibleStroke},
+                {Keywords.Visible, PointerEvents.Visible},
+                {Keywords.Painted, PointerEvents.Painted},
+                {Keywords.Fill, PointerEvents.Fill},
+                {Keywords.Stroke, PointerEvents.Stroke},
+                {Keywords.All, PointerEvents.All}
+            }.Freeze();
         public static readonly KeywordMap<Hyphens> HyphensModes =
             new KeywordMap<Hyphens>(StringComparer.OrdinalIgnoreCase)
             {
@@ -813,7 +827,7 @@ namespace PeachBrackets.Css
                 {Keywords.NorthWestResize, SystemCursor.NwResize},
                 {Keywords.SouthResize, SystemCursor.SResize},
                 {Keywords.SouthEastResize, SystemCursor.SeResize},
-                {Keywords.SouthWestResize, SystemCursor.WResize},
+                {Keywords.SouthWestResize, SystemCursor.SwResize},
                 {Keywords.WestResize, SystemCursor.WResize},
                 {Keywords.EastWestResize, SystemCursor.EwResize},
                 {Keywords.NorthSouthResize, SystemCursor.NsResize},

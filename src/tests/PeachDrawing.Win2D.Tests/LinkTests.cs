@@ -191,4 +191,18 @@ public class LinkTests
 
         Assert.Empty(launcher.Launched);
     }
+
+    [Fact]
+    public void Cursor_areas_are_recorded_and_the_topmost_one_is_found_by_position()
+    {
+        using var scene = SceneWith(new FakeLauncher());
+        scene.Canvas.AddCursor(new Rect(0, 0, 20, 20), CursorShape.Crosshair);
+        scene.Canvas.AddCursor(new Rect(10, 10, 20, 20), CursorShape.Grab, new[] { new CursorImage("https://example.com/c.png", null, null) });
+
+        Assert.Equal(2, scene.Canvas.Links.Cursors.Count);
+        Assert.Equal(CursorShape.Crosshair, scene.Canvas.Links.CursorAt(2, 2)!.Shape);
+        Assert.Equal(CursorShape.Grab, scene.Canvas.Links.CursorAt(15, 15)!.Shape);
+        Assert.Null(scene.Canvas.Links.CursorAt(50, 50));
+        Assert.Equal(CursorShape.Grab, scene.Canvas.Links.CursorAtDips(15, 15)!.Shape);
+    }
 }

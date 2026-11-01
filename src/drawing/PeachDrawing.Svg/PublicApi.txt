@@ -10,6 +10,7 @@ PeachDrawing.Svg.SvgCanvas : sealed class
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
   method virtual Void BeginArtifact()
   method virtual Void BeginMarkedContent(String structureType, Int32 mcid)

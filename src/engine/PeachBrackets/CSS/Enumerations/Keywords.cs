@@ -335,6 +335,11 @@
         public const string MatchParent = "match-parent";
         public const string JustifyAll = "justify-all";
         public const string Fill = "fill";
+        public const string Stroke = "stroke";
+        public const string Painted = "painted";
+        public const string VisiblePainted = "visiblePainted";
+        public const string VisibleFill = "visibleFill";
+        public const string VisibleStroke = "visibleStroke";
         public const string Screen = "screen";
         public const string Print = "print";
         public const string Speech = "speech";

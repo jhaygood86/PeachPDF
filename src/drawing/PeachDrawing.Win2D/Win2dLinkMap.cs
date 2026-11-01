@@ -72,6 +72,12 @@ public sealed class Win2dLinkActivatingEventArgs : EventArgs
     public bool Cancel { get; set; }
 }
 
+/// <summary>An area of the canvas the document asked to show a pointer of its own over.</summary>
+/// <param name="Bounds">the area, in the canvas's layout units</param>
+/// <param name="Shape">the pointer to show, which stands in when none of <paramref name="Images"/> can be used</param>
+/// <param name="Images">images to use as the pointer in order of preference; empty when there are none</param>
+public sealed record Win2dCursorArea(Rect Bounds, CursorShape Shape, IReadOnlyList<CursorImage> Images);
+
 /// <summary>
 /// The links and named places a <see cref="Win2dCanvas"/> was told about while a document was painted. A Win2D canvas draws pixels, so a
 /// link is not part of the picture: the host asks this map what is under the pointer and, when the user clicks, activates it.
@@ -102,6 +108,32 @@ public sealed class Win2dLinkMap
 
     /// <summary>Raised before a link is followed. Set <see cref="Win2dLinkActivatingEventArgs.Cancel"/> to handle it yourself.</summary>
     public event EventHandler<Win2dLinkActivatingEventArgs>? LinkActivating;
+
+    private readonly List<Win2dCursorArea> _cursors = [];
+
+    /// <summary>The areas that ask for a pointer of their own, in the order they were added; a later one is on top.</summary>
+    public IReadOnlyList<Win2dCursorArea> Cursors => _cursors;
+
+    internal void AddCursor(Win2dCursorArea area) => _cursors.Add(area);
+
+    /// <summary>The topmost area asking for a pointer at <paramref name="x"/>, <paramref name="y"/> in layout units, or <see langword="null"/> when the document asks for none there (the host shows its own).</summary>
+    /// <param name="x">the horizontal position</param>
+    /// <param name="y">the vertical position</param>
+    public Win2dCursorArea? CursorAt(double x, double y)
+    {
+        for (var i = _cursors.Count - 1; i >= 0; i--)
+        {
+            if (_cursors[i].Bounds.Contains(x, y))
+                return _cursors[i];
+        }
+
+        return null;
+    }
+
+    /// <summary>Like <see cref="CursorAt"/>, for a position in the host's own pointer coordinates (see <see cref="HitTestDips"/>).</summary>
+    /// <param name="xDips">the horizontal position</param>
+    /// <param name="yDips">the vertical position</param>
+    public Win2dCursorArea? CursorAtDips(double xDips, double yDips) => CursorAt(xDips * _unitsPerDip, yDips * _unitsPerDip);
 
     internal void Add(Win2dLink link) => _links.Add(link);
 

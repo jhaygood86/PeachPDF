@@ -110,4 +110,45 @@ public class SvgLinkTests
         Assert.Null(canvas.AddDestinationLink(new Rect(0, 0, 1, 1), "x"));
         canvas.AddDestination("x", 1);
     }
+
+    [Fact]
+    public void ACursorAreaIsAnUnpaintedRectangleWithACursorStyleUnderTheLinks()
+    {
+        using var scene = Create();
+        scene.Canvas.AddLink(new Rect(0, 0, 5, 5), "https://example.com/");
+        scene.Canvas.AddCursor(new Rect(10, 20, 30, 8), CursorShape.ResizeDiagonalDown, [new CursorImage("a'b.png", 3, 4)]);
+
+        var drawn = scene.Drawn().ToList();
+        Assert.Equal([Ns + "rect", Ns + "a"], drawn.Select(e => e.Name)); // below the link, so a link it covers is still clickable
+        Assert.Equal(("10", "20", "30", "8"), (Attr(drawn[0], "x"), Attr(drawn[0], "y"), Attr(drawn[0], "width"), Attr(drawn[0], "height")));
+        Assert.Equal(("none", "all"), (Attr(drawn[0], "fill"), Attr(drawn[0], "pointer-events")));
+        Assert.Equal("cursor:url('a\\'b.png') 3 4, nwse-resize", Attr(drawn[0], "style"));
+    }
+
+    [Fact]
+    public void EveryShapeIsWrittenAsACssCursorKeyword()
+    {
+        foreach (var shape in Enum.GetValues<CursorShape>())
+        {
+            using var scene = Create();
+            scene.Canvas.AddCursor(new Rect(0, 0, 10, 10), shape);
+
+            var style = Attr(Assert.Single(scene.Drawn()), "style");
+            Assert.StartsWith("cursor:", style);
+            Assert.False(style.EndsWith(':'), shape.ToString());
+        }
+    }
+
+    [Fact]
+    public void AnImageWithoutAHotspotIsListedBeforeTheKeyword_AndATileIgnoresCursors()
+    {
+        using var scene = Create();
+        scene.Canvas.AddCursor(new Rect(0, 0, 10, 10), CursorShape.Pointer, [new CursorImage("a.png", null, null)]);
+        var (tile, _) = scene.Canvas.CreateTile(10, 10)!.Value;
+        tile.AddCursor(new Rect(0, 0, 1, 1), CursorShape.Wait);
+        tile.Dispose();
+
+        var rect = Assert.Single(scene.Drawn());
+        Assert.Equal("cursor:url('a.png'), pointer", Attr(rect, "style"));
+    }
 }
