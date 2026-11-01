@@ -1691,6 +1691,13 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
+        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length-percentage; anything else computes to the inherited value.
+        /// A percentage is valid (it is relative to the font size), which the reference length of 1 lets through: with none the parser reads it as absent.
+        /// </summary>
+        private static bool IsSpacingValue(string value) =>
+            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
+
+        /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
         /// presentation attribute is in the attribute grammar (<c>translate(10 20)</c>, <c>rotate(30)</c>), which the animation mixes as CSS text, so it
         /// goes in as the matrix it means.
@@ -1711,6 +1718,9 @@ namespace PeachBrackets.Svg
                     _ => InheritedOrInitial(),
                 };
             }
+
+            // A spacing that is not a length computes to the inherited one, so that is what the animation mixes from (the cascade tier that holds it already reads it so).
+            if ((name is "letter-spacing" or "word-spacing") && !IsSpacingValue(declared)) return InheritedOrInitial();
 
             if (name == "transform" && declared == node.GetAttribute("transform"))
             {
