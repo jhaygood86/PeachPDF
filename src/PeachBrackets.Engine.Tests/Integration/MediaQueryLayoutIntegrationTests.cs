@@ -82,6 +82,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("(prefers-reduced-motion: no-preference)", WidePt, 600, false, false)]
         [InlineData("(prefers-reduced-motion)", WidePt, 600, false, true)]  // boolean, reduce stance
         [InlineData("(prefers-contrast: no-preference)", WidePt, 600, false, true)]
+        [InlineData("(forced-colors: none)", WidePt, 600, false, true)]
+        [InlineData("(forced-colors: active)", WidePt, 600, false, false)]
+        [InlineData("(forced-colors)", WidePt, 600, false, false)]
+        [InlineData("not (forced-colors: active)", WidePt, 600, false, true)]
         [InlineData("(prefers-reduced-transparency: no-preference)", WidePt, 600, false, true)]
         // ── prefers-color-scheme (config-driven) ────────────────────────────────
         [InlineData("(prefers-color-scheme: dark)", WidePt, 600, true, true)]
