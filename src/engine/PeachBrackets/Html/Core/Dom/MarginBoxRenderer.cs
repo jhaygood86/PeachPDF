@@ -444,10 +444,8 @@ namespace PeachBrackets.Html.Dom
         /// (<see cref="ApplyMarginAndBorder"/>) and content-box (<see cref="ApplyBoxModel"/>) rects per
         /// their own <c>background-origin</c>/<c>-clip</c> value via
         /// <see cref="LayeredBackgroundPainter.PaintAsync"/> - the same shared primitive the <c>@page</c>
-        /// box's own background uses (see that class's own remarks). Border paints as four independent
-        /// edge strokes rather than a mitred box (<see cref="PaintBorder"/>) - a margin box never
-        /// fragments across pages, so unlike a real <c>CssBox</c>'s border it has no shared corner with a
-        /// neighboring fragment to mitre into (#943's own flagged open question).
+        /// box's own background uses (see that class's own remarks). Border paints through
+        /// <see cref="PaintBorder"/>, which mitres the four edges at the corners like an ordinary box's.
         /// </summary>
         internal static async Task PaintBackgroundAndBorder(
             Canvas canvas, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
@@ -511,12 +509,9 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
-        /// Paints a margin box's own border as four independent edge strokes at
-        /// <paramref name="borderBoxRect"/>'s own edges (full width/height each, so adjacent edges
-        /// overlap at the corners rather than mitre into each other - see
-        /// <see cref="PaintBackgroundAndBorder"/>'s own remarks on why that's the right call here), via
-        /// <see cref="BordersDrawHandler.DrawCollapsedSegment"/> - the same value-based, no-<c>CssBox</c>
-        /// primitive already used for collapsed table borders. <c>border-color</c>'s own initial value
+        /// Paints a margin box's own border at <paramref name="borderBoxRect"/>'s edges through
+        /// <see cref="BoxEdgesDrawHandler.DrawBoxEdges(Canvas, Rect, BoxEdgesDrawHandler.EdgeSet, BorderRadii?, bool)"/>, the primitive an ordinary
+        /// box's border uses, so adjacent edges mitre at the corners. <c>border-color</c>'s own initial value
         /// is <c>currentcolor</c> (CSS Backgrounds 3 §4), so an edge with no explicit color (or an
         /// explicit <c>currentcolor</c>) resolves against the box's own already-resolved text
         /// <c>color</c>, which is <paramref name="color"/> when the caller has resolved it through the page context and the root element
@@ -557,35 +552,23 @@ namespace PeachBrackets.Html.Dom
                     ? BorderBevelColors.IsBeveled(lineStyle) ? BorderBevelColors.CurrentColorBase : textColor
                     : colorParser.GetActualColor(colorValue);
 
-            // Each edge names the side it is, unlike a table grid line: this box's border really does
-            // have four sides, so a bevelled one shades per side the way an ordinary box's does (issue
-            // #1237 - an inset border used to darken all four edges here, producing no bevel at all).
-            void PaintEdge(Border side, Rect edgeRect, double widthPx, string? styleValue, string? colorValue)
+            // The four edges are drawn together by the same routine an ordinary box's border goes through, so adjacent edges mitre along the
+            // diagonal from the border box's outer corner to its inner corner instead of overlapping, and a bevelled one shades per side
+            // (issue #1237).
+            BoxEdgesDrawHandler.Edge ResolveEdge(string? widthValue, string? styleValue, string? colorValue)
             {
                 if (!Map.LineStyles.TryGetValue(styleValue ?? string.Empty, out var lineStyle))
                     lineStyle = LineStyle.None;
 
-                if (widthPx <= 0 || lineStyle is LineStyle.None or LineStyle.Hidden)
-                    return;
-
-                BordersDrawHandler.DrawCollapsedSegment(
-                    g, side is Border.Top or Border.Bottom, edgeRect, lineStyle,
-                    ResolveBorderColor(colorValue, lineStyle), widthPx, side);
+                var widthPx = ResolveBorderWidthPt(widthValue, styleValue, emPt, remPt) * pixelsPerPoint;
+                return new BoxEdgesDrawHandler.Edge(widthPx, lineStyle, ResolveBorderColor(colorValue, lineStyle), IsPhysical: true, IsPainted: true);
             }
 
-            var topWidthPx = ResolveBorderWidthPt(style.BorderTopWidth, style.BorderTopStyle, emPt, remPt) * pixelsPerPoint;
-            var bottomWidthPx = ResolveBorderWidthPt(style.BorderBottomWidth, style.BorderBottomStyle, emPt, remPt) * pixelsPerPoint;
-            var leftWidthPx = ResolveBorderWidthPt(style.BorderLeftWidth, style.BorderLeftStyle, emPt, remPt) * pixelsPerPoint;
-            var rightWidthPx = ResolveBorderWidthPt(style.BorderRightWidth, style.BorderRightStyle, emPt, remPt) * pixelsPerPoint;
-
-            PaintEdge(Border.Top, new Rect(borderBoxRect.Left, borderBoxRect.Top, borderBoxRect.Width, topWidthPx),
-                topWidthPx, style.BorderTopStyle, style.BorderTopColor);
-            PaintEdge(Border.Bottom, new Rect(borderBoxRect.Left, borderBoxRect.Bottom - bottomWidthPx, borderBoxRect.Width, bottomWidthPx),
-                bottomWidthPx, style.BorderBottomStyle, style.BorderBottomColor);
-            PaintEdge(Border.Left, new Rect(borderBoxRect.Left, borderBoxRect.Top, leftWidthPx, borderBoxRect.Height),
-                leftWidthPx, style.BorderLeftStyle, style.BorderLeftColor);
-            PaintEdge(Border.Right, new Rect(borderBoxRect.Right - rightWidthPx, borderBoxRect.Top, rightWidthPx, borderBoxRect.Height),
-                rightWidthPx, style.BorderRightStyle, style.BorderRightColor);
+            BoxEdgesDrawHandler.DrawBoxEdges(g, borderBoxRect, new BoxEdgesDrawHandler.EdgeSet(
+                ResolveEdge(style.BorderTopWidth, style.BorderTopStyle, style.BorderTopColor),
+                ResolveEdge(style.BorderRightWidth, style.BorderRightStyle, style.BorderRightColor),
+                ResolveEdge(style.BorderBottomWidth, style.BorderBottomStyle, style.BorderBottomColor),
+                ResolveEdge(style.BorderLeftWidth, style.BorderLeftStyle, style.BorderLeftColor)));
         }
 
         /// <summary>

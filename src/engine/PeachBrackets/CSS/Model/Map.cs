@@ -827,7 +827,7 @@ namespace PeachBrackets.Css
                 {Keywords.NorthWestResize, SystemCursor.NwResize},
                 {Keywords.SouthResize, SystemCursor.SResize},
                 {Keywords.SouthEastResize, SystemCursor.SeResize},
-                {Keywords.SouthWestResize, SystemCursor.WResize},
+                {Keywords.SouthWestResize, SystemCursor.SwResize},
                 {Keywords.WestResize, SystemCursor.WResize},
                 {Keywords.EastWestResize, SystemCursor.EwResize},
                 {Keywords.NorthSouthResize, SystemCursor.NsResize},

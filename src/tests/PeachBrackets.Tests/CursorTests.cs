@@ -124,4 +124,71 @@ public class CursorTests
         Assert.Equal(CursorShape.Default, document.GetCursorAt(0, 5, 5).Shape);
         Assert.Throws<ArgumentOutOfRangeException>(() => document.GetCursorAt(5, 0, 0));
     }
+
+    [Theory]
+    [InlineData("auto", CursorShape.Default)]
+    [InlineData("default", CursorShape.Default)]
+    [InlineData("none", CursorShape.None)]
+    [InlineData("context-menu", CursorShape.ContextMenu)]
+    [InlineData("help", CursorShape.Help)]
+    [InlineData("pointer", CursorShape.Pointer)]
+    [InlineData("progress", CursorShape.Progress)]
+    [InlineData("wait", CursorShape.Wait)]
+    [InlineData("cell", CursorShape.Cell)]
+    [InlineData("crosshair", CursorShape.Crosshair)]
+    [InlineData("text", CursorShape.Text)]
+    [InlineData("vertical-text", CursorShape.VerticalText)]
+    [InlineData("alias", CursorShape.Alias)]
+    [InlineData("copy", CursorShape.Copy)]
+    [InlineData("move", CursorShape.Move)]
+    [InlineData("no-drop", CursorShape.NoDrop)]
+    [InlineData("not-allowed", CursorShape.NotAllowed)]
+    [InlineData("e-resize", CursorShape.ResizeEast)]
+    [InlineData("n-resize", CursorShape.ResizeNorth)]
+    [InlineData("ne-resize", CursorShape.ResizeNorthEast)]
+    [InlineData("nw-resize", CursorShape.ResizeNorthWest)]
+    [InlineData("s-resize", CursorShape.ResizeSouth)]
+    [InlineData("se-resize", CursorShape.ResizeSouthEast)]
+    [InlineData("sw-resize", CursorShape.ResizeSouthWest)]
+    [InlineData("w-resize", CursorShape.ResizeWest)]
+    [InlineData("ew-resize", CursorShape.ResizeHorizontal)]
+    [InlineData("ns-resize", CursorShape.ResizeVertical)]
+    [InlineData("nesw-resize", CursorShape.ResizeDiagonalUp)]
+    [InlineData("nwse-resize", CursorShape.ResizeDiagonalDown)]
+    [InlineData("col-resize", CursorShape.ResizeColumn)]
+    [InlineData("row-resize", CursorShape.ResizeRow)]
+    [InlineData("all-scroll", CursorShape.ScrollAll)]
+    [InlineData("zoom-in", CursorShape.ZoomIn)]
+    [InlineData("zoom-out", CursorShape.ZoomOut)]
+    [InlineData("grab", CursorShape.Grab)]
+    [InlineData("grabbing", CursorShape.Grabbing)]
+    public async Task EveryCursorKeywordIsItsShape(string keyword, CursorShape expected)
+    {
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap($"<div id=a style='height:40px;cursor:{keyword}'></div>"));
+
+        var (x, y) = Center(document, "a");
+        Assert.Equal(expected, document.GetCursorAt(0, x, y).Shape);
+    }
+
+    [Fact]
+    public async Task AnImageNeedsNoHotspot_AndAQuotedAddressIsTaken()
+    {
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a style=\"height:40px;cursor:url('file:///tmp/a b.png'), pointer\"></div>"));
+
+        var (x, y) = Center(document, "a");
+        var cursor = document.GetCursorAt(0, x, y);
+
+        var image = Assert.Single(cursor.Images);
+        Assert.Null(image.HotspotX);
+        Assert.Null(image.HotspotY);
+        Assert.Contains("a%20b.png", image.Uri);
+    }
+
+    [Fact]
+    public async Task APointThatIsNotOnAnElementIsTheDefaultCursor()
+    {
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a style='height:40px;cursor:help'></div>"));
+
+        Assert.Equal(CursorShape.Default, document.GetCursorAt(0, 2, 2).Shape);
+    }
 }

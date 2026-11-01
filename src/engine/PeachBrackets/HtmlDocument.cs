@@ -99,6 +99,8 @@ public sealed class HtmlDocument : IDisposable
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
+            container.PageNumberOffset = options.PageNumberOffset;
+            container.TotalPagesOverride = options.TotalPagesOverride;
             container.AnimationProgress = options.AnimationProgress;
             container.InteractiveForms = options.CollectFormFields;
             document.ApplyTextOptions(options);
@@ -178,6 +180,8 @@ public sealed class HtmlDocument : IDisposable
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
+            container.PageNumberOffset = options.PageNumberOffset;
+            container.TotalPagesOverride = options.TotalPagesOverride;
             document.ApplyTextOptions(options);
             await container.SetDeclarativeRoot(page.Root.Box, options.DefaultLanguage, styleSheet?.Data, properties.DisplayContentsShells);
 

@@ -125,6 +125,8 @@ internal static class CliProgram
               --interactive-pdf-forms
                                      Emit fillable AcroForm fields for form elements.
               --no-compress          Do not compress PDF content streams.
+              --linearize            Write a linearized ("fast web view") PDF, so a viewer
+                                     can show the first page before the whole file arrives.
               --brotli               With PDF 2.0, compress streams with Brotli (smaller,
                                      but Chrome, Edge and Acrobat show them blank).
               --pdf-version=VER      PDF version to write: 1.7 or 2.0.

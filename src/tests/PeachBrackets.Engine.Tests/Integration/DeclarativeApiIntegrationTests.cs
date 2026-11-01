@@ -775,6 +775,40 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task Footer_PageNumberOffsetAndTotalOverride_ShiftOnlyTheDisplayedCounters()
+        {
+            var (_, container) = await DeclarativeHarness.BuildAndLayoutAsync(page =>
+            {
+                page.Size(PdfLength.Points(300), PdfLength.Points(300));
+                page.Margin(20);
+                page.Footer(f => f.Text(t =>
+                {
+                    t.CurrentPageNumber();
+                    t.Span("/");
+                    t.TotalPages();
+                }));
+                page.Content(c => c.Column(column =>
+                {
+                    for (var i = 0; i < 40; i++)
+                        column.Item().Height(30).Text($"Line {i}");
+                }));
+            }, null, null, options =>
+            {
+                options.PageNumberOffset = 10;
+                options.TotalPagesOverride = 99;
+            });
+
+            var pages = container.FragmentTree!.Fragmentainers;
+            Assert.True(pages.Count > 2);
+
+            for (var i = 0; i < pages.Count; i++)
+            {
+                var footer = Assert.Single(pages[i].MarginBoxes, m => m.BoxName == "bottom-center");
+                Assert.Equal($"{i + 11}/99", string.Concat(CollectFragmentWords(footer.Content)));
+            }
+        }
+
+        [Fact]
         public async Task Footer_PageNumberWithinSectionAndTotalPagesWithinSection_ResolvePerPageAgainstTheMarkedSection()
         {
             var (_, container) = await BuildAndLayoutPage(page =>

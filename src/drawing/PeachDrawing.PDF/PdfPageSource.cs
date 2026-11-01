@@ -21,7 +21,7 @@ namespace PeachDrawing.PDF
     /// <para>
     /// What the importer cannot draw yet (fonts without an embedded TrueType, OpenType, CFF or
     /// Type 1 program) is skipped, and <see cref="Paint(int, Canvas)"/> names each such feature in its
-    /// result. A file protected with AES and the empty user password is read; one that needs a password, or that uses RC4 (which .NET does not provide), is refused.
+    /// result. A file protected with AES is read, with its password when it needs one; one that uses RC4 (which .NET does not provide) is refused.
     /// </para>
     /// </remarks>
     public sealed class PdfPageSource
@@ -44,10 +44,19 @@ namespace PeachDrawing.PDF
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
         /// <exception cref="NotSupportedException">the PDF needs a password to open, uses RC4, or uses an unknown security handler</exception>
-        public static PdfPageSource Open(byte[] pdf)
+        public static PdfPageSource Open(byte[] pdf) => Open(pdf, null);
+
+        /// <summary>Opens a PDF held in memory that is protected with a password.</summary>
+        /// <param name="pdf">the bytes of the PDF file</param>
+        /// <param name="password">the user password, or for an AES-256 file the owner password too; <see langword="null"/> or empty for a file that opens without one</param>
+        /// <returns>the opened file</returns>
+        /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
+        /// <exception cref="PdfPasswordException">the PDF needs a password that was not given or is wrong</exception>
+        /// <exception cref="NotSupportedException">the PDF uses RC4 or an unknown security handler</exception>
+        public static PdfPageSource Open(byte[] pdf, string? password)
         {
             ArgumentNullException.ThrowIfNull(pdf);
-            return new PdfPageSource(PdfSourceDocument.Open(pdf));
+            return new PdfPageSource(PdfSourceDocument.Open(pdf, password));
         }
 
         /// <summary>Opens a PDF read from <paramref name="stream"/>, which is read to the end and not closed.</summary>
@@ -55,13 +64,25 @@ namespace PeachDrawing.PDF
         /// <returns>the opened file</returns>
         /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
         /// <exception cref="NotSupportedException">the PDF needs a password to open, uses RC4, or uses an unknown security handler</exception>
-        public static PdfPageSource Open(Stream stream)
+        public static PdfPageSource Open(Stream stream) => Open(stream, null);
+
+        /// <summary>Opens a PDF protected with a password, read from <paramref name="stream"/>, which is read to the end and not closed.</summary>
+        /// <param name="stream">a stream positioned at the start of the PDF file</param>
+        /// <param name="password">the password, or <see langword="null"/> for a file that opens without one</param>
+        /// <returns>the opened file</returns>
+        /// <exception cref="InvalidDataException">the data is not a readable PDF</exception>
+        /// <exception cref="PdfPasswordException">the PDF needs a password that was not given or is wrong</exception>
+        /// <exception cref="NotSupportedException">the PDF uses RC4 or an unknown security handler</exception>
+        public static PdfPageSource Open(Stream stream, string? password)
         {
             ArgumentNullException.ThrowIfNull(stream);
             using var copy = new MemoryStream();
             stream.CopyTo(copy);
-            return Open(copy.ToArray());
+            return Open(copy.ToArray(), password);
         }
+
+        /// <summary>The reader behind this source, for the rest of the package.</summary>
+        internal PdfSourceDocument Document => _document;
 
         /// <summary>The number of pages in the file.</summary>
         public int PageCount => _document.Pages.Count;

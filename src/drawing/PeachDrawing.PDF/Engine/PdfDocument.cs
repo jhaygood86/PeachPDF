@@ -248,6 +248,12 @@ internal sealed class PdfDocument : PdfObject, IDisposable
 
             PrepareForSave();
 
+            if (Options.Linearize)
+            {
+                PdfLinearizer.Write(this, writer, security);
+                return;
+            }
+
             writer.WriteFileHeader(this);
             PdfReference[] irefs = _irefTable.AllReferences;
             int count = irefs.Length;

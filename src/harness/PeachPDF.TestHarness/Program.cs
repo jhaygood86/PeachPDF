@@ -15647,6 +15647,59 @@ await SaveDeclarativeShowcaseAsync("file_layers", "Document Building", "Overlay 
         });
     });
 
+const string documentMergeSource =
+    """"
+    static Action<IDocumentBuilder> Report(string title, int lines) => doc => doc.Page(page =>
+    {
+        page.Size(300, 300);
+        page.Margin(24);
+        page.Header(header => header.Text(t => t.Span(title).Bold()));
+        page.Footer(footer => footer.Text(t =>
+        {
+            t.Span("Page ");
+            t.CurrentPageNumber();
+            t.Span(" of ");
+            t.TotalPages();
+        }));
+        page.Content(container => container.Column(column =>
+        {
+            for (var i = 1; i <= lines; i++)
+                column.Item().Height(30).Text($"{title}, line {i}");
+        }));
+    });
+
+    // Two reports, 2 and 3 pages long, read as one run: pages 1 to 5 of 5.
+    var merge = DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers();
+    var document = await generator.CreateMergedDocument(merge);
+    """";
+
+await SaveDeclarativeShowcaseAsync("document_merge", "Document Building", "Merging Documents",
+    "DocumentMerge: declarative documents written into one PDF, with UseContinuousPageNumbers() making their footers read as one run (here two reports of 2 and 3 pages, pages 1 to 5 of 5) and UseOriginalPageNumbers() leaving each its own.",
+    documentMergeSource,
+    async gen =>
+    {
+        static Action<IDocumentBuilder> Report(string title, int lines) => doc => doc.Page(page =>
+        {
+            page.Size(300, 300);
+            page.Margin(24);
+            page.Header(header => header.Text(t => t.Span(title).Bold()));
+            page.Footer(footer => footer.Text(t =>
+            {
+                t.Span("Page ");
+                t.CurrentPageNumber();
+                t.Span(" of ");
+                t.TotalPages();
+            }));
+            page.Content(container => container.Column(column =>
+            {
+                for (var i = 1; i <= lines; i++)
+                    column.Item().Height(30).Text($"{title}, line {i}");
+            }));
+        });
+
+        return await gen.CreateMergedDocument(DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers());
+    });
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();
