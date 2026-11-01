@@ -859,6 +859,17 @@ Two knock-on gaps remain:
   applied. That case still only grows downward from its own top, which can leave the box positioned
   too low relative to the rest of the line.
 
+### Pointer Interaction
+
+Two properties describe how a document is meant to be pointed at. A PDF page has no pointer, so what each does depends on where the document is shown:
+
+| Property | MDN | PDF | Screen hosts ([PeachBrackets](peachbrackets.md) with a Skia, Win2D or SVG canvas) |
+|---|---|---|---|
+| `cursor` | [cursor](https://developer.mozilla.org/en-US/docs/Web/CSS/cursor) | Parsed and inherited, otherwise ignored: a PDF has nowhere to put a pointer. | `HtmlDocument.GetCursorAt(page, x, y)` gives the pointer at a point: the `cursor` of the innermost element that receives pointer events, with any `url()` images (and their hotspots) ahead of the keyword. `auto` is the link pointer over a link, the text pointer over text and the default pointer elsewhere. `HtmlDocument.PaintCursors` puts the areas that ask for a pointer on a canvas (`Canvas.AddCursor`): the Skia and Win2D link maps answer `CursorAt`, and the SVG canvas writes a `cursor` style on an unpainted rectangle under the links. |
+| `pointer-events` | [pointer-events](https://developer.mozilla.org/en-US/docs/Web/CSS/pointer-events) | `none` takes a link out of what can be clicked: no link annotation is written for it. | `none` lets a point fall through to what is beneath: `GetElementAt` and `GetCursorAt` skip the element (a child that sets `auto` again still receives events), and it is left out of the cursor areas and the links. |
+
+The keywords that only mean something for the painted parts of an SVG shape (`visiblePainted`, `visibleFill`, `visibleStroke`, `visible`, `painted`, `fill`, `stroke`, `all`) are accepted but read as `auto`: a shape inside an inline `<svg>` is not a separate hit target.
+
 ### Stacking Context
 
 Paint order follows the CSS [stacking context](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Positioned_layout/Stacking_context) model. A new stacking context is established by:

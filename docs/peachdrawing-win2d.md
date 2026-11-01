@@ -142,6 +142,28 @@ never launched, nothing is launched while a page is painted, and a launcher that
 intercept with `Links.LinkActivating` (set `Cancel`), and a link to a place in the document (`Destination`) is left to the host to scroll to
 (`TryGetDestination`). A custom `ILinkLauncher` replaces the system one.
 
+### Cursors
+
+`canvas.Links.CursorAt(x, y)` (or `CursorAtDips`) gives the topmost area the document asked a pointer for (`Canvas.AddCursor`), as a
+`CursorShape` and any images it names, or `null` where it asked for nothing. A WinUI host sets `ProtectedCursor` from it:
+
+| `CursorShape` | `InputSystemCursorShape` |
+|---|---|
+| `Default`, `Alias`, `Copy`, `NoDrop`, `Grab`, `Grabbing`, `Progress` | `Arrow` |
+| `Pointer` | `Hand` |
+| `Text`, `VerticalText` | `IBeam` |
+| `Wait` | `Wait` |
+| `Help` | `Help` |
+| `Crosshair`, `Cell` | `Cross` |
+| `NotAllowed` | `UniversalNo` |
+| `Move`, `ScrollAll` | `SizeAll` |
+| `ResizeHorizontal`, `ResizeEast`, `ResizeWest`, `ResizeColumn` | `SizeWestEast` |
+| `ResizeVertical`, `ResizeNorth`, `ResizeSouth`, `ResizeRow` | `SizeNorthSouth` |
+| `ResizeDiagonalUp`, `ResizeNorthEast`, `ResizeSouthWest` | `SizeNortheastSouthwest` |
+| `ResizeDiagonalDown`, `ResizeNorthWest`, `ResizeSouthEast` | `SizeNorthwestSoutheast` |
+
+A cursor image cannot be used as a WinUI pointer, so the shape stands in for it.
+
 ## Lifecycle
 
 Every native Win2D object the backend creates has one owner and is released deterministically; nothing relies on a finalizer.

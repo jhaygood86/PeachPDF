@@ -377,6 +377,44 @@ public sealed class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// The pointer the document asks for at a point of a page: the <c>cursor</c> of the innermost element under it that receives pointer
+    /// events (<c>pointer-events: none</c> lets the point fall through to what is beneath), with <c>auto</c> resolved to the pointer for
+    /// a link, the text pointer over text, or the default one.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the cursor; the default one when nothing is under the point</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public DocumentCursor GetCursorAt(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        return CursorQueries.At(_container, fragmentainers[pageIndex], x, y);
+    }
+
+    /// <summary>
+    /// Puts the areas of one page that ask for a pointer of their own on <paramref name="canvas"/> (<see cref="Canvas.AddCursor"/>), in paint
+    /// order, so a canvas for a surface that is pointed at records them for the host to hit-test. An element whose <c>cursor</c> is <c>auto</c>
+    /// is listed only when it is a link, and one with <c>pointer-events: none</c> is not listed at all. A canvas for a format with no pointer
+    /// ignores the calls.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page <paramref name="canvas"/> draws</param>
+    /// <param name="canvas">the canvas of that page</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public void PaintCursors(int pageIndex, Canvas canvas)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ThrowIfNotAPage(pageIndex);
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        var units = _unitsPerPoint;
+        foreach (var (bounds, cursor) in CursorQueries.Regions(_container, fragmentainers[pageIndex]))
+            canvas.AddCursor(new Rect(bounds.X * units, bounds.Y * units, bounds.Width * units, bounds.Height * units), cursor.Shape, cursor.Images.Count == 0 ? null : cursor.Images);
+    }
+
+    /// <summary>
     /// What the pages hold besides pixels: the links, the outline and the form controls, positioned on their pages in points.
     /// </summary>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
