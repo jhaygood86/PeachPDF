@@ -6,6 +6,7 @@ using PeachDrawing.Text.Internal.Fonts;
 using PeachDrawing.Text.Internal.Fonts.OpenType;
 using PeachDrawing.Text.Internal.Text;
 using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Collections.Generic;
@@ -835,8 +836,16 @@ namespace PeachDrawing.Text.Internal.Fonts
             IReadOnlyList<RuneInterval> coverage;
             try
             {
-                var fontSource = FontFileData.GetOrCreateFrom(GetFont(faceName));
-                coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap);
+                if (!_CustomFonts.ContainsKey(faceName) && _systemFontPaths.TryGetValue(faceName, out var systemFont))
+                {
+                    // Scanning every installed face for coverage must not load (and so keep) every font: read the cmap alone.
+                    coverage = _systemCoverageCache.GetOrAdd(systemFont, static face => ReadSystemCoverage(face.Path, face.FaceIndex));
+                }
+                else
+                {
+                    var fontSource = FontFileData.GetOrCreateFrom(GetFont(faceName));
+                    coverage = CMapCoverage.Extract(fontSource.Fontface?.cmap);
+                }
             }
             catch
             {
@@ -846,6 +855,53 @@ namespace PeachDrawing.Text.Internal.Fonts
             _coverageCache[faceName] = coverage;
             return coverage;
         }
+
+        /// <summary>
+        /// What one face of an installed font file covers, read from its <c>cmap</c> table alone - the rest of
+        /// the file is never read into memory. A file that cannot be read covers nothing.
+        /// </summary>
+        internal static IReadOnlyList<RuneInterval> ReadSystemCoverage(string path, int faceIndex)
+        {
+            try
+            {
+                using var stream = File.OpenRead(path);
+                var directory = SfntCollection.FaceOffset(stream, faceIndex);
+
+                stream.Seek(directory + 4, SeekOrigin.Begin);
+                Span<byte> count = stackalloc byte[2];
+                stream.ReadExactly(count);
+                int numTables = BinaryPrimitives.ReadUInt16BigEndian(count);
+
+                stream.Seek(directory + 12, SeekOrigin.Begin);
+                Span<byte> record = stackalloc byte[16];
+                for (var i = 0; i < numTables; i++)
+                {
+                    stream.ReadExactly(record);
+                    if (BinaryPrimitives.ReadUInt32BigEndian(record) != CMapTableTag)
+                        continue;
+
+                    var offset = BinaryPrimitives.ReadUInt32BigEndian(record[8..]);
+                    var length = BinaryPrimitives.ReadUInt32BigEndian(record[12..]);
+                    if ((long)offset + length > stream.Length)
+                        return [];
+
+                    var table = new byte[length];
+                    stream.Seek(offset, SeekOrigin.Begin);
+                    stream.ReadExactly(table);
+                    return CMapCoverage.ExtractFromTable(table);
+                }
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentOutOfRangeException or UnauthorizedAccessException)
+            {
+            }
+
+            return [];
+        }
+
+        private const uint CMapTableTag = 0x636D6170; // 'cmap'
+
+        /// <summary>Coverage of installed font files, shared like <see cref="_systemFontBytesCache"/> since the files never change.</summary>
+        private static readonly ConcurrentDictionary<(string Path, int FaceIndex), IReadOnlyList<RuneInterval>> _systemCoverageCache = new();
 
         /// <summary>
         /// The last-resort system-fallback step of CSS Fonts 4 §5's font matching algorithm: when no

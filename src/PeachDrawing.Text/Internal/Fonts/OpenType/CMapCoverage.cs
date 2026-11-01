@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Text;
 
@@ -29,18 +30,23 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (cmap.cmap12?.startCharCode is null || cmap.cmap12.numGroups == 0)
                 return bmp;
 
-            var cmap12 = cmap.cmap12;
+            return Merge(bmp, cmap.cmap12.startCharCode, cmap.cmap12.endCharCode, (int)cmap.cmap12.numGroups);
+        }
 
-            // Merge the BMP ranges and the format-12 groups by sorting on start, then coalescing - a
-            // format-12 subtable may itself include BMP codepoints, so a naive append wouldn't stay sorted.
-            var segments = new List<(long Start, long End)>(bmp.Count + (int)cmap12.numGroups);
+        /// <summary>
+        /// Merges the BMP ranges and the format-12 groups by sorting on start, then coalescing - a
+        /// format-12 subtable may itself include BMP codepoints, so a naive append wouldn't stay sorted.
+        /// </summary>
+        private static IReadOnlyList<RuneInterval> Merge(IReadOnlyList<RuneInterval> bmp, uint[] startCharCode, uint[] endCharCode, int numGroups)
+        {
+            var segments = new List<(long Start, long End)>(bmp.Count + numGroups);
             foreach (var r in bmp)
                 segments.Add((r.Start.Value, r.End.Value));
 
-            for (int g = 0; g < cmap12.numGroups; g++)
+            for (int g = 0; g < numGroups; g++)
             {
-                long start = cmap12.startCharCode[g];
-                long end = cmap12.endCharCode[g];
+                long start = startCharCode[g];
+                long end = endCharCode[g];
 
                 if (start > end || start > 0x10FFFF)
                     continue;
@@ -91,13 +97,17 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (cmap4?.startCount is null || cmap4.endCount is null)
                 return [];
 
-            int segCount = cmap4.segCountX2 / 2;
+            return ExtractSegments(cmap4.startCount, cmap4.endCount, cmap4.segCountX2 / 2);
+        }
+
+        private static IReadOnlyList<RuneInterval> ExtractSegments(ushort[] startCount, ushort[] endCount, int segCount)
+        {
             var ranges = new List<RuneInterval>(segCount);
 
             for (int seg = 0; seg < segCount; seg++)
             {
-                int start = cmap4.startCount[seg];
-                int end = cmap4.endCount[seg];
+                int start = startCount[seg];
+                int end = endCount[seg];
 
                 if (start > end)
                     continue;
@@ -135,6 +145,111 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
 
             return ranges;
+        }
+
+        /// <summary>
+        /// The same coverage as <see cref="Extract(CMapTable?)"/>, read straight from the bytes of a
+        /// <c>cmap</c> table without building a font: used to scan faces for coverage only, which must not
+        /// load (or keep) the rest of each font. Chooses subtables by the same rules <c>CMapTable</c> does;
+        /// a table that cannot be read, or has no usable subtable, covers nothing.
+        /// </summary>
+        public static IReadOnlyList<RuneInterval> ExtractFromTable(ReadOnlySpan<byte> table)
+        {
+            try
+            {
+                return ReadTable(table);
+            }
+            catch (ArgumentOutOfRangeException)
+            {
+                return [];
+            }
+        }
+
+        private static IReadOnlyList<RuneInterval> ReadTable(ReadOnlySpan<byte> table)
+        {
+            if (table.Length < 4)
+                return [];
+
+            int numTables = BinaryPrimitives.ReadUInt16BigEndian(table[2..]);
+            if (4 + numTables * 8 > table.Length)
+                return [];
+
+            IReadOnlyList<RuneInterval>? bmp = null;
+            uint[]? starts = null, ends = null;
+            var cmap12IsUnicode = false;
+
+            for (int idx = 0; idx < numTables; idx++)
+            {
+                var record = table.Slice(4 + idx * 8, 8);
+                int platformId = BinaryPrimitives.ReadUInt16BigEndian(record);
+                int encodingId = BinaryPrimitives.ReadUInt16BigEndian(record[2..]);
+                int offset = BinaryPrimitives.ReadInt32BigEndian(record[4..]);
+
+                if (offset < 0 || (long)offset + 2 > table.Length)
+                    continue;
+
+                var subtable = table[offset..];
+                int format = BinaryPrimitives.ReadUInt16BigEndian(subtable);
+
+                // PlatformId.Apple (0) / Win (3); WinEncodingId.Symbol (0) / Unicode (1); AppleEncodingId.Unicode20BmpOnly (3).
+                bool isBmpCandidate = (platformId == 3 && encodingId is 0 or 1) || (platformId == 0 && encodingId == 3);
+                bool isFullUnicodeCandidate = (platformId == 3 && encodingId is 1 or 10) || platformId == 0;
+
+                if (bmp is null && format == 4 && isBmpCandidate)
+                {
+                    bmp = ReadFormat4(subtable);
+                }
+                else if (format == 12 && (starts is null || (!cmap12IsUnicode && isFullUnicodeCandidate)))
+                {
+                    (starts, ends) = ReadFormat12(subtable);
+                    cmap12IsUnicode = isFullUnicodeCandidate;
+                }
+
+                if (bmp is not null && cmap12IsUnicode)
+                    break;
+            }
+
+            // A font with no BMP subtable is usable when its format-12 subtable is a Unicode one: that maps the BMP too.
+            if (bmp is null && !cmap12IsUnicode)
+                return [];
+
+            bmp ??= [];
+            return starts is null || starts.Length == 0 ? bmp : Merge(bmp, starts, ends!, starts.Length);
+        }
+
+        private static IReadOnlyList<RuneInterval> ReadFormat4(ReadOnlySpan<byte> subtable)
+        {
+            int segCount = BinaryPrimitives.ReadUInt16BigEndian(subtable[6..]) / 2;
+            // endCount[segCount], a reserved pad, then startCount[segCount].
+            var endAt = 14;
+            var startAt = endAt + segCount * 2 + 2;
+
+            var end = new ushort[segCount];
+            var start = new ushort[segCount];
+            for (int seg = 0; seg < segCount; seg++)
+            {
+                end[seg] = BinaryPrimitives.ReadUInt16BigEndian(subtable[(endAt + seg * 2)..]);
+                start[seg] = BinaryPrimitives.ReadUInt16BigEndian(subtable[(startAt + seg * 2)..]);
+            }
+
+            return ExtractSegments(start, end, segCount);
+        }
+
+        private static (uint[] Start, uint[] End) ReadFormat12(ReadOnlySpan<byte> subtable)
+        {
+            uint numGroups = BinaryPrimitives.ReadUInt32BigEndian(subtable[12..]);
+            if (16 + (long)numGroups * 12 > subtable.Length)
+                throw new ArgumentOutOfRangeException(nameof(subtable));
+
+            var start = new uint[numGroups];
+            var end = new uint[numGroups];
+            for (int g = 0; g < start.Length; g++)
+            {
+                start[g] = BinaryPrimitives.ReadUInt32BigEndian(subtable[(16 + g * 12)..]);
+                end[g] = BinaryPrimitives.ReadUInt32BigEndian(subtable[(20 + g * 12)..]);
+            }
+
+            return (start, end);
         }
 
         /// <summary>
