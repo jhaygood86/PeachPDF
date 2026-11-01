@@ -4510,6 +4510,7 @@ namespace PeachBrackets.Html.Dom
                 // The line's top was stated at the Y it was first grown at; it has moved, and the recorded top is a minimum.
                 coordinates.Line.FlowTop = null;
                 coordinates.Line.ContentRight = LineContentRightOf(blockBox, nextY);
+                coordinates.Line.FloatLimitRight = null;
                 growLineToItsExtent(word);
             }
         }
@@ -5900,6 +5901,8 @@ namespace PeachBrackets.Html.Dom
                         {
                             actualLimitRight = lastRightIntersectingFloatBox.Location.X -
                                                lastRightIntersectingFloatBox.ActualMarginLeft - rightSpacing;
+                            var floatEdge = lastRightIntersectingFloatBox.Location.X - lastRightIntersectingFloatBox.ActualMarginLeft;
+                            coordinates.Line.FloatLimitRight = Math.Min(coordinates.Line.FloatLimitRight ?? floatEdge, floatEdge);
                         }
 
                         // RTL reserves text-indent's line-start space on this (wrap-boundary) side instead
@@ -9119,7 +9122,7 @@ namespace PeachBrackets.Html.Dom
             // it never moves the span itself - so which edge carries the indent here is what decides
             // which physical side it ends up on after mirroring.
             var isRtl = lineBox.OwnerBox.Direction.Value == DirectionMode.Rtl;
-            var lineEnd = lineBox.ContentRight - (isRtl ? indent : 0);
+            var lineEnd = lineBox.AlignmentRight - (isRtl ? indent : 0);
             var leftover = lineEnd - Math.Max(lineBox.Words[^1].Right, LineContentEnd(lineBox));
 
             // §6.1: an overflowing line is start-aligned and spills past the end edge. Distributing the
@@ -9330,7 +9333,7 @@ namespace PeachBrackets.Html.Dom
             var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
-            var right = line.ContentRight - (isRtl ? indent : 0);
+            var right = line.AlignmentRight - (isRtl ? indent : 0);
             var diff = (right - LineContentEnd(line)) / 2;
 
             // right - lastWord.Right is, by construction, exactly the shift needed to center the line
@@ -9375,7 +9378,7 @@ namespace PeachBrackets.Html.Dom
             var indent = GetLineTextIndent(line.OwnerBox, isFirstLine, line.FollowsForcedBreak);
             var isRtl = line.OwnerBox.Direction.Value == DirectionMode.Rtl;
 
-            var right = line.ContentRight - (isRtl ? indent : 0);
+            var right = line.AlignmentRight - (isRtl ? indent : 0);
             var diff = right - LineContentEnd(line);
 
             // right - lastWord.Right is, by construction, exactly the shift needed to flush the line to
