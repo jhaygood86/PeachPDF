@@ -409,6 +409,9 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     }
     PdfResources _resources = null!;
 
+    /// <summary>Forgets the cached resources, after the page's <c>/Resources</c> entry was replaced by a dictionary copied in from a file.</summary>
+    internal void ResetResources() => _resources = null!;
+
     /// <summary>
     /// Implements the interface because the primary function is internal.
     /// </summary>

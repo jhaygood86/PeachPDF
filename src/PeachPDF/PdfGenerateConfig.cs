@@ -97,12 +97,13 @@ namespace PeachPDF
         public PdfDocumentMetadata? Metadata { get; set; } = null;
 
         /// <summary>
-        /// the page size to use for each page in the generated pdf
+        /// the page size to use for each page in the generated pdf. When left <see cref="PageSize.Undefined"/> and no
+        /// <see cref="ManualPageWidth"/>/<see cref="ManualPageHeight"/> are set, pages are US Letter; an <c>@page { size }</c> rule in the document still overrides it.
         /// </summary>
         public PageSize PageSize { get; set; }
 
         /// <summary>
-        /// if the page size is undefined this allows you to set manually the page width in points
+        /// if the page size is undefined this allows you to set manually the page width in points (both dimensions must be positive, else the page is US Letter)
         /// </summary>
         public double ManualPageWidth { get; set; }
 
@@ -219,6 +220,13 @@ namespace PeachPDF
         /// which is useful for testing or debugging.
         /// </summary>
         public bool CompressContentStreams { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether the PDF is written in the linearized layout ("fast web view"): the first page's objects come first, then the
+        /// other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has
+        /// arrived. Defaults to <c>false</c>. A linearized file is slightly larger.
+        /// </summary>
+        public bool Linearize { get; set; }
 
         /// <summary>
         /// When set to <c>true</c>, PeachPDF emits a PDF/UA-style tagged structure tree

@@ -71,5 +71,17 @@ namespace PeachDrawing.PDF.Tests
             Assert.Null(measuring.AddDestinationLink(new Rect(0, 0, 1, 1), "x"));
             measuring.AddDestination("x", 1);
         }
+
+        [Fact]
+        public void APointerAreaIsIgnored_BecauseAPdfHasNoPointer()
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { CompressContentStreams = false });
+            var page = composer.AddPage(300, 200);
+            var before = Write(composer).Length;
+
+            page.Canvas.AddCursor(new Rect(10, 10, 50, 20), CursorShape.Pointer, [new CursorImage("https://example.com/c.png", 1, 2)]);
+
+            Assert.Equal(before, Write(composer).Length);
+        }
     }
 }

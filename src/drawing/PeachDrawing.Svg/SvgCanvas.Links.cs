@@ -12,6 +12,10 @@ public sealed partial class SvgCanvas
     private readonly List<string> _links = [];
     private readonly HashSet<string> _destinations = new(StringComparer.Ordinal);
 
+    // Pointer areas lie under the links: a link's area is reached first (and the browser shows its own pointer for it), so one that a cursor
+    // area happens to cover is still clickable.
+    private readonly List<string> _cursors = [];
+
     /// <inheritdoc/>
     public override object? AddLink(Rect bounds, string uri, IReadOnlyList<PaintPoint>? quad = null)
     {
@@ -25,6 +29,67 @@ public sealed partial class SvgCanvas
         ArgumentException.ThrowIfNullOrEmpty(destinationName);
         return Link("#" + SvgDefs.Escape(Uri.EscapeDataString(AnchorId(destinationName))), bounds, quad);
     }
+
+    /// <inheritdoc/>
+    public override void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage>? images = null)
+    {
+        if (_isTile || _completed is not null)
+            return;
+
+        var value = new StringBuilder();
+        if (images is not null)
+        {
+            foreach (var image in images)
+            {
+                value.Append("url('").Append(image.Uri.Replace("\\", "\\\\").Replace("'", "\\'")).Append("')");
+                if (image.HotspotX is { } x && image.HotspotY is { } y)
+                    value.Append(' ').Append(N(x)).Append(' ').Append(N(y));
+                value.Append(", ");
+            }
+        }
+
+        value.Append(CssKeyword(shape));
+        _cursors.Add($"<rect x=\"{N(bounds.X)}\" y=\"{N(bounds.Y)}\" width=\"{N(bounds.Width)}\" height=\"{N(bounds.Height)}\" fill=\"none\" pointer-events=\"all\" style=\"cursor:{SvgDefs.Escape(value.ToString())}\"/>");
+    }
+
+    private static string CssKeyword(CursorShape shape) => shape switch
+    {
+        CursorShape.None => "none",
+        CursorShape.ContextMenu => "context-menu",
+        CursorShape.Help => "help",
+        CursorShape.Pointer => "pointer",
+        CursorShape.Progress => "progress",
+        CursorShape.Wait => "wait",
+        CursorShape.Cell => "cell",
+        CursorShape.Crosshair => "crosshair",
+        CursorShape.Text => "text",
+        CursorShape.VerticalText => "vertical-text",
+        CursorShape.Alias => "alias",
+        CursorShape.Copy => "copy",
+        CursorShape.Move => "move",
+        CursorShape.NoDrop => "no-drop",
+        CursorShape.NotAllowed => "not-allowed",
+        CursorShape.Grab => "grab",
+        CursorShape.Grabbing => "grabbing",
+        CursorShape.ResizeEast => "e-resize",
+        CursorShape.ResizeNorth => "n-resize",
+        CursorShape.ResizeNorthEast => "ne-resize",
+        CursorShape.ResizeNorthWest => "nw-resize",
+        CursorShape.ResizeSouth => "s-resize",
+        CursorShape.ResizeSouthEast => "se-resize",
+        CursorShape.ResizeSouthWest => "sw-resize",
+        CursorShape.ResizeWest => "w-resize",
+        CursorShape.ResizeHorizontal => "ew-resize",
+        CursorShape.ResizeVertical => "ns-resize",
+        CursorShape.ResizeDiagonalUp => "nesw-resize",
+        CursorShape.ResizeDiagonalDown => "nwse-resize",
+        CursorShape.ResizeColumn => "col-resize",
+        CursorShape.ResizeRow => "row-resize",
+        CursorShape.ScrollAll => "all-scroll",
+        CursorShape.ZoomIn => "zoom-in",
+        CursorShape.ZoomOut => "zoom-out",
+        _ => "default",
+    };
 
     /// <inheritdoc/>
     public override void AddDestination(string name, double top)
@@ -73,6 +138,9 @@ public sealed partial class SvgCanvas
 
     private void AppendLinks()
     {
+        foreach (var cursor in _cursors)
+            _body.Append(cursor).Append('\n');
+
         foreach (var link in _links)
             _body.Append(link).Append('\n');
     }

@@ -103,6 +103,7 @@ internal static class CliRunner
         {
             PageOrientation = options.Orientation ?? PageOrientation.Portrait,
             CompressContentStreams = !options.NoCompress,
+            Linearize = options.Linearize,
             BrotliCompression = options.Brotli,
             JxlPassthrough = options.JxlPassthrough,
             EnableTaggedPdf = options.TaggedPdf,

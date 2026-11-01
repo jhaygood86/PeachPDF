@@ -181,6 +181,17 @@ public class CliArgumentParserTests
     }
 
     [Fact]
+    public void Linearize_IsParsedAndMapsToConfig()
+    {
+        var options = ArgumentParser.Parse(["--linearize", "doc.html"]);
+
+        Assert.Empty(options.Errors);
+        Assert.True(options.Linearize);
+        Assert.True(CliRunner.BuildConfig(options).Linearize);
+        Assert.False(CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).Linearize);
+    }
+
+    [Fact]
     public void NoRasterAntiAliasing_IsParsed()
     {
         var options = ArgumentParser.Parse(["--no-raster-antialiasing", "doc.html"]);

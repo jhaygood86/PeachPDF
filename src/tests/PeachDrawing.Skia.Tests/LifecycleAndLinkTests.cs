@@ -179,4 +179,30 @@ public class LifecycleAndLinkTests
         Assert.Equal("screen", context.GetCssMediaType(["screen", "print"]));
         Assert.Equal("all", context.GetCssMediaType(["print"]));
     }
+
+    [Fact]
+    public void Cursor_areas_are_recorded_for_the_host_and_the_topmost_one_wins()
+    {
+        using var scene = Scene.Create();
+        scene.Canvas.AddCursor(new Rect(0, 0, 20, 20), CursorShape.Crosshair);
+        scene.Canvas.AddCursor(new Rect(10, 10, 20, 20), CursorShape.Grab, [new CursorImage("https://example.com/c.png", 1, 2)]);
+
+        Assert.Equal(2, scene.Composer.Links.Cursors.Count);
+        Assert.Equal(CursorShape.Crosshair, scene.Composer.Links.CursorAt(2, 2)!.Shape);
+        var top = scene.Composer.Links.CursorAt(15, 15)!;
+        Assert.Equal(CursorShape.Grab, top.Shape);
+        Assert.Equal("https://example.com/c.png", Assert.Single(top.Images).Uri);
+        Assert.Null(scene.Composer.Links.CursorAt(40, 40));
+    }
+
+    [Fact]
+    public void A_cursor_added_on_a_tile_is_not_recorded()
+    {
+        using var scene = Scene.Create();
+        var (tile, _) = scene.Canvas.CreateTile(10, 10)!.Value;
+        tile.AddCursor(new Rect(0, 0, 5, 5), CursorShape.Wait);
+        tile.Dispose();
+
+        Assert.Empty(scene.Composer.Links.Cursors);
+    }
 }

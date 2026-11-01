@@ -88,6 +88,8 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
+When the config names no page size (neither `PageSize` nor both `ManualPageWidth` and `ManualPageHeight`), pages are US Letter; an `@page { size }` rule in the document still takes precedence, and setting `PageSize` or the manual dimensions overrides the default.
+
 ## Rendering a local HTML file
 
 `FileUriNetworkLoader` renders a local `.html` file and every resource it references (stylesheets, images, fonts) from disk. It sets the base URL to the file's own location — exactly like opening the file in a browser — so relative references resolve against the file's directory. Pass `null` as the HTML argument to load the root document from the file.
@@ -732,6 +734,14 @@ Each file shows up in a viewer's attachments panel and is indexed twice: in the 
 | `ModificationDate` | The file's last-modification date. Defaults to the document's creation date, so the output stays deterministic (and to the current time when the document has no creation date either). |
 
 Attachments are only allowed with a PDF/A-3 level (`PdfA3B`, `PdfA3U` or `PdfA3A`) or with no PDF/A level at all, where they are ordinary PDF attachments. PDF/A-1 forbids embedded files entirely and PDF/A-2 allows only PDF/A files, so requesting an attachment under one of those levels throws an `InvalidOperationException`. Embedded streams are Flate-compressed unless `CompressContentStreams` is turned off.
+
+### Linearized ("fast web view") output
+
+Set `PdfGenerateConfig.Linearize` (or pass `--linearize` to the CLI) to write the PDF in the linearized layout of ISO 32000-1 Annex F: the objects of the first page come first, then the other pages in order, with hint tables, so a viewer that fetches the file over a network can show the first page before the rest has arrived. It is off by default, applies to HTML and declarative documents alike, and works with AES-256 encryption, tagged PDF and interactive forms; the file is a little larger.
+
+```csharp
+var document = await generator.GeneratePdf(html, new PdfGenerateConfig { Linearize = true });
+```
 
 Attachments are a whole-document property, like `PdfAConformance`. When several `AddPdfPages`/`AddPages` calls build one document — or a declarative document has several pages — every call must specify the same attachments; the files are embedded once.
 

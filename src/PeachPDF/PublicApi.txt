@@ -68,6 +68,14 @@ PeachPDF.ImageCompression : enum Int32
   Auto = 0
   Lossless = 1
   Lossy = 2
+PeachPDF.Layout.DocumentMerge : sealed class
+  method DocumentMerge Add(Action<IDocumentBuilder> document)
+  method DocumentMerge UseContinuousPageNumbers()
+  method DocumentMerge UseOriginalPageNumbers()
+  method static DocumentMerge Of(Action<IDocumentBuilder>[] documents)
+  method static DocumentMerge Of(IEnumerable<Action<IDocumentBuilder>> documents)
+  property Int32 Count { get; }
+  property MergePageNumbering Numbering { get; }
 PeachPDF.Layout.IColumnDescriptor : interface
   method abstract IColumnDescriptor Spacing(PdfLength value)
   method abstract IContainer Item()
@@ -218,6 +226,9 @@ PeachPDF.Layout.ITextStyle : interface
   method abstract ITextStyle Superscript()
   method abstract ITextStyle Underline()
   method abstract ITextStyle WordSpacing(PdfLength spacing)
+PeachPDF.Layout.MergePageNumbering : enum Int32
+  Continuous = 1
+  Original = 0
 PeachPDF.Layout.PdfListMarkerPosition : enum Int32
   Inside = 1
   Outside = 0
@@ -437,6 +448,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Boolean EnableXmpMetadata { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
   property Boolean JxlPassthrough { get; set; }
+  property Boolean Linearize { get; set; }
   property Boolean PortableColorFilters { get; set; }
   property Boolean RasterAntiAliasing { get; set; }
   property Boolean ScaleToPageSize { get; set; }
@@ -478,12 +490,14 @@ PeachPDF.PdfGenerator : class
   ctor()
   method Task AddFontFromStream(Stream stream)
   method Task AddFontFromStream(Stream stream, IReadOnlyList<RuneRange> unicodeRanges)
+  method Task AddMergedPages(PeachPdfDocument document, DocumentMerge merge, PdfGenerateConfig config = null)
   method Task AddPages(PeachPdfDocument document, Action<IDocumentBuilder> handler, PdfGenerateConfig config = null)
   method Task AddPdfPages(PeachPdfDocument document, String html, PageSize pageSize, Int32 margin = 20, PeachPdfCssContent cssData = null)
   method Task AddPdfPages(PeachPdfDocument document, String html, PdfGenerateConfig config, PeachPdfCssContent cssData = null)
   method Task<PeachPdfCssContent> ParseStyleSheet(ReadOnlyMemory<Char> stylesheet, Boolean combineWithDefault = True)
   method Task<PeachPdfCssContent> ParseStyleSheet(String stylesheet, Boolean combineWithDefault = True)
   method Task<PeachPdfDocument> CreateDocument(Action<IDocumentBuilder> handler, PdfGenerateConfig config = null)
+  method Task<PeachPdfDocument> CreateMergedDocument(DocumentMerge merge, PdfGenerateConfig config = null)
   method Task<PeachPdfDocument> GeneratePdf(String html, PageSize pageSize, Int32 margin = 20, PeachPdfCssContent cssData = null)
   method Task<PeachPdfDocument> GeneratePdf(String html, PdfGenerateConfig config, PeachPdfCssContent cssData = null)
   method Void AddFontFamilyMapping(String fromFamily, String toFamily)

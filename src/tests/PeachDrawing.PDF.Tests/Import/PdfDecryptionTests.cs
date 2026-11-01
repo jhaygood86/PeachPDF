@@ -55,7 +55,7 @@ namespace PeachDrawing.PDF.Tests.Import
         [Fact]
         public void FileThatNeedsAPassword_IsRefused()
         {
-            var e = Assert.Throws<NotSupportedException>(() => PdfSourceDocument.Open(Bytes(Fixtures.NeedsPassword)));
+            var e = Assert.Throws<PdfPasswordException>(() => PdfSourceDocument.Open(Bytes(Fixtures.NeedsPassword)));
 
             Assert.Contains("password", e.Message);
         }
@@ -85,7 +85,7 @@ namespace PeachDrawing.PDF.Tests.Import
             using var ms = new MemoryStream();
             composer.Save(ms);
 
-            Assert.Throws<NotSupportedException>(() => PdfPageSource.Open(ms.ToArray()));
+            Assert.Throws<PdfPasswordException>(() => PdfPageSource.Open(ms.ToArray()));
         }
 
         [Theory]

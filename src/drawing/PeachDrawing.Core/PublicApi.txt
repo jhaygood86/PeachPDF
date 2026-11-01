@@ -71,6 +71,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
   method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
   method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
@@ -206,6 +207,53 @@ PeachDrawing.Core.ConicGradientBrush : sealed class
   property IReadOnlyList<Double> AnglesRadians { get; }
   property IReadOnlyList<GradientStop> Stops { get; }
   property PaintPoint Center { get; }
+PeachDrawing.Core.CursorImage : sealed class
+  ctor(String Uri, Double? HotspotX, Double? HotspotY)
+  method CursorImage <Clone>$()
+  method Void Deconstruct(out String Uri, out Double? HotspotX, out Double? HotspotY)
+  method virtual Boolean Equals(CursorImage other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double? HotspotX { get; init; }
+  property Double? HotspotY { get; init; }
+  property String Uri { get; init; }
+PeachDrawing.Core.CursorShape : enum Int32
+  Alias = 11
+  Cell = 7
+  ContextMenu = 2
+  Copy = 12
+  Crosshair = 8
+  Default = 0
+  Grab = 16
+  Grabbing = 17
+  Help = 3
+  Move = 13
+  NoDrop = 14
+  None = 1
+  NotAllowed = 15
+  Pointer = 4
+  Progress = 5
+  ResizeColumn = 30
+  ResizeDiagonalDown = 29
+  ResizeDiagonalUp = 28
+  ResizeEast = 18
+  ResizeHorizontal = 26
+  ResizeNorth = 19
+  ResizeNorthEast = 20
+  ResizeNorthWest = 21
+  ResizeRow = 31
+  ResizeSouth = 22
+  ResizeSouthEast = 23
+  ResizeSouthWest = 24
+  ResizeVertical = 27
+  ResizeWest = 25
+  ScrollAll = 32
+  Text = 9
+  VerticalText = 10
+  Wait = 6
+  ZoomIn = 33
+  ZoomOut = 34
 PeachDrawing.Core.CurveContour : sealed class
   ctor(PaintPoint Start, IReadOnlyList<PathCommand> Commands, Boolean Closed)
   method CurveContour <Clone>$()

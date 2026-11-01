@@ -60,6 +60,13 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $@"{x2}(\.\d+)? {y2}(\.\d+)? l\s*\n" +
                 $@"{x1}(\.\d+)? {y2}(\.\d+)? l\s*\nh f");
 
+        private static Regex QuadFillPattern(string colorOp, params (double X, double Y)[] points)
+        {
+            static string Number(double v) => $@"{v}(\.\d+)?";
+            var body = string.Join(@"\s*\n", points.Select((pt, i) => $"{Number(pt.X)} {Number(pt.Y)} {(i == 0 ? "m" : "l")}"));
+            return new Regex(Regex.Escape(colorOp) + @"\s*\n" + body + @"\s*\nh f");
+        }
+
         [Fact]
         public async Task AllFourEdges_PaintTheirOwnIndependentlyResolvedWidthAndColor()
         {
@@ -76,14 +83,15 @@ namespace PeachBrackets.Engine.Tests.Integration
                 "@bottom-right { content: \"R\"; width: 20pt; } }</style></head>" +
                 "<body><p>short</p></body></html>");
 
-            // top: full border-box width (60..268), PDF Y from 40 (border-box top) down to 40-4=36.
-            Assert.Matches(PolygonFillPattern("1 0 0 rg", 60, 40, 268, 36), pdfText);
-            // bottom: full border-box width, PDF Y from 8 (border-box bottom + bottom width) down to 0.
-            Assert.Matches(PolygonFillPattern("0 0 1 rg", 60, 8, 268, 0), pdfText);
-            // left: PDF X from 60 (border-box left) to 60+6=66, spanning the full box height.
-            Assert.Matches(PolygonFillPattern("0 1 0 rg", 60, 40, 66, 0), pdfText);
-            // right: PDF X from 268-2=266 to 268 (border-box right).
-            Assert.Matches(PolygonFillPattern("0 0 0 rg", 266, 40, 268, 0), pdfText);
+            // Four mitred quads (the corner squares split along the outer-to-inner diagonal, CSS Backgrounds 3 section 5.2), PDF Y flipped.
+            // top: outer 60..268 at Y 40, inner 66..266 at Y 36.
+            Assert.Matches(QuadFillPattern("1 0 0 rg", (60, 40), (268, 40), (266, 36), (66, 36)), pdfText);
+            // bottom: outer 60..268 at Y 0, inner 66..266 at Y 8.
+            Assert.Matches(QuadFillPattern("0 0 1 rg", (60, 0), (268, 0), (266, 8), (66, 8)), pdfText);
+            // left: outer down the left edge at X 60, inner at X 66.
+            Assert.Matches(QuadFillPattern("0 1 0 rg", (60, 40), (60, 0), (66, 8), (66, 36)), pdfText);
+            // right: outer at X 268, inner at X 266.
+            Assert.Matches(QuadFillPattern("0 0 0 rg", (268, 40), (268, 0), (266, 8), (266, 36)), pdfText);
         }
 
         [Fact]
@@ -251,12 +259,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             var light = BorderBevelColors.Shade(color, darken: false);
             Assert.NotEqual(dark, light);
 
-            Assert.Equal(4, bands.Count);
-
-            Assert.Equal(dark, FaceAt(bands, 0, 0, 100, 10));    // top
-            Assert.Equal(light, FaceAt(bands, 0, 40, 100, 50));  // bottom
-            Assert.Equal(dark, FaceAt(bands, 0, 0, 10, 50));     // left
-            Assert.Equal(light, FaceAt(bands, 90, 0, 100, 50));  // right
+            // Painted as one mitred L per face: top and left are the dark one, bottom and right the light one, and the corners
+            // are split on the diagonal between them.
+            Assert.Equal(2, bands.Count);
+            Assert.Equal(dark, bands[0].PaintColor);
+            Assert.Equal(light, bands[1].PaintColor);
         }
 
         [Fact]
@@ -269,12 +276,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
 
-            Assert.Equal(4, bands.Count);
-
-            Assert.Equal(light, FaceAt(bands, 0, 0, 100, 10));   // top
-            Assert.Equal(dark, FaceAt(bands, 0, 40, 100, 50));   // bottom
-            Assert.Equal(light, FaceAt(bands, 0, 0, 10, 50));    // left
-            Assert.Equal(dark, FaceAt(bands, 90, 0, 100, 50));   // right
+            Assert.Equal(2, bands.Count);
+            Assert.Equal(light, bands[0].PaintColor);
+            Assert.Equal(dark, bands[1].PaintColor);
         }
 
         [Fact]
@@ -293,21 +297,12 @@ namespace PeachBrackets.Engine.Tests.Integration
             var dark = BorderBevelColors.Shade(color, darken: true);
             var light = BorderBevelColors.Shade(color, darken: false);
 
-            Assert.Equal(8, bands.Count);
-
-            // Top: outer band first, and it is the inset face of a top edge - darkened.
-            Assert.Equal(dark, FaceAt(bands, 0, 0, 100, 5));
-            Assert.Equal(light, FaceAt(bands, 0, 5, 100, 10));
-
-            // Bottom: the outer band is the LOWER one, and the inset face of a bottom edge is lit.
-            Assert.Equal(dark, FaceAt(bands, 0, 40, 100, 45));
-            Assert.Equal(light, FaceAt(bands, 0, 45, 100, 50));
-
-            Assert.Equal(dark, FaceAt(bands, 0, 0, 5, 50));
-            Assert.Equal(light, FaceAt(bands, 5, 0, 10, 50));
-
-            Assert.Equal(dark, FaceAt(bands, 90, 0, 95, 50));
-            Assert.Equal(light, FaceAt(bands, 95, 0, 100, 50));
+            // Two mitred layers (outer half, then inner half), each an L of one face and an L of the other.
+            Assert.Equal(4, bands.Count);
+            Assert.Equal(dark, bands[0].PaintColor);
+            Assert.Equal(light, bands[1].PaintColor);
+            Assert.Equal(light, bands[2].PaintColor);
+            Assert.Equal(dark, bands[3].PaintColor);
         }
     }
 }

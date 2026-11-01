@@ -33,6 +33,14 @@ public sealed partial class Win2dCanvas
     }
 
     /// <inheritdoc />
+    public override void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage>? images = null)
+    {
+        Guard();
+        if (!_isTile)
+            Links.AddCursor(new Win2dCursorArea(bounds, shape, images ?? []));
+    }
+
+    /// <inheritdoc />
     public override void AddDestination(string name, double top)
     {
         Guard();

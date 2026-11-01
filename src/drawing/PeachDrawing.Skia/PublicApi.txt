@@ -18,6 +18,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
   method virtual Void BeginArtifact()
   method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
@@ -77,6 +78,17 @@ PeachDrawing.Skia.SkiaComposerOptions : sealed class
   ctor()
   property PaintColor? Background { get; init; }
   property SkiaLinkOptions Links { get; init; }
+PeachDrawing.Skia.SkiaCursorArea : sealed class
+  ctor(Rect Bounds, CursorShape Shape, IReadOnlyList<CursorImage> Images)
+  method SkiaCursorArea <Clone>$()
+  method Void Deconstruct(out Rect Bounds, out CursorShape Shape, out IReadOnlyList<CursorImage> Images)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SkiaCursorArea other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property CursorShape Shape { get; init; }
+  property IReadOnlyList<CursorImage> Images { get; init; }
+  property Rect Bounds { get; init; }
 PeachDrawing.Skia.SkiaImageCodec : enum Int32
   Native = 1
   PeachImage = 0
@@ -102,11 +114,14 @@ PeachDrawing.Skia.SkiaLinkActivatingEventArgs : sealed class
   property SkiaLink Link { get; }
 PeachDrawing.Skia.SkiaLinkMap : sealed class
   method Boolean TryGetDestination(String name, out Double top)
+  method SkiaCursorArea CursorAt(Double x, Double y)
+  method SkiaCursorArea CursorAtDevice(Double xDevice, Double yDevice)
   method SkiaLink HitTest(Double x, Double y)
   method SkiaLink HitTestDevice(Double xDevice, Double yDevice)
   method Task<Boolean> ActivateAsync(SkiaLink link)
   method Task<Boolean> TryActivateAsync(Double x, Double y)
   property IReadOnlyDictionary<String, Double> Destinations { get; }
+  property IReadOnlyList<SkiaCursorArea> Cursors { get; }
   property IReadOnlyList<SkiaLink> Links { get; }
 PeachDrawing.Skia.SkiaLinkOptions : sealed class
   ctor()

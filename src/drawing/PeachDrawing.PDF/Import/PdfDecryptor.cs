@@ -44,7 +44,7 @@ internal sealed class PdfDecryptor
     /// Reads the <c>/Encrypt</c> dictionary and derives the file key from the empty user password.
     /// </summary>
     /// <exception cref="NotSupportedException">the handler is not the Standard one, uses an unknown version, or needs a password</exception>
-    public static PdfDecryptor Create(PdfSourceDocument doc, PdfDictionary encrypt, byte[] firstId)
+    public static PdfDecryptor Create(PdfSourceDocument doc, PdfDictionary encrypt, byte[] firstId, string password = "")
     {
         if (doc.NameOf(encrypt.GetRaw("Filter")) != "/Standard")
             throw new NotSupportedException("The PDF uses a security handler other than the Standard one.");
@@ -67,8 +67,8 @@ internal sealed class PdfDecryptor
             throw new NotSupportedException("The PDF is encrypted with RC4, which is not supported: .NET does not provide it.");
 
         byte[] fileKey = r >= 5
-            ? FileKeyR5R6(r, u, StringBytes(doc, encrypt, "UE"))
-            : FileKeyR4(o, permissions, firstId, encryptMetadata);
+            ? FileKeyR5R6(r, u, o, StringBytes(doc, encrypt, "UE"), StringBytes(doc, encrypt, "OE"), password)
+            : FileKeyR4(o, permissions, firstId, encryptMetadata, password);
         return new PdfDecryptor(fileKey, streams, strings, encryptMetadata, r);
     }
 
@@ -93,13 +93,19 @@ internal sealed class PdfDecryptor
     // ------------------------------------------------------------ keys (ISO 32000-1 7.6.3.3, 7.6.3.4; ISO 32000-2 7.6.4.3)
 
     /// <summary>
-    /// The file key of a revision 4 file (Algorithm 2). The empty password is not checked against /U: doing so needs RC4. A file that
-    /// does need a password therefore decrypts to noise, which the caller meets as data it cannot read.
+    /// The file key of a revision 4 file (Algorithm 2) for the user password. The password is not checked against /U: doing so needs RC4,
+    /// and an owner password cannot be turned into the user password without it either. A file that does need a different password
+    /// therefore decrypts to noise, which the caller meets as data it cannot read.
     /// </summary>
-    static byte[] FileKeyR4(byte[] o, int permissions, byte[] id, bool encryptMetadata)
+    static byte[] FileKeyR4(byte[] o, int permissions, byte[] id, bool encryptMetadata, string password)
     {
         using var md5 = MD5.Create();
-        var input = new List<byte>(PasswordPadding);
+        var padded = new byte[32];
+        var given = Encoding.Latin1.GetBytes(password);
+        var count = Math.Min(32, given.Length);
+        given.AsSpan(0, count).CopyTo(padded);
+        PasswordPadding.AsSpan(0, 32 - count).CopyTo(padded.AsSpan(count));
+        var input = new List<byte>(padded);
         input.AddRange(o.AsSpan(0, Math.Min(32, o.Length)).ToArray());
         input.AddRange(BitConverter.GetBytes(permissions));
         input.AddRange(id);
@@ -109,26 +115,40 @@ internal sealed class PdfDecryptor
         return hash.AsSpan(0, 16).ToArray();
     }
 
-    static byte[] FileKeyR5R6(int r, byte[] u, byte[] ue)
+    static byte[] FileKeyR5R6(int r, byte[] u, byte[] o, byte[] ue, byte[] oe, string password)
     {
         if (u.Length < 48 || ue.Length < 32) throw new NotSupportedException("The PDF's encryption data is incomplete.");
-        byte[] empty = [];
-        var validationSalt = u.AsSpan(32, 8).ToArray();
-        var keySalt = u.AsSpan(40, 8).ToArray();
-        var check = r == 5 ? Sha256(empty, validationSalt) : PdfAes256SecurityHandler.Hash(empty, validationSalt, []);
-        if (!check.AsSpan().SequenceEqual(u.AsSpan(0, 32)))
-            throw new NotSupportedException("The PDF needs a password to open.");
-        var intermediate = r == 5 ? Sha256(empty, keySalt) : PdfAes256SecurityHandler.Hash(empty, keySalt, []);
-        using var aes = Aes.Create();
-        aes.Key = intermediate;
-        return aes.DecryptCbc(ue.AsSpan(0, 32), new byte[16], PaddingMode.None);
+        var pw = Encoding.UTF8.GetBytes(password);
+        if (pw.Length > 127) pw = pw.AsSpan(0, 127).ToArray();
+
+        byte[] Digest(byte[] salt, byte[] userKey) => r == 5 ? Sha256(pw, salt, userKey) : PdfAes256SecurityHandler.Hash(pw, salt, userKey);
+        byte[] Unwrap(byte[] intermediate, byte[] wrapped)
+        {
+            using var aes = Aes.Create();
+            aes.Key = intermediate;
+            return aes.DecryptCbc(wrapped.AsSpan(0, 32), new byte[16], PaddingMode.None);
+        }
+
+        // The user password (Algorithm 2.A step a), then the owner password, which also opens the file (step b) and is bound to the first 48 bytes of /U.
+        if (Digest(u.AsSpan(32, 8).ToArray(), []).AsSpan().SequenceEqual(u.AsSpan(0, 32)))
+            return Unwrap(Digest(u.AsSpan(40, 8).ToArray(), []), ue);
+
+        if (o.Length >= 48 && oe.Length >= 32)
+        {
+            var userKey = u.AsSpan(0, 48).ToArray();
+            if (Digest(o.AsSpan(32, 8).ToArray(), userKey).AsSpan().SequenceEqual(o.AsSpan(0, 32)))
+                return Unwrap(Digest(o.AsSpan(40, 8).ToArray(), userKey), oe);
+        }
+
+        throw new PdfPasswordException("The PDF needs a password to open.", password.Length > 0);
     }
 
-    static byte[] Sha256(byte[] password, byte[] salt)
+    static byte[] Sha256(byte[] password, byte[] salt, byte[] userKey)
     {
-        var data = new byte[password.Length + salt.Length];
+        var data = new byte[password.Length + salt.Length + userKey.Length];
         password.CopyTo(data, 0);
         salt.CopyTo(data, password.Length);
+        userKey.CopyTo(data, password.Length + salt.Length);
         return SHA256.HashData(data);
     }
 
