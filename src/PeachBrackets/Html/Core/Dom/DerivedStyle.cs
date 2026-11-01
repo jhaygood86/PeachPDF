@@ -715,7 +715,22 @@ namespace PeachBrackets.Html.Dom
             if (!value.Contains('%'))
                 return cache = CssValueParser.ParseLength(value, 0, Owner);
 
-            return CssValueParser.ParseLength(value, Owner.ContainingBlock.AvailableWidth, Owner);
+            return CssValueParser.ParseLength(value, ContainingBlockInlineSize(Owner.ContainingBlock), Owner);
+        }
+
+        /// <summary>
+        /// The inline size of <paramref name="block"/>'s content box, which a percentage padding refers to (CSS Box 3: the
+        /// "logical width" of the containing block). In a vertical writing mode that is the block's height, which its own
+        /// declared height supplies; an undeclared one is as tall as it is laid out so far.
+        /// </summary>
+        private static double ContainingBlockInlineSize(CssBox block)
+        {
+            if (block.WritingMode.Value is not (PeachBrackets.Css.WritingMode.VerticalRl or PeachBrackets.Css.WritingMode.VerticalLr))
+                return block.AvailableWidth;
+
+            var height = CssLayoutEngine.ResolveDefiniteHeightValue(block) ?? block.ActualBoxSizingHeight;
+            return Math.Max(0, height - block.ActualBorderTopWidth - block.ActualBorderBottomWidth
+                               - block.ActualPaddingTop - block.ActualPaddingBottom);
         }
 
         public double ActualPaddingTop
