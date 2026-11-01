@@ -57,10 +57,19 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task AnEmptyInlineInsideAnotherInline_CountsItsAncestorsToo()
+        public async Task AnInlineHoldingOnlyEmptyInlines_ThickensItsColumnAsOneEmptyInline()
         {
-            // The enclosing <b> has the larger font; its own inline box is on the line though it holds nothing but an empty span.
-            var empty = await ColumnThickness("vertical-rl", "text<b style='font-size:40pt'><span></span></b>more");
+            // The outer <b> contributes nothing but its own box, so it is the empty inline noted for the column.
+            var nested = await ColumnThickness("vertical-rl", "text<b style='font-size:40pt'><span></span></b>more");
+            var plain = await ColumnThickness("vertical-rl", "textmore");
+            Assert.True(nested > plain + 20, $"nested {nested}, plain {plain}");
+        }
+
+        [Fact]
+        public async Task AnEmptyInlineAmongContent_InsideAnotherInline_IsNotedWithItsAncestors()
+        {
+            // The <b> holds a word, so the walk descends into it and meets the empty <span> with <b> as an inline ancestor.
+            var empty = await ColumnThickness("vertical-rl", "text<b style='font-size:40pt'><i style='font-size:10pt'>t</i><span></span></b>more");
             var plain = await ColumnThickness("vertical-rl", "textmore");
             Assert.True(empty > plain + 20, $"empty {empty}, plain {plain}");
         }
