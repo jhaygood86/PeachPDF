@@ -335,6 +335,15 @@
         public const string MatchParent = "match-parent";
         public const string JustifyAll = "justify-all";
         public const string Fill = "fill";
+        public const string Manipulation = "manipulation";
+        public const string PanX = "pan-x";
+        public const string PanY = "pan-y";
+        public const string PanLeft = "pan-left";
+        public const string PanRight = "pan-right";
+        public const string PanUp = "pan-up";
+        public const string PanDown = "pan-down";
+        public const string PinchZoom = "pinch-zoom";
+        public const string Inert = "inert";
         public const string Stroke = "stroke";
         public const string Painted = "painted";
         public const string VisiblePainted = "visiblePainted";

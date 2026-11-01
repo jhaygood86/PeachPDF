@@ -635,6 +635,13 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter InvertedColorConverter = CurrentColorConverter.Or(Keywords.Invert);
         public static readonly IValueConverter AutoColorConverter = CurrentColorConverter.Or(Keywords.Auto);
         public static readonly IValueConverter UserSelectConverter = Map.UserSelectModes.ToConverter();
+        public static readonly IValueConverter InteractivityConverter = Map.InteractivityModes.ToConverter();
+        public static readonly IValueConverter TouchActionConverter =
+            Assign(Keywords.Auto, 0).Or(Keywords.None).Or(Keywords.Manipulation)
+                .Or(WithAny(
+                    Assign(Keywords.PanX, 0).Or(Keywords.PanLeft).Or(Keywords.PanRight).Option(),
+                    Assign(Keywords.PanY, 0).Or(Keywords.PanUp).Or(Keywords.PanDown).Option(),
+                    Assign(Keywords.PinchZoom, 0).Option()));
         // SVG 2 <paint>: the context-fill / context-stroke keywords are the paint of the context element (a use, a marker's shape, the text).
         public static readonly IValueConverter PaintConverter = UrlConverter.Or(CurrentColorConverter.OrNone())
             .Or(Keywords.ContextFill).Or(Keywords.ContextStroke);
