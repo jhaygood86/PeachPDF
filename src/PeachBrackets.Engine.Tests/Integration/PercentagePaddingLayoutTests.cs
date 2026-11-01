@@ -91,5 +91,18 @@ namespace PeachBrackets.Engine.Tests.Integration
             // The containing block's content box is 500pt wide, not the page.
             Assert.Equal(50, box.ActualPaddingLeft, 3);
         }
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task Padding_Percentage_InAVerticalWritingMode_RefersToTheContainingBlocksInlineSize(string mode)
+        {
+            // The containing block is 200pt wide and 400pt tall; its inline size is its height, so 10% is 40pt on all sides.
+            var box = await BoxAsync($"<div style='writing-mode:{mode};width:200pt;height:400pt'><div id='t' style='padding:10%'></div></div>");
+
+            Assert.Equal(40, box.ActualPaddingLeft, 3);
+            Assert.Equal(40, box.ActualPaddingTop, 3);
+            Assert.Equal(40, box.ActualPaddingRight, 3);
+            Assert.Equal(40, box.ActualPaddingBottom, 3);
+        }
     }
 }
