@@ -178,6 +178,66 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(80, abs.ActualHeight, 1.5);
         }
 
+        // ─── §10.1 / §10.2: percentage insets resolve against the PADDING box (issue #224) ──
+        //
+        // The ancestor is 100pt + 2*10pt padding + 2*5pt border: content 100, padding box 120, border box
+        // 130. Every percentage inset below is 10%, i.e. 12pt of the padding box (13pt of the border box,
+        // 10pt of the content box - the two wrong bases), so a wrong base moves the answer by >= 1pt.
+
+        private const string PaddedAncestor =
+            "<div id='pos' style='position:relative; width:100pt; height:100pt; padding:10pt; border:5pt solid;'>";
+
+        [Fact]
+        public async Task AbsoluteAutoWidth_PercentageInsets_FillThePaddingBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                PaddedAncestor + "<div id='abs' style='position:absolute; left:10%; right:10%;'></div></div>"));
+            var pos = FindById(root, "pos")!;
+            var abs = FindById(root, "abs")!;
+            var paddingLeft = pos.Location.X + 5;
+
+            Assert.Equal(120 * 0.8, abs.Size.Width, 0.5);
+            Assert.Equal(paddingLeft + 12, abs.Location.X, 0.5);
+            Assert.Equal(paddingLeft + 120 - 12, abs.ActualRight, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteAutoHeight_PercentageInsets_FillThePaddingBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                PaddedAncestor + "<div id='abs' style='position:absolute; top:10%; bottom:10%; width:20pt;'></div></div>"));
+            var pos = FindById(root, "pos")!;
+            var abs = FindById(root, "abs")!;
+            var paddingTop = pos.Location.Y + 5;
+
+            Assert.Equal(120 * 0.8, abs.ActualHeight, 0.5);
+            Assert.Equal(paddingTop + 12, abs.Location.Y, 0.5);
+            Assert.Equal(paddingTop + 120 - 12, abs.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteLeftAndPercentageWidth_ResolveAgainstThePaddingBox()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                PaddedAncestor + "<div id='abs' style='position:absolute; left:10%; width:50%; height:10pt;'></div></div>"));
+            var pos = FindById(root, "pos")!;
+            var abs = FindById(root, "abs")!;
+
+            Assert.Equal(pos.Location.X + 5 + 12, abs.Location.X, 0.5);
+            Assert.Equal(60, abs.Size.Width, 0.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteRightPercentage_WithAutoLeft_MeasuresFromThePaddingBoxRightEdge()
+        {
+            var (root, _) = await BuildAndLayout(Wrap(
+                PaddedAncestor + "<div id='abs' style='position:absolute; right:10%; width:20pt; height:10pt;'></div></div>"));
+            var pos = FindById(root, "pos")!;
+            var abs = FindById(root, "abs")!;
+
+            Assert.Equal(pos.Location.X + 5 + 120 - 12, abs.ActualRight, 0.5);
+        }
+
         // ─── §10.1 containing block for content inside a detached <thead>/<tfoot> (issue #787) ──
         //
         // vertical-align:top on every cell below is deliberate, not incidental: it neutralizes the
