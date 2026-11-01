@@ -2121,6 +2121,9 @@ namespace PeachBrackets.Html.Dom
 
         #region Line-height
 
+        /// <summary>Whether <c>line-height</c> is anything but <c>normal</c> (which comes from the font's own metrics).</summary>
+        internal bool HasDeclaredLineHeight => Style.Text.LineHeight.Value.Value is not null;
+
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight
         {
