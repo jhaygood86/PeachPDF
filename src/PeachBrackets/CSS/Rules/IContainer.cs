@@ -13,5 +13,11 @@ namespace PeachBrackets.Css
         /// ordinary size-feature <c>@container</c> condition.
         /// </summary>
         IStyleQueryCondition StyleCondition { get; set; }
+
+        /// <summary>
+        /// The parsed condition tree when the rule combines size features and <c>style()</c> queries in one
+        /// <c>&lt;container-condition&gt;</c>; <c>null</c> otherwise.
+        /// </summary>
+        IContainerQueryTerm MixedCondition { get; set; }
     }
 }

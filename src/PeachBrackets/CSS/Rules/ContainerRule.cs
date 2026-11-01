@@ -27,6 +27,8 @@ namespace PeachBrackets.Css
 
         public IStyleQueryCondition StyleCondition { get; set; }
 
+        public IContainerQueryTerm MixedCondition { get; set; }
+
         public string ConditionText
         {
             // A style() condition has no MediaList content (Media stays empty) - StylesheetComposer.
@@ -34,7 +36,7 @@ namespace PeachBrackets.Css
             // placeholder rather than reconstructing the original style() text (this rule's condition
             // tree isn't retained in a serializable form - a known simplification, since re-serializing
             // a style() query is not needed by anything layout/evaluation-side reads).
-            get => StyleCondition is not null ? "style(...)" : Media.MediaText;
+            get => StyleCondition is not null || MixedCondition is not null ? "style(...)" : Media.MediaText;
             set => Media.MediaText = value;
         }
     }

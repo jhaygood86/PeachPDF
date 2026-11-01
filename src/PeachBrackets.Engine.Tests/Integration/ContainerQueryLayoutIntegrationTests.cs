@@ -523,6 +523,79 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(Red, box.Color);
         }
 
+        // ── a condition mixing size features and style() queries (CSS Containment 3 section 3) ──
+
+        // The container is 300px wide and has --theme: dark.
+        [Theory]
+        [InlineData("(min-width: 200px) and style(--theme: dark)", true)]
+        [InlineData("style(--theme: dark) and (min-width: 200px)", true)]
+        [InlineData("(min-width: 400px) and style(--theme: dark)", false)]
+        [InlineData("(min-width: 200px) and style(--theme: light)", false)]
+        [InlineData("(min-width: 400px) or style(--theme: dark)", true)]
+        [InlineData("(min-width: 200px) or style(--theme: light)", true)]
+        [InlineData("(min-width: 400px) or style(--theme: light)", false)]
+        [InlineData("not style(--theme: light)", true)]
+        [InlineData("(min-width: 200px) and not style(--theme: light)", true)]
+        [InlineData("(min-width: 200px) and not style(--theme: dark)", false)]
+        [InlineData("((min-width: 400px) or style(--theme: dark)) and (max-width: 400px)", true)]
+        [InlineData("((min-width: 400px) or style(--theme: light)) and (max-width: 400px)", false)]
+        [InlineData("style(--theme: dark) and style(--theme: dark)", true)]
+        [InlineData("style(--theme: dark) and style(--theme: light)", false)]
+        [InlineData("(width >= 300px) and style(--theme: dark)", true)]
+        public async Task MixedSizeAndStyleCondition_IsEvaluatedLeafByLeaf(string condition, bool shouldApply)
+        {
+            var html = Html(
+                "#box { container-type: inline-size; width: 300px; --theme: dark; } " +
+                "p { color: #ff0000; } " +
+                "@container " + condition + " { p { color: #0000ff; } }",
+                "<div id='box'><p>text</p></div>");
+
+            var box = await FindByTag(html, "p");
+            Assert.Equal(shouldApply ? Blue : Red, box.Color);
+        }
+
+        [Fact]
+        public async Task MixedCondition_WithANameQueriesTheNamedContainer()
+        {
+            var html = Html(
+                "#outer { container: outer / inline-size; width: 500px; --theme: dark; } " +
+                "#inner { container: inner / inline-size; width: 100px; --theme: light; } " +
+                "p { color: #ff0000; } " +
+                "@container outer (min-width: 400px) and style(--theme: dark) { p { color: #0000ff; } }",
+                "<div id='outer'><div id='inner'><p>text</p></div></div>");
+
+            var box = await FindByTag(html, "p");
+            Assert.Equal(Blue, box.Color);
+        }
+
+        [Fact]
+        public async Task MixedCondition_WithNoSizeContainer_IsUnknownAndDoesNotApply()
+        {
+            // Unknown (no size container) is falsy even under not.
+            var html = Html(
+                "p { color: #ff0000; } @container not ((min-width: 100px) and style(--theme: dark)) { p { color: #0000ff; } }",
+                "<div id='box' style='--theme: dark;'><p>text</p></div>");
+
+            var box = await FindByTag(html, "p");
+            Assert.Equal(Red, box.Color);
+        }
+
+        [Theory]
+        [InlineData("(min-width: 100px) and style(--theme: dark) or style(--theme: dark)")]
+        [InlineData("(min-width: 100px) and")]
+        [InlineData("style(--theme: dark) and ((min-width: 100px)")]
+        public async Task MalformedMixedCondition_MatchesNothing(string condition)
+        {
+            var html = Html(
+                "#box { container-type: inline-size; width: 300px; --theme: dark; } " +
+                "p { color: #ff0000; } " +
+                "@container " + condition + " { p { color: #0000ff; } }",
+                "<div id='box'><p>text</p></div>");
+
+            var box = await FindByTag(html, "p");
+            Assert.Equal(Red, box.Color);
+        }
+
         // ─── Harness ──────────────────────────────────────────────────────────
 
         private static string Html(string css, string body) =>
