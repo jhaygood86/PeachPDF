@@ -22,7 +22,7 @@ the public surface is designed from PeachPDF's requirements and from the specifi
 5. **Every PR that adds public API updates the register below.** The maintainer reviewed the first slice's register and found
    the naming fine, and then waived the per-PR review for the rest of the stack (2026-09-26): the author picks the
    spec-derived name and records its origin, and a PR is not held for a naming review. A collision found later is renamed,
-   not defended. `src/PeachDrawing.Text/PublicApi.txt` is the reviewed snapshot of the
+   not defended. `src/drawing/PeachDrawing.Text/PublicApi.txt` is the reviewed snapshot of the
    whole surface; `PublicSurfaceTests` fails when the surface and the file disagree, so nothing becomes public by accident.
 
 ## Register
