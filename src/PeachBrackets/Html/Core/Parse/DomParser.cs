@@ -4208,7 +4208,7 @@ namespace PeachBrackets.Html.Parse
         private static void CorrectAnonymousTablesGenerateMissingChildWrappers(CssBox box)
         {
             // 2.1 If a child C of a 'table' or 'inline-table' box is not a proper table child, then generate an anonymous 'table-row' box around C and all consecutive siblings of C that are not proper table children.
-            if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Table)
+            if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable)
             {
                 if (!DomUtils.IsProperTableChild(box))
                 {

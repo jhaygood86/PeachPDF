@@ -33,6 +33,7 @@ namespace PeachBrackets.Html.Dom
         internal NamedPageElement? RegisteredNamedPageElement;
         internal RunningElement? RegisteredRunningElement;
         internal double _appliedPositionedAutoMarginTop;
+        internal double _placedPercentageInsetTop;
         internal bool IsRoot;
         internal bool IsBeforePseudoElement;
         internal bool IsAfterPseudoElement;

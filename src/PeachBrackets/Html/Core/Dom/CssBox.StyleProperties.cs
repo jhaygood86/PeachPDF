@@ -726,7 +726,7 @@ namespace PeachBrackets.Html.Dom
         internal string ResolveFontSizeValueComputation(string value)
         {
             var trimmed = value.Trim();
-            if (CssValueParser.IsCalcFunction(value) && IsParentRelativeOnlyCalc(value))
+            if (CssValueParser.IsCalcFunction(value))
             {
                 // Computed value is an absolute length that descendants inherit (CSS Fonts 4 §2.5); left as
                 // text, every inheriting descendant would apply the calc() again against its own parent.
@@ -734,8 +734,21 @@ namespace PeachBrackets.Html.Dom
                 var parentSizePt = calcParent is null
                     ? DefaultFontResolver.FontSize
                     : calcParent.GetEmHeight();
-                var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
-                return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+
+                if (IsParentRelativeOnlyCalc(value))
+                {
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
+                    return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+                }
+
+                // rem, a root-element unit, a viewport unit or a container unit still needs a layout-time basis, so the
+                // calc() stays lazy - but its parent-relative terms are known now and are made absolute, so a descendant
+                // that inherits the text has nothing left to measure against its own parent.
+                return ParentRelativeTerm().Replace(trimmed, match =>
+                {
+                    var points = FontSizeResolver.Resolve(match.Value, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
+                    return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+                });
             }
 
             if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent)
@@ -761,6 +774,10 @@ namespace PeachBrackets.Html.Dom
 
             return value;
         }
+
+        /// <summary>A number with a parent-relative unit (or a percentage) inside a <c>font-size</c> <c>calc()</c>.</summary>
+        [System.Text.RegularExpressions.GeneratedRegex(@"(?<![\w.])[-+]?(?:\d+\.?\d*|\.\d+)(?:em|ex|ch|cap|ic|lh|%)(?![\w%])", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
+        private static partial System.Text.RegularExpressions.Regex ParentRelativeTerm();
 
         /// <summary>
         /// Whether a <c>font-size</c> <c>calc()</c> uses only absolute units and the parent-relative ones

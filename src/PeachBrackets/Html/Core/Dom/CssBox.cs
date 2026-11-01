@@ -457,6 +457,7 @@ namespace PeachBrackets.Html.Dom
         // The used auto block-start margin currently translated into this positioned box's geometry.
         // A content-sized containing block can revise the provisional answer after its own height settles.
         private double _appliedPositionedAutoMarginTop { get => _rare is null ? default(double) : _rare._appliedPositionedAutoMarginTop; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare._appliedPositionedAutoMarginTop = value; } }
+        private double _placedPercentageInsetTop { get => _rare is null ? default(double) : _rare._placedPercentageInsetTop; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare._placedPercentageInsetTop = value; } }
 
         /// <summary>
         /// Is the box is of "br" element.
@@ -1184,6 +1185,15 @@ namespace PeachBrackets.Html.Dom
             // first place; an auto/indefinite-percentage height still needs the live (by-then-settled)
             // read (issue #805).
             var rawHeightPt = container.ResolveDefiniteHeightPt() ?? container.ClientBottom - container.ClientTop;
+
+            // A container with no layout in this pass yet (it is being cascaded - word splitting reads a text box's font
+            // before any layout exists) has no size to offer. The previous pass's is the best answer there is, and the
+            // convergence loop re-runs the pass until the sizes agree.
+            if (rawWidthPt <= 0 && HtmlContainer?.PreviousPassContainerSizes is { } previous
+                && previous.TryGet(container.Id, out var earlier))
+            {
+                return (earlier.WidthPt, earlier.HeightPt, earlier.InlineSizePt, earlier.BlockSizePt);
+            }
 
             double? widthPt = rawWidthPt;
             double? heightPt = isSizeContainer ? rawHeightPt : null;
@@ -7227,17 +7237,117 @@ namespace PeachBrackets.Html.Dom
         private static double ResolveNearFarOffset(
             CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> near,
             CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> far,
-            double basis, CssBox box)
+            double? basis, CssBox box)
         {
+            // A percentage against an indefinite basis computes to `auto` (the engines agree, css-position-3
+            // section 3.3 then takes over: auto near with a set far offset moves the box the other way).
             var nearValue = near.Value;
             var farValue = far.Value;
+            var nearSet = nearValue.IsValue && (basis is not null || !DependsOnPercentage(nearValue.Value!.Value));
+            var farSet = farValue.IsValue && (basis is not null || !DependsOnPercentage(farValue.Value!.Value));
 
-            if (nearValue.IsValue || !farValue.IsValue)
+            if (nearSet || !farSet)
             {
-                return nearValue.Value is { } n ? CssValueParser.ParseLength(n, basis, box) : 0;
+                return nearSet ? CssValueParser.ParseLength(nearValue.Value!.Value, basis ?? 0, box) : 0;
             }
 
-            return -CssValueParser.ParseLength(farValue.Value!.Value, basis, box);
+            return -CssValueParser.ParseLength(farValue.Value!.Value, basis ?? 0, box);
+        }
+
+        /// <summary>
+        /// Places an absolutely positioned box with <c>top: auto</c> and a set <c>bottom</c> against its containing
+        /// block's bottom edge. Idempotent (it moves by the difference from where the box is), so the containing block can
+        /// run it again with its final height: <paramref name="finalizedBorderBoxHeight"/> is that height, or null to read the
+        /// ancestor's provisional one.
+        /// </summary>
+        private void PlaceAbsoluteBottomEdge(double? finalizedBorderBoxHeight)
+        {
+            var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
+            var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
+
+            var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, AbsoluteContainingBlockHeight(nearestPositionedAncestor, finalizedBorderBoxHeight), this);
+
+            // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
+            // before its children are laid out - see the GetBoxWidth call earlier in this
+            // method), a block-container ancestor's ActualBottom is only finalized by
+            // ApplyHeight/MarginBottomCollapse AFTER all of its children (including this box)
+            // have already run their own PerformLayoutImp - so ClientBottom here would still be
+            // reading a provisional, usually-wrong value. Resolve the ancestor's border-box
+            // height directly from its own declared CSS Height (independent of child layout
+            // order) when it has one; only fall back to its (possibly still-provisional)
+            // ActualBottom for an auto-height ancestor, where there is no better source yet.
+            var ancestorPaddingBoxBottom = inlineContainingBlock?.Bottom
+                ?? nearestPositionedAncestor.Location.Y
+                   + (finalizedBorderBoxHeight ?? CssLayoutEngine.GetBoxHeight(nearestPositionedAncestor)
+                      ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y)
+                   - nearestPositionedAncestor.ActualBorderBottomWidth;
+
+            var actualBottom = ancestorPaddingBoxBottom - bottom;
+
+            var delta = actualBottom - ActualBottom;
+
+            OffsetTop(delta);
+        }
+
+        /// <summary>
+        /// Re-places an absolutely positioned box whose <c>top</c> or <c>bottom</c> is a percentage, now that the
+        /// auto-height containing block that forms its basis has its final height
+        /// (<paramref name="finalizedBorderBoxHeight"/>); the first placement could only see a provisional one.
+        /// </summary>
+        private void RevisePercentageInsets(double finalizedBorderBoxHeight)
+        {
+            if (Position.Value is not PositionMode.Absolute) return;
+
+            if (Top.Value.IsValue)
+            {
+                if (!DependsOnPercentage(Top.Value.Value!.Value)) return;
+
+                var ancestor = DomUtils.GetNearestPositionedAncestor(this);
+                var offset = CssValueParser.ParseLength(Top.Value.Value!.Value,
+                    AbsoluteContainingBlockHeight(ancestor, finalizedBorderBoxHeight), this);
+                var shift = offset - _placedPercentageInsetTop;
+
+                if (Math.Abs(shift) > 0.01) OffsetTop(shift);
+                _placedPercentageInsetTop = offset;
+            }
+            else if (Bottom.Value.IsValue && DependsOnPercentage(Bottom.Value.Value!.Value))
+            {
+                PlaceAbsoluteBottomEdge(finalizedBorderBoxHeight);
+            }
+        }
+
+        private static bool DependsOnPercentage(LengthOrCalc value) =>
+            value.IsCalc ? value.CalcText!.Contains('%') : value.Length!.Value.Type == Length.Unit.Percent;
+
+        /// <summary>
+        /// The height a <c>top</c>/<c>bottom</c> percentage on a relatively positioned box refers to: its containing
+        /// block's content height, or null when that block's height is not definite.
+        /// </summary>
+        private static double? RelativeContainingBlockHeight(CssBox box)
+        {
+            var block = box.ContainingBlock;
+            if (CssLayoutEngine.ResolveDefiniteHeightValue(block) is not { } height) return null;
+
+            return Math.Max(0, height - block.ActualBorderTopWidth - block.ActualBorderBottomWidth
+                               - block.ActualPaddingTop - block.ActualPaddingBottom);
+        }
+
+        /// <summary>
+        /// The height of an absolutely positioned box's containing block, which <paramref name="ancestor"/> (the nearest
+        /// positioned ancestor) forms: an inline's own rectangle, or a block's padding box (CSS 2.1 section 10.1). The
+        /// ancestor's declared height is read directly, since its content-driven <c>ActualHeight</c> is still provisional
+        /// while its children are being placed.
+        /// </summary>
+        private static double AbsoluteContainingBlockHeight(CssBox ancestor, double? finalizedBorderBoxHeight = null)
+        {
+            if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
+                return inlineContainingBlock.Height;
+
+            var borderBoxHeight = finalizedBorderBoxHeight
+                ?? CssLayoutEngine.GetBoxHeight(ancestor)
+                ?? ancestor.ActualHeight;
+
+            return Math.Max(0, borderBoxHeight - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
         }
 
         /// <summary>
@@ -7364,8 +7474,12 @@ namespace PeachBrackets.Html.Dom
                     // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
                     // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
                     // bar paints 1em lower, but ".chin"'s position must not move with it.
-                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ActualWidth, child);
-                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, child.ActualHeight, child);
+                    //
+                    // A percentage refers to the containing block's width (left/right) or height (top/bottom),
+                    // not the box's own size (CSS Positioned Layout 3 section 3.1). A containing block whose
+                    // height is not definite leaves a top/bottom percentage as `auto`, as every engine does.
+                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ContainingBlock.AvailableWidth, child);
+                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, RelativeContainingBlockHeight(child), child);
 
                     child.RelativeOffsetX = offsetX;
                     child.RelativeOffsetY = offsetY;
@@ -7414,8 +7528,8 @@ namespace PeachBrackets.Html.Dom
                     var left = containingBlockLeft + child.ActualMarginLeft +
                                ResolveOffsetOrZero(child.Left, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, child);
 
-                    var top = containingBlockTop + child.ActualMarginTop +
-                              ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, child);
+                    child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
+                    var top = containingBlockTop + child.ActualMarginTop + child._placedPercentageInsetTop;
 
                     child.Location = new PaintPoint(left, top);
                 }
@@ -7712,31 +7826,7 @@ namespace PeachBrackets.Html.Dom
                 // relative to its bottom edge.
                 if (Top.Value.IsKeyword && Bottom.Value.IsValue)
                 {
-                    var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
-                    var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
-
-                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, this);
-
-                    // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
-                    // before its children are laid out - see the GetBoxWidth call earlier in this
-                    // method), a block-container ancestor's ActualBottom is only finalized by
-                    // ApplyHeight/MarginBottomCollapse AFTER all of its children (including this box)
-                    // have already run their own PerformLayoutImp - so ClientBottom here would still be
-                    // reading a provisional, usually-wrong value. Resolve the ancestor's border-box
-                    // height directly from its own declared CSS Height (independent of child layout
-                    // order) when it has one; only fall back to its (possibly still-provisional)
-                    // ActualBottom for an auto-height ancestor, where there is no better source yet.
-                    var ancestorPaddingBoxBottom = inlineContainingBlock?.Bottom
-                        ?? nearestPositionedAncestor.Location.Y
-                           + (CssLayoutEngine.GetBoxHeight(nearestPositionedAncestor)
-                              ?? nearestPositionedAncestor.ActualBottom - nearestPositionedAncestor.Location.Y)
-                           - nearestPositionedAncestor.ActualBorderBottomWidth;
-
-                    var actualBottom = ancestorPaddingBoxBottom - bottom;
-
-                    var delta = actualBottom - ActualBottom;
-
-                    OffsetTop(delta);
+                    PlaceAbsoluteBottomEdge(null);
                 }
             }
 
@@ -7822,6 +7912,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     if (child.Position.Value == PositionMode.Absolute)
                     {
+                        child.RevisePercentageInsets(ActualHeight);
                         child.ResolvePositionedAutoBlockMargins(ActualHeight);
                         child.ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
 
@@ -7884,20 +7975,7 @@ namespace PeachBrackets.Html.Dom
             {
                 var ancestor = DomUtils.GetNearestPositionedAncestor(this);
 
-                if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
-                {
-                    containingBlockHeight = inlineContainingBlock.Height;
-                }
-                else
-                {
-                    var ancestorBorderBoxHeight = finalizedAncestorBorderBoxHeight
-                        ?? CssLayoutEngine.GetBoxHeight(ancestor)
-                        ?? ancestor.ActualHeight;
-
-                    // An absolute containing block formed by a block box is its padding box (§10.1).
-                    containingBlockHeight = Math.Max(0, ancestorBorderBoxHeight
-                        - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
-                }
+                containingBlockHeight = AbsoluteContainingBlockHeight(ancestor, finalizedAncestorBorderBoxHeight);
             }
 
             var top = CssValueParser.ParseLength(Top.Value.Value!.Value, containingBlockHeight, this);
