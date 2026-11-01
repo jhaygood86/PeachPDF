@@ -424,7 +424,7 @@ namespace PeachBrackets.Html.Handlers
                     // device-scaling correction below is specific to this call site. The measured units read
                     // the painting box's own font even when emSizePt overrides the em basis (a margin box):
                     // the ratio is a property of the font, the override only rescales it.
-                    var emBasisPt = emSizePt ?? box.GetEmHeight() * pixelsPerPoint;
+                    var emBasisPt = emSizePt ?? box.GetEmHeight();
                     return len.ToPixels(emBasisPt, 0, 0.0, fonts: box.DerivedStyle) * pixelsPerPoint;
                 case Length.Unit.Rem:
                 case Length.Unit.Rex:
@@ -432,7 +432,7 @@ namespace PeachBrackets.Html.Handlers
                 case Length.Unit.Rcap:
                 case Length.Unit.Ric:
                 case Length.Unit.Rlh:
-                    return len.ToPixels(0, box.GetRemHeight() * pixelsPerPoint, 0.0, fonts: box.DerivedStyle) * pixelsPerPoint;
+                    return len.ToPixels(0, box.GetRemHeight(), 0.0, fonts: box.DerivedStyle) * pixelsPerPoint;
                 default:
                     return len.IsAbsolute
                         ? len.ToPixel() * pixelsPerPoint

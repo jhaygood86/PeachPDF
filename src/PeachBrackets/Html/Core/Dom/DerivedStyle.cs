@@ -1113,8 +1113,7 @@ namespace PeachBrackets.Html.Dom
             if (!double.IsNaN(ActualLetterSpacing)) return;
 
             // A percentage is a fraction of the box's own font size (CSS Text 4 leaves the basis to the UA).
-            // GetEmHeight() is in the device-scaled font-measurement space, so undo that scaling the same
-            // way NoEms does before using it as the 100% basis in layout units.
+            // GetEmHeight() is in true points; the 100% basis is in layout units.
             var fontSizeBasis = Owner.GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
 
             _actualLetterSpacing = Style.Text.LetterSpacing.Value is { IsValue: true, Value: { } letterSpacing }
@@ -1634,23 +1633,10 @@ namespace PeachBrackets.Html.Dom
 
                 if (parentBox is not null)
                 {
-                    // parentBox.ActualFont.Size (like GetRemHeight()'s own ActualFont.Size read below) is
-                    // in the adapter's device-scaled font-measurement space - CreateFontInt divides a
-                    // requested size by PixelsPerPoint once to get there. FontSizeResolver.Resolve expects
-                    // its parentSize/remSize inputs in true CSS points (the same space Style.Font.FontSize
-                    // itself is authored in), so the device scaling has to be undone here before handing
-                    // it in - otherwise a relative font-size (em/%/smaller/larger) resolves against a
-                    // reference that's already off by PixelsPerPoint, then gets divided by PixelsPerPoint
-                    // again when its own font is created, compounding into a value that's wrong by roughly
-                    // PixelsPerPoint² instead of exactly right. PixelsPerPoint is usually 1.0 (so this was
-                    // invisible) but a non-default PixelsPerInch, or ShrinkToFit/ScaleToPageSize, both
-                    // legitimately move it away from 1.0 - verified directly by generating PDFs at a
-                    // non-default PixelsPerInch and confirming the stored/computed font size lands on the
-                    // spec-correct value (see FontSizeInheritanceIntegrationTests.cs, and this fix's own
-                    // commit message for the reasoning).
-                    var pixelsPerPoint = Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
-                    parentSize = parentBox.DerivedStyle.GetEmHeight() * pixelsPerPoint;
-                    remSize = GetRemHeight() * pixelsPerPoint;
+                    // ActualFont.Size is the font's size in true CSS points whatever the layout scale (GetCachedFont
+                    // requests it in layout units), which is what FontSizeResolver.Resolve takes for parentSize/remSize.
+                    parentSize = parentBox.DerivedStyle.GetEmHeight();
+                    remSize = GetRemHeight();
                 }
                 else
                 {
@@ -2089,7 +2075,7 @@ namespace PeachBrackets.Html.Dom
         private double LineHeightRatio(double pixelsPerPoint)
         {
             var font = ActualFont;
-            var em = GetEmHeight() * pixelsPerPoint * pixelsPerPoint;
+            var em = GetEmHeight() * pixelsPerPoint;
             if (em <= 0) return FontMetricRatios.Approximate(FontMetric.Lh);
 
             // CSS Values 4 §6.1.1: in the line-height property itself, lh is the PARENT's line-height (a box's

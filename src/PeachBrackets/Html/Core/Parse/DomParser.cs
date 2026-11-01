@@ -728,12 +728,12 @@ namespace PeachBrackets.Html.Parse
                 .Select(r => r.Style?.FontSize)
                 .LastOrDefault(fs => !string.IsNullOrEmpty(fs));
             var emPt = string.IsNullOrEmpty(basePageFontSize)
-                ? root.GetEmHeight() * pixelsPerPoint
+                ? root.GetEmHeight()
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
             var lengthContext = new PageLengthContext(
                 emPt,
-                root.GetRemHeight() * pixelsPerPoint,
+                root.GetRemHeight(),
                 htmlContainer.PageSize.Width / pixelsPerPoint,
                 htmlContainer.PageSize.Height / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;

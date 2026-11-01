@@ -1864,7 +1864,7 @@ namespace PeachBrackets.Svg
                     if (shadow.Blur <= 0)
                     {
                         g.PushTransform(shadowMatrix);
-                        g.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                        DrawUserText(g, text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
                         g.PopTransform();
                         continue;
                     }
@@ -1885,7 +1885,7 @@ namespace PeachBrackets.Svg
                         continue;
 
                     transformedLayer.Canvas.PushTransform(shadowMatrix);
-                    transformedLayer.Canvas.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                    DrawUserText(transformedLayer.Canvas, text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
                     transformedLayer.Canvas.PopTransform();
                     continue;
                 }
@@ -1893,7 +1893,7 @@ namespace PeachBrackets.Svg
                 var point = new PaintPoint(drawX + shadow.Dx, drawY + shadow.Dy);
                 if (shadow.Blur <= 0)
                 {
-                    g.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                    DrawUserText(g, text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
                     continue;
                 }
 
@@ -1908,8 +1908,30 @@ namespace PeachBrackets.Svg
                     continue;
 
                 using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(left, top, right - left, bottom - top), Effects: [new BlurEffect(shadow.Blur / 2)]));
-                layer?.Canvas.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                if (layer is not null)
+                    DrawUserText(layer.Canvas, text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
             }
+        }
+
+        /// <summary>
+        /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/> for text
+        /// placed in SVG user units. Inside the viewBox transform a user unit is already a point, but the canvas takes the position and
+        /// size in layout units and divides them (and the font, requested in user units) by <see cref="Canvas.PixelsPerPoint"/>; scaling
+        /// by it first cancels that, so the text lands where and as large as the rest of the artwork.
+        /// </summary>
+        private static void DrawUserText(Canvas g, string str, Font font, PaintColor color, PaintPoint point, Size size,
+            double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
+        {
+            var pixelsPerPoint = g.PixelsPerPoint;
+            if (pixelsPerPoint == 1.0)
+            {
+                g.DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText);
+                return;
+            }
+
+            g.PushTransform(Matrix3x2.CreateScale((float)pixelsPerPoint));
+            g.DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText);
+            g.PopTransform();
         }
 
         private static bool IsCjk(string text)
@@ -2059,7 +2081,7 @@ namespace PeachBrackets.Svg
                     return;
 
                 var solid = ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity);
-                g.DrawString(text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                DrawUserText(g, text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -2151,7 +2173,7 @@ namespace PeachBrackets.Svg
             g.InvisibleText = true;
             try
             {
-                g.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                DrawUserText(g, text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
             }
             finally
             {
@@ -2172,7 +2194,7 @@ namespace PeachBrackets.Svg
         {
             if (fill.Kind == SvgPaintKind.Solid && !hasStroke && bend is null)
             {
-                g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                DrawUserText(g, text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -2200,7 +2222,7 @@ namespace PeachBrackets.Svg
             if (frame is { } coverageFrame)
                 coverage.Graphics.PushTransform(coverageFrame);
 
-            coverage.Graphics.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+            DrawUserText(coverage.Graphics, text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
 
             if (frame is not null)
                 coverage.Graphics.PopTransform();
@@ -2769,7 +2791,7 @@ namespace PeachBrackets.Svg
                     return;
 
                 g.PushTransform(placed.Frame);
-                g.DrawString(gi.Glyph, gi.Font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: gi.LogicalGlyph);
+                DrawUserText(g, gi.Glyph, gi.Font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: gi.LogicalGlyph);
                 g.PopTransform();
                 return;
             }

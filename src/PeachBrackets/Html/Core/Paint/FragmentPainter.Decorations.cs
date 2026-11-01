@@ -343,6 +343,11 @@ namespace PeachBrackets.Html.Paint
                     // agree only for the simplest single-nested-contour case.
                     union.FillMode = FillMode.Nonzero;
                 }
+                // GetTextOutline builds in layout units (the units of the origin it is given); a path reaches the canvas in
+                // points, like every other box-geometry path.
+                if (g.PixelsPerPoint != 1.0)
+                    outline.Transform(System.Numerics.Matrix3x2.CreateScale((float)(1.0 / g.PixelsPerPoint)));
+
                 union.AddPath(outline);
                 outline.Dispose();
             }

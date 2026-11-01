@@ -146,14 +146,10 @@ namespace PeachBrackets.Engine.Tests.Integration
                 """, ppp);
 
             // MarginTopPt stays in true points; the band height applies the ppp scaling exactly
-            // once (issue-#113 discipline): band = sheetPx - (mT + mB) * ppp. GetEmHeight() itself
-            // is in the adapter's device-scaled font-measurement space (CreateFontInt divides a
-            // requested size by PixelsPerPoint to get there - see DerivedStyle.ActualFont's own doc
-            // comment), so undoing that division (multiplying back by ppp) is what recovers the true
-            // CSS points value - not dividing again (issue #631: the previous formula here asserted
-            // the same double-division bug DomParser.ApplyPageStylesOnce had).
+            // once (issue-#113 discipline): band = sheetPx - (mT + mB) * ppp. GetEmHeight() is the
+            // font size in true CSS points whatever the layout scale.
             var marginTopPt = container.PageGeometry.GetPage(0).MarginTopPt;
-            var emPt = container.Root!.GetEmHeight() * ppp;
+            var emPt = container.Root!.GetEmHeight();
             Assert.Equal(2 * emPt, marginTopPt, 3);
 
             var sheetPx = container.PageSize.Height + container.MarginTop + container.MarginBottom;
