@@ -7088,9 +7088,37 @@ namespace PeachBrackets.Html.Dom
             return (regionalIndicatorCount, graphemeContext);
         }
 
-        private static bool HasInterElementWhitespaceBefore(CssRectWord word) =>
-            DomUtils.PrecedingBoxAcrossFirstChildChain(word.OwnerBox) is { } predecessor
-            && EndsWithCollapsibleWhitespace(predecessor);
+        /// <summary>
+        /// Whether the text before <paramref name="word"/> ends in collapsible inter-element whitespace. An inline box that contributes nothing
+        /// (an empty <c>&lt;span&gt;</c>) neither holds that whitespace nor removes it - inline box boundaries add or remove no wrap opportunity
+        /// (CSS Text 3 section 5.5) - so the search steps back over it to the box before.
+        /// </summary>
+        private static bool HasInterElementWhitespaceBefore(CssRectWord word)
+        {
+            for (var predecessor = DomUtils.PrecedingBoxAcrossFirstChildChain(word.OwnerBox);
+                 predecessor is not null;
+                 predecessor = DomUtils.PrecedingBoxAcrossFirstChildChain(predecessor))
+            {
+                if (EndsWithCollapsibleWhitespace(predecessor)) return true;
+                if (!ContributesNothing(predecessor)) return false;
+            }
+
+            return false;
+        }
+
+        /// <summary>Whether <paramref name="box"/> is a plain inline box with no text, words or atomic content anywhere inside it.</summary>
+        private static bool ContributesNothing(CssBox box)
+        {
+            if (box.DerivedStyle.ActualDisplay != Keywords.Inline || !string.IsNullOrEmpty(box.Text) || box.Words.Count > 0)
+                return false;
+
+            foreach (var child in box.Boxes)
+            {
+                if (!ContributesNothing(child)) return false;
+            }
+
+            return true;
+        }
 
         /// <summary>
         /// Whether <paramref name="box"/> ends in collapsible inter-element whitespace, descending to the
