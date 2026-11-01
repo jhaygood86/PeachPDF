@@ -7227,17 +7227,55 @@ namespace PeachBrackets.Html.Dom
         private static double ResolveNearFarOffset(
             CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> near,
             CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> far,
-            double basis, CssBox box)
+            double? basis, CssBox box)
         {
+            // A percentage against an indefinite basis computes to `auto` (the engines agree, css-position-3
+            // section 3.3 then takes over: auto near with a set far offset moves the box the other way).
             var nearValue = near.Value;
             var farValue = far.Value;
+            var nearSet = nearValue.IsValue && (basis is not null || !DependsOnPercentage(nearValue.Value!.Value));
+            var farSet = farValue.IsValue && (basis is not null || !DependsOnPercentage(farValue.Value!.Value));
 
-            if (nearValue.IsValue || !farValue.IsValue)
+            if (nearSet || !farSet)
             {
-                return nearValue.Value is { } n ? CssValueParser.ParseLength(n, basis, box) : 0;
+                return nearSet ? CssValueParser.ParseLength(nearValue.Value!.Value, basis ?? 0, box) : 0;
             }
 
-            return -CssValueParser.ParseLength(farValue.Value!.Value, basis, box);
+            return -CssValueParser.ParseLength(farValue.Value!.Value, basis ?? 0, box);
+        }
+
+        private static bool DependsOnPercentage(LengthOrCalc value) =>
+            value.IsCalc ? value.CalcText!.Contains('%') : value.Length!.Value.Type == Length.Unit.Percent;
+
+        /// <summary>
+        /// The height a <c>top</c>/<c>bottom</c> percentage on a relatively positioned box refers to: its containing
+        /// block's content height, or null when that block's height is not definite.
+        /// </summary>
+        private static double? RelativeContainingBlockHeight(CssBox box)
+        {
+            var block = box.ContainingBlock;
+            if (CssLayoutEngine.ResolveDefiniteHeightValue(block) is not { } height) return null;
+
+            return Math.Max(0, height - block.ActualBorderTopWidth - block.ActualBorderBottomWidth
+                               - block.ActualPaddingTop - block.ActualPaddingBottom);
+        }
+
+        /// <summary>
+        /// The height of an absolutely positioned box's containing block, which <paramref name="ancestor"/> (the nearest
+        /// positioned ancestor) forms: an inline's own rectangle, or a block's padding box (CSS 2.1 section 10.1). The
+        /// ancestor's declared height is read directly, since its content-driven <c>ActualHeight</c> is still provisional
+        /// while its children are being placed.
+        /// </summary>
+        private static double AbsoluteContainingBlockHeight(CssBox ancestor, double? finalizedBorderBoxHeight = null)
+        {
+            if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
+                return inlineContainingBlock.Height;
+
+            var borderBoxHeight = finalizedBorderBoxHeight
+                ?? CssLayoutEngine.GetBoxHeight(ancestor)
+                ?? ancestor.ActualHeight;
+
+            return Math.Max(0, borderBoxHeight - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
         }
 
         /// <summary>
@@ -7364,8 +7402,12 @@ namespace PeachBrackets.Html.Dom
                     // StaticBottom recovers by backing RelativeOffsetY out again. Acid2's
                     // ".smile div { position: relative; bottom: -1em }" is exactly this: the mouth
                     // bar paints 1em lower, but ".chin"'s position must not move with it.
-                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ActualWidth, child);
-                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, child.ActualHeight, child);
+                    //
+                    // A percentage refers to the containing block's width (left/right) or height (top/bottom),
+                    // not the box's own size (CSS Positioned Layout 3 section 3.1). A containing block whose
+                    // height is not definite leaves a top/bottom percentage as `auto`, as every engine does.
+                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ContainingBlock.AvailableWidth, child);
+                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, RelativeContainingBlockHeight(child), child);
 
                     child.RelativeOffsetX = offsetX;
                     child.RelativeOffsetY = offsetY;
@@ -7415,7 +7457,7 @@ namespace PeachBrackets.Html.Dom
                                ResolveOffsetOrZero(child.Left, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, child);
 
                     var top = containingBlockTop + child.ActualMarginTop +
-                              ResolveOffsetOrZero(child.Top, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, child);
+                              ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
 
                     child.Location = new PaintPoint(left, top);
                 }
@@ -7715,7 +7757,7 @@ namespace PeachBrackets.Html.Dom
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, inlineContainingBlock?.Height ?? nearestPositionedAncestor.ActualHeight, this);
+                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, AbsoluteContainingBlockHeight(nearestPositionedAncestor), this);
 
                     // Unlike ActualRight/ActualWidth (resolved for every box, including this ancestor,
                     // before its children are laid out - see the GetBoxWidth call earlier in this
@@ -7884,20 +7926,7 @@ namespace PeachBrackets.Html.Dom
             {
                 var ancestor = DomUtils.GetNearestPositionedAncestor(this);
 
-                if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
-                {
-                    containingBlockHeight = inlineContainingBlock.Height;
-                }
-                else
-                {
-                    var ancestorBorderBoxHeight = finalizedAncestorBorderBoxHeight
-                        ?? CssLayoutEngine.GetBoxHeight(ancestor)
-                        ?? ancestor.ActualHeight;
-
-                    // An absolute containing block formed by a block box is its padding box (§10.1).
-                    containingBlockHeight = Math.Max(0, ancestorBorderBoxHeight
-                        - ancestor.ActualBorderTopWidth - ancestor.ActualBorderBottomWidth);
-                }
+                containingBlockHeight = AbsoluteContainingBlockHeight(ancestor, finalizedAncestorBorderBoxHeight);
             }
 
             var top = CssValueParser.ParseLength(Top.Value.Value!.Value, containingBlockHeight, this);
