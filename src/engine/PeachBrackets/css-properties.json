@@ -4842,11 +4842,35 @@
     },
     {
       "name": "cursor",
-      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "comment": "Stored as the raw declared list (url() with optional hotspot, then the fallback keyword); CursorResolver turns it into a DocumentCursor on demand. Nothing in layout or paint reads it.",
       "inherited": true,
       "cssom": {"converter": "ImageSourceConverter.Or( WithOrder( ImageSourceConverter.Required(), NumberConverter.Required(), NumberConverter.Required())).RequiresEnd( Map.Cursors.ToConverter())"},
       "initialValue": "auto",
-      "cssDataType": "unsupported"
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.CursorProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Cursor",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "pointer-events",
+      "comment": "auto and none apply to every element; the SVG shape keywords are accepted everywhere (a shape is the only box they could mean something for) and read by the hit test.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.PointerEventsConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "PointerEvents",
+        "keywordMap": "Map.PointerEventsModes",
+        "fallback": "PointerEvents.Auto"
+      },
+      "html": {
+        "propertyPath": "PointerEvents",
+        "csharpDataType": "CssProperty<PointerEvents>",
+        "area": "TextArea",
+        "getterExpression": "{box}.PointerEvents.ToString()"
+      }
     },
     {
       "name": "size",

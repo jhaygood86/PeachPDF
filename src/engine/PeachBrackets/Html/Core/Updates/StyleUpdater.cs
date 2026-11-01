@@ -167,7 +167,8 @@ namespace PeachBrackets.Html.Updates
                     return found;
             }
 
-            if (!Covers(fragment, x, y, frame))
+            // pointer-events: none lets the point through to whatever is beneath (its children, tried above, still receive it).
+            if (fragment.Box.PointerEvents.Value == Css.PointerEvents.None || !Covers(fragment, x, y, frame))
                 return null;
 
             var box = fragment.Box;

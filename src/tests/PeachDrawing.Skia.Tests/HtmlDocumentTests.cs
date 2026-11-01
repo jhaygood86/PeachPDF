@@ -59,4 +59,37 @@ public class HtmlDocumentTests
         Assert.True(scene.IsBlue(30, 25));
         Assert.Contains(Enumerable.Range(0, 120), x => scene.Px(x, 25).A is > 0 and < 255);
     }
+
+    [Fact]
+    public async Task A_pages_cursor_areas_are_recorded_for_the_host_to_hit_test()
+    {
+        using var scene = Scene.Create(300, 200);
+        await using (var stream = File.OpenRead(BundledFonts.Ttf))
+            await scene.Context.AddFont(stream, "Source Sans 3");
+
+        var html = """
+            <!DOCTYPE html><html><head><style>
+              body{font:16px 'Source Sans 3';margin:0} @page{size:300pt 200pt;margin:0}
+              .band{height:40px;cursor:crosshair}
+              .muted{height:20px;cursor:wait;pointer-events:none}
+            </style></head><body>
+              <div class="band"></div>
+              <div class="muted"></div>
+              <p><a href="https://example.com/x">a link</a></p>
+            </body></html>
+            """;
+
+        using var document = await HtmlDocument.LoadAsync(html, scene.Context, new HtmlDocumentOptions { PageWidthPoints = 300, PageHeightPoints = 200 });
+        await document.LayoutAsync(scene.Canvas);
+        await document.PaintPageAsync(0, scene.Canvas);
+        document.PaintCursors(0, scene.Canvas);
+
+        var links = scene.Composer.Links;
+        Assert.Equal(CursorShape.Crosshair, links.CursorAt(100, 10)!.Shape);
+        Assert.Equal(CursorShape.Crosshair, links.CursorAtDevice(100, 10)!.Shape);
+        // pointer-events: none leaves no area, so nothing asks for the wait pointer there.
+        Assert.DoesNotContain(links.Cursors, area => area.Shape == CursorShape.Wait);
+        // A link that asks for nothing of its own still gets the link pointer.
+        Assert.Contains(links.Cursors, area => area.Shape == CursorShape.Pointer);
+    }
 }

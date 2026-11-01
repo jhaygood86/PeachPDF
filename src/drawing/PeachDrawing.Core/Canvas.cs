@@ -635,6 +635,18 @@ namespace PeachDrawing.Core
         public virtual object? AddDestinationLink(Rect bounds, string destinationName, IReadOnlyList<PaintPoint>? quad = null) => null;
 
         /// <summary>
+        /// Says which pointer a surface should show over <paramref name="bounds"/>. A format with no pointer (a PDF page, a bitmap) ignores it, which is
+        /// what the default does; a canvas for a surface that is looked at and pointed at records it for the host to hit-test, or writes it as the
+        /// format's own cursor styling. Areas are added in paint order: a later one is on top.
+        /// </summary>
+        /// <param name="bounds">the area, in this canvas's layout units like every other rectangle</param>
+        /// <param name="shape">the pointer to show, the one that stands in when none of <paramref name="images"/> can be used</param>
+        /// <param name="images">images to use as the pointer in order of preference, or <see langword="null"/> for none</param>
+        public virtual void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage>? images = null)
+        {
+        }
+
+        /// <summary>
         /// Names a place on the page this canvas draws, for <see cref="AddDestinationLink"/> to lead to. The default writes nothing.
         /// </summary>
         /// <param name="name">the name the place is given; it must be unique in the document</param>
