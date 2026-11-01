@@ -94,13 +94,22 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task RelativeUnitCalc_StaysDeferred_NotEagerlyResolved()
+        public async Task ParentRelativeCalc_IsEagerlyResolvedToAnAbsoluteLength()
         {
-            // Unlike a bare em/ex/%/smaller/larger value, a calc() mixing relative units is deliberately
-            // left lazy at set-time - CssBox.ResolveFontSizeValueComputation's own IsCalcFunction guard
-            // excludes it from eager resolution entirely, and it stays deferred calc text (LengthOrCalc's
-            // mechanism), evaluated later against the box's own font-size-resolution basis.
+            // A calc() using only parent-relative and absolute units is computed at set-time like a bare
+            // em/%, so descendants inherit the computed length instead of re-applying the calc() (CSS Fonts 4
+            // §2.5: the computed value is an absolute length).
             var box = await GetFontSizeBoxAsync("calc(1em + 2px)");
+            Assert.True(box.FontSize.Value is { IsValue: true, Value: { IsCalc: false } });
+        }
+
+        [Theory]
+        [InlineData("calc(1rem + 2px)")]
+        [InlineData("calc(1em + 1vw)")]
+        public async Task CalcNeedingLayoutTimeBasis_StaysDeferred(string value)
+        {
+            // rem and viewport units are not parent-relative, so they stay lazy calc text.
+            var box = await GetFontSizeBoxAsync(value);
             Assert.True(box.FontSize.Value is { IsValue: true, Value: { IsCalc: true } });
         }
 

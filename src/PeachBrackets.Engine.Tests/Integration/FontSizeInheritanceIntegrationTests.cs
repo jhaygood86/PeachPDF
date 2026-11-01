@@ -86,6 +86,73 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task FontSize_CalcWithEm_IsInheritedAsComputedLengthNotReappliedByChildren()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="grandparent" style="font-size: 20pt">
+                  <div id="middle" style="font-size: calc(2em + 10pt)">
+                    <div id="leaf"></div>
+                  </div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var grandparent = FindById(root, "grandparent")!;
+            var middle = FindById(root, "middle")!;
+            var leaf = FindById(root, "leaf")!;
+
+            var scale = grandparent.ActualFont.Size / 20;
+            Assert.Equal(50 * scale, middle.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, leaf.ActualFont.Size, 6);
+        }
+
+        [Fact]
+        public async Task FontSize_CalcWithPercentage_InheritedByChildAndInheritKeyword()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="grandparent" style="font-size: 20pt">
+                  <div id="middle" style="font-size: calc(100% + 10pt)">
+                    <div id="child"></div>
+                    <div id="explicit" style="font-size: inherit"></div>
+                  </div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var grandparent = FindById(root, "grandparent")!;
+            var middle = FindById(root, "middle")!;
+
+            var scale = grandparent.ActualFont.Size / 20;
+            Assert.Equal(30 * scale, middle.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, FindById(root, "child")!.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, FindById(root, "explicit")!.ActualFont.Size, 6);
+        }
+
+        [Fact]
+        public async Task FontSize_NestedCalcOnEachLevel_AppliesEachDeclarationOnce()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div id="a" style="font-size: 10pt">
+                  <div id="b" style="font-size: calc(1em + 10pt)">
+                    <div id="c" style="font-size: calc(1em + 10pt)"></div>
+                  </div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var a = FindById(root, "a")!;
+            var scale = a.ActualFont.Size / 10;
+            Assert.Equal(20 * scale, FindById(root, "b")!.ActualFont.Size, 6);
+            Assert.Equal(30 * scale, FindById(root, "c")!.ActualFont.Size, 6);
+        }
+
+        [Fact]
         public async Task FontSize_ExThreeLevelsDeep_DoesNotCompoundAcrossNonOverridingDescendants()
         {
             var html = """

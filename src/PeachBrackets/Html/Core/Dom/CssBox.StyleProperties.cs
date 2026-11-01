@@ -733,6 +733,19 @@ namespace PeachBrackets.Html.Dom
         internal string ResolveFontSizeValueComputation(string value)
         {
             var trimmed = value.Trim();
+            if (CssValueParser.IsCalcFunction(value) && IsParentRelativeOnlyCalc(value))
+            {
+                // Computed value is an absolute length that descendants inherit (CSS Fonts 4 §2.5); left as
+                // text, every inheriting descendant would apply the calc() again against its own parent.
+                var pixelsPerPoint = HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
+                var calcParent = ParentBox;
+                var parentSizePt = calcParent is null
+                    ? DefaultFontResolver.FontSize
+                    : calcParent.GetEmHeight() * pixelsPerPoint;
+                var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
+                return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+            }
+
             if (!CssValueParser.IsCalcFunction(value) && ParentBox is { } parent)
             {
                 bool matches;
@@ -756,6 +769,42 @@ namespace PeachBrackets.Html.Dom
             }
 
             return value;
+        }
+
+        /// <summary>
+        /// Whether a <c>font-size</c> <c>calc()</c> uses only absolute units and the parent-relative ones
+        /// (<c>em</c>/<c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c>/<c>%</c>), so it can be computed at cascade
+        /// time. One using <c>rem</c>, a root-element unit, a viewport unit or a container unit needs
+        /// layout-time information and stays lazy.
+        /// </summary>
+        private static bool IsParentRelativeOnlyCalc(string value)
+        {
+            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+            List<Token> tokens = pooledTokens;
+            return OnlyParentRelativeUnits(tokens);
+        }
+
+        private static bool OnlyParentRelativeUnits(IReadOnlyList<Token> tokens)
+        {
+            foreach (var token in tokens)
+            {
+                if (token.Type == TokenType.Function)
+                {
+                    // calc()/min()/max()/clamp() nest their operands inside the function token.
+                    if (!OnlyParentRelativeUnits(token.ArgumentTokens)) return false;
+                    continue;
+                }
+
+                if (token.Type != TokenType.Dimension) continue;
+
+                var allowed = Length.GetUnit(token.Unit) is Length.Unit.None or Length.Unit.Px or Length.Unit.Cm
+                    or Length.Unit.Mm or Length.Unit.In or Length.Unit.Pt or Length.Unit.Pc or Length.Unit.Q
+                    or Length.Unit.Em or Length.Unit.Ex or Length.Unit.Ch or Length.Unit.Cap or Length.Unit.Ic
+                    or Length.Unit.Lh;
+                if (!allowed) return false;
+            }
+
+            return true;
         }
 
         /// <summary>
