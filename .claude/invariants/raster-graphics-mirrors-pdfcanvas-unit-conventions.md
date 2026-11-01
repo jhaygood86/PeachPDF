@@ -25,7 +25,7 @@ all established by `PdfCanvas` and mirrored by `RasterCanvas` for exactly this r
   `Font.Ascent` (which is rounded - see the comment in `PdfCanvas.GetInkCrossings`).
 
 `RasterCanvasTests.PushTransform_DividesOnlyTheTranslationByPixelsPerPoint` and
-`LayoutUnits_AreDividedByPixelsPerPoint_ThenScaledToPixels` (both still in `PeachPDF.Tests/Raster/`, not
+`LayoutUnits_AreDividedByPixelsPerPoint_ThenScaledToPixels` (both still in `src/tests/PeachPDF.Tests/Raster/`, not
 `PeachDrawing.Tests` - they construct `RasterCanvas` through `PdfCanvas`'s own PDF-driven
 `PixelsPerPoint`, so they belong with the PeachPDF-integration tests, not the portable-algorithm ones) pin
 the first two groups. A method added to `Canvas` needs an answer for which group each of its coordinates

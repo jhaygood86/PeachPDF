@@ -60,7 +60,7 @@ KHMER_CODEPOINTS = [
     0x17E0, 0x17E1,  # digits 0, 1
 ]
 
-# The showcase's own sentence (src/PeachPDF.TestHarness/Program.cs, "dictionary_line_breaking"
+# The showcase's own sentence (src/harness/PeachPDF.TestHarness/Program.cs, "dictionary_line_breaking"
 # showcase's Khmer block) - "ខ្ញុំស្រឡាញ់ភាសាខ្មែរណាស់" ("I love the Khmer language very much"),
 # chosen to exercise both a coeng+RO pair (ស្រ) and two coeng+other-consonant pairs (ខ្ញ, ខ្ម)
 # while avoiding the five split-matra codepoints above.

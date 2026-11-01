@@ -48,7 +48,8 @@ function Invoke-Checked {
 
 function Invoke-PackageReference {
     param([string]$Project, [string]$Framework = 'net10.0', [string[]]$ExtraArguments = @())
-    Invoke-Checked 'dotnet' (@('build', (Join-Path $src "$Project/$Project.csproj"), '--configuration', 'Release',
+    $group = if ($Project -like 'PeachDrawing*') { 'drawing/' } elseif ($Project -like 'PeachBrackets*') { 'engine/' } else { '' }
+    Invoke-Checked 'dotnet' (@('build', (Join-Path $src "$group$Project/$Project.csproj"), '--configuration', 'Release',
         "-p:TargetFramework=$Framework", '-p:EnableWindowsTargeting=true', '-p:DisableDefaultDocumentation=false', '--nologo', '-v:q') + $ExtraArguments)
 }
 

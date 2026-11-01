@@ -48,7 +48,7 @@ uploaded to it once and the texture is reused for every draw.
 To draw a whole page onto a surface you hold and then read it back, `SkiaComposer` scales a page of a given size in points to fill the
 surface, clears it, and offers `ToPixelBuffer()` and `Save(stream, format)`. It borrows the surface and never disposes it.
 
-The example project (`src/PeachDrawing.Skia.Example`) draws a handful of scenes onto a CPU surface it makes itself and writes them as PNG
+The example project (`src/examples/PeachDrawing.Skia.Example`) draws a handful of scenes onto a CPU surface it makes itself and writes them as PNG
 files; a phone app would pass the canvas of its GPU view and change nothing else.
 
 ## Units
