@@ -115,7 +115,7 @@ namespace PeachBrackets.Svg
             var viewBoxX = document.ViewBox?.X ?? 0;
             var viewBoxY = document.ViewBox?.Y ?? 0;
 
-            var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
+            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
 
             var frame = g.CurrentTransform;
             var previousViewportClip = s_viewportClip;
@@ -239,32 +239,6 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
-        /// <see cref="ComputeViewportTransform"/>, adjusted for painting through <paramref name="g"/>:
-        /// that method's own math (shared with <see cref="CollectLinks"/>, which needs it unmodified)
-        /// resolves entirely in <paramref name="g"/>'s own coordinate space, where <paramref name="viewportRect"/>
-        /// lives - but <c>viewBoxWidth</c>/<c>viewBoxHeight</c> (and the resulting linear "scale") are
-        /// plain SVG user-unit numbers, never scaled by <see cref="Canvas.PixelsPerPoint"/> the way
-        /// <paramref name="viewportRect"/> itself already is. <see cref="Canvas.PushTransform"/> only
-        /// divides a matrix's translation by <c>PixelsPerPoint</c> before handing it to the backend, not
-        /// its linear part - correct for an ordinary CSS <c>transform: scale()</c> (already scale-neutral),
-        /// wrong for this transform's scale (a ratio of a <c>PixelsPerPoint</c>-scaled length over a
-        /// never-scaled one), which would otherwise land <c>PixelsPerPoint</c> times too large (issue
-        /// #814: an inline SVG icon's content overflowing its own, correctly-sized clip). Pre-dividing
-        /// the linear part here - leaving the translation untouched, since that still wants
-        /// <see cref="Canvas.PushTransform"/>'s own single division - is why this exists as a distinct
-        /// helper from <see cref="ComputeViewportTransform"/> rather than a change to it directly.
-        /// </summary>
-        private static Matrix3x2 ComputePaintViewportTransform(Canvas g, Rect viewportRect, double viewBoxX, double viewBoxY, double viewBoxWidth, double viewBoxHeight, SvgPreserveAspectRatio par)
-        {
-            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
-            var pixelsPerPoint = g.PixelsPerPoint;
-            return pixelsPerPoint == 1.0
-                ? matrix
-                : new Matrix3x2((float)(matrix.M11 / pixelsPerPoint), (float)(matrix.M12 / pixelsPerPoint),
-                    (float)(matrix.M21 / pixelsPerPoint), (float)(matrix.M22 / pixelsPerPoint), matrix.M31, matrix.M32);
-        }
-
-        /// <summary>
         /// Computes the viewBox-to-viewport transform per <paramref name="par"/>'s alignment and
         /// meet/slice mode. <c>xMidYMid meet</c> (the SVG/CSS default) is a uniform scale, centered,
         /// letterboxed; other alignments shift which edge/corner touches the viewport instead of
@@ -342,7 +316,7 @@ namespace PeachBrackets.Svg
             var viewBoxX = viewBox?.X ?? 0;
             var viewBoxY = viewBox?.Y ?? 0;
             var viewportRect = new Rect(x, y, width, height);
-            var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
+            var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, par);
 
             var hadOuterFrame = false;
             var outerFrame = default(Matrix3x2);
@@ -406,7 +380,7 @@ namespace PeachBrackets.Svg
                 // document is fit into its box - not the referenced document's own root
                 // preserveAspectRatio (only relevant when that document is rendered as a top-level
                 // viewport in its own right, e.g. via RenderInto).
-                var matrix = ComputePaintViewportTransform(g, viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, image.PreserveAspectRatio);
+                var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, image.PreserveAspectRatio);
 
                 g.PushClip(viewportRect);
                 g.PushTransform(matrix);
@@ -420,7 +394,7 @@ namespace PeachBrackets.Svg
             }
             else if (image.Image is { } raster && raster.Width > 0 && raster.Height > 0)
             {
-                var matrix = ComputePaintViewportTransform(g, viewportRect, 0, 0, raster.Width, raster.Height, image.PreserveAspectRatio);
+                var matrix = ComputeViewportTransform(viewportRect, 0, 0, raster.Width, raster.Height, image.PreserveAspectRatio);
 
                 g.PushClip(viewportRect);
                 g.PushTransform(matrix);
@@ -439,10 +413,9 @@ namespace PeachBrackets.Svg
             if (!foreign.Visible || foreign.Width <= 0 || foreign.Height <= 0)
                 return;
 
-            // Canvas.PushTransform takes layout units and divides by PixelsPerPoint, while everything drawn inside the
-            // SVG's own transform is in user units - hence the factor, so the box lands at (x, y) user units.
-            var ppp = g.PixelsPerPoint;
-            g.PushTransform(Matrix3x2.CreateTranslation((float)(foreign.X * ppp), (float)(foreign.Y * ppp)));
+            // The HTML content is laid out in layout units (a user unit times PixelsPerPoint), while the user space it is painted into
+            // already counts in layout units: scaling it down by PixelsPerPoint first puts the box at (x, y) user units at its own size.
+            g.PushTransform(Matrix3x2.CreateScale((float)(1.0 / g.PixelsPerPoint)) * Matrix3x2.CreateTranslation((float)foreign.X, (float)foreign.Y));
             foreign.Content.Paint(g);
             g.PopTransform();
         }
@@ -1753,7 +1726,7 @@ namespace PeachBrackets.Svg
 
             var style = Map.TextDecorationStyleModes.GetValueOrDefault(decorator.TextDecorationStyle, TextDecorationStyleMode.Solid);
             var pen = g.GetPen(actualColor);
-            pen.Width = thickness;
+            pen.Width = thickness / g.PixelsPerPoint;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(style);
 
             var span = new DecorationInterval(x1, x2);
@@ -1864,7 +1837,7 @@ namespace PeachBrackets.Svg
                     if (shadow.Blur <= 0)
                     {
                         g.PushTransform(shadowMatrix);
-                        DrawUserText(g, text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                        g.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
                         g.PopTransform();
                         continue;
                     }
@@ -1885,7 +1858,7 @@ namespace PeachBrackets.Svg
                         continue;
 
                     transformedLayer.Canvas.PushTransform(shadowMatrix);
-                    DrawUserText(transformedLayer.Canvas, text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
+                    transformedLayer.Canvas.DrawString(text, font, color, new PaintPoint(drawX, drawY), size, letterSpacing, run.Palette, features, logicalText);
                     transformedLayer.Canvas.PopTransform();
                     continue;
                 }
@@ -1893,7 +1866,7 @@ namespace PeachBrackets.Svg
                 var point = new PaintPoint(drawX + shadow.Dx, drawY + shadow.Dy);
                 if (shadow.Blur <= 0)
                 {
-                    DrawUserText(g, text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                    g.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
                     continue;
                 }
 
@@ -1909,29 +1882,8 @@ namespace PeachBrackets.Svg
 
                 using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(left, top, right - left, bottom - top), Effects: [new BlurEffect(shadow.Blur / 2)]));
                 if (layer is not null)
-                    DrawUserText(layer.Canvas, text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
+                    layer.Canvas.DrawString(text, font, color, point, size, letterSpacing, run.Palette, features, logicalText);
             }
-        }
-
-        /// <summary>
-        /// <see cref="Canvas.DrawString(string, Font, PaintColor, PaintPoint, Size, double, FontPalette?, ShapeSettings?, string?)"/> for text
-        /// placed in SVG user units. Inside the viewBox transform a user unit is already a point, but the canvas takes the position and
-        /// size in layout units and divides them (and the font, requested in user units) by <see cref="Canvas.PixelsPerPoint"/>; scaling
-        /// by it first cancels that, so the text lands where and as large as the rest of the artwork.
-        /// </summary>
-        private static void DrawUserText(Canvas g, string str, Font font, PaintColor color, PaintPoint point, Size size,
-            double letterSpacing = 0, FontPalette? fontPalette = null, ShapeSettings? features = null, string? logicalText = null)
-        {
-            var pixelsPerPoint = g.PixelsPerPoint;
-            if (pixelsPerPoint == 1.0)
-            {
-                g.DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText);
-                return;
-            }
-
-            g.PushTransform(Matrix3x2.CreateScale((float)pixelsPerPoint));
-            g.DrawString(str, font, color, point, size, letterSpacing, fontPalette, features, logicalText);
-            g.PopTransform();
         }
 
         private static bool IsCjk(string text)
@@ -2081,7 +2033,7 @@ namespace PeachBrackets.Svg
                     return;
 
                 var solid = ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity);
-                DrawUserText(g, text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                g.DrawString(text, font, solid, new PaintPoint(drawX, drawY), size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -2134,7 +2086,7 @@ namespace PeachBrackets.Svg
                 {
                     var brush = ResolvePaintBrush(g, document, run, fill, opacity * run.FillOpacity, fillBounds);
                     if (brush is not null)
-                        g.DrawPath(brush, outline);
+                        DrawUserPath(g, brush, outline);
                 }
             }
 
@@ -2146,7 +2098,7 @@ namespace PeachBrackets.Svg
                 var strokeBounds = ContextBounds(g, stroke) ?? bounds;
                 var pen = ResolveStrokePen(g, document, run, opacity * run.StrokeOpacity, strokeBounds, stroke);
                 if (pen is not null)
-                    g.DrawPath(pen, outline);
+                    DrawUserPath(g, pen, outline);
             }
 
             if (run.StrokeFirst)
@@ -2173,7 +2125,7 @@ namespace PeachBrackets.Svg
             g.InvisibleText = true;
             try
             {
-                DrawUserText(g, text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                g.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
             }
             finally
             {
@@ -2194,7 +2146,7 @@ namespace PeachBrackets.Svg
         {
             if (fill.Kind == SvgPaintKind.Solid && !hasStroke && bend is null)
             {
-                DrawUserText(g, text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+                g.DrawString(text, font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
                 return;
             }
 
@@ -2222,7 +2174,7 @@ namespace PeachBrackets.Svg
             if (frame is { } coverageFrame)
                 coverage.Graphics.PushTransform(coverageFrame);
 
-            DrawUserText(coverage.Graphics, text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
+            coverage.Graphics.DrawString(text, font, PaintColor.Black, topLeft, size, letterSpacing, fontPalette: run.Palette, features: features, logicalText: logicalText);
 
             if (frame is not null)
                 coverage.Graphics.PopTransform();
@@ -2272,7 +2224,7 @@ namespace PeachBrackets.Svg
                     }
                     else if (ResolvePaintBrush(layer.Graphics, document, run, paint, paintOpacity, paintBounds) is { } brush)
                     {
-                        layer.Graphics.DrawPath(brush, box);
+                        DrawUserPath(layer.Graphics, brush, box);
                     }
                 }
 
@@ -2745,14 +2697,15 @@ namespace PeachBrackets.Svg
 
                 if (shadow.Blur <= 0)
                 {
-                    g.DrawPath(g.GetSolidBrush(color), bent);
+                    DrawUserPath(g, g.GetSolidBrush(color), bent);
                 }
                 else
                 {
                     var box = new PathMeasure(bent).Bounds;
                     var spread = 1.5 * shadow.Blur + gi.Font.Height * 0.25;
                     using var layer = g.BeginLayer(new LayerOptions(Bounds: new Rect(box.X - spread, box.Y - spread, box.Width + 2 * spread, box.Height + 2 * spread), Effects: [new BlurEffect(shadow.Blur / 2)]));
-                    layer?.Canvas.DrawPath(layer.Canvas.GetSolidBrush(color), bent);
+                    if (layer is not null)
+                        DrawUserPath(layer.Canvas, layer.Canvas.GetSolidBrush(color), bent);
                 }
 
                 bent.Dispose();
@@ -2791,7 +2744,7 @@ namespace PeachBrackets.Svg
                     return;
 
                 g.PushTransform(placed.Frame);
-                DrawUserText(g, gi.Glyph, gi.Font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: gi.LogicalGlyph);
+                g.DrawString(gi.Glyph, gi.Font, ApplyOpacity(fill.PaintColor, opacity * run.FillOpacity), topLeft, glyphSize, letterSpacing: 0, fontPalette: run.Palette, features: run.ShapingFeatures, logicalText: gi.LogicalGlyph);
                 g.PopTransform();
                 return;
             }
@@ -2882,7 +2835,7 @@ namespace PeachBrackets.Svg
 
                 if (clipPath is not null)
                 {
-                    g.PushClip(clipPath);
+                    PushUserClip(g, clipPath);
                     pushedClip = true;
                 }
             }
@@ -3284,7 +3237,7 @@ namespace PeachBrackets.Svg
                 }
                 else if (ResolvePaintBrush(g, document, rect, paint, 1.0, bounds) is { } brush)
                 {
-                    g.DrawPath(brush, path);
+                    DrawUserPath(g, brush, path);
                 }
             }
 
@@ -3636,7 +3589,7 @@ namespace PeachBrackets.Svg
                 {
                     var brush = ResolvePaintBrush(g, document, element, fill, opacity * element.FillOpacity, fillBounds);
                     if (brush is not null)
-                        g.DrawPath(brush, fillPath ?? path);
+                        DrawUserPath(g, brush, fillPath ?? path);
                 }
             }
 
@@ -3644,7 +3597,7 @@ namespace PeachBrackets.Svg
             {
                 var pen = ResolveStrokePen(g, document, element, opacity * element.StrokeOpacity, ContextBounds(g, stroke), stroke);
                 if (pen is not null)
-                    g.DrawPath(pen, path);
+                    DrawUserPath(g, pen, path);
             }
 
             PaintMarkers(g, document, element, opacity);
@@ -3916,7 +3869,7 @@ namespace PeachBrackets.Svg
                 brushToUser = brushToUser.Then(patternTransform);
 
             using var brush = new TileBrush(t.Image, width, height, brushToUser);
-            g.DrawPath(brush, path);
+            DrawUserPath(g, brush, path);
         }
 
         /// <summary>Resolves a pattern's tile rect, same objectBoundingBox/userSpaceOnUse handling as <see cref="ResolveGradientPoint"/>.</summary>
@@ -4171,12 +4124,58 @@ namespace PeachBrackets.Svg
                 return null;
             }
 
-            pen.Width = element.StrokeWidth;
+            // A pen's width and dashes reach the canvas in points, like a path's coordinates.
+            var pixelsPerPoint = g.PixelsPerPoint;
+            pen.Width = element.StrokeWidth / pixelsPerPoint;
             pen.MiterLimit = element.StrokeMiterLimit;
             pen.LineCap = element.StrokeLineCap;
             pen.LineJoin = element.StrokeLineJoin;
-            pen.SetDashPattern(element.StrokeDashArray, element.StrokeDashOffset);
+            pen.SetDashPattern(pixelsPerPoint == 1.0 ? element.StrokeDashArray : [.. element.StrokeDashArray.Select(dash => dash / pixelsPerPoint)], element.StrokeDashOffset / pixelsPerPoint);
             return pen;
+        }
+
+        /// <summary>
+        /// A path, a pen's width and its dashes reach the canvas in points - there is no ambient transform to bring them down from layout
+        /// units - while everything else the canvas takes (positions, sizes, brush geometry, transforms) is in layout units, which is what
+        /// the SVG's own user space is laid out in. This returns <paramref name="path"/> as the canvas wants it: itself when the two are the
+        /// same, otherwise a copy scaled down by <see cref="Canvas.PixelsPerPoint"/> that the caller disposes.
+        /// </summary>
+        private static GraphicsPath InCanvasUnits(Canvas g, GraphicsPath path, out bool isCopy)
+        {
+            var pixelsPerPoint = g.PixelsPerPoint;
+            isCopy = pixelsPerPoint != 1.0;
+            if (!isCopy)
+                return path;
+
+            var copy = g.GetGraphicsPath();
+            copy.FillMode = path.FillMode;
+            copy.AddPath(path);
+            copy.Transform(Matrix3x2.CreateScale((float)(1.0 / pixelsPerPoint)));
+            return copy;
+        }
+
+        private static void DrawUserPath(Canvas g, Brush brush, GraphicsPath path)
+        {
+            var canvasPath = InCanvasUnits(g, path, out var isCopy);
+            g.DrawPath(brush, canvasPath);
+            if (isCopy)
+                canvasPath.Dispose();
+        }
+
+        private static void DrawUserPath(Canvas g, Pen pen, GraphicsPath path)
+        {
+            var canvasPath = InCanvasUnits(g, path, out var isCopy);
+            g.DrawPath(pen, canvasPath);
+            if (isCopy)
+                canvasPath.Dispose();
+        }
+
+        private static void PushUserClip(Canvas g, GraphicsPath path)
+        {
+            var canvasPath = InCanvasUnits(g, path, out var isCopy);
+            g.PushClip(canvasPath);
+            if (isCopy)
+                canvasPath.Dispose();
         }
 
         private static PaintColor ApplyOpacity(PaintColor color, double opacity)
