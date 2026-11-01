@@ -152,6 +152,37 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(30 * scale, FindById(root, "c")!.ActualFont.Size, 6);
         }
 
+        [Theory]
+        [InlineData("calc(2em + 1rem)")]
+        [InlineData("calc(1ex + 2em + 1rem)")]
+        [InlineData("calc(100% + 1rem)")]
+        public async Task FontSize_CalcMixingParentRelativeAndLazyUnits_IsNotReappliedByInheritingDescendants(string calc)
+        {
+            // rem and viewport units cannot be computed at cascade time, but the parent-relative terms can: a descendant
+            // inheriting the value must not measure those terms against its own parent again.
+            var html = $"""
+                <!DOCTYPE html><html><body>
+                <div id="grandparent" style="font-size: 20pt">
+                  <div id="middle" style="font-size: {calc}">
+                    <div id="child"></div>
+                    <div id="explicit" style="font-size: inherit">
+                      <div id="deep"></div>
+                    </div>
+                  </div>
+                </div>
+                </body></html>
+                """;
+
+            var root = await BuildBoxTree(html);
+            var grandparent = FindById(root, "grandparent")!;
+            var middle = FindById(root, "middle")!;
+
+            Assert.True(middle.ActualFont.Size > grandparent.ActualFont.Size, "the calc() grew the font");
+            Assert.Equal(middle.ActualFont.Size, FindById(root, "child")!.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, FindById(root, "explicit")!.ActualFont.Size, 6);
+            Assert.Equal(middle.ActualFont.Size, FindById(root, "deep")!.ActualFont.Size, 6);
+        }
+
         [Fact]
         public async Task FontSize_ExThreeLevelsDeep_DoesNotCompoundAcrossNonOverridingDescendants()
         {
