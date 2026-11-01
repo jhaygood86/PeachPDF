@@ -1,0 +1,62 @@
+name: WinUI
+
+# The WinUI control needs a desktop session to show a window. The main test workflow runs its window-free tests; this one starts the example app on a
+# hosted Windows runner and checks what the control reports (the smoke mode) and what a screen reader would read (the UI Automation tree). It is not
+# part of the required `test-gate`: a hosted runner's desktop is a convenience, not a guarantee. Mouse-driven checks (Verify-ImageCursor.ps1) stay manual.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/engine/PeachBrackets.WinUI/**'
+      - 'src/examples/PeachBrackets.WinUI.Example/**'
+      - 'src/engine/PeachBrackets/**'
+      - 'src/drawing/PeachDrawing.Win2D/**'
+      - 'src/drawing/PeachDrawing.Core/**'
+      - '.github/workflows/winui.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: winui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: pwsh
+
+jobs:
+  example:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+      with:
+        include-net11: 'false'
+
+    - name: Build the example app
+      run: dotnet build src/examples/PeachBrackets.WinUI.Example/PeachBrackets.WinUI.Example.csproj --configuration Release -p:Platform=x64
+
+    - name: Locate the app
+      id: exe
+      run: |
+        $exe = Get-ChildItem src/examples/PeachBrackets.WinUI.Example/bin -Recurse -Filter PeachBrackets.WinUI.Example.exe |
+          Where-Object { $_.FullName -match 'x64.*Release' } | Select-Object -First 1
+        "path=$($exe.FullName)" >> $env:GITHUB_OUTPUT
+
+    - name: Smoke test
+      run: |
+        $report = Join-Path $env:RUNNER_TEMP 'winui-smoke.txt'
+        $process = Start-Process -FilePath '${{ steps.exe.outputs.path }}' -ArgumentList '--smoke', $report -PassThru
+        if (-not $process.WaitForExit(120000)) { $process.Kill(); throw 'The smoke run did not finish.' }
+        Get-Content $report
+        if ($process.ExitCode -ne 0) { throw "The smoke run reported a failure (exit code $($process.ExitCode))." }
+
+    - name: Read the UI Automation tree
+      run: ./src/examples/PeachBrackets.WinUI.Example/Verify-Accessibility.ps1 -Exe '${{ steps.exe.outputs.path }}'
