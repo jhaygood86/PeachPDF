@@ -49,7 +49,7 @@ void OnDraw(CanvasControl sender, CanvasDrawEventArgs args)
 }                                                                     // the session is the control's: it is left open
 ```
 
-The example project (`src/PeachDrawing.Win2D.Example`) draws a handful of scenes
+The example project (`src/examples/PeachDrawing.Win2D.Example`) draws a handful of scenes
 (shapes, gradients, clips, compositing, patterns, text, links) and writes them as PNG files.
 
 ## Units

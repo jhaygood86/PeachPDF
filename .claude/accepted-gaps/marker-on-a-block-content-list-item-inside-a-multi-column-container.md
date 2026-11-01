@@ -46,7 +46,7 @@ all. Both narrowings were measured, not assumed:
 - Narrowing to markers specifically (`IsOutsideMarker(box) && Words.Count > 0`) *still* regressed the
   same two Acid2 tests: Acid2's own fixture retargets three `<li>`s to `display: table-cell`/`table`
   without a `list-style: none` override (`ul li.first-part`/`.second-part`/`.third-part` in
-  `PeachPDF.Tests/TestSupport/acid2.html`), and PeachPDF still produces a marker box with a real word for
+  `src/tests/PeachPDF.Tests/TestSupport/acid2.html`), and PeachPDF still produces a marker box with a real word for
   them even though CSS 2.1 §12.5.1 generates a marker only for `display: list-item` — a pre-existing,
   out-of-scope quirk this fix must not touch. Adding the `ParentBox?.DerivedStyle.ActualDisplay ==
   Keywords.ListItem` condition on top scopes the fix to genuine list items only, and both Acid2 tests
