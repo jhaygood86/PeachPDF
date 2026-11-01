@@ -8,7 +8,7 @@ Each package is documented with DefaultDocumentation, which writes a links file 
 reads the links files of the packages built before it (see src/ApiReferenceLinks.props). So the packages are built in the
 order of the references between them:
 
-  PeachDrawing.Text -> PeachDrawing.Core -> PeachImage -> PeachDrawing -> PeachDrawing.PDF -> PeachDrawing.Svg -> PeachDrawing.Win2D -> PeachBrackets -> PeachPDF
+  PeachDrawing.Text -> PeachDrawing.Core -> PeachImage -> PeachDrawing -> PeachDrawing.PDF -> PeachDrawing.Svg -> PeachDrawing.Skia -> PeachDrawing.Win2D -> PeachBrackets -> PeachPDF
 
 PeachDrawing.Win2D builds only for a Windows target (net10.0-windows10.0.19041.0), so it is the one package built for that target
 rather than for plain net10.0; EnableWindowsTargeting lets a Linux runner compile it, which is all the reference needs (the
@@ -105,6 +105,7 @@ Invoke-PeachImageReference
 Invoke-PackageReference 'PeachDrawing'
 Invoke-PackageReference 'PeachDrawing.PDF'
 Invoke-PackageReference 'PeachDrawing.Svg'
+Invoke-PackageReference 'PeachDrawing.Skia'
 # The Windows App SDK build tools generate a .pri resource index with MakePri.exe, which does not run on Linux and which the
 # reference does not need (it reads the assembly and its XML documentation), so the generation is emptied out.
 Invoke-PackageReference 'PeachDrawing.Win2D' 'net10.0-windows10.0.19041.0' @('-p:_GenerateProjectPriFileDependsOn=')
@@ -112,7 +113,7 @@ Invoke-PackageReference 'PeachBrackets'
 Invoke-PackageReference 'PeachPDF'
 
 # DefaultDocumentation writes an assembly page (index.md, which the site serves at /api/<package>/) only for an assembly with more than one
-# namespace. A package with a single namespace named like the package (PeachDrawing.PDF, PeachDrawing.Svg, PeachDrawing.Win2D) would
+# namespace. A package with a single namespace named like the package (PeachDrawing.PDF, PeachDrawing.Svg, PeachDrawing.Skia, PeachDrawing.Win2D) would
 # otherwise have no page at its folder's address, so its namespace page stands in for it.
 foreach ($folder in Get-ChildItem -Path $apiRoot -Directory) {
     $index = Join-Path $folder.FullName 'index.md'
@@ -127,6 +128,7 @@ foreach ($folder in Get-ChildItem -Path $apiRoot -Directory) {
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.PDF')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Svg')
+& $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Skia')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachDrawing.Win2D')
 & $fixLinks -ApiDocsPath (Join-Path $apiRoot 'PeachBrackets')
 & $fixLinks -ApiDocsPath $apiRoot

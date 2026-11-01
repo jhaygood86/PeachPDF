@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The tests of the Skia backend: what a SkiaCanvas draws for each Canvas call, read back as pixels from a CPU surface the tests supply,
+    the composer, both text engines and image codecs, the resource-lifecycle counters, and the public-API/internals-grant snapshot tests.
+    It never references PeachPDF; a test that needs real HTML layout draws a page through the PeachBrackets public API.
+  -->
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="coverlet.MTP" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="Microsoft.Testing.Extensions.TrxReport" />
+    <!-- The native Skia binaries the tests run on: CI runs Windows, Linux and macOS. -->
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <!-- Not a dependency of the package: only here to prove a host can supply a HarfBuzz shaper through ISkiaTextShaper. -->
+    <PackageReference Include="SkiaSharp.HarfBuzz" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
+    <PackageReference Include="xunit.analyzers">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\PeachDrawing.Skia\PeachDrawing.Skia.csproj" />
+    <!-- The HTML engine's public API only, for the tests that draw real documents onto a SkiaCanvas. -->
+    <ProjectReference Include="..\PeachBrackets\PeachBrackets.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared with PeachDrawing.Tests/PeachPDF.Tests. -->
+    <Compile Include="..\PeachPDF.Tests\TestSupport\BundledFonts.cs" Link="TestSupport\BundledFonts.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The bundled fonts the tests read, linked into the output root where BundledFonts looks. -->
+    <None Include="..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SourceCodePro-Regular.otf" Link="SourceCodePro-Regular.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV0.ttf" Link="ColorTestV0.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\NotoSansJPSubset.ttf" Link="NotoSansJPSubset.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\StixTwoMath-Regular.ttf" Link="StixTwoMath-Regular.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SimonCozensCBDT.otf" Link="SimonCozensCBDT.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SimonCozensCffAndSbix.otf" Link="SimonCozensCffAndSbix.otf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\SvgTest.ttf" Link="SvgTest.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\assets\fonts\ColorTestV1.ttf" Link="ColorTestV1.ttf">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+</Project>

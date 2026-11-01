@@ -1,0 +1,143 @@
+PeachDrawing.Skia.ISkiaLinkLauncher : interface
+  method abstract Task<Boolean> LaunchAsync(Uri uri)
+PeachDrawing.Skia.ISkiaTextShaper : interface
+  method abstract SkiaShapedRun Shape(String text, SKFont font)
+PeachDrawing.Skia.PeachTextShaper : sealed class
+  ctor()
+  method virtual SkiaShapedRun Shape(String text, SKFont font)
+PeachDrawing.Skia.SkiaCanvas : sealed class
+  method static SkiaCanvas FromCanvas(SkiaRenderContext context, SKCanvas canvas, Rect bounds, SkiaLinkOptions linkOptions = null)
+  method virtual CanvasLayer BeginLayer(LayerOptions options)
+  method virtual GraphicsPath GetGraphicsPath()
+  method virtual GraphicsPath GetTextOutline(String str, Font font, PaintPoint baselineOrigin, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual IReadOnlyList<InkSpan> GetInkCrossings(String str, Font font, PaintPoint origin, Double bandTop, Double bandBottom, Double letterSpacing = 0, ShapeSettings? features = null)
+  method virtual Int32 CountShapedGlyphs(String str, Font font, ShapeSettings? features = null)
+  method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
+  method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
+  method virtual Object SetAntiAliasSmoothingMode()
+  method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
+  method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void AddDestination(String name, Double top)
+  method virtual Void BeginArtifact()
+  method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
+  method virtual Void BeginVariableText()
+  method virtual Void Dispose()
+  method virtual Void DrawGlyphs(IReadOnlyList<GlyphPlacement> glyphs, Font font, PaintColor color)
+  method virtual Void DrawImage(Image image, Rect destRect)
+  method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect)
+  method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
+  method virtual Void DrawImageAlphaMasked(Image image, Image maskImage, Rect destRect, Boolean invert = False)
+  method virtual Void DrawImageBlendedOver(Image top, Image bottom, Rect destRect, PaintBlendMode blendMode)
+  method virtual Void DrawImageMasked(Image image, Image maskImage, Rect destRect)
+  method virtual Void DrawImageWithColorMatrix(Image image, Rect destRect, ColorMatrix matrix)
+  method virtual Void DrawImageWithOpacity(Image image, Rect destRect, Double opacity, PaintBlendMode blendMode = Normal)
+  method virtual Void DrawLine(Pen pen, Double x1, Double y1, Double x2, Double y2)
+  method virtual Void DrawPath(Brush brush, GraphicsPath path)
+  method virtual Void DrawPath(Pen pen, GraphicsPath path)
+  method virtual Void DrawPolygon(Brush brush, PaintPoint[] points)
+  method virtual Void DrawRaster(RasterSurface surface)
+  method virtual Void DrawRectangle(Brush brush, Double x, Double y, Double width, Double height)
+  method virtual Void DrawRectangle(Pen pen, Double x, Double y, Double width, Double height)
+  method virtual Void DrawString(String str, Font font, PaintColor color, PaintPoint point, Size size, Double letterSpacing = 0, FontPalette fontPalette = null, ShapeSettings? features = null)
+  method virtual Void EndMarkedContent()
+  method virtual Void EndVariableText()
+  method virtual Void MeasureString(String str, Font font, Double maxWidth, out Int32 charFit, out Double charFitWidth)
+  method virtual Void PopAntiAlias()
+  method virtual Void PopBlendMode()
+  method virtual Void PopClip()
+  method virtual Void PopTransform()
+  method virtual Void PushAntiAlias(Boolean enabled)
+  method virtual Void PushBlendMode(PaintBlendMode mode)
+  method virtual Void PushClip(GraphicsPath path)
+  method virtual Void PushClip(Rect rect)
+  method virtual Void PushClipExclude(Rect rect)
+  method virtual Void PushTransform(Matrix3x2 matrix)
+  method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean IsOffscreenTile { get; }
+  property Double PixelsPerPoint { get; }
+  property Matrix3x2 CurrentTransform { get; }
+  property SkiaLinkMap Links { get; }
+  property ValueTuple<Double, Double> TransformScale { get; }
+PeachDrawing.Skia.SkiaComposer : sealed class
+  ctor(SkiaRenderContext renderContext, SKSurface surface, Double widthPoints, Double heightPoints, SkiaComposerOptions options = null)
+  method PixelBuffer ToPixelBuffer()
+  method Void Finish()
+  method Void Save(Stream destination, SkiaImageFormat format = Png, Int32 quality = 100)
+  method virtual Void Dispose()
+  property Double HeightPoints { get; }
+  property Double WidthPoints { get; }
+  property Int32 PixelHeight { get; }
+  property Int32 PixelWidth { get; }
+  property SkiaCanvas Canvas { get; }
+  property SkiaLinkMap Links { get; }
+  property SkiaRenderContext RenderContext { get; }
+PeachDrawing.Skia.SkiaComposerOptions : sealed class
+  ctor()
+  property PaintColor? Background { get; init; }
+  property SkiaLinkOptions Links { get; init; }
+PeachDrawing.Skia.SkiaImageCodec : enum Int32
+  Native = 1
+  PeachImage = 0
+PeachDrawing.Skia.SkiaImageFormat : enum Int32
+  Jpeg = 1
+  Png = 0
+  Webp = 2
+PeachDrawing.Skia.SkiaLink : sealed class
+  ctor(Rect Bounds, IReadOnlyList<PaintPoint> Quad, String Uri, String Destination)
+  method Boolean Contains(Double x, Double y)
+  method SkiaLink <Clone>$()
+  method Void Deconstruct(out Rect Bounds, out IReadOnlyList<PaintPoint> Quad, out String Uri, out String Destination)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SkiaLink other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyList<PaintPoint> Quad { get; init; }
+  property Rect Bounds { get; init; }
+  property String Destination { get; init; }
+  property String Uri { get; init; }
+PeachDrawing.Skia.SkiaLinkActivatingEventArgs : sealed class
+  property Boolean Cancel { get; set; }
+  property SkiaLink Link { get; }
+PeachDrawing.Skia.SkiaLinkMap : sealed class
+  method Boolean TryGetDestination(String name, out Double top)
+  method SkiaLink HitTest(Double x, Double y)
+  method SkiaLink HitTestDevice(Double xDevice, Double yDevice)
+  method Task<Boolean> ActivateAsync(SkiaLink link)
+  method Task<Boolean> TryActivateAsync(Double x, Double y)
+  property IReadOnlyDictionary<String, Double> Destinations { get; }
+  property IReadOnlyList<SkiaLink> Links { get; }
+PeachDrawing.Skia.SkiaLinkOptions : sealed class
+  ctor()
+  property ISet<String> AllowedSchemes { get; init; }
+  property ISkiaLinkLauncher Launcher { get; init; }
+PeachDrawing.Skia.SkiaRenderContext : class
+  ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = PeachImage, ISkiaTextShaper textShaper = null)
+  method Task AddFont(Stream stream, String fontFamilyName)
+  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  method virtual Void Dispose()
+  property Boolean FallbackToPeachImage { get; set; }
+  property Double LayoutUnitsPerPoint { get; }
+  property Double PixelsPerPoint { get; set; }
+  property GRContext GpuContext { get; set; }
+  property ISkiaTextShaper TextShaper { get; }
+  property SkiaImageCodec ImageCodec { get; }
+  property SkiaTextEngine TextEngine { get; }
+PeachDrawing.Skia.SkiaShapedRun : sealed class
+  ctor(UInt16[] Glyphs, Single[] XOffsets, Single[] YOffsets, UInt32[] Clusters, Single Width)
+  method SkiaShapedRun <Clone>$()
+  method Void Deconstruct(out UInt16[] Glyphs, out Single[] XOffsets, out Single[] YOffsets, out UInt32[] Clusters, out Single Width)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SkiaShapedRun other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Single Width { get; init; }
+  property Single[] XOffsets { get; init; }
+  property Single[] YOffsets { get; init; }
+  property UInt16[] Glyphs { get; init; }
+  property UInt32[] Clusters { get; init; }
+PeachDrawing.Skia.SkiaTextEngine : enum Int32
+  Native = 1
+  PeachDrawing = 0

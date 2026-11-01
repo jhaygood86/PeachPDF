@@ -10,6 +10,7 @@
     <!-- 1.2.6 mangles the page name of a member with a tuple parameter (RasterSurfaceFactory.Create), breaking the API reference link check. -->
     <PackageVersion Include="DefaultDocumentation" Version="1.2.5" />
     <PackageVersion Include="HtmlAgilityPack" Version="1.13.1" />
+    <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.1" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.14" />
     <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.14" />
     <PackageVersion Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
@@ -20,6 +21,11 @@
     <PackageVersion Include="MimeKit" Version="4.18.2" />
     <PackageVersion Include="PeachImage" Version="0.6.2" />
     <PackageVersion Include="ScottPlot" Version="5.1.59" />
+    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.HarfBuzz" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="3.119.0" />
+    <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="3.119.0" />
     <PackageVersion Include="System.IO.Pipelines" Version="10.0.14" />
     <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.14" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />

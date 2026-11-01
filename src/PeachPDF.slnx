@@ -10,6 +10,9 @@
   <Project Path="PeachDrawing.Win2D.Tests/PeachDrawing.Win2D.Tests.csproj" />
   <Project Path="PeachDrawing.Svg.Example/PeachDrawing.Svg.Example.csproj" />
   <Project Path="PeachDrawing.Svg.Tests/PeachDrawing.Svg.Tests.csproj" />
+  <Project Path="PeachDrawing.Skia/PeachDrawing.Skia.csproj" />
+  <Project Path="PeachDrawing.Skia.Tests/PeachDrawing.Skia.Tests.csproj" />
+  <Project Path="PeachDrawing.Skia.Example/PeachDrawing.Skia.Example.csproj" />
   <Project Path="PeachDrawing.Tests/PeachDrawing.Tests.csproj" />
   <Project Path="PeachDrawing.Text/PeachDrawing.Text.csproj" />
   <Project Path="PeachDrawing.Text.Benchmarks/PeachDrawing.Text.Benchmarks.csproj" />

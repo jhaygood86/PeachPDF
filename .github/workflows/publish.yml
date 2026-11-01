@@ -87,6 +87,7 @@ jobs:
         dotnet build src/PeachDrawing/PeachDrawing.csproj --configuration Release
         dotnet build src/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release
         dotnet build src/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release
+        dotnet build src/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release
         dotnet build src/PeachBrackets/PeachBrackets.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
@@ -98,6 +99,7 @@ jobs:
         dotnet pack src/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachBrackets/PeachBrackets.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
@@ -113,7 +115,7 @@ jobs:
       # PeachDrawing.Core (PeachDrawing depends on it), then PeachDrawing (PeachDrawing.PDF depends on
       # it), then PeachDrawing.PDF (PeachPDF depends on it, alongside PeachDrawing and PeachDrawing.Core
       # directly), then PeachDrawing.Svg (like PeachDrawing.PDF it depends on PeachDrawing and PeachDrawing.Core; nothing depends on
-      # it), then PeachBrackets (PeachPDF depends on it too; it needs PeachDrawing, PeachDrawing.Core and
+      # it), then PeachDrawing.Skia (the same shape as PeachDrawing.Svg: PeachDrawing, PeachDrawing.Core and PeachImage; nothing depends on it), then PeachBrackets (PeachPDF depends on it too; it needs PeachDrawing, PeachDrawing.Core and
       # PeachDrawing.Text), then PeachPDF - each has to be on the feed
       # before anyone can restore the one that depends on it. --skip-duplicate makes this safe to re-run.
       # The exact version-pinned filenames (rather than a "PeachDrawing.Text.*"/"PeachDrawing.*" glob)
@@ -139,6 +141,10 @@ jobs:
           --skip-duplicate
         dotnet nuget push "./packages/PeachDrawing.PDF.${{ steps.version.outputs.value }}.nupkg"           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"           --source https://api.nuget.org/v3/index.json           --skip-duplicate
         dotnet nuget push "./packages/PeachDrawing.Svg.${{ steps.version.outputs.value }}.nupkg" \
+          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
+          --source https://api.nuget.org/v3/index.json \
+          --skip-duplicate
+        dotnet nuget push "./packages/PeachDrawing.Skia.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
