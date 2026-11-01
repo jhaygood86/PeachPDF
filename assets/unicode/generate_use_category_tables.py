@@ -10,7 +10,7 @@ gen-use-table.py in the harfbuzz repo) - PeachDrawing.Text.Internal.Text.Shaping
 the final per-codepoint USE category from them (plus .NET's own built-in General_Category via
 System.Globalization.CharUnicodeInfo, so no separate General_Category table needs generating here).
 
-Output goes to src/PeachDrawing.Text/Internal/Text/Resources/Use/*.txt.br, consumed by
+Output goes to src/drawing/PeachDrawing.Text/Internal/Text/Resources/Use/*.txt.br, consumed by
 PeachDrawing.Text.Internal.Text.IndicSyllabicCategoryTable/IndicPositionalCategoryTable. Same run-length-encoded
 (start, end, value) table shape as generate_arabic_joining_table.py/generate_script_table.py - the
 one difference is each raw UCD value name (e.g. "Vowel_Dependent", "Consonant_Preceding_Repha") has
@@ -28,7 +28,7 @@ import re
 import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text", "Internal", "Text", "Resources", "Use"))
+OUT_DIR = os.path.normpath(os.path.join(SCRIPT_DIR, "..", "..", "src", "drawing", "PeachDrawing.Text", "Internal", "Text", "Resources", "Use"))
 
 MAX_CODEPOINT = 0x10FFFF
 
