@@ -1,4 +1,7 @@
-# An absolutely positioned box with `auto` offsets ignores its static position (#1303)
+# An absolutely positioned box with `auto` offsets ignores its static position among inline content and under `direction: rtl` (#2069)
+
+The block-flow, left-to-right case is done (`CssBox.StaticPositionIn`, #1303). What follows is what is left, tracked by
+[#2069](https://github.com/jhaygood86/PeachPDF/issues/2069); the text below is the original description, still accurate for those two shapes.
 
 **Gap:** with `top`/`left` (or `right`/`bottom`) left `auto`, an absolutely positioned box sits at its
 containing block's padding corner. CSS 2.1 §10.3.7/§10.6.4 place it at its static position, where it
