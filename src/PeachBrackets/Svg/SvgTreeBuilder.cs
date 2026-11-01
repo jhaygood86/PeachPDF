@@ -1753,11 +1753,12 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
-        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length-percentage; anything else computes to the inherited value.
+        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c>, a CSS-wide keyword or a length-percentage; anything else computes to the inherited value.
         /// A percentage is valid (it is relative to the font size), which the reference length of 1 lets through: with none the parser reads it as absent.
         /// </summary>
         private static bool IsSpacingValue(string value) =>
-            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
+            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || CssGlobalKeywords.TryParse(value, out _)
+            || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
 
         /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
@@ -1821,7 +1822,7 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? DeclaredOrInitial(ISvgSourceNode node, string name)
         {
-            var text = ResolveStyledAttr(node, name);
+            var text = ResolveStyledAttr(node, name, name is "letter-spacing" or "word-spacing" ? IsSpacingValue : null);
             return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
         }
 
