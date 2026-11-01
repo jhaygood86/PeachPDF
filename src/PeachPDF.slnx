@@ -28,6 +28,9 @@
   <Project Path="harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
   <Project Path="tests/PeachPDF.Tests/PeachPDF.Tests.csproj" />
   <Project Path="engine/PeachBrackets/PeachBrackets.csproj" />
+  <Project Path="engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj" />
+  <Project Path="examples/PeachBrackets.WinUI.Example/PeachBrackets.WinUI.Example.csproj" />
+  <Project Path="tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />
