@@ -32,44 +32,51 @@ namespace PeachBrackets.Html
 
             foreach (var level in enclosingContainers)
             {
-                if (level.StyleCondition is { } styleCondition)
+                var result = level switch
                 {
-                    var styleContainer = node.FindNearestQueryContainer(level.Name, CssBox.QueryKind.Style);
-                    // CSS Containment 3 §7.2: no eligible container at all is the "unknown" state, which
-                    // is falsy for @container - a deliberate divergence from @media's permissive-on-
-                    // missing-geometry stance (a missing container here is invalid authoring, not a
-                    // missing render context).
-                    if (styleContainer is null || !styleCondition.Check(styleContainer)) return false;
-                    continue;
-                }
+                    { Mixed: { } mixed } => mixed.Evaluate(node, level.Name, sizes),
+                    { StyleCondition: { } styleCondition } => EvaluateStyle(styleCondition, node, level.Name),
+                    { SizeCondition: { } sizeCondition } => EvaluateSize(sizeCondition, node, level.Name, sizes),
+                    _ => false,
+                };
 
-                if (level.SizeCondition is not { } sizeCondition) return false;
-
-                var sizeContainer = node.FindNearestQueryContainer(level.Name, CssBox.QueryKind.Size);
-                if (sizeContainer is null) return false;
-
-                // No size data yet (the convergence loop's bootstrap pass) or this container isn't a
-                // size-tracking one after all (shouldn't happen given FindNearestQueryContainer's own
-                // Size-kind filter, but the lookup can still miss if a size box hasn't been visited by
-                // BuildContainerQuerySizes for some reason) - falsy either way, not permissive.
-                if (sizes is null || !sizes.TryGet(sizeContainer.Id, out var ctx)) return false;
-
-                var anyMediumMatches = false;
-                foreach (var medium in sizeCondition)
-                {
-                    var matches = medium.Features.All(feature => FeatureMatches(feature, ctx));
-                    if (medium.IsInverse) matches = !matches;
-                    if (matches)
-                    {
-                        anyMediumMatches = true;
-                        break;
-                    }
-                }
-
-                if (!anyMediumMatches) return false;
+                if (result != true) return false;
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// A <c>style()</c> query against the nearest style container. CSS Containment 3 §7.2: no eligible container at all is
+        /// the "unknown" state (<c>null</c>), which is falsy for @container - a deliberate divergence from @media's
+        /// permissive-on-missing-geometry stance (a missing container here is invalid authoring, not a missing render context).
+        /// </summary>
+        internal static bool? EvaluateStyle(IStyleQueryCondition condition, CssBox node, string? containerName)
+        {
+            var styleContainer = node.FindNearestQueryContainer(containerName, CssBox.QueryKind.Style);
+            return styleContainer is null ? null : condition.Check(styleContainer);
+        }
+
+        /// <summary>A size-feature query against the nearest size container; <c>null</c> (unknown) when there is none or it has no size data yet.</summary>
+        internal static bool? EvaluateSize(MediaList condition, CssBox node, string? containerName, ContainerQuerySizes? sizes)
+        {
+            var sizeContainer = node.FindNearestQueryContainer(containerName, CssBox.QueryKind.Size);
+            if (sizeContainer is null) return null;
+
+            // No size data yet (the convergence loop's bootstrap pass) or this container isn't a
+            // size-tracking one after all (shouldn't happen given FindNearestQueryContainer's own
+            // Size-kind filter, but the lookup can still miss if a size box hasn't been visited by
+            // BuildContainerQuerySizes for some reason) - falsy either way, not permissive.
+            if (sizes is null || !sizes.TryGet(sizeContainer.Id, out var ctx)) return null;
+
+            foreach (var medium in condition)
+            {
+                var matches = medium.Features.All(feature => FeatureMatches(feature, ctx));
+                if (medium.IsInverse) matches = !matches;
+                if (matches) return true;
+            }
+
+            return false;
         }
 
         /// <summary>

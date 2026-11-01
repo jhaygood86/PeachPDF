@@ -108,12 +108,12 @@ namespace PeachBrackets.Html
         /// declared <c>&lt;container-name&gt;</c> (null when unnamed) and its condition, either a plain
         /// size-feature <see cref="MediaList"/> (reusing <c>@media</c>'s grammar - see
         /// <see cref="ContainerRule"/>) or a <c>style()</c> query tree. Exactly one of
-        /// <see cref="SizeCondition"/>/<see cref="StyleCondition"/> is non-null. Carried forward the same
+        /// <see cref="SizeCondition"/>/<see cref="StyleCondition"/>/<see cref="Mixed"/> is non-null. Carried forward the same
         /// way <see cref="MediaList"/>[] EnclosingMedia is - deferred, per-candidate-box evaluation
         /// (<see cref="ContainerQueryMatcher"/>) rather than resolved once at index-build time, since
         /// (unlike <c>@supports</c>) neither form is a static, argument-free fact.
         /// </summary>
-        internal readonly record struct ContainerCondition(string? Name, MediaList? SizeCondition, IStyleQueryCondition? StyleCondition);
+        internal readonly record struct ContainerCondition(string? Name, MediaList? SizeCondition, IStyleQueryCondition? StyleCondition, IContainerQueryTerm? Mixed = null);
 
         // A style rule paired with its resolved @layer rank, for the cascade's author passes (which
         // need the rank both to reverse layer order for !important and to band rules by layer for
@@ -419,8 +419,9 @@ namespace PeachBrackets.Html
                         // documented "exactly one of SizeCondition/StyleCondition is set" invariant true.
                         var condition = new ContainerCondition(
                             containerName,
-                            containerRule.StyleCondition is null ? containerRule.Media : null,
-                            containerRule.StyleCondition);
+                            containerRule.StyleCondition is null && containerRule.MixedCondition is null ? containerRule.Media : null,
+                            containerRule.StyleCondition,
+                            containerRule.MixedCondition);
                         var nestedContainers = enclosingContainers is null
                             ? [condition]
                             : (ContainerCondition[])[.. enclosingContainers, condition];
