@@ -180,6 +180,7 @@ public sealed partial class HtmlView : UserControl
         _loaded = false;
         _loadVersion++;
         _reflowTimer?.Stop();
+        ReleaseCursors();
         _document?.Dispose();
         _document = null;
         _context?.Dispose();
