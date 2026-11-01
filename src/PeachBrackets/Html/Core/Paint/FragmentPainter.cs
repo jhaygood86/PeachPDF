@@ -1170,7 +1170,10 @@ namespace PeachBrackets.Html.Paint
 
             // Before this box's own overflow clip is popped: a deferred outline records it for replay.
             if (outlinePaints is not null && !_stopped)
+            {
+                AddOutlineDescendantRects(fragment, outlinePaints);
                 PaintOrDeferOutline(g, box, outlinePaints);
+            }
 
             PopOverflowClip(overflowClipRecorded);
 
