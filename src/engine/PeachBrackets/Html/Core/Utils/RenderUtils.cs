@@ -78,10 +78,22 @@ namespace PeachBrackets.Html.Utils
         /// <returns>the number of clips actually pushed (callers must pop exactly this many afterward)</returns>
         internal static int TryPushOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
-            var overflowBox = ancestor.Box;
-            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling) return 0;
+            if (ResolveOverflowClip(g, ancestor, snapToCssPixels) is not var (rect, curve)) return 0;
 
-            var prevClip = g.GetClip();
+            return ClipGraphicsByOverflow(g, rect, curve);
+        }
+
+        /// <summary>
+        /// The clip <paramref name="ancestor"/> imposes on its descendants - its padding edge, open on an
+        /// unclipped axis, with the rounded-corner curve when it has a <c>border-radius</c> - or null when it
+        /// does not clip. Split from <see cref="TryPushOverflowClip"/> so a painter can hold a clip back and
+        /// push it later (or not at all, for a descendant that escapes it).
+        /// </summary>
+        internal static (Rect Rect, OverflowClipCurve? Curve)? ResolveOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
+        {
+            var overflowBox = ancestor.Box;
+            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling) return null;
+
             // Snapped like the ancestor's own decorations, on the edges they snap (the fragment may be a cut
             // of it, and box-decoration-break decides which edges count), so a hoisted descendant is clipped
             // where an ordinary child would be. The padding box is taken from the snapped border box, which
@@ -99,19 +111,17 @@ namespace PeachBrackets.Html.Utils
 
             var oneAxis = ClipsOneAxisOnly(overflowBox);
             var rect = oneAxis ? OpenUnclippedAxes(overflowBox, paddingRect) : paddingRect;
-            rect.Intersect(prevClip);
-            g.PushClip(rect);
-            var pushed = 1;
 
+            OverflowClipCurve? curve = null;
             if (overflowBox.IsRounded && !oneAxis)
             {
                 var radii = overflowBox.ComputeInnerRadii(borderRect, paddingRect,
                     overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
                     overflowBox.ActualBorderRightWidth, overflowBox.ActualBorderBottomWidth);
-                pushed += PushRoundedClipIfRounded(g, paddingRect, radii);
+                curve = new OverflowClipCurve(paddingRect, radii);
             }
 
-            return pushed;
+            return (rect, curve);
         }
 
         /// <summary>
