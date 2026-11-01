@@ -255,7 +255,7 @@ namespace PeachPDF
             ValidateAnimationProgress(config);
 
             // get the size of each page to layout the HTML in
-            var orgPageSize = config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize) : new Size(config.ManualPageWidth, config.ManualPageHeight);
+            var orgPageSize = ResolveConfiguredPageSize(config);
 
             if (config.PageOrientation == PageOrientation.Landscape)
             {
@@ -357,7 +357,7 @@ namespace PeachPDF
         /// calls <c>.Size(...)</c>/<c>.Margin*(...)</c> falls back to this config's own page geometry,
         /// exactly like an HTML document's own <c>@page</c> rule falls back to it. Defaults to A4 with
         /// 20pt margins when omitted - unlike <see cref="PdfGenerateConfig"/>'s own bare field defaults
-        /// (<see cref="PageSize.Undefined"/>, a 0pt page with no margins), which exist so the HTML path's
+        /// (<see cref="PageSize.Undefined"/>, which falls back to US Letter, and no margins), which exist so the HTML path's
         /// <c>@page</c> rule can tell "unset" from "explicitly zero"; a declarative document has no
         /// <c>@page</c> rule to defer to, so <c>CreateDocument(handler)</c> with no config at all needs a
         /// usable page size on its own to be a genuinely code-first, zero-config entry point.
@@ -538,9 +538,7 @@ namespace PeachPDF
             var page = pageDescriptor.Page;
 
             var orgPageSize = pageDescriptor.PageSizeOverride
-                ?? (config.PageSize != PageSize.Undefined
-                    ? PageSizeConverter.ToSize(config.PageSize)
-                    : new Size(config.ManualPageWidth, config.ManualPageHeight));
+                ?? ResolveConfiguredPageSize(config);
 
             if ((pageDescriptor.OrientationOverride ?? config.PageOrientation) == PageOrientation.Landscape)
             {
@@ -769,6 +767,17 @@ namespace PeachPDF
 
             return options;
         }
+
+        /// <summary>
+        /// The page size a <see cref="PdfGenerateConfig"/> asks for: its <see cref="PdfGenerateConfig.PageSize"/>, else the
+        /// <see cref="PdfGenerateConfig.ManualPageWidth"/> by <see cref="PdfGenerateConfig.ManualPageHeight"/> it was given, else US Letter. A bare
+        /// <c>new PdfGenerateConfig()</c> sets none of them, and a 0pt page would have no content area. CSS Paged Media 3 leaves an
+        /// <c>auto</c> page size to the user agent, and this is the one this library picks.
+        /// </summary>
+        private static Size ResolveConfiguredPageSize(PdfGenerateConfig config) =>
+            config.PageSize != PageSize.Undefined ? PageSizeConverter.ToSize(config.PageSize)
+            : config.ManualPageWidth > 0 && config.ManualPageHeight > 0 ? new Size(config.ManualPageWidth, config.ManualPageHeight)
+            : PageSizeConverter.ToSize(PageSize.Letter);
 
         /// <summary>
         /// Whether a <c>ScaleToPageSize</c>/<c>ShrinkToFit</c> render needs its font-cache clear,
