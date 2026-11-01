@@ -903,6 +903,28 @@ namespace PeachBrackets.Html.Utils
             && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);
 
         /// <summary>
+        /// The nearest box on <paramref name="box"/>'s clipping chain whose <c>overflow</c> clips its content -
+        /// the box whose padding edge is <paramref name="box"/>'s own fragment <c>OverflowClip</c> - or null
+        /// when nothing clips it. The same walk <c>FragmentEmitter</c> makes to build that clip.
+        /// </summary>
+        /// <param name="box">the box being clipped</param>
+        internal static CssBox? ClippingBoxOf(CssBox box)
+        {
+            var containingBlock = ClippingContainingBlockOf(box);
+
+            while (containingBlock is not null)
+            {
+                if (ClipsItsOverflow(containingBlock)) return containingBlock;
+
+                var next = ClippingContainingBlockOf(containingBlock);
+                if (ReferenceEquals(next, containingBlock)) return null;
+                containingBlock = next;
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// Whether <paramref name="ancestor"/>'s <c>overflow</c> clip applies to <paramref name="box"/>:
         /// whether the walk up from <paramref name="box"/> reaches it without an out-of-flow positioned
         /// box on the way jumping past it to its own containing block (<see cref="ClippingContainingBlockOf"/>).
