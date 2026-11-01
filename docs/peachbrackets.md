@@ -107,6 +107,9 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
+  item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
+  tree builds it from these. Needs `RecordTextRuns`.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall
