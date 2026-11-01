@@ -205,6 +205,15 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// Whether <paramref name="value"/> is a calc-family function whose expression is well formed (for example, <c>calc(1em+2px)</c> is not:
+        /// a binary <c>+</c> needs whitespace on both sides, CSS Values 4 section 10.8). For a caller that reads a value outside the CSS-OM, where
+        /// <see cref="ParseLength(string, double, double, double, string, bool, double?, double?, double?, double?, double?, double?, double?, double?, double, IFontMetricSource?)"/>
+        /// would otherwise turn a malformed expression into 0.
+        /// </summary>
+        internal static bool IsWellFormedCalc(string value) =>
+            TryGetCalcFunction(value, out var function) && function is { } fn && CalcParser.Parse(fn) is not null;
+
+        /// <summary>
         /// Whether <paramref name="value"/>'s resolved length depends on the containing block's size at
         /// all - a bare percentage, or a <c>calc()</c>/<c>min()</c>/<c>max()</c>/<c>clamp()</c> expression
         /// that contains a percentage anywhere in its tree (e.g. <c>calc(100% - 5px)</c>).

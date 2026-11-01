@@ -139,6 +139,10 @@ namespace PeachBrackets.Svg
             // before this point.
             if (IsCalcExpression(trimmed))
             {
+                // A malformed expression is an invalid value, not a zero length.
+                if (!CssValueParser.IsWellFormedCalc(trimmed))
+                    return null;
+
                 const double pointsPerPx = 0.75; // Length.PointsPerPx: 1px = 1/96in = 0.75pt
                 var points = CssValueParser.ParseLength(
                     trimmed,
@@ -180,6 +184,10 @@ namespace PeachBrackets.Svg
                 if (trimmed.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
                 {
                     trimmed = trimmed[..^suffix.Length];
+                    // A unit sits directly against its number (CSS Values 4 section 5): "5 px" is not a length.
+                    if (trimmed.Length > 0 && char.IsWhiteSpace(trimmed[^1]))
+                        return null;
+
                     scale = pixelsPerUnit;
                     break;
                 }
