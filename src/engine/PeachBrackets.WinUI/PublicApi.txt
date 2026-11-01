@@ -1,0 +1,19 @@
+PeachBrackets.WinUI.HtmlLinkClickedEventArgs : sealed class
+  property Boolean Cancel { get; set; }
+  property String Destination { get; }
+  property String Uri { get; }
+PeachBrackets.WinUI.HtmlLoadFailedEventArgs : sealed class
+  property Exception Exception { get; }
+PeachBrackets.WinUI.HtmlView : sealed class
+  ctor()
+  field static DependencyProperty HtmlProperty
+  field static DependencyProperty SourceProperty
+  method Boolean ScrollToElement(String elementId)
+  method Void CopySelection()
+  method Void SelectAll()
+  property Color PageBackground { get; set; }
+  property HtmlDocument Document { get; }
+  property InputCapabilities Input { get; set; }
+  property String Html { get; set; }
+  property String SelectedText { get; }
+  property Uri Source { get; set; }

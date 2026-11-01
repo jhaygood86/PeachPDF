@@ -157,6 +157,50 @@ jobs:
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
 
+  # PeachBrackets.WinUI is a WinUI 3 control, so like PeachDrawing.Win2D it is built on Windows and pushed by its own job once the
+  # packages it depends on (PeachBrackets, PeachDrawing.Win2D and what they need) are on the feed.
+  publish-winui:
+    needs: publish-win2d
+    runs-on: windows-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          10.0.x
+
+    - name: Setup .NET 11 (RC)
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 11.0.x
+        dotnet-quality: 'preview'
+
+    - name: Read package version
+      id: version
+      shell: pwsh
+      run: |
+        $version = [regex]::Match((Get-Content src/Version.props -Raw), '<PackageVersion>([0-9][^<]*)</PackageVersion>').Groups[1].Value
+        "value=$version" >> $env:GITHUB_OUTPUT
+        Write-Host "Version: $version"
+
+    - name: Build and pack
+      run: |
+        dotnet build src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
+        dotnet pack src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
+
+    - name: NuGet login
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Push to NuGet.org
+      run: dotnet nuget push "./packages/PeachBrackets.WinUI.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
   # PeachDrawing.Win2D builds on Windows only (Win2D is a Windows App SDK component), so it is packed and pushed by its own job once
   # the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
   publish-win2d:
