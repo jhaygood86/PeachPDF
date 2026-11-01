@@ -51,7 +51,7 @@ raster canvases give the `Canvas` API: rectangles, lines, polygons, image rectan
 positions are in layout units, while the coordinates of a `GraphicsPath` (for `DrawPath` and `PushClip`), and a `Pen`'s width and
 dash lengths, are in points. `SvgCanvas` scales those to the document's units when it writes them.
 
-The repository's `src/PeachDrawing.Svg.Example` project is a runnable version of this with a handful of scenes (shapes and
+The repository's `src/examples/PeachDrawing.Svg.Example` project is a runnable version of this with a handful of scenes (shapes and
 dashes, gradients, clips and transforms, blend modes and layer effects, patterns and images, text in both modes); run it and open the
 files in a browser.
 

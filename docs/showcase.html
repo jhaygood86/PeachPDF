@@ -42,7 +42,7 @@ machine, in the page, with no server involved. Prefer the command line or plain 
 {% else %}
 <p>The showcase gallery is generated during the production site build and isn't part of
 the repository. To produce it locally, run
-<code>dotnet run --project src/PeachPDF.TestHarness --framework net10.0 -- docs/showcase</code>
+<code>dotnet run --project src/harness/PeachPDF.TestHarness --framework net10.0 -- docs/showcase</code>
 from the repository root, then move <code>docs/showcase/showcases.json</code> to
 <code>docs/_data/showcases.json</code> and rebuild the site.</p>
 {% endif %}

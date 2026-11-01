@@ -17,7 +17,7 @@ from fontTools.subset import Options, Subsetter
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
-# The paragraph of the showcase (src/PeachPDF.TestHarness/Program.cs sets the same text), built from word groups already
+# The paragraph of the showcase (src/harness/PeachPDF.TestHarness/Program.cs sets the same text), built from word groups already
 # exercised by the dictionary line-breaking tests (PeachDrawing.Text.Tests/Text/Segmentation/DictionaryLineBreakingTests.cs).
 TEXT = {
     "Lao": (
