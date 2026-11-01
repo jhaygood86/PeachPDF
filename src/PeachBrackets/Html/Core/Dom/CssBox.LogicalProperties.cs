@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
@@ -53,12 +54,14 @@ namespace PeachBrackets.Html.Dom
         /// Resolves every logical margin/padding/inset/border value cascaded onto this box (any of the
         /// 24 properties above that are non-null) into its physical edge, via
         /// <see cref="LogicalPropertyResolver"/> against this box's own resolved <see cref="Direction"/>/
-        /// <see cref="WritingMode"/>. Deliberately unconditional - a logical value always overwrites
-        /// whatever the corresponding physical longhand's own cascade already wrote, rather than tracking
-        /// true declaration order between the two (CSS Logical Properties 1 §1.1 says the last one
-        /// written, physical or logical, should win) - a known, narrow simplification, see
-        /// .claude/accepted-gaps/logical-and-physical-property-conflicts-favor-logical.md.
+        /// <see cref="WritingMode"/>. A logical value overwrites the physical longhand on the same edge
+        /// unless that physical longhand was applied later in the cascade (CSS Logical Properties 1 §1.1:
+        /// the last one written, physical or logical, wins) - see <see cref="LogicalDeclarationOrder"/>.
         /// </summary>
+        /// <remarks>
+        /// A logical longhand with no recorded order (one written by a path other than
+        /// <c>CssUtils.SetPropertyValue</c>) keeps winning, which is the behaviour before order was tracked.
+        /// </remarks>
         internal void ResolveLogicalProperties()
         {
             if (MarginBlockStart is null && MarginBlockEnd is null && MarginInlineStart is null && MarginInlineEnd is null
@@ -80,37 +83,91 @@ namespace PeachBrackets.Html.Dom
             var inlineStart = LogicalPropertyResolver.InlineStart(writingMode, direction);
             var inlineEnd = LogicalPropertyResolver.InlineEnd(writingMode, direction);
 
-            if (MarginBlockStart is { } mbs) ApplyMargin(blockStart, mbs);
-            if (MarginBlockEnd is { } mbe) ApplyMargin(blockEnd, mbe);
-            if (MarginInlineStart is { } mis) ApplyMargin(inlineStart, mis);
-            if (MarginInlineEnd is { } mie) ApplyMargin(inlineEnd, mie);
+            if (MarginBlockStart is { } mbs) ApplyMargin(blockStart, mbs, "margin-block-start");
+            if (MarginBlockEnd is { } mbe) ApplyMargin(blockEnd, mbe, "margin-block-end");
+            if (MarginInlineStart is { } mis) ApplyMargin(inlineStart, mis, "margin-inline-start");
+            if (MarginInlineEnd is { } mie) ApplyMargin(inlineEnd, mie, "margin-inline-end");
 
-            if (PaddingBlockStart is { } pbs) ApplyPadding(blockStart, pbs);
-            if (PaddingBlockEnd is { } pbe) ApplyPadding(blockEnd, pbe);
-            if (PaddingInlineStart is { } pis) ApplyPadding(inlineStart, pis);
-            if (PaddingInlineEnd is { } pie) ApplyPadding(inlineEnd, pie);
+            if (PaddingBlockStart is { } pbs) ApplyPadding(blockStart, pbs, "padding-block-start");
+            if (PaddingBlockEnd is { } pbe) ApplyPadding(blockEnd, pbe, "padding-block-end");
+            if (PaddingInlineStart is { } pis) ApplyPadding(inlineStart, pis, "padding-inline-start");
+            if (PaddingInlineEnd is { } pie) ApplyPadding(inlineEnd, pie, "padding-inline-end");
 
-            if (InsetBlockStart is { } ibs) ApplyInset(blockStart, ibs);
-            if (InsetBlockEnd is { } ibe) ApplyInset(blockEnd, ibe);
-            if (InsetInlineStart is { } iis) ApplyInset(inlineStart, iis);
-            if (InsetInlineEnd is { } iie) ApplyInset(inlineEnd, iie);
+            if (InsetBlockStart is { } ibs) ApplyInset(blockStart, ibs, "inset-block-start");
+            if (InsetBlockEnd is { } ibe) ApplyInset(blockEnd, ibe, "inset-block-end");
+            if (InsetInlineStart is { } iis) ApplyInset(inlineStart, iis, "inset-inline-start");
+            if (InsetInlineEnd is { } iie) ApplyInset(inlineEnd, iie, "inset-inline-end");
 
-            if (BorderBlockStartWidth is { } bbsw) ApplyBorderWidth(blockStart, bbsw);
-            if (BorderBlockStartStyle is { } bbss) ApplyBorderStyle(blockStart, bbss);
-            if (BorderBlockStartColor is { } bbsc) ApplyBorderColor(blockStart, bbsc);
-            if (BorderBlockEndWidth is { } bbew) ApplyBorderWidth(blockEnd, bbew);
-            if (BorderBlockEndStyle is { } bbes) ApplyBorderStyle(blockEnd, bbes);
-            if (BorderBlockEndColor is { } bbec) ApplyBorderColor(blockEnd, bbec);
-            if (BorderInlineStartWidth is { } bisw) ApplyBorderWidth(inlineStart, bisw);
-            if (BorderInlineStartStyle is { } biss) ApplyBorderStyle(inlineStart, biss);
-            if (BorderInlineStartColor is { } bisc) ApplyBorderColor(inlineStart, bisc);
-            if (BorderInlineEndWidth is { } biew) ApplyBorderWidth(inlineEnd, biew);
-            if (BorderInlineEndStyle is { } bies) ApplyBorderStyle(inlineEnd, bies);
-            if (BorderInlineEndColor is { } biec) ApplyBorderColor(inlineEnd, biec);
+            if (BorderBlockStartWidth is { } bbsw) ApplyBorderWidth(blockStart, bbsw, "border-block-start-width");
+            if (BorderBlockStartStyle is { } bbss) ApplyBorderStyle(blockStart, bbss, "border-block-start-style");
+            if (BorderBlockStartColor is { } bbsc) ApplyBorderColor(blockStart, bbsc, "border-block-start-color");
+            if (BorderBlockEndWidth is { } bbew) ApplyBorderWidth(blockEnd, bbew, "border-block-end-width");
+            if (BorderBlockEndStyle is { } bbes) ApplyBorderStyle(blockEnd, bbes, "border-block-end-style");
+            if (BorderBlockEndColor is { } bbec) ApplyBorderColor(blockEnd, bbec, "border-block-end-color");
+            if (BorderInlineStartWidth is { } bisw) ApplyBorderWidth(inlineStart, bisw, "border-inline-start-width");
+            if (BorderInlineStartStyle is { } biss) ApplyBorderStyle(inlineStart, biss, "border-inline-start-style");
+            if (BorderInlineStartColor is { } bisc) ApplyBorderColor(inlineStart, bisc, "border-inline-start-color");
+            if (BorderInlineEndWidth is { } biew) ApplyBorderWidth(inlineEnd, biew, "border-inline-end-width");
+            if (BorderInlineEndStyle is { } bies) ApplyBorderStyle(inlineEnd, bies, "border-inline-end-style");
+            if (BorderInlineEndColor is { } biec) ApplyBorderColor(inlineEnd, biec, "border-inline-end-color");
         }
 
-        private void ApplyMargin(PhysicalSide side, string value)
+        /// <summary>
+        /// Records that <paramref name="propName"/> was just applied to this box, so
+        /// <see cref="ResolveLogicalProperties"/> can tell which of a logical longhand and the physical
+        /// longhand on the same edge was declared later. Called by <c>CssUtils.SetPropertyValue</c> for every
+        /// declaration in cascade order. A logical longhand is always stamped; a physical one only once the
+        /// box has a logical declaration, because one applied before any logical declaration can never
+        /// outrank it (an unstamped physical longhand counts as earliest) and almost no box has one.
+        /// </summary>
+        internal void NoteDeclarationOrder(string propName)
         {
+            if (IsLogicalBoxModelName(propName))
+            {
+                _rare ??= new BoxRareState();
+                (_rare.LogicalOrder ??= new LogicalDeclarationOrder()).Stamp(propName);
+            }
+            else if (_rare?.LogicalOrder is { } order && LogicalDeclarationOrder.IsPhysicalEdgeName(propName))
+            {
+                order.Stamp(propName);
+            }
+        }
+
+        private static bool IsLogicalBoxModelName(string propName) =>
+            propName.Contains("-block-", StringComparison.Ordinal) || propName.Contains("-inline-", StringComparison.Ordinal);
+
+        /// <summary>
+        /// Whether the logical longhand <paramref name="logicalName"/> may write the physical edge
+        /// <paramref name="side"/>: false only when the physical longhand on that edge was declared after it.
+        /// </summary>
+        private bool LogicalOutranks(string logicalName, PhysicalSide side)
+        {
+            if (_rare?.LogicalOrder is not { } order) return true;
+
+            var sideName = side switch
+            {
+                PhysicalSide.Top => "top",
+                PhysicalSide.Right => "right",
+                PhysicalSide.Bottom => "bottom",
+                _ => "left",
+            };
+
+            var physicalName = logicalName switch
+            {
+                _ when logicalName.StartsWith("margin-", StringComparison.Ordinal) => "margin-" + sideName,
+                _ when logicalName.StartsWith("padding-", StringComparison.Ordinal) => "padding-" + sideName,
+                _ when logicalName.StartsWith("inset-", StringComparison.Ordinal) => sideName,
+                // border-{block|inline}-{start|end}-{width|style|color} -> border-{side}-{width|style|color}
+                _ => "border-" + sideName + logicalName.Substring(logicalName.LastIndexOf('-')),
+            };
+
+            return order.Of(physicalName) <= order.Of(logicalName);
+        }
+
+        private void ApplyMargin(PhysicalSide side, string value, string logicalName)
+        {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             var parsed = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
                 value, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
             switch (side)
@@ -122,8 +179,10 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
-        private void ApplyPadding(PhysicalSide side, string value)
+        private void ApplyPadding(PhysicalSide side, string value, string logicalName)
         {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             switch (side)
             {
                 case PhysicalSide.Top: PaddingTop = value; break;
@@ -133,8 +192,10 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
-        private void ApplyInset(PhysicalSide side, string value)
+        private void ApplyInset(PhysicalSide side, string value, string logicalName)
         {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             var parsed = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
                 value, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
             switch (side)
@@ -146,8 +207,10 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
-        private void ApplyBorderWidth(PhysicalSide side, string value)
+        private void ApplyBorderWidth(PhysicalSide side, string value, string logicalName)
         {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             switch (side)
             {
                 case PhysicalSide.Top: BorderTopWidth = value; break;
@@ -157,8 +220,10 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
-        private void ApplyBorderStyle(PhysicalSide side, string value)
+        private void ApplyBorderStyle(PhysicalSide side, string value, string logicalName)
         {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             var parsed = CssProperty<LineStyle>.FromCssText(value, Map.LineStyles, LineStyle.None);
             switch (side)
             {
@@ -169,8 +234,10 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
-        private void ApplyBorderColor(PhysicalSide side, string value)
+        private void ApplyBorderColor(PhysicalSide side, string value, string logicalName)
         {
+            if (!LogicalOutranks(logicalName, side)) return;
+
             switch (side)
             {
                 case PhysicalSide.Top: BorderTopColor = value; break;

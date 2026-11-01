@@ -109,6 +109,97 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(0, el.ActualMarginTop, 1);
         }
 
+        // ── Logical vs physical on the same edge: the later declaration wins ──────
+
+        [Theory]
+        [InlineData("margin-inline-start: 10pt; margin-left: 20pt", "margin-left", "20pt")]
+        [InlineData("margin-left: 20pt; margin-inline-start: 10pt", "margin-left", "10pt")]
+        [InlineData("padding-inline-start: 10pt; padding-left: 20pt", "padding-left", "20pt")]
+        [InlineData("padding-left: 20pt; padding-inline-start: 10pt", "padding-left", "10pt")]
+        [InlineData("border-inline-start-width: 10pt; border-left-width: 20pt", "border-left-width", "20pt")]
+        [InlineData("border-left-width: 20pt; border-inline-start-width: 10pt", "border-left-width", "10pt")]
+        [InlineData("border-inline-start-color: red; border-left-color: blue", "border-left-color", "rgb(0, 0, 255)")]
+        [InlineData("border-left-color: blue; border-inline-start-color: red", "border-left-color", "rgb(255, 0, 0)")]
+        public async Task LogicalAndPhysicalOnSameEdge_LaterDeclarationWins(string declarations, string physical, string expected)
+        {
+            var box = await CascadedDiv(declarations);
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, physical));
+        }
+
+        [Theory]
+        [InlineData("position: relative; inset-inline-start: 10pt; left: 20pt", "left", "20pt")]
+        [InlineData("position: relative; left: 20pt; inset-inline-start: 10pt", "left", "10pt")]
+        public async Task InsetLogicalAndPhysicalOnSameEdge_LaterDeclarationWins(string declarations, string physical, string expected)
+        {
+            var box = await CascadedDiv(declarations);
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, physical));
+        }
+
+        [Theory]
+        [InlineData("direction: rtl; margin-inline-start: 10pt; margin-right: 20pt", "margin-right", "20pt")]
+        [InlineData("direction: rtl; margin-right: 20pt; margin-inline-start: 10pt", "margin-right", "10pt")]
+        [InlineData("writing-mode: vertical-rl; margin-block-start: 10pt; margin-right: 20pt", "margin-right", "20pt")]
+        [InlineData("writing-mode: vertical-rl; margin-right: 20pt; margin-block-start: 10pt", "margin-right", "10pt")]
+        public async Task LogicalAndPhysicalOnSameEdge_LaterDeclarationWins_UnderDirectionAndWritingMode(
+            string declarations, string physical, string expected)
+        {
+            var box = await CascadedDiv(declarations);
+
+            Assert.Equal(expected, CssUtils.GetPropertyValue(box, physical));
+        }
+
+        [Fact]
+        public async Task PhysicalDeclarationOnADifferentEdge_DoesNotSuppressTheLogicalValue()
+        {
+            // margin-top is the block-start edge in horizontal-tb, not the inline-start (left) edge.
+            var box = await CascadedDiv("margin-inline-start: 10pt; margin-top: 20pt");
+
+            Assert.Equal("10pt", CssUtils.GetPropertyValue(box, "margin-left"));
+            Assert.Equal("20pt", CssUtils.GetPropertyValue(box, "margin-top"));
+        }
+
+        [Fact]
+        public async Task PhysicalShorthandDeclaredAfterTheLogicalLonghand_Wins()
+        {
+            var box = await CascadedDiv("margin-inline-start: 10pt; margin: 20pt");
+
+            Assert.Equal("20pt", CssUtils.GetPropertyValue(box, "margin-left"));
+        }
+
+        [Fact]
+        public async Task PhysicalShorthandDeclaredBeforeTheLogicalLonghand_Loses()
+        {
+            var box = await CascadedDiv("margin: 20pt; margin-inline-start: 10pt");
+
+            Assert.Equal("10pt", CssUtils.GetPropertyValue(box, "margin-left"));
+            Assert.Equal("20pt", CssUtils.GetPropertyValue(box, "margin-right"));
+        }
+
+        [Fact]
+        public async Task LaterRulePhysicalDeclaration_BeatsEarlierRuleLogicalDeclaration()
+        {
+            var html = """
+                <!DOCTYPE html><html><head><style>
+                  #el { margin-inline-start: 10pt; }
+                  #el { margin-left: 20pt; }
+                </style></head><body><div id="el">x</div></body></html>
+                """;
+            var el = FindById(await BuildBoxTree(html), "el")!;
+
+            Assert.Equal("20pt", CssUtils.GetPropertyValue(el, "margin-left"));
+            Assert.Equal(20, el.ActualMarginLeft, 1);
+        }
+
+        [Fact]
+        public async Task ImportantPhysicalDeclaration_BeatsLaterNormalLogicalDeclaration()
+        {
+            var box = await CascadedDiv("margin-left: 20pt !important; margin-inline-start: 10pt");
+
+            Assert.Equal("20pt", CssUtils.GetPropertyValue(box, "margin-left"));
+        }
+
         // ── Helpers ───────────────────────────────────────────────────────────────
 
         private static async Task<CssBox> CascadedDiv(string declarations)
