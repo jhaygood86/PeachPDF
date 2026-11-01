@@ -160,6 +160,57 @@ namespace PeachDrawing.PDF.Tests.Operations
         }
 
         [Fact]
+        public void FormDefaults_AreCarriedAndDefaultResourcesMerged()
+        {
+            static byte[] Form(string resources) =>
+                Encoding.Latin1.GetBytes(Text(TestPdf.Build("0 g", pageExtras: "/Annots [5 0 R]", extraObjects: [Widget, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>"]))
+                    .Replace("/Type /Catalog /Pages 2 0 R", "/Type /Catalog /Pages 2 0 R /AcroForm << /Fields [5 0 R] /DA (/Helv 0 Tf 0 g) /Q 1 /NeedAppearances true /DR << " + resources + " >> >>"));
+
+            var first = Form("/Font << /Helv 6 0 R >>");
+            var second = Form("/Font << /Helv 6 0 R /Other 6 0 R >> /Encoding << >>");
+
+            var result = Copy(PdfOperation.LoadBytes(first).MergeBytes(second));
+
+            var text = Text(result);
+            Assert.Contains("/NeedAppearances true", text);
+            Assert.Contains("/Q 1", text);
+            Assert.Contains("/Other", text);
+            Assert.Contains("/Encoding", text);
+            Assert.Equal(2, PdfPageSource.Open(result).PageCount);
+        }
+
+        [Fact]
+        public void PopupAnnotations_AreLeftToTheViewer()
+        {
+            var pdf = TestPdf.Build("0 g", pageExtras: "/Annots [5 0 R 6 0 R]", extraObjects:
+            [
+                "<< /Type /Annot /Subtype /Text /Rect [10 10 30 30] /Contents (note) /Popup 6 0 R >>",
+                "<< /Type /Annot /Subtype /Popup /Rect [40 40 90 90] /Parent 5 0 R >>",
+            ]);
+
+            var text = Text(Copy(PdfOperation.LoadBytes(pdf)));
+
+            Assert.Contains("/Text", text);
+            Assert.DoesNotContain("/Popup /", text.Replace("/Popup 6 0 R", ""));
+        }
+
+        [Fact]
+        public void ContentGivenAsAnArray_IsCopiedInOrder()
+        {
+            var pdf = Encoding.Latin1.GetBytes(Text(TestPdf.Build("", extraObjects:
+            [
+                TestPdf.Stream("", "1 0 0 rg 0 0 100 100 re f"),
+                TestPdf.Stream("", "0 0 1 rg 0 0 50 50 re f"),
+            ])).Replace("/Contents 4 0 R", "/Contents [5 0 R 6 0 R]"));
+
+            var result = Copy(PdfOperation.LoadBytes(pdf));
+
+            var inside = At(result, 0, 10, 90);
+            Assert.True(inside.B > 200 && inside.R < 50, $"the second stream draws over the first: {inside}");
+            Assert.True(At(result, 0, 80, 20).R > 200);
+        }
+
+        [Fact]
         public void PageTakenTwice_HasItsFormFieldOnce()
         {
             var result = Copy(PdfOperation.LoadBytes(WithForm()).TakePages("1,1"));

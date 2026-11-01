@@ -244,6 +244,58 @@ namespace PeachDrawing.PDF.Tests.Operations
         }
 
         [Fact]
+        public void StreamsAndFiles_AreAcceptedEverywhereABytesSourceIs()
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+            try
+            {
+                File.WriteAllBytes(path, Make(2));
+                using var stream = new MemoryStream(Make(3));
+                using var layerStream = new MemoryStream(Make(1));
+
+                var operation = PdfOperation.LoadStream(stream)
+                    .OverlayFile(new PdfLayerConfiguration { Stream = layerStream, TargetPages = "1" })
+                    .UnderlayFile(new PdfLayerConfiguration { FilePath = path, TargetPages = "2-3", SourcePages = "1-2" });
+
+                Assert.Equal(3, operation.PageCount);
+                Assert.Equal(3, PdfPageSource.Open(operation.ToArray()).PageCount);
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
+        public void AddAttachment_FromAFile_IsShownUnderItsAttachmentName()
+        {
+            var path = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".txt");
+            try
+            {
+                File.WriteAllText(path, "hello");
+                var result = PdfOperation.LoadBytes(Make(1))
+                    .AddAttachment(new PdfFileAttachment { FilePath = path, AttachmentName = "shown.txt" })
+                    .ToArray();
+
+                var file = Assert.Single(PdfPageSource.Open(result).GetAttachments());
+                Assert.Equal("shown.txt", file.FileName);
+                Assert.Equal("hello", System.Text.Encoding.UTF8.GetString(file.Data));
+            }
+            finally
+            {
+                File.Delete(path);
+            }
+        }
+
+        [Fact]
+        public void Warnings_AreEmptyWhenEverythingWasDrawn()
+        {
+            var operation = PdfOperation.LoadBytes(Make(1));
+            operation.ToArray();
+            Assert.Empty(operation.Warnings);
+        }
+
+        [Fact]
         public void TakePages_RefusesAPageTheFileLacks()
         {
             var operation = PdfOperation.LoadBytes(Make(1));
