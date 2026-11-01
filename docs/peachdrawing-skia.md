@@ -183,6 +183,13 @@ for the address) or follow the link yourself from `Links.LinkActivating`. A link
 host to scroll to (`TryGetDestination`). Links drawn inside a tile or a layer are not recorded: they are composited into the page later, in
 coordinates a pointer cannot use.
 
+### Cursors
+
+A document can ask for a pointer over an area (`Canvas.AddCursor`). The canvas records those beside the links, and the host asks what is under
+the pointer: `canvas.Links.CursorAt(x, y)` (or `CursorAtDevice` for a position in the surface's own pixels) gives the topmost `SkiaCursorArea`
+- a `CursorShape` and any images the document names - or `null` where the document asks for nothing, and the host shows its own. Mapping a
+`CursorShape` to the platform's pointer is left to the host (Skia has no pointer of its own).
+
 ## Lifecycle
 
 Every native Skia object the backend creates has one owner and is released deterministically; nothing relies on a finalizer.

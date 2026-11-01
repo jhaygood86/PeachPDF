@@ -392,6 +392,7 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter PageBreakInsideModeConverter = Map.PageBreakInsideModes.ToConverter();
         public static readonly IValueConverter UnicodeModeConverter = Map.UnicodeModes.ToConverter();
         public static readonly IValueConverter VisibilityConverter = Map.Visibilities.ToConverter();
+        public static readonly IValueConverter PointerEventsConverter = Map.PointerEventsModes.ToConverter();
         public static readonly IValueConverter PlayStateConverter = Map.PlayStates.ToConverter();
         public static readonly IValueConverter FontVariantCapsConverter = Map.FontVariantCapsKeywords.ToConverter();
         public static readonly IValueConverter FontVariantPositionConverter = Map.FontVariantPositionKeywords.ToConverter();

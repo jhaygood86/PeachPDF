@@ -33,6 +33,14 @@ public sealed partial class SkiaCanvas
     }
 
     /// <inheritdoc />
+    public override void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage>? images = null)
+    {
+        Guard();
+        if (!_isOffscreen)
+            Links.AddCursor(new SkiaCursorArea(bounds, shape, images ?? []));
+    }
+
+    /// <inheritdoc />
     public override void AddDestination(string name, double top)
     {
         Guard();
