@@ -107,6 +107,10 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
+  **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
+  records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall
+  through, in these and in `GetElementAt`. See [Pointer Interaction](html-css-support.md#pointer-interaction).
 - **`PaintLinks(pageIndex, canvas)`** puts a page's links on a canvas as `Canvas.AddLink`/`AddDestinationLink`/`AddDestination` calls (see
   [Links and destinations](peachdrawing-core.md#links-and-destinations)), so a canvas for a format with hyperlinks - the PDF and SVG ones - writes
   them without the consumer reading `Links` itself. Call it for every page *after all the pages have been painted*: where a link sits under a

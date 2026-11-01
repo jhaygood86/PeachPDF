@@ -218,6 +218,6 @@ The following SVG 1.0/1.1 features are not supported, each for the reason given:
 
 - **SMIL animation** (`animate`, `animateColor`, `animateMotion`, `animateTransform`, `set`) — a static PDF page has no animation/timeline model to target.
 - **Scripting** (`script`, event-handler attributes like `onclick`) — no script execution context exists in a static PDF page.
-- **`cursor`** — no pointer/cursor model exists for embedded vector content in a PDF.
+- **`cursor`** (the SVG 1.1 `<cursor>` element) — a PDF has no pointer to give an image to. The CSS `cursor` property is read for HTML elements; see [Pointer Interaction](html-css-support.md#pointer-interaction).
 - **`view`** — fragment-based view navigation has no equivalent in static PDF page content.
 - **Legacy SVG glyph-outline fonts** (`font`, `glyph`, `missing-glyph`, `hkern`, `vkern`, `font-face` and its children) — this would duplicate PeachPDF's existing full TrueType/CFF/WOFF/WOFF2 font pipeline for a mechanism SVG2 itself deprecated in favor of ordinary web fonts; use real fonts via `font-family`/`@font-face` instead.

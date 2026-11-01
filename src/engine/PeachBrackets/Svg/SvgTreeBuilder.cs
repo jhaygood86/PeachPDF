@@ -1753,11 +1753,12 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
-        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c> or a length-percentage; anything else computes to the inherited value.
+        /// A <c>letter-spacing</c>/<c>word-spacing</c> value that is <c>normal</c>, a CSS-wide keyword or a length-percentage; anything else computes to the inherited value.
         /// A percentage is valid (it is relative to the font size), which the reference length of 1 lets through: with none the parser reads it as absent.
         /// </summary>
         private static bool IsSpacingValue(string value) =>
-            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
+            value.Trim().Equals("normal", StringComparison.OrdinalIgnoreCase) || CssGlobalKeywords.TryParse(value, out _)
+            || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
 
         /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
@@ -1821,7 +1822,7 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? DeclaredOrInitial(ISvgSourceNode node, string name)
         {
-            var text = ResolveStyledAttr(node, name);
+            var text = ResolveStyledAttr(node, name, name is "letter-spacing" or "word-spacing" ? IsSpacingValue : null);
             return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
         }
 
@@ -2495,6 +2496,14 @@ namespace PeachBrackets.Svg
                    ?? GetFontFor(font, Html.Utils.DefaultFontResolver.DefaultFont, size);
         }
 
+        private const double RelativeFontSizeRatio = 1.2;
+
+        private static readonly Dictionary<string, double> AbsoluteFontSizes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["xx-small"] = 9, ["x-small"] = 10, ["small"] = 13, ["medium"] = 16,
+            ["large"] = 18, ["x-large"] = 24, ["xx-large"] = 32, ["xxx-large"] = 48,
+        };
+
         /// <summary>
         /// Resolves a <c>font-size</c> value in the same unit domain the rest of the text pipeline uses.
         /// Relative units resolve against the real inherited size: <c>em</c>/<c>%</c> against
@@ -2512,8 +2521,19 @@ namespace PeachBrackets.Svg
 
             var t = value.Trim();
 
-            if (t.Equals("inherit", StringComparison.OrdinalIgnoreCase))
+            // font-size is inherited, so unset is inherit; initial is the medium keyword, not the size inherited from the parent.
+            if (t.Equals("inherit", StringComparison.OrdinalIgnoreCase) || t.Equals("unset", StringComparison.OrdinalIgnoreCase))
                 return parentSize;
+            if (t.Equals("initial", StringComparison.OrdinalIgnoreCase))
+                return SvgValueParsers.DefaultEmPx;
+
+            // The absolute-size keywords are a fixed table off the 16px medium (CSS Fonts 4 section 2.5); smaller/larger step the parent's size by 1.2.
+            if (AbsoluteFontSizes.TryGetValue(t, out var keywordSize))
+                return keywordSize;
+            if (t.Equals("smaller", StringComparison.OrdinalIgnoreCase))
+                return parentSize / RelativeFontSizeRatio;
+            if (t.Equals("larger", StringComparison.OrdinalIgnoreCase))
+                return parentSize * RelativeFontSizeRatio;
 
             static double? Number(string s) =>
                 double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : null;

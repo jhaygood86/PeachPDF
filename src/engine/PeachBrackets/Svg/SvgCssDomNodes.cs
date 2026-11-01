@@ -220,7 +220,9 @@ namespace PeachBrackets.Svg
                             || trimmed.Equals(Keywords.Unset, StringComparison.OrdinalIgnoreCase))
                             resolved = null;
                         else if (trimmed.Equals(Keywords.Initial, StringComparison.OrdinalIgnoreCase))
-                            resolved = SvgPropertyRegistry.GetInitialValue(property.Name);
+                            // font-size's initial value is the medium keyword, which the builder's font resolution reads itself: the registry's
+                            // value for it is the resting text size, which would change the em basis of the whole SVG.
+                            resolved = property.Name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? Keywords.Initial : SvgPropertyRegistry.GetInitialValue(property.Name);
                         else
                             resolved = CssVarResolver.Resolve(node, property.Value, varContext);
 
