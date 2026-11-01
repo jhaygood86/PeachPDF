@@ -283,7 +283,8 @@ namespace PeachBrackets.Html.Dom
                     var targetRect = CommonUtils.GetFirstValueOrDefault(geometryBox.Rectangles, geometryBox.Bounds);
                     var pageIndex = PageAnchorResolver.ResolvePixelYToPage(
                         container, map.SlotToPage, map.MaxMappedSlot, map.FallbackPageCount, targetRect.Top);
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1, style, cssBox));
+                    // Numbered like counter(page): a document that is one part of a larger one counts on from the part before it.
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageIndex + 1 + container.PageNumberOffset, style, cssBox));
                 }
                 else
                 {
@@ -291,7 +292,7 @@ namespace PeachBrackets.Html.Dom
                     // convergence loop's first iteration has run) - the same placeholder counter(page)
                     // already silently produces outside margin boxes today; the convergence loop revisits
                     // this box once a real map exists.
-                    sb.Append(CssCounterEngine.FormatCounterValue(1, style, cssBox));
+                    sb.Append(CssCounterEngine.FormatCounterValue(1 + (container?.PageNumberOffset ?? 0), style, cssBox));
                 }
 
                 return;
