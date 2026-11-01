@@ -240,4 +240,83 @@ public class CssNestingIntegrationTests
         Assert.NotNull(container.Root);
         return container.Root!;
     }
+
+    // ---- conditional group rules written inside a style rule (CSS Nesting 1 section 3.2) ----
+
+    [Fact]
+    public async Task NestedMedia_AppliesItsDeclarationsToTheParentUnderTheCondition()
+    {
+        // print is the medium here, so the matching block applies over the rule's own declarations.
+        var html = Html(
+            ".box { color: #ff0000; @media print { color: #0000ff; } }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task NestedMedia_ThatDoesNotMatch_LeavesTheParentAlone()
+    {
+        var html = Html(
+            ".box { color: #ff0000; @media screen { color: #0000ff; } }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(255, 0, 0)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task NestedMedia_HoldsNestedRulesToo()
+    {
+        var html = Html(
+            ".box { @media print { & span { color: #0000ff; } } }",
+            "<div class='box'><span id='s'>x</span></div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "s")).Color);
+    }
+
+    [Fact]
+    public async Task NestedMedia_KeepsTheOrderItWasWrittenIn()
+    {
+        // The group's declaration comes after the parent's own, so it wins at equal specificity; a later parent declaration wins back.
+        var html = Html(
+            ".box { color: #ff0000; @media print { color: #0000ff; } } .box { background-color: #00ff00; }",
+            "<div class='box' id='d'>x</div>");
+        var d = await Box(html, "d");
+        Assert.Equal("rgb(0, 0, 255)", d.Color);
+        Assert.Equal("rgb(0, 255, 0)", d.BackgroundColor);
+    }
+
+    [Fact]
+    public async Task NestedSupports_ThatHolds_Applies()
+    {
+        var html = Html(
+            ".box { color: #ff0000; @supports (display: flex) { color: #0000ff; } @supports (nonsense-property: x) { color: #00ff00; } }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task NestedLayer_RanksBelowTheUnlayeredRule()
+    {
+        // A layered declaration loses to an unlayered one whatever the order (CSS Cascade 5 section 6.4.1).
+        var html = Html(
+            ".box { color: #ff0000; @layer base { color: #0000ff; } }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(255, 0, 0)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task NestedMediaInsideNestedMedia_NeedsBothConditions()
+    {
+        var html = Html(
+            ".box { color: #ff0000; @media print { @media (min-width: 1px) { color: #0000ff; } @media screen { color: #00ff00; } } }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "d")).Color);
+    }
+
+    [Fact]
+    public async Task AnUnrelatedAtRuleInAStyleRule_StillIsSkippedAndTheRestParses()
+    {
+        var html = Html(
+            ".box { @bogus foo; color: #0000ff; }",
+            "<div class='box' id='d'>x</div>");
+        Assert.Equal("rgb(0, 0, 255)", (await Box(html, "d")).Color);
+    }
 }
