@@ -128,6 +128,7 @@ the default media type is **print**.
 | `--animation-progress=P` | Render CSS animations as a single frame: `start`, `end`, or a number from 0 to 1, a point in each animation's own run. Without it animations are not applied. See [Rendering CSS animations as a still frame](usage-examples.md#rendering-css-animations-as-a-still-frame). |
 | `--interactive-pdf-forms` | Emit fillable AcroForm fields for `<input>`/`<select>` elements. |
 | `--no-compress` | Do not compress PDF content streams. |
+| `--linearize` | Write a linearized ("fast web view") PDF, so a viewer can show the first page before the whole file has arrived. |
 | `--pdf-version=VER` | PDF version to write: `2.0` (the default) or `1.7`. A `--pdfa` level that is defined against an earlier version picks that version when this option is not given. |
 | `--jxl-passthrough` | Experimental. With `--pdf-version=2.0`, embed opaque, upright JPEG XL images as their original bytes (`/JXLDecode`) instead of decoding them. No published PDF filter exists for JPEG XL yet, so no PDF reader opens such a file today. |
 | `--brotli` | With PDF 2.0, compress streams with Brotli instead of Flate: smaller files, but PDFium-based viewers (Chrome, Edge) and Acrobat show them blank today. Has no effect for other versions. |

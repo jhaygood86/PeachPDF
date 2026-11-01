@@ -1670,6 +1670,12 @@ namespace PeachBrackets.Html
         /// </remarks>
         internal (int Page, int Pages)? RunningElementPageContext { get; set; }
 
+        /// <summary>Pages that precede this document in the file it is part of; added to the page number a counter displays (see <c>HtmlDocumentOptions.PageNumberOffset</c>).</summary>
+        internal int PageNumberOffset { get; set; }
+
+        /// <summary>The page total a counter displays in place of this document's own, or null (see <c>HtmlDocumentOptions.TotalPagesOverride</c>).</summary>
+        internal int? TotalPagesOverride { get; set; }
+
         /// <summary>
         /// Measures the bounds of box and children, recursively.
         /// </summary>

@@ -154,6 +154,12 @@ document.Save(stream);
 
 See the [Declarative Document-Building API guide](docs/declarative-api.md) for the full surface.
 
+Several documents merge into one PDF with `DocumentMerge` (original or continuous page numbers, see the guide), and existing PDF files are merged, cut up, layered and protected with `PdfOperation` from [PeachDrawing.PDF](docs/peachdrawing-pdf.md#merging-and-working-on-existing-pdfs):
+
+```csharp
+PdfOperation.LoadFile("a.pdf").TakePages("1-5").MergeFile("b.pdf", "1,3,5").Save("merged.pdf");
+```
+
 ## Command-line tool
 
 If you just want to convert HTML to PDF from the shell, the standalone **`peachpdf`** command-line tool needs no .NET runtime — it is a single, self-contained Native AOT binary:
