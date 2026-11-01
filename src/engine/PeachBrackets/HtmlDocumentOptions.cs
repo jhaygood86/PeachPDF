@@ -44,6 +44,12 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public string Media { get; set; } = "print";
 
+    /// <summary>
+    /// The pointing devices the <c>hover</c>, <c>any-hover</c>, <c>pointer</c> and <c>any-pointer</c> media features report. <see langword="null"/>
+    /// (the default) is <see cref="InputCapabilities.None"/>: a document that is not pointed at, so those queries match their "none" state.
+    /// </summary>
+    public InputCapabilities? Input { get; set; }
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 
