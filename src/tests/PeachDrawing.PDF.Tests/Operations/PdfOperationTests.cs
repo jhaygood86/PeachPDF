@@ -296,6 +296,18 @@ namespace PeachDrawing.PDF.Tests.Operations
         }
 
         [Fact]
+        public void RedrawnFormField_WithWidgetsOnSeveralPages_StaysOneField_AndClashesRenameItAsAWhole()
+        {
+            var file = PdfObjectCopyTests.TwoPageField("/FT /Tx /T (total) /V (x)");
+
+            var result = PdfPageSource.Open(PdfOperation.LoadBytes(file).MergeBytes(file).ToArray());
+
+            // Pages 1 and 2 are the first file's, 3 and 4 the second's: each file's field is one field under one name.
+            var names = Enumerable.Range(0, 4).Select(i => Assert.Single(result.GetFormFields(i)).Name).ToList();
+            Assert.Equal(["total", "total", "total_2", "total_2"], names);
+        }
+
+        [Fact]
         public void TakePages_RefusesAPageTheFileLacks()
         {
             var operation = PdfOperation.LoadBytes(Make(1));
