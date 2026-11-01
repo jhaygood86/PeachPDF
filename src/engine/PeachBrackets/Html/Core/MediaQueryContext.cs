@@ -17,6 +17,7 @@ namespace PeachBrackets.Html
     /// <param name="ViewportHeightPt">The page-box height in points, or <c>null</c> when unknown.</param>
     /// <param name="ResolutionDpi">The output resolution in dots-per-inch, for <c>resolution</c> queries.</param>
     /// <param name="PreferredColorScheme">What <c>prefers-color-scheme</c> reports.</param>
+    /// <param name="Input">The pointing devices <c>hover</c>, <c>pointer</c> and their <c>any-</c> forms report; none by default.</param>
     /// <param name="PixelsPerPoint">The ambient <c>PdfGenerateConfig.PixelsPerInch / 72</c> catch-up
     /// multiplier (issue #814's convention) a length-valued feature's resolved value must be scaled by
     /// before comparing against <see cref="ViewportWidthPt"/>/<see cref="ViewportHeightPt"/> - despite
@@ -31,7 +32,8 @@ namespace PeachBrackets.Html
         double? ViewportHeightPt,
         double ResolutionDpi,
         ColorSchemePreference PreferredColorScheme,
-        double PixelsPerPoint = 1.0)
+        double PixelsPerPoint = 1.0,
+        InputCapabilities? Input = null)
     {
         /// <summary>
         /// A context carrying only the media type, with no page geometry — used by callers that have no
@@ -60,7 +62,8 @@ namespace PeachBrackets.Html
                 height,
                 96d,
                 container.PreferredColorScheme,
-                pixelsPerPoint);
+                pixelsPerPoint,
+                container.Input);
         }
     }
 }
