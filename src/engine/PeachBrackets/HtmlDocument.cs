@@ -4,6 +4,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Annotations;
 using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Html.Pages;
 using PeachBrackets.Html.Parse;
@@ -116,6 +117,8 @@ public sealed class HtmlDocument : IDisposable
                     ? null
                     : await PeachBrackets.Html.CssData.Parse(renderContext, options.UserStyleSheet, combineWithDefault: true));
 
+            document._source = html;
+            document._options = options;
             await container.SetHtml(html, userStyles);
 
             // An @page { size } rule in the document replaces the configured sheet; the content area is what is left inside the margins.
@@ -594,6 +597,15 @@ public sealed class HtmlDocument : IDisposable
         _container.SelectionModel = _selectedRanges.Count == 0 ? null : SelectionModel.Build(runs, _selectedRanges);
     }
 
+    private string? _source;
+    private HtmlDocumentOptions? _options;
+    private bool _textEdited;
+    private HashSet<int> _pointerChain = [];
+    private bool _pressed;
+    private int _focused = -1;
+    private bool _focusVisible;
+    private InteractionState _interaction = new();
+
     private readonly List<(string Name, int Priority, int Order, TextRange[] Ranges)> _highlights = [];
     private int _highlightOrder;
 
@@ -796,6 +808,234 @@ public sealed class HtmlDocument : IDisposable
             box = parent;
 
         return box.HtmlTag is null ? null : new DocumentElement(box);
+    }
+
+    /// <summary>
+    /// Tells the document where the pointer is and whether its button is down, so the rules that use <c>:hover</c> and <c>:active</c> apply to
+    /// the element under it and to its ancestors. The point is resolved like <see cref="GetElementAt(int, double, double)"/> (an element with
+    /// <c>pointer-events: none</c> lets it through). When no style rule uses the state, or the state is the one already in force, nothing is
+    /// done. Otherwise the document is cascaded and laid out again with the new state - so a rule may change anything, including the size of
+    /// an element - and the result names what to repaint: the elements whose state changed when nothing moved, or every page from the first
+    /// one that did. <see cref="DocumentElement"/> handles taken before the call no longer refer to the document and must be taken again.
+    /// Selection and highlights are kept when the text is unchanged.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page the pointer is over</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <param name="pressed">whether the primary button is down</param>
+    /// <param name="measuringCanvas">a canvas to measure text on, as <see cref="LayoutAsync"/> takes</param>
+    /// <returns>whether the state was applied and the regions to repaint</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public Task<UpdateResult> SetPointerStateAsync(int pageIndex, double x, double y, bool pressed, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        ThrowIfNotAPage(pageIndex);
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        var chain = StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? ChainOf(box) : [];
+        return ApplyStateAsync(chain, pressed, _focused, _focusVisible, measuringCanvas);
+    }
+
+    /// <summary>Tells the document the pointer left it, which ends <c>:hover</c> and <c>:active</c>. See <see cref="SetPointerStateAsync"/>.</summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether the state was applied and the regions to repaint</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        return ApplyStateAsync([], false, _focused, _focusVisible, measuringCanvas);
+    }
+
+    /// <summary>
+    /// Moves focus to an element (<c>null</c> takes it away), so the rules that use <c>:focus</c>, <c>:focus-visible</c> and <c>:focus-within</c>
+    /// apply. See <see cref="SetPointerStateAsync"/> for what that costs and returns.
+    /// </summary>
+    /// <param name="element">the element to focus, or <see langword="null"/></param>
+    /// <param name="focusVisible">whether focus came from the keyboard, which is when <c>:focus-visible</c> matches</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether the state was applied and the regions to repaint</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public Task<UpdateResult> SetFocusAsync(DocumentElement? element, bool focusVisible, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        var ordinal = element?.Box.HtmlTag?.SourceOrdinal ?? -1;
+        return ApplyStateAsync(_pointerChain, _pressed, ordinal, ordinal >= 0 && focusVisible, measuringCanvas);
+    }
+
+    // The source positions of an element and of the elements that contain it.
+    private static HashSet<int> ChainOf(CssBox box)
+    {
+        var chain = new HashSet<int>();
+        for (var current = box; current is not null; current = current.ParentBox)
+        {
+            if (current.HtmlTag is { SourceOrdinal: >= 0 } tag)
+                chain.Add(tag.SourceOrdinal);
+        }
+
+        return chain;
+    }
+
+    private async Task<UpdateResult> ApplyStateAsync(HashSet<int> pointerChain, bool pressed, int focused, bool focusVisible, Canvas measuringCanvas)
+    {
+        ThrowIfDisposed();
+        var focusWithin = new HashSet<int>();
+        if (focused >= 0 && FindByOrdinal(_container.Root, focused) is { } focusedBox)
+            focusWithin = ChainOf(focusedBox);
+
+        var next = new InteractionState
+        {
+            Hover = pointerChain,
+            Active = pressed ? pointerChain : [],
+            FocusWithin = focusWithin,
+            Focused = focused,
+            FocusVisible = focusVisible,
+        };
+
+        if (next.SameAs(_interaction))
+            return UpdateResult.NotApplied("The state is already in force.");
+
+        if (_source is null || _options is null)
+            return UpdateResult.NotApplied("Only a document loaded from HTML can be restyled for a change of state.");
+
+        // Only a kind of state some rule reads is worth a reload: pointer state for :hover/:active, focus for the :focus family.
+        var pointerChanged = !_interaction.Hover.SetEquals(next.Hover) || !_interaction.Active.SetEquals(next.Active);
+        var focusChanged = _interaction.Focused != next.Focused || _interaction.FocusVisible != next.FocusVisible || !_interaction.FocusWithin.SetEquals(next.FocusWithin);
+        var affectsStyle = (pointerChanged && _container.PointerPseudoClassesInUse) || (focusChanged && _container.FocusPseudoClassesInUse);
+
+        if (affectsStyle && _textEdited)
+            return UpdateResult.NotApplied("The text was edited in place, which loading the document again would undo.");
+
+        var changed = InteractionState.Difference(_interaction, next);
+        _pointerChain = pointerChain;
+        _pressed = pressed;
+        _focused = focused;
+        _focusVisible = focusVisible;
+        _interaction = next;
+        _container.Interaction = next;
+
+        if (!affectsStyle)
+            return new UpdateResult(true, null, []);
+
+        var geometryBefore = GeometrySignature();
+        var textBefore = _recordTextRuns && _textRuns is not null ? TextSignature(_textRuns) : null;
+
+        await ReloadAsync(measuringCanvas);
+
+        var geometryAfter = GeometrySignature();
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        var regions = new List<DirtyRegion>();
+        if (FirstGeometryChange(geometryBefore, geometryAfter) is { } firstPage)
+        {
+            for (var page = firstPage; page < _pages!.Count; page++)
+                regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
+        }
+        else
+        {
+            regions.AddRange(StyleUpdater.DirtyRegionsFor(_container, changed, fragmentainers));
+        }
+
+        // The selection and highlights were built over the old runs; they carry over when the text did not change.
+        if (_recordTextRuns && textBefore is not null && TextSignature(TextRuns) == textBefore)
+        {
+            if (_selectionStyling && _selectedRanges.Count > 0)
+                SetSelectedRanges(_selectedRanges);
+
+            if (_highlights.Count > 0)
+                RebuildHighlights();
+        }
+        else
+        {
+            _selectedRanges = [];
+            _highlights.Clear();
+            _selection?.RemoveAllRanges();
+        }
+
+        return new UpdateResult(true, null, regions);
+    }
+
+    private async Task ReloadAsync(Canvas measuringCanvas)
+    {
+        var options = _options!;
+        var units = _unitsPerPoint;
+
+        // As LoadAsync does before it parses: the physical sheet and the configured margins, which an @page rule then corrects in place.
+        _container.MarginTop = options.MarginTopPoints * units;
+        _container.MarginRight = options.MarginRightPoints * units;
+        _container.MarginBottom = options.MarginBottomPoints * units;
+        _container.MarginLeft = options.MarginLeftPoints * units;
+        var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
+        _container.PageSize = Utils.ToPixels(sheet, units);
+        _container.CssPageSize = null;
+
+        await _container.ReparseAsync();
+
+        var resolvedSheet = _container.CssPageSize ?? sheet;
+        var content = new Size(
+            resolvedSheet.Width - ((_container.MarginLeft + _container.MarginRight) / units),
+            resolvedSheet.Height - ((_container.MarginTop + _container.MarginBottom) / units));
+        _container.PageSize = Utils.ToPixels(content, units);
+        _container.Location = new PaintPoint(_container.MarginLeft, _container.MarginTop);
+
+        _container.ClipReport.Words.Clear();
+        _container.SelectionModel = null;
+        _container.HighlightLayers = [];
+        _textRuns = null;
+        _annotations = null;
+        await LayOutAsync(measuringCanvas);
+    }
+
+    private static CssBox? FindByOrdinal(CssBox? box, int ordinal)
+    {
+        if (box is null)
+            return null;
+
+        if (box.HtmlTag is { } tag && tag.SourceOrdinal == ordinal)
+            return box;
+
+        foreach (var child in box.Boxes)
+        {
+            if (FindByOrdinal(child, ordinal) is { } found)
+                return found;
+        }
+
+        return null;
+    }
+
+    private static string TextSignature(IReadOnlyList<TextRun> runs) => string.Join('\n', runs.Select(run => run.Text));
+
+    // The rectangle of every fragment of every page, rounded: what changes when a rule moves or resizes something.
+    private List<string>[] GeometrySignature()
+    {
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        var signature = new List<string>[fragmentainers.Count];
+        for (var page = 0; page < signature.Length; page++)
+        {
+            signature[page] = [];
+            AppendGeometry(fragmentainers[page].Root, signature[page]);
+        }
+
+        return signature;
+    }
+
+    private static void AppendGeometry(BoxFragment fragment, List<string> into)
+    {
+        var rect = fragment.Rect;
+        into.Add($"{Math.Round(rect.X, 1)},{Math.Round(rect.Y, 1)},{Math.Round(rect.Width, 1)},{Math.Round(rect.Height, 1)}");
+        foreach (var child in fragment.Children)
+            AppendGeometry(child, into);
+    }
+
+    private static int? FirstGeometryChange(List<string>[] before, List<string>[] after)
+    {
+        for (var page = 0; page < Math.Max(before.Length, after.Length); page++)
+        {
+            if (page >= before.Length || page >= after.Length || !before[page].SequenceEqual(after[page]))
+                return page;
+        }
+
+        return null;
     }
 
     /// <summary>The ranges last given to <see cref="SetSelectedRanges"/>; empty when nothing is selected.</summary>
@@ -1033,6 +1273,8 @@ public sealed class HtmlDocument : IDisposable
         var (caretPoint, reason) = change();
         if (caretPoint is null)
             return TextEditResult.NotApplied(reason ?? "The text could not be changed.", pagesBefore);
+
+        _textEdited = true;
 
         // What the old layout looked like, to say where the new one differs.
         var signature = Signature(before, pagesBefore);
