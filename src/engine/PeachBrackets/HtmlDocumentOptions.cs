@@ -86,6 +86,19 @@ public sealed class HtmlDocumentOptions
 
     private double? _animationProgress;
 
+    /// <summary>
+    /// How many pages precede this document in the file it is part of. Added to the number <c>counter(page)</c> shows in a page's margin
+    /// boxes and running elements, so a document that is one part of a larger one numbers its pages on from the part before. Pages
+    /// are still selected by <c>@page</c> rules (<c>:first</c>, <c>:left</c>) by their place in this document. Zero by default.
+    /// </summary>
+    public int PageNumberOffset { get; set; }
+
+    /// <summary>
+    /// The number <c>counter(pages)</c> shows in place of this document's own page count, for a document that is one part of a larger one;
+    /// <see langword="null"/> (the default) shows its own page count.
+    /// </summary>
+    public int? TotalPagesOverride { get; set; }
+
     /// <summary>Whether box backgrounds and borders snap to whole CSS pixels, as a browser's do. Off by default.</summary>
     public bool SnapBoxDecorationsToCssPixels { get; set; }
 

@@ -89,6 +89,9 @@ internal sealed class CliOptions
     // --- PDF output ---
     public bool NoCompress { get; set; }
 
+    /// <summary>Write a linearized ("fast web view") PDF (<c>--linearize</c>).</summary>
+    public bool Linearize { get; set; }
+
     /// <summary>Compress with Brotli when writing PDF 2.0 (<c>--brotli</c>).</summary>
     public bool Brotli { get; set; }
 

@@ -161,6 +161,16 @@ PeachBrackets.ColorSchemePreference : enum Int32
   Light = 0
 PeachBrackets.DataUri : static class
   method static Boolean TryDecode(String uri, out String mimeType, out Byte[] bytes)
+PeachBrackets.DocumentCursor : sealed class
+  ctor(CursorShape Shape, IReadOnlyList<CursorImage> Images)
+  method DocumentCursor <Clone>$()
+  method Void Deconstruct(out CursorShape Shape, out IReadOnlyList<CursorImage> Images)
+  method virtual Boolean Equals(DocumentCursor other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property CursorShape Shape { get; init; }
+  property IReadOnlyList<CursorImage> Images { get; init; }
 PeachBrackets.DocumentPage : struct
   ctor(Int32 Index, Double WidthPoints, Double HeightPoints)
   method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints)
@@ -187,6 +197,7 @@ PeachBrackets.GenericFontKeyword : struct
   property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
   method Boolean RemoveHighlight(String name)
+  method DocumentCursor GetCursorAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
@@ -213,6 +224,7 @@ PeachBrackets.HtmlDocument : sealed class
   method TextRange? GetWordAt(TextPosition position)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method Void ClearHighlights()
+  method Void PaintCursors(Int32 pageIndex, Canvas canvas)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
   method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)
   method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
@@ -263,6 +275,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property Int32 PageNumberOffset { get; set; }
+  property Int32? TotalPagesOverride { get; set; }
   property PaintColor SelectionBackground { get; set; }
   property PaintColor? SelectionForeground { get; set; }
   property String DefaultLanguage { get; set; }

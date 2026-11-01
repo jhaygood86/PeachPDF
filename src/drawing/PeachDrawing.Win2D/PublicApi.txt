@@ -13,6 +13,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
+  method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
   method virtual Void BeginArtifact()
   method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
@@ -73,6 +74,17 @@ PeachDrawing.Win2D.Win2dComposerOptions : sealed class
   property PaintColor Background { get; init; }
   property Single Dpi { get; init; }
   property Win2dLinkOptions Links { get; init; }
+PeachDrawing.Win2D.Win2dCursorArea : sealed class
+  ctor(Rect Bounds, CursorShape Shape, IReadOnlyList<CursorImage> Images)
+  method Void Deconstruct(out Rect Bounds, out CursorShape Shape, out IReadOnlyList<CursorImage> Images)
+  method Win2dCursorArea <Clone>$()
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(Win2dCursorArea other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property CursorShape Shape { get; init; }
+  property IReadOnlyList<CursorImage> Images { get; init; }
+  property Rect Bounds { get; init; }
 PeachDrawing.Win2D.Win2dDeviceLostException : sealed class
   ctor(Exception inner)
 PeachDrawing.Win2D.Win2dImageCodec : enum Int32
@@ -104,9 +116,12 @@ PeachDrawing.Win2D.Win2dLinkMap : sealed class
   method Boolean TryGetDestination(String name, out Double top)
   method Task<Boolean> ActivateAsync(Win2dLink link)
   method Task<Boolean> TryActivateAsync(Double x, Double y)
+  method Win2dCursorArea CursorAt(Double x, Double y)
+  method Win2dCursorArea CursorAtDips(Double xDips, Double yDips)
   method Win2dLink HitTest(Double x, Double y)
   method Win2dLink HitTestDips(Double xDips, Double yDips)
   property IReadOnlyDictionary<String, Double> Destinations { get; }
+  property IReadOnlyList<Win2dCursorArea> Cursors { get; }
   property IReadOnlyList<Win2dLink> Links { get; }
 PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   ctor()

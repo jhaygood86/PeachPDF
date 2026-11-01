@@ -479,13 +479,13 @@ namespace PeachBrackets.Html.Dom
             {
                 if (counterName.Data.Equals("page", StringComparison.OrdinalIgnoreCase))
                 {
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page, style, counterBox));
+                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Page + counterBox.HtmlContainer.PageNumberOffset, style, counterBox));
                     return;
                 }
 
                 if (counterName.Data.Equals("pages", StringComparison.OrdinalIgnoreCase))
                 {
-                    sb.Append(CssCounterEngine.FormatCounterValue(pageContext.Pages, style, counterBox));
+                    sb.Append(CssCounterEngine.FormatCounterValue(counterBox.HtmlContainer.TotalPagesOverride ?? pageContext.Pages, style, counterBox));
                     return;
                 }
             }

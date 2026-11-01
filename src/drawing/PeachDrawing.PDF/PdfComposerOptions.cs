@@ -114,6 +114,13 @@ namespace PeachDrawing.PDF
         public bool CompressContentStreams { get; set; } = true;
 
         /// <summary>
+        /// Whether the file is written in the linearized layout ("fast web view", ISO 32000-1 Annex F): the first page's objects come first, then the
+        /// other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has arrived.
+        /// Defaults to <see langword="false"/>. A linearized file is a little larger.
+        /// </summary>
+        public bool Linearize { get; set; }
+
+        /// <summary>
         /// Whether page content, fonts, embedded files and raster image data are compressed with Brotli (the PDF 2.0
         /// <c>/BrotliDecode</c> filter) instead of Flate: typically smaller output. Defaults to <see langword="false"/>, because the
         /// filter is not read by every PDF reader yet (PDFium, the engine behind Chrome's and Edge's viewers, and Acrobat show such a

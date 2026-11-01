@@ -75,6 +75,7 @@ files in a browser.
 | `DrawImageWithColorMatrix`, `DrawImageBlendedOver`, `DrawImageWithOpacity` | `feColorMatrix`, an isolated group blending the top image, and `opacity` |
 | `CreateTile` | the content drawn into the tile becomes a clipped `<g>` in `<defs>`, referenced wherever the tile is drawn |
 | `DrawString`, `DrawGlyphs` | see [Text](#text) |
+| `AddCursor` | an unpainted, clickable `<rect>` with a `cursor` style (images first, then the keyword), written under the links so a link it covers is still clickable |
 | `AddLink`, `AddDestinationLink`, `AddDestination` | `<a href>` around an unpainted, clickable `<rect>` (or a `<polygon>` for a link over a rotated element), written after everything else so it lies on top; a destination is an empty `<rect id="anchor-...">` at its height, and a link to it is `href="#anchor-..."` |
 | `BeginRasterSurface`, `DrawRaster` | the one non-vector path: a bitmap a caller asks for is embedded as a PNG |
 

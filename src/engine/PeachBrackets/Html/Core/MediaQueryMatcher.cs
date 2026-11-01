@@ -130,6 +130,8 @@ namespace PeachBrackets.Html
                 case "any-pointer":
                 case "update":
                 case "scripting":
+                // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors).
+                case "forced-colors":
                     return MatchesKeyword(feature, "none", booleanContextResult: false);
                 case "prefers-contrast":
                 case "prefers-reduced-transparency":

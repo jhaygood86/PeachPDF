@@ -38,6 +38,9 @@ internal sealed class PdfDocumentOptions
     /// <summary>
     /// Gets or sets a value indicating that all objects are not compressed.
     /// </summary>
+    /// <summary>Whether the file is written in the linearized ("fast web view") layout.</summary>
+    public bool Linearize { get; set; }
+
     public bool NoCompression
     {
         get => _noCompression;

@@ -53,6 +53,7 @@ namespace PeachDrawing.PDF
         {
             var settings = _document.Options;
             settings.CompressContentStreams = options.CompressContentStreams;
+            settings.Linearize = options.Linearize;
             settings.BrotliCompression = options.BrotliCompression;
             settings.JxlPassthrough = options.JxlPassthrough;
             // Undefined (not the engine default of Rgb) lets each colour write in whichever space it actually carries - RGB as

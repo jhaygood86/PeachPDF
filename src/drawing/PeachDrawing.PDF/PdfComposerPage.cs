@@ -83,6 +83,17 @@ namespace PeachDrawing.PDF
         /// <summary>The engine's page, for the rest of the package.</summary>
         internal PdfPage Page => _page;
 
+        /// <summary>
+        /// Draws into a content stream added after the ones the page has, for a page that is finished and whose content was copied in from a file:
+        /// what is drawn lands over that content, where what the page's own canvas drew lands under it. The canvas is closed when this returns.
+        /// </summary>
+        internal void DrawAppended(PdfRenderContext renderContext, Action<PdfCanvas> draw)
+        {
+            using var graphics = PdfGraphics.FromPdfPage(_page);
+            using var canvas = new PdfCanvas(renderContext, graphics, renderContext.PixelsPerPoint) { Page = this };
+            draw(canvas);
+        }
+
         /// <summary>Sets a custom string entry in a dictionary associated with the page.</summary>
         /// <remarks>
         /// The dictionary is created as an indirect object on first use. Another call with the same

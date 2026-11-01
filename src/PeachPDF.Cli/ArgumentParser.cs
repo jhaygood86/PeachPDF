@@ -123,6 +123,7 @@ internal static class ArgumentParser
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;
 
                 case "no-compress": _options.NoCompress = true; break;
+                case "linearize": _options.Linearize = true; break;
                 case "brotli": _options.Brotli = true; break;
                 case "jxl-passthrough": _options.JxlPassthrough = true; break;
                 case "pdf-version": ParsePdfVersion(_options, RequireValue(name, inlineValue)); break;

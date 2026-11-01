@@ -777,6 +777,29 @@ await SaveShowcaseAsync("gradients", "Backgrounds & Borders", "CSS Gradients",
     "linear-gradient, radial-gradient, and conic-gradient: directions, angles, multi-stop and hard-stop color lists, gradient layers over a background color, and CSS Color Level 4 interpolation spaces.",
     html, pdfConfig);
 
+// --- Pointer interaction showcase ---
+
+const string pointerHtml = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.4em }
+    p { margin: 0 0 0.6em; color: #444 }
+    .box { position: relative; width: 120mm; height: 28mm; margin: 0 0 6mm; background: #dfeaf7; border: 1px solid #5b7fa8; cursor: crosshair }
+    .overlay { position: absolute; left: 20mm; top: 6mm; width: 60mm; height: 14mm; background: rgba(240, 160, 60, .7); cursor: wait; pointer-events: none }
+    a.live, a.dead { display: inline-block; padding: 3mm 6mm; margin-right: 6mm; color: #fff; text-decoration: none; background: #2e7d32; cursor: pointer }
+    a.dead { background: #b23b3b; pointer-events: none; cursor: not-allowed }
+    </style>
+    <h1>Pointer interaction</h1>
+    <p>In a PDF, <code>cursor</code> has nowhere to go, and <code>pointer-events: none</code> removes the link annotation. On a screen host the same document answers hit tests with the pointer it asks for.</p>
+    <div class="box">The box asks for a crosshair<div class="overlay">overlay: pointer-events none</div></div>
+    <p><a class="live" href="https://example.com/live">A live link</a><a class="dead" href="https://example.com/dead">A link with pointer-events: none</a></p>
+    """;
+
+await SaveShowcaseAsync("pointer_interaction", "Interaction", "Pointer Interaction",
+    "cursor and pointer-events: the cursor a screen host shows is read from the document, while in the PDF a link under pointer-events: none is not written as an annotation.",
+    pointerHtml, pdfConfig);
+
 // --- Border-radius showcase ---
 
 const string RadiusCss = """
@@ -15622,6 +15645,59 @@ await SaveDeclarativeShowcaseAsync("file_layers", "Document Building", "Overlay 
                 });
             }
         });
+    });
+
+const string documentMergeSource =
+    """"
+    static Action<IDocumentBuilder> Report(string title, int lines) => doc => doc.Page(page =>
+    {
+        page.Size(300, 300);
+        page.Margin(24);
+        page.Header(header => header.Text(t => t.Span(title).Bold()));
+        page.Footer(footer => footer.Text(t =>
+        {
+            t.Span("Page ");
+            t.CurrentPageNumber();
+            t.Span(" of ");
+            t.TotalPages();
+        }));
+        page.Content(container => container.Column(column =>
+        {
+            for (var i = 1; i <= lines; i++)
+                column.Item().Height(30).Text($"{title}, line {i}");
+        }));
+    });
+
+    // Two reports, 2 and 3 pages long, read as one run: pages 1 to 5 of 5.
+    var merge = DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers();
+    var document = await generator.CreateMergedDocument(merge);
+    """";
+
+await SaveDeclarativeShowcaseAsync("document_merge", "Document Building", "Merging Documents",
+    "DocumentMerge: declarative documents written into one PDF, with UseContinuousPageNumbers() making their footers read as one run (here two reports of 2 and 3 pages, pages 1 to 5 of 5) and UseOriginalPageNumbers() leaving each its own.",
+    documentMergeSource,
+    async gen =>
+    {
+        static Action<IDocumentBuilder> Report(string title, int lines) => doc => doc.Page(page =>
+        {
+            page.Size(300, 300);
+            page.Margin(24);
+            page.Header(header => header.Text(t => t.Span(title).Bold()));
+            page.Footer(footer => footer.Text(t =>
+            {
+                t.Span("Page ");
+                t.CurrentPageNumber();
+                t.Span(" of ");
+                t.TotalPages();
+            }));
+            page.Content(container => container.Column(column =>
+            {
+                for (var i = 1; i <= lines; i++)
+                    column.Item().Height(30).Text($"{title}, line {i}");
+            }));
+        });
+
+        return await gen.CreateMergedDocument(DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers());
     });
 
 const string declarativeApiSource =
