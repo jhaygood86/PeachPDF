@@ -2,7 +2,7 @@
 
 `UseContinuousPageNumbers()` sets `HtmlDocumentOptions.PageNumberOffset` / `TotalPagesOverride`, which change what
 `counter(page)` / `counter(pages)` display in margin boxes and running elements (`CssContentEngine`, `PagePainter`).
-`@page :first`, `:left`/`:right` and page-name selection still use the page's place in its own part, and
+`target-counter(..., page)` is shifted too (it is the number a page would print). `@page :first`, `:left`/`:right` and page-name selection still use the page's place in its own part, and
 `TotalPagesWithinSection` / `PageNumberWithinSection` count within the part.
 
 **Why.** Page selection decides geometry and margin boxes during fragmentation, before and independently of the

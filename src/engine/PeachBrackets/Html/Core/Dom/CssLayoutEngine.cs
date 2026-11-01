@@ -5236,7 +5236,8 @@ namespace PeachBrackets.Html.Dom
             // line box. With no ::first-line in play the strut is the block's own, and the word's own
             // inline box contributes separately alongside it.
             var ownerBox = word.OwnerBox;
-            var strutStyle = word.FirstLineStyle ?? blockBox;
+            // The strut is the block's own first-line style; the word's is its inline's (CssBox.FirstLineInlineStyle), which can differ.
+            var strutStyle = word.FirstLineStyle is null ? blockBox : blockBox.ResolvedFirstLineStyle ?? word.FirstLineStyle;
 
             LineBoxExtent ExtentOf(CssBox box) => reserveDoubleOverlineReach
                 ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
@@ -5252,8 +5253,8 @@ namespace PeachBrackets.Html.Dom
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
             // ordinary inline box, so the loop below deliberately continues to include those.
-            if (word.FirstLineStyle is null && !word.IsImage)
-                extent = extent.Union(ExtentOf(ownerBox));
+            if (!word.IsImage)
+                extent = extent.Union(ExtentOf(word.FirstLineStyle ?? ownerBox));
 
             // A word owned by the block itself has no inline ancestors. Starting at its parent in
             // that case would walk *outside* the line's formatting context and let an outer element's
@@ -5262,7 +5263,8 @@ namespace PeachBrackets.Html.Dom
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
-                extent = extent.Union(ExtentOf(inlineAncestor));
+                // On the first line an inline ancestor contributes the font it has there, which inherits from ::first-line.
+                extent = extent.Union(ExtentOf(word.FirstLineStyle is null ? inlineAncestor : inlineAncestor.FirstLineInlineStyle ?? inlineAncestor));
             }
 
             return extent;
@@ -5582,13 +5584,17 @@ namespace PeachBrackets.Html.Dom
                 // The pass that broke here gave it to the line before the break, and kept that line.
                 if (coordinates.EmptyInlinesBeforeResume?.Contains(emptyInline) == true) return;
 
-                var extent = HalfLeadingExtentWithDecoration(emptyInline, g.PixelsPerPoint);
+                // On the first line of a block with a ::first-line rule an inline has the font it inherits from that rule.
+                var onFirstLine = blockBox.ResolvedFirstLineStyle is not null && ReferenceEquals(coordinates.Line, blockBox.LineBoxes.FirstOrDefault());
+                CssBox StyleOn(CssBox inline) => onFirstLine ? inline.FirstLineInlineStyle ?? inline : inline;
+
+                var extent = HalfLeadingExtentWithDecoration(StyleOn(emptyInline), g.PixelsPerPoint);
 
                 for (var inline = emptyInline.ParentBox;
                      inline is not null && !ReferenceEquals(inline, blockBox);
                      inline = inline.ParentBox)
                 {
-                    extent = extent.Union(HalfLeadingExtentWithDecoration(inline, g.PixelsPerPoint));
+                    extent = extent.Union(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint));
                 }
 
                 if (coordinates.PendingWordSeparator || IsAtLineStart(coordinates))
@@ -5762,7 +5768,7 @@ namespace PeachBrackets.Html.Dom
                 // corrects the words that actually end up on line 2+ back to b's own normal style.
                 if (blockBox.ResolvedFirstLineStyle != null && coordinates.Line == blockBox.LineBoxes[0])
                 {
-                    b.ApplyFirstLineStyleOverride(g, blockBox.ResolvedFirstLineStyle);
+                    b.ApplyFirstLineStyleOverride(g, b.FirstLineInlineStyle ?? blockBox.ResolvedFirstLineStyle);
                 }
 
                 // A box whose content began in an earlier fragmentainer is not re-opened here: under

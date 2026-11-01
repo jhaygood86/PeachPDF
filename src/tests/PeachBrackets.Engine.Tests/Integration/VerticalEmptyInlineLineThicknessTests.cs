@@ -55,5 +55,25 @@ namespace PeachBrackets.Engine.Tests.Integration
             var plain = await ColumnThickness("vertical-rl", "textmore");
             Assert.Equal(plain, empty, 0.5);
         }
+
+        [Fact]
+        public async Task AnEmptyInlineInsideAnotherInline_CountsItsAncestorsToo()
+        {
+            // The enclosing <b> has the larger font; its own inline box is on the line though it holds nothing but an empty span.
+            var empty = await ColumnThickness("vertical-rl", "text<b style='font-size:40pt'><span></span></b>more");
+            var plain = await ColumnThickness("vertical-rl", "textmore");
+            Assert.True(empty > plain + 20, $"empty {empty}, plain {plain}");
+        }
+
+        [Fact]
+        public async Task SeveralEmptyInlinesBeforeOneWord_TakeTheLargest()
+        {
+            var both = await ColumnThickness("vertical-rl", "text<span style='font-size:20pt'></span><span style='font-size:40pt'></span>more");
+            var largest = await ColumnThickness("vertical-rl", "text<span style='font-size:40pt'></span>more");
+            var smallestFirst = await ColumnThickness("vertical-rl", "text<span style='font-size:40pt'></span><span style='font-size:20pt'></span>more");
+
+            Assert.Equal(largest, both, 0.5);
+            Assert.Equal(largest, smallestFirst, 0.5);
+        }
     }
 }

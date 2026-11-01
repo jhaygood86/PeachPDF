@@ -1351,7 +1351,7 @@ p.lede::first-line { font-weight: bold; color: darkslateblue; font-variant: smal
 
 Known narrowing: a `background-image` layer (as opposed to a solid `background-color`) set via `::first-line` is not first-line-aware and paints using the element's own normal background instead.
 
-Known narrowing: an inline element on the first line, such as a `<span>`, still sizes the line box from its own font rather than the font it inherits from `::first-line`. So a `::first-line` that makes the text smaller than the paragraph's own font leaves a first line holding a `<span>` as tall as the paragraph's font would make it. The text itself is drawn in the `::first-line` font.
+Inline elements on the first line, such as a `<span>`, inherit from `::first-line` rather than from the paragraph: one that declares no font of its own has the `::first-line` font and sizes the line box from it, and one that declares its own `font-size`, `color` or other property keeps that declaration. Only the declarations that match the element itself (stylesheet rules and its `style` attribute) are re-applied, so a `revert` keyword and an animation on such an element read the ordinary cascade.
 
 **`::placeholder`** styles the hint drawn in an empty interactive PDF text field. `color`, `opacity`, and font properties such as `font-family`, `font-size`, `font-style`, and `font-weight` affect the baked hint appearance; box-model properties have no useful target because the hint is text inside the field's PDF appearance stream, not an independently laid-out box. PeachPDF's UA style gives an unstyled hint an opaque grey (`#7f7f7f`). Author-specified alpha in `color` or `opacity` uses the normal PDF transparency path: it works in ordinary PDF output and is rejected by `PdfATransparencyGuard` for PDF/A-1, just like translucent text anywhere else, rather than being silently discarded.
 
@@ -1434,7 +1434,8 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | `resolution`, `device-pixel-ratio` | Yes | Evaluated against the CSS reference density of 96 dpi (1 dppx) |
 | `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles |
 | `color`, `color-index`, `monochrome`, `grid` | Yes | Fixed device characteristics: color output (8 bits/channel), not a color-index/monochrome device, not a grid/tty |
-| `hover`, `pointer`, `any-hover`, `any-pointer`, `update`, `scripting`, `forced-colors` | Yes | All report the static-document resting state (`none`) — a PDF cannot be hovered, pointed at, updated, or scripted, and is never drawn under a forced palette |
+| `hover`, `any-hover`, `pointer`, `any-pointer` | Yes | Report the pointing devices of the host, which a PDF does not have: `none` unless `HtmlDocumentOptions.Input` says otherwise (`InputCapabilities.Mouse`, `.Touch`, or a mix of `PointerTypes`; see [PeachBrackets](peachbrackets.md)). The boolean form `(hover)` is true when the device can hover, `(pointer)` when there is any pointer; a keyword the feature does not define never matches |
+| `update`, `scripting`, `forced-colors` | Yes | All report the static-document resting state (`none`) — a PDF cannot be updated or scripted, and is never drawn under a forced palette |
 | `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) |
 | `prefers-contrast`, `prefers-reduced-transparency` | Yes | Report `no-preference` |
 | A feature name PeachPDF doesn't recognize | No | The whole media query is invalid and its block does not apply (per Media Queries 4, an unknown feature is false) |
