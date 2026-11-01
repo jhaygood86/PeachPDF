@@ -110,8 +110,8 @@ in the parent, and that word counts its owner on both sides of the break, so the
 The mutation run caught both.
 
 **Not done:**
-- **Vertical writing modes (#1316):** `CreateVerticalLineBoxes` walks a flat word list and never sees an
-  empty inline.
+- **Vertical writing modes (#1316):** done afterwards - `MeasureAndCollectWordsInDocumentOrder` notes an empty
+  inline's thickness against the word that follows it and `CreateVerticalLineBoxes` folds it into that column.
 - **`::first-line` (#1318):** done afterwards (see `CssBox.FirstLineInlineStyle`); an empty inline used to contribute its own font, not the one it inherits from
   `::first-line`. `LineBoxContributionOf`'s ancestor walk already did that for a text-bearing span
   (`text<span>x</span>more` under a smaller `::first-line` gives a 48pt line on `main`), so this matches

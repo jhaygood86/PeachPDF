@@ -859,7 +859,10 @@ namespace PeachBrackets.Html.Dom
 
             var words = new List<CssRect>();
             var outOfFlowDescendants = new List<(CssBox Box, int WordIndex)>();
-            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants);
+            // The thickness an empty inline element obliges the column it sits in, keyed by the index of the word that follows it
+            // (the word count for one after the last word).
+            var emptyInlineThickness = new Dictionary<int, double>();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants, emptyInlineThickness);
 
             var clientTop = blockBox.ClientTop;
             var clientLeft = blockBox.ClientLeft;
@@ -1220,7 +1223,15 @@ namespace PeachBrackets.Html.Dom
                 // still sized from its own box, exactly as it is there.
                 lineThickness = Math.Max(lineThickness,
                     word.IsImage ? wordBlock : LineBoxExtentOf(word, blockBox));
+
+                // An empty inline before the word still has a line box of its own (CSS 2.1 section 9.4.2), sized from its own font
+                // (section 10.8.1); it goes with the word that follows it, as FlowBox's PlaceEmptyInline does.
+                if (emptyInlineThickness.TryGetValue(i, out var emptyThickness))
+                    lineThickness = Math.Max(lineThickness, emptyThickness);
             }
+
+            if (emptyInlineThickness.TryGetValue(words.Count, out var trailingEmptyThickness))
+                lineThickness = Math.Max(lineThickness, trailingEmptyThickness);
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
 
@@ -1609,7 +1620,8 @@ namespace PeachBrackets.Html.Dom
         /// direct words, not its descendants'.
         /// </summary>
         private static async ValueTask MeasureAndCollectWordsInDocumentOrder(Canvas g, CssBox box,
-            List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants)
+            List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants,
+            Dictionary<int, double>? emptyInlineThickness = null)
         {
             if (box.Words.Count > 0)
             {
@@ -1640,7 +1652,24 @@ namespace PeachBrackets.Html.Dom
                     continue;
                 }
 
-                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants);
+                // An empty inline element puts no word in the stream, but it generates an inline box all the same: its thickness is noted
+                // against the word that follows it.
+                if (emptyInlineThickness is not null && child.DerivedStyle.ActualDisplay == Keywords.Inline && ContributesNothing(child))
+                {
+                    var extent = HalfLeadingExtentWithDecoration(child, g.PixelsPerPoint);
+                    for (var inline = child.ParentBox;
+                         inline is not null && inline.DerivedStyle.ActualDisplay == Keywords.Inline;
+                         inline = inline.ParentBox)
+                    {
+                        extent = extent.Union(HalfLeadingExtentWithDecoration(inline, g.PixelsPerPoint));
+                    }
+
+                    var thickness = extent.AboveBaseline + extent.BelowBaseline;
+                    emptyInlineThickness[words.Count] = emptyInlineThickness.TryGetValue(words.Count, out var held) ? Math.Max(held, thickness) : thickness;
+                    continue;
+                }
+
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants, emptyInlineThickness);
             }
         }
 
