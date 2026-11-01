@@ -38,7 +38,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var parent = table.ParentBox!;
 
             // Same line as the surrounding text: the table is an atomic inline, not a block that breaks the line.
-            Assert.Equal(1, parent.LineBoxes.Count);
+            Assert.Single(parent.LineBoxes);
             Assert.True(table.Location.X > parent.Location.X);
         }
 
