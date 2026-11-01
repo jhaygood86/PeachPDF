@@ -46,12 +46,16 @@ sealed class PdfObjectCopier
 
     // The field names already used by the destination's form, so merged files whose fields share a name do not become one field.
     readonly HashSet<string> _fieldNames;
+
+    // The output name of a named destination of the source, or null when it has none there (its page was not copied, or it is not defined).
+    readonly Func<string, string?> _destinationName;
     readonly HashSet<PdfItem> _fieldRoots = new(ReferenceEqualityComparer.Instance);
     readonly List<PdfDictionary> _newFieldRoots = [];
     readonly HashSet<PdfItem> _widgetPages = new(ReferenceEqualityComparer.Instance);
 
-    public PdfObjectCopier(PdfSourceDocument source, PdfDocument destination, HashSet<string> fieldNames)
+    public PdfObjectCopier(PdfSourceDocument source, PdfDocument destination, HashSet<string> fieldNames, Func<string, string?>? destinationName = null)
     {
+        _destinationName = destinationName ?? (name => name);
         _source = source;
         _destination = destination;
         _fieldNames = fieldNames;
@@ -218,6 +222,7 @@ sealed class PdfObjectCopier
 
         clone.Elements["/P"] = page.RequiredReference;
         StripUnsafe(clone);
+        PointNamedDestinations(clone);
 
         // A widget is a field, or the leaf of one: its form root goes in the form.
         if (isWidget)
@@ -251,6 +256,39 @@ sealed class PdfObjectCopier
                 action.Elements.Remove("/Next");
         }
     }
+
+    /// <summary>
+    /// A link that leads to a destination by name is pointed at the name that destination has in the output, and taken off when it has none there
+    /// (a name two files define means the destination of the file the link is in).
+    /// </summary>
+    void PointNamedDestinations(PdfDictionary annotation)
+    {
+        if (Resolved(annotation.Elements["/Dest"]) is { } dest && NamedTarget(dest) is { } name)
+        {
+            if (_destinationName(name) is { } renamed)
+                annotation.Elements["/Dest"] = Named(dest, renamed);
+            else
+                annotation.Elements.Remove("/Dest");
+        }
+
+        if (Resolved(annotation.Elements["/A"]) is PdfDictionary action && Resolved(action.Elements["/D"]) is { } to && NamedTarget(to) is { } actionName)
+        {
+            if (_destinationName(actionName) is { } renamed)
+                action.Elements["/D"] = Named(to, renamed);
+            else
+                annotation.Elements.Remove("/A");
+        }
+    }
+
+    static string? NamedTarget(PdfItem item) => item switch
+    {
+        PdfString s => s.Value,
+        PdfName n => n.Value.TrimStart('/'),
+        _ => null,
+    };
+
+    static PdfItem Named(PdfItem original, string name) =>
+        original is PdfName ? new PdfName("/" + name) : new PdfString(name, PdfStringEncoding.WinAnsiEncoding);
 
     static PdfItem? Resolved(PdfItem? item) => item is PdfReference reference ? reference.Value : item;
 

@@ -121,6 +121,38 @@ namespace PeachDrawing.PDF.Tests.Operations
             Assert.DoesNotContain(trimmed.GetLinks(0), l => l.Destination is not null);
         }
 
+        /// <summary>Three pages whose first one links, by the name <c>intro</c>, to the page at <paramref name="introPage"/>.</summary>
+        private static byte[] WithIntro(int introPage)
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { CompressContentStreams = false });
+            for (var i = 0; i < 3; i++)
+                composer.AddPage(100, 100);
+            composer.AddNamedDestination("intro", introPage, 10);
+            composer.Pages[0].AddDestinationLink(new Rect(10, 10, 20, 20), "intro");
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+            return stream.ToArray();
+        }
+
+        [Fact]
+        public void NamedDestinationLinks_LeadToTheirOwnFilesDestination_WhenTwoFilesUseTheSameName()
+        {
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(WithIntro(1)).MergeBytes(WithIntro(2))));
+
+            Assert.Equal(1, Assert.Single(result.GetLinks(0)).Destination!.PageIndex);
+            Assert.Equal(5, Assert.Single(result.GetLinks(3)).Destination!.PageIndex);   // the second file's page 3, not the first file's "intro"
+            Assert.Equal(["intro", "intro_2"], result.GetNamedDestinations().Keys.OrderBy(k => k));
+        }
+
+        [Fact]
+        public void NamedDestinationLink_IsRemoved_WhenItsPageWasNotTaken()
+        {
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(WithIntro(2)).TakePages("1-2")));
+
+            Assert.Empty(result.GetLinks(0));
+            Assert.Empty(result.GetNamedDestinations());
+        }
+
         [Fact]
         public void Outline_IsCarriedToTheNewPages()
         {
