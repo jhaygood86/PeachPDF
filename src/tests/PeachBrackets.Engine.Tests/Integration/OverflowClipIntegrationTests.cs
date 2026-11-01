@@ -270,15 +270,18 @@ body { margin: 0; }
             Assert.Equal(clipped, clipsAtFill!.Exists(c => Math.Abs(c.Height - 5) < 0.5));
         }
 
-        // What survives a non-positioned stacking context (opacity) between the clipper and the child: a child
-        // whose containing-block chain passes through the clipper stays clipped, and a fixed box is never clipped.
-        // NOT covered, and still wrong (issue #1315): an absolutely positioned child there keeps the clip - see
-        // .claude/accepted-gaps/positioned-box-inside-non-positioned-stacking-context-keeps-an-escaped-overflow-clip.md.
+        // CSS Overflow 3 section 3: an overflow clip affects only descendants whose containing-block chain passes
+        // through the clipping box. A non-positioned stacking context (opacity, mix-blend-mode) between the clipper
+        // and a positioned box forms no containing block, so it must not clip the box (issue #1315).
         [Theory]
-        [InlineData("opacity:0.5;", "position:relative;", "position:absolute;", true)]   // clipper is the containing block
+        [InlineData("opacity:0.5;", "position:relative;", "position:absolute;", true)]   // the clipper is the containing block
+        [InlineData("opacity:0.5;", "", "position:absolute;", false)]
+        [InlineData("mix-blend-mode:multiply;", "", "position:absolute;", false)]
         [InlineData("opacity:0.5;", "", "position:fixed;", false)]
         [InlineData("opacity:0.5;", "", "", true)]                                        // an in-flow child is clipped
-        public async Task PaintingAChildOfAStackingContext_KeepsOrSkipsTheClipByItsContainingBlockChain(
+        [InlineData("position:relative;z-index:1;", "", "position:absolute;", true)]      // a positioned middle is the containing block
+        [InlineData("", "", "position:absolute;z-index:1;", false)]
+        public async Task PaintingAChildOfAStackingContext_IsClippedOnlyWhenItsContainingBlockChainPassesThroughTheClipper(
             string middleStyle, string clipperStyle, string childPosition, bool clipped)
         {
             var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
