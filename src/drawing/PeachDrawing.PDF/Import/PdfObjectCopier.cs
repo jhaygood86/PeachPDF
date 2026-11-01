@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using PeachDrawing.PDF.Engine;
 using PeachDrawing.PDF.Engine.Advanced;
@@ -48,6 +49,9 @@ sealed class PdfObjectCopier
     readonly HashSet<string> _fieldNames;
     readonly HashSet<PdfItem> _fieldRoots = new(ReferenceEqualityComparer.Instance);
     readonly List<PdfDictionary> _newFieldRoots = [];
+
+    // The widgets that were put on a page of the output; the rest of a field's widgets belong to pages that were not taken.
+    readonly HashSet<PdfDictionary> _placedWidgets = new(ReferenceEqualityComparer.Instance);
     readonly HashSet<PdfItem> _widgetPages = new(ReferenceEqualityComparer.Instance);
 
     public PdfObjectCopier(PdfSourceDocument source, PdfDocument destination, HashSet<string> fieldNames)
@@ -146,7 +150,11 @@ sealed class PdfObjectCopier
 
         var form = _destination.Catalog.AcroForm;
         foreach (var root in _newFieldRoots)
-            form.Fields.Elements.Add(root.RequiredReference);
+        {
+            // A field that is left with no widget at all had all of them on pages that were not taken.
+            if (PruneToPlacedWidgets(root))
+                form.Fields.Elements.Add(root.RequiredReference);
+        }
 
         if (_source.DictOf(_source.DictOf(_source.Trailer, "Root") ?? _source.NewDictionary(), "AcroForm") is not { } sourceForm)
             return;
@@ -221,7 +229,10 @@ sealed class PdfObjectCopier
 
         // A widget is a field, or the leaf of one: its form root goes in the form.
         if (isWidget)
+        {
+            _placedWidgets.Add(clone);
             RegisterFieldRoot(annotation, clone);
+        }
 
         return clone.RequiredReference;
     }
@@ -250,6 +261,39 @@ sealed class PdfObjectCopier
             else
                 action.Elements.Remove("/Next");
         }
+    }
+
+    /// <summary>
+    /// Takes the widgets that are not on a page of the output (their pages were not taken) out of a field's tree, and the fields that held only
+    /// those. A radio group or check box whose chosen state belonged to a widget that is gone is reset to off.
+    /// </summary>
+    /// <returns>whether the field still has a widget</returns>
+    bool PruneToPlacedWidgets(PdfDictionary field)
+    {
+        if (field.Elements["/Kids"] is not { } kidsItem || Resolved(kidsItem) is not PdfArray kids)
+            return _placedWidgets.Contains(field);
+
+        for (var i = kids.Elements.Count - 1; i >= 0; i--)
+        {
+            if (Resolved(kids.Elements[i]) is not PdfDictionary kid || !PruneToPlacedWidgets(kid))
+                kids.Elements.RemoveAt(i);
+        }
+
+        if (kids.Elements.Count == 0)
+            return false;
+
+        if (Resolved(field.Elements["/V"]) is PdfName { Value: var state } && state != "/Off"
+            && !kids.Elements.Any(k => Resolved(k) is PdfDictionary { } w && w.Elements["/AS"] is PdfName { Value: var shown } && shown == state))
+        {
+            field.Elements.SetName("/V", "/Off");
+            foreach (var k in kids.Elements)
+            {
+                if (Resolved(k) is PdfDictionary widget && widget.Elements.ContainsKey("/AS"))
+                    widget.Elements.SetName("/AS", "/Off");
+            }
+        }
+
+        return true;
     }
 
     static PdfItem? Resolved(PdfItem? item) => item is PdfReference reference ? reference.Value : item;

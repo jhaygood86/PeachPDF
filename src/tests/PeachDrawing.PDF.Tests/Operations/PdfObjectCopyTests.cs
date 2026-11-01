@@ -243,6 +243,65 @@ namespace PeachDrawing.PDF.Tests.Operations
             Assert.True(At(result, 0, 80, 20).R > 200);
         }
 
+        /// <summary>
+        /// A two-page file with one field (<paramref name="fieldEntries"/>) whose two widgets are one on each page; <paramref name="widgetExtras"/>
+        /// holds the extra entries of the first and second widget.
+        /// </summary>
+        internal static byte[] TwoPageField(string fieldEntries, string firstWidgetExtras = "", string secondWidgetExtras = "")
+        {
+            string[] objects =
+            [
+                "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] /DA (/Helv 0 Tf 0 g) >> >>",
+                "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R /Annots [7 0 R] >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Contents 5 0 R /Annots [8 0 R] >>",
+                TestPdf.Stream("", ""),
+                "<< " + fieldEntries + " /Kids [7 0 R 8 0 R] >>",
+                "<< /Type /Annot /Subtype /Widget /Parent 6 0 R /Rect [10 10 90 30] /P 3 0 R " + firstWidgetExtras + " >>",
+                "<< /Type /Annot /Subtype /Widget /Parent 6 0 R /Rect [10 10 90 30] /P 4 0 R " + secondWidgetExtras + " >>",
+            ];
+            var sb = new StringBuilder("%PDF-1.4\n");
+            var offsets = new List<int>();
+            foreach (var body in objects)
+            {
+                offsets.Add(sb.Length);
+                sb.Append(offsets.Count).Append(" 0 obj\n").Append(body).Append("\nendobj\n");
+            }
+
+            var xref = sb.Length;
+            sb.Append("xref\n0 ").Append(offsets.Count + 1).Append("\n0000000000 65535 f \n");
+            foreach (var o in offsets)
+                sb.Append(o.ToString("D10")).Append(" 00000 n \n");
+            sb.Append("trailer\n<< /Size ").Append(offsets.Count + 1).Append(" /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n");
+            return Encoding.Latin1.GetBytes(sb.ToString());
+        }
+
+        [Fact]
+        public void FieldWhoseOtherWidgetWasOnAPageNotTaken_KeepsOnlyItsWidgetOnThePage()
+        {
+            var both = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(TwoPageField("/FT /Tx /T (total) /V (x)"))));
+            Assert.Equal("total", Assert.Single(both.GetFormFields(0)).Name);
+            Assert.Equal("total", Assert.Single(both.GetFormFields(1)).Name);
+
+            var result = Copy(PdfOperation.LoadBytes(TwoPageField("/FT /Tx /T (total) /V (x)")).TakePages("2"));
+
+            Assert.Equal(1, Count(Text(result), "/Subtype /Widget"));
+            Assert.Equal("total", Assert.Single(PdfPageSource.Open(result).GetFormFields(0)).Name);
+        }
+
+        [Fact]
+        public void RadioGroup_WhoseChosenButtonWasOnAPageNotTaken_IsResetToOff()
+        {
+            var pdf = TwoPageField("/FT /Btn /Ff 32768 /T (group) /V /On", "/AS /Off", "/AS /On");
+
+            var result = Copy(PdfOperation.LoadBytes(pdf).TakePages("1"));
+
+            var text = Text(result);
+            Assert.DoesNotContain("/V /On", text);
+            Assert.Contains("/V /Off", text);
+            Assert.Equal(1, Count(text, "/Subtype /Widget"));
+        }
+
         [Fact]
         public void PageTakenTwice_HasItsFormFieldOnce()
         {
