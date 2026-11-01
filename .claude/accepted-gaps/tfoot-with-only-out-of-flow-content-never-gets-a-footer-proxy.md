@@ -13,7 +13,7 @@ never appears in the rendered output at all, not even at the wrong position.
 The equivalent `<thead>` path has no such height gate - a `<thead>` whose only content is
 out-of-flow still gets its proxy created and its out-of-flow content still resolves/paints
 correctly, confirmed directly by `AbsoluteInTheadCell_NoPositionedAncestor_ResolvesAgainstPageContentOrigin`
-(`src/PeachPDF.Tests/Integration/AbsolutePositioningIntegrationTests.cs`). So this is a
+(`src/tests/PeachPDF.Tests/Integration/AbsolutePositioningIntegrationTests.cs`). So this is a
 `<tfoot>`-specific asymmetry, not a general limitation of out-of-flow content inside a repeating
 group - `AbsoluteInTfootCell_NoPositionedAncestor_ResolvesAgainstPageContentOrigin` in the same file
 routes around it by giving the footer cell some ordinary in-flow content alongside the out-of-flow

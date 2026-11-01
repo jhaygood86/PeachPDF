@@ -81,26 +81,26 @@ jobs:
 
     - name: Build
       run: |
-        dotnet build src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release
-        dotnet build src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release
-        dotnet build src/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release
-        dotnet build src/PeachDrawing/PeachDrawing.csproj --configuration Release
-        dotnet build src/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release
-        dotnet build src/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release
-        dotnet build src/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release
-        dotnet build src/PeachBrackets/PeachBrackets.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing/PeachDrawing.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release
+        dotnet build src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release
+        dotnet build src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
     - name: Pack
       run: |
-        dotnet pack src/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/PeachBrackets/PeachBrackets.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.Text.Data/PeachDrawing.Text.Data.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.Text/PeachDrawing.Text.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release --no-build --output ./packages
+        dotnet pack src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
@@ -189,8 +189,8 @@ jobs:
 
     - name: Build and pack
       run: |
-        dotnet build src/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release
-        dotnet pack src/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release --no-build --output ./packages
+        dotnet build src/drawing/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release
+        dotnet pack src/drawing/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release --no-build --output ./packages
 
     - name: NuGet login
       uses: NuGet/login@v1

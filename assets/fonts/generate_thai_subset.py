@@ -19,7 +19,7 @@ from fontTools.subset import Options, Subsetter
 from fontTools.ttLib import TTFont
 from fontTools.varLib.instancer import instantiateVariableFont
 
-# The paragraph of the showcase (src/PeachPDF.TestHarness/Program.cs sets the same text).
+# The paragraph of the showcase (src/harness/PeachPDF.TestHarness/Program.cs sets the same text).
 TEXT = {
     "Thai": (
         "à¸›à¸£à¸°à¹€à¸—à¸¨à¹„à¸—à¸¢à¹€à¸›à¹‡à¸™à¸›à¸£à¸°à¹€à¸—à¸¨à¸—à¸µà¹ˆà¸•à¸±à¹‰à¸‡à¸­à¸¢à¸¹à¹ˆà¹ƒà¸™à¹€à¸­à¹€à¸Šà¸µà¸¢à¸•à¸°à¸§à¸±à¸™à¸­à¸­à¸à¹€à¸‰à¸µà¸¢à¸‡à¹ƒà¸•à¹‰ à¸à¸£à¸¸à¸‡à¹€à¸—à¸žà¸¡à¸«à¸²à¸™à¸„à¸£à¹€à¸›à¹‡à¸™à¹€à¸¡à¸·à¸­à¸‡à¸«à¸¥à¸§à¸‡à¹à¸¥à¸°à¹€à¸¡à¸·à¸­à¸‡à¸—à¸µà¹ˆà¹ƒà¸«à¸à¹ˆà¸—à¸µà¹ˆà¸ªà¸¸à¸”à¸‚à¸­à¸‡à¸›à¸£à¸°à¹€à¸—à¸¨ "
