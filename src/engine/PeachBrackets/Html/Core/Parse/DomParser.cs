@@ -1453,6 +1453,9 @@ namespace PeachBrackets.Html.Parse
                 ResolveFirstLineStyle(valueParser, box, cssData, media, containerSizes);
             }
 
+            // After the block's own first-line style (above, for a box that is one) and before its children are cascaded, which read this.
+            ResolveFirstLineInlineStyle(valueParser, box, cssData, media, containerSizes);
+
             // The cascade still recurses into an inline <svg>/<math>, but their internals are not boxes of the
             // document: an SVG or MathML renderer reads them, and nothing may be lifted out from under it
             // (a shell recorded here would be spliced out of the tree those renderers read). A
@@ -1769,6 +1772,52 @@ namespace PeachBrackets.Html.Parse
             CssUtils.ApplyCurrentColor(shadowBox, valueParser);
 
             box.ResolvedFirstLineStyle = shadowBox;
+        }
+
+        /// <summary>
+        /// Resolves <see cref="CssBox.FirstLineInlineStyle"/> for an inline box under a block with a <c>::first-line</c> rule: its parent's first-line
+        /// style (the block's, or an inline's own) stands in for the parent when it inherits, and the declarations that matched the box itself are
+        /// applied over that, in the cascade's order. Only the box's own rules and style attribute apply: an animation does not, and
+        /// <c>revert</c> reads no earlier origin here, as for <see cref="ResolveFirstLineStyle"/>.
+        /// </summary>
+        private static void ResolveFirstLineInlineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            box.FirstLineInlineStyle = null;
+
+            if (!cssData.HasFirstLineRules || box.ParentBox is not { } parent) return;
+
+            var parentStyle = parent.FirstLineInlineStyle ?? parent.ResolvedFirstLineStyle;
+            if (parentStyle is null || box.IsOutOfFlow || box.DerivedStyle.ActualDisplay != Keywords.Inline) return;
+
+            var shadowBox = new CssBox(box, null);
+            box.Boxes.Remove(shadowBox); // a detached resolution helper, never a real tree member
+            shadowBox.InheritStyle(parentStyle);
+
+            // A run of text and an anonymous box are not elements: nothing matches them, they only inherit.
+            if (box.HtmlTag is not null || box.IsPseudoElement)
+            {
+                var pendingVarProperties = new Dictionary<string, string>();
+                var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes);
+                var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box, containerSizes);
+
+                IStyleRule? inlineRule = null;
+                if (box.HtmlTag is { } tag && tag.HasAttribute("style"))
+                    inlineRule = valueParser.GetOrParseInlineStyleRule(tag.TryGetAttribute("style")!);
+
+                AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
+                if (box.HtmlTag is not null) TranslateAttributes(box.HtmlTag, shadowBox, valueParser);
+                ApplyAuthorRulesInLayerBands(valueParser, shadowBox, authorNormal, importantPass: false, null, null, false, pendingVarProperties);
+                if (inlineRule is not null)
+                    AssignCssBlock(valueParser, shadowBox, inlineRule, importantPass: false, null, null, null, null, pendingVarProperties);
+                ApplyAuthorRulesInLayerBands(valueParser, shadowBox, authorImportant, importantPass: true, null, null, false, pendingVarProperties);
+                if (inlineRule is not null)
+                    AssignCssBlock(valueParser, shadowBox, inlineRule, importantPass: true, null, null, null, null, pendingVarProperties);
+                AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: true, null, null, null, null, pendingVarProperties);
+                ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
+                CssUtils.ApplyCurrentColor(shadowBox, valueParser);
+            }
+
+            box.FirstLineInlineStyle = shadowBox;
         }
 
         /// <summary>

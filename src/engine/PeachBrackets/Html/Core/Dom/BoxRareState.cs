@@ -47,6 +47,7 @@ namespace PeachBrackets.Html.Dom
         internal bool FirstLetterProcessed;
         internal bool MatchesFirstLetterSelector;
         internal CssBox? ResolvedFirstLineStyle;
+        internal CssBox? FirstLineInlineStyle;
         internal CssBox? ResolvedPlaceholderStyle;
         internal CssBox? ResolvedSelectionStyle;
         internal bool SelectionStyleProcessed;
