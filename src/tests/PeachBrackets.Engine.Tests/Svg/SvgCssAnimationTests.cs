@@ -498,6 +498,31 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         [Theory]
+        [InlineData("stroke-width", "x", 0.25, 4)]
+        [InlineData("stroke-width", "x", 0.5, 3)]
+        [InlineData("stroke-width", "x", 0.75, 2)]
+        [InlineData("stroke-width", "5 px", 0.5, 3)]
+        public async Task AnInvalidPresentationAttribute_StartsFromTheInheritedValue(string property, string attribute, double progress, double expected)
+        {
+            // The attribute is dropped as invalid, so the rect computes to the 5 it inherits and the animation mixes 5 to 1, not a flip from the text.
+            var document = await BuildAsync("@keyframes k { to { stroke-width: 1 } } .t { animation: k 1s linear }",
+                $"<g stroke-width=\"5\"><rect class=\"t\" {property}=\"{attribute}\" width=\"10\" height=\"10\" stroke=\"black\"/></g>", progress);
+
+            var group = Assert.IsType<SvgGroupElement>(document.Children[0]);
+            Assert.Equal(expected, group.Children[0].StrokeWidth, 2);
+        }
+
+        [Fact]
+        public async Task AnInvalidOpacityAttribute_StartsFromTheInitialValue()
+        {
+            // opacity is not inherited, so the dropped attribute leaves the initial 1; halfway to 0 is 0.5.
+            var document = await BuildAsync("@keyframes k { to { opacity: 0 } } .t { animation: k 1s linear }",
+                "<rect class=\"t\" opacity=\"x\" width=\"10\" height=\"10\"/>", 0.5);
+
+            Assert.Equal(0.5, document.Children[0].Opacity, 2);
+        }
+
+        [Theory]
         [InlineData(0, 24)]
         [InlineData(0.5, 22)]
         public async Task AnInheritedEmLength_IsFixedWhereItWasDeclared(double progress, double expected)

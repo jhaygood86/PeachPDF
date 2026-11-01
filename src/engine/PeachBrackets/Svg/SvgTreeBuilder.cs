@@ -1761,6 +1761,27 @@ namespace PeachBrackets.Svg
             || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
 
         /// <summary>
+        /// Whether <paramref name="value"/> is a valid declaration for the length and number properties an animation can start from. A property
+        /// with no check here is taken as valid, as it was before.
+        /// </summary>
+        private static bool IsValidDeclaredValue(string name, string value) => name switch
+        {
+            "letter-spacing" or "word-spacing" => IsSpacingValue(value),
+            // <length-percentage>; the reference length lets a percentage through, which the parser otherwise reads as absent.
+            "stroke-width" or "stroke-dashoffset" => SvgValueParsers.ParseLength(value, referenceLength: 1) is not null,
+            "opacity" or "fill-opacity" or "stroke-opacity" => IsNumberOrPercentage(value),
+            "stroke-miterlimit" => double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out _),
+            _ => true,
+        };
+
+        private static bool IsNumberOrPercentage(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.EndsWith('%')) trimmed = trimmed[..^1];
+            return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
+        }
+
+        /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
         /// presentation attribute is in the attribute grammar (<c>translate(10 20)</c>, <c>rotate(30)</c>), which the animation mixes as CSS text, so it
         /// goes in as the matrix it means.
@@ -1782,8 +1803,9 @@ namespace PeachBrackets.Svg
                 };
             }
 
-            // A spacing that is not a length computes to the inherited one, so that is what the animation mixes from (the cascade tier that holds it already reads it so).
-            if ((name is "letter-spacing" or "word-spacing") && !IsSpacingValue(declared)) return InheritedOrInitial();
+            // A value that is not valid for the property is dropped, so the property computes to the inherited (or initial) value, and that is what the
+            // animation mixes from rather than the declared text, which it cannot interpolate.
+            if (!IsValidDeclaredValue(name, declared)) return InheritedOrInitial();
 
             if (name == "transform" && declared == node.GetAttribute("transform"))
             {

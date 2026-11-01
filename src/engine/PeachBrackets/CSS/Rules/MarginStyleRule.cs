@@ -9,7 +9,7 @@ namespace PeachBrackets.Css
     internal sealed class MarginStyleRule : Rule, IStyleRule
     {
         // @page margin boxes don't participate in CSS Nesting.
-        public IReadOnlyList<IStyleRule> NestedRules => [];
+        public IReadOnlyList<IRule> NestedRules => [];
 
         public MarginStyleRule(StylesheetParser parser) : base(RuleType.Style, parser)
         {

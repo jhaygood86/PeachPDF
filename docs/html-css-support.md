@@ -1293,7 +1293,17 @@ This is deliberately **not** blanket acceptance of anything unknown: a genuine t
 }
 ```
 
-A nested selector is resolved against its parent (`&` takes the parent's specificity, exactly like `:is(<parent>)`); a nested selector with no `&` is made a descendant of the parent. Nesting works to any depth, under a parent selector list (`.a, .b { & .c { } }` matches under either), with a bare type selector (`.card { img { } }`), and inside [`@media`](#css-at-rules)/[`@layer`](#css-at-rules) (the nested rule inherits that context). **Not supported:** an at-rule (`@media`/`@layer`/`@supports`) nested *inside* a style rule — place those at the top level.
+A nested selector is resolved against its parent (`&` takes the parent's specificity, exactly like `:is(<parent>)`); a nested selector with no `&` is made a descendant of the parent. Nesting works to any depth, under a parent selector list (`.a, .b { & .c { } }` matches under either), with a bare type selector (`.card { img { } }`), and inside [`@media`](#css-at-rules)/[`@layer`](#css-at-rules) (the nested rule inherits that context). A conditional group rule — `@media`, `@supports`, `@container` or `@layer` — can also be written *inside* a style rule: its declarations apply to the parent's elements under the condition (as if wrapped in `& { }`), and it can hold further nested rules and groups.
+
+```css
+.card {
+  color: black;
+  @media (min-width: 40em) { padding: 2rem; }          /* .card, under the condition */
+  @supports (display: grid) { & .body { display: grid; } }
+}
+```
+
+Any other at-rule inside a style rule is skipped.
 
 ### Pseudo-elements
 
