@@ -580,6 +580,15 @@ namespace PeachBrackets.Html.Dom
         internal CssBox? ResolvedFirstLineStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedFirstLineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedFirstLineStyle = value; } }
 
         /// <summary>
+        /// The style this inline box (an element, a pseudo-element or a run of text) has on the first formatted line of a block that has a
+        /// <c>::first-line</c> rule: a detached <see cref="CssBox"/> that inherits from its parent's first-line style instead of from the parent,
+        /// with the box's own declarations applied over it (<see href="https://www.w3.org/TR/css-pseudo-4/#first-line-inheritance">CSS Pseudo-Elements 4
+        /// section 2.1.3</see>). So an inline that declares no font takes the <c>::first-line</c> one, and one that declares its own keeps it. Null when
+        /// no first-line style reaches the box, which then uses the block's <see cref="ResolvedFirstLineStyle"/>.
+        /// </summary>
+        internal CssBox? FirstLineInlineStyle { get => _rare is null ? default(CssBox?) : _rare.FirstLineInlineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.FirstLineInlineStyle = value; } }
+
+        /// <summary>
         /// The computed style of this form control's <c>::placeholder</c>, resolved through the normal
         /// cascade into a detached pseudo-element box. Null unless the control is showing a
         /// placeholder at PDF-generation time.

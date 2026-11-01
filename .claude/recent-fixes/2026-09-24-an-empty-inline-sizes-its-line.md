@@ -112,7 +112,7 @@ The mutation run caught both.
 **Not done:**
 - **Vertical writing modes (#1316):** `CreateVerticalLineBoxes` walks a flat word list and never sees an
   empty inline.
-- **`::first-line` (#1318):** an empty inline contributes its own font, not the one it inherits from
+- **`::first-line` (#1318):** done afterwards (see `CssBox.FirstLineInlineStyle`); an empty inline used to contribute its own font, not the one it inherits from
   `::first-line`. `LineBoxContributionOf`'s ancestor walk already did that for a text-bearing span
   (`text<span>x</span>more` under a smaller `::first-line` gives a 48pt line on `main`), so this matches
   it rather than introducing it.
