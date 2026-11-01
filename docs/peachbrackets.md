@@ -107,6 +107,8 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`GetInteractionAt(pageIndex, x, y)`** tells a pointer or touch host what the document allows at a point: whether it is inert, which gestures a
+  touch there may begin (`touch-action`, as `TouchActions`) and whether its text may be selected (`user-select`).
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
   make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
   laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint

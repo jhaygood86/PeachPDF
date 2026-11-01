@@ -191,7 +191,7 @@ namespace PeachBrackets.Html.Updates
             }
 
             // pointer-events: none lets the point through to whatever is beneath (its children, tried above, still receive it).
-            if (fragment.Box.PointerEvents.Value == Css.PointerEvents.None || !Covers(fragment, x, y, frame))
+            if (fragment.Box.PointerEvents.Value == Css.PointerEvents.None || fragment.Box.IsInert || !Covers(fragment, x, y, frame))
                 return null;
 
             var box = fragment.Box;
