@@ -58,10 +58,20 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | Links | A click (not a drag) on a link opens `http`, `https`, `mailto` and `tel` addresses with the system handler; a link to a place in the document scrolls to it. Other schemes are never launched. |
 | Selection | Drag to select, double-click to select a word, long-press with a finger for a word. |
 
+## Accessibility
+
+The view is exposed to UI Automation as a **Document** whose children are the page's blocks of text - paragraphs and list items as **Text**,
+headings as **Text** with a heading level (`AutomationHeadingLevel`), and each link, below the block that holds it, as a **Hyperlink** with the
+**Invoke** pattern (invoking it follows the link exactly as a click does, including `LinkClicked`). Every node has its bounding rectangle on the
+screen and reports whether it is scrolled out of view, so Narrator can read the page, jump by heading and follow links. The tree is rebuilt
+whenever a document loads or reflows. Reading comes from `HtmlDocument.GetAccessibleNodes()`, which any other host can use too.
+
+`src/examples/PeachBrackets.WinUI.Example/Verify-Accessibility.ps1` starts the example and checks that tree through the UI Automation client
+API (it needs a desktop session).
+
 ## Limits of this version
 
 - Form controls are painted but not interactive, and there is no keyboard navigation between links or controls.
-- Text is not exposed to UI Automation, so a screen reader cannot read it.
 - Zoom scales the rendered surface; it is not re-rendered at the new scale, so very high zoom is soft.
 - A custom `url()` cursor is shown as its keyword.
 - Find in the page is available through `Document` (`FindText`) but has no built-in user interface.

@@ -553,6 +553,14 @@ public sealed class HtmlDocument : IDisposable
         return slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None || slice.Word.OwnerBox.IsInert ? null : position;
     }
 
+    /// <summary>
+    /// What an assistive technology reads: one node for each block of text (a paragraph, a heading, a list item) with a node after it for each
+    /// link inside it, in reading order, positioned on their pages in points. A host that has an accessibility tree builds it from these.
+    /// </summary>
+    /// <returns>the nodes</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<AccessibleNode> GetAccessibleNodes() => AccessibilityCollector.Collect(TextRuns);
+
     /// <summary>The colour of the text caret at a position (<c>caret-color</c>; <c>auto</c> is the text colour), for a host that draws one.</summary>
     /// <param name="position">a position in <see cref="TextRuns"/></param>
     /// <returns>the colour, or <see langword="null"/> when the position is not in the text</returns>

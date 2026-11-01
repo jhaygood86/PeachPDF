@@ -118,6 +118,10 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
+  item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
+  tree builds it from these (see [PeachBrackets.WinUI](peachbrackets-winui.md#accessibility) and
+  [PeachBrackets.Android](peachbrackets-android.md#accessibility)). Needs `RecordTextRuns`.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall

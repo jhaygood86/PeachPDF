@@ -51,6 +51,7 @@ public sealed partial class HtmlView : UserControl
         DependencyProperty.Register(nameof(Source), typeof(Uri), typeof(HtmlView), new PropertyMetadata(null, (d, _) => ((HtmlView)d).QueueReload()));
 
     private readonly ScrollViewer _scroller = new();
+    private readonly HtmlViewHost _host;
     private readonly CanvasVirtualControl _canvas = new();
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _reflowTimer;
     private Win2dRenderContext? _context;
@@ -68,13 +69,15 @@ public sealed partial class HtmlView : UserControl
         _canvas.HorizontalAlignment = HorizontalAlignment.Left;
         _canvas.VerticalAlignment = VerticalAlignment.Top;
         _canvas.RegionsInvalidated += OnRegionsInvalidated;
+        _host = new HtmlViewHost(this);
+        _host.Content = _scroller;
         _scroller.Content = _canvas;
         _scroller.ZoomMode = ZoomMode.Enabled;
         _scroller.MinZoomFactor = 0.5f;
         _scroller.MaxZoomFactor = 4f;
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
         _scroller.VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
-        Content = _scroller;
+        Content = _host;
 
         Loaded += (_, _) => OnLoaded();
         Unloaded += (_, _) => OnUnloaded();
@@ -233,6 +236,7 @@ public sealed partial class HtmlView : UserControl
             };
 
             UpdateMetrics();
+            RefreshAccessibility(document);
             _canvas.Invalidate();
             DocumentLoaded?.Invoke(this, EventArgs.Empty);
         }
