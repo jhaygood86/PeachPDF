@@ -578,6 +578,14 @@ public sealed class HtmlDocument : IDisposable
         return slice.Word.OwnerBox.ActualCaretColor;
     }
 
+    /// <summary>
+    /// What an assistive technology reads: one node for each block of text (a paragraph, a heading, a list item) with a node after it for each
+    /// link inside it, in reading order, positioned on their pages in points. A host that has an accessibility tree builds it from these.
+    /// </summary>
+    /// <returns>the nodes</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
+    public IReadOnlyList<AccessibleNode> GetAccessibleNodes() => AccessibilityCollector.Collect(TextRuns);
+
     /// <summary>Finds every place a string occurs in the text of the document, as <see cref="GetText"/> reads it.</summary>
     /// <param name="query">the text to look for</param>
     /// <param name="ignoreCase">whether to ignore the case of letters (ordinal, not culture aware)</param>
