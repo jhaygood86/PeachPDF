@@ -293,6 +293,21 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         [Fact]
+        public void PerCharX_CountsTextPathCharactersInTheAncestorList()
+        {
+            // SVG 2 section 11.5: B and C inside the textPath are addressable characters of the <text>, so the x list
+            // runs A=10, B=30, C=50, D=70 and D is placed at 70 (not at B's slot, 30).
+            var g = Render("""
+                <defs><path id="p" d="M0 120 L300 120"/></defs>
+                <text x="10 30 50 70" y="50" font-size="40" fill="rgb(0,0,0)">A<textPath href="#p">BC</textPath>D</text>
+                """);
+
+            var calls = g.DrawStringCalls;
+            Assert.Equal(10, calls.Single(c => c.Text == "A").PaintPoint.X, 3);
+            Assert.Equal(70, calls.Single(c => c.Text == "D").PaintPoint.X, 3);
+        }
+
+        [Fact]
         public void FlowingText_SingleSelectableDrawString()
         {
             // Ordinary in-flow, unrotated, single-run text stays one selectable DrawString (the fast path
