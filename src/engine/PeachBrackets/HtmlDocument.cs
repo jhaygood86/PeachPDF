@@ -96,6 +96,7 @@ public sealed class HtmlDocument : IDisposable
 
             container.Media = string.IsNullOrEmpty(options.Media) ? "print" : options.Media;
             container.PreferredColorScheme = options.ColorScheme;
+            container.Input = options.Input ?? InputCapabilities.None;
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
