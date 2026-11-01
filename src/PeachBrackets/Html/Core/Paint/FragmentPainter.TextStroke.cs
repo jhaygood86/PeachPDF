@@ -30,8 +30,12 @@ namespace PeachBrackets.Html.Paint
             if (outline is null)
                 return;
 
+            // The outline is in layout units, a path reaches the canvas in points.
+            if (g.PixelsPerPoint != 1.0)
+                outline.Transform(System.Numerics.Matrix3x2.CreateScale((float)(1.0 / g.PixelsPerPoint)));
+
             var pen = g.GetPen(color);
-            pen.Width = width;
+            pen.Width = width / g.PixelsPerPoint;
             g.DrawPath(pen, outline);
         }
     }

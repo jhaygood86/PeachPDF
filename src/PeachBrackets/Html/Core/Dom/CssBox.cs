@@ -10561,14 +10561,19 @@ namespace PeachBrackets.Html.Dom
             NotifyGeometryChanged(Math.Min(fromY, toY), 0);
         }
 
+        /// <summary>
+        /// Resolves a font for a size in true CSS points. The render context takes a size in layout units (points times
+        /// <c>LayoutUnitsPerPoint</c>) and builds the font at <c>size / LayoutUnitsPerPoint</c> points, so the point size is scaled up
+        /// here; the font's <c>Size</c> then comes back in points whatever the layout scale.
+        /// </summary>
         internal Font? GetCachedFont(string fontFamily, double fsize, PaintFontStyle st, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize, st, weight, stretch, obliqueSkewSinus, variations);
+            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize * HtmlContainer.RenderContext.LayoutUnitsPerPoint, st, weight, stretch, obliqueSkewSinus, variations);
         }
 
         internal Font? GetCachedFontForCodepoint(string fontFamily, double fsize, PaintFontStyle st, System.Text.Rune codepoint, double? weight = null, double? stretch = null, double? obliqueSkewSinus = null, EmojiPresentation presentation = EmojiPresentation.NoPreference, string? variations = null)
         {
-            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
+            return FontFamilyResolver.Resolve(HtmlContainer!.RenderContext, fontFamily, fsize * HtmlContainer.RenderContext.LayoutUnitsPerPoint, st, codepoint, weight, stretch, obliqueSkewSinus, presentation, variations);
         }
 
         internal PaintColor GetActualColor(string colorStr)

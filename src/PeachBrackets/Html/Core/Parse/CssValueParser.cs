@@ -332,14 +332,9 @@ namespace PeachBrackets.Html.Parse
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
             var pixelsPerPoint = PixelsPerPointOf(box);
 
-            // box.GetEmHeight()/GetRemHeight() live in the adapter's device-scaled *font-measurement*
-            // space (trueFontSizePt / pixelsPerPoint - CssBox.NoEms's doc comment, issue #631) - the
-            // OPPOSITE direction from the box's internal, pixelsPerPoint-inflated layout space every other
-            // basis below (container/viewport sizes) already reports. Undoing that device-scaling here
-            // (mirroring CssImagePainter.ResolveGradientLength, issue #826) before handing them to
-            // Length.ToPixels as the em/rem basis is a no-op when only container/viewport/percent units
-            // are in play - those bases are unaffected - so it's safe to always apply.
-            var result = length.ToPixels(box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, hundredPercent,
+            // box.GetEmHeight()/GetRemHeight() are true CSS points whatever the layout scale (fonts are requested
+            // in layout units and report their size in points), which is the em/rem basis Length.ToPixels takes.
+            var result = length.ToPixels(box.GetEmHeight(), box.GetRemHeight(), hundredPercent,
                 containerInlinePt, containerBlockPt,
                 viewportWidthPt, viewportHeightPt, containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt,
                 box.DerivedStyle);
@@ -423,13 +418,7 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         public static double ParseLength(LengthOrUnitless value, double hundredPercent, CssBox box) =>
             value.IsUnitless
-                // GetEmHeight() (== ActualFont.Size) is in the adapter's device-scaled font-measurement
-                // space - CreateFontInt divides a requested size by PixelsPerPoint once to get there, so
-                // that division has to be undone here before treating it as a true-point font size, the
-                // same correction CssBox.NoEms/ResolveFontSizeValueComputation already apply for
-                // text-indent/word-spacing/letter-spacing and font-size inheritance (issue #814's
-                // line-height sibling - invisible at the library's default PixelsPerInch of 72, where
-                // PixelsPerPoint == 1).
+                // GetEmHeight() is the font size in true points; the result is in layout units.
                 ? value.Unitless!.Value * box.GetEmHeight() * PixelsPerPointOf(box)
                 : ParseLength(value.LengthOrCalc!.Value, hundredPercent, box);
 
@@ -550,12 +539,11 @@ namespace PeachBrackets.Html.Parse
             var (viewportWidthPt, viewportHeightPt, viewportInlinePt, viewportBlockPt) = box.GetViewportUnitBasis();
             var pixelsPerPoint = PixelsPerPointOf(box);
 
-            // box.GetEmHeight()/GetRemHeight() need the same device-scaling correction the typed Length
-            // overload above applies (issue #826) before use as the em/rem basis - see that overload's
-            // comment. This is the overload the vast majority of Length-typed CSS box-geometry properties
-            // (padding-*, width/height, margin-*, border-*-radius, min-*/max-*, etc.) actually resolve
-            // through, since css-properties.json stores them as raw strings, not typed Length values.
-            var result = ParseLength(length, hundredPercent, box.GetEmHeight() * pixelsPerPoint, box.GetRemHeight() * pixelsPerPoint, null, false,
+            // box.GetEmHeight()/GetRemHeight() are true points, as the typed Length overload above takes them. This is the
+            // overload the vast majority of Length-typed CSS box-geometry properties (padding-*, width/height, margin-*,
+            // border-*-radius, min-*/max-*, etc.) actually resolve through, since css-properties.json stores them as raw
+            // strings, not typed Length values.
+            var result = ParseLength(length, hundredPercent, box.GetEmHeight(), box.GetRemHeight(), null, false,
                 containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
                 containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, pixelsPerPoint,
                 out var needsPixelsPerPointCatchUp, box.DerivedStyle);
