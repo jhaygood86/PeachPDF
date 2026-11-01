@@ -402,6 +402,24 @@ public sealed class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// What the document says about a point for a host that handles pointer and touch input: whether the element there is inert, which
+    /// gestures a touch starting there may begin (<c>touch-action</c>), and whether its text may be selected (<c>user-select</c>). A host
+    /// that scrolls and zooms the page itself consults it at touch-down to decide whether to pan or to hand the gesture to the page.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the interaction at the point; everything allowed where there is no element</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public DocumentInteraction GetInteractionAt(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        return CursorQueries.InteractionAt(_container, fragmentainers[pageIndex], x, y);
+    }
+
+    /// <summary>
     /// Puts the areas of one page that ask for a pointer of their own on <paramref name="canvas"/> (<see cref="Canvas.AddCursor"/>), in paint
     /// order, so a canvas for a surface that is pointed at records them for the host to hit-test. An element whose <c>cursor</c> is <c>auto</c>
     /// is listed only when it is a link, and one with <c>pointer-events: none</c> is not listed at all. A canvas for a format with no pointer
@@ -512,7 +530,7 @@ public sealed class HtmlDocument : IDisposable
     /// <returns>the text</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
     public string GetText(TextPosition from, TextPosition to) =>
-        TextRunQueries.GetText(TextRuns, from, to, slice => slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None);
+        TextRunQueries.GetText(TextRuns, from, to, slice => slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None || slice.Word.OwnerBox.IsInert);
 
     /// <summary>
     /// A position the reader may start a selection at: <see langword="null"/> over text whose <c>user-select</c> is <c>none</c>, so a host that
@@ -535,7 +553,7 @@ public sealed class HtmlDocument : IDisposable
                 slice = candidate;
         }
 
-        return slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None ? null : position;
+        return slice.Word.OwnerBox.EffectiveUserSelect == Css.UserSelect.None || slice.Word.OwnerBox.IsInert ? null : position;
     }
 
     /// <summary>The colour of the text caret at a position (<c>caret-color</c>; <c>auto</c> is the text colour), for a host that draws one.</summary>
@@ -863,7 +881,8 @@ public sealed class HtmlDocument : IDisposable
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         _ = Pages;
-        var ordinal = element?.Box.HtmlTag?.SourceOrdinal ?? -1;
+        // An inert element cannot take focus.
+        var ordinal = element is { Box.IsInert: false } ? element.Box.HtmlTag?.SourceOrdinal ?? -1 : -1;
         return ApplyStateAsync(_pointerChain, _pressed, ordinal, ordinal >= 0 && focusVisible, measuringCanvas);
     }
 

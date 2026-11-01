@@ -4922,6 +4922,38 @@
       }
     },
     {
+      "name": "touch-action",
+      "comment": "Stored as written; CssBox.EffectiveTouchActions reads it, intersecting the ancestors.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TouchActionConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TouchActionProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TouchAction",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "interactivity",
+      "comment": "inert takes the subtree out of hit testing, links, selection and focus (CssBox.IsInert, with the HTML inert attribute).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.InteractivityConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "Interactivity",
+        "keywordMap": "Map.InteractivityModes",
+        "fallback": "Interactivity.Auto"
+      },
+      "html": {
+        "propertyPath": "Interactivity",
+        "csharpDataType": "CssProperty<Interactivity>",
+        "area": "TextArea",
+        "getterExpression": "{box}.Interactivity.ToString()"
+      }
+    },
+    {
       "name": "size",
       "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
       "inherited": false,

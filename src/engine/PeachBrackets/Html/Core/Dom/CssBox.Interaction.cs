@@ -27,6 +27,74 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>
+        /// Whether this box takes no part in user interaction: <c>interactivity: inert</c> (inherited) or the HTML <c>inert</c> attribute on it
+        /// or an ancestor. An inert box is skipped by hit testing, is not a link, cannot hold a selection or focus, and shows the default pointer.
+        /// </summary>
+        public bool IsInert
+        {
+            get
+            {
+                if (Interactivity.Value == Css.Interactivity.Inert)
+                    return true;
+
+                for (var box = this; box is not null; box = box.ParentBox)
+                {
+                    if (box.HtmlTag is { } tag && tag.HasAttribute("inert"))
+                        return true;
+                }
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// The gestures a touch may start on this box: its <c>touch-action</c> intersected with that of every ancestor (CSS Pointer Events,
+        /// "touch-action"), since the document is the only scroller.
+        /// </summary>
+        public TouchActions EffectiveTouchActions
+        {
+            get
+            {
+                var allowed = TouchActions.All;
+                for (var box = this; box is not null; box = box.ParentBox)
+                    allowed &= ParseTouchAction(box.TouchAction);
+
+                return allowed;
+            }
+        }
+
+        private static TouchActions ParseTouchAction(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return TouchActions.All;
+
+            var pans = TouchActions.None;
+            var pinch = false;
+            var xGroup = false;
+            var yGroup = false;
+            foreach (var word in value.Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                switch (word.ToLowerInvariant())
+                {
+                    case "auto": return TouchActions.All;
+                    case "none": return TouchActions.None;
+                    case "manipulation": return TouchActions.Pan | TouchActions.PinchZoom;
+                    case "pan-x": pans |= TouchActions.PanLeft | TouchActions.PanRight; xGroup = true; break;
+                    case "pan-left": pans |= TouchActions.PanLeft; xGroup = true; break;
+                    case "pan-right": pans |= TouchActions.PanRight; xGroup = true; break;
+                    case "pan-y": pans |= TouchActions.PanUp | TouchActions.PanDown; yGroup = true; break;
+                    case "pan-up": pans |= TouchActions.PanUp; yGroup = true; break;
+                    case "pan-down": pans |= TouchActions.PanDown; yGroup = true; break;
+                    case "pinch-zoom": pinch = true; break;
+                }
+            }
+
+            _ = xGroup;
+            _ = yGroup;
+            return pans | (pinch ? TouchActions.PinchZoom : TouchActions.None);
+        }
+
         /// <summary>The colour of the text caret: <c>auto</c> is the text colour.</summary>
         public PaintColor ActualCaretColor =>
             IsOwnColor(CaretColor) ? ActualColor : GetActualColor(CaretColor);

@@ -874,6 +874,13 @@ Three more properties from the same module serve a screen host and have no effec
 | `caret-color` | [caret-color](https://developer.mozilla.org/en-US/docs/Web/CSS/caret-color) | The colour of the text caret, which `HtmlDocument.GetCaretColor(position)` gives a host that draws one; `auto` is the text colour. |
 | `accent-color` | [accent-color](https://developer.mozilla.org/en-US/docs/Web/CSS/accent-color) | Colours the check mark of a checked check box and the dot of a checked radio button, in the painted page and in the PDF form widget appearances alike; `auto` keeps the text colour. Range and progress controls are not drawn by PeachPDF, so they are unaffected. |
 
+Two more serve touch hosts, and are read through `HtmlDocument.GetInteractionAt(page, x, y)`:
+
+| Property | MDN | Behavior |
+|---|---|---|
+| `touch-action` | [touch-action](https://developer.mozilla.org/en-US/docs/Web/CSS/touch-action) | `auto`, `none`, `manipulation`, and the `pan-x`/`pan-y`/`pan-left`/`pan-right`/`pan-up`/`pan-down` and `pinch-zoom` combinations. The result is `TouchActions`: what the element allows, intersected with every ancestor (the document is the only scroller), so a host knows at touch-down whether to pan or zoom or leave the gesture to the page. `auto` also allows double-tap zoom; `manipulation` does not. |
+| `interactivity` and the `inert` attribute | [inert](https://developer.mozilla.org/en-US/docs/Web/HTML/Global_attributes/inert) | `interactivity: inert` (inherited) or `inert` on an element or an ancestor takes the subtree out of interaction: pointer hits fall through to what is beneath, its links write no annotation, its text cannot be selected, and the element cannot take focus. It is still painted. |
+
 The keywords that only mean something for the painted parts of an SVG shape (`visiblePainted`, `visibleFill`, `visibleStroke`, `visible`, `painted`, `fill`, `stroke`, `all`) are accepted but read as `auto`: a shape inside an inline `<svg>` is not a separate hit target.
 
 ### Stacking Context

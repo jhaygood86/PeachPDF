@@ -297,6 +297,12 @@ namespace PeachBrackets.Css
                 {Keywords.All, UserSelect.All},
                 {Keywords.Contain, UserSelect.Contain}
             }.Freeze();
+        public static readonly KeywordMap<Interactivity> InteractivityModes =
+            new KeywordMap<Interactivity>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, Interactivity.Auto},
+                {Keywords.Inert, Interactivity.Inert}
+            }.Freeze();
         public static readonly KeywordMap<Hyphens> HyphensModes =
             new KeywordMap<Hyphens>(StringComparer.OrdinalIgnoreCase)
             {

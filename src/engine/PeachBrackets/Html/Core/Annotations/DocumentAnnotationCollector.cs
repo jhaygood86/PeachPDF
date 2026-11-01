@@ -49,7 +49,7 @@ namespace PeachBrackets.Html.Annotations
             foreach (var link in container.GetLinks(bookmarkBoxes))
             {
                 // pointer-events: none takes the link out of what can be clicked, so nothing is written for it.
-                if (link.SourceBox is { } source && source.PointerEvents.Value == PeachBrackets.Css.PointerEvents.None)
+                if (link.SourceBox is { } source && (source.PointerEvents.Value == PeachBrackets.Css.PointerEvents.None || source.IsInert))
                     continue;
 
                 var href = ResolveHref(container, link.Href);
@@ -253,7 +253,7 @@ namespace PeachBrackets.Html.Annotations
                 yield break;
             }
 
-            if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible } && fragment.Box.PointerEvents.Value != PeachBrackets.Css.PointerEvents.None)
+            if (fragment.Box is { IsClickable: true, Visibility.Value: Visibility.Visible } && fragment.Box.PointerEvents.Value != PeachBrackets.Css.PointerEvents.None && !fragment.Box.IsInert)
             {
                 yield return (fragment, fragment.Box);
             }

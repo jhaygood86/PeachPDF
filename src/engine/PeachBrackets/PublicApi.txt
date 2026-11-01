@@ -171,6 +171,17 @@ PeachBrackets.DocumentCursor : sealed class
   method virtual String ToString()
   property CursorShape Shape { get; init; }
   property IReadOnlyList<CursorImage> Images { get; init; }
+PeachBrackets.DocumentInteraction : sealed class
+  ctor(Boolean Inert, TouchActions TouchActions, Boolean CanSelectText)
+  method DocumentInteraction <Clone>$()
+  method Void Deconstruct(out Boolean Inert, out TouchActions TouchActions, out Boolean CanSelectText)
+  method virtual Boolean Equals(DocumentInteraction other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean CanSelectText { get; init; }
+  property Boolean Inert { get; init; }
+  property TouchActions TouchActions { get; init; }
 PeachBrackets.DocumentPage : struct
   ctor(Int32 Index, Double WidthPoints, Double HeightPoints)
   method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints)
@@ -201,6 +212,7 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
+  method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
@@ -383,6 +395,16 @@ PeachBrackets.Text.TextRun : sealed class
   property String ElementId { get; }
   property String LinkUri { get; }
   property String Text { get; }
+PeachBrackets.TouchActions : enum Int32
+  All = 63
+  DoubleTapZoom = 32
+  None = 0
+  Pan = 15
+  PanDown = 8
+  PanLeft = 1
+  PanRight = 2
+  PanUp = 4
+  PinchZoom = 16
 PeachBrackets.Updates.DirtyRegion : struct
   ctor(Int32 PageIndex, Rect Bounds)
   method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
