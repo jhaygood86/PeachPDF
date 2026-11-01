@@ -103,7 +103,7 @@ namespace PeachBrackets.Html.Animation
                         if (!IsAnimatable(property.Name)) continue;
 
                         // The CSS-wide keywords are kept and resolved against the element when sampled.
-                        existing.Declarations[property.Name] = property.Value;
+                        existing.Declarations[property.Name] = KeepZeroUnit(property);
                     }
 
                     if (!ReferenceEquals(easing, existing.Easing))
@@ -123,6 +123,20 @@ namespace PeachBrackets.Html.Animation
             !name.StartsWith("--", StringComparison.Ordinal)
             && !name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)
             && !name.StartsWith("transition", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// The declared value, except that a zero <em>length</em> keeps its unit where the property also takes a number. The CSS-OM
+        /// serializes <c>0px</c> as <c>0</c>, which on those properties reads back as the number: it would flip against a <c>calc()</c>
+        /// of lengths instead of blending (CSS Inline 3 <c>line-height</c>: <c>0px</c> is a &lt;length&gt;, a bare <c>0</c> the &lt;number&gt;).
+        /// </summary>
+        private static string KeepZeroUnit(Property property)
+        {
+            var value = property.Value;
+            if (value != "0" || !CssValueInterpolator.ZeroIsANumber(property.Name)) return value;
+
+            var original = property.Original.Trim();
+            return original.Length > 1 && char.IsLetter(original[^1]) && char.IsDigit(original[0]) ? original : value;
+        }
 
         /// <summary>The first entry of a comma-separated list, keeping commas inside parentheses together.</summary>
         internal static string FirstListEntry(string list) =>

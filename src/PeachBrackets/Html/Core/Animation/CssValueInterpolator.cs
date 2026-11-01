@@ -78,6 +78,8 @@ namespace PeachBrackets.Html.Animation
         /// Properties that take a number or a length, where a bare <c>0</c> is the number: against a calc() of lengths it is not a zero length, and
         /// the pair flips half way as in a browser (<c>0px</c> is a length, and blends).
         /// </summary>
+        internal static bool ZeroIsANumber(string property) => ZeroIsANumberProperties.Contains(property);
+
         private static readonly HashSet<string> ZeroIsANumberProperties = new(StringComparer.OrdinalIgnoreCase)
         {
             "line-height", "tab-size", "border-image-width", "border-image-outset"

@@ -68,6 +68,17 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(pixels * PointsPerPx, (await BoxAt(keyframes, progress)).Size.Height, 2);
         }
 
+        [Theory]
+        [InlineData("from { line-height: 0px } to { line-height: calc(1em + 10px) }", 0.25, 7.5)]
+        [InlineData("from { line-height: 0px } to { line-height: calc(1em + 10px) }", 0.75, 22.5)]
+        [InlineData("from { line-height: calc(1em + 10px) } to { line-height: 0px }", 0.25, 22.5)]
+        [InlineData("from { line-height: 0em } to { line-height: calc(1em + 10px) }", 0.25, 7.5)]
+        public async Task AZeroLengthAgainstACalc_BlendsWherePropertyTakesANumber(string keyframes, double progress, double pixels)
+        {
+            // 0px is a <length>, not the number 0, so it mixes with a calc() of lengths (CSS Inline 3 line-height: animated by computed value type).
+            Assert.Equal(pixels * PointsPerPx, (await BoxAt(keyframes, progress)).Size.Height, 2);
+        }
+
         [Fact]
         public async Task ACalcAgainstANumber_IsNotMixedAsALength()
         {
