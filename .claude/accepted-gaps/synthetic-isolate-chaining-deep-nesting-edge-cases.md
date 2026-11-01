@@ -6,14 +6,14 @@ ordering for boxes sharing a text index), [#576](https://github.com/jhaygood86/P
 
 Fixing #554 (the UA stylesheet's `[dir]`/`bdo[dir]` rules using `unicode-bidi: isolate`/
 `isolate-override` instead of the legacy `embed`/`bidi-override`) surfaced a real gap in how
-`BidiResolver` (`src/PeachDrawing.Text/Internal/Text/Bidi/BidiResolver.cs`) implements X10/BD13 isolating-run-sequence
+`BidiResolver` (`src/drawing/PeachDrawing.Text/Internal/Text/Bidi/BidiResolver.cs`) implements X10/BD13 isolating-run-sequence
 chaining for a CSS-driven isolate: a synthetic `BidiIsolateOverride` never occupies a real character
 index the way an actual Unicode LRI/RLI/FSI/PDI control character would, so chaining has to be
 located by index-adjacency (an override's own `Start`/`End`) instead. Two failure modes from that —
 duplicate-processing when nested isolates close at the same index, and dropped positions when
 sibling isolates merge into one level run with no boundary between them — were found and fixed as
 part of that change (`ComputeIsolatingRunSequences`'s `runEndIndex`-verified chain entries and
-`!visited[...]` guard; see `PeachDrawing.Text.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`).
+`!visited[...]` guard; see `src/tests/PeachDrawing.Text.Tests/Text/Bidi/BidiResolverSyntheticIsolateTests.cs`).
 
 Two narrower issues remain, deliberately out of scope for that fix:
 
