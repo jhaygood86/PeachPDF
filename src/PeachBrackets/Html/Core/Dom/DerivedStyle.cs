@@ -703,12 +703,27 @@ namespace PeachBrackets.Html.Dom
         private double _actualBorderSpacingHorizontal = double.NaN;
         private double _actualBorderSpacingVertical = double.NaN;
 
+        /// <summary>
+        /// CSS Box 3 (padding): a percentage refers to the width of the containing block, on all four sides - the same
+        /// basis the margins use, not this box's own (still unresolved) width. A value holding a percentage is not
+        /// cached: the containing block may not have its width yet when it is first read.
+        /// </summary>
+        private double ResolvePadding(string value, ref double cache)
+        {
+            // Only a percentage needs the containing block's width, and reading it for every padding would recurse:
+            // that width is itself the containing block's size minus the containing block's padding.
+            if (!value.Contains('%'))
+                return cache = CssValueParser.ParseLength(value, 0, Owner);
+
+            return CssValueParser.ParseLength(value, Owner.ContainingBlock.AvailableWidth, Owner);
+        }
+
         public double ActualPaddingTop
         {
             get
             {
                 if (double.IsNaN(_actualPaddingTop))
-                    _actualPaddingTop = CssValueParser.ParseLength(Style.BoxModel.PaddingTop, Owner.Size.Width, Owner);
+                    return ResolvePadding(Style.BoxModel.PaddingTop, ref _actualPaddingTop);
                 return _actualPaddingTop;
             }
         }
@@ -718,7 +733,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingRight))
-                    _actualPaddingRight = CssValueParser.ParseLength(Style.BoxModel.PaddingRight, Owner.Size.Width, Owner);
+                    return ResolvePadding(Style.BoxModel.PaddingRight, ref _actualPaddingRight);
                 return _actualPaddingRight;
             }
         }
@@ -728,7 +743,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingBottom))
-                    _actualPaddingBottom = CssValueParser.ParseLength(Style.BoxModel.PaddingBottom, Owner.Size.Width, Owner);
+                    return ResolvePadding(Style.BoxModel.PaddingBottom, ref _actualPaddingBottom);
                 return _actualPaddingBottom;
             }
         }
@@ -738,7 +753,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (double.IsNaN(_actualPaddingLeft))
-                    _actualPaddingLeft = CssValueParser.ParseLength(Style.BoxModel.PaddingLeft, Owner.Size.Width, Owner);
+                    return ResolvePadding(Style.BoxModel.PaddingLeft, ref _actualPaddingLeft);
                 return _actualPaddingLeft;
             }
         }
