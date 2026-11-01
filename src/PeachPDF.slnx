@@ -28,6 +28,7 @@
   <Project Path="harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj" />
   <Project Path="tests/PeachPDF.Tests/PeachPDF.Tests.csproj" />
   <Project Path="engine/PeachBrackets/PeachBrackets.csproj" />
+  <Project Path="tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj" />
   <Project Path="tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj" />
   <Project Path="PeachPDF/PeachPDF.csproj" />

@@ -942,7 +942,8 @@ public sealed class HtmlDocument : IDisposable
             return new UpdateResult(true, null, []);
 
         var geometryBefore = GeometrySignature();
-        var textBefore = _recordTextRuns && _textRuns is not null ? TextSignature(_textRuns) : null;
+        // The text the selection and highlights were built over (the runs are computed on demand, so they may not be there yet).
+        var textBefore = _recordTextRuns && (_selectedRanges.Count > 0 || _highlights.Count > 0 || (_selection?.HasSelection ?? false)) ? TextSignature(TextRuns) : null;
 
         await ReloadAsync(measuringCanvas);
 
@@ -960,7 +961,11 @@ public sealed class HtmlDocument : IDisposable
         }
 
         // The selection and highlights were built over the old runs; they carry over when the text did not change.
-        if (_recordTextRuns && textBefore is not null && TextSignature(TextRuns) == textBefore)
+        if (textBefore is null)
+        {
+            // Nothing was selected or highlighted, so there is nothing to carry.
+        }
+        else if (TextSignature(TextRuns) == textBefore)
         {
             if (_selectionStyling && _selectedRanges.Count > 0)
                 SetSelectedRanges(_selectedRanges);
