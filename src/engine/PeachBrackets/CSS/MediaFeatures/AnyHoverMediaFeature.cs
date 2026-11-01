@@ -10,6 +10,6 @@ namespace PeachBrackets.Css
         {
         }
 
-        internal override IValueConverter Converter => Converters.Any;
+        internal override IValueConverter Converter => Map.HoverAbilities.ToConverter().Option();
     }
 }

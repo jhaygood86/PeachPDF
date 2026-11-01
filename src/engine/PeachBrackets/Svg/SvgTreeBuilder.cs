@@ -1830,10 +1830,62 @@ namespace PeachBrackets.Svg
         /// The value of <paramref name="name"/> on <paramref name="node"/> as an element below it inherits it: its own declaration (animated or not),
         /// else its parent's for an inherited property, else the initial value. Null when nothing up the tree declares it and it has no initial value here.
         /// </summary>
-        private static string? ResolveEffectiveValue(ISvgSourceNode node, string name) =>
-            ResolveStyledAttr(node, name) is { } value
-                ? UnderlyingValue(node, name, value, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
+        private static string? ResolveEffectiveValue(ISvgSourceNode node, string name)
+        {
+            var value = ResolveStyledAttr(node, name) is { } declared
+                ? UnderlyingValue(node, name, declared, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
                 : InheritedOrInitialValue(node, name);
+
+            return value is not null && FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value) : value;
+        }
+
+        // The inherited length properties whose value can be written in a font-relative unit.
+        private static readonly HashSet<string> FontRelativeLengthProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "letter-spacing", "word-spacing", "stroke-width", "stroke-dashoffset",
+        };
+
+        /// <summary>
+        /// An inherited length is a computed length, fixed where it was declared: <c>2em</c> on a 12px ancestor is 24px for every element below it, not 2em of
+        /// each one's own font. Returns <paramref name="value"/> as pixels resolved against <paramref name="declaring"/>'s font-size, or unchanged when it is not a plain length.
+        /// </summary>
+        private static string ToPixelsAtDeclaringElement(ISvgSourceNode declaring, string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length == 0 || CssGlobalKeywords.TryParse(trimmed, out _) || trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || trimmed.EndsWith('%'))
+                return value;
+
+            return SvgValueParsers.ParseLength(trimmed, null, new EmBasis(FontSizeAt(declaring), FontSizeAt(RootOf(declaring)))) is { } px
+                ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
+                : value;
+        }
+
+        private static ISvgSourceNode RootOf(ISvgSourceNode node)
+        {
+            while (node.Parent is { } parent) node = parent;
+            return node;
+        }
+
+        /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; 16px with none declared.</summary>
+        private static double FontSizeAt(ISvgSourceNode node)
+        {
+            var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+            return ResolveStyledAttr(node, "font-size") is { } text
+                   && SvgValueParsers.ParseLength(text, parentSize, new EmBasis(parentSize, parentSize)) is { } size
+                ? size
+                : parentSize;
+        }
+
+        /// <summary>A length basis with only the em sizes known: the measured units take the spec's fallback ratios.</summary>
+        private sealed class EmBasis(double emPx, double rootEmPx) : ISvgLengthBasis
+        {
+            public double EmPx => emPx;
+
+            public double RootEmPx => rootEmPx;
+
+            public double GetRatio(FontMetric metric, bool rootElement) => FontMetricRatios.Approximate(metric);
+        }
 
         private static string? InheritedOrInitialValue(ISvgSourceNode node, string name) =>
             IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(name);

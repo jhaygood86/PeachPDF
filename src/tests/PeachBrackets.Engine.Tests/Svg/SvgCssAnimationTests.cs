@@ -521,5 +521,29 @@ namespace PeachBrackets.Engine.Tests.Svg
 
             Assert.Equal(0.5, document.Children[0].Opacity, 2);
         }
+
+        [Theory]
+        [InlineData(0, 24)]
+        [InlineData(0.5, 22)]
+        public async Task AnInheritedEmLength_IsFixedWhereItWasDeclared(double progress, double expected)
+        {
+            // The <g>'s 2em at its own 12px is 24px for the text below it, whatever the text's own 20px font-size: the animation mixes 24 to 20.
+            var document = await BuildAsync("@keyframes k { to { letter-spacing: 20px } } .t { animation: k 1s linear }",
+                "<g font-size=\"12\" letter-spacing=\"2em\"><text class=\"t\" font-size=\"20\" x=\"0\" y=\"20\">Ab</text></g>", progress);
+
+            var text = Assert.IsType<SvgTextElement>(Assert.IsType<SvgGroupElement>(document.Children[0]).Children[0]);
+            Assert.Equal(expected, text.LetterSpacing, 2);
+        }
+
+        [Fact]
+        public async Task AnInheritedEmLength_ResolvesAgainstAFontSizeInheritedInEm()
+        {
+            // 1.5em of 16px is 24px on the <g>; its letter-spacing 1em is 24px for the text, not 1em of the text's own 10px.
+            var document = await BuildAsync("@keyframes k { to { stroke-width: 0 } } .t { animation: k 1s linear }",
+                "<g font-size=\"1.5em\" stroke-width=\"1em\"><rect class=\"t\" font-size=\"10\" width=\"10\" height=\"10\" stroke=\"black\"/></g>", 0);
+
+            var group = Assert.IsType<SvgGroupElement>(document.Children[0]);
+            Assert.Equal(24, group.Children[0].StrokeWidth, 2);
+        }
     }
 }
