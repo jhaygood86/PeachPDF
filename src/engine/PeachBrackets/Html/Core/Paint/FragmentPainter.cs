@@ -904,9 +904,8 @@ namespace PeachBrackets.Html.Paint
 
             if (box.DerivedStyle.ActualDisplay == Keywords.None || HidesAsAnEmptyCell(box)) return;
 
-            var (overflowClip, overflowClipCurve) = OverflowClipOf(g, fragment);
-            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
-            var overflowClipRecorded = PushOverflowClip(overflowClip, overflowClipCurve);
+            var entryDeferred = _deferredClips;
+            var clipScope = PushClipsFor(g, fragment);
 
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
@@ -1150,13 +1149,34 @@ namespace PeachBrackets.Html.Paint
             // collapsed borders and marker below included - so they are set aside and painted last.
             List<List<StackingOrder.StackingParticipant>>? raisedLayers = null;
 
-            foreach (var layerBoxes in _ownOnly ? [] : StackingOrder.ByLayers(StackingOrder.Flatten(fragment)))
+            var layers = _ownOnly ? [] : StackingOrder.ByLayers(StackingOrder.Flatten(fragment)).ToList();
+
+            // The clips pushed above are canvas state that everything painted below inherits, but an
+            // out-of-flow participant whose containing-block chain skips a clipping box is not clipped by it
+            // (CSS Overflow 3 §3; issue #1315). When one is among the layers, the box's clips are lifted off
+            // the canvas for the layers and held as deferred entries, and each participant pushes the ones its
+            // own chain passes through (see PaintStackingParticipant).
+            var held = layers.Count == 0 ? null : EntriesEscapedBy(fragment, clipScope, layers);
+            if (held is not null)
+            {
+                PopClips(g, clipScope);
+                _deferredClips = Combine(entryDeferred, held);
+            }
+            else if (clipScope.Deferred is { } alreadyPushed)
+            {
+                _deferredClips = Without(entryDeferred, alreadyPushed);
+            }
+
+            foreach (var layerBoxes in layers)
             {
                 if (StackingOrder.LayerOf(layerBoxes[0]) > 0)
                     (raisedLayers ??= []).Add(layerBoxes);
                 else
                     PaintLayer(g, layerBoxes);
             }
+
+            _deferredClips = entryDeferred;
+            if (held is not null) clipScope = PushClipsFor(g, fragment);
 
             // CSS 2.1 §17.6.2's resolved borders are drawn once per grid-line run, after every
             // table-internal background and content has painted - which is the whole fix (issue #735):
@@ -1175,10 +1195,7 @@ namespace PeachBrackets.Html.Paint
                 PaintOrDeferOutline(g, box, outlinePaints);
             }
 
-            PopOverflowClip(overflowClipRecorded);
-
-            for (var i = 0; i < clipsPushed; i++)
-                g.PopClip();
+            PopClips(g, clipScope);
 
             if (paintMarkers && !_stopped)
             {
@@ -1199,11 +1216,21 @@ namespace PeachBrackets.Html.Paint
             if (OwnsOutlineScope(fragment))
                 DrawScopeOutlinesSoFar(g, box.HtmlContainer?.StructureTagBuilder);
 
+            // As for the layers above: with a clipping box to name, the box's clip is deferred and each
+            // participant pushes it if its chain passes through the box; a clip that is only a fragmentainer
+            // band has no box to be off the chain of and covers them all.
             var (raisedClip, raisedClipCurve) = OverflowClipOf(g, fragment);
-            var raisedClipsPushed = RenderUtils.ClipGraphicsByOverflow(g, raisedClip, raisedClipCurve);
+            var raisedClipper = raisedClip is null ? null : DomUtils.ClippingBoxOf(box);
+            var raisedClipsPushed = raisedClip is not null && raisedClipper is null
+                ? RenderUtils.ClipGraphicsByOverflow(g, raisedClip, raisedClipCurve)
+                : 0;
+            if (raisedClipper is not null)
+                _deferredClips = Combine(entryDeferred, [new ClipEntry(raisedClipper, raisedClip!.Value, raisedClipCurve)]);
 
             foreach (var layerBoxes in raisedLayers)
                 PaintLayer(g, layerBoxes);
+
+            _deferredClips = entryDeferred;
 
             for (var i = 0; i < raisedClipsPushed; i++)
                 g.PopClip();
@@ -1289,10 +1316,58 @@ namespace PeachBrackets.Html.Paint
         private void PaintStackingParticipant(Canvas g, StackingOrder.StackingParticipant participant)
         {
             var fragment = participant.Fragment;
-            var pushedClips = RenderUtils.PushAncestorOverflowClips(g, participant.Box, participant.ClipAncestors,
-                container.SnapBoxDecorationsToCssPixels);
+            var box = participant.Box;
+            var pushedClips = 0;
+            var recordedClips = 0;
+            List<ClipEntry>? pending = null;
+
+            // A clip whose clipping box this participant's subtree escapes somewhere is not pushed around it:
+            // pushed here, it would clip the escaping box, and for a group (opacity, mix-blend-mode) it would
+            // clip the composite of the whole group. It stays pending for the participant's own paint, which
+            // pushes it inside the group, around only the content that is clipped.
+            void Apply(ClipEntry entry)
+            {
+                if (HasEscapingDescendant(fragment, entry.Clipper))
+                {
+                    (pending ??= []).Add(entry);
+                    return;
+                }
+
+                pushedClips += RenderUtils.ClipGraphicsByOverflow(g, entry.Rect, entry.Curve);
+                if (PushOverflowClip(entry.Rect, entry.Curve)) recordedClips++;
+            }
+
+            // Ancestors hoisted past: an overflow box that does not clip this participant is skipped
+            // (as RenderUtils.PushAncestorOverflowClips does; the participant's chain must pass through it).
+            foreach (var ancestor in participant.ClipAncestors)
+            {
+                if (!DomUtils.ClipsItsOverflow(ancestor.Box) || !DomUtils.IsOnClippingChainOf(box, ancestor.Box)) continue;
+
+                if (RenderUtils.ResolveOverflowClip(g, ancestor, container.SnapBoxDecorationsToCssPixels) is var (rect, curve))
+                    Apply(new ClipEntry(ancestor.Box, rect, curve));
+            }
+
+            var saved = _deferredClips;
+            if (saved.Count > 0)
+            {
+                var keep = new List<ClipEntry>(saved.Count);
+                foreach (var entry in saved)
+                {
+                    if (DomUtils.IsOnClippingChainOf(box, entry.Clipper)) Apply(entry);
+                    else keep.Add(entry);
+                }
+
+                _deferredClips = keep;
+            }
+
+            if (pending is not null) _deferredClips = Combine(_deferredClips, pending);
 
             PaintFragment(g, fragment);
+
+            _deferredClips = saved;
+
+            for (var i = 0; i < recordedClips; i++)
+                PopOverflowClip(true);
 
             for (var i = 0; i < pushedClips; i++)
                 g.PopClip();

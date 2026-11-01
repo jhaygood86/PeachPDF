@@ -74,7 +74,7 @@ namespace PeachBrackets.Html.Paint
         private bool OwnPaintNeedsTransparency(Canvas g, BoxFragment fragment)
         {
             return g.PaintRequiresTransparency(scratch =>
-                new FragmentPainter(container) { _ownOnly = true, _taggingSuppressed = true }.PaintContent(scratch, fragment));
+                new FragmentPainter(container) { _ownOnly = true, _taggingSuppressed = true, _deferredClips = _deferredClips }.PaintContent(scratch, fragment));
         }
 
         private bool FlattenSubtree(Canvas g, BoxFragment fragment)
