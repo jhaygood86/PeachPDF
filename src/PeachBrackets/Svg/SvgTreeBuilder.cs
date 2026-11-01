@@ -850,6 +850,11 @@ namespace PeachBrackets.Svg
             if (IsNotRendered(node))
                 return null;
 
+            // Conditional processing attributes (SVG 2 section 5.8): a false test removes the element, and for a
+            // <switch> child it is what moves the choice on to the next candidate.
+            if (!PassesConditionalProcessing(node, fontContext.Language))
+                return null;
+
             // Every length parsed while this element is built (its geometry, its stroke-width, ...) resolves its
             // font-relative units against THIS element's font; restored so a parent's later attributes see theirs.
             var outer = _lengthBasis;
@@ -904,10 +909,9 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
-        /// PeachPDF has no "which features/extensions/languages does this renderer support" axis to
-        /// evaluate <c>requiredFeatures</c>/<c>requiredExtensions</c>/<c>systemLanguage</c> against -
-        /// so, per a deliberate v1 simplification, this always renders only the first buildable child,
-        /// same as if every other candidate had failed its (nonexistent) test.
+        /// A <c>&lt;switch&gt;</c> renders its first direct child whose conditional processing attributes
+        /// (<c>systemLanguage</c>, <c>requiredExtensions</c>, <c>requiredFeatures</c>) all pass; the tests themselves
+        /// are applied in <see cref="BuildElement"/>, so a failing child simply builds to nothing and the next one is tried.
         /// </summary>
         private SvgElement? BuildSwitch(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)
         {
@@ -925,6 +929,64 @@ namespace PeachBrackets.Svg
             }
 
             return null;
+        }
+
+        private static readonly string[] SupportedExtensions =
+        [
+            "http://www.w3.org/1999/xhtml",
+            "http://www.w3.org/2000/svg",
+        ];
+
+        /// <summary>
+        /// Evaluates <c>systemLanguage</c>, <c>requiredExtensions</c> and <c>requiredFeatures</c> on <paramref name="node"/>.
+        /// The user's language is the element's resolved <c>lang</c> (the document language), else English.
+        /// <c>requiredFeatures</c> was removed in SVG 2 and always passes; an extension passes only if it is a namespace
+        /// this renderer handles, and an empty list never does.
+        /// </summary>
+        private static bool PassesConditionalProcessing(ISvgSourceNode node, string? userLanguage)
+        {
+            var systemLanguage = node.GetAttribute("systemLanguage");
+            if (systemLanguage is not null)
+            {
+                var matched = false;
+                foreach (var tag in systemLanguage.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (LanguageTagMatches(tag, "en") || (!string.IsNullOrEmpty(userLanguage) && LanguageTagMatches(tag, userLanguage)))
+                    {
+                        matched = true;
+                        break;
+                    }
+                }
+
+                if (!matched)
+                    return false;
+            }
+
+            var requiredExtensions = node.GetAttribute("requiredExtensions");
+            if (requiredExtensions is not null)
+            {
+                var extensions = requiredExtensions.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+                if (extensions.Length == 0)
+                    return false;
+
+                foreach (var extension in extensions)
+                {
+                    if (Array.IndexOf(SupportedExtensions, extension) < 0)
+                        return false;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>Whether two language tags are equal, or one is the other cut at a hyphen (<c>en</c> and <c>en-US</c>).</summary>
+        private static bool LanguageTagMatches(string a, string b)
+        {
+            if (a.Equals(b, StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var (shorter, longer) = a.Length < b.Length ? (a, b) : (b, a);
+            return longer.StartsWith(shorter, StringComparison.OrdinalIgnoreCase) && longer[shorter.Length] == '-';
         }
 
         private SvgAnchorElement BuildAnchor(ISvgSourceNode node, InheritedPaint inherited, FontContext fontContext)

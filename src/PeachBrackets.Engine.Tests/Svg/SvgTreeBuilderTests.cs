@@ -980,6 +980,58 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Empty(document.Children);
         }
 
+        [Theory]
+        [InlineData("""<circle systemLanguage="de" cx="1" cy="1" r="1"/><rect systemLanguage="en" width="5" height="5"/>""", typeof(SvgRectElement))]
+        [InlineData("""<circle systemLanguage="de, fr" cx="1" cy="1" r="1"/><rect systemLanguage="en-US" width="5" height="5"/>""", typeof(SvgRectElement))]
+        [InlineData("""<circle systemLanguage="" cx="1" cy="1" r="1"/><rect width="5" height="5"/>""", typeof(SvgRectElement))]
+        [InlineData("""<circle requiredExtensions="http://example.com/unknown" cx="1" cy="1" r="1"/><rect width="5" height="5"/>""", typeof(SvgRectElement))]
+        [InlineData("""<circle requiredExtensions="" cx="1" cy="1" r="1"/><rect width="5" height="5"/>""", typeof(SvgRectElement))]
+        [InlineData("""<circle requiredExtensions="http://www.w3.org/1999/xhtml" cx="1" cy="1" r="1"/><rect width="5" height="5"/>""", typeof(SvgCircleElement))]
+        [InlineData("""<circle requiredFeatures="http://example.com/anything" cx="1" cy="1" r="1"/><rect width="5" height="5"/>""", typeof(SvgCircleElement))]
+        public void Switch_PicksTheFirstChildWhoseConditionsPass(string children, Type expected)
+        {
+            var document = BuildFrom($"""<svg xmlns="http://www.w3.org/2000/svg"><switch>{children}</switch></svg>""");
+
+            Assert.IsType(expected, Assert.Single(document.Children));
+        }
+
+        [Fact]
+        public void Switch_NoChildPasses_BuildsNothing()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <switch><rect systemLanguage="de" width="5" height="5"/><rect systemLanguage="fr" width="5" height="5"/></switch>
+                </svg>
+                """);
+
+            Assert.Empty(document.Children);
+        }
+
+        [Fact]
+        public void Switch_MatchesTheDocumentLanguage()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg" lang="de">
+                  <switch><circle systemLanguage="de" cx="1" cy="1" r="1"/><rect width="5" height="5"/></switch>
+                </svg>
+                """);
+
+            Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
+        }
+
+        [Fact]
+        public void ConditionalAttributes_OutsideASwitch_RemoveTheElementWhenFalse()
+        {
+            var document = BuildFrom("""
+                <svg xmlns="http://www.w3.org/2000/svg">
+                  <rect systemLanguage="de" width="5" height="5"/>
+                  <circle systemLanguage="en" cx="1" cy="1" r="1"/>
+                </svg>
+                """);
+
+            Assert.IsType<SvgCircleElement>(Assert.Single(document.Children));
+        }
+
         [Fact]
         public void Anchor_ParsesHrefAndBuildsChildren()
         {
