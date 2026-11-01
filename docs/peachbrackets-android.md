@@ -68,6 +68,15 @@ panning and zooming for a touch that starts on that element, `pan-x` / `pan-y` /
 | `@media (hover)`, `(pointer)` | Match the devices attached to the device (or `Input`). |
 | Selection | A long press selects the word and shows the floating Copy / Select all menu; dragging after the long press extends the selection. |
 
+## Accessibility
+
+The view is an accessibility **node provider**: the page's blocks of text (paragraphs, headings, list items) are virtual `TextView` nodes with the
+text, bounds and visibility they have on screen, headings are marked as headings (API 28 and later), and each link, a child of its block, is
+clickable and follows the link when TalkBack activates it (raising `LinkTapped`, as a tap does). Accessibility focus scrolls the node into view, and
+the host node scrolls forward and backward. The tree is rebuilt when a document loads or reflows. Reading comes from
+`HtmlDocument.GetAccessibleNodes()`, which any other host can use too. You can see the tree an accessibility service sees with
+`adb shell uiautomator dump`.
+
 ## Fonts
 
 Text is drawn with the fonts of the device. The view registers Roboto as `sans-serif` and `Roboto`, Noto Serif as `serif` and the system
@@ -76,7 +85,6 @@ monospace font from `/system/fonts`, and a document's own `@font-face` fonts wor
 ## Limits of this version
 
 - Form controls are painted but not interactive.
-- Text is not exposed to accessibility services (TalkBack cannot read it).
 - Selection has no drag handles; a drag after the long press extends it.
 - A custom `url()` cursor is shown as its keyword.
 - Zoom re-renders at the new scale, which is slow on very large pages.
