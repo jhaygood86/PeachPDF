@@ -1436,7 +1436,7 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | `resolution`, `device-pixel-ratio` | Yes | Evaluated against the CSS reference density of 96 dpi (1 dppx) |
 | `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles |
 | `color`, `color-index`, `monochrome`, `grid` | Yes | Fixed device characteristics: color output (8 bits/channel), not a color-index/monochrome device, not a grid/tty |
-| `hover`, `any-hover`, `pointer`, `any-pointer` | Yes | Report the pointing devices of the host, which a PDF does not have: `none` unless `HtmlDocumentOptions.Input` says otherwise (`InputCapabilities.Mouse`, `.Touch`, or a mix of `PointerTypes`; see [PeachBrackets](peachbrackets.md)). The boolean form `(hover)` is true when the device can hover, `(pointer)` when there is any pointer |
+| `hover`, `any-hover`, `pointer`, `any-pointer` | Yes | Report the pointing devices of the host, which a PDF does not have: `none` unless `HtmlDocumentOptions.Input` says otherwise (`InputCapabilities.Mouse`, `.Touch`, or a mix of `PointerTypes`; see [PeachBrackets](peachbrackets.md)). The boolean form `(hover)` is true when the device can hover, `(pointer)` when there is any pointer; a keyword the feature does not define never matches |
 | `update`, `scripting` | Yes | Report the static-document resting state (`none`) — a PDF cannot be updated or scripted |
 | `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) |
 | `prefers-contrast`, `prefers-reduced-transparency` | Yes | Report `no-preference` |

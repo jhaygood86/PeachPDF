@@ -16,7 +16,7 @@ public class InputMediaFeatureTests
         @media (any-pointer: coarse) { #c { cursor: grab } }
         @media (any-pointer: fine) { #c { cursor: grabbing } }
         @media (any-hover) { #d { cursor: zoom-in } }
-        @media (hover: hover) and (pointer: fine) { #e { cursor: zoom-out } }
+        @media (hover) and (pointer) { #e { cursor: zoom-out } }
         </style>
         """;
 
@@ -83,5 +83,24 @@ public class InputMediaFeatureTests
         Assert.Equal(CursorShape.Grabbing, cursors["c"]); // both any-pointer rules match; the later one wins
         Assert.Equal(CursorShape.ZoomIn, cursors["d"]);
         Assert.Equal(CursorShape.Default, cursors["e"]); // the primary device cannot hover
+    }
+
+    [Theory]
+    [InlineData("(hover)", true)]
+    [InlineData("(pointer)", true)]
+    [InlineData("(any-hover) and (any-pointer)", true)]
+    [InlineData("(hover) and (pointer: fine)", true)]
+    [InlineData("screen and (hover) and (pointer)", true)]
+    [InlineData("not (hover)", false)]
+    [InlineData("(hover: banana)", false)]
+    [InlineData("(any-pointer: banana)", false)]
+    public async Task ABareFeatureIsTheBooleanForm_AndAKeywordTheFeatureDoesNotKnowNeverMatches(string query, bool expected)
+    {
+        var (_, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap("<div id=a style='height:20px'></div>", "<style>@media " + query + " { #a { cursor: help } }</style>"),
+            new HtmlDocumentOptions { Input = InputCapabilities.Mouse, Media = "screen" });
+        var bounds = document.GetElementBounds("a")!.Value;
+
+        Assert.Equal(expected, document.GetCursorAt(0, bounds.X + 5, bounds.Y + 5).Shape == CursorShape.Help);
     }
 }
