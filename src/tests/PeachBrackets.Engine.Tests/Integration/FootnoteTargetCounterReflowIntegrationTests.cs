@@ -51,6 +51,29 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(failures.Length == 0, $"{swept} layouts swept; footnote areas disagreed with their calls in:\n{failures}");
         }
 
+        /// <summary>The page number a table-of-contents line resolves to, with the document <paramref name="offset"/> pages into a larger one.</summary>
+        private static async Task<int> ResolvedPageAsync(int offset)
+        {
+            const string html =
+                "<style>a::after{content:' ' target-counter(attr(href), page)} p{margin:0;font:10pt/20pt sans-serif}</style>" +
+                "<p><a href='#end'>Chapter</a></p><div style='height:330pt'></div><p id='end'>The target</p>";
+            var (root, _) = await LayoutAsync(html, pageWidth: 200, pageHeight: 200, margin: 20,
+                prepare: box => box.HtmlContainer!.PageNumberOffset = offset);
+
+            var text = string.Concat(Descendants(root).SelectMany(b => b.Words).Select(w => w.Text));
+            return int.Parse(new string(text.Where(char.IsDigit).ToArray()));
+        }
+
+        [Fact]
+        public async Task TargetCounterPage_AfterTheLayoutConverges_IsShiftedByThePageNumberOffset()
+        {
+            var plain = await ResolvedPageAsync(0);
+            var shifted = await ResolvedPageAsync(10);
+
+            Assert.True(plain >= 2, $"the target must be past the first page, was {plain}");
+            Assert.Equal(plain + 10, shifted);
+        }
+
         /// <summary>
         /// Null when every page's note-area body count equals the number of calls on that page, else a
         /// description of the first page that disagrees.

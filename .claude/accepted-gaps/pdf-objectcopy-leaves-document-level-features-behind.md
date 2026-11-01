@@ -33,4 +33,3 @@ the entries above it kept as headings.
   files that both define `intro` therefore send the second file's links to the first file's `intro` (the second file's own
   name is stored as `intro_2`, unused by its links), and a name whose page was not taken is not filtered.
   `Redraw` rewrites links to generated unique names and does not have this.
-- `target-counter(..., page)` in a merged document uses part-local page numbers, unlike `counter(page)`, which is shifted.
