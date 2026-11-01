@@ -33,8 +33,7 @@ public class LayoutScaleSvgGeometryTests
             var saved = new Stack<Matrix3x2>();
             var points = new List<Vector2>();
             var operands = new List<string>();
-            foreach (var token in stream.Groups[1].Value.Split([' ', '', '
-'], StringSplitOptions.RemoveEmptyEntries))
+            foreach (var token in stream.Groups[1].Value.Split([' ', (char)13, (char)10], StringSplitOptions.RemoveEmptyEntries))
             {
                 // An operand is a number or a name; anything else is an operator, which takes the operands read since the last one.
                 if (token[0] == '/' || float.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out _))
