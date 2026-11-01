@@ -1185,6 +1185,15 @@ namespace PeachBrackets.Html.Dom
             // read (issue #805).
             var rawHeightPt = container.ResolveDefiniteHeightPt() ?? container.ClientBottom - container.ClientTop;
 
+            // A container with no layout in this pass yet (it is being cascaded - word splitting reads a text box's font
+            // before any layout exists) has no size to offer. The previous pass's is the best answer there is, and the
+            // convergence loop re-runs the pass until the sizes agree.
+            if (rawWidthPt <= 0 && HtmlContainer?.PreviousPassContainerSizes is { } previous
+                && previous.TryGet(container.Id, out var earlier))
+            {
+                return (earlier.WidthPt, earlier.HeightPt, earlier.InlineSizePt, earlier.BlockSizePt);
+            }
+
             double? widthPt = rawWidthPt;
             double? heightPt = isSizeContainer ? rawHeightPt : null;
 

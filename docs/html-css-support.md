@@ -1510,7 +1510,6 @@ Supported ([CSS Containment 3](https://developer.mozilla.org/en-US/docs/Web/CSS/
 | `cqb` | 1% of the nearest ancestor query container's own resolved **block-axis** size (only meaningful against a `size` container) — identical to `cqh` under `horizontal-tb`, but its **physical width** under `vertical-rl`/`vertical-lr`. Shares `cqh`'s percentage-height caveat above when the container is horizontal (its block axis is then the physical height) |
 | `cqmin`, `cqmax` | The smaller/larger of `cqi` and `cqb` |
 | Container-relative unit with no eligible ancestor container | Falls back to the corresponding small-viewport unit (`cqw`→`svw`, `cqh`→`svh`, `cqi`→`svi`, `cqb`→`svb`, `cqmin`→`svmin`, `cqmax`→`svmax`) — see [CSS Viewport Units](#css-viewport-units) |
-| Container-relative unit in `font-size` (e.g. `font-size: 10cqw`) | Resolves to `0` for any element with text content — a font-caching order limitation, not the general no-ancestor-container fallback above; a real ancestor container is found, but its size isn't available yet at the point text content first resolves the font. Works only for the uncommon case of an element with no text content of its own |
 
 ---
 
