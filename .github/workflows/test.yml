@@ -213,6 +213,15 @@ jobs:
       if: matrix.suite == 'small' && runner.os == 'Windows'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Win2D.Tests/PeachDrawing.Win2D.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename win2d-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix win2d-test-results --results-directory coverage
 
+    # The WinUI control is a Windows component too: its logic is tested on the Windows leg (the control itself needs a desktop session).
+    - name: Build WinUI control tests
+      if: matrix.suite == 'small' && runner.os == 'Windows'
+      run: dotnet build src/tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj --configuration Release
+
+    - name: Test WinUI control (PeachBrackets.WinUI)
+      if: matrix.suite == 'small' && runner.os == 'Windows'
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename winui-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix winui-test-results --results-directory coverage
+
     - name: Test HTML engine (PeachBrackets)
       if: matrix.suite == 'small'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Tests/PeachBrackets.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename brackets-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix brackets-test-results --results-directory coverage
