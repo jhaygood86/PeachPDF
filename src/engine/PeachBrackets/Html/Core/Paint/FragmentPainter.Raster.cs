@@ -119,7 +119,7 @@ namespace PeachBrackets.Html.Paint
             if (g.IsOffscreenTile)
                 return;
 
-            var overlay = new FragmentPainter(container) { _textOnly = true, _contextMembers = _contextMembers };
+            var overlay = new FragmentPainter(container) { _textOnly = true, _contextMembers = _contextMembers, _deferredClips = _deferredClips };
             g.InvisibleText = true;
             try
             {
