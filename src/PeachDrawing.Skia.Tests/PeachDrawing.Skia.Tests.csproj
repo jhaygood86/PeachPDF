@@ -21,6 +21,7 @@
     <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
     <!-- Not a dependency of the package: only here to prove a host can supply a HarfBuzz shaper through ISkiaTextShaper. -->
     <PackageReference Include="SkiaSharp.HarfBuzz" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
     <PackageReference Include="xunit.analyzers">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
