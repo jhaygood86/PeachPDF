@@ -83,14 +83,15 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
-        /// Maps a single character to its fullwidth compatibility form per Unicode's &lt;wide&gt;
-        /// decomposition mapping (used by CSS Text Module Level 3's <c>text-transform: full-width</c>).
+        /// Maps a single character to its fullwidth form per Unicode's &lt;wide&gt; and &lt;narrow&gt;
+        /// decomposition mappings (used by CSS Text Module Level 3's <c>text-transform: full-width</c>).
         /// ASCII 0x21-0x7E map to U+FF01-FF5E (offset by U+FEE0), space maps to the ideographic space
-        /// U+3000, and a handful of Latin-1 currency/symbol characters map to their own fullwidth forms
-        /// in the U+FFE0-FFE6 range. Characters with no fullwidth form are returned unchanged. Does not
-        /// implement the spec's &lt;narrow&gt;-tagged half (halfwidth katakana/Hangul jamo/symbol forms
-        /// converting the other direction) - see
-        /// .claude/accepted-gaps/text-transform-full-width-halfwidth-cjk-forms.md.
+        /// U+3000, a handful of Latin-1 currency/symbol characters map to their own fullwidth forms in
+        /// the U+FFE0-FFE6 range, and the halfwidth katakana (U+FF61-FF9F), halfwidth Hangul jamo
+        /// (U+FFA0-FFDC) and halfwidth symbol forms (U+FFE8-FFEE) map to their normal-width characters.
+        /// The mapping is one code point to one code point, so the text keeps its length: a halfwidth
+        /// voiced-sound mark (U+FF9E/FF9F) becomes the combining mark U+3099/309A rather than composing
+        /// into the preceding kana, as in Chromium. Characters with no fullwidth form are returned unchanged.
         /// </summary>
         public static char ToFullWidth(char c)
         {
@@ -114,9 +115,52 @@ namespace PeachBrackets.Html.Utils
                     return '￥';
                 case '₩':
                     return '￦';
+                case '⦅':
+                    return '｟';
+                case '⦆':
+                    return '｠';
+                case >= '｡' and <= 'ﾟ':
+                    return HalfwidthKatakana[c - '｡'];
+                case 'ﾠ':
+                    return 'ㅤ';
+                case >= 'ﾡ' and <= 'ﾾ':
+                    return (char)(c - 0xFFA1 + 0x3131);
+                case >= 'ￂ' and <= 'ￇ':
+                    return (char)(c - 0xFFC2 + 0x314F);
+                case >= 'ￊ' and <= 'ￏ':
+                    return (char)(c - 0xFFCA + 0x3155);
+                case >= 'ￒ' and <= 'ￗ':
+                    return (char)(c - 0xFFD2 + 0x315B);
+                case >= 'ￚ' and <= 'ￜ':
+                    return (char)(c - 0xFFDA + 0x3161);
+                case '￨':
+                    return '│';
+                case >= '￩' and <= '￬':
+                    return (char)(c - 0xFFE9 + 0x2190);
+                case '￭':
+                    return '■';
+                case '￮':
+                    return '○';
                 default:
                     return c;
             }
         }
+
+        // U+FF61..U+FF9F: halfwidth CJK punctuation, katakana and the voiced/semi-voiced sound marks, to their normal-width forms.
+        private static readonly char[] HalfwidthKatakana =
+        [
+            '。', '「', '」', '、', '・', 'ヲ',
+            'ァ', 'ィ', 'ゥ', 'ェ', 'ォ', 'ャ', 'ュ', 'ョ', 'ッ', 'ー',
+            'ア', 'イ', 'ウ', 'エ', 'オ',
+            'カ', 'キ', 'ク', 'ケ', 'コ',
+            'サ', 'シ', 'ス', 'セ', 'ソ',
+            'タ', 'チ', 'ツ', 'テ', 'ト',
+            'ナ', 'ニ', 'ヌ', 'ネ', 'ノ',
+            'ハ', 'ヒ', 'フ', 'ヘ', 'ホ',
+            'マ', 'ミ', 'ム', 'メ', 'モ',
+            'ヤ', 'ユ', 'ヨ',
+            'ラ', 'リ', 'ル', 'レ', 'ロ',
+            'ワ', 'ン', '゙', '゚',
+        ];
     }
 }
