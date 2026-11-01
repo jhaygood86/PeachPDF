@@ -12,8 +12,8 @@ Thanks for your interest in contributing. This document covers how to build, tes
 The test projects use xunit.v3 4.x on Microsoft.Testing.Platform (opted into by `global.json`), so `dotnet test` takes the project as `--project <csproj>`. Run the test suite with a single target framework:
 
 ```
-dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
-dotnet test --project PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --framework net8.0
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
+dotnet test --project tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --framework net8.0
 ```
 
 The HTML/CSS/SVG/MathML engine's internals are tested by `PeachBrackets.Engine.Tests`; PDF output and the public API by `PeachPDF.Tests`.
@@ -25,7 +25,7 @@ The HTML/CSS/SVG/MathML engine's internals are tested by `PeachBrackets.Engine.T
 The repo's tracked `global.json` pins a `10.0.100` floor with `rollForward: "latestMajor"` and `allowPrerelease: true`, and `src/Directory.Build.props` only adds `net11.0` to the multi-targeted projects' `TargetFrameworks` when the SDK actually in use is 11.0.100 or newer. Combined, this means no configuration is needed either way: with only the .NET 10 SDK installed, `dotnet` resolves to it and net11.0 is quietly not offered; install the [.NET 11 RC SDK](https://dotnet.microsoft.com/download/dotnet/11.0) alongside it and `dotnet` automatically promotes to the RC SDK, bringing net11.0 into the list — no `global.json` edits, local or committed.
 
 ```
-dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
 ```
 
 (That command only works once the RC SDK is actually installed — see above.)
@@ -33,19 +33,19 @@ dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
 The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` (net10.0-only, since the CLI is net10.0-only):
 
 ```
-dotnet test --project PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
+dotnet test --project tests/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
 ```
 
 The font and text engine has its own test project too, `PeachDrawing.Text.Tests` (the font parsers and tables, shaping, bidi, script itemization, hyphenation, and the public API of `PeachDrawing.Text`; it must not reference PeachPDF):
 
 ```
-dotnet test --project PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
+dotnet test --project tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
 ```
 
 To run a subset of tests:
 
 ```
-dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter-class "*Svg*"
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter-class "*Svg*"
 ```
 
 ## Code coverage
@@ -55,7 +55,7 @@ CI enforces **90% diff coverage** on pull requests — the coverage of lines you
 Reproduce this locally before opening or updating a PR:
 
 ```
-dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
 ```
 
 If your changed lines fall short of 90%, add tests to close the gap rather than relying on CI to catch it — a red diff-coverage check is one of the more common reasons a PR stalls in review.
@@ -67,7 +67,7 @@ If your changed lines fall short of 90%, add tests to close the gap rather than 
 - When implementing a new SVG or CSS **paint** feature, a parser-level "did it parse into the right enum/value" test is not sufficient on its own — add an integration test that would fail if the feature were a complete no-op at render time.
 - **Layout engine changes** (`CssLayoutEngine`/`CssLayoutEngineFlex`/`CssLayoutEngineTable`/`CssLayoutEngineColumns`, `CssBox.PerformLayoutImp`) need unit tests that assert the relevant `CssBox`'s properties after layout (`Location`, `ActualRight`/`ActualBottom`, etc.), not just that layout completes without throwing. Assert on every box the change affects, including children when the change affects child placement. See the harness pattern in `FlexboxIntegrationTests.cs`/`MulticolLayoutIntegrationTests.cs`: build a `HtmlContainerInt` + `PdfRenderContext`, call `PerformLayout` directly, then walk the box tree by id/class and assert positions/sizes.
 - **Painting changes** need unit tests that confirm the actual sequence of calls made to the `Canvas` adapter layer (`PeachDrawing.Core.Canvas`), not just that painting completes or that some token shows up in the final PDF. Use a test-only `Canvas` mock (see `SpyGraphics` in `TransformIntegrationTests.cs`, `RecordingGraphics` in `CssLayoutEngineTablePageBreakTests.cs`) that records each invocation, then assert on the recording. When order across different call types matters, record into a single ordered log.
-- Avoid writing tests against `FontFactory` (in `src/PeachDrawing.Text`) (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk.
+- Avoid writing tests against `FontFactory` (in `src/drawing/PeachDrawing.Text`) (and OpenType neighbors) without care — it caches resolved fonts in `static readonly Dictionary` fields shared process-wide, and xUnit's parallel test-class execution makes new tests here a real order-dependent-flakiness risk.
 
 ## Documentation
 
@@ -80,13 +80,13 @@ When you add or change a user-facing feature, update the relevant doc page in th
 - [docs/testing.md](docs/testing.md) — reader-facing overview of how the project is tested (the suite, CI, coverage gate, and two-renderer rasterization); the commands and conventions here are the contributor-facing complement
 - [README.md](README.md) / [docs/getting-started.md](docs/getting-started.md) — cross-link new features from these where relevant
 
-If a change gives PeachPDF a new visible rendering capability, add or update a showcase in `src/PeachPDF.TestHarness/Program.cs` in the same change. Several real rendering-correctness bugs (paint-order issues, broken masks, no-op gradient spread methods) were only caught by visually exercising a showcase, not by automated tests alone.
+If a change gives PeachPDF a new visible rendering capability, add or update a showcase in `src/harness/PeachPDF.TestHarness/Program.cs` in the same change. Several real rendering-correctness bugs (paint-order issues, broken masks, no-op gradient spread methods) were only caught by visually exercising a showcase, not by automated tests alone.
 
 ## Architecture conventions
 
 - Don't write two independent parsers for the same CSS value grammar across layers. If both the CSS-OM/parsing layer and a later render/resolution layer need to understand a value's grammar, extract it into one shared internal class both call (e.g. `CalcParser`, `BackgroundPositionGrammar`/`BackgroundSizeGrammar`). Only the final numeric resolution that genuinely depends on runtime-only information should differ between layers.
-- `PeachDrawing.Core` (`Canvas`/`RenderContext`/`Pen`/etc., see [docs/peachdrawing-core.md](docs/peachdrawing-core.md)) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`src/PeachDrawing.PDF/Backend/`, over the embedded PDF engine in `src/PeachDrawing.PDF/Engine/`). New rendering primitives get added there first, then implemented in `PdfCanvas`/`XGraphics`/`XGraphicsPdfRenderer` and in the SVG backend's `SvgCanvas` (`src/PeachDrawing.Svg/`). If you add a new abstract `Canvas` member, update the test-only mocks (`SpyGraphics`, `RecordingGraphics`) too.
-- Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether the PDF engine in `src/PeachDrawing.PDF/Engine/` already has an unused primitive for it — `PdfForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points.
+- `PeachDrawing.Core` (`Canvas`/`RenderContext`/`Pen`/etc., see [docs/peachdrawing-core.md](docs/peachdrawing-core.md)) is the abstraction boundary between layout/paint logic and the concrete PDF backend (`src/drawing/PeachDrawing.PDF/Backend/`, over the embedded PDF engine in `src/drawing/PeachDrawing.PDF/Engine/`). New rendering primitives get added there first, then implemented in `PdfCanvas`/`XGraphics`/`XGraphicsPdfRenderer` and in the SVG backend's `SvgCanvas` (`src/drawing/PeachDrawing.Svg/`). If you add a new abstract `Canvas` member, update the test-only mocks (`SpyGraphics`, `RecordingGraphics`) too.
+- Before building new PDF-writing infrastructure (patterns, soft masks, shadings), check whether the PDF engine in `src/drawing/PeachDrawing.PDF/Engine/` already has an unused primitive for it — `PdfForm`/`PdfFormXObject`, `PdfTilingPattern`, `PdfSoftMask` have all been found pre-existing-but-uncalled at various points.
 
 ## Pull requests
 
@@ -109,7 +109,7 @@ Report findings only.
 ## Ground rules
 - Read CLAUDE.md at the repo root first and apply all of it. Key rules: the whole solution must build with 0
   warnings (`dotnet build PeachPDF.slnx -t:Rebuild` from `src/`); run tests with
-  `dotnet test --project PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` and never bare `dotnet test`; spec claims
+  `dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` and never bare `dotnet test`; spec claims
   are checked against real spec text fetched from w3.org/whatwg.org, not recalled; paint-affecting changes are
   rasterized through BOTH PDFium (pypdfium2) and MuPDF (PyMuPDF) and viewed; diff coverage must be >= 90%;
   no AI attribution in commits or PR text (a grep for "claude" false-positives on `.claude/` paths, so check
@@ -192,7 +192,7 @@ content, table cells with vertical-align, rowspan across a page break, abs boxes
 headers. Render the same input twice through the CLI and byte-compare. Any drift is a blocker even if invisible today.
 
 ## 6. Every showcase
-Run src/PeachPDF.TestHarness on baseline twice (to measure noise) and on head once. Compare page content streams
+Run src/harness/PeachPDF.TestHarness on baseline twice (to measure noise) and on head once. Compare page content streams
 byte-for-byte, then rasterize differences in PDFium and MuPDF. Any changed showcase is a regression until proven
 intended and judged against Chrome. If the change adds a visible capability there must be a showcase registered
 through `SaveShowcaseAsync`, and its caption must be true against Chrome and the render.
