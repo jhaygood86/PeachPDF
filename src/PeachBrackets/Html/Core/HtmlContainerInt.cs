@@ -1321,6 +1321,7 @@ namespace PeachBrackets.Html
         {
             _lastHtmlSource = htmlSource;
             _lastBaseCssData = baseCssData;
+            PreviousPassContainerSizes = containerSizes;
 
             Clear();
             if (string.IsNullOrEmpty(htmlSource)) return;
@@ -1330,6 +1331,13 @@ namespace PeachBrackets.Html
             DomParser parser = new(CssParser);
             (Root, CssData, DocumentMetadata) = await parser.GenerateCssTree(htmlSource, this, CssData, containerSizes);
         }
+
+        /// <summary>
+        /// The size containers' sizes as the previous layout pass left them, which this pass was cascaded against
+        /// (null on the first pass of a document). A <c>cq*</c> unit asked for before its container has a layout in
+        /// this pass - a <c>font-size</c> read while text is being split into words - falls back on these.
+        /// </summary>
+        internal ContainerQuerySizes? PreviousPassContainerSizes { get; private set; }
 
         // Remembered so PerformLayout's container-query convergence loop can re-invoke SetHtml itself
         // between passes (a full re-parse + re-cascade, the same "wholesale redo" PdfGenerator.SetContent's

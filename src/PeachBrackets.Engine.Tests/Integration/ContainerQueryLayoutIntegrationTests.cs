@@ -155,23 +155,24 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(120d, target!.ActualBoxSizingWidth, 1);
         }
 
-        // font-size threads the same container basis width/calc() do (DerivedStyle.ActualFont), but
-        // for a box with text content it never actually resolves against it - word-splitting reads
-        // ActualFont during cascade, before any layout pass has determined the ancestor container's
-        // size, and the resolved font is cached forever from that first (pre-layout) read. See
-        // .claude/accepted-gaps/font-size-container-relative-units-resolve-to-zero-for-text-content.md.
+        // font-size threads the same container basis width/calc() do (DerivedStyle.ActualFont). A box with text content
+        // reads its font during cascade, before the container has a layout, so it takes the previous pass's container
+        // sizes (HtmlContainerInt.PreviousPassContainerSizes) - see ContainerRelativeFontSizeTests.
         [Fact]
-        public async Task ContainerRelativeUnit_ForFontSize_ResolvesToZero_ForTextContent()
+        public async Task ContainerRelativeUnit_ForFontSize_ResolvesAgainstTheContainer_ForTextContent()
         {
             var html = Html(
                 "#box { container-type: inline-size; width: 300px; } " +
-                "#target { font-size: 10cqw; }",
-                "<div id='box'><p id='target'>text</p></div>");
+                "#target { font-size: 10cqw; } #reference { font-size: 22.5pt; }",
+                "<div id='box'><p id='target'>text</p></div><p id='reference'>text</p>");
 
             var root = await BuildRoot(html);
             var target = DomUtils.GetBoxById(root, "target");
+            var reference = DomUtils.GetBoxById(root, "reference");
             Assert.NotNull(target);
-            Assert.Equal(0d, target!.ActualFont.Size, 1);
+            Assert.NotNull(reference);
+            // 10% of the 300px (225pt) container inline size is 22.5pt.
+            Assert.Equal(reference!.ActualFont.Size, target!.ActualFont.Size, 4);
         }
 
         // ── width / min-width / max-width / inline-size against an inline-size container ─
