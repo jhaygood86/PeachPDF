@@ -157,22 +157,17 @@ namespace PeachBrackets.Engine.Tests.Integration
             var clip = Assert.Single(g.Log, e => e.Kind == PaintOpKind.PushClip).Bounds;
             var matrix = Assert.Single(g.Log, e => e.Kind == PaintOpKind.PushTransform).Matrix!.Value;
 
-            // RecordingGraphics logs exactly what was passed to PushClip/PushTransform, with none of
-            // PdfCanvas's own real-backend conversion - PushClip's rect and a transform's own
-            // OffsetX/OffsetY are still in the box's internal (PixelsPerPoint-inflated) coordinate space,
-            // dividing by PixelsPerPoint only once actually reaching the PDF (see Canvas.PixelsPerPoint's
-            // own doc comment). The transform's linear part (M11/M22) is the one exception, already
-            // pre-divided by SvgRenderer itself (issue #814) - the fix under test - since PdfCanvas's
-            // own PushTransform never touches it. Dividing the clip and the offset by ppp here mirrors
-            // that real conversion, so this comparison matches what the actual PDF page content stream
-            // ends up with.
-            var clipReal = new Rect(clip.X / ppp, clip.Y / ppp, clip.Width / ppp, clip.Height / ppp);
-            var offsetXReal = matrix.M31 / ppp;
-            var offsetYReal = matrix.M32 / ppp;
+            // RecordingGraphics logs exactly what was passed to PushClip/PushTransform. The viewBox-to-viewport
+            // transform is the ordinary layout-unit one (Canvas divides only its translation, and everything drawn
+            // inside it counts in the same units), so the viewBox's corners mapped through it must land exactly
+            // on the clip rect, with no conversion between them.
+            var clipReal = clip;
+            var offsetXReal = (double)matrix.M31;
+            var offsetYReal = (double)matrix.M32;
 
-            // The <svg>'s own viewBox: (0, 0, 32, 32). Map its four corners through the (now fully
-            // real-point) transform and confirm the result is exactly the real-point clip rect - i.e.
-            // the content and its own clip were sized from the same, single source of truth.
+            // The <svg>'s own viewBox: (0, 0, 32, 32). Map its four corners through the transform and confirm
+            // the result is exactly the clip rect - i.e. the content and its own clip were sized from the
+            // same, single source of truth.
             var (x0, y0) = (offsetXReal, offsetYReal);
             var (x1, y1) = (32 * matrix.M11 + offsetXReal, 32 * matrix.M22 + offsetYReal);
             var mappedX = Math.Min(x0, x1);

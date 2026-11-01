@@ -1745,6 +1745,7 @@ namespace PeachBrackets.Html.Dom
                 WidenAtomicInlineRectangles(lineBox);
                 ApplyVerticalAlignment(lineBox);
                 HeightenAtomicInlineRectangles(lineBox);
+                ExtendInlineBlockRectanglesToLineHeight(lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
         }
@@ -2647,7 +2648,7 @@ namespace PeachBrackets.Html.Dom
                 var resolvedBlockTop = blockTop ?? box.Location.Y;
                 var widthBasis = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } wfc
                     ? wfc.PageContentRightOf(resolvedBlockTop) - wfc.MarginLeft
-                    : InlinePercentageBase(box)?.Width ?? PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
+                    : AbsolutePaddingBoxWidth(box) ?? PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
                 width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
@@ -2678,7 +2679,7 @@ namespace PeachBrackets.Html.Dom
 
             if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute })
             {
-                var absCbWidth = InlinePercentageBase(box)?.Width ?? PercentageBase(box).Size.Width;
+                var absCbWidth = AbsolutePaddingBoxWidth(box) ?? PercentageBase(box).Size.Width;
                 if (box.Left.Value.IsValue && box.Right.Value.IsValue)
                 {
                     // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
@@ -2774,6 +2775,27 @@ namespace PeachBrackets.Html.Dom
                 ? DomUtils.InlineContainingBlockOf(DomUtils.GetNearestPositionedAncestor(box))
                 : null;
 
+        /// <summary>
+        /// The width of the padding box (CSS 2.1 §10.1) of the positioned ancestor that forms an absolutely
+        /// positioned <paramref name="box"/>'s containing block, or null for any other box or when no
+        /// ancestor is positioned (the initial containing block keeps the ordinary basis). The same measure
+        /// <c>CssBox</c>'s <c>left</c>/<c>right</c> placement resolves against.
+        /// </summary>
+        private static double? AbsolutePaddingBoxWidth(CssBox box) =>
+            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+
+        /// <summary>The height counterpart of <see cref="AbsolutePaddingBoxWidth"/>.</summary>
+        private static double? AbsolutePaddingBoxHeight(CssBox box) =>
+            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
+
+        private static CssBox? AbsoluteContainingBlockOf(CssBox box)
+        {
+            if (box.Position.Value is not PositionMode.Absolute) return null;
+
+            var ancestor = DomUtils.GetNearestPositionedAncestor(box);
+            return ancestor.IsPositioned || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
+        }
+
         public static double? GetBoxHeight(CssBox box)
         {
             box.ResolveStretchSizes();
@@ -2827,7 +2849,7 @@ namespace PeachBrackets.Html.Dom
                 || IsHeightDefinite(heightCb);
             var heightBasis = isFixedToPage
                 ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight
-                : InlinePercentageBase(box)?.Height ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
+                : AbsolutePaddingBoxHeight(box) ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
@@ -7755,6 +7777,58 @@ namespace PeachBrackets.Html.Dom
             foreach (var (box, declaredHeight, anchor) in heightening)
             {
                 line.Rectangles[box] = GrowAtomicInlineRectangle(line.Rectangles[box], declaredHeight, anchor);
+            }
+        }
+
+        /// <summary>
+        /// Extends each flowed <c>inline-block</c> on <paramref name="line"/> from the glyphs' content area its
+        /// words bubbled up to the height of the line box it generates: an <c>inline-block</c> is a block
+        /// container, so its content is laid out in line boxes of at least its own <c>line-height</c>
+        /// (<see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1 §10.8.1</see>'s strut) and
+        /// its height is that of its lines
+        /// (<see href="https://www.w3.org/TR/CSS21/visudet.html#inlineblock-height">§10.6.6</see>). The leading
+        /// (<c>line-height</c> minus the font's content area) is split in half above and below the glyphs, the
+        /// same split <see cref="HalfLeadingExtentOf"/> gives the line, so the glyphs do not move - only the
+        /// box's background, border and transform pivot grow to cover the whole line
+        /// (<see href="https://github.com/jhaygood86/PeachPDF/issues/1694">#1694</see>).
+        /// </summary>
+        /// <remarks>
+        /// Deliberately limited to the case where the box's content is exactly one run in its own font (the
+        /// rectangle's inner height is the font's content area): a box holding children in other fonts has a
+        /// strut and line contributions this does not model, and is left as the words produced it. A declared
+        /// <c>height</c>/<c>min-height</c> wins and is handled by <see cref="HeightenAtomicInlineRectangles"/>.
+        /// A plain <c>inline</c> never reaches here - its box is the content area by §10.8.1.
+        /// </remarks>
+        private static void ExtendInlineBlockRectanglesToLineHeight(CssLineBox line)
+        {
+            List<(CssBox Box, Rect Rect)>? extending = null;
+
+            foreach (var (box, rect) in line.Rectangles)
+            {
+                if (box.DerivedStyle.ActualDisplay is not Keywords.InlineBlock) continue;
+                if (!IsWhollyHostedOnLine(box, line) || !HasWordOnLine(box, line)) continue;
+                if (ResolveAtomicInlineDeclaredHeight(box) is not null) continue;
+
+                // `normal` is the font's own line spacing, which the words' content area already tracks to
+                // within the font's line gap; only a declared line-height opens a leading worth covering.
+                if (!box.DerivedStyle.HasDeclaredLineHeight) continue;
+
+                var decoration = box.ActualBorderTopWidth + box.ActualPaddingTop
+                                 + box.ActualPaddingBottom + box.ActualBorderBottomWidth;
+                var contentArea = box.ActualFont.Height;
+                if (Math.Abs(rect.Height - decoration - contentArea) > 0.5) continue;
+
+                var leading = box.ActualLineHeight - contentArea;
+                if (Math.Abs(leading) < 0.01) continue;
+
+                (extending ??= []).Add((box, new Rect(rect.X, rect.Y - leading / 2, rect.Width, rect.Height + leading)));
+            }
+
+            if (extending is null) return;
+
+            foreach (var (box, rect) in extending)
+            {
+                line.Rectangles[box] = rect;
             }
         }
 

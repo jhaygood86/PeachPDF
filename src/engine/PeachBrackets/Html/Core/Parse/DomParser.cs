@@ -1609,7 +1609,7 @@ namespace PeachBrackets.Html.Parse
                 // row threw out of LayoutBodyRows.
                 DisplayMode.TableRow or DisplayMode.TableRowGroup or DisplayMode.TableHeaderGroup
                     or DisplayMode.TableFooterGroup or DisplayMode.TableCell or DisplayMode.TableColumn
-                    or DisplayMode.TableColumnGroup =>
+                    or DisplayMode.TableColumnGroup or DisplayMode.TableCaption =>
                     CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 _ => BlockifyInlineLevel(box.Display)
             };

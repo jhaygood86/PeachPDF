@@ -7333,12 +7333,26 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The width of an absolutely positioned box's containing block, which <paramref name="ancestor"/> (the nearest
+        /// positioned ancestor) forms: an inline's own rectangle, or a block's padding box (CSS 2.1 sections 10.1 and
+        /// 10.2). The one measure both the <c>left</c>/<c>right</c> placement and the auto-width fill resolve a
+        /// percentage against, so the two cannot disagree.
+        /// </summary>
+        internal static double AbsoluteContainingBlockWidth(CssBox ancestor)
+        {
+            if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
+                return inlineContainingBlock.Width;
+
+            return Math.Max(0, ancestor.ActualWidth - ancestor.ActualBorderLeftWidth - ancestor.ActualBorderRightWidth);
+        }
+
+        /// <summary>
         /// The height of an absolutely positioned box's containing block, which <paramref name="ancestor"/> (the nearest
         /// positioned ancestor) forms: an inline's own rectangle, or a block's padding box (CSS 2.1 section 10.1). The
         /// ancestor's declared height is read directly, since its content-driven <c>ActualHeight</c> is still provisional
         /// while its children are being placed.
         /// </summary>
-        private static double AbsoluteContainingBlockHeight(CssBox ancestor, double? finalizedBorderBoxHeight = null)
+        internal static double AbsoluteContainingBlockHeight(CssBox ancestor, double? finalizedBorderBoxHeight = null)
         {
             if (DomUtils.InlineContainingBlockOf(ancestor) is { } inlineContainingBlock)
                 return inlineContainingBlock.Height;
@@ -7526,7 +7540,7 @@ namespace PeachBrackets.Html.Dom
                                              ?? containingBlockOrigin.Y + nearestPositionedAncestor.ActualBorderTopWidth;
 
                     var left = containingBlockLeft + child.ActualMarginLeft +
-                               ResolveOffsetOrZero(child.Left, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, child);
+                               ResolveOffsetOrZero(child.Left, AbsoluteContainingBlockWidth(nearestPositionedAncestor), child);
 
                     child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
                     var top = containingBlockTop + child.ActualMarginTop + child._placedPercentageInsetTop;
@@ -7810,7 +7824,7 @@ namespace PeachBrackets.Html.Dom
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
                     var inlineContainingBlock = DomUtils.InlineContainingBlockOf(nearestPositionedAncestor);
 
-                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, inlineContainingBlock?.Width ?? nearestPositionedAncestor.ActualWidth, this);
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, AbsoluteContainingBlockWidth(nearestPositionedAncestor), this);
                     var actualRight = (inlineContainingBlock?.Right
                                        ?? nearestPositionedAncestor.ClientRight + nearestPositionedAncestor.ActualPaddingRight) - right;
 

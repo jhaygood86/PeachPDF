@@ -243,6 +243,54 @@ namespace PeachBrackets.Html.Paint
                 DrawOutline(g, box, rects);
         }
 
+        /// <summary>
+        /// Adds the border boxes of an outlined inline's non-inline descendants - atomic inlines, floats and
+        /// block children - to the rectangles its outline is the union of. CSS UI 4 §3.1 asks for the minimum
+        /// outline enclosing all of an element's boxes and says descendant boxes may affect its position;
+        /// Blink's <c>PhysicalBoxFragment::AddOutlineRectsForInlineBox</c> feeds each such descendant's own
+        /// rectangle into the same union, so an image taller than its line pushes the outline out around it
+        /// (issue #1207). Nested inline boxes only recurse (their line rectangles already are their share), a
+        /// list marker is skipped, and an out-of-flow box is left out: it is not part of the inline's box tree.
+        /// Rectangles fully inside one already collected change nothing, so they are not added, which keeps
+        /// an ordinary single-rectangle outline on its single-rectangle path.
+        /// </summary>
+        private static void AddOutlineDescendantRects(BoxFragment fragment, List<OutlineRect> rects)
+        {
+            var box = fragment.Box;
+            if (box.DerivedStyle.ActualDisplay != Keywords.Inline || IsVerticalDecorationGeometry(box)) return;
+
+            CollectOutlineDescendantRects(fragment, rects);
+        }
+
+        private static void CollectOutlineDescendantRects(BoxFragment fragment, List<OutlineRect> rects)
+        {
+            foreach (var child in fragment.Children)
+            {
+                var childBox = child.Box;
+
+                if (childBox.IsMarkerPseudoElement
+                    || childBox.Position.Value is PositionMode.Absolute or PositionMode.Fixed
+                    || childBox.DerivedStyle.ActualDisplay == Keywords.None)
+                {
+                    continue;
+                }
+
+                if (childBox.DerivedStyle.ActualDisplay == Keywords.Inline && !DomUtils.IsAtomicInline(childBox))
+                {
+                    CollectOutlineDescendantRects(child, rects);
+                    continue;
+                }
+
+                var rect = child.PrimaryRect;
+                if (rect.IsEmpty || rects.Exists(existing => Contains(existing.Rect, rect))) continue;
+
+                rects.Add(new OutlineRect(rect, true, true, true, true));
+            }
+        }
+
+        private static bool Contains(Rect outer, Rect inner) =>
+            inner.Left >= outer.Left && inner.Right <= outer.Right && inner.Top >= outer.Top && inner.Bottom <= outer.Bottom;
+
         /// <summary>Draws one box's outline from the rectangles its paint collected.</summary>
         private static void DrawOutline(Canvas g, CssBox box, List<OutlineRect> rects)
         {

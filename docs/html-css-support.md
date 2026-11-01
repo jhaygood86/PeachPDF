@@ -472,7 +472,7 @@ Every outline style follows that shape, including the patterned and bevelled one
 
 For translucent square-cornered `dotted` and `dashed` outlines, each corner dot or dash is painted once, so the corners have the same opacity as the straight runs. The same applies to borders with matching patterned sides.
 
-One limitation remains: only the element's own line boxes take part in the region, not the border boxes of any atomic inlines (images, inline-blocks) inside it, so an outline around content taller than its own line box can cut through it where Chromium's would go around.
+The border boxes of the non-inline boxes inside an inline (images, inline-blocks, floats) join the region too, so an outline around content taller than its own line box goes around it, as in Chromium. Out-of-flow boxes and list markers do not.
 
 A page or column break is a different axis and is unaffected by any of this: the region is always built from one page's own rectangles, so a box broken across pages gets its own shape on each, and the block-axis edge the break cuts through stays open on both sides of it, exactly as border's own `slice` geometry already leaves it.
 

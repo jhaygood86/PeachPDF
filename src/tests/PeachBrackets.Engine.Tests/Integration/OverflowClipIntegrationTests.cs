@@ -270,6 +270,51 @@ body { margin: 0; }
             Assert.Equal(clipped, clipsAtFill!.Exists(c => Math.Abs(c.Height - 5) < 0.5));
         }
 
+        // What survives a non-positioned stacking context (opacity) between the clipper and the child: a child
+        // whose containing-block chain passes through the clipper stays clipped, and a fixed box is never clipped.
+        // NOT covered, and still wrong (issue #1315): an absolutely positioned child there keeps the clip - see
+        // .claude/accepted-gaps/positioned-box-inside-non-positioned-stacking-context-keeps-an-escaped-overflow-clip.md.
+        [Theory]
+        [InlineData("opacity:0.5;", "position:relative;", "position:absolute;", true)]   // clipper is the containing block
+        [InlineData("opacity:0.5;", "", "position:fixed;", false)]
+        [InlineData("opacity:0.5;", "", "", true)]                                        // an in-flow child is clipped
+        public async Task PaintingAChildOfAStackingContext_KeepsOrSkipsTheClipByItsContainingBlockChain(
+            string middleStyle, string clipperStyle, string childPosition, bool clipped)
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<div style='position:relative;width:200pt;height:100pt'>" +
+                $"<div style='overflow:hidden;{clipperStyle}width:60pt;height:5pt'>" +
+                $"<div style='{middleStyle}'>" +
+                $"<div style='{childPosition}top:0;left:0;width:80pt;height:40pt;background:red'></div></div></div></div>"));
+
+            var recording = new RecordingGraphics(new HtmlRenderContext());
+            FragmentPaintHarness.PaintPage(container, recording);
+
+            var activeClips = new List<Rect>();
+            List<Rect>? clipsAtFill = null;
+            foreach (var op in recording.Log)
+            {
+                switch (op.Kind)
+                {
+                    case PaintOpKind.PushClip:
+                        activeClips.Add(op.Bounds);
+                        break;
+                    case PaintOpKind.PushClipPath:
+                        activeClips.Add(default);
+                        break;
+                    case PaintOpKind.PopClip:
+                        activeClips.RemoveAt(activeClips.Count - 1);
+                        break;
+                    case PaintOpKind.FillRect when Math.Abs(op.Bounds.Height - 40) < 0.5:
+                        clipsAtFill ??= [.. activeClips];
+                        break;
+                }
+            }
+
+            Assert.NotNull(clipsAtFill);
+            Assert.Equal(clipped, clipsAtFill!.Exists(c => Math.Abs(c.Height - 5) < 0.5));
+        }
+
         [Fact]
         public async Task OverflowClipCurve_PreservesEllipticalRadii()
         {
