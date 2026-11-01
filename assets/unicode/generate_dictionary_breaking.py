@@ -10,9 +10,9 @@ by UAX #14's own rules.
 
 Licences (read at that tag, in its LICENSE file): the Thai and Khmer lists are ICU data under the Unicode License v3, and the Lao and
 Burmese lists carry BSD-style notices of their own (Brian Eugene Wilson and Robert Martin Campbell, 2013, and LeRoy Benjamin Sharon,
-2013, respectively) - all four reproduced in src/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md.
+2013, respectively) - all four reproduced in src/drawing/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md.
 
-Output, one file per script in src/PeachDrawing.Text.Data/Internal/Text/Resources/Dictionaries/ (<script>.dict.br), embedded in the
+Output, one file per script in src/drawing/PeachDrawing.Text.Data/Internal/Text/Resources/Dictionaries/ (<script>.dict.br), embedded in the
 PeachDrawing.Text.Data assembly and read by PeachDrawing.Text.Internal.Text.Segmentation.WordDictionary:
 
     Brotli (quality 11) of
@@ -45,7 +45,7 @@ import brotli
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 OUT_DIR = os.path.normpath(os.path.join(
-    SCRIPT_DIR, "..", "..", "src", "PeachDrawing.Text.Data", "Internal", "Text", "Resources", "Dictionaries"))
+    SCRIPT_DIR, "..", "..", "src", "drawing", "PeachDrawing.Text.Data", "Internal", "Text", "Resources", "Dictionaries"))
 
 ICU_TAG = "release-78.3"   # commit 21d1eb0f306e1141c10931e914dfc038c06121da
 ICU_URL = "https://raw.githubusercontent.com/unicode-org/icu/{tag}/icu4c/source/data/brkitr/dictionaries/{name}.txt"

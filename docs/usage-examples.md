@@ -187,7 +187,7 @@ The document you pass in is unaffected: it's an input, not something the documen
 
 ## Rendering in the browser (Blazor WebAssembly)
 
-PeachPDF is pure managed code, so it runs unmodified in a browser under WebAssembly — the whole pipeline, from HTML parsing through font subsetting to PDF output, with no server round-trip. [PeachPDF's own demo](https://peachpdf.net/demo/) does exactly this; its source is in `src/PeachPDF.Demo.BlazorWasm/`.
+PeachPDF is pure managed code, so it runs unmodified in a browser under WebAssembly — the whole pipeline, from HTML parsing through font subsetting to PDF output, with no server round-trip. [PeachPDF's own demo](https://peachpdf.net/demo/) does exactly this; its source is in `src/examples/PeachPDF.Demo.BlazorWasm/`.
 
 Three things differ from a server or desktop host:
 

@@ -46,7 +46,7 @@ jobs:
           # docs/_data/tests.yml and consumed via {{ site.data.tests.total }} on the testing page.
           COUNT=0
           for PROJECT in PeachPDF.Tests PeachBrackets.Engine.Tests; do
-            N=$(dotnet test --project "src/$PROJECT/$PROJECT.csproj" --framework net8.0 --list-tests \
+            N=$(dotnet test --project "src/tests/$PROJECT/$PROJECT.csproj" --framework net8.0 --list-tests \
               | grep -cE '^[[:space:]]+(PeachPDF|PeachBrackets\.Engine)\.Tests\.' || true)
             COUNT=$((COUNT + N))
           done
@@ -104,7 +104,7 @@ jobs:
 
       - name: Generate feature showcases
         run: |
-          dotnet run --project src/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj \
+          dotnet run --project src/harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj \
             --configuration Release --framework net10.0 \
             -- "$GITHUB_WORKSPACE/docs/showcase" --svg
           mv docs/showcase/showcases.json docs/_data/showcases.json
@@ -134,7 +134,7 @@ jobs:
       # its assets.
       - name: Publish the in-browser demo
         run: |
-          dotnet publish src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj \
+          dotnet publish src/examples/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj \
             --configuration Release -o demo-publish
 
           # Blazor resolves every asset against <base href>, so this has to match where the app is
