@@ -2647,7 +2647,7 @@ namespace PeachBrackets.Html.Dom
                 var resolvedBlockTop = blockTop ?? box.Location.Y;
                 var widthBasis = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } wfc
                     ? wfc.PageContentRightOf(resolvedBlockTop) - wfc.MarginLeft
-                    : InlinePercentageBase(box)?.Width ?? PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
+                    : AbsolutePaddingBoxWidth(box) ?? PageAwareWidthBasis(PercentageBase(box), resolvedBlockTop);
                 width = CssValueParser.ParseLength(box.Width, widthBasis, box);
             }
 
@@ -2678,7 +2678,7 @@ namespace PeachBrackets.Html.Dom
 
             if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute })
             {
-                var absCbWidth = InlinePercentageBase(box)?.Width ?? PercentageBase(box).Size.Width;
+                var absCbWidth = AbsolutePaddingBoxWidth(box) ?? PercentageBase(box).Size.Width;
                 if (box.Left.Value.IsValue && box.Right.Value.IsValue)
                 {
                     // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
@@ -2774,6 +2774,27 @@ namespace PeachBrackets.Html.Dom
                 ? DomUtils.InlineContainingBlockOf(DomUtils.GetNearestPositionedAncestor(box))
                 : null;
 
+        /// <summary>
+        /// The width of the padding box (CSS 2.1 §10.1) of the positioned ancestor that forms an absolutely
+        /// positioned <paramref name="box"/>'s containing block, or null for any other box or when no
+        /// ancestor is positioned (the initial containing block keeps the ordinary basis). The same measure
+        /// <c>CssBox</c>'s <c>left</c>/<c>right</c> placement resolves against.
+        /// </summary>
+        private static double? AbsolutePaddingBoxWidth(CssBox box) =>
+            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockWidth(ancestor) : null;
+
+        /// <summary>The height counterpart of <see cref="AbsolutePaddingBoxWidth"/>.</summary>
+        private static double? AbsolutePaddingBoxHeight(CssBox box) =>
+            AbsoluteContainingBlockOf(box) is { } ancestor ? CssBox.AbsoluteContainingBlockHeight(ancestor) : null;
+
+        private static CssBox? AbsoluteContainingBlockOf(CssBox box)
+        {
+            if (box.Position.Value is not PositionMode.Absolute) return null;
+
+            var ancestor = DomUtils.GetNearestPositionedAncestor(box);
+            return ancestor.IsPositioned || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
+        }
+
         public static double? GetBoxHeight(CssBox box)
         {
             box.ResolveStretchSizes();
@@ -2827,7 +2848,7 @@ namespace PeachBrackets.Html.Dom
                 || IsHeightDefinite(heightCb);
             var heightBasis = isFixedToPage
                 ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight
-                : InlinePercentageBase(box)?.Height ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
+                : AbsolutePaddingBoxHeight(box) ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
             // content - content taller than it overflows past ActualBottom (clipped or not per
