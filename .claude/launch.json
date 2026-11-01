@@ -7,7 +7,7 @@
       "runtimeArgs": [
         "run",
         "--project",
-        "src/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj",
+        "src/examples/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj",
         "--launch-profile",
         "http"
       ],
