@@ -25,6 +25,7 @@ surface, mirroring `PdfComposer`/`SvgComposer`. Do **not** reuse a Win2D name (`
 | `Win2dComposer`, `Win2dComposerOptions` | One offscreen page: its canvas, size, finishing and reading back | `Composer` is this repository's name for the document-level assembler; `Finish` mirrors the page-completing call of `PdfComposerPage`; `ToPixelBuffer`/`SaveAsync` name what they return and do |
 | `Win2dImageFormat` | The file format a page is saved as | Ours; each value is the format's name |
 | `Win2dTextEngine` (`PeachDrawing`, `DirectWrite`) | Which engine shapes and draws text | Ours; each value names the engine |
+| `Win2dImageCodec` (`PeachImage`, `Native`) | Which decoder turns an encoded image into pixels; `Win2dRenderContext.ImageCodec`/`FallbackToPeachImage` read and set it (`SkiaImageCodec` is the same switch) | Ours; each value names the decoder |
 | `Win2dLinkMap`, `Win2dLink`, `Win2dLinkOptions`, `Win2dLinkActivatingEventArgs`, `ILinkLauncher` | The links a page recorded, finding the one under a point, and opening it with the system's handler | Ours; `HitTest`/`TryActivateAsync`/`TryGetDestination` name what they do; `LinkActivating`/`Cancel` follow the .NET event idiom |
 | `Win2dDeviceLostException` | Reading a drawing whose device was lost | Ours |
 

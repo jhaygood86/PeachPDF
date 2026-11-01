@@ -30,6 +30,8 @@
       url: /peachdrawing-svg.html
     - title: PeachDrawing.Win2D
       url: /peachdrawing-win2d.html
+    - title: PeachDrawing.Skia
+      url: /peachdrawing-skia.html
     - title: PeachBrackets
       url: /peachbrackets.html
     - title: PeachImage
@@ -60,6 +62,9 @@
     - title: PeachDrawing.Win2D
       url: /api/PeachDrawing.Win2D/
       prefix: /api/PeachDrawing.Win2D/
+    - title: PeachDrawing.Skia
+      url: /api/PeachDrawing.Skia/
+      prefix: /api/PeachDrawing.Skia/
     - title: PeachBrackets
       url: /api/PeachBrackets/
       prefix: /api/PeachBrackets/

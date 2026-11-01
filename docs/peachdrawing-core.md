@@ -13,7 +13,7 @@ dotnet add package PeachDrawing.Core
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
 > `PublicApi.txt` for the exact, machine-checked snapshot. Three concrete `Canvas`/`RenderContext`
-> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) joins them as a fourth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
+> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) and [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, drawing with SkiaSharp into a canvas you supply, on any platform) join them as a fourth and fifth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
 > renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
@@ -353,7 +353,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), [PeachDrawing.Win2D](peachdrawing-win2d.md)'s `Win2dRenderContext`/`Win2dCanvas` (a hardware-accelerated Windows backend, with the resource-lifetime rules a native-handle backend needs), PeachPDF's use of `RasterCanvas`
+[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), [PeachDrawing.Win2D](peachdrawing-win2d.md)'s `Win2dRenderContext`/`Win2dCanvas` (a hardware-accelerated Windows backend, with the resource-lifetime rules a native-handle backend needs), [PeachDrawing.Skia](peachdrawing-skia.md)'s `SkiaRenderContext`/`SkiaCanvas` (the cross-platform one, drawing into a host-supplied surface), PeachPDF's use of `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a

@@ -248,7 +248,7 @@ public sealed partial class Win2dCanvas
         var key = (typeface, glyphId, bitmap.Ppem);
         if (!_bitmapGlyphs.TryGetValue(key, out var image))
         {
-            image = Win2dImage.TryDecode(new System.IO.MemoryStream(bitmap.Data));
+            image = _context.DecodeImage(bitmap.Data);
             _bitmapGlyphs[key] = image;
         }
 

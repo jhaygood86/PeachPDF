@@ -15,7 +15,7 @@ App SDK flavour. The application that uses it supplies the Win2D native binary b
 with a runtime identifier, as for any Win2D app.
 
 > **Status: pre-1.0.** The public surface is `Win2dCanvas`, `Win2dRenderContext`, `Win2dComposer`, `Win2dComposerOptions`,
-> `Win2dImageFormat`, `Win2dTextEngine`, `Win2dLinkMap`, `Win2dLink`, `Win2dLinkOptions`, `Win2dLinkActivatingEventArgs`,
+> `Win2dImageFormat`, `Win2dTextEngine`, `Win2dImageCodec`, `Win2dLinkMap`, `Win2dLink`, `Win2dLinkOptions`, `Win2dLinkActivatingEventArgs`,
 > `ILinkLauncher` and `Win2dDeviceLostException`; `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## Quick start
@@ -110,6 +110,17 @@ DirectWrite mode is a convenience for text that should look like the rest of Win
 | Fonts the document adds | Supported, by weight and italic only. They are loaded from temporary files the context deletes on `Dispose` (best effort: a file DirectWrite still has mapped is left behind). |
 | Colour glyphs | Drawn by DirectWrite's colour-font support; per-palette choice (`font-palette`) is not applied. |
 | Vertical text, `letter-spacing` | Vertical metrics are not provided; letter spacing is applied as trailing space after each character. |
+
+## Images
+
+`Win2dRenderContext(device, textEngine, Win2dImageCodec)` chooses what turns an encoded image into pixels:
+
+- **`Win2dImageCodec.PeachImage`** (default): the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
+  every other canvas.
+- **`Win2dImageCodec.Native`**: the Windows Imaging Component (`BitmapDecoder`), which can read what the codecs installed on the machine can,
+  including formats PeachImage does not know. An image Windows cannot decode is handed to PeachImage unless
+  `Win2dRenderContext.FallbackToPeachImage` is switched off. The decode is done on a thread-pool thread and waited for, so a UI thread that
+  loads an image cannot deadlock; the orientation stored with the image is read by PeachImage so it is reported as on every other canvas.
 
 ## Links
 

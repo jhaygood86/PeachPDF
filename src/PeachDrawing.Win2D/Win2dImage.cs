@@ -3,7 +3,10 @@ using PeachDrawing.Core;
 using PeachImage;
 using System;
 using System.IO;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Windows.Graphics.DirectX;
+using Windows.Graphics.Imaging;
 
 namespace PeachDrawing.Win2D;
 
@@ -73,20 +76,44 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
         }
     }
 
-    public static Win2dImage? TryDecode(Stream stream)
+    public static byte[] ReadAll(Stream stream)
     {
-        byte[] source;
         if (stream is MemoryStream ms && ms.TryGetBuffer(out var segment) && segment.Offset == 0 && segment.Count == segment.Array!.Length && ms.Position == 0)
-        {
-            source = segment.Array;
-        }
-        else
-        {
-            using var copy = new MemoryStream();
-            stream.CopyTo(copy);
-            source = copy.ToArray();
-        }
+            return segment.Array;
 
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
+    }
+
+    public static Win2dImage? TryDecode(Stream stream) => TryDecode(ReadAll(stream));
+
+    /// <summary>
+    /// Decodes with the Windows Imaging Component, or returns <see langword="null"/> when Windows has no codec for the data. The decode runs on a
+    /// thread-pool thread and is waited for, so calling it from a UI thread cannot deadlock. The orientation stored with the image is read by
+    /// PeachImage, because WIC applies or hides it rather than reporting it the way the rest of PeachDrawing expects.
+    /// </summary>
+    public static Win2dImage? TryDecodeNative(byte[] source) => Task.Run(() => DecodeNativeAsync(source)).GetAwaiter().GetResult();
+
+    private static async Task<Win2dImage?> DecodeNativeAsync(byte[] source)
+    {
+        try
+        {
+            using var stream = new MemoryStream(source).AsRandomAccessStream();
+            var decoder = await BitmapDecoder.CreateAsync(stream);
+            var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Rgba8, BitmapAlphaMode.Premultiplied, new BitmapTransform(),
+                ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
+            return new Win2dImage((int)decoder.PixelWidth, (int)decoder.PixelHeight, pixels.DetachPixelData(), StoredOrientation(source));
+        }
+        catch (Exception)
+        {
+            // No codec for the data (or one that failed): the caller decides whether PeachImage gets a turn.
+            return null;
+        }
+    }
+
+    public static Win2dImage? TryDecode(byte[] source)
+    {
         if (!PeachImage.Image.TryLoad(new MemoryStream(source), out var image, new DecoderOptions { TargetPixelFormat = PixelFormat.Rgba32 }) || image is null)
             return null;
 

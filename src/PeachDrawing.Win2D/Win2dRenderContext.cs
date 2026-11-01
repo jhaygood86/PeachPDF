@@ -35,6 +35,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
     private readonly object _gate = new();
     private bool _deviceIsOurs;
     private readonly Win2dTextEngine _textEngine;
+    private readonly Win2dImageCodec _imageCodec;
     private CanvasDevice? _device;
     private DirectWriteFonts? _directWrite;
     private bool _softwareDevice;
@@ -43,14 +44,16 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Makes a context that draws with its own device, or <paramref name="device"/> when one is given.</summary>
     /// <param name="device">a device to use and not dispose, or <see langword="null"/> to let the context make (and own) one when it needs it</param>
     /// <param name="textEngine">which engine shapes and draws text</param>
-    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing)
-        : this(device, textEngine, false)
+    /// <param name="imageCodec">which decoder turns an encoded image into pixels</param>
+    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage)
+        : this(device, textEngine, imageCodec, false)
     {
     }
 
-    private Win2dRenderContext(CanvasDevice? device, Win2dTextEngine textEngine, bool softwareDevice)
+    private Win2dRenderContext(CanvasDevice? device, Win2dTextEngine textEngine, Win2dImageCodec imageCodec, bool softwareDevice)
     {
         _textEngine = textEngine;
+        _imageCodec = imageCodec;
         _softwareDevice = softwareDevice;
         if (device is not null)
             AttachDevice(device, ours: false);
@@ -65,11 +68,21 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// machine, which is what a server, a test or a reproducible export wants.
     /// </summary>
     /// <param name="textEngine">which engine shapes and draws text</param>
-    public static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing) =>
-        new(null, textEngine, true);
+    /// <param name="imageCodec">which decoder turns an encoded image into pixels</param>
+    public static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage) =>
+        new(null, textEngine, imageCodec, true);
 
     /// <summary>Which text engine this context's fonts use.</summary>
     public Win2dTextEngine TextEngine => _textEngine;
+
+    /// <summary>Which decoder turns an encoded image into pixels.</summary>
+    public Win2dImageCodec ImageCodec => _imageCodec;
+
+    /// <summary>
+    /// Whether an image Windows has no codec for is handed to PeachImage instead, when <see cref="ImageCodec"/> is
+    /// <see cref="Win2dImageCodec.Native"/>. With it off, such an image fails to load. It has no effect with <see cref="Win2dImageCodec.PeachImage"/>.
+    /// </summary>
+    public bool FallbackToPeachImage { get; set; } = true;
 
     /// <summary>Layout units per point; see <see cref="RenderContext.LayoutUnitsPerPoint"/>. 1 means a layout unit is a point.</summary>
     public double PixelsPerPoint { get; set; } = 1.0;
@@ -246,7 +259,20 @@ public class Win2dRenderContext : RenderContext, IDisposable
 
     /// <inheritdoc />
     protected override Core.Image ImageFromStreamInt(Stream memoryStream) =>
-        Win2dImage.TryDecode(memoryStream) ?? throw new InvalidDataException("The stream is not a recognised image format.");
+        DecodeImage(Win2dImage.ReadAll(memoryStream)) ?? throw new InvalidDataException("The stream is not a recognised image format.");
+
+    /// <summary>Decodes with the codec this context is set to use, falling back to PeachImage where allowed.</summary>
+    internal Win2dImage? DecodeImage(byte[] bytes)
+    {
+        if (_imageCodec == Win2dImageCodec.Native)
+        {
+            var native = Win2dImage.TryDecodeNative(bytes);
+            if (native is not null || !FallbackToPeachImage)
+                return native;
+        }
+
+        return Win2dImage.TryDecode(bytes);
+    }
 
     /// <inheritdoc />
     protected override Font CreateFontInt(string family, double size, PaintFontStyle style, double weight = 400, double stretch = 100, double? obliqueSkewSinus = null, string? variations = null) =>

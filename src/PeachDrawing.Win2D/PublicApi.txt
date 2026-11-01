@@ -75,6 +75,9 @@ PeachDrawing.Win2D.Win2dComposerOptions : sealed class
   property Win2dLinkOptions Links { get; init; }
 PeachDrawing.Win2D.Win2dDeviceLostException : sealed class
   ctor(Exception inner)
+PeachDrawing.Win2D.Win2dImageCodec : enum Int32
+  Native = 1
+  PeachImage = 0
 PeachDrawing.Win2D.Win2dImageFormat : enum Int32
   Bmp = 2
   Gif = 4
@@ -110,15 +113,17 @@ PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   property ILinkLauncher Launcher { get; init; }
   property ISet<String> AllowedSchemes { get; init; }
 PeachDrawing.Win2D.Win2dRenderContext : class
-  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing)
+  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage)
   method Task AddFont(Stream stream, String fontFamilyName)
   method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
-  method static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = PeachDrawing)
+  method static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
+  property Boolean FallbackToPeachImage { get; set; }
   property CanvasDevice Device { get; }
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+  property Win2dImageCodec ImageCodec { get; }
   property Win2dTextEngine TextEngine { get; }
 PeachDrawing.Win2D.Win2dTextEngine : enum Int32
   DirectWrite = 1
