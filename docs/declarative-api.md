@@ -24,6 +24,7 @@ using PeachPDF.Layout;
 - [Lists](#lists)
 - [Headers, footers, and page numbers](#headers-footers-and-page-numbers)
   - [Sectioned page numbers](#sectioned-page-numbers)
+- [Merging documents](#merging-documents)
 - [Known v1 limitations](#known-v1-limitations)
 
 ## Quick start
@@ -436,6 +437,32 @@ page.Footer(footer => footer.Text(t =>
 ```
 
 `BeginPageNumberOfSection(id)`/`EndPageNumberOfSection(id)` are decorators, like `Bookmark` - they tag whatever container they're chained onto (rather than placing content of their own), so chain one before that container's own terminal content and it can go anywhere in a page's normal content flow (not just `Header`/`Footer`). `PageNumberWithinSection(id)`/`TotalPagesWithinSection(id)` then resolve against the physical pages that pair of tagged containers land on, the same way `CurrentPageNumber()`/`TotalPages()` do - only inside `Header`/`Footer` content, and continuously renumbered per document page. The current-page-within-section number is deliberately unclamped outside the section itself: it climbs by exactly one per document page throughout the whole document, so it reads non-positive before the section starts and past the total after it ends - a footer that only wants to show it inside the section's own pages should condition on that itself. An id with no matching `BeginPageNumberOfSection` call (a typo, or a forgotten call) resolves to `1` rather than throwing, the same fallback an unresolved `target-counter()` reference already uses.
+
+## Merging documents
+
+`DocumentMerge` writes several declarative documents into one PDF. Each part is the callback that builds one document, exactly what `CreateDocument` takes:
+
+```csharp
+static Action<IDocumentBuilder> Report(string title) => doc => doc.Page(page =>
+{
+    page.Size(420, 595).Margin(30);
+    page.Header(h => h.Text(title));
+    page.Content(c => c.Text("..."));
+    page.Footer(f => f.Text(t => { t.CurrentPageNumber(); t.Span(" of "); t.TotalPages(); }));
+});
+
+var merge = DocumentMerge.Of(Report("Q1"), Report("Q2")).UseContinuousPageNumbers();
+var document = await generator.CreateMergedDocument(merge);
+```
+
+`AddMergedPages(document, merge)` appends a merge to a document that already has pages, the way `AddPages` does for one document.
+
+- `UseOriginalPageNumbers()` (the default) lets each part number its own pages: two parts of 2 and 3 pages read 1, 2, 1, 2, 3, each footer with its own total.
+- `UseContinuousPageNumbers()` makes the parts one run: the same parts read 1, 2, 3, 4, 5, and `TotalPages()` is 5 in every footer.
+
+Numbering the parts as one run needs every page count before any page is drawn, so the parts are laid out once to count and again to draw, and each callback runs twice: build the document from the callback's own state, not from anything that must happen once. Only the numbers a footer or header prints change; `@page` rules (`:first`, `:left`, `:right`) still select by a page's place in its own part, so each part's cover page is its own `:first` page. A part with several `Page` calls numbers them as one run in both modes, where a document built by `CreateDocument` alone restarts the numbering at each `Page` call. File layers added inside a part (`OverlayFile`, `UnderlayFile`) read their target pages against the merged document, so `"1"` is the first page of the first part.
+
+The `PdfGenerateConfig` passed to `CreateMergedDocument` applies to every part. To merge PDF files that already exist, or to take pages out of them, use `PdfOperation` from [PeachDrawing.PDF](peachdrawing-pdf.md#merging-and-working-on-existing-pdfs) on the saved files.
 
 ## Known v1 limitations
 
