@@ -35,7 +35,7 @@ namespace PeachBrackets.Html.Paint
                 outline.Transform(System.Numerics.Matrix3x2.CreateScale((float)(1.0 / g.PixelsPerPoint)));
 
             var pen = g.GetPen(color);
-            pen.Width = width;
+            pen.Width = width / g.PixelsPerPoint;
             g.DrawPath(pen, outline);
         }
     }

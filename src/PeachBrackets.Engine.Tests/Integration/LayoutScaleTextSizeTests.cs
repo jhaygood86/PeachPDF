@@ -118,4 +118,43 @@ public class LayoutScalePdfTextSizeTests
             Assert.Equal(at72[i].Y, at96[i].Y, 0.75);
         }
     }
+
+    /// <summary>The extent of the path each stroke operator draws and the line width it draws it with.</summary>
+    private static (double Width, double Height, double LineWidth) StrokedExtent(string pdf)
+    {
+        var number = System.Globalization.CultureInfo.InvariantCulture;
+        var stroke = System.Text.RegularExpressions.Regex.Match(pdf, @"([\d.]+) w?
+(?:[^
+]*
+)*?([\d.\-]+ [\d.\-]+ m?
+(?:[^
+]*
+)*?)S?
+");
+        var points = System.Text.RegularExpressions.Regex.Matches(stroke.Groups[2].Value, @"([\d.\-]+) ([\d.\-]+) [mlc]?
+")
+            .Select(m => (X: double.Parse(m.Groups[1].Value, number), Y: double.Parse(m.Groups[2].Value, number))).ToList();
+        return (points.Max(p => p.X) - points.Min(p => p.X), points.Max(p => p.Y) - points.Min(p => p.Y), double.Parse(stroke.Groups[1].Value, number));
+    }
+
+    [Fact]
+    public async Task TextStroke_KeepsItsOutlineAndWidthInPoints_UnderALayoutScale()
+    {
+        const string body = "<p style='margin:0;font-size:40px;-webkit-text-stroke:3px red;color:white'>Hi</p>";
+        var at72 = StrokedExtent(await PdfAtAsync(body, 72));
+        var at96 = StrokedExtent(await PdfAtAsync(body, 96));
+
+        Assert.Equal(at72.Width, at96.Width, 1.0);
+        Assert.Equal(at72.Height, at96.Height, 1.0);
+        Assert.Equal(at72.LineWidth, at96.LineWidth, 0.1);
+    }
+
+    [Fact]
+    public async Task BlurredSvgTextShadow_IsDrawnAtEveryScale()
+    {
+        const string body = "<svg width='200' height='100'><text x='10' y='50' font-size='30' style='text-shadow:3px 3px 3px black'>Shad</text></svg>";
+
+        Assert.NotEmpty(EffectiveText(await PdfAtAsync(body, 72)));
+        Assert.NotEmpty(EffectiveText(await PdfAtAsync(body, 96)));
+    }
 }
