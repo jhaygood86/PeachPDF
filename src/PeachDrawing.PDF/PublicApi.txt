@@ -216,6 +216,17 @@ PeachDrawing.PDF.PdfFacturXInfo : sealed class
   ctor(String fileName, String conformanceLevel)
   property String ConformanceLevel { get; }
   property String FileName { get; }
+PeachDrawing.PDF.PdfFileAttachment : sealed class
+  ctor()
+  property Boolean Replace { get; set; }
+  property Byte[] Data { get; set; }
+  property DateTimeOffset? ModificationDate { get; set; }
+  property PdfEmbeddedFileRelationship Relationship { get; set; }
+  property String AttachmentName { get; set; }
+  property String Description { get; set; }
+  property String FilePath { get; set; }
+  property String Key { get; set; }
+  property String MimeType { get; set; }
 PeachDrawing.PDF.PdfFormBuilder : sealed class
   method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)
 PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
@@ -254,7 +265,39 @@ PeachDrawing.PDF.PdfFormOption : struct
   property Boolean Selected { get; }
   property String Label { get; }
   property String Value { get; }
+PeachDrawing.PDF.PdfLayerConfiguration : sealed class
+  ctor()
+  property Byte[] Data { get; set; }
+  property Stream Stream { get; set; }
+  property String FilePath { get; set; }
+  property String Password { get; set; }
+  property String RepeatSourcePages { get; set; }
+  property String SourcePages { get; set; }
+  property String TargetPages { get; set; }
 PeachDrawing.PDF.PdfLink : sealed class
+PeachDrawing.PDF.PdfOperation : sealed class
+  method Byte[] ToArray()
+  method PdfOperation AddAttachment(PdfFileAttachment attachment)
+  method PdfOperation Decrypt()
+  method PdfOperation Encrypt(PdfEncryptionOptions options)
+  method PdfOperation ExtendMetadata(String xml)
+  method PdfOperation MergeBytes(Byte[] pdf, String pageSelector = null, String password = null)
+  method PdfOperation MergeFile(String filePath, String pageSelector = null, String password = null)
+  method PdfOperation MergeStream(Stream pdf, String pageSelector = null, String password = null)
+  method PdfOperation OverlayFile(PdfLayerConfiguration layer)
+  method PdfOperation RemoveRestrictions()
+  method PdfOperation TakePages(String pageSelector)
+  method PdfOperation UnderlayFile(PdfLayerConfiguration layer)
+  method Void Save(Stream stream)
+  method Void Save(String filePath)
+  method static PdfOperation LoadBytes(Byte[] pdf, String password = null)
+  method static PdfOperation LoadFile(String filePath)
+  method static PdfOperation LoadFile(String filePath, String password)
+  method static PdfOperation LoadStream(Stream pdf, String password = null)
+  property IReadOnlyList<String> Warnings { get; }
+  property Int32 PageCount { get; }
+PeachDrawing.PDF.PdfPageSelector : static class
+  method static IReadOnlyList<Int32> Select(String selector, Int32 pageCount)
 PeachDrawing.PDF.PdfPageSource : sealed class
   method Boolean TryGetCustomString(Int32 pageIndex, String dictionaryKey, String key, out String value)
   method IReadOnlyCollection<String> Paint(Int32 pageIndex, Canvas canvas)
@@ -272,8 +315,13 @@ PeachDrawing.PDF.PdfPageSource : sealed class
   method ValueTuple<Double, Double> GetPageSize(Int32 pageIndex)
   method Void TieLinkToStructure(PdfTagSession tags, PdfSourceLink link, PdfLink added)
   method static PdfPageSource Open(Byte[] pdf)
+  method static PdfPageSource Open(Byte[] pdf, String password)
   method static PdfPageSource Open(Stream stream)
+  method static PdfPageSource Open(Stream stream, String password)
   property Int32 PageCount { get; }
+PeachDrawing.PDF.PdfPasswordException : sealed class
+  ctor(String message, Boolean passwordWasGiven = False)
+  property Boolean PasswordWasGiven { get; }
 PeachDrawing.PDF.PdfPermissions : enum Int32
   All = 3900
   AllowAccessibilityExtract = 512

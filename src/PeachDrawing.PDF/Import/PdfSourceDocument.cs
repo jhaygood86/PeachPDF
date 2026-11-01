@@ -33,10 +33,12 @@ internal sealed class PdfSourceDocument
     bool _rebuilt;
     PdfDecryptor? _decryptor;
     int _encryptObjectNumber = -1;
+    readonly string _password;
 
-    PdfSourceDocument(byte[] data)
+    PdfSourceDocument(byte[] data, string password)
     {
         _data = data;
+        _password = password;
         _doc = new PdfDocument { _openMode = Engine.IO.PdfDocumentOpenMode.Import };
         _doc._state |= DocumentState.Imported;
         _doc.ImportLoader = LoadInto;
@@ -51,23 +53,23 @@ internal sealed class PdfSourceDocument
 
     /// <summary>Opens a PDF held in memory.</summary>
     /// <exception cref="InvalidDataException">The data is not a readable PDF.</exception>
-    /// <exception cref="NotSupportedException">The file is encrypted.</exception>
-    public static PdfSourceDocument Open(byte[] data)
+    /// <exception cref="PdfPasswordException">The file needs a password that was not given or is wrong.</exception>
+    public static PdfSourceDocument Open(byte[] data, string? password = null)
     {
-        var doc = new PdfSourceDocument(data);
+        var doc = new PdfSourceDocument(data, password ?? "");
         const string needsPassword = "The PDF needs a password to open.";
         try { doc.Load(); }
         catch (InvalidDataException) when (doc._decryptor is not null)
         {
             // A revision 4 file cannot be checked against the empty password (that needs RC4), so a wrong one decrypts to noise.
-            throw new NotSupportedException(needsPassword);
+            throw new PdfPasswordException(needsPassword, password is { Length: > 0 });
         }
 
         // Read the first page's content now: it is what shows a wrong key, as AES output with padding that cannot be right.
         if (doc._decryptor is not null && doc.Pages.Count > 0)
         {
             _ = doc.GetPageContent(doc.Pages[0]);
-            if (doc._decryptor.SawInvalidPadding) throw new NotSupportedException(needsPassword);
+            if (doc._decryptor.SawInvalidPadding) throw new PdfPasswordException(needsPassword, password is { Length: > 0 });
         }
 
         return doc;
@@ -95,7 +97,7 @@ internal sealed class PdfSourceDocument
         byte[] id = [];
         if (Resolve(Trailer.GetRaw("ID")) is PdfArray { Elements.Count: > 0 } ids && Resolve(ids.Elements[0]) is PdfString first)
             id = Encoding.Latin1.GetBytes(first.Value);
-        _decryptor = PdfDecryptor.Create(this, encrypt, id);
+        _decryptor = PdfDecryptor.Create(this, encrypt, id, _password);
 
         // Anything read before the key was known (a rebuild scans every object) was read as ciphertext.
         _loaded.Clear();
