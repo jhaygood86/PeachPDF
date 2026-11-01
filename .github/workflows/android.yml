@@ -1,0 +1,73 @@
+name: Android
+
+# PeachBrackets.Android needs the android workload, which the main test workflow does not install. This workflow builds it, checks its public surface and
+# runs the example app on an emulator, so the view is exercised on a real Android runtime (the Mono runtime differs from CoreCLR in ways that have
+# mattered: static initialization order, for one). Not part of the required `test-gate`; it runs when the view or what it is built on changes.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/engine/PeachBrackets.Android/**'
+      - 'src/examples/PeachBrackets.Android.Example/**'
+      - 'src/tests/PeachBrackets.Android.Tests/**'
+      - 'src/engine/PeachBrackets/**'
+      - 'src/drawing/PeachDrawing.Skia/**'
+      - 'src/drawing/PeachDrawing.Core/**'
+      - '.github/workflows/android.yml'
+      - '.github/scripts/android-smoke.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+      with:
+        include-net11: 'false'
+
+    - name: Install the android workload
+      run: dotnet workload install android
+
+    - name: Build the view and the example app
+      run: |
+        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
+        dotnet build src/examples/PeachBrackets.Android.Example/PeachBrackets.Android.Example.csproj --configuration Release
+
+    # Reads the built assembly's metadata; skipped locally when the project has not been built.
+    - name: Test the view's logic and public surface
+      run: dotnet test --project src/tests/PeachBrackets.Android.Tests/PeachBrackets.Android.Tests.csproj --configuration Release
+
+    - name: Enable KVM
+      shell: bash
+      run: |
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        sudo udevadm control --reload-rules
+        sudo udevadm trigger --name-match=kvm
+
+    - name: Find the APK
+      id: apk
+      shell: bash
+      run: echo "path=$(find src/examples/PeachBrackets.Android.Example/bin/Release -name '*-Signed.apk' | head -1)" >> "$GITHUB_OUTPUT"
+
+    - name: Run the example on an emulator
+      uses: reactivecircus/android-emulator-runner@v2
+      with:
+        api-level: 34
+        arch: x86_64
+        target: google_apis
+        profile: pixel_6
+        disable-animations: true
+        script: bash .github/scripts/android-smoke.sh ${{ steps.apk.outputs.path }}
