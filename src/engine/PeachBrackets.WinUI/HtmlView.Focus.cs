@@ -108,9 +108,7 @@ public sealed partial class HtmlView
         if (!ReferenceEquals(document, _document))
             return;
 
-        Repaint(result);
-        BringIntoView(node);
-        RaiseFocusChanged(node);
+        AfterFocusChange(document, result, node.Id);
     }
 
     private async Task ClearDocumentFocusAsync()
@@ -122,7 +120,22 @@ public sealed partial class HtmlView
         using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
         var result = await document.SetFocusAsync(null, false, measuring.Canvas);
         if (ReferenceEquals(document, _document))
-            Repaint(result);
+            AfterFocusChange(document, result, null);
+    }
+
+    // The document was restyled, which can have moved things: repaint, take the tree again (the document builds a new one, so nodes are compared by
+    // id from here on), bring the focused part into view and tell UI Automation.
+    private void AfterFocusChange(HtmlDocument document, PeachBrackets.Updates.UpdateResult result, string? focusedId)
+    {
+        Repaint(result);
+        if (result.Applied && result.DirtyRegions.Count > 0)
+            RefreshAccessibility(document);
+
+        if (focusedId is not null && _accessibilityTree?.FindById(focusedId) is { } focused)
+        {
+            BringIntoView(focused);
+            RaiseFocusChanged(focused);
+        }
     }
 
     private void Repaint(PeachBrackets.Updates.UpdateResult result)

@@ -151,7 +151,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
         {
             foreach (var peer in peers.OfType<HtmlNodeAutomationPeer>())
             {
-                if (ReferenceEquals(peer.Node, node))
+                if (peer.Node.Id == node.Id)
                     return peer;
 
                 if (Find(peer.Peers, node) is { } below)

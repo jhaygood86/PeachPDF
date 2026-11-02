@@ -278,10 +278,12 @@ public class HtmlViewTests
             button.SetFocus();
             await Task.Delay(300);
             await view.FocusIdle;
-            return new[] { before.ToString(), button.IsKeyboardFocusable().ToString(), text.IsKeyboardFocusable().ToString(), button.HasKeyboardFocus().ToString(), view.FocusedNode!.Name };
+            // The engine builds a new tree when the focus restyles the page; the peer for the focused part is still found.
+            var found = DocumentPeer(view)!.FindPeer(view.FocusedNode!) is not null;
+            return new[] { before.ToString(), button.IsKeyboardFocusable().ToString(), text.IsKeyboardFocusable().ToString(), button.HasKeyboardFocus().ToString(), view.FocusedNode!.Name, found.ToString() };
         });
 
-        Assert.Equal(["False", "True", "False", "True", "button"], facts);
+        Assert.Equal(["False", "True", "False", "True", "button", "True"], facts);
     }
 
     private static IEnumerable<AutomationPeer> Descend(AutomationPeer peer)
