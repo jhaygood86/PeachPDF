@@ -35,6 +35,7 @@ public sealed partial class HtmlView
         _canvas.DoubleTapped += OnDoubleTapped;
         _canvas.Holding += OnHolding;
         KeyDown += OnKeyDown;
+        WireFocus();
     }
 
     // Where a position of the canvas (device-independent pixels) is on the pages, in points from the page's top-left.
@@ -142,6 +143,12 @@ public sealed partial class HtmlView
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
+        if (HandleFocusKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
         var control = Microsoft.UI.Input.InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Control).HasFlag(Windows.UI.Core.CoreVirtualKeyStates.Down);
         if (control && e.Key == VirtualKey.C)
         {

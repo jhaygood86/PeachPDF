@@ -118,6 +118,13 @@ Every primitive above builds a fresh PDF tile from its input(s) rather than muta
 
 See `a` in [SVG Root & Document Structure](#svg-root--document-structure) above.
 
+## Accessibility
+
+An inline `<svg>` is one node of the [accessibility tree](accessibility.md#svg-and-mathml). Its name comes from `aria-labelledby`, `aria-label` or its
+own [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/title) child, its description from `aria-describedby`,
+`aria-description` or its [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/desc) child, `role` is honored (`role="img"`
+makes it an image), and `aria-hidden="true"` leaves it out. The shapes and text inside are not separate nodes.
+
 ## Raster & Nested Content
 
 | Element | MDN Reference | Notes |

@@ -66,6 +66,38 @@ public class CliPdfAAndEmbeddingTests
         Assert.Null(options.PdfA);
     }
 
+    // --- --pdfua ---
+
+    [Theory]
+    [InlineData("1", PdfUAConformance.UA1)]
+    [InlineData("2", PdfUAConformance.UA2)]
+    public void PdfUA_PartIsParsedAndMapped(string value, PdfUAConformance expected)
+    {
+        var options = ArgumentParser.Parse([$"--pdfua={value}", "doc.html"]);
+
+        Assert.Empty(options.Errors);
+        Assert.Equal(expected, options.PdfUA);
+        Assert.Equal(expected, CliRunner.BuildConfig(options).PdfUAConformance);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("3")]
+    [InlineData("ua1")]
+    public void PdfUA_UnknownPart_IsError(string value)
+    {
+        var options = ArgumentParser.Parse(["--pdfua", value, "doc.html"]);
+
+        Assert.Contains("--pdfua", Assert.Single(options.Errors));
+        Assert.Null(options.PdfUA);
+    }
+
+    [Fact]
+    public void PdfUA_IsOffByDefault()
+    {
+        Assert.Equal(PdfUAConformance.None, CliRunner.BuildConfig(ArgumentParser.Parse(["doc.html"])).PdfUAConformance);
+    }
+
     [Fact]
     public void PdfA_MapsToConformance_WithoutInventingACreationDate()
     {

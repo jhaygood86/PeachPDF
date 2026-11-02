@@ -19,8 +19,8 @@ namespace PeachDrawing.PDF
     /// <remarks>
     /// <para>
     /// Get one from <see cref="PdfComposer.CreateTagRecorder"/>, call <see cref="BeginPage"/> as each page is added, and wrap the drawing of
-    /// each piece of content in the scope an <c>Open</c> method returns: <see cref="OpenContentElement"/> tags what is drawn inside it
-    /// (a paragraph's text), <see cref="OpenGroupingElement"/> nests the elements opened inside it (a list around its items), and
+    /// each piece of content in the scope an <c>Open</c> method returns: <see cref="OpenContentElement(Canvas, object, string, string)"/> tags what is drawn inside it
+    /// (a paragraph's text), <see cref="OpenGroupingElement(object, string)"/> nests the elements opened inside it (a list around its items), and
     /// <see cref="OpenArtifact"/> marks decoration that is not part of the structure. Call <see cref="Finish"/> after the last page and
     /// before adding links that should be tied to structure elements.
     /// </para>
@@ -76,6 +76,7 @@ namespace PeachDrawing.PDF
 
             _documentElement = new PdfStructureElement(document) { StructureType = "/Document" };
             document.Internals.AddObject(_documentElement);
+            UseNamespace(_documentElement);
             _documentElement.Parent = _root;
             _root.SetRootKid(_documentElement);
         }
@@ -104,9 +105,20 @@ namespace PeachDrawing.PDF
         /// <param name="key">identifies the element; the same key opens the same element again</param>
         /// <param name="structureType">the structure type, such as <c>L</c>, <c>Sect</c> or <c>Table</c> (without the slash)</param>
         /// <returns>a scope that closes the element when disposed</returns>
-        public IDisposable OpenGroupingElement(object key, string structureType)
+        public IDisposable OpenGroupingElement(object key, string structureType) => OpenGroupingElement(key, structureType, null);
+
+        /// <summary>
+        /// Opens a grouping structure element as <see cref="OpenGroupingElement(object, string)"/> does, giving it a language, a title or attributes the
+        /// first time it is opened.
+        /// </summary>
+        /// <param name="key">identifies the element; the same key opens the same element again</param>
+        /// <param name="structureType">the structure type, without the slash</param>
+        /// <param name="details">what else to give the element, or <see langword="null"/></param>
+        /// <returns>a scope that closes the element when disposed</returns>
+        public IDisposable OpenGroupingElement(object key, string structureType, PdfStructureDetails? details)
         {
             var element = GetOrCreateElement(_elementsByBox, key, structureType);
+            ApplyDetailsOnce(element, details);
             _parentStack.Push(element);
             return new PopParentScope(_parentStack);
         }
@@ -166,10 +178,24 @@ namespace PeachDrawing.PDF
         /// alternative text when the recorder was created to require it (the accessible PDF/A levels), which marks it decorative.
         /// </param>
         /// <returns>a scope that ends the marked content when disposed</returns>
-        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText = null)
+        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText = null) =>
+            OpenContentElement(canvas, key, structureType, altText, null);
+
+        /// <summary>
+        /// Opens a content element as <see cref="OpenContentElement(Canvas, object, string, string)"/> does, giving it a language, a title or attributes
+        /// the first time it is opened.
+        /// </summary>
+        /// <param name="canvas">the canvas the content is drawn on</param>
+        /// <param name="key">identifies the element; the same key opens the same element again</param>
+        /// <param name="structureType">the structure type, without the slash</param>
+        /// <param name="altText">the alternative text of a figure or formula, or <see langword="null"/></param>
+        /// <param name="details">what else to give the element, or <see langword="null"/></param>
+        /// <returns>a scope that ends the marked content when disposed</returns>
+        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText, PdfStructureDetails? details)
         {
             var g = canvas;
             var element = GetOrCreateElement(_elementsByBox, key, structureType);
+            ApplyDetailsOnce(element, details);
 
             if (!string.IsNullOrEmpty(altText))
                 element.AlternateText = altText;
@@ -257,10 +283,45 @@ namespace PeachDrawing.PDF
         /// <returns><see langword="true"/> when it exists</returns>
         public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
 
+        PdfDictionary? _pdf2Namespace;
+
+        // A PDF 2.0 file says which namespace its structure types come from: the root lists the namespaces it uses and every element names
+        // its own (ISO 32000-2 14.7.4); without it the types are those of PDF 1.7, which PDF/UA-2 does not accept.
+        void UseNamespace(PdfStructureElement element)
+        {
+            if (_document.Version < 20)
+                return;
+
+            if (_pdf2Namespace is null)
+            {
+                _pdf2Namespace = new PdfDictionary(_document);
+                _document.Internals.AddObject(_pdf2Namespace);
+                _pdf2Namespace.Elements.SetName("/Type", "/Namespace");
+                _pdf2Namespace.Elements.SetString("/NS", "http://iso.org/pdf2/ssn", PdfStringEncoding.Unicode);
+
+                var namespaces = new PdfArray(_document);
+                namespaces.Elements.Add(_pdf2Namespace.RequiredReference);
+                _root.Elements.SetObject("/Namespaces", namespaces);
+            }
+
+            element.Elements.SetReference("/NS", _pdf2Namespace);
+        }
+
+        // An element is opened once for every page its content reaches: it takes its details the first time.
+        readonly HashSet<PdfStructureElement> _detailed = new(ReferenceEqualityComparer.Instance);
+
+        void ApplyDetailsOnce(PdfStructureElement element, PdfStructureDetails? details)
+        {
+            if (details is not null && _detailed.Add(element))
+                ApplyDetails(element, details);
+        }
+
         void ApplyDetails(PdfStructureElement element, PdfStructureDetails details)
         {
             if (!string.IsNullOrEmpty(details.Language))
                 element.Elements.SetString("/Lang", details.Language, PdfStringEncoding.Unicode);
+            if (!string.IsNullOrEmpty(details.Alt))
+                element.Elements.SetString("/Alt", details.Alt, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.ActualText))
                 element.Elements.SetString("/ActualText", details.ActualText, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.Title))
@@ -373,7 +434,17 @@ namespace PeachDrawing.PDF
         /// </summary>
         /// <param name="key">the key of the link's structure element</param>
         /// <param name="link">the link, as returned when it was added to its page</param>
-        public void LinkAnnotation(object key, PdfLink link)
+        public void LinkAnnotation(object key, PdfLink link) => LinkAnnotation(key, link, null, null);
+
+        /// <summary>
+        /// Ties a link to the structure element of the content it covers, and gives the link annotation <paramref name="contents"/> as its
+        /// <c>/Contents</c>: the description a reader announces for the link (PDF/UA requires one on every link).
+        /// </summary>
+        /// <param name="key">the identity of the structure element the link covers</param>
+        /// <param name="link">the link</param>
+        /// <param name="contents">the link's accessible name, or null for none</param>
+        /// <param name="target">the key of the structure element a link within the document leads to, or null; in a PDF 2.0 file the link then also leads to that element</param>
+        public void LinkAnnotation(object key, PdfLink link, string? contents, object? target)
         {
             ArgumentNullException.ThrowIfNull(link);
 
@@ -384,6 +455,12 @@ namespace PeachDrawing.PDF
             var page = link.Page.Page;
             var annotation = link.Annotation;
 
+            if (target is not null && _document.Version >= 20 && TryGetStructureElement(target) is { } targetElement)
+                annotation.SetStructureDestination(targetElement);
+
+            if (!string.IsNullOrEmpty(contents))
+                annotation.Elements.SetString(PdfAnnotation.Keys.Contents, contents, PdfStringEncoding.Unicode);
+
             var objectReference = new PdfObjectReference(_document) { Page = page, Object = annotation };
             _document.Internals.AddObject(objectReference);
             element.AppendKid(objectReference);
@@ -392,9 +469,9 @@ namespace PeachDrawing.PDF
             _root.ParentTreeNextKey = structParentKey + 1;
             annotation.StructParent = structParentKey;
 
-            var array = new PdfArray(_document);
-            array.Elements.Add(element.RequiredReference);
-            _root.ParentTree.AddNumber(structParentKey, array);
+            // An annotation's /StructParent leads to its structure element directly; only a page's marked content (a /StructParents key)
+            // leads to an array indexed by MCID (ISO 32000-1 14.7.4.4).
+            _root.ParentTree.AddNumber(structParentKey, element.RequiredReference);
 
             // PDF/UA requires tab order to follow structure order on any page that has an
             // annotation linked into the structure tree.
@@ -403,7 +480,7 @@ namespace PeachDrawing.PDF
 
         /// <summary>
         /// Completes the structure tree after the last page: writes each page's entry in the parent tree and, when the document has a
-        /// title, asks readers to show it (required once a document is tagged). Call it before <see cref="LinkAnnotation"/>.
+        /// title, asks readers to show it (required once a document is tagged). Call it before <see cref="LinkAnnotation(object, PdfLink)"/>.
         /// </summary>
         public void Finish()
         {
@@ -431,6 +508,7 @@ namespace PeachDrawing.PDF
 
             var element = new PdfStructureElement(_document) { StructureType = "/" + structureType };
             _document.Internals.AddObject(element);
+            UseNamespace(element);
             element.Parent = parent;
             parent.AppendKid(element);
 

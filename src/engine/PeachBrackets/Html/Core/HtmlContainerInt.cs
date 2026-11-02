@@ -1217,6 +1217,17 @@ namespace PeachBrackets.Html
         /// </summary>
         internal HtmlDocumentMetadata? DocumentMetadata { get; private set; }
 
+        private PeachBrackets.Accessibility.AccessibilityTree? _semanticTree;
+
+        /// <summary>
+        /// The accessibility tree of the laid-out document, built the first time it is asked for and kept until <see cref="ResetSemanticTree"/>. The
+        /// tagged-PDF painter reads it for the names, languages and table positions of the boxes it tags, and <c>HtmlDocument</c> hands it out.
+        /// </summary>
+        internal PeachBrackets.Accessibility.AccessibilityTree SemanticTree => _semanticTree ??= PeachBrackets.Html.Semantics.AccessibilityTreeBuilder.Build(this, DocumentMetadata?.Title);
+
+        /// <summary>Forgets the accessibility tree, as when the document is laid out again.</summary>
+        internal void ResetSemanticTree() => _semanticTree = null;
+
         /// <summary>
         /// The document's language, from the root <c>&lt;html lang="..."&gt;</c> attribute — <c>null</c>
         /// if the document declares none. Used by <c>hyphens: auto</c> (per the CSS Text spec, automatic
@@ -1292,6 +1303,9 @@ namespace PeachBrackets.Html
         /// <c>PdfGenerator.HandleFormFields</c> are no-ops.
         /// </summary>
         internal bool InteractiveForms { get; set; }
+
+        /// <summary>Whether form controls are drawn with their look (check marks, values, labels) for a host that shows the page.</summary>
+        internal bool PaintFormControls { get; set; }
 
         /// <summary>
         /// The selected words and the parts of them that are selected, painted in their <c>::selection</c> style (or the defaults below).

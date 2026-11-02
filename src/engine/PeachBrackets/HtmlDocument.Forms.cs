@@ -1,0 +1,269 @@
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
+using PeachBrackets.Html.Updates;
+using PeachBrackets.Updates;
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+
+namespace PeachBrackets;
+
+public sealed partial class HtmlDocument
+{
+    /// <summary>
+    /// What a form control holds now: the value of a text field, range or button, whether a check box or radio button is checked, and the label of
+    /// the chosen option of a drop-down.
+    /// </summary>
+    /// <param name="element">the control, from <see cref="GetElement"/> or <see cref="GetElementAt(int, double, double)"/></param>
+    /// <returns>its state, or null when the element is not an <c>&lt;input&gt;</c> or a <c>&lt;select&gt;</c></returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    public FormControlState? GetFormState(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        return ControlOf(element) is { } control ? StateOf(control) : null;
+    }
+
+    /// <summary>
+    /// Checks or unchecks a check box, or checks a radio button (which unchecks the others of its group: those with the same <c>name</c> in the same
+    /// <c>form</c>), in the document itself, and reports what to repaint. No layout pass runs. Not applied to a control that is disabled, or to
+    /// anything else.
+    /// </summary>
+    /// <param name="element">the control</param>
+    /// <param name="isChecked">whether it is checked; a radio button cannot be unchecked this way</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult SetChecked(DocumentElement element, bool isChecked)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _ = Pages;
+        if (ControlOf(element) is not { } control)
+            return UpdateResult.NotApplied("The element is not a form control.");
+        if (control.HtmlTag!.HasAttribute("disabled"))
+            return UpdateResult.NotApplied("The control is disabled.");
+
+        var type = TypeOf(control);
+        var changed = new List<CssBox>();
+        if (type == "checkbox")
+        {
+            if (control.HtmlTag.HasAttribute("checked") == isChecked)
+                return new UpdateResult(true, null, []);
+
+            SetFlag(control, "checked", isChecked);
+            changed.Add(control);
+        }
+        else if (type == "radio")
+        {
+            if (!isChecked)
+                return UpdateResult.NotApplied("A radio button is unchecked by checking another of its group.");
+
+            foreach (var other in RadiosOfGroup(control))
+            {
+                var shouldBeChecked = ReferenceEquals(other, control);
+                if (other.HtmlTag!.HasAttribute("checked") != shouldBeChecked)
+                {
+                    SetFlag(other, "checked", shouldBeChecked);
+                    changed.Add(other);
+                }
+            }
+        }
+        else
+        {
+            return UpdateResult.NotApplied("Only a check box or a radio button is checked.");
+        }
+
+        return Changed(changed);
+    }
+
+    /// <summary>
+    /// Sets what a text field, a range or a drop-down holds - the text of the field, the number of the range (kept between its <c>min</c> and
+    /// <c>max</c>), the <c>value</c> of the option to choose - in the document itself, and reports what to repaint. No layout pass runs, so the
+    /// control keeps its size. Not applied to a control that is disabled or read-only, or to anything else.
+    /// </summary>
+    /// <param name="element">the control</param>
+    /// <param name="value">the new value</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult SetValue(DocumentElement element, string value)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(value);
+        _ = Pages;
+        if (ControlOf(element) is not { } control)
+            return UpdateResult.NotApplied("The element is not a form control.");
+        if (control.HtmlTag!.HasAttribute("disabled") || control.HtmlTag.HasAttribute("readonly"))
+            return UpdateResult.NotApplied("The control is disabled or read-only.");
+
+        if (control.HtmlTag.Name.Equals("select", StringComparison.OrdinalIgnoreCase))
+        {
+            var options = OptionsOf(control);
+            CssBox? chosen = null;
+            foreach (var option in options)
+            {
+                if ((option.HtmlTag!.TryGetAttribute("value") ?? OptionText(option)) == value)
+                {
+                    chosen = option;
+                    break;
+                }
+            }
+
+            // Nothing changes unless there is such an option.
+            if (chosen is null)
+                return UpdateResult.NotApplied("The drop-down has no such option.");
+
+            foreach (var option in options)
+                SetFlag(option, "selected", ReferenceEquals(option, chosen));
+
+            return Changed([control]);
+        }
+
+        switch (TypeOf(control))
+        {
+            case "checkbox" or "radio" or "button" or "submit" or "reset" or "image" or "hidden" or "file":
+                return UpdateResult.NotApplied("This kind of control does not hold a text value.");
+            case "range":
+                if (!double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+                    return UpdateResult.NotApplied("A range holds a number.");
+
+                var min = Number(control, "min", 0);
+                var max = Number(control, "max", 100);
+                if (max <= min)
+                    max = min + 100;
+                value = Math.Clamp(number, min, max).ToString(CultureInfo.InvariantCulture);
+                break;
+        }
+
+        control.HtmlTag.SetAttribute("value", value);
+        return Changed([control]);
+    }
+
+    /// <summary>
+    /// Does what a click on a control does: toggles a check box and checks a radio button. Anything else is not applied. A host calls it when a
+    /// pointer is released over a control.
+    /// </summary>
+    /// <param name="element">the control</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult Activate(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _ = Pages;
+        if (ControlOf(element) is not { } control)
+            return UpdateResult.NotApplied("The element is not a form control.");
+
+        return TypeOf(control) switch
+        {
+            "checkbox" => SetChecked(element, !control.HtmlTag!.HasAttribute("checked")),
+            "radio" => SetChecked(element, true),
+            _ => UpdateResult.NotApplied("Nothing to do for this kind of control."),
+        };
+    }
+
+    private static CssBox? ControlOf(DocumentElement element) =>
+        element.Box is CssBoxFormField { HtmlTag: not null } field ? field : null;
+
+    private static string TypeOf(CssBox control) =>
+        control.HtmlTag!.Name.Equals("select", StringComparison.OrdinalIgnoreCase) ? "select" : control.GetAttribute("type", "text").ToLowerInvariant();
+
+    private static double Number(CssBox control, string name, double fallback) =>
+        double.TryParse(control.GetAttribute(name, string.Empty), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
+
+    private static void SetFlag(CssBox box, string name, bool on)
+    {
+        if (on)
+            box.HtmlTag!.SetAttribute(name, string.Empty);
+        else
+            box.HtmlTag!.RemoveAttribute(name);
+    }
+
+    // The options of a drop-down, in order, wherever the parser put them (an option left open can hold the next).
+    private static List<CssBox> OptionsOf(CssBox select)
+    {
+        var options = new List<CssBox>();
+        void Visit(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.HtmlTag is { } tag && tag.Name.Equals("option", StringComparison.OrdinalIgnoreCase))
+                    options.Add(child);
+
+                Visit(child);
+            }
+        }
+
+        Visit(select);
+        return options;
+    }
+
+    private static string OptionText(CssBox option) => (CssContentEngine.ExtractText(option) ?? string.Empty).Trim();
+
+    private static FormControlState StateOf(CssBox control)
+    {
+        var tag = control.HtmlTag!;
+        var type = TypeOf(control);
+        var value = control.GetAttribute("value", string.Empty);
+        if (type == "select")
+        {
+            value = string.Empty;
+            foreach (var child in OptionsOf(control))
+            {
+                if (child.HtmlTag!.HasAttribute("selected"))
+                    value = child.HtmlTag.TryGetAttribute("value") ?? OptionText(child);
+            }
+        }
+
+        return new FormControlState(type, tag.TryGetAttribute("name"), value, tag.HasAttribute("checked"), tag.HasAttribute("disabled"));
+    }
+
+    // The radio buttons that are one group: the same name, in the same form (or, with no form, in the same document).
+    private IEnumerable<CssBox> RadiosOfGroup(CssBox radio)
+    {
+        var name = radio.HtmlTag!.TryGetAttribute("name");
+        if (string.IsNullOrEmpty(name))
+        {
+            yield return radio;
+            yield break;
+        }
+
+        static CssBox? FormOf(CssBox box)
+        {
+            for (var parent = box.ParentBox; parent is not null; parent = parent.ParentBox)
+            {
+                if (parent.HtmlTag is { } tag && tag.Name.Equals("form", StringComparison.OrdinalIgnoreCase))
+                    return parent;
+            }
+
+            return null;
+        }
+
+        var form = FormOf(radio);
+        var stack = new Stack<CssBox>();
+        if (_container.Root is { } root)
+            stack.Push(root);
+        while (stack.Count > 0)
+        {
+            var box = stack.Pop();
+            foreach (var child in box.Boxes)
+                stack.Push(child);
+
+            if (box is CssBoxFormField { HtmlTag: not null } field && TypeOf(field) == "radio" && field.HtmlTag!.TryGetAttribute("name") == name
+                && ReferenceEquals(FormOf(field), form))
+            {
+                yield return field;
+            }
+        }
+    }
+
+    private UpdateResult Changed(IReadOnlyList<CssBox> controls)
+    {
+        _container.ResetSemanticTree();
+        var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        var regions = new List<DirtyRegion>();
+        foreach (var control in controls)
+            regions.AddRange(StyleUpdater.DirtyRegionsOf(_container, control, fragmentainers));
+
+        return new UpdateResult(true, null, regions);
+    }
+}

@@ -13,12 +13,14 @@ public sealed class AccessibilityTree
 {
     private readonly Dictionary<string, AccessibilityNode> _byId;
 
+    private readonly Dictionary<PeachBrackets.Html.Dom.CssBox, AccessibilityNode>? _byBox;
     private readonly Dictionary<AccessibilityNode, int> _documentPosition;
     private readonly Dictionary<AccessibilityNode, int> _focusPosition;
 
-    internal AccessibilityTree(AccessibilityNode root)
+    internal AccessibilityTree(AccessibilityNode root, Dictionary<PeachBrackets.Html.Dom.CssBox, AccessibilityNode>? byBox = null)
     {
         Root = root;
+        _byBox = byBox;
         Nodes = root.DescendantsAndSelf().ToArray();
         _byId = new Dictionary<string, AccessibilityNode>(Nodes.Count, StringComparer.Ordinal);
         _documentPosition = new Dictionary<AccessibilityNode, int>(Nodes.Count, ReferenceEqualityComparer.Instance);
@@ -75,6 +77,9 @@ public sealed class AccessibilityTree
 
     /// <summary>Every node, in reading order, the document first.</summary>
     public IReadOnlyList<AccessibilityNode> Nodes { get; }
+
+    /// <summary>The node an element's box became, or null if it has none (it means nothing to a reader, or is not shown).</summary>
+    internal AccessibilityNode? NodeFor(PeachBrackets.Html.Dom.CssBox box) => _byBox?.GetValueOrDefault(box);
 
     /// <summary>The node with an <see cref="AccessibilityNode.Id"/>, or null if there is none.</summary>
     /// <param name="id">the identifier</param>

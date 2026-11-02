@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Diagnostics.CodeAnalysis;
 using PeachDrawing.PDF.Engine.Advanced;
 using System.Collections.Generic;
@@ -65,7 +66,15 @@ internal sealed class PdfStructureElement : PdfDictionary
     public string AlternateText
     {
         get => Elements.GetString(Keys.Alt);
-        set { Elements.SetString(Keys.Alt, value); }
+        set
+        {
+            // A raw string can only hold ASCII; any other text (an accented, Arabic or Japanese alt) is written as a Unicode text string. Plain
+            // ASCII keeps the form it always had.
+            if (value.All(c => c < 0x80))
+                Elements.SetString(Keys.Alt, value);
+            else
+                Elements.SetString(Keys.Alt, value, PdfStringEncoding.Unicode);
+        }
     }
 
     /// <summary>

@@ -139,11 +139,13 @@ PeachDrawing.Win2D.Win2dRenderContext : class
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
   property Boolean FallbackToPeachImage { get; set; }
+  property Boolean LcdBgrStripes { get; set; }
   property CanvasDevice Device { get; }
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
   property Win2dImageCodec ImageCodec { get; }
   property Win2dTextEngine TextEngine { get; }
+  property Win2dTextRendering TextRendering { get; set; }
 PeachDrawing.Win2D.Win2dSemanticRegion : sealed class
   ctor(Rect Bounds, SemanticInfo Info)
   method Void Deconstruct(out Rect Bounds, out SemanticInfo Info)
@@ -157,3 +159,8 @@ PeachDrawing.Win2D.Win2dSemanticRegion : sealed class
 PeachDrawing.Win2D.Win2dTextEngine : enum Int32
   DirectWrite = 1
   PeachDrawing = 0
+PeachDrawing.Win2D.Win2dTextRendering : enum Int32
+  Auto = 0
+  Grayscale = 2
+  Lcd = 3
+  Outline = 1

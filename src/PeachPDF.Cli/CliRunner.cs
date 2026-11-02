@@ -164,6 +164,11 @@ internal static class CliRunner
             config.PdfAConformance = pdfA;
         }
 
+        if (options.PdfUA is { } pdfUA)
+        {
+            config.PdfUAConformance = pdfUA;
+        }
+
         if (options.WantsEncryption)
         {
             config.Encryption = new PdfEncryptionOptions

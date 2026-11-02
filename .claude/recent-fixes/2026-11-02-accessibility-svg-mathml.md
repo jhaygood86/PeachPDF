@@ -1,0 +1,7 @@
+# SVG titles and spoken MathML in the accessibility tree
+
+An inline SVG is named by its `<title>` and described by its `<desc>`; a `<math>` element is said in English when the author gave no name.
+
+- **The child boxes are gone by the time the tree is built.** `CssBoxSvg.EnsureDocument` and `CssBoxMath.EnsureLayout` build their scene graph / presentation tree and then `Boxes.Clear()`, so a walk of the box tree after layout finds nothing inside either. The text is therefore read *at build time*, from the source node (`ISvgSourceNode`/`IMathSourceNode`), and kept on the box (`AccessibleTitle`, `AccessibleDescription`, `SpokenText`). Anything else the tree wants from inside an SVG or a formula has to be captured the same way.
+- **`MathSpeech` is a small, plain English renderer, not a speech-rule engine.** It is structural (fraction, root, scripts, limits, fences, tables) with a table of operators and Greek letters. The exponent special cases (2 squared, 3 cubed) and "simple" vs complex arguments keep common formulas short and the rest unambiguous with an "end ..." marker. The author's `alttext`, `aria-label` and `text/plain` annotation always win.
+- **Not done:** PDF `/Alt` for a tagged `Formula`/`Figure` (the tagged-PDF slice will use this text, and that is when `.claude/accepted-gaps/mathml-no-alt-text-synthesis.md` gets rewritten or removed), nodes for shapes inside an SVG, other languages.
