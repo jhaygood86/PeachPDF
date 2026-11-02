@@ -174,6 +174,10 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
         ? (AutomationHeadingLevel)Math.Clamp(_node.Level, 1, 9)
         : AutomationHeadingLevel.None;
 
+    protected override int GetPositionInSetCore() => _node.PositionInSet > 0 ? _node.PositionInSet : -1;
+
+    protected override int GetSizeOfSetCore() => _node.SetSize > 0 ? _node.SetSize : -1;
+
     protected override AutomationLandmarkType GetLandmarkTypeCore() => HtmlViewLogic.ToLandmarkType(_node.Role);
 
     protected override string GetLocalizedLandmarkTypeCore() => HtmlViewLogic.LandmarkName(_node.Role) ?? base.GetLocalizedLandmarkTypeCore();

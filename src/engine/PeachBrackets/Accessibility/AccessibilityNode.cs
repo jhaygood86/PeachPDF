@@ -145,6 +145,75 @@ public sealed class AccessibilityNode
     /// <summary>The <c>aria-keyshortcuts</c> attribute, or null.</summary>
     public string? KeyShortcuts { get; internal set; }
 
+    /// <summary>For a cell or a row of a table or grid, the zero-based index of its row (<c>aria-rowindex</c> if given); otherwise -1.</summary>
+    public int RowIndex { get; internal set; } = -1;
+
+    /// <summary>For a cell, the zero-based index of its first column (<c>aria-colindex</c> if given); otherwise -1.</summary>
+    public int ColumnIndex { get; internal set; } = -1;
+
+    /// <summary>For a cell, how many rows it covers (<c>rowspan</c>, <c>aria-rowspan</c>); 1 otherwise.</summary>
+    public int RowSpan { get; internal set; } = 1;
+
+    /// <summary>For a cell, how many columns it covers (<c>colspan</c>, <c>aria-colspan</c>); 1 otherwise.</summary>
+    public int ColumnSpan { get; internal set; } = 1;
+
+    /// <summary>For a table or grid, how many rows it has (<c>aria-rowcount</c> if given); otherwise 0.</summary>
+    public int RowCount { get; internal set; }
+
+    /// <summary>For a table or grid, how many columns it has (<c>aria-colcount</c> if given); otherwise 0.</summary>
+    public int ColumnCount { get; internal set; }
+
+    /// <summary>For a cell, the cells that head its column (or those its <c>headers</c> attribute names that do).</summary>
+    public IReadOnlyList<AccessibilityNode> ColumnHeaders { get; internal set; } = [];
+
+    /// <summary>For a cell, the cells that head its row (or those its <c>headers</c> attribute names that do).</summary>
+    public IReadOnlyList<AccessibilityNode> RowHeaders { get; internal set; } = [];
+
+    /// <summary>For an item of a set (a list item, option, tab, menu item, tree item), its place in the set counted from 1 (<c>aria-posinset</c>); otherwise 0.</summary>
+    public int PositionInSet { get; internal set; }
+
+    /// <summary>For an item of a set, how many items the set has (<c>aria-setsize</c>); otherwise 0.</summary>
+    public int SetSize { get; internal set; }
+
+    /// <summary>The nodes this one controls (<c>aria-controls</c>). Nodes the tree leaves out are not listed.</summary>
+    public IReadOnlyList<AccessibilityNode> Controls { get; internal set; } = [];
+
+    /// <summary>The nodes this one owns although they are not below it in the document (<c>aria-owns</c>). The tree is not rearranged to show it.</summary>
+    public IReadOnlyList<AccessibilityNode> Owns { get; internal set; } = [];
+
+    /// <summary>The nodes a reader may go to next instead of the one that follows (<c>aria-flowto</c>).</summary>
+    public IReadOnlyList<AccessibilityNode> FlowTo { get; internal set; } = [];
+
+    /// <summary>The nodes that give more detail than the description does (<c>aria-details</c>).</summary>
+    public IReadOnlyList<AccessibilityNode> Details { get; internal set; } = [];
+
+    /// <summary>The nodes that say what is wrong with an invalid value (<c>aria-errormessage</c>).</summary>
+    public IReadOnlyList<AccessibilityNode> ErrorMessages { get; internal set; } = [];
+
+    /// <summary>The nodes that give this one its name (<c>aria-labelledby</c>).</summary>
+    public IReadOnlyList<AccessibilityNode> LabelledBy { get; internal set; } = [];
+
+    /// <summary>The nodes that describe this one (<c>aria-describedby</c>).</summary>
+    public IReadOnlyList<AccessibilityNode> DescribedBy { get; internal set; } = [];
+
+    /// <summary>For a composite widget, the node inside it that has the focus although the widget keeps it (<c>aria-activedescendant</c>); otherwise null.</summary>
+    public AccessibilityNode? ActiveDescendant { get; internal set; }
+
+    // What the builder read from the element and could not use until the whole tree was built.
+    internal Dictionary<string, string>? RawReferences { get; set; }
+
+    internal int? ExplicitRowIndex { get; set; }
+
+    internal int? ExplicitColumnIndex { get; set; }
+
+    internal int? ExplicitRowCount { get; set; }
+
+    internal int? ExplicitColumnCount { get; set; }
+
+    internal int? ExplicitPosition { get; set; }
+
+    internal int? ExplicitSetSize { get; set; }
+
     /// <summary>
     /// What a reader says for the node: its <see cref="Name"/>, or when it has none the text it holds directly (the parts of it that are not
     /// elements of their own), or all of its <see cref="Text"/> if it holds only that. A host that has its own tree gives this as the node's name.
