@@ -221,6 +221,8 @@ namespace PeachDrawing.PDF
             var forms = composer.CreateFormBuilder(context, "PeachPDFMergedField");
             var fieldNames = new HashSet<string>(StringComparer.Ordinal);
             var destinationNames = new HashSet<string>(StringComparer.Ordinal);
+            var renamed = new Dictionary<(PdfPageSource, int, string), string>();
+            var pageOccurrences = new Dictionary<(PdfPageSource, int), int>();
 
             for (var i = 0; carryPageFeatures && i < pages.Count; i++)
             {
@@ -244,16 +246,18 @@ namespace PeachDrawing.PDF
                     }
                 }
 
-                var renamed = new Dictionary<string, string>(StringComparer.Ordinal);
+                // A field with widgets on several pages is one field: its name is settled once per file and per round of that file's pages, so
+                // a page taken again (a second round) gets fields of its own, but the pages of one round share them.
+                var occurrence = pageOccurrences[(entry.Source, entry.SourcePage)] = pageOccurrences.GetValueOrDefault((entry.Source, entry.SourcePage)) + 1;
                 string Unique(string name)
                 {
-                    if (renamed.TryGetValue(name, out var existing))
+                    if (renamed.TryGetValue((entry.Source, occurrence, name), out var existing))
                         return existing;
 
                     var unique = name;
                     for (var n = 2; !fieldNames.Add(unique); n++)
                         unique = name + "_" + n;
-                    return renamed[name] = unique;
+                    return renamed[(entry.Source, occurrence, name)] = unique;
                 }
 
                 foreach (var field in entry.Source.GetFormFields(entry.SourcePage, target.Canvas.PixelsPerPoint, Unique))
