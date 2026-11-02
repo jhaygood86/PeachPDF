@@ -712,7 +712,8 @@ namespace PeachBrackets.Html.Dom
             {
                 var (lineTop, lineBottom) = FinalLineEdgesOf(line, setAside.Y);
                 var align = EffectiveVerticalAlignOf(ancestor, line, out var styledBox);
-                var delta = VerticalAlignDeltaOf(line, align, styledBox, block, 0, lineTop, lineBottom, lineBaseline);
+                var delta = VerticalAlignDeltaOf(line, align, styledBox, block, 0, lineTop, lineBottom, lineBaseline)
+                            - EnclosingRaiseOf(styledBox, line.OwnerBox);
                 block = new Rect(block.X, block.Y + delta, block.Width, block.Height);
             }
 
@@ -3969,9 +3970,15 @@ namespace PeachBrackets.Html.Dom
             // bottom padding and border to MaxBottom again). Only a NESTED atomic inline is compared.
             if (box != blockBox && opensHere && box.DerivedStyle.ActualDisplay is not Keywords.Inline
                 && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
-                && coordinates.MaxBottom - trueStartY < declaredFlowHeight)
+                && !TryGrowLineForBaselessAtomic(coordinates, box, blockBox, declaredFlowHeight))
             {
-                coordinates.MaxBottom = trueStartY + declaredFlowHeight;
+                // A raised box reaches that much further above the line it was placed in.
+                var needed = declaredFlowHeight + Math.Max(0, CumulativeRaiseOf(box, blockBox));
+
+                if (coordinates.MaxBottom - trueStartY < needed)
+                {
+                    coordinates.MaxBottom = trueStartY + needed;
+                }
             }
 
             // handle width setting
@@ -5287,11 +5294,20 @@ namespace PeachBrackets.Html.Dom
                 ? default
                 : ExtentOf(strutStyle);
 
+            // An inline box with its own vertical-align (sub, super, a length...) is moved off the baseline
+            // by that offset, and everything inside it moves too: CSS 2.1 §10.8 sizes the line from the
+            // boxes where they end up, so a raised box reaches further above the baseline. Each box on the
+            // chain from the word's owner outwards is shifted by its own offset plus every enclosing one's,
+            // running down from the total as the loop passes each.
+            var raise = CumulativeRaiseOf(ownerBox, blockBox);
+
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
             // ordinary inline box, so the loop below deliberately continues to include those.
             if (!word.IsImage)
-                extent = extent.Union(ExtentOf(word.FirstLineStyle ?? ownerBox));
+                extent = extent.Union(RaisedBy(ExtentOf(word.FirstLineStyle ?? ownerBox), raise));
+
+            if (!ReferenceEquals(ownerBox, blockBox)) raise -= OwnRaiseOf(ownerBox);
 
             // A word owned by the block itself has no inline ancestors. Starting at its parent in
             // that case would walk *outside* the line's formatting context and let an outer element's
@@ -5301,11 +5317,111 @@ namespace PeachBrackets.Html.Dom
                  inlineAncestor = inlineAncestor.ParentBox)
             {
                 // On the first line an inline ancestor contributes the font it has there, which inherits from ::first-line.
-                extent = extent.Union(ExtentOf(word.FirstLineStyle is null ? inlineAncestor : inlineAncestor.FirstLineInlineStyle ?? inlineAncestor));
+                extent = extent.Union(RaisedBy(
+                    ExtentOf(word.FirstLineStyle is null ? inlineAncestor : inlineAncestor.FirstLineInlineStyle ?? inlineAncestor), raise));
+                raise -= OwnRaiseOf(inlineAncestor);
             }
 
             return extent;
         }
+
+        /// <summary>
+        /// How far <paramref name="box"/>'s own <c>vertical-align</c> raises it above its parent's baseline
+        /// (negative lowers it), or 0 for <c>baseline</c>, <c>top</c> and <c>bottom</c> - the last two align
+        /// to the line box rather than to a baseline, so they have no offset to give a line its size.
+        /// Always the same number <see cref="VerticalAlignDeltaOf"/> moves the box by, so the line is sized
+        /// for the box where it ends up.
+        /// </summary>
+        /// <remarks>
+        /// For <c>middle</c>, <c>text-top</c> and <c>text-bottom</c> the offset depends on the box's own
+        /// extent, so it is read from the box's half-leading extent here - what the line is sized from -
+        /// and not for an atomic box, which those keywords align by its margin box instead.
+        /// </remarks>
+        private static double OwnRaiseOf(CssBox box)
+        {
+            if (box.HtmlTag is null && !box.IsMarkerPseudoElement) return 0;
+
+            var align = box.VerticalAlign.Value;
+
+            if (align.IsValue)
+            {
+                return align.Value is { } lengthOrCalc
+                    ? CssValueParser.ParseLength(lengthOrCalc, box.ActualLineHeight, box)
+                    : 0;
+            }
+
+            var keyword = align.Keyword;
+            if (keyword is not (VerticalAlignment.Sub or VerticalAlignment.Super or VerticalAlignment.Middle
+                    or VerticalAlignment.TextTop or VerticalAlignment.TextBottom))
+            {
+                return 0;
+            }
+
+            var parentFont = (box.ParentBox ?? box).ActualFont;
+
+            if (keyword == VerticalAlignment.Sub) return -SubscriptShiftOf(parentFont);
+            if (keyword == VerticalAlignment.Super) return SuperscriptShiftOf(parentFont);
+            if (box.IsImage || box.DerivedStyle.ActualDisplay is Keywords.InlineBlock) return 0;
+
+            var own = HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
+
+            return keyword switch
+            {
+                VerticalAlignment.Middle => XHeightOf(parentFont) / 2 - (own.AboveBaseline - own.BelowBaseline) / 2,
+                VerticalAlignment.TextTop => parentFont.Ascent - own.AboveBaseline,
+                _ => own.BelowBaseline - (parentFont.Height - parentFont.Ascent)
+            };
+        }
+
+        /// <summary>
+        /// The raise of <paramref name="box"/> from the line's baseline: its own offset plus every enclosing
+        /// inline's, up to but not including <paramref name="blockBox"/>, which owns the line.
+        /// </summary>
+        private static double CumulativeRaiseOf(CssBox box, CssBox blockBox)
+        {
+            var total = 0d;
+
+            for (var inline = box; inline is not null; inline = inline.ParentBox)
+            {
+                if (ReferenceEquals(inline, blockBox)) return total;
+
+                total += OwnRaiseOf(inline);
+            }
+
+            // The line's owner is not above this box, so no inline between them is enclosing it.
+            return 0;
+        }
+
+        /// <summary>
+        /// The raise <paramref name="box"/> inherits from the inlines enclosing it on a line owned by
+        /// <paramref name="lineOwner"/>: nothing for the owner itself or for a box outside it, which the
+        /// line's own alignment (a table cell's, say) governs rather than a raise.
+        /// </summary>
+        private static double EnclosingRaiseOf(CssBox box, CssBox lineOwner) =>
+            ReferenceEquals(box, lineOwner) || box.ParentBox is not { } parent
+                ? 0
+                : CumulativeRaiseOf(parent, lineOwner);
+
+        /// <summary><paramref name="extent"/> moved up by <paramref name="raise"/> (down when negative).</summary>
+        private static LineBoxExtent RaisedBy(LineBoxExtent extent, double raise) =>
+            raise == 0 ? extent : new LineBoxExtent(extent.AboveBaseline + raise, extent.BelowBaseline - raise);
+
+        /// <summary>
+        /// How far <c>vertical-align: sub</c> lowers a box: a fifth of the parent's font size plus a pixel,
+        /// the offset Chromium and WebKit use (CSS 2.1 §10.8.1 leaves "the proper position for subscripts of
+        /// the parent's box" to the UA). Taken from the parent's font, never the box's own.
+        /// </summary>
+        private static double SubscriptShiftOf(Font parentFont) => parentFont.Size / 5 + Length.PointsPerPx;
+
+        /// <summary>
+        /// How far <c>vertical-align: super</c> raises a box: a third of the parent's font size plus a
+        /// pixel, as Chromium and WebKit do.
+        /// </summary>
+        private static double SuperscriptShiftOf(Font parentFont) => parentFont.Size / 3 + Length.PointsPerPx;
+
+        /// <summary>The font's x-height in layout units, the measure <c>vertical-align: middle</c> uses.</summary>
+        private static double XHeightOf(Font font) =>
+            FontMetricMeasurement.Ratio(font, FontMetric.Ex) * font.Size;
 
         /// <summary>
         /// Makes <paramref name="baselineExtent"/> the baseline-aligned extent of the line
@@ -5598,7 +5714,8 @@ namespace PeachBrackets.Html.Dom
                             line.BottomAlignedAtomicHeight = Math.Max(line.BottomAlignedAtomicHeight, atomicHeight);
                             break;
                         default:
-                            baselineExtent = baselineExtent.Union(new LineBoxExtent(atomicHeight, 0));
+                            baselineExtent = baselineExtent.Union(RaisedBy(
+                                new LineBoxExtent(atomicHeight, 0), CumulativeRaiseOf(word.OwnerBox, blockBox)));
                             break;
                     }
                 }
@@ -5625,13 +5742,17 @@ namespace PeachBrackets.Html.Dom
                 var onFirstLine = blockBox.ResolvedFirstLineStyle is not null && ReferenceEquals(coordinates.Line, blockBox.LineBoxes.FirstOrDefault());
                 CssBox StyleOn(CssBox inline) => onFirstLine ? inline.FirstLineInlineStyle ?? inline : inline;
 
-                var extent = HalfLeadingExtentWithDecoration(StyleOn(emptyInline), g.PixelsPerPoint);
+                // Raised or lowered by its own vertical-align and every enclosing inline's, like a box with words.
+                var raise = CumulativeRaiseOf(emptyInline, blockBox);
+                var extent = RaisedBy(HalfLeadingExtentWithDecoration(StyleOn(emptyInline), g.PixelsPerPoint), raise);
+                raise -= OwnRaiseOf(emptyInline);
 
                 for (var inline = emptyInline.ParentBox;
                      inline is not null && !ReferenceEquals(inline, blockBox);
                      inline = inline.ParentBox)
                 {
-                    extent = extent.Union(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint));
+                    extent = extent.Union(RaisedBy(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint), raise));
+                    raise -= OwnRaiseOf(inline);
                 }
 
                 if (coordinates.PendingWordSeparator || IsAtLineStart(coordinates))
@@ -7813,6 +7934,37 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// Sizes the open line around a baseline-aligned atomic inline whose baseline is its bottom margin
+        /// edge (see <see cref="BaselineIsBottomMarginEdge"/>): its whole margin box reaches above the
+        /// baseline and its bottom margin below it, raised or lowered by its own <c>vertical-align</c>
+        /// (CSS 2.1 §10.8.1). Unioned into the line's extent so the strut's descent below the baseline
+        /// stays - taking only <c>start + height</c> for <c>MaxBottom</c>, as an atomic box with a baseline of
+        /// its own can, ended the line at the box's bottom edge and lost it.
+        /// </summary>
+        /// <returns>false when <paramref name="box"/> is not such a box, so the caller sizes it as before</returns>
+        private static bool TryGrowLineForBaselessAtomic(
+            CssLineBoxCoordinates coordinates, CssBox box, CssBox blockBox, double declaredHeight)
+        {
+            var line = coordinates.Line;
+            if (!BaselineIsBottomMarginEdge(box, line)) return false;
+
+            var align = box.VerticalAlign.Value;
+            if (!align.IsValue && align.Keyword is not (VerticalAlignment.Baseline or VerticalAlignment.Sub
+                    or VerticalAlignment.Super))
+            {
+                return false;
+            }
+
+            var extent = RaisedBy(
+                new LineBoxExtent(declaredHeight + box.ActualMarginTop, box.ActualMarginBottom),
+                CumulativeRaiseOf(box, blockBox));
+            var held = line.BaselineAlignedExtent ?? line.BaselineExtent;
+
+            CommitLineExtent(coordinates, held is { } known ? known.Union(extent) : extent);
+            return true;
+        }
+
+        /// <summary>
         /// Whether <paramref name="box"/>'s baseline is its bottom margin edge rather than a line box of its
         /// own (CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#propdef-vertical-align">§10.8.1</see>):
         /// an <c>inline-block</c> with no in-flow line boxes, or whose <c>overflow</c> is not
@@ -8694,7 +8846,12 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var (box, rect) in lineBox.Rectangles)
             {
-                if (EffectiveVerticalAlignOf(box, lineBox, out _).Value.Keyword != VerticalAlignment.Baseline)
+                // Baseline-relative alignments (baseline itself, sub, super, a length or percentage) place the
+                // box by its baseline and so size the line around it; top, bottom, middle and the text-*
+                // keywords align to something else and are handled with the line's edges below.
+                var atomicAlign = EffectiveVerticalAlignOf(box, lineBox, out _).Value;
+                if (!atomicAlign.IsValue && atomicAlign.Keyword is not (VerticalAlignment.Baseline or VerticalAlignment.Sub
+                        or VerticalAlignment.Super))
                 {
                     continue;
                 }
@@ -8704,9 +8861,9 @@ namespace PeachBrackets.Html.Dom
                 var marginTop = rect.Top - box.ActualMarginTop;
                 var marginBottom = rect.Bottom + box.ActualMarginBottom;
 
-                var atomicExtent = new LineBoxExtent(
-                    atomicBaseline - marginTop,
-                    marginBottom - atomicBaseline);
+                var atomicExtent = RaisedBy(
+                    new LineBoxExtent(atomicBaseline - marginTop, marginBottom - atomicBaseline),
+                    CumulativeRaiseOf(box, lineBox.OwnerBox));
 
                 baselineExtent = baselineExtent is { } held ? held.Union(atomicExtent) : atomicExtent;
 
@@ -8866,8 +9023,13 @@ namespace PeachBrackets.Html.Dom
                 // (negative) the box by this distance from its own baseline - a percentage resolves
                 // against the styled box's own line-height, mirroring sub/super's own baseline-relative
                 // offset below rather than any of the line-extent-relative cases.
+                // The offsets of the inlines enclosing the styled box carry it along too (§10.8.1: each is
+                // relative to its parent's baseline, which is itself raised), the same sum that sized the line.
+                var enclosingRaise = EnclosingRaiseOf(styledBoxForVerticalAlign, lineBox.OwnerBox);
+
                 OffsetBoxWithinLine(lineBox, box, VerticalAlignDeltaOf(
-                    lineBox, effectiveVerticalAlign, styledBoxForVerticalAlign, rect, baselineDeltas[box], lineTop, lineBottom, flowTop));
+                    lineBox, effectiveVerticalAlign, styledBoxForVerticalAlign, rect, baselineDeltas[box], lineTop, lineBottom, flowTop)
+                    - enclosingRaise);
             }
         }
 
@@ -8911,15 +9073,17 @@ namespace PeachBrackets.Html.Dom
             switch (verticalAlign.Value.Keyword)
             {
                 case VerticalAlignment.Sub:
-                    return baselineDelta + rect.Height * .5f;
+                    return baselineDelta + SubscriptShiftOf((styledBox.ParentBox ?? styledBox).ActualFont);
                 case VerticalAlignment.Super:
-                    return baselineDelta - rect.Height * .2f;
+                    return baselineDelta - SuperscriptShiftOf((styledBox.ParentBox ?? styledBox).ActualFont);
                 case VerticalAlignment.Top:
                     return lineTop + (alignsMarginBox ? styledBox.ActualMarginTop : 0) - rect.Top;
                 case VerticalAlignment.Bottom:
                     return lineBottom - (alignsMarginBox ? styledBox.ActualMarginBottom : 0) - rect.Bottom;
                 case VerticalAlignment.Middle:
-                    return lineTop + (lineBottom - lineTop - rect.Height) / 2 - rect.Top;
+                    // The box's vertical midpoint on the parent's baseline plus half the parent's x-height.
+                    return (lineBox.BaselineY ?? flowTop) - XHeightOf((styledBox.ParentBox ?? styledBox).ActualFont) / 2
+                           - (rect.Top + rect.Height / 2);
                 case VerticalAlignment.TextTop:
                 case VerticalAlignment.TextBottom:
                     // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not

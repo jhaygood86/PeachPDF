@@ -94,9 +94,10 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task SeparatorBeforeASlightlyRaisedWord_StaysAtThePen()
         {
-            // vertical-align: super lifts "b" less than a quarter of an em; an inkless glyph that close
-            // still reads as part of the line, and continuing the pen keeps the next Td unchanged.
-            var pdf = await RenderAsync("""<p>a <span style="vertical-align:super">b</span></p>""");
+            // A raise of less than a quarter of an em (2.75pt at the 11pt default): an inkless glyph that
+            // close still reads as part of the line, and continuing the pen keeps the next Td unchanged.
+            // (vertical-align: super is a third of an em, as in the browsers, so it is no longer "slight".)
+            var pdf = await RenderAsync("""<p>a <span style="vertical-align:1.5pt">b</span></p>""");
 
             Assert.Matches(@"Td <0044> Tj\n<0003> Tj\n", pdf);
         }
