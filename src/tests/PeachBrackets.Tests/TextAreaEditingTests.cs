@@ -169,4 +169,44 @@ public class TextAreaEditingTests
         var place = document.GetEditPlace(measuring, 11)!.Value;
         Assert.True(document.GetEditIndexAt(measuring, place.PageIndex, place.Bounds.X, place.Bounds.Y + 2) >= 9);
     }
+
+    [Fact]
+    public async Task AWheelScrollsATextAreaWithoutMovingTheCaretAndAnEditScrollsBack()
+    {
+        var lf = ((char)10).ToString();
+        var body = "<textarea id=t style='height:56pt'>" + string.Join(lf, "HHHH", "", "", "", "", "HHHH") + "</textarea><input id=i>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+        var dark = ((byte R, byte G, byte B, byte A) p) => p.R < 100 && p.G < 100 && p.B < 100;
+        var element = document.GetElement("t")!;
+        using var measuring = context.CreateCanvas(1, 1);
+
+        var top = await TestDocument.PaintAsync(context, document);
+        Assert.True(Count(top, 14, 12, 150, 22, dark) > 50);
+
+        // Not focused: the wheel moves the lines up until the last one shows, and no further.
+        Assert.True(document.ScrollTextArea(element, 500, measuring).Applied);
+        var bottom = await TestDocument.PaintAsync(context, document);
+        Assert.Equal(0, Count(bottom, 14, 12, 150, 22, dark));
+        Assert.True(Count(bottom, 14, 12, 150, 56, dark) > 50);
+
+        Assert.True(document.ScrollTextArea(element, -500, measuring).Applied);
+        var back = await TestDocument.PaintAsync(context, document);
+        Assert.True(Count(back, 14, 12, 150, 22, dark) > 50);
+
+        // Focused, with the caret at the end: a wheel scrolls away, and moving the caret brings it back.
+        await document.SetFocusAsync(element, true, measuring);
+        await TestDocument.PaintAsync(context, document);
+        var scrolledAway = document.ScrollTextArea(element, -500, measuring);
+        Assert.True(scrolledAway.Applied, scrolledAway.Reason);
+        var away = await TestDocument.PaintAsync(context, document);
+        Assert.True(Count(away, 14, 12, 150, 22, dark) > 50);
+        document.SetEditSelection(13, 13);
+        var followed = await TestDocument.PaintAsync(context, document);
+        Assert.Equal(0, Count(followed, 14, 12, 150, 22, dark));
+
+        Assert.False(document.ScrollTextArea(document.GetElement("i")!, 10, measuring).Applied);
+        document.SetEditSelection(0, 0);
+        await TestDocument.PaintAsync(context, document);
+        Assert.False(document.ScrollTextArea(element, -50, measuring).Applied);
+    }
 }

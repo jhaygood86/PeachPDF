@@ -210,6 +210,7 @@ namespace PeachBrackets.Html.Semantics
                     node.AddBounds(b);
             }
 
+            ApplyStyle(node, box);
             ApplyStates(node, box, tag, role, context);
             ReadStructureAttributes(node, tag);
             ReadRange(node, tag, role);
@@ -286,6 +287,20 @@ namespace PeachBrackets.Html.Semantics
             return false;
         }
 
+        // What a text attribute of the node's text is: the font, its size, weight and slant, and the colours.
+        private void ApplyStyle(AccessibilityNode node, CssBox box)
+        {
+            var font = box.ActualFont;
+            node.FontFamily = font.Typeface?.FamilyName;
+            node.FontSize = font.Size;
+            node.FontWeight = (int)Math.Clamp(Math.Round(box.ActualNumericWeight), 1, 1000);
+            node.IsItalic = font.Typeface?.IsItalic == true || ((int)font.SyntheticStyle & 2) != 0;
+            node.ForegroundColor = Argb(box.ActualColor);
+            node.BackgroundColor = box.ActualBackgroundColor is { A: > 0 } background ? Argb(background) : null;
+        }
+
+        private static int Argb(PeachDrawing.Core.PaintColor color) => (color.A << 24) | (color.R << 16) | (color.G << 8) | color.B;
+
         private void AddText(CssBox box, AccessibilityNode parent)
         {
             var text = Collapse(OwnText(box));
@@ -300,6 +315,8 @@ namespace PeachBrackets.Html.Semantics
                 Text = text,
                 Language = parent.Language,
             };
+
+            ApplyStyle(node, box);
 
             if (_bounds.TryGetValue(box, out var bounds))
             {

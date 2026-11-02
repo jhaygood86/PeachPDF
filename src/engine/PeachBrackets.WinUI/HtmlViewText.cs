@@ -41,7 +41,7 @@ internal sealed class HtmlTextProvider : ITextProvider
     public ITextRangeProvider[] GetSelection()
     {
         if (_view.Document?.GetEditState() is not { } state || _view.FocusedNode is not { } focused)
-            return [];
+            return PageSelection();
 
         var model = Model();
         foreach (var segment in model.Segments)
@@ -96,6 +96,26 @@ internal sealed class HtmlTextProvider : ITextProvider
         }
 
         return new HtmlTextRange(this, model, 0, 0);
+    }
+
+    // The selection of the page's own text, when it lies inside one block: the selected phrase is found in the document's text the way the document finds
+    // text, and in the reading text by its place among the occurrences, so the two agree on which one is selected.
+    private ITextRangeProvider[] PageSelection()
+    {
+        if (_view.Document is not { Selection: { HasSelection: true } selection } document || selection.GetRange() is not { } range)
+            return [];
+
+        var phrase = selection.GetText();
+        if (phrase.Length == 0 || phrase.Contains('\n', StringComparison.Ordinal))
+            return [];
+
+        var n = document.FindText(phrase).ToList().FindIndex(r => r.Equals(range));
+        var model = Model();
+        var at = n < 0 ? -1 : model.OffsetOfOccurrence(phrase, n);
+        if (at < 0)
+            return [];
+
+        return [new HtmlTextRange(this, model, at, at + phrase.Length)];
     }
 
     internal HtmlTextModel Model()
@@ -235,8 +255,19 @@ internal sealed class HtmlTextRange : ITextRangeProvider
     // Selects the range in the text field that has the focus, when the range is inside that field's text.
     public void Select()
     {
-        if (_model.SegmentAt(_start) is { Node: { } node } segment && _end <= segment.End)
+        if (_model.SegmentAt(_start) is not { Node: { } node } segment || _end > segment.End)
+            return;
+
+        if (_provider.View.FocusedNode?.Id == node.Id)
+        {
             _provider.View.SetFieldSelection(node, _start - segment.Start, _end - segment.Start);
+            return;
+        }
+
+        // Text of the page: the same phrase, found the document's way, is what gets selected.
+        var phrase = _model.Slice(_start, _end);
+        if (phrase.Length > 0 && !phrase.Contains('\n', StringComparison.Ordinal))
+            _provider.View.SelectPageText(phrase, _model.OccurrenceAt(phrase, _start));
     }
 
     public void AddToSelection() { }

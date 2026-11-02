@@ -35,6 +35,7 @@ public sealed partial class HtmlView
         _canvas.DoubleTapped += OnDoubleTapped;
         _canvas.Holding += OnHolding;
         _canvas.RightTapped += OnRightTapped;
+        _canvas.PointerWheelChanged += OnPointerWheelChanged;
         Unloaded += (_, _) => CloseFlyouts();
         KeyDown += OnKeyDown;
         WireFocus();
@@ -166,6 +167,31 @@ public sealed partial class HtmlView
         {
             _document.Selection.SelectWordAt(page, x, y);
         }
+    }
+
+    // The wheel over a text area that has more lines than show scrolls the text area; at its first or last line, or anywhere else, the page scrolls.
+    private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        var point = e.GetCurrentPoint(_canvas);
+        if (point.Properties.IsHorizontalMouseWheel || !TryLocate(point.Position, out var page, out var x, out var y))
+            return;
+
+        if (ScrollTextAreaAt(page, x, y, -point.Properties.MouseWheelDelta / 120.0 * WheelNotchPoints))
+            e.Handled = true;
+    }
+
+    private const double WheelNotchPoints = 42;
+
+    // Scrolls the text area under a point by an amount in points; false when the point is not over one or it cannot move that way.
+    internal bool ScrollTextAreaAt(int page, double x, double y, double points)
+    {
+        if (_document is not { } document || _context is null || document.GetElementAt(page, x, y) is not { } element)
+            return false;
+
+        using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
+        var result = document.ScrollTextArea(element, points, measuring.Canvas);
+        Repaint(result);
+        return result.Applied;
     }
 
     // A right click (or a touch hold the system reports as one) on a text field shows the field's menu.

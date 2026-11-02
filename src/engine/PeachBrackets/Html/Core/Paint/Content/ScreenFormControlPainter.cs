@@ -155,34 +155,41 @@ namespace PeachBrackets.Html.Paint.Content
             g.PopClip();
         }
 
-        // How far the lines of the text area being edited are scrolled so that the caret's line shows; the session remembers it. A text area that is
-        // not being edited shows from its top.
+        // How far the lines of a text area are scrolled: what a wheel set, kept inside the text, and - after the caret moved or the text changed in the
+        // field being edited - enough to bring the caret's line into view. The container remembers it.
         private static double ScrollToCaret(CssBox box, string text, IReadOnlyList<TextAreaLine> lines, double lineHeight, double viewHeight)
         {
-            var ordinal = box.HtmlTag!.SourceOrdinal;
-            if (box.HtmlContainer is not { } container || container.Interaction?.Focused != ordinal)
+            if (box.HtmlContainer is not { } container)
                 return 0;
 
-            // A field that has just been focused starts at the end of its text, as the document's own editing calls start it.
-            var session = container.FormEdit;
-            if (session.Ordinal != ordinal)
+            var ordinal = box.HtmlTag!.SourceOrdinal;
+            var scroll = container.TextAreaScroll.GetValueOrDefault(ordinal);
+            if (container.Interaction?.Focused == ordinal)
             {
-                session.Ordinal = ordinal;
-                session.Start = session.End = text.Length;
-                session.CompositionStart = session.CompositionEnd = -1;
-                session.ScrollTop = 0;
+                // A field that has just been focused starts at the end of its text, as the document's own editing calls start it.
+                var session = container.FormEdit;
+                if (session.Ordinal != ordinal)
+                {
+                    session.Ordinal = ordinal;
+                    session.Start = session.End = text.Length;
+                    session.CompositionStart = session.CompositionEnd = -1;
+                    session.FollowCaret = true;
+                }
+
+                if (session.FollowCaret)
+                {
+                    var lineTop = TextAreaLayout.LineOf(lines, Math.Clamp(session.End, 0, text.Length)) * lineHeight;
+                    if (lineTop < scroll)
+                        scroll = lineTop;
+                    else if (lineTop + lineHeight > scroll + viewHeight)
+                        scroll = lineTop + lineHeight - viewHeight;
+
+                    session.FollowCaret = false;
+                }
             }
-            var caret = Math.Clamp(session.End, 0, text.Length);
-            var lineTop = TextAreaLayout.LineOf(lines, caret) * lineHeight;
-            var scroll = session.ScrollTop;
-            if (lineTop < scroll)
-                scroll = lineTop;
-            else if (lineTop + lineHeight > scroll + viewHeight)
-                scroll = lineTop + lineHeight - viewHeight;
 
             scroll = Math.Clamp(scroll, 0, Math.Max((lines.Count * lineHeight) - viewHeight, 0));
-            session.ScrollTop = scroll;
-
+            container.TextAreaScroll[ordinal] = scroll;
             return scroll;
         }
 
@@ -331,6 +338,21 @@ namespace PeachBrackets.Html.Paint.Content
         }
 
         // A button that says what it does, and beside it what has been chosen.
+        /// <summary>The attribute a host's choice of files is kept in (the names, one to a line); see <see cref="HtmlDocument.SetFileNames"/>.</summary>
+        internal const string ChosenFilesAttribute = "peachpdf-chosen-files";
+
+        /// <summary>What a file input shows beside its button: "No file chosen", the name of the one file, or the number of files.</summary>
+        internal static string FileLabel(string chosen)
+        {
+            var names = chosen.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+            return names.Length switch
+            {
+                0 => "No file chosen",
+                1 => names[0],
+                _ => names.Length + " files",
+            };
+        }
+
         private static void PaintFileChooser(Canvas g, CssBox box, Rect rect, bool disabled)
         {
             var content = ContentRect(box, rect);
@@ -350,7 +372,7 @@ namespace PeachBrackets.Html.Paint.Content
             if (restX < content.X + content.Width)
             {
                 var rest = new Rect(restX - box.ActualBorderLeftWidth - box.ActualPaddingLeft, rect.Y, rect.Width - (restX - rect.X) + box.ActualBorderLeftWidth + box.ActualPaddingLeft, rect.Height);
-                PaintText(g, box, rest, "No file chosen", centered: false, PaintColor.FromArgb(255, 117, 117, 117), disabled);
+                PaintText(g, box, rest, FileLabel(box.GetAttribute(ChosenFilesAttribute, string.Empty)), centered: false, PaintColor.FromArgb(255, 117, 117, 117), disabled);
             }
         }
 

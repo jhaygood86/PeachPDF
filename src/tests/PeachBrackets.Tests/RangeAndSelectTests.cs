@@ -72,4 +72,40 @@ public class RangeAndSelectTests
         Assert.Equal([false, false, true], options.Select(o => o.Disabled));
         Assert.Empty(document.GetSelectOptions(document.GetElement("i")!));
     }
+
+    [Fact]
+    public async Task AnOptionOrOptgroupStartTagEndsTheOptionBeforeIt()
+    {
+        var document = await LoadAsync("<select id=s><option value=1>One<option selected>Two<optgroup label=g><option>Three<option disabled>Four<optgroup label=h><option>Five</select>");
+
+        var options = document.GetSelectOptions(document.GetElement("s")!);
+
+        Assert.Equal(["One", "Two", "Three", "Four", "Five"], options.Select(o => o.Label));
+        Assert.Equal([false, true, false, false, false], options.Select(o => o.Selected));
+        Assert.Equal([false, false, false, true, false], options.Select(o => o.Disabled));
+    }
+
+    [Fact]
+    public async Task AFileInputAsksForItsKindsAndRemembersTheNamesOfTheFilesChosen()
+    {
+        var document = await LoadAsync("<input id=one type=file accept='.png,image/*'><input id=many type=file multiple><input id=off type=file disabled><input id=t>");
+        var one = document.GetElement("one")!;
+        var many = document.GetElement("many")!;
+
+        Assert.Equal((false, ".png,image/*"), (document.GetFileInputInfo(one)!.Value.Multiple, document.GetFileInputInfo(one)!.Value.Accept));
+        Assert.True(document.GetFileInputInfo(many)!.Value.Multiple);
+        Assert.Null(document.GetFileInputInfo(document.GetElement("t")!));
+
+        Assert.True(document.SetFileNames(one, ["photo.png"]).Applied);
+        Assert.Equal("photo.png", document.GetFormState(one)!.Value.Value);
+        Assert.False(document.SetFileNames(one, ["a.png", "b.png"]).Applied);
+
+        Assert.True(document.SetFileNames(many, ["a.txt", "b.txt", "  ", "c.txt"]).Applied);
+        Assert.Equal("a.txt, b.txt, c.txt", document.GetFormState(many)!.Value.Value);
+        Assert.True(document.SetFileNames(many, []).Applied);
+        Assert.Equal(string.Empty, document.GetFormState(many)!.Value.Value);
+
+        Assert.False(document.SetFileNames(document.GetElement("off")!, ["x"]).Applied);
+        Assert.False(document.SetFileNames(document.GetElement("t")!, ["x"]).Applied);
+    }
 }

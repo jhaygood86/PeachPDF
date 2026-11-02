@@ -27,5 +27,12 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         [InlineData("week", "Week --, ----")]
         public void AnEmptyDateOrTimeFieldShowsThePatternOfItsValue(string type, string hint) =>
             Assert.Equal(hint, ScreenFormControlPainter.DateTimeHint(type));
+
+        [Theory]
+        [InlineData("", "No file chosen")]
+        [InlineData("report.pdf", "report.pdf")]
+        [InlineData("a.txt\nb.txt", "2 files")]
+        public void AFileInputShowsNothingTheNameOrTheCount(string chosen, string label) =>
+            Assert.Equal(label, ScreenFormControlPainter.FileLabel(chosen));
     }
 }

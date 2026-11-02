@@ -47,11 +47,13 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property Boolean Disabled { get; }
   property Boolean Invalid { get; }
   property Boolean IsFocusable { get; }
+  property Boolean IsItalic { get; }
   property Boolean Modal { get; }
   property Boolean ReadOnly { get; }
   property Boolean Required { get; }
   property Boolean? Expanded { get; }
   property Boolean? Selected { get; }
+  property Double FontSize { get; }
   property Double ValueMax { get; }
   property Double ValueMin { get; }
   property Double? Value { get; }
@@ -70,18 +72,22 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property Int32 ColumnCount { get; }
   property Int32 ColumnIndex { get; }
   property Int32 ColumnSpan { get; }
+  property Int32 FontWeight { get; }
   property Int32 Level { get; }
   property Int32 PositionInSet { get; }
   property Int32 RowCount { get; }
   property Int32 RowIndex { get; }
   property Int32 RowSpan { get; }
   property Int32 SetSize { get; }
+  property Int32? BackgroundColor { get; }
+  property Int32? ForegroundColor { get; }
   property Int32? TabIndex { get; }
   property LiveSetting Live { get; }
   property String AccessKey { get; }
   property String Current { get; }
   property String Description { get; }
   property String ElementId { get; }
+  property String FontFamily { get; }
   property String Id { get; }
   property String KeyShortcuts { get; }
   property String Language { get; }
@@ -433,6 +439,7 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
+  method FileInputInfo? GetFileInputInfo(DocumentElement element)
   method FormControlState? GetFormState(DocumentElement element)
   method FormEditState? GetEditState()
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
@@ -473,10 +480,12 @@ PeachBrackets.HtmlDocument : sealed class
   method UpdateResult DeleteEditText(Boolean backward)
   method UpdateResult InsertText(String text)
   method UpdateResult ReplaceEditText(Int32 start, Int32 end, String text, Int32 caret = -1)
+  method UpdateResult ScrollTextArea(DocumentElement element, Double points, Canvas measuringCanvas)
   method UpdateResult SetCaretVisible(Boolean visible)
   method UpdateResult SetChecked(DocumentElement element, Boolean isChecked)
   method UpdateResult SetComposition(Int32 start, Int32 end)
   method UpdateResult SetEditSelection(Int32 start, Int32 end)
+  method UpdateResult SetFileNames(DocumentElement element, IReadOnlyList<String> names)
   method UpdateResult SetRangeAtPoint(DocumentElement element, Int32 pageIndex, Double x)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method UpdateResult SetValue(DocumentElement element, String value)
@@ -738,6 +747,15 @@ PeachBrackets.Updates.DocumentElement : sealed class
   method virtual Int32 GetHashCode()
   property String Id { get; }
   property String TagName { get; }
+PeachBrackets.Updates.FileInputInfo : struct
+  ctor(Boolean Multiple, String Accept)
+  method Void Deconstruct(out Boolean Multiple, out String Accept)
+  method virtual Boolean Equals(FileInputInfo other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Multiple { get; init; }
+  property String Accept { get; init; }
 PeachBrackets.Updates.FormControlState : struct
   ctor(String Type, String Name, String Value, Boolean Checked, Boolean Disabled)
   method Void Deconstruct(out String Type, out String Name, out String Value, out Boolean Checked, out Boolean Disabled)

@@ -133,7 +133,7 @@ A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the
 control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
 buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges, a colour input (a block of its colour), a file input (a "Choose File" button
 and "No file chosen") and date and time inputs (their value, or the pattern it would take while empty: `mm/dd/yyyy`, `--:-- --`...). The text of a text field can be edited
-through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or colour field and a range control are operated through the hosts' own popups and drag handling, and a file input has no picker. The accessibility tree already reports each control's role, name and state.
+through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or colour field and a range control are operated through the hosts' own popups and drag handling, and a file input opens the host's file picker. The accessibility tree already reports each control's role, name and state.
 
 ## Preferences and text spacing
 

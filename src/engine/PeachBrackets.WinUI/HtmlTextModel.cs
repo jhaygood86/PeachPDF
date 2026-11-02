@@ -105,6 +105,13 @@ internal sealed class HtmlTextModel
     /// <summary>UI Automation's id of the StyleId text attribute; the heading styles are 70001 for level 1 up to 70009.</summary>
     public const int StyleIdAttribute = 40034;
 
+    /// <summary>UI Automation's ids of the BackgroundColor, FontName, FontSize, FontWeight, ForegroundColor and IsItalic text attributes.</summary>
+    public const int BackgroundColorAttribute = 40001, FontNameAttribute = 40005, FontSizeAttribute = 40006, FontWeightAttribute = 40007,
+        ForegroundColorAttribute = 40008, IsItalicAttribute = 40014;
+
+    /// <summary>A colour as 0xAARRGGBB, as the colour reference (0x00BBGGRR) UI Automation takes.</summary>
+    public static int ColorReference(int argb) => ((argb & 0xFF) << 16) | (argb & 0xFF00) | ((argb >> 16) & 0xFF);
+
     /// <summary>The value a text attribute has on a node's text, or null when the attribute is not one reported.</summary>
     public static object? AttributeValue(AccessibilityNode? node, int attributeId)
     {
@@ -113,6 +120,18 @@ internal sealed class HtmlTextModel
 
         switch (attributeId)
         {
+            case FontNameAttribute:
+                return string.IsNullOrEmpty(node.FontFamily) ? null : node.FontFamily;
+            case FontSizeAttribute:
+                return node.FontSize > 0 ? node.FontSize : null;
+            case FontWeightAttribute:
+                return node.FontWeight > 0 ? node.FontWeight : null;
+            case IsItalicAttribute:
+                return node.FontSize > 0 ? node.IsItalic : null;
+            case ForegroundColorAttribute:
+                return node.ForegroundColor is { } foreground ? ColorReference(foreground) : null;
+            case BackgroundColorAttribute:
+                return node.BackgroundColor is { } background ? ColorReference(background) : null;
             case IsReadOnlyAttribute:
                 return node.ReadOnly || node.Disabled || node.Role is not (AccessibilityRole.TextBox or AccessibilityRole.SearchBox);
             case StyleIdAttribute:
@@ -133,6 +152,49 @@ internal sealed class HtmlTextModel
             default:
                 return null;
         }
+    }
+
+    /// <summary>
+    /// Which occurrence of a phrase a position starts, counting the non-overlapping occurrences from the start of the text as the document's own text
+    /// search does; -1 when the phrase does not start at the position.
+    /// </summary>
+    public int OccurrenceAt(string phrase, int offset)
+    {
+        if (phrase.Length == 0)
+            return -1;
+
+        var count = 0;
+        var at = 0;
+        while ((at = Text.IndexOf(phrase, at, StringComparison.Ordinal)) >= 0)
+        {
+            if (at == offset)
+                return count;
+            if (at > offset)
+                return -1;
+
+            count++;
+            at += phrase.Length;
+        }
+
+        return -1;
+    }
+
+    /// <summary>Where the n-th non-overlapping occurrence of a phrase starts, or -1.</summary>
+    public int OffsetOfOccurrence(string phrase, int n)
+    {
+        if (phrase.Length == 0 || n < 0)
+            return -1;
+
+        var at = 0;
+        for (var i = 0; (at = Text.IndexOf(phrase, at, StringComparison.Ordinal)) >= 0; i++)
+        {
+            if (i == n)
+                return at;
+
+            at += phrase.Length;
+        }
+
+        return -1;
     }
 
     /// <summary>The text of a stretch of it, clipped to what there is; a negative maximum means all of it.</summary>

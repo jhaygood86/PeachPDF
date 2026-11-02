@@ -167,6 +167,20 @@ public sealed partial class HtmlView
         AfterEdit(document.SetEditSelection(start, end), state.Text);
     }
 
+    /// <summary>Selects the n-th occurrence of a phrase in the page's text, as a screen reader's Select does for a range of the page's own text.</summary>
+    internal void SelectPageText(string phrase, int occurrence)
+    {
+        if (_document is not { } document || occurrence < 0)
+            return;
+
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            var found = document.FindText(phrase);
+            if (occurrence < found.Count)
+                document.Selection.Select(found[occurrence]);
+        });
+    }
+
     /// <summary>Selects a range of the text of the text field that has the focus, as a screen reader's Select does; false if the node is not that field.</summary>
     internal void SetFieldSelection(PeachBrackets.Accessibility.AccessibilityNode node, int start, int end)
     {

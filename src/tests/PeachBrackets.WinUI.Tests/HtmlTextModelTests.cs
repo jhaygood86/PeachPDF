@@ -151,4 +151,24 @@ public class HtmlTextModelTests
         var backward = model.MoveEndpoint(0, 6, moveStart: false, TextUnitKind.Word, -1);
         Assert.Equal((0, 4, -1), (backward.Start, backward.End, backward.Moved));
     }
+
+    [Fact]
+    public void AnOccurrenceIsCountedAndFoundTheWayTheDocumentSearchCountsThem()
+    {
+        var model = Model("dup one dup", "dup");
+
+        Assert.Equal(0, model.OccurrenceAt("dup", 0));
+        Assert.Equal(1, model.OccurrenceAt("dup", 8));
+        Assert.Equal(2, model.OccurrenceAt("dup", 12));
+        Assert.Equal(-1, model.OccurrenceAt("dup", 4));
+        Assert.Equal(-1, model.OccurrenceAt("dup", 99));
+        Assert.Equal(-1, model.OccurrenceAt(string.Empty, 0));
+        Assert.Equal(8, model.OffsetOfOccurrence("dup", 1));
+        Assert.Equal(12, model.OffsetOfOccurrence("dup", 2));
+        Assert.Equal(-1, model.OffsetOfOccurrence("dup", 3));
+        Assert.Equal(-1, model.OffsetOfOccurrence("dup", -1));
+        Assert.Equal(-1, model.OffsetOfOccurrence(string.Empty, 0));
+        // Occurrences do not overlap, as in the document's own search.
+        Assert.Equal(-1, HtmlTextModel.FromBlocks(new (string, PeachBrackets.Accessibility.AccessibilityNode?)[] { ("aaa", null) }).OccurrenceAt("aa", 1));
+    }
 }

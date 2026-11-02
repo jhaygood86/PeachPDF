@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 
 namespace PeachBrackets.Android.Logic;
@@ -18,8 +19,25 @@ internal static class PickerValues
         "datetime-local" => "datetime",
         "color" => "color",
         "select" => "select",
+        "file" => "file",
         _ => null,
     };
+
+    /// <summary>The media types and the extensions an <c>accept</c> attribute names, each as a list; both empty when it names nothing (any file).</summary>
+    public static (IReadOnlyList<string> MimeTypes, IReadOnlyList<string> Extensions) AcceptTokens(string accept)
+    {
+        var mimeTypes = new List<string>();
+        var extensions = new List<string>();
+        foreach (var token in accept.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (token.StartsWith('.') && token.Length > 1)
+                extensions.Add(token[1..].ToLowerInvariant());
+            else if (token.Contains('/', StringComparison.Ordinal))
+                mimeTypes.Add(token.ToLowerInvariant());
+        }
+
+        return (mimeTypes, extensions);
+    }
 
     public static bool TryParseDate(string value, out DateTime date)
     {

@@ -11,7 +11,8 @@ public class HtmlViewPickersTests
     [InlineData("color", "color")]
     [InlineData("select", "select")]
     [InlineData("text", null)]
-    [InlineData("file", null)]
+    [InlineData("file", "file")]
+    [InlineData("number", null)]
     public void EachKindOfControlOpensItsOwnPickerOrNone(string type, string? kind) =>
         Assert.Equal(kind, HtmlViewPickers.KindOf(type));
 
@@ -51,5 +52,16 @@ public class HtmlViewPickersTests
         Assert.Equal((0, 0, 0), HtmlViewPickers.ParseColor("red"));
         Assert.Equal((0, 0, 0), HtmlViewPickers.ParseColor("#12345"));
         Assert.Equal((0, 0, 0), HtmlViewPickers.ParseColor("#gggggg"));
+    }
+
+    [Fact]
+    public void AnAcceptAttributeBecomesTheExtensionsAPickerListsOrAnyFile()
+    {
+        Assert.Equal(new[] { ".png", ".pdf" }, HtmlViewPickers.ExtensionsFor(".PNG, .pdf"));
+        Assert.Contains(".jpg", HtmlViewPickers.ExtensionsFor("image/*"));
+        Assert.Equal(new[] { ".pdf", ".png" }, HtmlViewPickers.ExtensionsFor("application/pdf,.png,.pdf"));
+        Assert.Equal(new[] { "*" }, HtmlViewPickers.ExtensionsFor(string.Empty));
+        Assert.Equal(new[] { "*" }, HtmlViewPickers.ExtensionsFor("application/x-unknown"));
+        Assert.Equal(new[] { "*" }, HtmlViewPickers.ExtensionsFor("."));
     }
 }

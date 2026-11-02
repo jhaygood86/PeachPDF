@@ -26,6 +26,8 @@ PeachBrackets.Android.HtmlView : sealed class
   event EventHandler<HtmlTappedEventArgs> LongPressed
   event EventHandler<HtmlTappedEventArgs> Tapped
   event EventHandler<HtmlTouchStartedEventArgs> TouchStarted
+  field const Int32 FilePickerRequestCode
+  method Boolean HandleActivityResult(Int32 requestCode, Result resultCode, Intent data)
   method Boolean ScrollToElement(String elementId)
   method Void ApplyUpdate(UpdateResult result)
   method Void CopySelection()

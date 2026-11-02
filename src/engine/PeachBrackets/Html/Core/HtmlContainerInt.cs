@@ -1337,6 +1337,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal System.Collections.Generic.IReadOnlyDictionary<int, System.Collections.Generic.Dictionary<string, string?>>? AttributeOverrides { get; set; }
 
+        /// <summary>How far each text area is scrolled up, by the source ordinal of the element, in layout units; the painter keeps the value inside the text.</summary>
+        internal System.Collections.Generic.Dictionary<int, double> TextAreaScroll { get; } = [];
+
         /// <summary>Where the caret and selection of the text field being edited are.</summary>
         internal FormEditSession FormEdit { get; } = new();
 
