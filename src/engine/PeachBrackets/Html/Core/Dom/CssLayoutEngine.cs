@@ -408,6 +408,8 @@ namespace PeachBrackets.Html.Dom
             // indent-aware flush target unreachable by a mere shift.
             var isRtl = blockBox.Direction.Value == DirectionMode.Rtl;
 
+            blockBox.HangingFirstWidth = MeasureHangingFirst(g, blockBox);
+
             CssLineBoxCoordinates coordinates = new()
             {
                 Line = seedLine,
@@ -9135,7 +9137,80 @@ namespace PeachBrackets.Html.Dom
         private static double GetLineTextIndent(CssBox blockBox, bool isFirstLine, bool followsForcedBreak)
         {
             var selected = isFirstLine || (blockBox.ActualTextIndentEachLine && followsForcedBreak);
-            return (blockBox.ActualTextIndentHanging ? !selected : selected) ? blockBox.ActualTextIndent : 0d;
+            var indent = (blockBox.ActualTextIndentHanging ? !selected : selected) ? blockBox.ActualTextIndent : 0d;
+
+            // hanging-punctuation: first (CSS Text 3 §8.1): the hung opening punctuation sits outside the
+            // line's start edge and is not measured, which is exactly what a start-edge shift of its own
+            // advance does - the line begins that far outside the content box and gains the same width.
+            // Only the block's true first line, so a resumed fragment's opening line does not hang again.
+            return isFirstLine ? indent - blockBox.HangingFirstWidth : indent;
+        }
+
+        /// <summary>
+        /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start
+        /// edge of <paramref name="blockBox"/>'s first line (CSS Text 3 §8.1), or 0 when the property is off
+        /// or the line does not open with such a character. Qualifying characters are the Unicode categories
+        /// Ps, Pf and Pi plus the ASCII apostrophe and quotation mark. A border or padding on an inline that
+        /// opens the line sits between the edge and the character, so it blocks hanging.
+        /// </summary>
+        private static double MeasureHangingFirst(Canvas g, CssBox blockBox)
+        {
+            if (blockBox.HangingPunctuation is not { Length: > 0 } declared
+                || !HangingPunctuationGrammar.TryParse(declared, out var flags)
+                || (flags & HangingPunctuationFlags.First) == 0)
+            {
+                return 0d;
+            }
+
+            if (FirstTextWordOf(blockBox) is not { } word || word.Text is not { Length: > 0 } text) return 0d;
+
+            Rune.TryGetRuneAt(text, 0, out var rune);
+            if (Rune.GetUnicodeCategory(rune) is not (UnicodeCategory.OpenPunctuation
+                    or UnicodeCategory.InitialQuotePunctuation or UnicodeCategory.FinalQuotePunctuation)
+                && rune.Value is not ('\'' or '"'))
+            {
+                return 0d;
+            }
+
+            var owner = word.OwnerBox;
+            return g.MeasureString(rune.ToString(), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
+        /// <summary>
+        /// The first word of <paramref name="container"/>'s first line, found through inline descendants only:
+        /// a nested block, float, absolutely positioned or atomic inline box ends the search, and an inline
+        /// with its own start border or padding (which would sit between the edge and the word) returns null.
+        /// </summary>
+        private static CssRect? FirstTextWordOf(CssBox container)
+        {
+            foreach (var child in container.Boxes)
+            {
+                foreach (var word in child.Words)
+                {
+                    if (!word.IsSpaces) return word;
+                }
+
+                if (child.IsOutOfFlow) return null;
+
+                if (child.IsBlock)
+                {
+                    if (child.Words.Count == 0) return FirstTextWordOf(child);
+                    return null;
+                }
+
+                if (child.DerivedStyle.ActualDisplay != Keywords.Inline) return null;
+
+                var rtl = child.Direction.Value == DirectionMode.Rtl;
+                if ((rtl ? child.ActualPaddingRight + child.ActualBorderRightWidth
+                        : child.ActualPaddingLeft + child.ActualBorderLeftWidth) > 0)
+                {
+                    return null;
+                }
+
+                if (FirstTextWordOf(child) is { } nested) return nested;
+            }
+
+            return null;
         }
 
         /// <summary>

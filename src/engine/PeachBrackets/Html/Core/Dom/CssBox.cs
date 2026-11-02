@@ -586,6 +586,13 @@ namespace PeachBrackets.Html.Dom
         /// section 2.1.3</see>). So an inline that declares no font takes the <c>::first-line</c> one, and one that declares its own keeps it. Null when
         /// no first-line style reaches the box, which then uses the block's <see cref="ResolvedFirstLineStyle"/>.
         /// </summary>
+        /// <summary>
+        /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside this block's
+        /// start edge on its first line (CSS Text 3 §8.1), resolved by the layout engine just before the
+        /// block's lines are built; 0 when nothing hangs.
+        /// </summary>
+        internal double HangingFirstWidth { get => _rare is null ? default(double) : _rare.HangingFirstWidth; set { if (_rare is null) { if (value == 0d) return; _rare = new BoxRareState(); } _rare.HangingFirstWidth = value; } }
+
         internal CssBox? FirstLineInlineStyle { get => _rare is null ? default(CssBox?) : _rare.FirstLineInlineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.FirstLineInlineStyle = value; } }
 
         /// <summary>

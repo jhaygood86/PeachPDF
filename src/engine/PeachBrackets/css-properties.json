@@ -2960,6 +2960,19 @@
       }
     },
     {
+      "name": "hanging-punctuation",
+      "comment": "CSS Text 3 §8: none | [ first || [ force-end | allow-end ] || last ]. cssDataType 'cssom-grammar' calls the shared HangingPunctuationGrammar through its converter; layout re-parses the raw stored text (CssBox.HangingPunctuationFlags).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.HangingPunctuationConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.HangingPunctuationConverter.Convert" },
+      "html": {
+        "propertyPath": "HangingPunctuation",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "hyphenate-limit-chars",
       "comment": "CSS Text 4 §6.3.4: [ auto | <integer> ]{1,3}. cssDataType 'cssom-grammar' calls Converters.HyphenateLimitCharsConverter.Convert directly (the real, already-public converter HyphenateLimitCharsProperty itself uses) instead of the full cssom round trip; layout re-parses the raw stored text to get the word/before/after minimums (CssLayoutEngine.TryHyphenateWord).",
       "inherited": true,
