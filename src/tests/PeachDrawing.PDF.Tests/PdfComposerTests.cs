@@ -282,5 +282,93 @@ namespace PeachDrawing.PDF.Tests
             Assert.Contains("W* n", pdf);
             Assert.Contains(" cm", pdf);
         }
+        private static PdfComposerOptions Accessible(PdfUAConformance level, Action<PdfComposerOptions>? configure = null) => Plain(o =>
+        {
+            o.UAConformance = level;
+            o.Title = "An accessible file";
+            o.Language = "en";
+            o.CreationDate = new DateTimeOffset(2026, 1, 2, 3, 4, 5, TimeSpan.Zero);
+            configure?.Invoke(o);
+        });
+
+        [Fact]
+        public async Task PdfUA_NeedsATagStructureToBeSaved_AndIdentifiesItselfWhenItHasOne()
+        {
+            var (context, _) = await NewContextAsync();
+            using (var untagged = new PdfComposer(context, Accessible(PdfUAConformance.UA1)))
+            {
+                untagged.AddPage(200, 200);
+                var error = Assert.Throws<InvalidOperationException>(() => Save(untagged));
+                Assert.Contains("tag", error.Message, StringComparison.OrdinalIgnoreCase);
+            }
+
+            using var composer = new PdfComposer(context, Accessible(PdfUAConformance.UA1));
+            var recorder = composer.CreateTagRecorder();
+            var page = composer.AddPage(200, 200);
+            recorder.BeginPage(page);
+            using (recorder.OpenContentElement(page.Canvas, "p", "P"))
+                page.Canvas.DrawRectangle(page.Canvas.GetSolidBrush(Red), 10, 10, 50, 50);
+
+            recorder.Finish();
+            var pdf = Latin1(Save(composer));
+
+            Assert.Contains("pdfuaid:part", pdf);
+            Assert.Contains("/DisplayDocTitle true", pdf);
+            Assert.Contains("%PDF-1.7", pdf);
+        }
+
+        [Fact]
+        public async Task PdfUA_TheRecorderRequiresAlternativeTextOfFigures()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Accessible(PdfUAConformance.UA2));
+            var recorder = composer.CreateTagRecorder();
+            var page = composer.AddPage(200, 200);
+            recorder.BeginPage(page);
+            using (recorder.OpenContentElement(page.Canvas, "f", "Figure"))
+                page.Canvas.DrawRectangle(page.Canvas.GetSolidBrush(Red), 10, 10, 50, 50);
+
+            recorder.Finish();
+            var pdf = Latin1(Save(composer));
+
+            Assert.Contains("/Alt", pdf);
+            Assert.Contains("%PDF-2.0", pdf);
+            Assert.Contains("pdfuaid:rev", pdf);
+        }
+
+        [Fact]
+        public async Task PdfUA_NeedsATitleALanguageAndACreationDate()
+        {
+            var (context, _) = await NewContextAsync();
+
+            Assert.Contains("title", Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Title = null)).AddPage(10, 10)).Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("language", Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Language = null)).AddPage(10, 10)).Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("creation date", Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.CreationDate = null)).AddPage(10, 10)).Message, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public async Task PdfUA_AnEncryptedFileMustStillLetAssistiveTechnologyExtractText()
+        {
+            var (context, _) = await NewContextAsync();
+            var blocked = new PdfEncryptionOptions { UserPassword = "u", OwnerPassword = "o", Permissions = PdfPermissions.AllowPrint };
+            var allowed = new PdfEncryptionOptions { UserPassword = "u", OwnerPassword = "o", Permissions = PdfPermissions.AllowPrint | PdfPermissions.AllowAccessibilityExtract };
+
+            var error = Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Encryption = blocked)).AddPage(10, 10));
+            Assert.Contains("AllowAccessibilityExtract", error.Message);
+            using var composer = new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Encryption = allowed));
+            composer.AddPage(10, 10);
+        }
+
+        [Fact]
+        public async Task PdfUA_CannotBeCombinedWithPdfX_OrWithAPdfLevelItIsNotDefinedAgainst()
+        {
+            var (context, _) = await NewContextAsync();
+
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.XConformance = PdfXConformance.X4)).AddPage(10, 10));
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Conformance = PdfAConformance.PdfA4)).AddPage(10, 10));
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA2, o => o.Conformance = PdfAConformance.PdfA2A)).AddPage(10, 10));
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA1, o => o.Version = PdfVersion.Pdf20)).AddPage(10, 10));
+            Assert.Throws<InvalidOperationException>(() => new PdfComposer(context, Accessible(PdfUAConformance.UA2, o => o.Version = PdfVersion.Pdf17)).AddPage(10, 10));
+        }
     }
 }

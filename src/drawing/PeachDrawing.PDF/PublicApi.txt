@@ -172,6 +172,7 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property PdfAConformance Conformance { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfFacturXInfo FacturX { get; set; }
+  property PdfUAConformance UAConformance { get; set; }
   property PdfVersion? Version { get; set; }
   property PdfXConformance XConformance { get; set; }
   property String Author { get; set; }
@@ -443,6 +444,10 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method Void LinkAnnotation(Object key, PdfLink link)
   property Boolean IsInMarkedContent { get; }
 PeachDrawing.PDF.PdfTagSession : sealed class
+PeachDrawing.PDF.PdfUAConformance : enum Int32
+  None = 0
+  UA1 = 1
+  UA2 = 2
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

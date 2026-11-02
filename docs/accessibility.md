@@ -101,6 +101,13 @@ tree is not rearranged to match it.
 `aria-modal` and `aria-current` are read, and so are their native equivalents: `checked`, `disabled` (also through a disabled `fieldset`), `required`,
 `readonly`, `selected`, and a `details` element's `open`.
 
+## PDF/UA
+
+A tagged PDF built from a document carries the same names, languages and table details (see
+[Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support)), and `PdfGenerateConfig.PdfUAConformance` makes the file claim
+[PDF/UA](https://pdfa.org/resource/iso-14289-pdfua/): it identifies it in the XMP metadata, requires a title, a language and a creation date, gives every
+figure alternative text, and shows the title in the viewer. See [Generating PDF/UA (accessible) output](usage-examples.md#generating-pdfua-accessible-output).
+
 ## Preferences and text spacing
 
 A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with

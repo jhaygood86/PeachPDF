@@ -91,21 +91,48 @@ namespace PeachDrawing.PDF
                 _document.Version = 17;
             }
 
+            // ISO 14289-1 (PDF/UA-1) is defined against PDF 1.7 as well.
+            if (options.UAConformance == PdfUAConformance.UA1 && _document.Version < 17)
+                _document.Version = 17;
+
             // PDF/A-4 and PDF/X-6 are defined against PDF 2.0; every other PDF/A or PDF/X level is defined against PDF 1.4, 1.6 or 1.7.
             // A caller who left the version alone gets the version the requested standard needs; one who set it to something the
             // standard cannot use has a contradiction to resolve, not something to silently pick a winner for.
             var requiresPdf20 = options.Conformance is PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F
-                || options.XConformance == PdfXConformance.X6;
+                || options.XConformance == PdfXConformance.X6 || options.UAConformance == PdfUAConformance.UA2;
             var requestsEarlierLevel = !requiresPdf20
-                && (options.Conformance != PdfAConformance.None || options.XConformance != PdfXConformance.None);
+                && (options.Conformance != PdfAConformance.None || options.XConformance != PdfXConformance.None
+                    || options.UAConformance == PdfUAConformance.UA1);
+
+            // PDF/UA-1 is defined against PDF 1.7 and PDF/UA-2 against PDF 2.0: a file cannot be both, which a PDF/A-4 or PDF/X-6 claim
+            // alongside UA-1 (or an earlier PDF/A level alongside UA-2) would ask for.
+            if (options.UAConformance == PdfUAConformance.UA1 && requiresPdf20)
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance is UA1, which is defined against PDF 1.7, but Conformance or XConformance is a level " +
+                    "defined against PDF 2.0 (PDF/A-4, PDF/X-6). Use PdfUAConformance.UA2, or an earlier PDF/A level.");
+            }
+
+            if (options.UAConformance == PdfUAConformance.UA2 && options.Conformance is not (PdfAConformance.None or PdfAConformance.PdfA4 or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F))
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance is UA2, which is defined against PDF 2.0, but Conformance is a PDF/A level defined " +
+                    "against PDF 1.x. Use PdfUAConformance.UA1, or PDF/A-4.");
+            }
+
+            if (options.UAConformance != PdfUAConformance.None && options.XConformance != PdfXConformance.None)
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance cannot be combined with XConformance: PDF/UA is an accessibility claim and PDF/X a print-production one.");
+            }
             var requestedVersion = options.Version
                 ?? (requiresPdf20 ? PdfVersion.Pdf20 : requestsEarlierLevel ? PdfVersion.Pdf17 : PdfVersion.Pdf20);
 
             if (requiresPdf20 && requestedVersion != PdfVersion.Pdf20)
             {
                 throw new InvalidOperationException(
-                    $"PdfComposerOptions.Version is set to {requestedVersion}, but Conformance ({options.Conformance}) " +
-                    $"or XConformance ({options.XConformance}) is a level defined against PDF 2.0 (PDF/A-4, PDF/X-6). " +
+                    $"PdfComposerOptions.Version is set to {requestedVersion}, but Conformance ({options.Conformance}), " +
+                    $"XConformance ({options.XConformance}) or UAConformance ({options.UAConformance}) is a level defined against PDF 2.0 (PDF/A-4, PDF/X-6, PDF/UA-2). " +
                     "Set Version to Pdf20, or leave it unset.");
             }
 
@@ -115,6 +142,13 @@ namespace PeachDrawing.PDF
                     "PdfComposerOptions.Version is set to Pdf20, but Conformance is also set to a " +
                     "level defined against PDF 1.4 or 1.7. Only PDF/A-4 (PdfA4, PdfA4E, PdfA4F) is a PDF 2.0 level; " +
                     "request PdfVersion.Pdf17 (or leave Version unset) for the earlier ones.");
+            }
+
+            if (options.UAConformance == PdfUAConformance.UA1 && requestedVersion == PdfVersion.Pdf20 && options.Version is not null)
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.Version is set to Pdf20, but UAConformance is UA1, which is defined against PDF 1.7. " +
+                    "Request PdfVersion.Pdf17 (or leave Version unset), or claim PdfUAConformance.UA2.");
             }
 
             if (!requiresPdf20 && requestedVersion == PdfVersion.Pdf20 && options.XConformance != PdfXConformance.None && options.Version is not null)
@@ -143,6 +177,15 @@ namespace PeachDrawing.PDF
 
             // PDF/A (archival) and PDF/X (print production) are different documents in practice - no single file conformance-claims
             // both at once, so requesting both is a contradiction for the caller to resolve.
+            if (settings.PdfUAConformance != options.UAConformance && settings.PdfUAConformance != PdfUAConformance.None)
+            {
+                throw new InvalidOperationException(
+                    $"PdfComposerOptions.UAConformance must be the same every time options are applied to a document - this document was " +
+                    $"already established as '{settings.PdfUAConformance}' by an earlier call, and this call specifies '{options.UAConformance}'.");
+            }
+
+            settings.PdfUAConformance = options.UAConformance;
+
             if (options.Conformance != PdfAConformance.None && options.XConformance != PdfXConformance.None)
             {
                 throw new InvalidOperationException(
@@ -194,6 +237,15 @@ namespace PeachDrawing.PDF
                     "PDF/A and PDF/X documents must not be encrypted.");
             }
 
+            // PDF/UA (ISO 14289) allows encryption only so long as assistive technology can still extract the text.
+            if (encryption is not null && options.UAConformance != PdfUAConformance.None
+                && !encryption.Permissions.HasFlag(PdfPermissions.AllowAccessibilityExtract))
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance is set and the document is encrypted, but PdfEncryptionOptions.Permissions does not include " +
+                    "PdfPermissions.AllowAccessibilityExtract. A PDF/UA file must stay readable by assistive technology.");
+            }
+
             if (settings.EncryptionEstablished
                 && !(settings.Encryption is null ? encryption is null : settings.Encryption.SameAs(encryption)))
             {
@@ -231,8 +283,16 @@ namespace PeachDrawing.PDF
             if (options.CreationDate is { } created)
                 info.CreationDate = created.LocalDateTime;
 
-            // The accessible PDF/A levels (a) build on tagged output and additionally require a real document language.
-            var isAccessibleConformance = options.Conformance is PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A;
+            // The accessible PDF/A levels (a) and PDF/UA build on tagged output and additionally require a real document language; PDF/UA
+            // (ISO 14289) also requires a title, which it makes the viewer show in place of the file name.
+            var isAccessibleConformance = options.Conformance is PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A
+                || options.UAConformance != PdfUAConformance.None;
+            if (options.UAConformance != PdfUAConformance.None && string.IsNullOrWhiteSpace(_document.Info.Title))
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance is set, which requires a document title, but PdfComposerOptions.Title is not set.");
+            }
+
             if (!string.IsNullOrEmpty(options.Language))
             {
                 _document.Language = options.Language;
@@ -240,8 +300,8 @@ namespace PeachDrawing.PDF
             else if (isAccessibleConformance && string.IsNullOrEmpty(_document.Language))
             {
                 throw new InvalidOperationException(
-                    "PdfComposerOptions.Conformance is set to an accessible ('A') PDF/A level, which requires a document language, " +
-                    "but PdfComposerOptions.Language is not set.");
+                    "PdfComposerOptions.Conformance is set to an accessible ('A') PDF/A level, or UAConformance is set, which requires a " +
+                    "document language, but PdfComposerOptions.Language is not set.");
             }
 
             ValidateColorOptions(options.ColorOptions);
@@ -287,11 +347,11 @@ namespace PeachDrawing.PDF
             // too: PDF/X-4's identification is primarily an XMP property (ISO 15930-7), not just an Info-dictionary one the way
             // PDF/X-1a/X-3's is.
             var writeXmpMetadata = options.WriteXmpMetadata || pdfAConformanceRequested || pdfXConformanceRequested
-                || options.CustomXmpProperties.Count > 0;
+                || options.UAConformance != PdfUAConformance.None || options.CustomXmpProperties.Count > 0;
             if (writeXmpMetadata && options.CreationDate is not { })
             {
                 throw new InvalidOperationException(
-                    "An XMP metadata stream is being written (WriteXmpMetadata, Conformance, XConformance, or CustomXmpProperties is set), " +
+                    "An XMP metadata stream is being written (WriteXmpMetadata, Conformance, XConformance, UAConformance, or CustomXmpProperties is set), " +
                     "but no creation date is available. Set PdfComposerOptions.CreationDate.");
             }
 
@@ -303,7 +363,7 @@ namespace PeachDrawing.PDF
                 var facturX = options.FacturX is { } marker ? (marker.FileName, marker.ConformanceLevel) : ((string, string)?)null;
                 var metadataStream = new PdfMetadataStream(
                     _document, _document.Info, options.CreationDate!.Value, options.Conformance, options.XConformance,
-                    options.CustomXmpProperties, facturX);
+                    options.CustomXmpProperties, facturX, options.UAConformance);
                 _document.Catalog.SetMetadata(metadataStream);
             }
 

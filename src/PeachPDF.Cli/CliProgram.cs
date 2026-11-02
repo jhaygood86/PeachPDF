@@ -90,6 +90,8 @@ internal static class CliProgram
               --pdf-creator=CREATOR  Set the PDF creator.
               --pdf-lang=LANG        Set the PDF language (/Lang).
               --pdfa=LEVEL           Produce PDF/A: 1a, 1b, 2a, 2b, 2u, 3a, 3b or 3u.
+              --pdfua=PART           Produce PDF/UA (accessible): 1 or 2. Needs a title,
+                                     a language and a creation date.
               --pdf-creation-date=DATE
                                      Set the PDF creation date (ISO 8601). PDF/A needs
                                      one: else the document's own date is used.

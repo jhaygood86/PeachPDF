@@ -630,7 +630,8 @@ namespace PeachPDF
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
             // which Configure has already checked.
             var isAccessibleConformance = config.PdfAConformance is
-                PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A;
+                PdfAConformance.PdfA1A or PdfAConformance.PdfA2A or PdfAConformance.PdfA3A
+                || config.PdfUAConformance != PdfUAConformance.None;
 
             // Only constructed when tagging is enabled - CssBox.PaintImp's tagging wrapper checks
             // HtmlContainerInt.StructureTagBuilder for null and skips all classification/bookkeeping
@@ -743,6 +744,7 @@ namespace PeachPDF
                 Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
                 Conformance = config.PdfAConformance.ToEngine(),
                 XConformance = config.PdfXConformance.ToEngine(),
+                UAConformance = config.PdfUAConformance.ToEngine(),
                 ColorOptions = config.ColorOptions.ToEngine(),
                 WriteXmpMetadata = config.EnableXmpMetadata,
                 FacturX = embeddings.FacturX,
