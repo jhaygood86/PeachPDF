@@ -26,6 +26,19 @@ namespace PeachBrackets.Html.Updates
                 : new DocumentCursor(CursorShape.Default, []);
         }
 
+        /// <summary>The interaction the document allows at a point of a page, in points from the top-left of the sheet.</summary>
+        public static DocumentInteraction InteractionAt(HtmlContainerInt container, FragmentainerFragment fragmentainer, double x, double y)
+        {
+            var frame = FrameOf(container, fragmentainer);
+            // The topmost thing under the point, inert or not, says whether the point is inert; what a touch may begin is then read off the
+            // element that would receive it.
+            var overInert = Find(fragmentainer.Root, x, y, frame, out var top, out _, skipInert: false) && top is { IsInert: true };
+            if (!Find(fragmentainer.Root, x, y, frame, out var box, out _) || box is null)
+                return new DocumentInteraction(overInert, TouchActions.All, !overInert);
+
+            return new DocumentInteraction(overInert, box.EffectiveTouchActions, !overInert && box.EffectiveUserSelect != UserSelect.None);
+        }
+
         /// <summary>
         /// The areas of a page that ask for a pointer other than the default one, in paint order, in points from the top-left of the sheet. An
         /// element whose <c>cursor</c> is <c>auto</c> is listed only when it is a link; the text pointer over plain text is left to the host,
@@ -48,7 +61,7 @@ namespace PeachBrackets.Html.Updates
         private static void Walk(HtmlContainerInt container, BoxFragment fragment, TextRunCollector.Frame frame, List<(Rect, DocumentCursor)> regions)
         {
             var box = fragment.Box;
-            if (box.HtmlTag is not null && box.PointerEvents.Value != PointerEvents.None && Regionable(container, box) is { } cursor)
+            if (box.HtmlTag is not null && box.PointerEvents.Value != PointerEvents.None && !box.IsInert && Regionable(container, box) is { } cursor)
             {
                 if (fragment.Lines.Count > 0)
                 {
@@ -82,17 +95,17 @@ namespace PeachBrackets.Html.Updates
             new(frame.X(layout.X), frame.Y(layout.Y), layout.Width / frame.Ppp, layout.Height / frame.Ppp);
 
         // The deepest fragment under the point that receives pointer events, and among siblings the one painted last (on top).
-        private static bool Find(BoxFragment fragment, double x, double y, TextRunCollector.Frame frame, out CssBox? box, out bool overText)
+        private static bool Find(BoxFragment fragment, double x, double y, TextRunCollector.Frame frame, out CssBox? box, out bool overText, bool skipInert = true)
         {
             for (var i = fragment.Children.Count - 1; i >= 0; i--)
             {
-                if (Find(fragment.Children[i], x, y, frame, out box, out overText))
+                if (Find(fragment.Children[i], x, y, frame, out box, out overText, skipInert))
                     return true;
             }
 
             box = null;
             overText = false;
-            if (fragment.Box.PointerEvents.Value == PointerEvents.None)
+            if (fragment.Box.PointerEvents.Value == PointerEvents.None || (skipInert && fragment.Box.IsInert))
                 return false;
 
             foreach (var word in fragment.Words)

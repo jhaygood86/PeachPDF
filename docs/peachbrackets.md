@@ -107,6 +107,8 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`GetInteractionAt(pageIndex, x, y)`** tells a pointer or touch host what the document allows at a point: whether it is inert, which gestures a
+  touch there may begin (`touch-action`, as `TouchActions`) and whether its text may be selected (`user-select`).
 - **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
   item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
   tree builds it from these. Needs `RecordTextRuns`.
