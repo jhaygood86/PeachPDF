@@ -93,7 +93,7 @@ Shift to select, with Ctrl to move by word), Backspace and Delete (with Ctrl by 
 turns line breaks into spaces, and a password is never copied). A text field also has the Value pattern, so Narrator reads its text and a screen reader
 can set it. The view asks Windows for a text service context (`CoreTextEditContext`) so an input method, handwriting, dictation and the emoji panel can
 put text in a field and place their windows beside the caret; where the window does not offer one, typed characters arrive as the view's own
-character events and everything but composition still works. Picking from a drop-down and moving a range are not handled yet.
+character events and everything but composition still works. A progress bar, meter, slider, scroll bar or spin button has the RangeValue pattern - its current number, its least and most, and a small step (a hundredth of the extent) and a large one (a tenth) - so Narrator says "30 percent" and a slider can be set; only a slider that is not read-only or disabled accepts a new value, and it is kept within its range. Picking from a drop-down is not handled yet.
 
 ## Limits of this version
 

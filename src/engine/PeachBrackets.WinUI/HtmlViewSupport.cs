@@ -156,6 +156,16 @@ internal static class HtmlViewLogic
     }
 
     /// <summary>Whether a link may be opened by the system: only the schemes a document cannot abuse.</summary>
+    /// <summary>Whether a role is one UI Automation reads through the RangeValue pattern: a progress bar, meter, slider, scroll bar or spin button.</summary>
+    public static bool IsRangeRole(AccessibilityRole role) =>
+        role is AccessibilityRole.ProgressBar or AccessibilityRole.Meter or AccessibilityRole.Slider or AccessibilityRole.ScrollBar or AccessibilityRole.SpinButton;
+
+    /// <summary>The size of a small step of a range (an arrow key) and of a large one (Page Up and Down): a hundredth and a tenth of its extent.</summary>
+    public static (double Small, double Large) RangeSteps(double minimum, double maximum)
+    {
+        var extent = Math.Max(maximum - minimum, 0);
+        return (extent / 100, extent / 10);
+    }
     /// <summary>How UI Automation processes a notification for a live region: an assertive one interrupts, a polite one waits for the reader to be idle.</summary>
     public static Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing ToNotificationProcessing(LiveSetting setting) =>
         setting == LiveSetting.Assertive
