@@ -43,6 +43,9 @@ public sealed partial class HtmlView
 
         var control = IsDown(VirtualKey.Control);
         var shift = IsDown(VirtualKey.Shift);
+        if (state.Type == "textarea" && HandleTextAreaKey(document, state, key, control, shift))
+            return true;
+
         var move = key switch
         {
             VirtualKey.Left => control ? EditMove.WordLeft : EditMove.Left,
@@ -98,6 +101,113 @@ public sealed partial class HtmlView
         }
     }
 
+    // ---- the menu of a text field --------------------------------------------------------------------------------------------------------
+
+    private bool _fieldMenuOpen;
+
+    // Gives the field under a point the focus, optionally selects the word there, and shows its menu. Returns whether the point was over a text field.
+    internal bool OpenFieldMenu(int page, double x, double y, Point at, bool selectWord)
+    {
+        if (!FocusTextFieldAt(page, x, y))
+            return false;
+
+        if (selectWord)
+            _ = SelectWordInFieldAsync(page, x, y);
+
+        var flyout = new Microsoft.UI.Xaml.Controls.MenuFlyout();
+        void Add(string text, Action action)
+        {
+            var item = new Microsoft.UI.Xaml.Controls.MenuFlyoutItem { Text = text };
+            item.Click += (_, _) => action();
+            flyout.Items.Add(item);
+        }
+
+        Add("Cut", () =>
+        {
+            if (_document is { } document && document.GetEditState() is { } state)
+            {
+                CopyFieldSelection(state);
+                AfterEdit(document.DeleteEditText(true), state.Text);
+            }
+        });
+        Add("Copy", () =>
+        {
+            if (_document?.GetEditState() is { } state)
+                CopyFieldSelection(state);
+        });
+        Add("Paste", () => _ = PasteIntoFieldAsync());
+        Add("Select all", () =>
+        {
+            if (_document is { } document && document.GetEditState() is { } state)
+                AfterEdit(document.SetEditSelection(0, state.Text.Length), state.Text);
+        });
+        _fieldMenuOpen = true;
+        flyout.Closed += (_, _) =>
+        {
+            _fieldMenuOpen = false;
+            Focus(Microsoft.UI.Xaml.FocusState.Programmatic);
+        };
+        ShowFlyout(flyout, at);
+        return true;
+    }
+
+    // Selects the word under a point of the field that has the focus, once the focus work that placed the caret there is done.
+    private async Task SelectWordInFieldAsync(int page, double x, double y)
+    {
+        await FocusIdle;
+        await Task.Delay(50);
+        if (_document is not { } document || _context is null || document.GetEditState() is not { } state)
+            return;
+
+        using var measuring = new Win2dComposer(_context, 1, 1);
+        if (document.GetEditIndexAt(measuring.Canvas, page, x, y) is not { } at)
+            return;
+
+        var (start, end) = HtmlViewEditing.WordAt(state.Text, at);
+        AfterEdit(document.SetEditSelection(start, end), state.Text);
+    }
+
+    /// <summary>Selects a range of the text of the text field that has the focus, as a screen reader's Select does; false if the node is not that field.</summary>
+    internal void SetFieldSelection(PeachBrackets.Accessibility.AccessibilityNode node, int start, int end)
+    {
+        if (_document is not { } document || FocusedNode?.Id != node.Id || document.GetEditState() is not { } state)
+            return;
+
+        DispatcherQueue.TryEnqueue(() => AfterEdit(document.SetEditSelection(start, end), state.Text));
+    }
+
+    // The keys that work on the lines of a text area: Up and Down, Home and End (to the ends of the line; with Control, of the text), and Enter.
+    private bool HandleTextAreaKey(HtmlDocument document, FormEditState state, VirtualKey key, bool control, bool shift)
+    {
+        if (key == VirtualKey.Enter && !control)
+        {
+            AfterEdit(document.InsertText("\n"), state.Text);
+            return true;
+        }
+
+        var name = key switch
+        {
+            VirtualKey.Up => "Up",
+            VirtualKey.Down => "Down",
+            VirtualKey.Home when !control => "Home",
+            VirtualKey.End when !control => "End",
+            _ => null,
+        };
+
+        if (name is null || _context is null)
+            return false;
+
+        using var measuring = new Win2dComposer(_context, 1, 1);
+        var canvas = measuring.Canvas;
+        var target = HtmlViewEditing.LineMove(name, state.SelectionEnd,
+            lines => document.GetEditIndexByLine(canvas, state.SelectionEnd, lines), index => document.GetEditLineRange(canvas, index));
+        if (target is not { } to)
+            return false;
+
+        AfterEdit(document.SetEditSelection(shift ? state.SelectionStart : to, to), state.Text);
+        return true;
+    }
+
     private void CopyFieldSelection(FormEditState state)
     {
         var from = Math.Min(state.SelectionStart, state.SelectionEnd);
@@ -116,7 +226,7 @@ public sealed partial class HtmlView
         if (!content.Contains(StandardDataFormats.Text) || _document is not { } document || document.GetEditState() is not { } state)
             return;
 
-        var text = HtmlViewEditing.ForSingleLine(await content.GetTextAsync());
+        var text = HtmlViewEditing.ForField(state.Type, await content.GetTextAsync());
         if (ReferenceEquals(document, _document))
             AfterEdit(document.InsertText(text), state.Text);
     }
@@ -245,7 +355,7 @@ public sealed partial class HtmlView
         var composing = _composing;
         InTextServices(() =>
         {
-            var result = document.ReplaceEditText(start, end, HtmlViewEditing.ForSingleLine(args.Text), args.NewSelection.EndCaretPosition);
+            var result = document.ReplaceEditText(start, end, HtmlViewEditing.ForField(document.GetEditState()?.Type ?? string.Empty, args.Text), args.NewSelection.EndCaretPosition);
             args.Result = result.Applied ? CoreTextTextUpdatingResult.Succeeded : CoreTextTextUpdatingResult.Failed;
             if (result.Applied && composing)
                 document.SetComposition(start, start + args.Text.Length);
@@ -444,13 +554,13 @@ public sealed partial class HtmlView
     internal bool FocusTextFieldAt(int page, double x, double y)
     {
         if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element
-            || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" })
+            || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" or "textarea" })
         {
             return false;
         }
 
         Focus(Microsoft.UI.Xaml.FocusState.Pointer);
-        _ = FocusFieldAtAsync(document, element, page, x);
+        _ = FocusFieldAtAsync(document, element, page, x, y);
         return true;
     }
 
@@ -461,7 +571,7 @@ public sealed partial class HtmlView
     private bool _fieldDragBusy;
 
     // A drag from inside a field selects between where it began and the pointer.
-    internal async Task ExtendFieldSelectionAsync(HtmlDocument document, int page, double x, int anchor)
+    internal async Task ExtendFieldSelectionAsync(HtmlDocument document, int page, double x, double y, int anchor)
     {
         if (_context is null || _fieldDragBusy)
             return;
@@ -470,7 +580,7 @@ public sealed partial class HtmlView
         try
         {
             using var measuring = new Win2dComposer(_context, 1, 1);
-            if (ReferenceEquals(document, _document) && document.GetEditIndexAt(measuring.Canvas, page, x) is { } index)
+            if (ReferenceEquals(document, _document) && document.GetEditIndexAt(measuring.Canvas, page, x, y) is { } index)
                 AfterEdit(document.SetEditSelection(anchor, index), CurrentFieldText());
         }
         finally
@@ -479,7 +589,7 @@ public sealed partial class HtmlView
         }
     }
 
-    private async Task FocusFieldAtAsync(HtmlDocument document, DocumentElement element, int page, double x)
+    private async Task FocusFieldAtAsync(HtmlDocument document, DocumentElement element, int page, double x, double y)
     {
         if (_context is null)
             return;
@@ -490,7 +600,7 @@ public sealed partial class HtmlView
             return;
 
         AfterFocusChange(document, result, document.FocusedNode?.Id);
-        if (document.GetEditIndexAt(measuring.Canvas, page, x) is { } index)
+        if (document.GetEditIndexAt(measuring.Canvas, page, x, y) is { } index)
         {
             AfterEdit(document.SetEditSelection(index, index), CurrentFieldText());
             if (_fieldPressed)

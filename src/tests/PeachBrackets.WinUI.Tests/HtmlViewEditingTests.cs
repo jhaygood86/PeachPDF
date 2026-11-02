@@ -65,4 +65,36 @@ public class HtmlViewEditingTests
     [InlineData('\u001b', false)]
     public void OnlyTextIsTypedIntoAField(char character, bool expected) =>
         Assert.Equal(expected, HtmlViewEditing.IsTypedText(character));
+
+    [Fact]
+    public void ATextAreaKeepsLineBreaksAndEveryOtherFieldIsOneLine()
+    {
+        var lf = ((char)10).ToString();
+        Assert.Equal("a" + lf + "b" + lf + "c", HtmlViewEditing.ForField("textarea", "a\r\nb\rc"));
+        Assert.Equal("a b c", HtmlViewEditing.ForField("text", "a\r\nb\nc"));
+    }
+
+    [Fact]
+    public void TheLineKeysAskForTheLineAboveBelowAndTheEndsOfTheLine()
+    {
+        Func<int, int?> byLine = lines => 100 + lines;
+        Func<int, (int Start, int End)?> range = caret => (caret - 1, caret + 1);
+
+        Assert.Equal(99, HtmlViewEditing.LineMove("Up", 5, byLine, range));
+        Assert.Equal(101, HtmlViewEditing.LineMove("Down", 5, byLine, range));
+        Assert.Equal(4, HtmlViewEditing.LineMove("Home", 5, byLine, range));
+        Assert.Equal(6, HtmlViewEditing.LineMove("End", 5, byLine, range));
+        Assert.Null(HtmlViewEditing.LineMove("Left", 5, byLine, range));
+        Assert.Null(HtmlViewEditing.LineMove("Home", 5, byLine, _ => null));
+    }
+
+    [Theory]
+    [InlineData("hello world", 2, 0, 5)]
+    [InlineData("hello world", 5, 0, 5)]
+    [InlineData("hello world", 6, 6, 11)]
+    [InlineData("hello, world", 6, 6, 6)]
+    [InlineData("", 0, 0, 0)]
+    [InlineData("ab", 99, 0, 2)]
+    public void ALongPressSelectsTheWordItIsOn(string text, int index, int start, int end) =>
+        Assert.Equal((start, end), HtmlViewEditing.WordAt(text, index));
 }

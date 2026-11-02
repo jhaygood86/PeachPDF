@@ -34,6 +34,8 @@ public sealed partial class HtmlView
         _canvas.PointerExited += (_, _) => RequestClear();
         _canvas.DoubleTapped += OnDoubleTapped;
         _canvas.Holding += OnHolding;
+        _canvas.RightTapped += OnRightTapped;
+        Unloaded += (_, _) => CloseFlyouts();
         KeyDown += OnKeyDown;
         WireFocus();
         WireTextInput();
@@ -68,7 +70,9 @@ public sealed partial class HtmlView
         if (_dragSelecting)
             document.Selection.ExtendTo(page, x, y);
         else if (_fieldAnchor is { } anchor)
-            _ = ExtendFieldSelectionAsync(document, page, x, anchor);
+            _ = ExtendFieldSelectionAsync(document, page, x, y, anchor);
+        else if (_rangeElement is not null)
+            SetRange(x);
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -96,6 +100,9 @@ public sealed partial class HtmlView
 
         // A press on a text field puts the caret there at once, so a drag can select inside it.
         _fieldPressed = FocusTextFieldAt(page, x, y);
+        if (!_fieldPressed && BeginRangeDrag(page, x, y))
+            return;
+
         if (!_fieldPressed && document.GetInteractionAt(page, x, y).CanSelectText)
             _dragSelecting = document.Selection.SelectAt(page, x, y);
     }
@@ -105,7 +112,7 @@ public sealed partial class HtmlView
         var position = e.GetCurrentPoint(_canvas).Position;
         var wasClick = Math.Abs(position.X - _pressPoint.X) <= ClickSlop && Math.Abs(position.Y - _pressPoint.Y) <= ClickSlop;
         var wasSelecting = _dragSelecting;
-        var wasField = _fieldPressed;
+        var wasField = _fieldPressed || _rangeElement is not null;
         EndPress();
         _canvas.ReleasePointerCapture(e.Pointer);
 
@@ -114,7 +121,7 @@ public sealed partial class HtmlView
             if (wasSelecting)
                 _document!.Selection.RemoveAllRanges();
 
-            if (!wasField && !FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y))
+            if (!wasField && !FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y) && !OpenPickerAt(page, x, y, position))
                 FollowLinkAt(page, x, y);
         }
     }
@@ -128,6 +135,7 @@ public sealed partial class HtmlView
         _dragSelecting = false;
         _fieldAnchor = null;
         _fieldPressed = false;
+        EndRangeDrag();
         RestoreTouchPolicy();
         if (_document is not null && TryLocate(_pressPoint, out var page, out var x, out var y))
             RequestState(page, x, y, pressed: false);
@@ -144,6 +152,13 @@ public sealed partial class HtmlView
 
     private void OnHolding(object sender, HoldingRoutedEventArgs e)
     {
+        // A long press on a text field selects its word and shows the field's menu.
+        if (e.HoldingState == Microsoft.UI.Input.HoldingState.Started && TryLocate(e.GetPosition(_canvas), out var fieldPage, out var fieldX, out var fieldY)
+            && OpenFieldMenu(fieldPage, fieldX, fieldY, e.GetPosition(_canvas), selectWord: true))
+        {
+            return;
+        }
+
         // A long press with a finger selects the word, as a long press does elsewhere.
         if (e.HoldingState == Microsoft.UI.Input.HoldingState.Started
             && TryLocate(e.GetPosition(_canvas), out var page, out var x, out var y)
@@ -151,6 +166,14 @@ public sealed partial class HtmlView
         {
             _document.Selection.SelectWordAt(page, x, y);
         }
+    }
+
+    // A right click (or a touch hold the system reports as one) on a text field shows the field's menu.
+    private void OnRightTapped(object sender, RightTappedRoutedEventArgs e)
+    {
+        var position = e.GetPosition(_canvas);
+        if (TryLocate(position, out var page, out var x, out var y) && OpenFieldMenu(page, x, y, position, selectWord: false))
+            e.Handled = true;
     }
 
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)

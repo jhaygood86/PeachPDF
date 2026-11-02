@@ -9,6 +9,7 @@ PeachBrackets.WinUI.HtmlView : sealed class
   field static DependencyProperty HtmlProperty
   field static DependencyProperty SourceProperty
   method Boolean ScrollToElement(String elementId)
+  method Void ApplyUpdate(UpdateResult result)
   method Void CopySelection()
   method Void SelectAll()
   property AccessibilityNode FocusedNode { get; }

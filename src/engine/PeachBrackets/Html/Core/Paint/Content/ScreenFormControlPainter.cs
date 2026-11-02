@@ -132,10 +132,13 @@ namespace PeachBrackets.Html.Paint.Content
             }
 
             var lines = TextAreaLayout.Wrap(g, font, text, content.Width);
+            var scroll = ScrollToCaret(box, value, lines, font.Height, content.Height);
             g.PushClip(content);
             for (var i = 0; i < lines.Count; i++)
             {
-                var top = content.Y + (i * font.Height);
+                var top = content.Y + (i * font.Height) - scroll;
+                if (top + font.Height <= content.Y)
+                    continue;
                 if (top >= content.Y + content.Height)
                     break;
 
@@ -147,8 +150,40 @@ namespace PeachBrackets.Html.Paint.Content
                 }
             }
 
-            PaintTextAreaEditing(g, box, content, value, value.Length > 0 ? lines : TextAreaLayout.Wrap(g, font, value, content.Width));
+            PaintTextAreaEditing(g, box, new Rect(content.X, content.Y - scroll, content.Width, content.Height), value,
+                value.Length > 0 ? lines : TextAreaLayout.Wrap(g, font, value, content.Width));
             g.PopClip();
+        }
+
+        // How far the lines of the text area being edited are scrolled so that the caret's line shows; the session remembers it. A text area that is
+        // not being edited shows from its top.
+        private static double ScrollToCaret(CssBox box, string text, IReadOnlyList<TextAreaLine> lines, double lineHeight, double viewHeight)
+        {
+            var ordinal = box.HtmlTag!.SourceOrdinal;
+            if (box.HtmlContainer is not { } container || container.Interaction?.Focused != ordinal)
+                return 0;
+
+            // A field that has just been focused starts at the end of its text, as the document's own editing calls start it.
+            var session = container.FormEdit;
+            if (session.Ordinal != ordinal)
+            {
+                session.Ordinal = ordinal;
+                session.Start = session.End = text.Length;
+                session.CompositionStart = session.CompositionEnd = -1;
+                session.ScrollTop = 0;
+            }
+            var caret = Math.Clamp(session.End, 0, text.Length);
+            var lineTop = TextAreaLayout.LineOf(lines, caret) * lineHeight;
+            var scroll = session.ScrollTop;
+            if (lineTop < scroll)
+                scroll = lineTop;
+            else if (lineTop + lineHeight > scroll + viewHeight)
+                scroll = lineTop + lineHeight - viewHeight;
+
+            scroll = Math.Clamp(scroll, 0, Math.Max((lines.Count * lineHeight) - viewHeight, 0));
+            session.ScrollTop = scroll;
+
+            return scroll;
         }
 
         private static void PaintTextAreaEditing(Canvas g, CssBox box, Rect content, string text, IReadOnlyList<TextAreaLine> lines)

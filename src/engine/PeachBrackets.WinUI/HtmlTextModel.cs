@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using PeachBrackets.Accessibility;
 
@@ -94,6 +94,45 @@ internal sealed class HtmlTextModel
         var model = new HtmlTextModel(text.ToString());
         model._segments.AddRange(segments);
         return model;
+    }
+
+    /// <summary>UI Automation's id of the Culture text attribute.</summary>
+    public const int CultureAttribute = 40004;
+
+    /// <summary>UI Automation's id of the IsReadOnly text attribute.</summary>
+    public const int IsReadOnlyAttribute = 40015;
+
+    /// <summary>UI Automation's id of the StyleId text attribute; the heading styles are 70001 for level 1 up to 70009.</summary>
+    public const int StyleIdAttribute = 40034;
+
+    /// <summary>The value a text attribute has on a node's text, or null when the attribute is not one reported.</summary>
+    public static object? AttributeValue(AccessibilityNode? node, int attributeId)
+    {
+        if (node is null)
+            return null;
+
+        switch (attributeId)
+        {
+            case IsReadOnlyAttribute:
+                return node.ReadOnly || node.Disabled || node.Role is not (AccessibilityRole.TextBox or AccessibilityRole.SearchBox);
+            case StyleIdAttribute:
+                return node.Role == AccessibilityRole.Heading ? 70000 + Math.Clamp(node.Level, 1, 9) : 69000;
+            case CultureAttribute:
+                if (node.Language is { Length: > 0 } language)
+                {
+                    try
+                    {
+                        return CultureInfo.GetCultureInfo(language).LCID;
+                    }
+                    catch (CultureNotFoundException)
+                    {
+                    }
+                }
+
+                return null;
+            default:
+                return null;
+        }
     }
 
     /// <summary>The text of a stretch of it, clipped to what there is; a negative maximum means all of it.</summary>

@@ -162,6 +162,9 @@ public sealed partial class HtmlView
 
         var control = e is { IsCtrlPressed: true };
         var shift = e is { IsShiftPressed: true };
+        if (state.Type == "textarea" && HandleTextAreaKey(document, state, keyCode, control, shift))
+            return true;
+
         var move = keyCode switch
         {
             Keycode.DpadLeft => control ? EditMove.WordLeft : EditMove.Left,
@@ -225,6 +228,198 @@ public sealed partial class HtmlView
         }
     }
 
+    // A long press on a text field: it takes the focus, the word under the finger is selected and the field's menu (cut, copy, paste, select all)
+    // appears; moving the finger on extends the selection from the start of that word. Returns whether the point was over a text field.
+    private bool LongPressField(HtmlDocument document, int page, double x, double y)
+    {
+        if (document.GetElementAt(page, x, y) is not { } element
+            || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" or "textarea" })
+        {
+            return false;
+        }
+
+        RequestFocus();
+        _ = SelectWordInFieldAsync(document, element, page, x, y);
+        return true;
+    }
+
+    private async Task SelectWordInFieldAsync(HtmlDocument document, DocumentElement element, int page, double x, double y)
+    {
+        if (_context is not { } context)
+            return;
+
+        UpdateResult result;
+        int? index;
+        using (var surface = SKSurface.Create(new SKImageInfo(1, 1)))
+        using (var measuring = new SkiaComposer(context, surface, 1, 1))
+        {
+            result = await document.SetFocusAsync(element, false, measuring.Canvas);
+            if (!ReferenceEquals(document, _document))
+                return;
+
+            AfterFocusChange(document, result, document.FocusedNode?.Id);
+            index = document.GetEditIndexAt(measuring.Canvas, page, x, y);
+        }
+
+        if (index is not { } at || document.GetEditState() is not { } state)
+            return;
+
+        var (start, end) = CaretMoves.WordAt(state.Text, at);
+        _fieldAnchor = start;
+        AfterEdit(document.SetEditSelection(start, end), state.Text);
+        StartFieldActionMode();
+    }
+
+    // The anchor of a drag that extends the selection of the focused field, from a long press; null when none is under way.
+    private int? _fieldAnchor;
+    private bool _fieldDragBusy;
+
+    private async Task ExtendFieldSelectionAsync(HtmlDocument document, int page, double x, double y, int anchor)
+    {
+        if (_context is not { } context || _fieldDragBusy)
+            return;
+
+        _fieldDragBusy = true;
+        try
+        {
+            int? index;
+            using (var surface = SKSurface.Create(new SKImageInfo(1, 1)))
+            using (var measuring = new SkiaComposer(context, surface, 1, 1))
+                index = ReferenceEquals(document, _document) ? document.GetEditIndexAt(measuring.Canvas, page, x, y) : null;
+
+            if (index is { } at)
+                AfterEdit(document.SetEditSelection(anchor, at), CurrentFieldText());
+        }
+        finally
+        {
+            _fieldDragBusy = false;
+        }
+    }
+
+    // ---- the menu of a text field --------------------------------------------------------------------------------------------------------
+
+    private ActionMode? _fieldMode;
+
+    private void StartFieldActionMode()
+    {
+        if (_fieldMode is not null)
+            return;
+
+        _fieldMode = StartActionMode(new FieldMenu(this), ActionModeType.Floating);
+    }
+
+    private void EndFieldActionMode()
+    {
+        _fieldMode?.Finish();
+        _fieldMode = null;
+    }
+
+    private sealed class FieldMenu(HtmlView view) : ActionMode.Callback2
+    {
+        private const int Cut = 1;
+        private const int Copy = 2;
+        private const int Paste = 3;
+        private const int SelectAllId = 4;
+
+        public override bool OnCreateActionMode(ActionMode? mode, IMenu? menu)
+        {
+            var state = view._document?.GetEditState();
+            if (state is { ReadOnly: false })
+                menu?.Add(0, Cut, 0, "Cut");
+
+            menu?.Add(0, Copy, 1, "Copy");
+            if (state is { ReadOnly: false })
+                menu?.Add(0, Paste, 2, "Paste");
+
+            menu?.Add(0, SelectAllId, 3, "Select all");
+            return true;
+        }
+
+        public override bool OnPrepareActionMode(ActionMode? mode, IMenu? menu) => false;
+
+        public override bool OnActionItemClicked(ActionMode? mode, IMenuItem? item)
+        {
+            if (view._document is { } document && document.GetEditState() is { } state)
+            {
+                switch (item?.ItemId)
+                {
+                    case Cut:
+                        view.CopyFieldSelection(state);
+                        view.AfterEdit(document.DeleteEditText(true), state.Text);
+                        break;
+                    case Copy:
+                        view.CopyFieldSelection(state);
+                        break;
+                    case Paste:
+                        view.PasteIntoField();
+                        break;
+                    case SelectAllId:
+                        view.AfterEdit(document.SetEditSelection(0, state.Text.Length), state.Text);
+                        break;
+                }
+            }
+
+            mode?.Finish();
+            return true;
+        }
+
+        public override void OnDestroyActionMode(ActionMode? mode) => view._fieldMode = null;
+
+        public override void OnGetContentRect(ActionMode? mode, global::Android.Views.View? view2, global::Android.Graphics.Rect? outRect)
+        {
+            if (outRect is null)
+                return;
+
+            // Beside the caret of the field.
+            outRect.Set(0, 0, view.Width, 1);
+            if (view._context is { } context && view._document is { } document)
+            {
+                using var surface = SKSurface.Create(new SKImageInfo(1, 1));
+                using var measuring = new SkiaComposer(context, surface, 1, 1);
+                if (document.GetEditPlace(measuring.Canvas) is { } place && place.PageIndex < view._pageTops.Length)
+                {
+                    var scale = view.Scale;
+                    var left = (int)((place.Bounds.X * PixelsPerPoint * scale) - view._scrollX);
+                    var top = (int)(((view._pageTops[place.PageIndex] + (place.Bounds.Y * PixelsPerPoint)) * scale) - view._scrollY);
+                    outRect.Set(left, top, left + 1, top + (int)(place.Bounds.Height * PixelsPerPoint * scale));
+                }
+            }
+        }
+    }
+
+    // The keys that work on the lines of a text area: Up and Down, Home and End (to the ends of the line; with Control, of the text), and Enter.
+    private bool HandleTextAreaKey(HtmlDocument document, FormEditState state, Keycode keyCode, bool control, bool shift)
+    {
+        if (keyCode is Keycode.Enter or Keycode.NumpadEnter && !control)
+        {
+            AfterEdit(document.InsertText("\n"), state.Text);
+            return true;
+        }
+
+        var name = keyCode switch
+        {
+            Keycode.DpadUp => "Up",
+            Keycode.DpadDown => "Down",
+            Keycode.MoveHome when !control => "Home",
+            Keycode.MoveEnd when !control => "End",
+            _ => null,
+        };
+
+        if (name is null || _context is not { } context)
+            return false;
+
+        using var surface = SKSurface.Create(new SKImageInfo(1, 1));
+        using var measuring = new SkiaComposer(context, surface, 1, 1);
+        var canvas = measuring.Canvas;
+        var target = CaretMoves.LineMove(name, state.SelectionEnd,
+            lines => document.GetEditIndexByLine(canvas, state.SelectionEnd, lines), index => document.GetEditLineRange(canvas, index));
+        if (target is not { } to)
+            return false;
+
+        AfterEdit(document.SetEditSelection(shift ? state.SelectionStart : to, to), state.Text);
+        return true;
+    }
+
     private void CopyFieldSelection(FormEditState state)
     {
         var from = Math.Min(state.SelectionStart, state.SelectionEnd);
@@ -244,8 +439,7 @@ public sealed partial class HtmlView
         }
 
         var text = clip.GetItemAt(0)?.CoerceToText(Context)?.ToString() ?? string.Empty;
-        text = text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');
-        AfterEdit(document.InsertText(text), state.Text);
+        AfterEdit(document.InsertText(CaretMoves.ForField(state.Type, text)), state.Text);
     }
 
     // ---- focus, the caret and the pointer ----------------------------------------------------------------------------------------------
@@ -261,6 +455,7 @@ public sealed partial class HtmlView
             {
                 _editing = false;
                 _editFieldKey = null;
+                EndFieldActionMode();
                 StopBlink();
                 InputMethod()?.HideSoftInputFromWindow(WindowToken, HideSoftInputFlags.None);
             }
@@ -323,17 +518,17 @@ public sealed partial class HtmlView
     private bool FocusTextFieldAt(int page, double x, double y)
     {
         if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element
-            || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" })
+            || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" or "textarea" })
         {
             return false;
         }
 
         RequestFocus();
-        _ = FocusFieldAtAsync(document, element, page, x);
+        _ = FocusFieldAtAsync(document, element, page, x, y);
         return true;
     }
 
-    private async Task FocusFieldAtAsync(HtmlDocument document, DocumentElement element, int page, double x)
+    private async Task FocusFieldAtAsync(HtmlDocument document, DocumentElement element, int page, double x, double y)
     {
         if (_context is not { } context)
             return;
@@ -348,7 +543,7 @@ public sealed partial class HtmlView
                 return;
 
             AfterFocusChange(document, result, document.FocusedNode?.Id);
-            index = document.GetEditIndexAt(measuring.Canvas, page, x);
+            index = document.GetEditIndexAt(measuring.Canvas, page, x, y);
         }
 
         if (index is { } at)

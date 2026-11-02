@@ -216,7 +216,7 @@ public sealed partial class HtmlDocument
             var number = TextAreaLayout.LineOf(lines, at);
             return new TextEditPlace(box.PageIndex, new Rect(
                 box.Bounds.X + left + (TextAreaLayout.OffsetOf(measuringCanvas, font, text, lines[number], at) / units),
-                box.Bounds.Y + top + (number * font.Height / units), 1, font.Height / units));
+                box.Bounds.Y + top + (((number * font.Height) - session.ScrollTop) / units), 1, font.Height / units));
         }
 
         var contentHeight = Math.Max(region.Bounds.Height - top - ((field.ActualBorderBottomWidth + field.ActualPaddingBottom) / units), 0);
@@ -265,7 +265,7 @@ public sealed partial class HtmlDocument
             var inside = new Rect(
                 region.Bounds.X + ((field.ActualBorderLeftWidth + field.ActualPaddingLeft) / _unitsPerPoint),
                 region.Bounds.Y + ((field.ActualBorderTopWidth + field.ActualPaddingTop) / _unitsPerPoint), 0, 0);
-            return TextAreaLayout.IndexAt(measuringCanvas, field.ActualFont, text, lines, (x - inside.X) * _unitsPerPoint, (y - inside.Y) * _unitsPerPoint);
+            return TextAreaLayout.IndexAt(measuringCanvas, field.ActualFont, text, lines, (x - inside.X) * _unitsPerPoint, ((y - inside.Y) * _unitsPerPoint) + _container.FormEdit.ScrollTop);
         }
 
         var display = ScreenFormControlPainter.DisplayText(field, text);
@@ -382,6 +382,7 @@ public sealed partial class HtmlDocument
             session.Ordinal = ordinal;
             session.Start = session.End = text.Length;
             session.CompositionStart = session.CompositionEnd = -1;
+            session.ScrollTop = 0;
         }
 
         session.Start = Math.Clamp(session.Start, 0, text.Length);

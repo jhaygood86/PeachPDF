@@ -113,7 +113,9 @@ keyboard an `InputConnection` over the field (commit, composing text and its reg
 caret, the action key), with the keyboard layout and action key chosen from the field's `type` (password, email, URL, telephone, number, search). A
 hardware keyboard works too: arrows, Home and End (Shift selects, Ctrl moves by word), Delete and Backspace (Ctrl by word), printable keys, and
 Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V (a paste into a one-line field turns line breaks into spaces, and a password is never copied). To an accessibility
-service a text field is editable and takes the set-text, set-selection and paste actions. Picking from a drop-down and moving a range are not handled yet.
+service a text field is editable and takes the set-text, set-selection and paste actions. 
+
+A text area takes the Enter key (a line break; its keyboard offers no action button), Up and Down (by line, keeping the column) and Home and End (to the ends of the line), and its pasted line breaks are kept. A long press on a text field selects the word under the finger and shows the field's menu (Cut, Copy, Paste, Select all) beside the caret; moving the finger on extends the selection from the start of that word. A touch that begins on a range control sets it and dragging moves the thumb. A tap on a drop-down opens its options as a menu, and on a date or time field a dialog (a date-and-time field asks for the date and then the time); there is no colour or file picker. An application that changes the document itself calls `ApplyUpdate` with the result so the view repaints and an accessibility service hears what a live region now says.
 
 ## Limits of this version
 
