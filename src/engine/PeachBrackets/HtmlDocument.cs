@@ -920,6 +920,59 @@ public sealed class HtmlDocument : IDisposable
         return ApplyStateAsync(_pointerChain, _pressed, ordinal, ordinal >= 0 && focusVisible, measuringCanvas);
     }
 
+    /// <summary>
+    /// The node of the accessibility tree that has the focus (see <see cref="SetFocusAsync(DocumentElement?, bool, Canvas)"/>, <see cref="FocusAsync"/>
+    /// and <see cref="MoveFocusAsync"/>), or null if none does or the element is not in the tree.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public AccessibilityNode? FocusedNode => _focused >= 0 ? GetAccessibilityTree().FindById("e" + _focused.ToString(System.Globalization.CultureInfo.InvariantCulture)) : null;
+
+    /// <summary>
+    /// Gives the focus to a node of the accessibility tree, as <see cref="SetFocusAsync(DocumentElement?, bool, Canvas)"/> does for an element, so
+    /// the document's <c>:focus</c> and <c>:focus-visible</c> rules apply to it.
+    /// </summary>
+    /// <param name="node">the node to focus; one that cannot be focused, or is not an element, is not applied</param>
+    /// <param name="focusVisible">whether the focus came from the keyboard, so <c>:focus-visible</c> matches</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether the state was applied and the regions to repaint</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public Task<UpdateResult> FocusAsync(AccessibilityNode node, bool focusVisible, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        if (!node.IsFocusable || node.Id.Length < 2 || node.Id[0] != 'e'
+            || !int.TryParse(node.Id.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var ordinal)
+            || FindByOrdinal(_container.Root, ordinal) is not { } box)
+        {
+            return Task.FromResult(UpdateResult.NotApplied("The node is not an element that can take the focus."));
+        }
+
+        return SetFocusAsync(new DocumentElement(box), focusVisible, measuringCanvas);
+    }
+
+    /// <summary>
+    /// Moves the focus to the next (or previous) tab stop, as the Tab (or Shift+Tab) key does: the nodes of <see cref="AccessibilityTree.FocusOrder"/> in
+    /// turn. Past the last (or before the first) the document gives up the focus, so a host can hand it to the next control.
+    /// </summary>
+    /// <param name="forward">true for Tab, false for Shift+Tab</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>where the focus is now</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async Task<FocusMoveResult> MoveFocusAsync(bool forward, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        var tree = GetAccessibilityTree();
+        var next = tree.NextFocus(FocusedNode, forward);
+        if (next is null)
+        {
+            var left = await SetFocusAsync(null, focusVisible: false, measuringCanvas);
+            return new FocusMoveResult(null, true, left);
+        }
+
+        return new FocusMoveResult(next, false, await FocusAsync(next, focusVisible: true, measuringCanvas));
+    }
+
     // The source positions of an element and of the elements that contain it.
     private static HashSet<int> ChainOf(CssBox box)
     {
