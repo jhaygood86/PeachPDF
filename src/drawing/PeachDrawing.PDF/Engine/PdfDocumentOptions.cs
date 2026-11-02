@@ -251,6 +251,17 @@ internal sealed class PdfDocumentOptions
     bool _pdfXConformanceEstablished;
 
     /// <summary>
+    /// Mirrors <c>PdfGenerateConfig.PdfUAConformance</c> - see there for behavior. Read by <see cref="PeachDrawing.PDF.PdfComposer"/> when it
+    /// creates the tag recorder (the figures of a PDF/UA file always carry alternative text) and when it saves.
+    /// </summary>
+    public PdfUAConformance PdfUAConformance
+    {
+        get => _pdfUAConformance;
+        set => _pdfUAConformance = value;
+    }
+    PdfUAConformance _pdfUAConformance = PdfUAConformance.None;
+
+    /// <summary>
     /// Mirrors <c>PdfGenerateConfig.ColorOptions</c> - see there for behavior.
     /// </summary>
     public ColorOptions? ColorOptions

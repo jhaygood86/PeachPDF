@@ -49,5 +49,16 @@ namespace PeachBrackets.Tagging
         void LinkAdded(StructureNode node, object link)
         {
         }
+
+        /// <summary>
+        /// As <see cref="LinkAdded(StructureNode, object)"/>, with the link's accessible name - the text of the link, or its
+        /// <c>aria-label</c> - for a format that stores a description with each link, and the element a link within the document leads to,
+        /// for a format whose destinations name the structure they lead to. Calls <see cref="LinkAdded(StructureNode, object)"/> by default.
+        /// </summary>
+        /// <param name="node">the content the link covers</param>
+        /// <param name="link">the handle the canvas returned for the link</param>
+        /// <param name="name">the accessible name of the link, or null when it has none</param>
+        /// <param name="target">the element a link within the document leads to, or null for an external link or one to a place with no element</param>
+        void LinkAdded(StructureNode node, object link, string? name, StructureNode? target) => LinkAdded(node, link);
     }
 }

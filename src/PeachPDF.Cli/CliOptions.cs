@@ -124,6 +124,7 @@ internal sealed class CliOptions
     public string? PdfCreator { get; set; }
     public string? PdfLang { get; set; }
     public PdfAConformance? PdfA { get; set; }
+    public PdfUAConformance? PdfUA { get; set; }
     public DateTimeOffset? PdfCreationDate { get; set; }
     public List<CliAttachment> Attachments { get; } = [];
     public string? FacturXXmlPath { get; set; }

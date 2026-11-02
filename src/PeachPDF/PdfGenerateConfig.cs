@@ -553,6 +553,15 @@ namespace PeachPDF
         public PdfXConformance PdfXConformance { get; set; } = PdfXConformance.None;
 
         /// <summary>
+        /// The PDF/UA (ISO 14289) accessibility conformance level to target. Defaults to <see cref="PeachPDF.PdfUAConformance.None"/>: no PDF/UA
+        /// claim is made. Any other level turns on <see cref="EnableTaggedPdf"/>, gives every figure alternative text, identifies the file as PDF/UA in
+        /// its XMP metadata, and needs a document title, a language and a creation date; generation throws when one is missing. It can be combined
+        /// with <see cref="PdfAConformance"/> (UA-1 with PDF/A-1a, 2a or 3a, UA-2 with PDF/A-4) but not with <see cref="PdfXConformance"/>. See
+        /// <see cref="PeachPDF.PdfUAConformance"/>.
+        /// </summary>
+        public PdfUAConformance PdfUAConformance { get; set; } = PdfUAConformance.None;
+
+        /// <summary>
         /// Password protection and permissions for the generated PDF (AES-256, standard security handler revision 6).
         /// <see langword="null"/> (the default) leaves the document unencrypted. See <see cref="PdfEncryptionOptions"/>.
         /// A whole-document property: every <c>AddPdfPages</c>/<c>AddPages</c> call on one document must ask for the same

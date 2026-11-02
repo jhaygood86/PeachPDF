@@ -27,6 +27,7 @@ namespace PeachDrawing.PDF.Engine.Advanced;
 internal sealed class PdfMetadataStream : PdfDictionary
 {
     static readonly XNamespace XNs = "adobe:ns:meta/";
+    static readonly XNamespace PdfuaidNs = "http://www.aiim.org/pdfua/ns/id/";
     static readonly XNamespace RdfNs = "http://www.w3.org/1999/02/22-rdf-syntax-ns#";
     static readonly XNamespace DcNs = "http://purl.org/dc/elements/1.1/";
     static readonly XNamespace PdfNs = "http://ns.adobe.com/pdf/1.3/";
@@ -60,13 +61,14 @@ internal sealed class PdfMetadataStream : PdfDictionary
         PdfAConformance conformance,
         PdfXConformance pdfXConformance,
         IEnumerable<XElement> customProperties,
-        (string FileName, string ConformanceLevel)? facturX = null)
+        (string FileName, string ConformanceLevel)? facturX = null,
+        PdfUAConformance uaConformance = PdfUAConformance.None)
         : base(document)
     {
         Elements.SetName(Keys.Type, "/Metadata");
         Elements.SetName(Keys.Subtype, "/XML");
 
-        var packetBytes = BuildPacket(info, creationDate, conformance, pdfXConformance, customProperties, facturX);
+        var packetBytes = BuildPacket(info, creationDate, conformance, pdfXConformance, customProperties, facturX, uaConformance);
 
         // Per ISO 19005 §6.7.4 the metadata stream must not specify a /Filter - every other
         // stream writer in this codebase sets Elements[PdfStream.Keys.Filter] explicitly
@@ -81,7 +83,8 @@ internal sealed class PdfMetadataStream : PdfDictionary
         PdfAConformance conformance,
         PdfXConformance pdfXConformance,
         IEnumerable<XElement> customProperties,
-        (string FileName, string ConformanceLevel)? facturX)
+        (string FileName, string ConformanceLevel)? facturX,
+        PdfUAConformance uaConformance)
     {
         var description = new XElement(RdfNs + "Description",
             new XAttribute(RdfNs + "about", ""),
@@ -132,6 +135,15 @@ internal sealed class PdfMetadataStream : PdfDictionary
                 description.Add(new XElement(PdfaidNs + "conformance", level));
         }
 
+        // PDF/UA identifies itself with pdfuaid:part (ISO 14289-1: 1; ISO 14289-2: 2 and, being a revision of the standard, pdfuaid:rev).
+        if (uaConformance != PdfUAConformance.None)
+        {
+            description.Add(new XAttribute(XNamespace.Xmlns + "pdfuaid", PdfuaidNs));
+            description.Add(new XElement(PdfuaidNs + "part", uaConformance == PdfUAConformance.UA2 ? "2" : "1"));
+            if (uaConformance == PdfUAConformance.UA2)
+                description.Add(new XElement(PdfuaidNs + "rev", "2024"));
+        }
+
         // pdfx:GTS_PDFXVersion/GTS_PDFXConformance mirror the Info-dictionary keys PdfGenerator writes
         // alongside this stream (PdfXIdentifiers is the shared source of truth for both) - written for
         // every PDF/X level under the original Adobe-defined "pdfx" schema. PDF/X-4 additionally gets
@@ -161,6 +173,10 @@ internal sealed class PdfMetadataStream : PdfDictionary
         // The rdf prefix is declared explicitly (rather than left to LINQ to XML's generated "p1") so the
         // packet reads like every other XMP packet - some consumers match on the conventional prefix.
         var rdf = new XElement(RdfNs + "RDF", new XAttribute(XNamespace.Xmlns + "rdf", RdfNs), description);
+
+        // A PDF/A file may only use XMP properties of schemas it declares, and pdfuaid is not one of the predefined ones.
+        if (uaConformance != PdfUAConformance.None && conformance != PdfAConformance.None)
+            rdf.Add(PdfUAExtensionSchemaDescription(uaConformance));
 
         // Factur-X / ZUGFeRD: the extension schema that declares the fx: properties, then the properties
         // themselves - separate rdf:Description blocks, exactly as the specification's sample XMP has them.
@@ -194,6 +210,37 @@ internal sealed class PdfMetadataStream : PdfDictionary
         }
 
         return memoryStream.ToArray();
+    }
+
+    /// <summary>
+    /// The <c>pdfaExtension:schemas</c> description that declares the PDF/UA identification schema (its namespace, prefix and the integer properties
+    /// <c>part</c> and, for ISO 14289-2, <c>rev</c>), which a PDF/A file needs in order to carry <c>pdfuaid</c> properties.
+    /// </summary>
+    static XElement PdfUAExtensionSchemaDescription(PdfUAConformance uaConformance)
+    {
+        static XElement Property(string name, string description) =>
+            new(RdfNs + "li", new XAttribute(RdfNs + "parseType", "Resource"),
+                new XElement(PdfaPropertyNs + "name", name),
+                new XElement(PdfaPropertyNs + "valueType", "Integer"),
+                new XElement(PdfaPropertyNs + "category", "internal"),
+                new XElement(PdfaPropertyNs + "description", description));
+
+        var properties = new List<XElement> { Property("part", "Indicates, which part of ISO 14289 standard is followed") };
+        if (uaConformance == PdfUAConformance.UA2)
+            properties.Add(Property("rev", "Indicates, which revision of ISO 14289 standard is followed"));
+
+        return new XElement(RdfNs + "Description",
+            new XAttribute(RdfNs + "about", ""),
+            new XAttribute(XNamespace.Xmlns + "pdfaExtension", PdfaExtensionNs),
+            new XAttribute(XNamespace.Xmlns + "pdfaSchema", PdfaSchemaNs),
+            new XAttribute(XNamespace.Xmlns + "pdfaProperty", PdfaPropertyNs),
+            new XElement(PdfaExtensionNs + "schemas",
+                new XElement(RdfNs + "Bag",
+                    new XElement(RdfNs + "li", new XAttribute(RdfNs + "parseType", "Resource"),
+                        new XElement(PdfaSchemaNs + "schema", "PDF/UA identification schema"),
+                        new XElement(PdfaSchemaNs + "namespaceURI", PdfuaidNs.NamespaceName),
+                        new XElement(PdfaSchemaNs + "prefix", "pdfuaid"),
+                        new XElement(PdfaSchemaNs + "property", new XElement(RdfNs + "Seq", properties))))));
     }
 
     /// <summary>

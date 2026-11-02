@@ -11,6 +11,8 @@ namespace PeachPDF.Rendering
 
         public static PeachDrawing.PDF.PdfXConformance ToEngine(this PeachPDF.PdfXConformance value) => (PeachDrawing.PDF.PdfXConformance)(int)value;
 
+        public static PeachDrawing.PDF.PdfUAConformance ToEngine(this PeachPDF.PdfUAConformance value) => (PeachDrawing.PDF.PdfUAConformance)(int)value;
+
         public static PeachDrawing.PDF.PdfVersion ToEngine(this PeachPDF.PdfVersion value) => (PeachDrawing.PDF.PdfVersion)(int)value;
 
         public static PeachDrawing.PDF.ImageCompression ToEngine(this PeachPDF.ImageCompression value) => (PeachDrawing.PDF.ImageCompression)(int)value;

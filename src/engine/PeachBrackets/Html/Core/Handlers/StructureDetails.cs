@@ -10,6 +10,19 @@ namespace PeachBrackets.Tagging
         /// <summary>The language of the element's content as a BCP 47 tag, when the element sets one of its own (<c>lang</c>); otherwise <see langword="null"/>.</summary>
         public string? Language { get; init; }
 
+        /// <summary>
+        /// An alternative description for an element that groups other content, such as a figure around a picture and its caption; a
+        /// picture's own description is passed with the picture. <see langword="null"/> when there is none.
+        /// </summary>
+        public string? AlternativeText { get; init; }
+
+        /// <summary>
+        /// For a list, how its items are marked, as the name tagged-document formats use (<c>Disc</c>, <c>Circle</c>, <c>Square</c>,
+        /// <c>Decimal</c>, <c>LowerRoman</c>, <c>UpperRoman</c>, <c>LowerAlpha</c>, <c>UpperAlpha</c>, <c>Ordered</c>, <c>Unordered</c> or
+        /// <c>None</c>); otherwise <see langword="null"/>.
+        /// </summary>
+        public string? ListNumbering { get; init; }
+
         /// <summary>For a table header cell, what it heads: <c>Row</c> or <c>Column</c>; otherwise <see langword="null"/>.</summary>
         public string? TableScope { get; init; }
 

@@ -25,6 +25,7 @@ using PeachPDF.Network;
 - [Fonts](#fonts)
 - [Rendering MathML formulas](#rendering-mathml-formulas)
 - [Enabling tagged PDF (PDF/UA) output](#enabling-tagged-pdf-pdfua-output)
+- [Generating PDF/UA (accessible) output](#generating-pdfua-accessible-output)
 - [PDF 2.0 output](#pdf-20-output)
 - [Encrypting and password-protecting PDF output](#encrypting-and-password-protecting-pdf-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
@@ -517,6 +518,25 @@ When `EnableTaggedPdf` is left at its default (`false`), none of this runs — o
 The HTML-tag → structure-type mapping is CSS-driven and author-overridable via the `-peachpdf-pdf-tag-type` custom property — see [Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support) in HTML & CSS Support for the property's accepted values, the full default mapping table, and known limitations.
 
 PDF outline (bookmark) generation is a separate, always-on feature — no `PdfGenerateConfig` flag needed — driven purely by the `bookmark-level`/`bookmark-label`/`bookmark-state` CSS properties; see [PDF Bookmarks (Outline) Support](html-css-support.md#pdf-bookmarks-outline-support) in HTML & CSS Support.
+
+## Generating PDF/UA (accessible) output
+
+Set `PdfUAConformance` to claim [PDF/UA](https://pdfa.org/resource/iso-14289-pdfua/) (ISO 14289), the standard for PDF files that assistive technology can read. `UA1` is ISO 14289-1 (a PDF 1.7 file); `UA2` is ISO 14289-2 (a PDF 2.0 file).
+
+```csharp
+var config = new PdfGenerateConfig
+{
+    PdfUAConformance = PdfUAConformance.UA1,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+};
+var pdf = await generator.GeneratePdf("<html lang='en'><head><title>Quarterly report</title></head><body>...</body></html>", config);
+```
+
+A claim turns on [tagged PDF](#enabling-tagged-pdf-pdfua-output), gives every figure alternative text (the `alt` attribute, or the element's accessible name, or an empty one that marks a picture decorative), writes `pdfuaid:part` (and `pdfuaid:rev` for UA-2) into the XMP metadata, and makes the viewer show the document title in place of the file name. Generation throws if the document has no `<title>` (or `Metadata.Title`), no language (`<html lang>` or `DefaultLanguage`) or no creation date, because a file missing them cannot be accessible.
+
+It can be combined with PDF/A: `UA1` with PDF/A-1a, 2a or 3a, and `UA2` with PDF/A-4 (the pairs defined against the same PDF version); the `pdfuaid` schema is then declared in the file as a PDF/A extension schema. It cannot be combined with PDF/X, and an encrypted file must keep `PdfPermissions.AllowAccessibilityExtract`. From the command line, use `--pdfua=1` or `--pdfua=2`.
+
+The claim says the file is *structured* for accessibility. Whether its content is accessible depends on the HTML it came from: headings that do not skip levels, a sensible reading order, real alternative text. Check a file with a PDF/UA checker such as [veraPDF](https://verapdf.org/) before relying on it. Files PeachPDF produces for a page of headings, navigation, a figure with a caption, lists, links and a table pass veraPDF's PDF/UA-1 and PDF/UA-2 profiles; for that to hold, a link carries its accessible name as `/Contents`, a figure that groups a picture and its caption is described too, a list says how its items are marked, a text decoration line is an artifact, and a PDF 2.0 file declares the structure namespace and gives each link and outline entry within the document a structure destination.
 
 ## PDF 2.0 output
 

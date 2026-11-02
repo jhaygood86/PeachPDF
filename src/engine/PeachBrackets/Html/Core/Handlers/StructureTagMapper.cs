@@ -94,6 +94,11 @@ namespace PeachBrackets.Html.Handlers
                 return StructureTagClassification.Artifact;
 
             var structureType = CanonicalName(tagType);
+
+            // A division that holds nothing but inline content is a paragraph of text (see ClassifyAuto).
+            if (structureType == "Div" && !box.IsInline && HoldsOnlyInlineContent(box))
+                structureType = "P";
+
             return HasOwnPaintedContent(box)
                 ? StructureTagClassification.Content(structureType, AltFor(box))
                 : StructureTagClassification.Grouping(structureType);
@@ -145,10 +150,39 @@ namespace PeachBrackets.Html.Handlers
                 rows = node.RowSpan;
             }
 
-            return language is null && scope is null && columns == 1 && rows == 1
+            // A figure that groups its picture and caption is a Figure of its own, and PDF/UA wants every Figure described: the name the
+            // accessibility tree gives it (from its caption or label).
+            string? groupAlt = null;
+            if (classification.Kind == StructureTagKind.Grouping && classification.StructureType == "Figure"
+                && box.HtmlContainer?.SemanticTree.NodeFor(box) is { Name: { Length: > 0 } figureName })
+            {
+                groupAlt = figureName;
+            }
+
+            var listNumbering = classification.StructureType == "L" ? ListNumberingOf(box) : null;
+
+            return language is null && scope is null && groupAlt is null && listNumbering is null && columns == 1 && rows == 1
                 ? null
-                : new StructureDetails { Language = language, TableScope = scope, ColumnSpan = columns, RowSpan = rows };
+                : new StructureDetails
+                {
+                    Language = language, TableScope = scope, AlternativeText = groupAlt, ListNumbering = listNumbering, ColumnSpan = columns, RowSpan = rows,
+                };
         }
+
+        /// <summary>How a list marks its items, as the tagged-document <c>ListNumbering</c> name (ISO 32000-1 14.8.5.4).</summary>
+        static string ListNumberingOf(CssBox box) => box.ListStyleType?.ToLowerInvariant() switch
+        {
+            "disc" => "Disc",
+            "circle" => "Circle",
+            "square" => "Square",
+            "decimal" or "decimal-leading-zero" => "Decimal",
+            "lower-roman" => "LowerRoman",
+            "upper-roman" => "UpperRoman",
+            "lower-alpha" or "lower-latin" => "LowerAlpha",
+            "upper-alpha" or "upper-latin" => "UpperAlpha",
+            "none" => "None",
+            _ => box.HtmlTag?.Name.Equals("ol", System.StringComparison.OrdinalIgnoreCase) == true ? "Ordered" : "Unordered",
+        };
 
         static StructureTagClassification ClassifyAuto(CssBox box)
         {
@@ -160,7 +194,9 @@ namespace PeachBrackets.Html.Handlers
                     ? StructureTagClassification.Content("Link")
                     : StructureTagClassification.Grouping("Link");
 
-            var structureType = box.IsInline ? "Span" : "Div";
+            // A block that holds nothing but inline content is a paragraph of text; PDF/UA wants text in a paragraph-level element, not
+            // loose in a division.
+            var structureType = box.IsInline ? "Span" : HoldsOnlyInlineContent(box) ? "P" : "Div";
             return HasOwnPaintedContent(box)
                 ? StructureTagClassification.Content(structureType)
                 : StructureTagClassification.Grouping(structureType);
@@ -194,9 +230,24 @@ namespace PeachBrackets.Html.Handlers
 
             // A pure-grouping anonymous box (no own Words) is fully transparent - its children
             // attach directly to the nearest real ancestor struct element.
+            // An anonymous block (the text between two blocks in a block container) is a paragraph; an anonymous inline run is a span.
             return HasOwnPaintedContent(box)
-                ? StructureTagClassification.Content("Span")
+                ? StructureTagClassification.Content(box.IsInline ? "Span" : "P")
                 : StructureTagClassification.None;
+        }
+
+        static bool HoldsOnlyInlineContent(CssBox box)
+        {
+            if (box.Boxes.Count == 0)
+                return false;
+
+            foreach (var child in box.Boxes)
+            {
+                if (!child.IsInline)
+                    return false;
+            }
+
+            return true;
         }
 
         static bool IsProvidedByDisplayContentsAncestors(CssBox box, string structureType)
