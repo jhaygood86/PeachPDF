@@ -80,6 +80,23 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 `prefers-reduced-data`. The defaults are those of a static document. `HtmlDocumentOptions.TextSpacing` applies the spacing
 [WCAG 1.4.12](https://www.w3.org/TR/WCAG22/#text-spacing) asks a page to survive (`TextSpacingOverrides.Wcag`) over the document's own.
 
+### Forced colors
+
+With `UserPreferences.ForcedColors` on, the document is also drawn in the colours of `UserPreferences.ForcedPalette` (a
+`SystemColorPalette`: `Canvas`, `CanvasText`, `LinkText`, `ButtonFace`... filled from the platform, or `SystemColorPalette.Light` / `.Dark`), as a
+browser does under a Windows high contrast theme: text takes `CanvasText` (`LinkText` in a link, `ButtonText` in a button, `FieldText` in a field),
+backgrounds take `Canvas` (`ButtonFace`, `Field`, `Mark`), borders, outlines and column rules take `CanvasText` (`ButtonBorder` on a control),
+and box shadows and text shadows are not drawn. A fully transparent colour stays transparent. An element opts out with
+[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text colour with
+`preserve-parent-color`. The CSS [system colour keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
+work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes. Gradient backgrounds are
+not dropped yet.
+
+### Text size
+
+`HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a
+percentage or a keyword follows the reader's text size setting, and text sized in `px` or `pt` does not, as in a browser.
+
 ## Limits of this version
 
 - A name that comes from an element that is not shown (`display: none`) is not read, because it is never laid out; `aria-labelledby` pointing at one

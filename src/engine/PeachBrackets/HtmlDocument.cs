@@ -119,6 +119,8 @@ public sealed class HtmlDocument : IDisposable
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
 
             var userCss = options.TextSpacing is { } spacing ? options.UserStyleSheet + "\n" + spacing.ToCss() : options.UserStyleSheet;
+            if (options.FontScale is > 0 and not 1 && double.IsFinite(options.FontScale))
+                userCss += $"\nhtml {{ font-size: {(options.FontScale * 100).ToString("0.####", System.Globalization.CultureInfo.InvariantCulture)}% }}\n";
             var userStyles = options.StyleSheet?.Data
                 ?? (string.IsNullOrWhiteSpace(userCss)
                     ? null
