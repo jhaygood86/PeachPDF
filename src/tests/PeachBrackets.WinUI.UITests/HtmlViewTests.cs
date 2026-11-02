@@ -459,4 +459,20 @@ public class HtmlViewTests
 
         Assert.True(told);
     }
+
+    [Fact]
+    public async Task TogglingACheckBoxRestylesTheRulesThatReadItsState()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<style>input:checked + label { color: red }</style><input id=a type=checkbox aria-label=agree><label for=a>on</label>");
+            var box = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.CheckBox);
+            ((IToggleProvider)box.GetPattern(PatternInterface.Toggle)).Toggle();
+            await Task.Delay(500);
+            await view.FocusIdle;
+            return (view.Document!.NeedsRestyle, view.Document.GetFormState(view.Document.GetElement("a")!)!.Value.Checked);
+        });
+
+        Assert.Equal((false, true), facts);
+    }
 }

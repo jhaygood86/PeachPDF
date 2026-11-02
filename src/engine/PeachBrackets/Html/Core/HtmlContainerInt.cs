@@ -1349,6 +1349,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool FocusPseudoClassesInUse { get; set; }
 
+        /// <summary>Whether a rule reads <c>:checked</c>, <c>:disabled</c>, <c>:enabled</c>, <c>:required</c>, <c>:optional</c>, <c>:read-only</c> or <c>:read-write</c>, so a change to a control's state changes what the cascade gives.</summary>
+        internal bool FormStatePseudoClassesInUse { get; set; }
+
         /// <summary>Parses and cascades the same source again, now that <see cref="Interaction"/> has changed.</summary>
         internal async Task ReparseAsync()
         {

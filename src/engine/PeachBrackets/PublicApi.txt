@@ -455,6 +455,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
   method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
   method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
+  method Task<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
   method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
   method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
@@ -484,6 +485,7 @@ PeachBrackets.HtmlDocument : sealed class
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property AccessibilityNode FocusedNode { get; }
+  property Boolean NeedsRestyle { get; }
   property DocumentAnnotations Annotations { get; }
   property DocumentSelection Selection { get; }
   property HtmlDocumentMetadata Metadata { get; }
