@@ -69,9 +69,39 @@ foreach ($level in $levels.Keys) {
     }
 }
 
+# PDF/UA: the accessible-document sample (headings, landmarks, a figure, lists, a table with headers, links, a labelled field) at both parts, on
+# its own and combined with the PDF/A level defined against the same PDF version. A field is only a widget with interactive forms on.
+$uaSample = (Resolve-Path (Join-Path $conformance 'pdfua-sample.html')).Path
+$uaCases = [ordered]@{
+    'ua1'      = @{ Flavours = @('ua1'); Args = @('--pdfua=1') }
+    'ua2'      = @{ Flavours = @('ua2'); Args = @('--pdfua=2') }
+    'ua1-2a'   = @{ Flavours = @('ua1', '2a'); Args = @('--pdfua=1', '--pdfa=2a') }
+    'ua2-4'    = @{ Flavours = @('ua2', '4'); Args = @('--pdfua=2', '--pdfa=4') }
+}
+foreach ($case in $uaCases.Keys) {
+    $pdf = Join-Path $OutDir "pdfua-$case.pdf"
+    & dotnet $CliDll $uaSample '--pdf-creation-date=2026-01-01' @($uaCases[$case].Args) -o $pdf
+    if ($LASTEXITCODE -ne 0) {
+        Write-Host "::error::peachpdf failed to render $case (exit code $LASTEXITCODE)"
+        $failed += $case
+        continue
+    }
+
+    foreach ($flavour in $uaCases[$case].Flavours) {
+        $report = Join-Path $OutDir "pdfua-$case-$flavour.xml"
+        & $VeraPdf --flavour $flavour --format xml $pdf | Out-File -Encoding utf8 $report
+        $text = (& $VeraPdf --flavour $flavour --format text $pdf) -join "`n"
+        Write-Host $text
+        if ($text -notmatch '^PASS') {
+            Write-Host "::error::$case output does not validate against $flavour; see $report"
+            $failed += "$case/$flavour"
+        }
+    }
+}
+
 if ($failed.Count -gt 0) {
-    Write-Host "Failed levels: $($failed -join ', ')"
+    Write-Host "Failed: $($failed -join ', ')"
     exit 1
 }
 
-Write-Host "All $($levels.Count) PDF/A levels validate."
+Write-Host "All $($levels.Count) PDF/A levels and $($uaCases.Count) PDF/UA cases validate."
