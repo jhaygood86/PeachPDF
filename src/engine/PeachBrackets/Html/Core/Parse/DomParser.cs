@@ -169,6 +169,20 @@ namespace PeachBrackets.Html.Parse
             // resolved yet at the DocumentLanguage assignment above.
             htmlContainer.RootWritingMode = htmlBox?.WritingMode.Value ?? WritingMode.HorizontalTb;
 
+            // The page context's em/rem basis is the real <html> element's font (css-values-4 §6.1.1,
+            // css-page-3 §3), which only exists once the cascade above has run - the first resolve, before
+            // it, can see only the synthetic wrapper's default font. Reading the html box's font any earlier
+            // would memoize the default on it (DerivedStyle.ActualFont caches on first read), which is why
+            // this is a second resolve rather than a moved one.
+            if (htmlBox is not null)
+            {
+                var rootFontPt = htmlBox.GetEmHeight();
+                if (htmlContainer.PageLengthContext is not { } captured || Math.Abs(captured.RemPt - rootFontPt) > 0.001)
+                {
+                    CascadeApplyPageStyles(htmlContainer, root, cssData, rootFontPt: rootFontPt);
+                }
+            }
+
             // Must run after the whole tree's cascade above, not from inside it - see
             // ApplyTablePresentationalAttributesToCells's remarks / issue #636.
             ApplyTablePresentationalAttributesToCells(root);
@@ -646,9 +660,14 @@ namespace PeachBrackets.Html.Parse
         /// <param name="allowMarginRight">Same as <paramref name="allowMarginLeft"/>, for <c>margin-right</c>.</param>
         /// <param name="allowMarginBottom">Same as <paramref name="allowMarginLeft"/>, for <c>margin-bottom</c>.</param>
         /// <param name="allowSize">Same as <paramref name="allowMarginLeft"/>, for <c>size</c>.</param>
+        /// <param name="rootFontPt">
+        /// The real <c>&lt;html&gt;</c> element's font size, once the cascade has resolved it, used as the
+        /// <c>em</c>/<c>rem</c> basis; null (the pre-cascade pass) reads the synthetic root's default font.
+        /// </param>
         internal static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData,
             bool allowMarginLeft = true, bool allowMarginTop = true,
-            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true,
+            double? rootFontPt = null)
         {
             // HtmlContainerInt.MarginTop/Bottom/Left/Right live in the same "internal pixel space" as
             // every other layout coordinate (PageSize, Location, box positions) - under ShrinkToFit/
@@ -672,7 +691,7 @@ namespace PeachBrackets.Html.Parse
             var pixelsPerPoint = htmlContainer.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
-                allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
+                allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize, rootFontPt);
 
             // Issue #582 / "Direction 1": this method runs before CascadeApplyStyles and every box-tree
             // correction pass in GenerateCssTree - none of that expensive work has started yet - so if
@@ -704,13 +723,14 @@ namespace PeachBrackets.Html.Parse
             {
                 htmlContainer.PageSize = PeachBrackets.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
                 ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
-                    allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
+                    allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize, rootFontPt);
             }
         }
 
         private static void ApplyPageStylesOnce(HtmlContainerInt htmlContainer, CssBox root, CssData cssData, double pixelsPerPoint,
             bool allowMarginLeft = true, bool allowMarginTop = true,
-            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true,
+            double? rootFontPt = null)
         {
             // ParseLength's absolute-unit branches (pt/mm/cm/in/pc, and px at the spec-correct
             // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
@@ -744,12 +764,12 @@ namespace PeachBrackets.Html.Parse
                 .Select(r => r.Style?.FontSize)
                 .LastOrDefault(fs => !string.IsNullOrEmpty(fs));
             var emPt = string.IsNullOrEmpty(basePageFontSize)
-                ? root.GetEmHeight()
+                ? rootFontPt ?? root.GetEmHeight()
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
             var lengthContext = new PageLengthContext(
                 emPt,
-                root.GetRemHeight(),
+                rootFontPt ?? root.GetRemHeight(),
                 htmlContainer.PageSize.Width / pixelsPerPoint,
                 htmlContainer.PageSize.Height / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;
@@ -1469,6 +1489,9 @@ namespace PeachBrackets.Html.Parse
                 ResolveFirstLineStyle(valueParser, box, cssData, media, containerSizes);
             }
 
+            // After the block's own first-line style (above, for a box that is one) and before its children are cascaded, which read this.
+            ResolveFirstLineInlineStyle(valueParser, box, cssData, media, containerSizes);
+
             // The cascade still recurses into an inline <svg>/<math>, but their internals are not boxes of the
             // document: an SVG or MathML renderer reads them, and nothing may be lifted out from under it
             // (a shell recorded here would be spliced out of the tree those renderers read). A
@@ -1785,6 +1808,52 @@ namespace PeachBrackets.Html.Parse
             CssUtils.ApplyCurrentColor(shadowBox, valueParser);
 
             box.ResolvedFirstLineStyle = shadowBox;
+        }
+
+        /// <summary>
+        /// Resolves <see cref="CssBox.FirstLineInlineStyle"/> for an inline box under a block with a <c>::first-line</c> rule: its parent's first-line
+        /// style (the block's, or an inline's own) stands in for the parent when it inherits, and the declarations that matched the box itself are
+        /// applied over that, in the cascade's order. Only the box's own rules and style attribute apply: an animation does not, and
+        /// <c>revert</c> reads no earlier origin here, as for <see cref="ResolveFirstLineStyle"/>.
+        /// </summary>
+        private static void ResolveFirstLineInlineStyle(CssValueParser valueParser, CssBox box, CssData cssData, MediaQueryContext media, ContainerQuerySizes? containerSizes)
+        {
+            box.FirstLineInlineStyle = null;
+
+            if (!cssData.HasFirstLineRules || box.ParentBox is not { } parent) return;
+
+            var parentStyle = parent.FirstLineInlineStyle ?? parent.ResolvedFirstLineStyle;
+            if (parentStyle is null || box.IsOutOfFlow || box.DerivedStyle.ActualDisplay != Keywords.Inline) return;
+
+            var shadowBox = new CssBox(box, null);
+            box.Boxes.Remove(shadowBox); // a detached resolution helper, never a real tree member
+            shadowBox.InheritStyle(parentStyle);
+
+            // A run of text and an anonymous box are not elements: nothing matches them, they only inherit.
+            if (box.HtmlTag is not null || box.IsPseudoElement)
+            {
+                var pendingVarProperties = new Dictionary<string, string>();
+                var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes);
+                var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box, containerSizes);
+
+                IStyleRule? inlineRule = null;
+                if (box.HtmlTag is { } tag && tag.HasAttribute("style"))
+                    inlineRule = valueParser.GetOrParseInlineStyleRule(tag.TryGetAttribute("style")!);
+
+                AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
+                if (box.HtmlTag is not null) TranslateAttributes(box.HtmlTag, shadowBox, valueParser);
+                ApplyAuthorRulesInLayerBands(valueParser, shadowBox, authorNormal, importantPass: false, null, null, false, pendingVarProperties);
+                if (inlineRule is not null)
+                    AssignCssBlock(valueParser, shadowBox, inlineRule, importantPass: false, null, null, null, null, pendingVarProperties);
+                ApplyAuthorRulesInLayerBands(valueParser, shadowBox, authorImportant, importantPass: true, null, null, false, pendingVarProperties);
+                if (inlineRule is not null)
+                    AssignCssBlock(valueParser, shadowBox, inlineRule, importantPass: true, null, null, null, null, pendingVarProperties);
+                AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: true, null, null, null, null, pendingVarProperties);
+                ResolveDeferredVarProperties(valueParser, shadowBox, pendingVarProperties);
+                CssUtils.ApplyCurrentColor(shadowBox, valueParser);
+            }
+
+            box.FirstLineInlineStyle = shadowBox;
         }
 
         /// <summary>

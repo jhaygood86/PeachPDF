@@ -350,6 +350,7 @@ namespace PeachBrackets.Css
             Assign(Keywords.Self, Keywords.Self).Or(UrlConverter).Or(AttrConverter);
         public static readonly IValueConverter HyphenateCharacterConverter = StringConverter.OrAuto();
         public static readonly IValueConverter HyphenateLimitCharsConverter = new HyphenateLimitCharsValueConverter();
+        public static readonly IValueConverter HangingPunctuationConverter = new HangingPunctuationValueConverter();
         public static readonly IValueConverter HyphenateLimitLinesConverter = NaturalIntegerConverter.Or(Keywords.NoLimit);
         public static readonly IValueConverter HyphenateLimitLastConverter = Map.HyphenateLimitLastModes.ToConverter();
         public static readonly IValueConverter HyphenateBeforeAfterConverter = NaturalIntegerConverter;

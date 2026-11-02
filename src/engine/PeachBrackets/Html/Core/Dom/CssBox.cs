@@ -580,6 +580,22 @@ namespace PeachBrackets.Html.Dom
         internal CssBox? ResolvedFirstLineStyle { get => _rare is null ? default(CssBox?) : _rare.ResolvedFirstLineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.ResolvedFirstLineStyle = value; } }
 
         /// <summary>
+        /// The style this inline box (an element, a pseudo-element or a run of text) has on the first formatted line of a block that has a
+        /// <c>::first-line</c> rule: a detached <see cref="CssBox"/> that inherits from its parent's first-line style instead of from the parent,
+        /// with the box's own declarations applied over it (<see href="https://www.w3.org/TR/css-pseudo-4/#first-line-inheritance">CSS Pseudo-Elements 4
+        /// section 2.1.3</see>). So an inline that declares no font takes the <c>::first-line</c> one, and one that declares its own keeps it. Null when
+        /// no first-line style reaches the box, which then uses the block's <see cref="ResolvedFirstLineStyle"/>.
+        /// </summary>
+        /// <summary>
+        /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside this block's
+        /// start edge on its first line (CSS Text 3 §8.1), resolved by the layout engine just before the
+        /// block's lines are built; 0 when nothing hangs.
+        /// </summary>
+        internal double HangingFirstWidth { get => _rare is null ? default(double) : _rare.HangingFirstWidth; set { if (_rare is null) { if (value == 0d) return; _rare = new BoxRareState(); } _rare.HangingFirstWidth = value; } }
+
+        internal CssBox? FirstLineInlineStyle { get => _rare is null ? default(CssBox?) : _rare.FirstLineInlineStyle; set { if (_rare is null) { if (EqualityComparer<CssBox?>.Default.Equals(value, default(CssBox?))) return; _rare = new BoxRareState(); } _rare.FirstLineInlineStyle = value; } }
+
+        /// <summary>
         /// The computed style of this form control's <c>::placeholder</c>, resolved through the normal
         /// cascade into a detached pseudo-element box. Null unless the control is showing a
         /// placeholder at PDF-generation time.
@@ -7545,6 +7561,14 @@ namespace PeachBrackets.Html.Dom
                     child._placedPercentageInsetTop = ResolveOffsetOrZero(child.Top, AbsoluteContainingBlockHeight(nearestPositionedAncestor), child);
                     var top = containingBlockTop + child.ActualMarginTop + child._placedPercentageInsetTop;
 
+                    // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
+                    // and 10.6.4): the parent's content edge across, and below the previous in-flow sibling down.
+                    if (StaticPositionIn(child) is { } staticPosition)
+                    {
+                        if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
+                        if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
+                    }
+
                     child.Location = new PaintPoint(left, top);
                 }
 
@@ -7620,6 +7644,32 @@ namespace PeachBrackets.Html.Dom
         /// Null for a box this frame does not own, which is how the root — standing in for its own frame —
         /// gets the answer it has always had: a box with no parent has no previous sibling.
         /// </remarks>
+        /// <summary>
+        /// The margin-edge position <paramref name="child"/>, an absolutely positioned box, would have had were it <c>position: static</c>, on each axis
+        /// where both of its offsets are <c>auto</c> (null for an axis it has one set on). Only for a box in block flow: the parent's content edge
+        /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
+        /// content has its position on a line, which this does not know.
+        /// </summary>
+        private (double? Left, double? Top)? StaticPositionIn(CssBox child)
+        {
+            if (!ReferenceEquals(child.ParentBox, this) || Direction.Value == DirectionMode.Rtl) return null;
+
+            foreach (var sibling in Boxes)
+            {
+                if (!ReferenceEquals(sibling, child) && !sibling.IsOutOfFlow && !sibling.IsExcludedFromFlow && sibling.IsInline) return null;
+            }
+
+            double? left = child.Left.Value.Value is null && child.Right.Value.Value is null ? ClientLeft : null;
+            double? top = null;
+            if (child.Top.Value.Value is null && child.Bottom.Value.Value is null)
+            {
+                var previous = PreviousInFlowSibling(child);
+                top = previous is null ? ClientTop : previous.StaticBottom + previous.ActualMarginBottom;
+            }
+
+            return left is null && top is null ? null : (left, top);
+        }
+
         private CssBox? PreviousInFlowSibling(CssBox child) =>
             ReferenceEquals(child.ParentBox, this) ? DomUtils.GetPreviousSibling(child, false) : null;
 
