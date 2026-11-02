@@ -19,7 +19,8 @@ for _ in $(seq 1 180); do
 done
 
 # A swipe up scrolls the page: the view must report it. `input swipe` may send only a down and an up, which the view rightly takes for a tap
-# at the end point, so the finger is moved in steps.
+# at the end point, so the finger is moved in steps. A freshly booted emulator can still be settling and drop the first gesture, so the swipe
+# is tried up to three times, until the view reports a scroll.
 size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
 width=${size%x*}
 height=${size#*x}
@@ -27,12 +28,15 @@ x=$((width / 2))
 top=$((height / 4))
 start=$((height * 3 / 4))
 step=$(((start - top) / 10))
-adb shell input motionevent DOWN "$x" "$start"
-for i in $(seq 1 10); do
-  adb shell input motionevent MOVE "$x" $((start - i * step))
+for _ in 1 2 3; do
+  adb shell input motionevent DOWN "$x" "$start"
+  for i in $(seq 1 10); do
+    adb shell input motionevent MOVE "$x" $((start - i * step))
+  done
+  adb shell input motionevent UP "$x" $((start - 10 * step))
+  sleep 2
+  if [[ "$(adb logcat -d -s PEACH_SMOKE:V)" == *scroll* ]]; then break; fi
 done
-adb shell input motionevent UP "$x" $((start - 10 * step))
-sleep 3
 
 log=$(adb logcat -d -s PEACH_SMOKE:V)
 echo "$log"
