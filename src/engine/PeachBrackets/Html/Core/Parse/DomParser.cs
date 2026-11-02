@@ -63,6 +63,32 @@ namespace PeachBrackets.Html.Parse
                 NumberElements(child, next);
         }
 
+        // What a host changed on elements since the source was loaded goes onto the tags before anything reads them.
+        private static void ApplyAttributeOverrides(CssBox box, IReadOnlyDictionary<int, Dictionary<string, string?>>? overrides)
+        {
+            if (overrides is not { Count: > 0 })
+                return;
+
+            void Visit(CssBox current)
+            {
+                if (current.HtmlTag is { SourceOrdinal: >= 0 } tag && overrides.TryGetValue(tag.SourceOrdinal, out var changes))
+                {
+                    foreach (var (name, value) in changes)
+                    {
+                        if (value is null)
+                            tag.RemoveAttribute(name);
+                        else
+                            tag.SetAttribute(name, value);
+                    }
+                }
+
+                foreach (var child in current.Boxes)
+                    Visit(child);
+            }
+
+            Visit(box);
+        }
+
         /// <summary>
         /// Generate css tree by parsing the given html and applying the given css style data on it.
         /// </summary>
@@ -80,6 +106,7 @@ namespace PeachBrackets.Html.Parse
             var root = HtmlParser.ParseDocument(html);
             HtmlParser.EnsureHtmlAndBody(root);
             NumberElements(root, new int[1]);
+            ApplyAttributeOverrides(root, htmlContainer.AttributeOverrides);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 

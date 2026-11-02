@@ -421,6 +421,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
   method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
+  method Task<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
   method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method TextEditPlace? GetEditPlace(Canvas measuringCanvas, Int32 index = -1)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)

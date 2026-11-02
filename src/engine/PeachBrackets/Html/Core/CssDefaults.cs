@@ -312,6 +312,11 @@ namespace PeachBrackets.Html
             input::placeholder { color: #7f7f7f; }
             input[type=checkbox],
             input[type=radio] { padding: 0; margin: 3px 3px 3px 4px; }
+
+            /* A details element that is not open shows only its summary; everything else in it is hidden until it is opened. A second summary child is
+               shown too: telling it from the first takes a sibling combinator, and one in the default sheet turns off the cascade's sibling style
+               sharing for the whole document. */
+            details:not([open]) > :not(summary) { display: none }
         """;
 
         /// <summary>
