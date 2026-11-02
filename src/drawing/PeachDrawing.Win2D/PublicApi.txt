@@ -15,6 +15,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
+  method virtual Void AddSemanticRegion(Rect bounds, SemanticInfo info)
   method virtual Void BeginArtifact()
   method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
   method virtual Void BeginVariableText()
@@ -120,9 +121,12 @@ PeachDrawing.Win2D.Win2dLinkMap : sealed class
   method Win2dCursorArea CursorAtDips(Double xDips, Double yDips)
   method Win2dLink HitTest(Double x, Double y)
   method Win2dLink HitTestDips(Double xDips, Double yDips)
+  method Win2dSemanticRegion SemanticAt(Double x, Double y)
+  method Win2dSemanticRegion SemanticAtDips(Double xDips, Double yDips)
   property IReadOnlyDictionary<String, Double> Destinations { get; }
   property IReadOnlyList<Win2dCursorArea> Cursors { get; }
   property IReadOnlyList<Win2dLink> Links { get; }
+  property IReadOnlyList<Win2dSemanticRegion> Semantics { get; }
 PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   ctor()
   property ILinkLauncher Launcher { get; init; }
@@ -140,6 +144,16 @@ PeachDrawing.Win2D.Win2dRenderContext : class
   property Double PixelsPerPoint { get; set; }
   property Win2dImageCodec ImageCodec { get; }
   property Win2dTextEngine TextEngine { get; }
+PeachDrawing.Win2D.Win2dSemanticRegion : sealed class
+  ctor(Rect Bounds, SemanticInfo Info)
+  method Void Deconstruct(out Rect Bounds, out SemanticInfo Info)
+  method Win2dSemanticRegion <Clone>$()
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(Win2dSemanticRegion other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Rect Bounds { get; init; }
+  property SemanticInfo Info { get; init; }
 PeachDrawing.Win2D.Win2dTextEngine : enum Int32
   DirectWrite = 1
   PeachDrawing = 0
