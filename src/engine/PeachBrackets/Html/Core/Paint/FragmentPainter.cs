@@ -789,12 +789,12 @@ namespace PeachBrackets.Html.Paint
                     break;
 
                 case StructureTagKind.Grouping:
-                    using (builder.OpenGroupingElement(StructureNode.Of(box), classification.StructureType!))
+                    using (builder.OpenGroupingElement(StructureNode.Of(box), classification.StructureType!, StructureTagMapper.DetailsFor(box, classification)))
                         PaintContent(g, fragment);
                     break;
 
                 case StructureTagKind.Content:
-                    using (builder.OpenContentElement(g, StructureNode.Of(box), classification.StructureType!, classification.AltText))
+                    using (builder.OpenContentElement(g, StructureNode.Of(box), classification.StructureType!, classification.AltText, StructureTagMapper.DetailsFor(box, classification)))
                     {
                         // Attach the original MathML source as a PDF 2.0 Associated File on this
                         // formula's own structure element - see StructureTagBuilder.AttachMathMlSource
@@ -1103,6 +1103,10 @@ namespace PeachBrackets.Html.Paint
             // there is no text for a line to sit under and a per-own-line one only ran across the empty
             // box. The other replaced kinds (<img>, <svg>, <math>...) never
             // reach this code, so they need no say here.
+            // The line is drawn, not text, so in a tagged document it is an artifact: the text it decorates is already content.
+            var decorationBuilder = _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder;
+            var decorationArtifact = decorationBuilder is { IsInMarkedContent: false } && DecorationsWorthCollecting(box) ? decorationBuilder.OpenArtifact(g) : null;
+
             if (_textOnly)
             {
                 // Text decorations (underline, line-through) are drawn shapes, not text.
@@ -1144,6 +1148,8 @@ namespace PeachBrackets.Html.Paint
                     }
                 }
             }
+
+            decorationArtifact?.Dispose();
 
             // Positive z-index layers are Appendix E step 9: over everything else this box paints - its
             // collapsed borders and marker below included - so they are set aside and painted last.

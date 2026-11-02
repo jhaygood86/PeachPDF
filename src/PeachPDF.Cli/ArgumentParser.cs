@@ -141,6 +141,7 @@ internal static class ArgumentParser
                 case "pdf-creator": _options.PdfCreator = RequireValue(name, inlineValue) ?? _options.PdfCreator; break;
                 case "pdf-lang": _options.PdfLang = RequireValue(name, inlineValue) ?? _options.PdfLang; break;
                 case "pdfa": ParsePdfA(_options, RequireValue(name, inlineValue)); break;
+                case "pdfua": ParsePdfUA(_options, RequireValue(name, inlineValue)); break;
                 case "pdf-creation-date": ParseCreationDate(_options, RequireValue(name, inlineValue)); break;
                 case "attach": AddAttachment(_options, RequireValue(name, inlineValue)); break;
                 case "facturx-xml": _options.FacturXXmlPath = RequireValue(name, inlineValue) ?? _options.FacturXXmlPath; break;
@@ -342,6 +343,21 @@ internal static class ArgumentParser
         else
         {
             options.Errors.Add($"invalid --pdfa value '{value}' (expected one of {string.Join(", ", PdfALevels.Keys)})");
+        }
+    }
+
+    private static void ParsePdfUA(CliOptions options, string? value)
+    {
+        if (value is null)
+        {
+            return;
+        }
+
+        switch (value)
+        {
+            case "1": options.PdfUA = PdfUAConformance.UA1; break;
+            case "2": options.PdfUA = PdfUAConformance.UA2; break;
+            default: options.Errors.Add($"invalid --pdfua value '{value}' (expected 1 or 2)"); break;
         }
     }
 

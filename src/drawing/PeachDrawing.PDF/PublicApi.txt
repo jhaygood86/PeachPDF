@@ -81,6 +81,7 @@ PeachDrawing.PDF.PdfBookmark : sealed class
   property Double TopPoints { get; set; }
   property Int32 Level { get; }
   property Int32? PageIndex { get; set; }
+  property Object StructureTarget { get; set; }
   property String Title { get; }
   property String Uri { get; set; }
 PeachDrawing.PDF.PdfCanvas : sealed class
@@ -172,6 +173,7 @@ PeachDrawing.PDF.PdfComposerOptions : sealed class
   property PdfAConformance Conformance { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
   property PdfFacturXInfo FacturX { get; set; }
+  property PdfUAConformance UAConformance { get; set; }
   property PdfVersion? Version { get; set; }
   property PdfXConformance XConformance { get; set; }
   property String Author { get; set; }
@@ -424,13 +426,16 @@ PeachDrawing.PDF.PdfStructureDetails : sealed class
   ctor()
   property IReadOnlyList<PdfStructureAttributes> Attributes { get; init; }
   property String ActualText { get; init; }
+  property String Alt { get; init; }
   property String Language { get; init; }
   property String Title { get; init; }
 PeachDrawing.PDF.PdfTagRecorder : sealed class
   method Boolean HasElement(Object key)
   method IDisposable OpenArtifact(Canvas canvas)
   method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText = null)
+  method IDisposable OpenContentElement(Canvas canvas, Object key, String structureType, String altText, PdfStructureDetails details)
   method IDisposable OpenGroupingElement(Object key, String structureType)
+  method IDisposable OpenGroupingElement(Object key, String structureType, PdfStructureDetails details)
   method IDisposable OpenListItemBodyElement(Object key)
   method IDisposable OpenPhantomAncestors(IReadOnlyList<ValueTuple<Object, String>> ancestors)
   method Void AttachMathMlSource(Object key, String mathMlSource)
@@ -439,8 +444,13 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method Void DeclareListItemBody(Object itemKey)
   method Void Finish()
   method Void LinkAnnotation(Object key, PdfLink link)
+  method Void LinkAnnotation(Object key, PdfLink link, String contents, Object target)
   property Boolean IsInMarkedContent { get; }
 PeachDrawing.PDF.PdfTagSession : sealed class
+PeachDrawing.PDF.PdfUAConformance : enum Int32
+  None = 0
+  UA1 = 1
+  UA2 = 2
 PeachDrawing.PDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

@@ -29,6 +29,8 @@
 		<GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
 		<GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
 		<RunCodeAnalysis>false</RunCodeAnalysis>
+		<!-- Win2dNativeTarget reads a session's Direct2D target through function pointers into the COM objects Win2D wraps. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<!-- A library cannot know the consumer's platform; the application referencing it supplies the Win2D native binary. -->
 		<Win2DWarnNoPlatform>false</Win2DWarnNoPlatform>
 	</PropertyGroup>

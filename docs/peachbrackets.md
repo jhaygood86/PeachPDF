@@ -91,6 +91,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `Media` | The media type `@media` queries see. `print` by default. |
 | `ColorScheme` | What `prefers-color-scheme` reports: `Light` (the default) or `Dark`. |
 | `Preferences` | The reader's settings that `prefers-reduced-motion`, `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency` and `prefers-reduced-data` report (`UserPreferences`). The default is a static document's: reduced motion on, everything else off, so a document reports what it always did. A window or phone reads them from the system (Windows high contrast, Android's text-contrast and remove-animations settings). |
+| `FontScale` | A multiplier for the root font size (1, the default, leaves it alone), for a reader who sets a text size on their system. Text sized in `em`, `rem`, a percentage or a keyword follows; text in `px` or `pt` does not. Added to `UserStyleSheet`, so ignored when `StyleSheet` is set. |
 | `TextSpacing` | Spacing applied over the document's own for a reader who needs more room around text: line height, paragraph spacing, letter spacing and word spacing as multiples of the font size. `TextSpacingOverrides.Wcag` is what WCAG 2.2 success criterion 1.4.12 asks a page to survive. Added to `UserStyleSheet` as `!important` rules, so it is ignored when `StyleSheet` is set. |
 | `UserStyleSheet` | CSS applied after the built-in defaults and before the document's own style sheets. |
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
@@ -124,6 +125,11 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`GetFormState(element)`**, **`SetChecked(element, isChecked)`**, **`SetValue(element, value)`** and **`Activate(element)`** read and change what an
+  `<input>` or `<select>` holds in the document itself: whether a check box or radio button is checked (checking a radio button unchecks the rest of its
+  name in the same form), a text field's text, a range's number (kept between `min` and `max`), a drop-down's chosen option. `Activate` does what a click
+  does (toggles a check box, checks a radio button). Each returns an `UpdateResult` with the regions to repaint; no layout pass runs, and the accessibility
+  tree follows. A disabled control, and a read-only one for `SetValue`, is left alone.
 - **`PaintAccessibility(pageIndex, canvas)`** puts the roles, names and states of the [accessibility tree](accessibility.md) on a canvas as
   `Canvas.AddSemanticRegion` calls in reading order, for a canvas that writes them (SVG), so a drawing made from the document can be read by
   assistive technology. Containers and runs of text are left out; the regions are flat.

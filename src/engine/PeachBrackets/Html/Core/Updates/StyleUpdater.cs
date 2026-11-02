@@ -78,6 +78,10 @@ namespace PeachBrackets.Html.Updates
             style.InvalidateOutlineColor();
         }
 
+        /// <summary>The regions to repaint after <paramref name="element"/> changed how it looks without moving.</summary>
+        internal static List<DirtyRegion> DirtyRegionsOf(HtmlContainerInt container, CssBox element, IReadOnlyList<FragmentainerFragment> fragmentainers) =>
+            DirtyRegions(container, element, fragmentainers);
+
         /// <summary>The rectangles, in points on their pages, that painting <paramref name="element"/> and everything in it covers.</summary>
         private static List<DirtyRegion> DirtyRegions(HtmlContainerInt container, CssBox element, IReadOnlyList<FragmentainerFragment> fragmentainers)
         {

@@ -168,6 +168,11 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
     }
 
     /// <summary>
+    /// The structure element this entry leads to instead of a place on a page (a PDF 2.0 structure destination), or null.
+    /// </summary>
+    internal PeachDrawing.PDF.Engine.Structure.PdfStructureElement? StructureDestination { get; set; }
+
+    /// <summary>
     /// Gets or sets the destination page.
     /// </summary>
     public PdfPage DestinationPage
@@ -332,7 +337,9 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
                 // Has destination? Mutually exclusive with an /A action - a page destination always
                 // wins if both happen to be set.
-                if (DestinationPage is not null)
+                if (StructureDestination is not null)
+                    Elements[Keys.Dest] = new PdfArray(Owner, StructureDestination.RequiredReference, new PdfLiteral("/Fit"));
+                else if (DestinationPage is not null)
                     //Elements[Keys.Dest] = new PdfArray(Owner, DestinationPage.Reference, new PdfLiteral("/XYZ null null 0"));
                     Elements[Keys.Dest] = CreateDestArray();
                 else if (!string.IsNullOrEmpty(Url))

@@ -117,6 +117,12 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal SvgDocument? Document => _document;
 
+        /// <summary>The text of the SVG's own <c>&lt;title&gt;</c> child, read before its child boxes were dropped: what a reader calls the graphic. Null if it has none.</summary>
+        internal string? AccessibleTitle { get; private set; }
+
+        /// <summary>The text of the SVG's own <c>&lt;desc&gt;</c> child: more about the graphic than its title says. Null if it has none.</summary>
+        internal string? AccessibleDescription { get; private set; }
+
         /// <summary>
         /// Builds the scene graph from this element's own children, once. Synchronous and idempotent:
         /// any network <c>&lt;image&gt;</c> hrefs it needs were prefetched during measurement.
@@ -126,7 +132,9 @@ namespace PeachBrackets.Html.Dom
             if (_document is not null)
                 return;
 
-            _document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), HtmlContainer!.RenderContext, ActualColor, _prefetchedImages,
+            var source = new CssBoxSvgSourceNode(this);
+            (AccessibleTitle, AccessibleDescription) = ReadAccessibleText(source);
+            _document = SvgTreeBuilder.Build(source, HtmlContainer!.RenderContext, ActualColor, _prefetchedImages,
                 fontPaletteValues: HtmlContainer.FontPaletteValues, fontFeatureValues: HtmlContainer.FontFeatureValues);
 
             // The parser builds a real (generic) CssBox for every SVG child element so
@@ -137,6 +145,26 @@ namespace PeachBrackets.Html.Dom
             // background/border/content positioning. Clearing them makes this box a true leaf (one
             // phantom word, no children), exactly like CssBoxImage.
             Boxes.Clear();
+        }
+
+        // The first <title> and <desc> directly inside the <svg>, which is where SVG puts the name and the description of the graphic.
+        private static (string? Title, string? Description) ReadAccessibleText(ISvgSourceNode root)
+        {
+            string? title = null;
+            string? description = null;
+            foreach (var child in root.Children)
+            {
+                var text = System.Text.RegularExpressions.Regex.Replace(child.GetTextContent() ?? string.Empty, @"\s+", " ").Trim();
+                if (text.Length == 0)
+                    continue;
+
+                if (title is null && child.Name.Equals("title", StringComparison.OrdinalIgnoreCase))
+                    title = text;
+                else if (description is null && child.Name.Equals("desc", StringComparison.OrdinalIgnoreCase))
+                    description = text;
+            }
+
+            return (title, description);
         }
 
         /// <summary>

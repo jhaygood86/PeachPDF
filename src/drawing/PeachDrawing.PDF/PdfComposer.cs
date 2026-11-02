@@ -99,7 +99,8 @@ namespace PeachDrawing.PDF
         public PdfTagRecorder CreateTagRecorder(bool requireAlternateText = false)
         {
             EnsureConfigured();
-            return _tagRecorder ??= new PdfTagRecorder(_document, requireAlternateText);
+            // The figures of a PDF/UA file always carry alternative text (empty marks one decorative), as those of an accessible PDF/A file do.
+            return _tagRecorder ??= new PdfTagRecorder(_document, requireAlternateText || _document.Options.PdfUAConformance != PdfUAConformance.None);
         }
 
         // A document has one structure tree, so every call that asks for a recorder gets the same one: a second recorder would replace the
@@ -187,6 +188,9 @@ namespace PeachDrawing.PDF
                     outline.Top = outline.DestinationPage.Height - bookmark.TopPoints;
                 }
 
+                if (bookmark.StructureTarget is { } target && _document.Version >= 20 && _tagRecorder?.TryGetStructureElement(target) is { } element)
+                    outline.StructureDestination = element;
+
                 if (stack.Count > 0)
                     stack.Peek().Outline.Outlines.Add(outline);
                 else
@@ -226,6 +230,16 @@ namespace PeachDrawing.PDF
                 throw new InvalidOperationException("A PDF file needs at least one page; call AddPage first.");
 
             EnsureConfigured();
+            if (_document.Options.PdfUAConformance != PdfUAConformance.None && _tagRecorder is null)
+            {
+                throw new InvalidOperationException(
+                    "PdfComposerOptions.UAConformance is set, but the document has no tag structure. A PDF/UA file is tagged: call CreateTagRecorder " +
+                    "before drawing the pages and open structure elements around what is drawn.");
+            }
+
+            if (_document.Options.PdfUAConformance != PdfUAConformance.None)
+                _document.Catalog.ViewerPreferences.DisplayDocTitle = true;
+
             FinishPages();
             _document.Save(stream);
         }

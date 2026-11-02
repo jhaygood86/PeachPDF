@@ -12,7 +12,8 @@ namespace PeachBrackets.Annotations
     /// </summary>
     /// <param name="PageIndex">the zero-based index of the page, in the order the pages were produced</param>
     /// <param name="Top">how far below the top edge of that page the position is, in points</param>
-    public readonly record struct PagePosition(int PageIndex, double Top);
+    /// <param name="Target">the element the position is at, when there is one, for a format whose destinations name the structure they lead to</param>
+    public readonly record struct PagePosition(int PageIndex, double Top, StructureNode? Target = null);
 
     /// <summary>
     /// A clickable region of a page: the area a hyperlink covers, and where it leads.
