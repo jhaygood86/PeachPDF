@@ -43,6 +43,23 @@ namespace PeachBrackets.Html.Dom
             Words.Add(_word);
         }
 
+        /// <summary>Whether this is a <c>&lt;textarea&gt;</c>, a multi-line text control whose text is its value rather than flowed content.</summary>
+        internal bool IsTextArea => HtmlTag?.Name.Equals("textarea", System.StringComparison.OrdinalIgnoreCase) == true;
+
+        // The size HTML gives a text area with no CSS size: cols (20) characters wide and rows (2) lines tall, in CSS pixels.
+        private (double Width, double Height) TextAreaSize(Canvas g)
+        {
+            var unit = (HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0) * 0.75;
+            var cols = PositiveInt("cols", 20);
+            var rows = PositiveInt("rows", 2);
+            var font = ActualFont;
+            var characterWidth = g.MeasureString("0", font).Width / unit;
+            return (cols * characterWidth, rows * font.Height / unit);
+        }
+
+        private int PositiveInt(string attribute, int fallback) =>
+            int.TryParse(GetAttribute(attribute, string.Empty), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) && n > 0 ? n : fallback;
+
         internal override ValueTask MeasureWordsSize(Canvas g)
         {
             if (_wordsSizeMeasured)
@@ -54,7 +71,7 @@ namespace PeachBrackets.Html.Dom
             var kind = FormFieldMapper.Classify(this).Kind;
             var (intrinsicWidth, intrinsicHeight) = kind is FormFieldKind.Checkbox or FormFieldKind.Radio
                 ? (13.0, 13.0)
-                : (170.0, 20.0);
+                : IsTextArea ? TextAreaSize(g) : (170.0, 20.0);
 
             CssLayoutEngine.MeasureIntrinsicSize(_word, intrinsicWidth, intrinsicHeight);
             return ValueTask.CompletedTask;

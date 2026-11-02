@@ -124,6 +124,38 @@ namespace PeachBrackets.Html.Updates
             return regions;
         }
 
+        /// <summary>The rectangle, in points on its page, of the box of <paramref name="element"/> itself - not its content or anything it paints around it.</summary>
+        internal static DirtyRegion? BoxRegionOf(HtmlContainerInt container, CssBox element, IReadOnlyList<FragmentainerFragment> fragmentainers)
+        {
+            var ppp = container.RenderContext.LayoutUnitsPerPoint;
+            for (var page = 0; page < fragmentainers.Count; page++)
+            {
+                var geometry = fragmentainers[page].Geometry;
+                var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
+                if (Find(fragmentainers[page].Root, element) is { } fragment)
+                {
+                    var rect = fragment.PrimaryRect;
+                    return new DirtyRegion(page, new Rect(frame.X(rect.X), frame.Y(rect.Y), rect.Width / ppp, rect.Height / ppp));
+                }
+            }
+
+            return null;
+        }
+
+        private static BoxFragment? Find(BoxFragment fragment, CssBox box)
+        {
+            if (ReferenceEquals(fragment.Box, box))
+                return fragment;
+
+            foreach (var child in fragment.Children)
+            {
+                if (Find(child, box) is { } found)
+                    return found;
+            }
+
+            return null;
+        }
+
         private static void Walk(BoxFragment fragment, Func<CssBox, bool> isTarget, bool inside, TextRunCollector.Frame frame, List<Rect> rects)
         {
             inside |= isTarget(fragment.Box);

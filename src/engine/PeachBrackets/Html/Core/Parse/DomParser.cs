@@ -63,6 +63,24 @@ namespace PeachBrackets.Html.Parse
                 NumberElements(child, next);
         }
 
+        // A text area's text is its value: the control holds it the way an input holds its value attribute, so it is read and edited the same way
+        // and is not flowed as content. HTML drops one line break straight after the start tag.
+        private static void SeedTextAreaValues(CssBox box)
+        {
+            if (box is CssBoxFormField { IsTextArea: true, HtmlTag: { } tag })
+            {
+                var text = (CssContentEngine.ExtractText(box) ?? string.Empty).Replace("\r\n", "\n");
+                if (text.StartsWith('\n'))
+                    text = text[1..];
+
+                tag.SetAttribute("value", text);
+                return;
+            }
+
+            foreach (var child in box.Boxes)
+                SeedTextAreaValues(child);
+        }
+
         // What a host changed on elements since the source was loaded goes onto the tags before anything reads them.
         private static void ApplyAttributeOverrides(CssBox box, IReadOnlyDictionary<int, Dictionary<string, string?>>? overrides)
         {
@@ -106,6 +124,7 @@ namespace PeachBrackets.Html.Parse
             var root = HtmlParser.ParseDocument(html);
             HtmlParser.EnsureHtmlAndBody(root);
             NumberElements(root, new int[1]);
+            SeedTextAreaValues(root);
             ApplyAttributeOverrides(root, htmlContainer.AttributeOverrides);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;

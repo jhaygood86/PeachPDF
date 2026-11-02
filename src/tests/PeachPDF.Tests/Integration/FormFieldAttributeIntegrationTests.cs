@@ -21,6 +21,7 @@ namespace PeachPDF.Tests.Integration
         const int ReadOnly = 1;
         const int Required = 1 << 1;
         const int NoExport = 1 << 2;
+        const int Multiline = 1 << 12;
         const int Password = 1 << 13;
         const int Radio = 1 << 15;
         const int Combo = 1 << 17;
@@ -38,6 +39,14 @@ namespace PeachPDF.Tests.Integration
         public async Task TextField_MapsItsAttributesToFieldFlags(string html, int expected)
         {
             Assert.Equal(expected, (await Field(html)).Flags);
+        }
+
+        [Fact]
+        public async Task TextArea_IsAMultilineTextField_HoldingItsText()
+        {
+            var field = await Field("<textarea name='f' required>first line second line</textarea>");
+
+            Assert.Equal(Multiline | Required, field.Flags);
         }
 
         [Theory]

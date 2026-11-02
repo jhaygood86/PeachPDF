@@ -117,6 +117,8 @@ namespace PeachBrackets.Annotations
 
                 if (combCells is > 0)
                     DrawCombCharacters(g, color, contentRect, font, text, combCells.Value);
+                else if (box is CssBoxFormField { IsTextArea: true })
+                    DrawLines(g, textStyle, color, contentRect, font, text);
                 else
                     DrawSingleLine(g, textStyle, color, contentRect, font, text);
             }
@@ -167,6 +169,25 @@ namespace PeachBrackets.Annotations
             // (CssBoxFormField.MeasureWordsSize) never runs - reading it here would hit its NaN-sentinel default instead.
             g.DrawString(text, font, color, new PaintPoint(contentRect.X, y),
                 new Size(contentRect.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
+        }
+
+        // A text area: its text broken into lines for its width, from the top, as many as show.
+        private static void DrawLines(Canvas g, CssBox box, PaintColor color, Rect contentRect, Font font, string text)
+        {
+            var lines = PeachBrackets.Html.Paint.Content.TextAreaLayout.Wrap(g, font, text, contentRect.Width);
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var top = contentRect.Y + (i * font.Height);
+                if (top >= contentRect.Y + contentRect.Height)
+                    break;
+
+                var line = lines[i];
+                if (line.End > line.Start)
+                {
+                    g.DrawString(text[line.Start..line.End].TrimEnd(' '), font, color, new PaintPoint(contentRect.X, top),
+                        new Size(contentRect.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
+                }
+            }
         }
 
         /// <summary>A comb field's cell divider lines, in the field's own border color and width.</summary>

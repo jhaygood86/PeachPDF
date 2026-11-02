@@ -1727,6 +1727,7 @@ namespace PeachBrackets.Html.Dom
                 HtmlConstants.Embed => new CssBoxEmbed(parent, tag),
                 HtmlConstants.Input => new CssBoxFormField(parent, tag),
                 HtmlConstants.Select => new CssBoxFormField(parent, tag),
+                "textarea" => new CssBoxFormField(parent, tag),
                 _ => new CssBox(parent, tag)
             };
         }

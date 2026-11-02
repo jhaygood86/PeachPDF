@@ -34,12 +34,15 @@ namespace PeachBrackets.Html.Handlers
         internal static bool IsPlaceholderShown(CssBox box)
         {
             if (box is not CssBoxFormField || box.HtmlTag is not { } tag
-                || !tag.Name.Equals(HtmlConstants.Input, StringComparison.OrdinalIgnoreCase)
+                || !(tag.Name.Equals(HtmlConstants.Input, StringComparison.OrdinalIgnoreCase) || tag.Name.Equals("textarea", StringComparison.OrdinalIgnoreCase))
                 || !tag.HasAttribute("placeholder")
                 || !string.IsNullOrEmpty(box.GetAttribute("value", null)))
             {
                 return false;
             }
+
+            if (box.HtmlTag!.Name.Equals("textarea", StringComparison.OrdinalIgnoreCase))
+                return true;
 
             var type = box.GetAttribute("type", Keywords.Text).ToLowerInvariant();
             return type switch
@@ -84,6 +87,9 @@ namespace PeachBrackets.Html.Handlers
 
             if (string.Equals(tag, HtmlConstants.Select, StringComparison.OrdinalIgnoreCase))
                 return ClassifySelect(box);
+
+            if (string.Equals(tag, "textarea", StringComparison.OrdinalIgnoreCase))
+                return ClassifyText(box);
 
             if (!string.Equals(tag, HtmlConstants.Input, StringComparison.OrdinalIgnoreCase))
                 return FormFieldClassification.None;
@@ -141,7 +147,7 @@ namespace PeachBrackets.Html.Handlers
             var doNotScroll = string.Equals(box.PdfFormFieldDoNotScroll, Keywords.Auto, StringComparison.OrdinalIgnoreCase);
             int? comb = int.TryParse(box.PdfFormFieldComb, out var cells) && cells > 0 ? cells : null;
             return FormFieldClassification.Text(name, value, autoFontSize, comb, doNotScroll,
-                IsPlaceholderShown(box), ReadAttributes(box));
+                IsPlaceholderShown(box), ReadAttributes(box), box.HtmlTag!.Name.Equals("textarea", StringComparison.OrdinalIgnoreCase));
         }
 
         static FormFieldClassification ClassifyCheckbox(CssBox box)

@@ -571,9 +571,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task TextareaUnderline_IsUnderItsTextNotTheWholeControl()
+        public async Task TextareaUnderline_DoesNotRuleTheWholeControl()
         {
-            // A <textarea> is a static inline-block, not a form field, so it takes the propagated path.
+            // A <textarea> is a form field box: its text is its value, drawn by the control, so a decoration set on it never propagates to a
+            // line across the control.
             var (root, container) = await BuildAndLayout(Wrap(
                 "<p><textarea id='f' style='width:200pt; text-decoration:underline'>ab</textarea></p>"));
             var f = FindById(root, "f")!;
@@ -581,11 +582,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, f, g);
 
-            var line = Assert.Single(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             var control = f.Rectangles.Values.Single();
 
-            Assert.True(line.X2 - line.X1 < control.Width * 0.3,
-                $"the line ({line.X2 - line.X1}pt) should cover 'ab', not the {control.Width}pt control");
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawLineCall>(), line => line.X2 - line.X1 >= control.Width * 0.3);
         }
 
         [Fact]
