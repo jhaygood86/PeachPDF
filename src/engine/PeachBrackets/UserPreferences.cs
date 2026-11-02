@@ -24,8 +24,8 @@ public enum ContrastPreference
 /// </summary>
 /// <remarks>
 /// The defaults are those of a static, printed document, which is what a PDF is, so a document rendered without preferences reports exactly
-/// what it always did. A document is a still image, so <see cref="ReducedMotion"/> is on by default. <see cref="ForcedColors"/> only reports
-/// the mode to style sheets (<c>@media (forced-colors: active)</c>); the engine does not recolour the page itself.
+/// what it always did. A document is a still image, so <see cref="ReducedMotion"/> is on by default. With <see cref="ForcedColors"/> on, the
+/// document is also drawn in the colours of <see cref="ForcedPalette"/> (<c>forced-color-adjust</c> opts an element out).
 /// </remarks>
 public sealed record UserPreferences
 {
@@ -38,8 +38,15 @@ public sealed record UserPreferences
     /// <summary>What <c>prefers-contrast</c> reports. <see cref="ContrastPreference.NoPreference"/> by default.</summary>
     public ContrastPreference Contrast { get; init; }
 
-    /// <summary>Whether <c>forced-colors</c> reports <c>active</c>: the system overrides the page's colours with its own palette. Off by default.</summary>
+    /// <summary>
+    /// Whether <c>forced-colors</c> reports <c>active</c>: the system overrides the page's colours with its own palette, and the document is drawn in
+    /// the colours of <see cref="ForcedPalette"/> instead of its own (text, backgrounds, borders and outlines; shadows and gradient backgrounds are
+    /// dropped), except where an element sets <c>forced-color-adjust: none</c>. Off by default.
+    /// </summary>
     public bool ForcedColors { get; init; }
+
+    /// <summary>The colours a document is drawn in when <see cref="ForcedColors"/> is on. <see cref="SystemColorPalette.Light"/> by default.</summary>
+    public SystemColorPalette ForcedPalette { get; init; } = SystemColorPalette.Light;
 
     /// <summary>Whether <c>inverted-colors</c> reports <c>inverted</c>: the system inverts the colours it shows. Off by default.</summary>
     public bool InvertedColors { get; init; }

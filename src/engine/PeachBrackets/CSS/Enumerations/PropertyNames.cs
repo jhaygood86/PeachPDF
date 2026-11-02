@@ -131,6 +131,7 @@
         public static readonly string FontSizeAdjust = "font-size-adjust";
         public static readonly string FontLanguageOverride = "font-language-override";
         public static readonly string TextRendering = "text-rendering";
+        public static readonly string ForcedColorAdjust = "forced-color-adjust";
         public static readonly string WebkitTextStroke = "-webkit-text-stroke";
         public static readonly string WebkitTextStrokeWidth = "-webkit-text-stroke-width";
         public static readonly string WebkitTextStrokeColor = "-webkit-text-stroke-color";

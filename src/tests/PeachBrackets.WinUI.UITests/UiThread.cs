@@ -1,6 +1,9 @@
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 
+// Every test puts its own content in the one window, so tests must not overlap.
+[assembly: Xunit.CollectionBehavior(Xunit.CollectionBehavior.CollectionPerAssembly)]
+
 namespace PeachBrackets.WinUI.UITests;
 
 /// <summary>

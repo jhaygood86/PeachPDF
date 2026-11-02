@@ -369,6 +369,7 @@ public sealed partial class Win2dCanvas : Canvas
             AbandonLayers();
             ReleaseConverted();
             ReleaseBitmapGlyphs();
+            ReleaseNativeTarget();
             _session.Transform = _originalTransform;
             _session.Blend = _originalBlend;
             _session.Antialiasing = _originalAntialiasing;
