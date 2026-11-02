@@ -1,3 +1,23 @@
+PeachBrackets.AccessibleNode : sealed class
+  ctor(AccessibleRole Role, Int32 HeadingLevel, String Text, Int32 PageIndex, Rect Bounds, String Uri, Int32 ParentIndex)
+  method AccessibleNode <Clone>$()
+  method Void Deconstruct(out AccessibleRole Role, out Int32 HeadingLevel, out String Text, out Int32 PageIndex, out Rect Bounds, out String Uri, out Int32 ParentIndex)
+  method virtual Boolean Equals(AccessibleNode other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AccessibleRole Role { get; init; }
+  property Int32 HeadingLevel { get; init; }
+  property Int32 PageIndex { get; init; }
+  property Int32 ParentIndex { get; init; }
+  property Rect Bounds { get; init; }
+  property String Text { get; init; }
+  property String Uri { get; init; }
+PeachBrackets.AccessibleRole : enum Int32
+  Heading = 1
+  Link = 3
+  ListItem = 2
+  Text = 0
 PeachBrackets.Annotations.Bookmark : sealed class
   ctor()
   property Boolean IsOpen { get; init; }
@@ -201,6 +221,7 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
+  method IReadOnlyList<AccessibleNode> GetAccessibleNodes()
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)

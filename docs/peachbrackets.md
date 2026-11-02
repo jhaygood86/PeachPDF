@@ -107,6 +107,9 @@ The options are read when the document is loaded.
 `document.Annotations` describes the parts of the document a reader of the pages can act on, positioned on their pages in points from the
 top-left corner of the sheet. A consumer that writes a format with these concepts carries them over; one that only draws can ignore them.
 
+- **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
+  item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
+  tree builds it from these. Needs `RecordTextRuns`.
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
   make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
   laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint
