@@ -117,6 +117,12 @@ namespace PeachBrackets.Html.Animation
                 if (to.Equals("normal", StringComparison.OrdinalIgnoreCase)) to = "0px";
             }
 
+            // SVG 2 section 9.3.2 (the d property): two paths of the same commands are mixed number by number.
+            if (property.Equals("d", StringComparison.OrdinalIgnoreCase) && PathDataInterpolator.TryMix(from, to, t, out var path)) return path;
+
+            // SVG 2 section 13.5 (stroke-dasharray): lists of different lengths are repeated to the lowest common multiple of the two, then mixed item by item.
+            if (property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase) && TryMixDashLists(from, to, t, out var dashes)) return dashes;
+
             // CSS Values 4 §10.1: a calc() against a length is mixed as the calc() of the two terms, resolved at layout.
             if (SupportsCalcMix(property) && TryMixWithCalc(valueParser, property, from, to, t, out var calcMixed)) return calcMixed;
 
@@ -202,6 +208,101 @@ namespace PeachBrackets.Html.Animation
             result = NonNegativeProperties.Contains(property) ? $"max(0px, {mixed})" : mixed;
             return true;
         }
+
+        // Few enough for a hand-written dash pattern, and bounds what two coprime lists of any length can ask for.
+        private const int MaxDashItems = 256;
+
+        /// <summary>
+        /// Two <c>stroke-dasharray</c> lists of different lengths mixed item by item once each is repeated to the lowest common multiple of the two lengths
+        /// (<c>4</c> against <c>20 10</c> is <c>4 4</c> against <c>20 10</c>). False when the lists are of the same length (the generic mix does those), or either is not a
+        /// plain list of numbers and lengths (<c>none</c>, a <c>calc()</c>), or an item pair has two units (which would be a <c>calc()</c> a dash list cannot hold).
+        /// </summary>
+        private static bool TryMixDashLists(string from, string to, double t, out string result)
+        {
+            result = string.Empty;
+
+            if (!TryReadDashList(from, out var a) || !TryReadDashList(to, out var b) || a.Count == b.Count) return false;
+
+            var count = a.Count / GreatestCommonDivisor(a.Count, b.Count) * b.Count;
+            if (count > MaxDashItems) return false;
+
+            var text = new StringBuilder();
+
+            for (var i = 0; i < count; i++)
+            {
+                var (fromNumber, fromUnit) = a[i % a.Count];
+                var (toNumber, toUnit) = b[i % b.Count];
+                if (!fromUnit.Equals(toUnit, StringComparison.OrdinalIgnoreCase)) return false;
+
+                // A dash is never negative, which an easing that overshoots would make it.
+                if (i > 0) text.Append(' ');
+                text.Append(Format(Math.Max(0, fromNumber * (1 - t) + toNumber * t))).Append(fromUnit);
+            }
+
+            result = text.ToString();
+            return true;
+        }
+
+        private static bool TryReadDashList(string value, out List<(double Number, string Unit)> items)
+        {
+            items = [];
+
+            foreach (var part in value.Split([' ', ',', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (!TryReadNumberWithUnit(part, out var number, out var unit) || number < 0) return false;
+
+                items.Add((number, unit));
+            }
+
+            return items.Count > 0;
+        }
+
+        /// <summary>
+        /// A single number with an optional unit (<c>-5px</c>, <c>.5</c>, <c>1e1%</c>) and nothing else. Scanned by hand: the number is one pass over the text, where a
+        /// pattern for it can backtrack in more than one way over a long run of digits.
+        /// </summary>
+        internal static bool TryReadNumberWithUnit(string text, out double number, out string unit)
+        {
+            number = 0;
+            unit = string.Empty;
+
+            var end = 0;
+            if (end < text.Length && text[end] is '+' or '-') end++;
+
+            var digits = 0;
+            while (end < text.Length && char.IsAsciiDigit(text[end])) { end++; digits++; }
+
+            if (end < text.Length && text[end] == '.')
+            {
+                end++;
+                while (end < text.Length && char.IsAsciiDigit(text[end])) { end++; digits++; }
+            }
+
+            if (digits == 0) return false;
+
+            // An exponent is part of the number (1e1px), where the e of em is the start of the unit.
+            if (end < text.Length && (text[end] is 'e' or 'E'))
+            {
+                var exponent = end + 1;
+                if (exponent < text.Length && (text[exponent] is '+' or '-')) exponent++;
+
+                if (exponent < text.Length && char.IsAsciiDigit(text[exponent]))
+                {
+                    end = exponent;
+                    while (end < text.Length && char.IsAsciiDigit(text[end])) end++;
+                }
+            }
+
+            for (var i = end; i < text.Length; i++)
+            {
+                if (!(char.IsAsciiLetter(text[i]) || text[i] == '%')) return false;
+            }
+
+            unit = text[end..];
+            return double.TryParse(text.AsSpan(0, end), NumberStyles.Float, CultureInfo.InvariantCulture, out number);
+        }
+
+        private static int GreatestCommonDivisor(int a, int b) => b == 0 ? a : GreatestCommonDivisor(b, a % b);
 
         private static bool IsWholeCalc(string value) =>
             value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length;

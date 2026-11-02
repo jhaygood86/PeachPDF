@@ -248,4 +248,14 @@ internal static class HtmlViewLogic
     public static bool IsLaunchable(string uri) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
         && parsed.Scheme is "http" or "https" or "mailto" or "tel";
+
+    /// <summary>The size UI Automation names, as the model measures it; a format or page unit is a paragraph and the whole document respectively.</summary>
+    internal static TextUnitKind ToUnitKind(Microsoft.UI.Xaml.Automation.Text.TextUnit unit) => unit switch
+    {
+        Microsoft.UI.Xaml.Automation.Text.TextUnit.Character => TextUnitKind.Character,
+        Microsoft.UI.Xaml.Automation.Text.TextUnit.Word => TextUnitKind.Word,
+        Microsoft.UI.Xaml.Automation.Text.TextUnit.Line => TextUnitKind.Line,
+        Microsoft.UI.Xaml.Automation.Text.TextUnit.Format or Microsoft.UI.Xaml.Automation.Text.TextUnit.Paragraph => TextUnitKind.Paragraph,
+        _ => TextUnitKind.Document,
+    };
 }

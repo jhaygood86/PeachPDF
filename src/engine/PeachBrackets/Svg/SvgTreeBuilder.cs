@@ -1146,6 +1146,9 @@ namespace PeachBrackets.Svg
             var childFont = ComputeFontContext(node, fontContext);
 
             _useDepth++;
+            // The instance's parent is the <use>, not the element's own parent: an animation that leaves a property out of a keyframe starts from what
+            // the element inherits, which below a <use> is the <use>'s value (SVG 2 section 5.5.3).
+            targetNode = targetNode.AsInstanceUnder(node);
             // <symbol> is excluded from BuildElement's general dispatch (like <defs> content, it must
             // never be painted directly if encountered during ordinary traversal) - it only becomes
             // paintable through this explicit <use> reference, which is what actually establishes its
@@ -1724,6 +1727,27 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? ApplyAnimation(ISvgSourceNode node, string name, string? declared)
         {
+            // What an element inherits is worked out up the tree and, for a font-size, by two walks (the value, and the size it is a share of), each of which reads the
+            // animations of the ancestors in turn: on a deep tree of animated elements that doubles at every level. Within one lookup nothing changes, so what the walk
+            // has found is kept until the outermost lookup is done.
+            var outermost = _lookupCache is null;
+            if (outermost) _lookupCache = new Dictionary<(object, string), string?>();
+
+            try
+            {
+                return ApplyAnimationCore(node, name, declared);
+            }
+            finally
+            {
+                if (outermost) _lookupCache = null;
+            }
+        }
+
+        [ThreadStatic]
+        private static Dictionary<(object Node, string Name), string?>? _lookupCache;
+
+        private static string? ApplyAnimationCore(ISvgSourceNode node, string name, string? declared)
+        {
             // The parent's value is walked up for once however many of the keyframes' keywords and the underlying value ask for it: asking each
             // time doubles the work at every level of nesting.
             string? parentValue = null;
@@ -1832,11 +1856,29 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? ResolveEffectiveValue(ISvgSourceNode node, string name)
         {
+            if (_lookupCache is { } cache && node.IdentityKey is { } key)
+            {
+                if (cache.TryGetValue((key, name), out var known)) return known;
+
+                var found = ResolveEffectiveValueCore(node, name);
+                cache[(key, name)] = found;
+                return found;
+            }
+
+            return ResolveEffectiveValueCore(node, name);
+        }
+
+        private static string? ResolveEffectiveValueCore(ISvgSourceNode node, string name)
+        {
             var value = ResolveStyledAttr(node, name) is { } declared
                 ? UnderlyingValue(node, name, declared, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
                 : InheritedOrInitialValue(node, name);
 
-            return value is not null && FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value) : value;
+            if (value is null) return null;
+
+            return name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? FontSizeToPixels(node, value)
+                : FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value)
+                : value;
         }
 
         // The inherited length properties whose value can be written in a font-relative unit.
@@ -1861,6 +1903,23 @@ namespace PeachBrackets.Svg
                 : value;
         }
 
+        /// <summary>
+        /// A <c>font-size</c> is a computed length too, but its <c>em</c> and percentage are of the <em>parent's</em> size, not of the element's own (CSS Fonts 4, section 2.5):
+        /// <c>2em</c> on a 10px parent is 20px for every element below. Returns <paramref name="value"/> as pixels on that basis, or unchanged when it is not a plain length
+        /// (a keyword such as <c>larger</c>).
+        /// </summary>
+        private static string FontSizeToPixels(ISvgSourceNode declaring, string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length == 0 || CssGlobalKeywords.TryParse(trimmed, out _)) return value;
+
+            var parentSize = declaring.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+
+            return SvgValueParsers.ParseLength(trimmed, parentSize, new EmBasis(parentSize, FontSizeAt(RootOf(declaring)))) is { } px
+                ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
+                : value;
+        }
+
         private static ISvgSourceNode RootOf(ISvgSourceNode node)
         {
             while (node.Parent is { } parent) node = parent;
@@ -1869,6 +1928,23 @@ namespace PeachBrackets.Svg
 
         /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; 16px with none declared.</summary>
         private static double FontSizeAt(ISvgSourceNode node)
+        {
+            if (_lookupCache is { } cache && node.IdentityKey is { } key)
+            {
+                if (cache.TryGetValue((key, FontSizeCacheName), out var known)) return double.Parse(known!, CultureInfo.InvariantCulture);
+
+                var size = FontSizeAtCore(node);
+                cache[(key, FontSizeCacheName)] = size.ToString("R", CultureInfo.InvariantCulture);
+                return size;
+            }
+
+            return FontSizeAtCore(node);
+        }
+
+        // The used font size is kept beside the effective values, under a name no property has.
+        private const string FontSizeCacheName = "(used font-size)";
+
+        private static double FontSizeAtCore(ISvgSourceNode node)
         {
             var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
             return ResolveStyledAttr(node, "font-size") is { } text

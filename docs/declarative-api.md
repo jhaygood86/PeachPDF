@@ -25,6 +25,7 @@ using PeachPDF.Layout;
 - [Headers, footers, and page numbers](#headers-footers-and-page-numbers)
   - [Sectioned page numbers](#sectioned-page-numbers)
 - [Merging documents](#merging-documents)
+- [Adding existing PDFs](#adding-existing-pdfs)
 - [Known v1 limitations](#known-v1-limitations)
 
 ## Quick start
@@ -462,7 +463,37 @@ var document = await generator.CreateMergedDocument(merge);
 
 Numbering the parts as one run needs every page count before any page is drawn, so the parts are laid out once to count and again to draw, and each callback runs twice: build the document from the callback's own state, not from anything that must happen once. Only the page numbers a document prints change (`counter(page)`, `counter(pages)` and `target-counter(..., page)`); `@page` rules (`:first`, `:left`, `:right`) still select by a page's place in its own part, so each part's cover page is its own `:first` page. A part with several `Page` calls numbers them as one run in both modes, where a document built by `CreateDocument` alone restarts the numbering at each `Page` call. File layers added inside a part (`OverlayFile`, `UnderlayFile`) read their target pages against the merged document, so `"1"` is the first page of the first part.
 
-The `PdfGenerateConfig` passed to `CreateMergedDocument` applies to every part. To merge PDF files that already exist, or to take pages out of them, use `PdfOperation` from [PeachDrawing.PDF](peachdrawing-pdf.md#merging-and-working-on-existing-pdfs) on the saved files.
+The `PdfGenerateConfig` passed to `CreateMergedDocument` applies to every part. To put PDF files that already exist in the document, see [Adding existing PDFs](#adding-existing-pdfs) below; to work on the saved files themselves, use `PdfOperation` from [PeachDrawing.PDF](peachdrawing-pdf.md#merging-and-working-on-existing-pdfs).
+
+## Adding existing PDFs
+
+`Append` and `Prepend` on the document builder write the pages of an existing PDF into the document being generated, as a section like a `Page` call is. The sections come out in the order of the calls:
+
+```csharp
+var document = await generator.CreateDocument(doc =>
+{
+    doc.Append(File.ReadAllBytes("cover.pdf"));       // first: nothing comes before it
+
+    doc.Page(page =>
+    {
+        page.Size(PageSize.A4);
+        page.Margin(20);
+        page.Content(c => c.Text("The permit"));
+    });
+
+    doc.Append(File.ReadAllBytes("regulations.pdf")); // last
+});
+```
+
+`Prepend` puts the PDF before everything else wherever it is called (several `Prepend` calls keep their order). `Append` and `Prepend` take the bytes of a file, a `Stream`, or a `PdfOperation`, which chooses pages (`TakePages("2-5")`), joins several files (`MergeFile`) or stamps a layer on them (`OverlayFile`) before they are added. A file that needs a password takes it as the `password` argument.
+
+- The pages become part of the document, so its `PdfGenerateConfig` covers the whole file: PDF/A or PDF/X conformance, encryption, linearization and the metadata are the document's own. The added pages are not tagged, so a document that claims an accessible level (PDF/UA, PDF/A-1a, 2a or 3a) does not get tags for them. An operation that encrypts, linearizes, attaches files or extends the metadata is refused, since those belong to the whole file; set them in the config. The title, author and the other document information of an added file are not taken, nor are its attachments.
+- The links, outline, named destinations, form fields and annotations of an added file are carried across and lead to the pages they now are on. A form field whose name an earlier added file already uses is renamed (`total`, `total_2`). Named destinations of an added file keep their names, so one that shares a name with an anchor of the generated pages (an `id` a link jumps to) is ambiguous: avoid reusing the same names.
+- The `mode` argument chooses how the pages are taken. `PdfCopyMode.Redraw` (the default) draws each page again into the document, so it follows the document's conformance level and colour settings; `PdfCopyMode.ObjectCopy` copies the page objects as they are, which keeps the file's own content byte for byte (its fonts, images and text stay exactly as they were) but does not bring it into line with the document's PDF/A or PDF/X profile.
+- `UseContinuousPageNumbers()` on the builder numbers the generated pages as one run with the added ones (every generated section is laid out twice, once to count and once to draw): with a two-page PDF before a one-page document the footer reads "3 of 3". Without it the generated pages number from 1 and count only themselves. The numbers a document prints change, and `@page` rules (`:first` and the like) still select by a page's place among the generated pages.
+- File layers (`OverlayFile`, `UnderlayFile`) read their target pages against the whole document and are drawn on the generated pages only; the pages added from other PDFs are left as they are.
+
+A `DocumentMerge` part can use `Append` and `Prepend` too. With `UseContinuousPageNumbers()` on the merge the added pages are counted in the run; with original numbering they count only if the part's builder called `UseContinuousPageNumbers()` itself.
 
 ## Known v1 limitations
 
