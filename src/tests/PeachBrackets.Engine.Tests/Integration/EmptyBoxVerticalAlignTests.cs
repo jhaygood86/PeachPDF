@@ -112,13 +112,14 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         // --- an empty positioned inline's own vertical-align (the containing block of its abs child) ---
 
+        /// <summary>The absolute child's top relative to its line's baseline (negative is above it).</summary>
         private static async Task<double> AbsoluteChildTop(string align, string extra = "")
         {
             var (root, _) = await LayoutAsync(Wrap(
-                "<p style='margin:0;padding-top:80pt;font-size:20pt'>text" +
+                "<p id='p' style='margin:0;padding-top:80pt;font-size:20pt'>text" +
                 $"<span style='position:relative;{(align.Length > 0 ? "vertical-align:" + align + ";" : "")}{extra}'>" +
                 "<span id='a' style='position:absolute;left:0;top:0;width:6pt;height:6pt'></span></span>more</p>"));
-            return FindById(root, "a")!.Location.Y;
+            return FindById(root, "a")!.Location.Y - FindById(root, "p")!.LineBoxes[0].BaselineY!.Value;
         }
 
         [Fact]
