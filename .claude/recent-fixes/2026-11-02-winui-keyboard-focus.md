@@ -1,0 +1,9 @@
+# WinUI keyboard focus
+
+Tab, Shift+Tab and Enter on the WinUI view, over the engine's `MoveFocusAsync`/`FocusAsync` (see `HtmlView.Focus.cs`).
+
+- **Decide synchronously, apply later.** A key handler has to say at once whether it used the key, but moving the page's focus restyles and lays the document out again, which is async. `StepFocus` asks the tree for the next stop (`NextFocus`) and answers from that; the move itself is queued (`QueueFocus`) and runs in order. The id of where the focus is *going* (`_focusTargetId`) is kept, so a second Tab pressed before the first has finished steps on from the right place.
+- **Past the last stop the key is not used.** The page gives up its focus and the key goes on to XAML, which moves to the next control. Handling Tab everywhere would make the view a keyboard trap.
+- **The built-in focus indication is the engine's.** The UA sheet styles `:focus` with an outline and focus moves apply it, so no ring is drawn by the control. `GotFocus` from the keyboard moves to the first stop (the last with Shift held); `LostFocus` to something outside the view clears the page's focus.
+- **A region the canvas refuses.** `CanvasVirtualControl.Invalidate(Rect)` throws `ArgumentException` for a region outside the size the control was last laid out at, which happens when the document has just changed size (a Tab straight after load did it). `InvalidateRegion` now falls back to invalidating all of it. A pointer update right after a resize could always have hit this.
+- **Testing without key events.** `StepFocus` is `internal` and the window tests are granted internals (`InternalsVisibleTo` for `PeachBrackets.WinUI.UITests`, and the surface test's expected set says so); `FocusIdle` is the queue's tail to await. A real key press, `Verify-Accessibility.ps1` and Narrator are the checks left to do by hand.

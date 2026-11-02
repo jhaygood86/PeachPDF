@@ -237,6 +237,53 @@ public class HtmlViewTests
         Assert.Equal(["Site", "Hyperlink", "Save", "False", "Saves it", "True"], facts);
     }
 
+    [Fact]
+    public async Task TabStepsThroughTheTabStopsOfThePageAndThenLeavesIt()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<a href='#x'>first</a><button>second</button><p>text</p>");
+            var log = new List<string>();
+
+            async Task<bool> TabAsync(bool forward)
+            {
+                var used = view.StepFocus(forward);
+                await view.FocusIdle;
+                log.Add(used + ":" + (view.FocusedNode?.Name ?? "none"));
+                return used;
+            }
+
+            await TabAsync(true);
+            await TabAsync(true);
+            await TabAsync(false);
+            await TabAsync(true);
+            await TabAsync(true);
+            return log;
+        });
+
+        // Tab to the link, to the button, back to the link, on to the button, and past it: the page gives up the focus and the key is left to XAML.
+        Assert.Equal(["True:first", "True:second", "True:first", "True:second", "False:none"], facts);
+    }
+
+    [Fact]
+    public async Task AutomationCanFocusAPartOfThePageAndSeesWhereTheFocusIs()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<a href='#x'>link</a><button>button</button><p>text</p>");
+            var top = DocumentPeer(view)!.GetChildren();
+            var button = top.First(c => c.GetAutomationControlType() == AutomationControlType.Button);
+            var text = top.First(c => c.GetName() == "text");
+            var before = button.HasKeyboardFocus();
+            button.SetFocus();
+            await Task.Delay(300);
+            await view.FocusIdle;
+            return new[] { before.ToString(), button.IsKeyboardFocusable().ToString(), text.IsKeyboardFocusable().ToString(), button.HasKeyboardFocus().ToString(), view.FocusedNode!.Name };
+        });
+
+        Assert.Equal(["False", "True", "False", "True", "button"], facts);
+    }
+
     private static IEnumerable<AutomationPeer> Descend(AutomationPeer peer)
     {
         foreach (var child in peer.GetChildren() ?? [])
