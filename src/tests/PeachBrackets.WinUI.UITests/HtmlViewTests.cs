@@ -450,7 +450,7 @@ public class HtmlViewTests
             var peer = (HtmlViewAutomationPeer)DocumentPeer(view)!;
             var region = view.AccessibilityTree!.Root;
             HtmlView.RaiseAnnouncements(peer,
-            [
+            (AccessibilityAnnouncement[])[
                 new AccessibilityAnnouncement("Saved", LiveSetting.Polite, region),
                 new AccessibilityAnnouncement("Error", LiveSetting.Assertive, region),
             ]);

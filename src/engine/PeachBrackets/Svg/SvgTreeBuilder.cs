@@ -1146,6 +1146,9 @@ namespace PeachBrackets.Svg
             var childFont = ComputeFontContext(node, fontContext);
 
             _useDepth++;
+            // The instance's parent is the <use>, not the element's own parent: an animation that leaves a property out of a keyframe starts from what
+            // the element inherits, which below a <use> is the <use>'s value (SVG 2 section 5.6).
+            targetNode = targetNode.AsInstanceUnder(node);
             // <symbol> is excluded from BuildElement's general dispatch (like <defs> content, it must
             // never be painted directly if encountered during ordinary traversal) - it only becomes
             // paintable through this explicit <use> reference, which is what actually establishes its
@@ -1836,7 +1839,11 @@ namespace PeachBrackets.Svg
                 ? UnderlyingValue(node, name, declared, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
                 : InheritedOrInitialValue(node, name);
 
-            return value is not null && FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value) : value;
+            if (value is null) return null;
+
+            return name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? FontSizeToPixels(node, value)
+                : FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value)
+                : value;
         }
 
         // The inherited length properties whose value can be written in a font-relative unit.
@@ -1857,6 +1864,23 @@ namespace PeachBrackets.Svg
                 return value;
 
             return SvgValueParsers.ParseLength(trimmed, null, new EmBasis(FontSizeAt(declaring), FontSizeAt(RootOf(declaring)))) is { } px
+                ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
+                : value;
+        }
+
+        /// <summary>
+        /// A <c>font-size</c> is a computed length too, but its <c>em</c> and percentage are of the <em>parent's</em> size, not of the element's own (CSS Fonts 4, section 2.5):
+        /// <c>2em</c> on a 10px parent is 20px for every element below. Returns <paramref name="value"/> as pixels on that basis, or unchanged when it is not a plain length
+        /// (a keyword such as <c>larger</c>).
+        /// </summary>
+        private static string FontSizeToPixels(ISvgSourceNode declaring, string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length == 0 || CssGlobalKeywords.TryParse(trimmed, out _)) return value;
+
+            var parentSize = declaring.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+
+            return SvgValueParsers.ParseLength(trimmed, parentSize, new EmBasis(parentSize, FontSizeAt(RootOf(declaring)))) is { } px
                 ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
                 : value;
         }

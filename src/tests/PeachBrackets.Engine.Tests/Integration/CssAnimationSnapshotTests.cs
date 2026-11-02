@@ -479,6 +479,58 @@ namespace PeachBrackets.Engine.Tests.Integration
         public void Interpolate_ANonNegativeProperty_IsClampedWhenAnEasingOvershoots(string property, string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix(property, from, to, t));
 
+        [Theory]
+        [InlineData("2px 4px", "10px 20px 30px", 0.5, "6px 12px 16px 7px 11px 17px")]      // repeated to the lowest common multiple of 2 and 3
+        [InlineData("4px 4px", "8px", 0.5, "6px 6px")]
+        [InlineData("4px", "20px 10px", 0.25, "8px 5.5px")]
+        [InlineData("2px, 4px", "10px,20px,30px", 0.5, "6px 12px 16px 7px 11px 17px")]      // commas and spaces both separate
+        [InlineData("2px 4px", "10px 20px 30px", -0.5, "0px 0px 0px 1px 0px 0px")]          // a dash is never negative
+        [InlineData("1 2 3 4", "10 20 30 40 50 60", 0.5, "5.5 11 16.5 22 25.5 31 6.5 12 15.5 21 26.5 32")]  // lcm(4, 6) = 12
+        public void Interpolate_DashListsOfDifferentLengths_AreRepeatedToACommonLength(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("stroke-dasharray", from, to, t));
+
+        [Theory]
+        [InlineData("none", "10px 20px", 0.4, "none")]                      // none is not a list
+        [InlineData("4px 8px", "10% 20% 30%", 0.6, "10% 20% 30%")]          // two units would be a calc(), which a dash list cannot hold
+        [InlineData("4px", "calc(2px + 1px) 3px", 0.6, "calc(2px + 1px) 3px")]
+        [InlineData("4px 8px", "10px -20px 30px", 0.4, "4px 8px")]          // a negative dash is invalid
+        public void Interpolate_ADashListThatCannotBeMixed_FlipsHalfWay(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("stroke-dasharray", from, to, t));
+
+        [Theory]
+        [InlineData("path(\"M0 0 L10 10\")", "path(\"M10 10 L30 30\")", 0.5, "path(\"M 5 5 L 20 20\")")]
+        [InlineData("M0 0 L10 10", "path('M10 10 L30 30')", 0.5, "path(\"M 5 5 L 20 20\")")]  // the attribute's own data against a path()
+        [InlineData("path('M0 0 L10 10')", "path('M0 0 L30 30')", 1.625, "path(\"M 0 0 L 42.5 42.5\")")]  // an overshoot extrapolates
+        [InlineData("path('m0 0 l10 10')", "path('m10 10 l30 30')", 0.5, "path(\"M 5 5 L 25 25\")")]  // relative commands mix as the points they reach
+        [InlineData("path('M0 0 L10 10')", "path('M10 10 l30 30')", 0.5, "path(\"M 5 5 L 25 25\")")]
+        [InlineData("path('M0 0 10 10')", "path('M0 0 L30 30')", 0.5, "path(\"M 0 0 L 20 20\")")]  // a pair after M is an L
+        [InlineData("path('M0 0 H10 V10')", "path('M0 0 H30 V30')", 0.5, "path(\"M 0 0 H 20 V 20\")")]
+        [InlineData("path('M0 0 L10 0 Z')", "path('M0 0 L30 0 z')", 0.5, "path(\"M 0 0 L 20 0 Z\")")]
+        [InlineData("path('M0 0 L10 0 Z M5 5 L6 6')", "path('M0 0 L30 0 Z M15 15 L26 26')", 0.5, "path(\"M 0 0 L 20 0 Z M 10 10 L 16 16\")")]
+        [InlineData("path('M0 0 Q5 5 10 0')", "path('M0 0 Q9 9 20 0')", 0.5, "path(\"M 0 0 Q 7 7 15 0\")")]
+        [InlineData("path('M0 0 C1 1 2 2 3 3 S5 5 6 6')", "path('M0 0 C1 1 2 2 3 3 S9 9 12 12')", 0.5, "path(\"M 0 0 C 1 1 2 2 3 3 S 7 7 9 9\")")]
+        [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A20 10 90 0 1 40 0')", 0.5, "path(\"M 0 0 A 15 10 45 0 1 30 0\")")]
+        [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A10 10 0 1 0 20 0')", 0.5, "path(\"M 0 0 A 10 10 0 1 1 20 0\")")]  // the flags round half up
+        [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A10 10 0 1 0 20 0')", 0.25, "path(\"M 0 0 A 10 10 0 0 1 20 0\")")]
+        [InlineData("path('M10 10 h10 v10')", "path('M10 10 h30 v30')", 0.5, "path(\"M 10 10 H 30 V 30\")")]  // relative h and v
+        [InlineData("path('M0 0 a10 10 0 0 1 20 0')", "path('M10 10 a10 10 0 0 1 20 0')", 0.5, "path(\"M 5 5 A 10 10 0 0 1 25 5\")")]  // a relative arc moves its end point only
+        public void Interpolate_TwoPathsOfTheSameCommands_AreMixedNumberByNumber(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("d", from, to, t));
+
+        [Theory]
+        [InlineData("none", "path('M0 0 L30 30')", 0.4, "none")]
+        [InlineData("path('M0 0 H10')", "path('M0 0 L20 20')", 0.4, "path('M0 0 H10')")]                  // an H is not an L
+        [InlineData("path('M0 0 V10')", "path('M0 0 L0 30')", 0.6, "path('M0 0 L0 30')")]
+        [InlineData("path('M0 0 C1 1 2 2 3 3')", "path('M0 0 S2 2 3 3')", 0.4, "path('M0 0 C1 1 2 2 3 3')")]  // nor an S a C
+        [InlineData("path('M0 0 Q5 5 10 0')", "path('M0 0 C5 5 10 5 15 0')", 0.6, "path('M0 0 C5 5 10 5 15 0')")]
+        [InlineData("path('M0 0 L10 10')", "path('M0 0 L10 10 L20 20')", 0.4, "path('M0 0 L10 10')")]       // a different number of commands
+        [InlineData("path('M0 0 L10')", "path('M0 0 L30 30')", 0.6, "path('M0 0 L30 30')")]                  // malformed data
+        [InlineData("path(evenodd, 'M0 0 L10 10')", "path('M0 0 L30 30')", 0.4, "path(evenodd, 'M0 0 L10 10')")]  // a fill rule is not part of d
+        [InlineData("L0 0 L10 10", "path('M0 0 L30 30')", 0.4, "L0 0 L10 10")]                              // data has to start with a moveto
+        [InlineData("10 10 L20 20", "path('M0 0 L30 30')", 0.4, "10 10 L20 20")]                           // numbers before any command
+        public void Interpolate_PathsThatCannotBeMixed_FlipHalfWay(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("d", from, to, t));
+
         [Fact]
         public void Interpolate_Opacity_IsClampedWhenAnEasingOvershoots()
         {

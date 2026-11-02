@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.RegularExpressions;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
@@ -121,6 +122,10 @@ namespace PeachBrackets.Html.Animation
                     if (resolved is null) continue;
 
                     resolved = InUserUnits(property, resolved)!;
+
+                    // A negative number where the property takes none is an invalid declaration, and a browser drops it from the keyframe as it does at parse time.
+                    if (IsNegativeWhereNoneIsAllowed(property, resolved)) continue;
+
                     stops.Add(new ResolvedStop(stop.Offset, stop.Easing, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [property] = resolved }));
                 }
 
@@ -143,6 +148,23 @@ namespace PeachBrackets.Html.Animation
             "stroke-width", "stroke-dashoffset", "stroke-dasharray", "font-size", "letter-spacing", "word-spacing",
             "x", "y", "cx", "cy", "r", "rx", "ry", "width", "height"
         };
+
+        // The properties that take no negative number: a keyframe that gives one is invalid (a calc() that comes out negative is valid, and clamps).
+        private static readonly HashSet<string> NonNegativeElementProperties = new(StringComparer.OrdinalIgnoreCase) {
+            "r", "rx", "ry", "width", "height", "stroke-width", "font-size"
+        };
+
+        private static bool IsNegativeWhereNoneIsAllowed(string property, string value)
+        {
+            var trimmed = value.Trim();
+
+            if (property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase))
+                return trimmed.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries).Any(IsNegativeNumber);
+
+            return NonNegativeElementProperties.Contains(property) && IsNegativeNumber(trimmed);
+        }
+
+        private static bool IsNegativeNumber(string text) => text.Length > 1 && text[0] == '-' && (char.IsAsciiDigit(text[1]) || text[1] == '.');
 
         private static readonly Regex BareNumber = new(@"(?<![\w.%#-])[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w.%])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

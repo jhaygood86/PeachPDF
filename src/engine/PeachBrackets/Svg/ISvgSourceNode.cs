@@ -84,6 +84,13 @@ namespace PeachBrackets.Svg
         ISvgSourceNode? Parent => null;
 
         /// <summary>
+        /// This node as the root of the instance a <paramref name="use"/> element makes of it: the same element, but its <see cref="Parent"/> is the
+        /// <c>&lt;use&gt;</c> (SVG 2 section 5.6), and so is that of every descendant's chain, which is what an inherited property takes its value
+        /// from below the instance. Selector matching still sees the element where it is declared. A source that does not track parents has no use for it.
+        /// </summary>
+        ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => this;
+
+        /// <summary>
         /// The value a CSS animation gives <paramref name="name"/> on this element at the sampled point, or null when no animation does (the
         /// default, and every element of a standalone SVG, which is not animated). The animation origin sits above normal declarations and below
         /// <c>!important</c> ones (CSS Cascade 4, section 6.1), which the caller settles.

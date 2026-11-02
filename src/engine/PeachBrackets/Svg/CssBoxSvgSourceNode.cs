@@ -37,18 +37,23 @@ namespace PeachBrackets.Svg
         private readonly string _media;
         private readonly CssVarResolver.VarContext? _varContext;
 
+        // Set on the nodes of an instance a <use> makes (see AsInstanceUnder): the box the instance starts at, and the <use> that is its parent.
+        private readonly (CssBox Root, ISvgSourceNode Use)? _instance;
+
         public CssBoxSvgSourceNode(CssBox box)
             : this(box, box, box.HtmlContainer?.CssData, "print", BuildVarContext(box.HtmlContainer))
         {
         }
 
-        private CssBoxSvgSourceNode(CssBox box, CssBox svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext)
+        private CssBoxSvgSourceNode(CssBox box, CssBox svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext,
+            (CssBox Root, ISvgSourceNode Use)? instance = null)
         {
             _box = box;
             _svgRoot = svgRoot;
             _cssData = cssData;
             _media = media;
             _varContext = varContext;
+            _instance = instance;
         }
 
         /// <summary>
@@ -72,14 +77,14 @@ namespace PeachBrackets.Svg
         public string? GetAttribute(string name) => _box.GetAttribute(name, null);
 
         public IEnumerable<ISvgSourceNode> Children =>
-            _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext));
+            _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext, _instance));
 
         public IEnumerable<SvgContentNode> ContentNodes =>
             // A box with no HtmlTag is a loose text node (its Text is the run's characters); one with an
             // HtmlTag is a child element. The HTML tokenizer already emits them as ordered child boxes.
             _box.Boxes.Select(b => b.HtmlTag is null
                 ? SvgContentNode.OfText(b.Text ?? string.Empty)
-                : SvgContentNode.OfElement(new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext)));
+                : SvgContentNode.OfElement(new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext, _instance)));
 
         /// <summary>
         /// Mirrors <c>DomParser.CascadeParseStyles</c>'s own precedent for reading a <c>&lt;style&gt;</c>
@@ -99,9 +104,11 @@ namespace PeachBrackets.Svg
         }
 
         public ISvgSourceNode? Parent =>
-            ReferenceEquals(_box, _svgRoot) || _box.ParentBox is not { } parent
-                ? null
-                : new CssBoxSvgSourceNode(parent, _svgRoot, _cssData, _media, _varContext);
+            _instance is { } instance && ReferenceEquals(_box, instance.Root) ? instance.Use
+            : ReferenceEquals(_box, _svgRoot) || _box.ParentBox is not { } parent ? null
+            : new CssBoxSvgSourceNode(parent, _svgRoot, _cssData, _media, _varContext, _instance);
+
+        public ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => new CssBoxSvgSourceNode(_box, _svgRoot, _cssData, _media, _varContext, (_box, use));
 
         public bool IsAnimated => _box.HtmlContainer?.AnimationProgress is not null && _box.GetSvgAnimationPlan() is not null;
 

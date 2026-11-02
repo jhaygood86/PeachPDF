@@ -117,6 +117,12 @@ namespace PeachBrackets.Html.Animation
                 if (to.Equals("normal", StringComparison.OrdinalIgnoreCase)) to = "0px";
             }
 
+            // SVG 2 section 9.4: two paths of the same commands are mixed number by number.
+            if (property.Equals("d", StringComparison.OrdinalIgnoreCase) && PathDataInterpolator.TryMix(from, to, t, out var path)) return path;
+
+            // SVG 2 section 13.5 (stroke-dasharray): lists of different lengths are repeated to the lowest common multiple of the two, then mixed item by item.
+            if (property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase) && TryMixDashLists(from, to, t, out var dashes)) return dashes;
+
             // CSS Values 4 §10.1: a calc() against a length is mixed as the calc() of the two terms, resolved at layout.
             if (SupportsCalcMix(property) && TryMixWithCalc(valueParser, property, from, to, t, out var calcMixed)) return calcMixed;
 
@@ -202,6 +208,63 @@ namespace PeachBrackets.Html.Animation
             result = NonNegativeProperties.Contains(property) ? $"max(0px, {mixed})" : mixed;
             return true;
         }
+
+        // Few enough for a hand-written dash pattern, and bounds what two coprime lists of any length can ask for.
+        private const int MaxDashItems = 256;
+
+        /// <summary>
+        /// Two <c>stroke-dasharray</c> lists of different lengths mixed item by item once each is repeated to the lowest common multiple of the two lengths
+        /// (<c>4</c> against <c>20 10</c> is <c>4 4</c> against <c>20 10</c>). False when the lists are of the same length (the generic mix does those), or either is not a
+        /// plain list of numbers and lengths (<c>none</c>, a <c>calc()</c>), or an item pair has two units (which would be a <c>calc()</c> a dash list cannot hold).
+        /// </summary>
+        private static bool TryMixDashLists(string from, string to, double t, out string result)
+        {
+            result = string.Empty;
+
+            if (!TryReadDashList(from, out var a) || !TryReadDashList(to, out var b) || a.Count == b.Count) return false;
+
+            var count = a.Count / GreatestCommonDivisor(a.Count, b.Count) * b.Count;
+            if (count > MaxDashItems) return false;
+
+            var text = new StringBuilder();
+
+            for (var i = 0; i < count; i++)
+            {
+                var (fromNumber, fromUnit) = a[i % a.Count];
+                var (toNumber, toUnit) = b[i % b.Count];
+                if (!fromUnit.Equals(toUnit, StringComparison.OrdinalIgnoreCase)) return false;
+
+                // A dash is never negative, which an easing that overshoots would make it.
+                if (i > 0) text.Append(' ');
+                text.Append(Format(Math.Max(0, fromNumber * (1 - t) + toNumber * t))).Append(fromUnit);
+            }
+
+            result = text.ToString();
+            return true;
+        }
+
+        private static readonly System.Text.RegularExpressions.Regex DashItem = new(
+            @"^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)([a-zA-Z%]*)$",
+            System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        private static bool TryReadDashList(string value, out List<(double Number, string Unit)> items)
+        {
+            items = [];
+
+            foreach (var part in value.Split([' ', ',', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (DashItem.Match(part) is not { Success: true } match
+                    || !double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
+                    || number < 0)
+                    return false;
+
+                items.Add((number, match.Groups[2].Value));
+            }
+
+            return items.Count > 0;
+        }
+
+        private static int GreatestCommonDivisor(int a, int b) => b == 0 ? a : GreatestCommonDivisor(b, a % b);
 
         private static bool IsWholeCalc(string value) =>
             value.StartsWith("calc(", StringComparison.OrdinalIgnoreCase) && MatchingParen(value, 4) == value.Length;
