@@ -30,6 +30,7 @@ PeachBrackets.Android.HtmlView : sealed class
   method Void CopySelection()
   method Void SelectAll()
   method virtual Boolean OnGenericMotionEvent(MotionEvent e)
+  method virtual Boolean OnHoverEvent(MotionEvent e)
   method virtual Boolean OnKeyDown(Keycode keyCode, KeyEvent e)
   method virtual Boolean OnTouchEvent(MotionEvent e)
   method virtual PointerIcon OnResolvePointerIcon(MotionEvent e, Int32 pointerIndex)
