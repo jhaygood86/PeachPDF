@@ -55,6 +55,8 @@ public sealed partial class HtmlView : UserControl
     private readonly CanvasVirtualControl _canvas = new();
     private Microsoft.UI.Dispatching.DispatcherQueueTimer? _reflowTimer;
     private Win2dRenderContext? _context;
+    private Win2dTextRendering _textRendering = Win2dTextRendering.Auto;
+    private Color _pageBackground = Microsoft.UI.Colors.White;
     private HtmlDocument? _document;
     private double[] _pageTops = [];
     private double[] _pageHeights = [];
@@ -68,6 +70,7 @@ public sealed partial class HtmlView : UserControl
         IsTabStop = true;
         _canvas.HorizontalAlignment = HorizontalAlignment.Left;
         _canvas.VerticalAlignment = VerticalAlignment.Top;
+        _canvas.ClearColor = _pageBackground;
         _canvas.RegionsInvalidated += OnRegionsInvalidated;
         _host = new HtmlViewHost(this);
         _host.Content = _scroller;
@@ -100,8 +103,43 @@ public sealed partial class HtmlView : UserControl
         set => SetValue(SourceProperty, value);
     }
 
-    /// <summary>The colour behind the page.</summary>
-    public Color PageBackground { get; set; } = Microsoft.UI.Colors.White;
+    /// <summary>
+    /// The colour behind the page. While it is opaque (the default) the view's surface has no alpha channel (the control follows its clear colour
+    /// in this), which is what lets LCD text be blended against what is behind it; a colour with transparency keeps the surface translucent,
+    /// and text is drawn as grayscale.
+    /// </summary>
+    public Color PageBackground
+    {
+        get => _pageBackground;
+        set
+        {
+            _pageBackground = value;
+            _canvas.ClearColor = value;
+            _canvas.Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// How the text is drawn; see <see cref="Win2dTextRendering"/>. <see cref="Win2dTextRendering.Auto"/> (the default) draws body text hinted and
+    /// with the weight Windows gives it, with ClearType's colour stripes when the user has ClearType on and what is behind the text is opaque,
+    /// and leaves large text as crisp vectors.
+    /// </summary>
+    public Win2dTextRendering TextRendering
+    {
+        get => _textRendering;
+        set
+        {
+            if (_textRendering == value)
+                return;
+
+            _textRendering = value;
+            if (_context is not null)
+            {
+                _context.TextRendering = value;
+                _canvas.Invalidate();
+            }
+        }
+    }
 
     /// <summary>
     /// The pointing devices the document's <c>hover</c> and <c>pointer</c> media queries report. <see langword="null"/> (the default) asks the
@@ -167,7 +205,7 @@ public sealed partial class HtmlView : UserControl
     private void OnLoaded()
     {
         _loaded = true;
-        _context ??= new Win2dRenderContext(CanvasDevice.GetSharedDevice()) { PixelsPerPoint = PixelsPerPoint };
+        _context ??= new Win2dRenderContext(CanvasDevice.GetSharedDevice()) { PixelsPerPoint = PixelsPerPoint, TextRendering = _textRendering };
         _reflowTimer ??= DispatcherQueue.CreateTimer();
         _reflowTimer.Interval = TimeSpan.FromMilliseconds(150);
         _reflowTimer.IsRepeating = false;
@@ -318,7 +356,7 @@ public sealed partial class HtmlView : UserControl
         foreach (var region in args.InvalidatedRegions)
         {
             using var session = sender.CreateDrawingSession(region);
-            session.Clear(PageBackground);
+            session.Clear(_pageBackground);
             if (document is null || context is null)
                 continue;
 
