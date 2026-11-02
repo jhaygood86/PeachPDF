@@ -237,6 +237,21 @@ public class HtmlViewTests
         Assert.Equal(["Site", "Hyperlink", "Save", "False", "Saves it", "True"], facts);
     }
 
+    [Fact]
+    public async Task ListItemsKnowTheirPlaceInTheSet()
+    {
+        var places = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<ul><li>one</li><li>two</li><li>three</li></ul><p>not an item</p>");
+            var top = DocumentPeer(view)!.GetChildren();
+            var items = top.First(c => c.GetAutomationControlType() == AutomationControlType.List).GetChildren();
+            return (items.Select(i => (i.GetPositionInSet(), i.GetSizeOfSet())).ToArray(), top.First(c => c.GetName() == "not an item").GetPositionInSet());
+        });
+
+        Assert.Equal([(1, 3), (2, 3), (3, 3)], places.Item1);
+        Assert.Equal(-1, places.Item2);
+    }
+
     private static IEnumerable<AutomationPeer> Descend(AutomationPeer peer)
     {
         foreach (var child in peer.GetChildren() ?? [])
