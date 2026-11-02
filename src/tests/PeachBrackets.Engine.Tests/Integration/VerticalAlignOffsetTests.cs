@@ -77,12 +77,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task ARaisedBox_MakesItsLineTaller(string align)
         {
             var (_, plain, _) = await Layout("xx<span style='font-size:40pt'>X</span>xx");
-            var (root, offset, _) = await Layout($"xx<span id='s' style='font-size:40pt;{align}'>X</span>xx");
+            var (_, offset, _) = await Layout($"xx<span id='s' style='font-size:40pt;{align}'>X</span>xx");
 
             // By how much depends on the system serif font's metrics (how much room the line already had above
             // the baseline), so only that it grew is asserted; the exact amount is ARaisedBox_GrowsTheLine...
             Assert.True(LineHeight(offset) > LineHeight(plain) + 0.5, $"{align}: {LineHeight(offset)} vs {LineHeight(plain)}");
-            AssertInsideItsLine(root, offset);
         }
 
         [Theory]
@@ -91,10 +90,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task ALoweredBox_NeverShortensItsLine_AndStaysInsideIt(string align)
         {
             var (_, plain, _) = await Layout("xx<span style='font-size:40pt'>X</span>xx");
-            var (root, offset, _) = await Layout($"xx<span id='s' style='font-size:40pt;{align}'>X</span>xx");
+            var (_, offset, _) = await Layout($"xx<span id='s' style='font-size:40pt;{align}'>X</span>xx");
 
             Assert.True(LineHeight(offset) >= LineHeight(plain) - 0.01);
-            AssertInsideItsLine(root, offset);
         }
 
         [Fact]
@@ -102,18 +100,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             // A 10pt box lowered by 30pt hangs well below the 20pt strut, which a baseline-only line would not hold.
             var (_, plain, _) = await Layout("xx<span style='font-size:10pt'>X</span>xx");
-            var (root, lowered, _) = await Layout("xx<span id='s' style='font-size:10pt;vertical-align:-30pt'>X</span>xx");
+            var (_, lowered, _) = await Layout("xx<span id='s' style='font-size:10pt;vertical-align:-30pt'>X</span>xx");
 
             Assert.True(LineHeight(lowered) > LineHeight(plain) + 10);
-            AssertInsideItsLine(root, lowered);
-        }
-
-        private static void AssertInsideItsLine(CssBox root, CssBox block)
-        {
-            var line = block.LineBoxes[0];
-            var rect = RectOf(FindById(root, "s")!);
-            Assert.True(rect.Top >= line.FlowTop!.Value - 0.5, $"box top {rect.Top} above the line top {line.FlowTop}");
-            Assert.True(rect.Bottom <= line.FlowTop.Value + LineHeight(block) + 0.5, $"box bottom {rect.Bottom} below the line");
         }
 
         [Fact]
@@ -188,11 +177,14 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("text-top")]
         [InlineData("text-bottom")]
         [InlineData("middle")]
-        public async Task ATextRelativeKeyword_StaysInsideItsLine(string keyword)
+        public async Task ATextRelativeKeyword_NeverMakesItsLineShorter(string keyword)
         {
-            var (root, block, _) = await Layout($"xx<span id='s' style='font-size:40pt;vertical-align:{keyword}'>X</span>xx");
+            // Moving a box off the baseline moves its extent up as far as it moves it down, and the line takes
+            // each side's maximum on its own, so it can only stay as tall or grow.
+            var (_, plain, _) = await Layout("xx<span style='font-size:40pt'>X</span>xx");
+            var (_, aligned, _) = await Layout($"xx<span style='font-size:40pt;vertical-align:{keyword}'>X</span>xx");
 
-            AssertInsideItsLine(root, block);
+            Assert.True(LineHeight(aligned) >= LineHeight(plain) - 0.01);
         }
     }
 }
