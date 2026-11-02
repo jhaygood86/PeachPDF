@@ -393,6 +393,7 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
+  method FormControlState? GetFormState(DocumentElement element)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
@@ -420,7 +421,10 @@ PeachBrackets.HtmlDocument : sealed class
   method TextRange? ApplyTextFragmentDirective(String directive)
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
+  method UpdateResult Activate(DocumentElement element)
+  method UpdateResult SetChecked(DocumentElement element, Boolean isChecked)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
+  method UpdateResult SetValue(DocumentElement element, String value)
   method Void ClearHighlights()
   method Void PaintCursors(Int32 pageIndex, Canvas canvas)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
@@ -673,6 +677,18 @@ PeachBrackets.Updates.DocumentElement : sealed class
   method virtual Int32 GetHashCode()
   property String Id { get; }
   property String TagName { get; }
+PeachBrackets.Updates.FormControlState : struct
+  ctor(String Type, String Name, String Value, Boolean Checked, Boolean Disabled)
+  method Void Deconstruct(out String Type, out String Name, out String Value, out Boolean Checked, out Boolean Disabled)
+  method virtual Boolean Equals(FormControlState other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Checked { get; init; }
+  property Boolean Disabled { get; init; }
+  property String Name { get; init; }
+  property String Type { get; init; }
+  property String Value { get; init; }
 PeachBrackets.Updates.TextEditResult : struct
   ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null, Int32? ResumedFromPage = null)
   method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block, out Int32? ResumedFromPage)

@@ -125,6 +125,11 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`GetFormState(element)`**, **`SetChecked(element, isChecked)`**, **`SetValue(element, value)`** and **`Activate(element)`** read and change what an
+  `<input>` or `<select>` holds in the document itself: whether a check box or radio button is checked (checking a radio button unchecks the rest of its
+  name in the same form), a text field's text, a range's number (kept between `min` and `max`), a drop-down's chosen option. `Activate` does what a click
+  does (toggles a check box, checks a radio button). Each returns an `UpdateResult` with the regions to repaint; no layout pass runs, and the accessibility
+  tree follows. A disabled control, and a read-only one for `SetValue`, is left alone.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall
