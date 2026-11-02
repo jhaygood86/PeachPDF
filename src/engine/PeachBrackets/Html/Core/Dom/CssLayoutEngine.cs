@@ -408,6 +408,8 @@ namespace PeachBrackets.Html.Dom
             // indent-aware flush target unreachable by a mere shift.
             var isRtl = blockBox.Direction.Value == DirectionMode.Rtl;
 
+            blockBox.HangingFirstWidth = MeasureHangingFirst(g, blockBox);
+
             CssLineBoxCoordinates coordinates = new()
             {
                 Line = seedLine,
@@ -859,7 +861,10 @@ namespace PeachBrackets.Html.Dom
 
             var words = new List<CssRect>();
             var outOfFlowDescendants = new List<(CssBox Box, int WordIndex)>();
-            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants);
+            // The thickness an empty inline element obliges the column it sits in, keyed by the index of the word that follows it
+            // (the word count for one after the last word).
+            var emptyInlineThickness = new Dictionary<int, double>();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants, emptyInlineThickness);
 
             var clientTop = blockBox.ClientTop;
             var clientLeft = blockBox.ClientLeft;
@@ -1220,7 +1225,15 @@ namespace PeachBrackets.Html.Dom
                 // still sized from its own box, exactly as it is there.
                 lineThickness = Math.Max(lineThickness,
                     word.IsImage ? wordBlock : LineBoxExtentOf(word, blockBox));
+
+                // An empty inline before the word still has a line box of its own (CSS 2.1 section 9.4.2), sized from its own font
+                // (section 10.8.1); it goes with the word that follows it, as FlowBox's PlaceEmptyInline does.
+                if (emptyInlineThickness.TryGetValue(i, out var emptyThickness))
+                    lineThickness = Math.Max(lineThickness, emptyThickness);
             }
+
+            if (emptyInlineThickness.TryGetValue(words.Count, out var trailingEmptyThickness))
+                lineThickness = Math.Max(lineThickness, trailingEmptyThickness);
 
             maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
 
@@ -1609,7 +1622,8 @@ namespace PeachBrackets.Html.Dom
         /// direct words, not its descendants'.
         /// </summary>
         private static async ValueTask MeasureAndCollectWordsInDocumentOrder(Canvas g, CssBox box,
-            List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants)
+            List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants,
+            Dictionary<int, double>? emptyInlineThickness = null)
         {
             if (box.Words.Count > 0)
             {
@@ -1640,7 +1654,24 @@ namespace PeachBrackets.Html.Dom
                     continue;
                 }
 
-                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants);
+                // An empty inline element puts no word in the stream, but it generates an inline box all the same: its thickness is noted
+                // against the word that follows it.
+                if (emptyInlineThickness is not null && child.DerivedStyle.ActualDisplay == Keywords.Inline && ContributesNothing(child))
+                {
+                    var extent = HalfLeadingExtentWithDecoration(child, g.PixelsPerPoint);
+                    for (var inline = child.ParentBox;
+                         inline is not null && inline.DerivedStyle.ActualDisplay == Keywords.Inline;
+                         inline = inline.ParentBox)
+                    {
+                        extent = extent.Union(HalfLeadingExtentWithDecoration(inline, g.PixelsPerPoint));
+                    }
+
+                    var thickness = extent.AboveBaseline + extent.BelowBaseline;
+                    emptyInlineThickness[words.Count] = emptyInlineThickness.TryGetValue(words.Count, out var held) ? Math.Max(held, thickness) : thickness;
+                    continue;
+                }
+
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants, emptyInlineThickness);
             }
         }
 
@@ -5207,7 +5238,8 @@ namespace PeachBrackets.Html.Dom
             // line box. With no ::first-line in play the strut is the block's own, and the word's own
             // inline box contributes separately alongside it.
             var ownerBox = word.OwnerBox;
-            var strutStyle = word.FirstLineStyle ?? blockBox;
+            // The strut is the block's own first-line style; the word's is its inline's (CssBox.FirstLineInlineStyle), which can differ.
+            var strutStyle = word.FirstLineStyle is null ? blockBox : blockBox.ResolvedFirstLineStyle ?? word.FirstLineStyle;
 
             LineBoxExtent ExtentOf(CssBox box) => reserveDoubleOverlineReach
                 ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
@@ -5223,8 +5255,8 @@ namespace PeachBrackets.Html.Dom
             // A replaced element's own line-height does not contribute; its margin box is added by
             // GrowLineToItsExtent instead. A non-replaced inline ancestor around it still owns an
             // ordinary inline box, so the loop below deliberately continues to include those.
-            if (word.FirstLineStyle is null && !word.IsImage)
-                extent = extent.Union(ExtentOf(ownerBox));
+            if (!word.IsImage)
+                extent = extent.Union(ExtentOf(word.FirstLineStyle ?? ownerBox));
 
             // A word owned by the block itself has no inline ancestors. Starting at its parent in
             // that case would walk *outside* the line's formatting context and let an outer element's
@@ -5233,7 +5265,8 @@ namespace PeachBrackets.Html.Dom
                  inlineAncestor is not null && !ReferenceEquals(inlineAncestor, blockBox);
                  inlineAncestor = inlineAncestor.ParentBox)
             {
-                extent = extent.Union(ExtentOf(inlineAncestor));
+                // On the first line an inline ancestor contributes the font it has there, which inherits from ::first-line.
+                extent = extent.Union(ExtentOf(word.FirstLineStyle is null ? inlineAncestor : inlineAncestor.FirstLineInlineStyle ?? inlineAncestor));
             }
 
             return extent;
@@ -5553,13 +5586,17 @@ namespace PeachBrackets.Html.Dom
                 // The pass that broke here gave it to the line before the break, and kept that line.
                 if (coordinates.EmptyInlinesBeforeResume?.Contains(emptyInline) == true) return;
 
-                var extent = HalfLeadingExtentWithDecoration(emptyInline, g.PixelsPerPoint);
+                // On the first line of a block with a ::first-line rule an inline has the font it inherits from that rule.
+                var onFirstLine = blockBox.ResolvedFirstLineStyle is not null && ReferenceEquals(coordinates.Line, blockBox.LineBoxes.FirstOrDefault());
+                CssBox StyleOn(CssBox inline) => onFirstLine ? inline.FirstLineInlineStyle ?? inline : inline;
+
+                var extent = HalfLeadingExtentWithDecoration(StyleOn(emptyInline), g.PixelsPerPoint);
 
                 for (var inline = emptyInline.ParentBox;
                      inline is not null && !ReferenceEquals(inline, blockBox);
                      inline = inline.ParentBox)
                 {
-                    extent = extent.Union(HalfLeadingExtentWithDecoration(inline, g.PixelsPerPoint));
+                    extent = extent.Union(HalfLeadingExtentWithDecoration(StyleOn(inline), g.PixelsPerPoint));
                 }
 
                 if (coordinates.PendingWordSeparator || IsAtLineStart(coordinates))
@@ -5733,7 +5770,7 @@ namespace PeachBrackets.Html.Dom
                 // corrects the words that actually end up on line 2+ back to b's own normal style.
                 if (blockBox.ResolvedFirstLineStyle != null && coordinates.Line == blockBox.LineBoxes[0])
                 {
-                    b.ApplyFirstLineStyleOverride(g, blockBox.ResolvedFirstLineStyle);
+                    b.ApplyFirstLineStyleOverride(g, b.FirstLineInlineStyle ?? blockBox.ResolvedFirstLineStyle);
                 }
 
                 // A box whose content began in an earlier fragmentainer is not re-opened here: under
@@ -9100,7 +9137,80 @@ namespace PeachBrackets.Html.Dom
         private static double GetLineTextIndent(CssBox blockBox, bool isFirstLine, bool followsForcedBreak)
         {
             var selected = isFirstLine || (blockBox.ActualTextIndentEachLine && followsForcedBreak);
-            return (blockBox.ActualTextIndentHanging ? !selected : selected) ? blockBox.ActualTextIndent : 0d;
+            var indent = (blockBox.ActualTextIndentHanging ? !selected : selected) ? blockBox.ActualTextIndent : 0d;
+
+            // hanging-punctuation: first (CSS Text 3 §8.1): the hung opening punctuation sits outside the
+            // line's start edge and is not measured, which is exactly what a start-edge shift of its own
+            // advance does - the line begins that far outside the content box and gains the same width.
+            // Only the block's true first line, so a resumed fragment's opening line does not hang again.
+            return isFirstLine ? indent - blockBox.HangingFirstWidth : indent;
+        }
+
+        /// <summary>
+        /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start
+        /// edge of <paramref name="blockBox"/>'s first line (CSS Text 3 §8.1), or 0 when the property is off
+        /// or the line does not open with such a character. Qualifying characters are the Unicode categories
+        /// Ps, Pf and Pi plus the ASCII apostrophe and quotation mark. A border or padding on an inline that
+        /// opens the line sits between the edge and the character, so it blocks hanging.
+        /// </summary>
+        private static double MeasureHangingFirst(Canvas g, CssBox blockBox)
+        {
+            if (blockBox.HangingPunctuation is not { Length: > 0 } declared
+                || !HangingPunctuationGrammar.TryParse(declared, out var flags)
+                || (flags & HangingPunctuationFlags.First) == 0)
+            {
+                return 0d;
+            }
+
+            if (FirstTextWordOf(blockBox) is not { } word || word.Text is not { Length: > 0 } text) return 0d;
+
+            Rune.TryGetRuneAt(text, 0, out var rune);
+            if (Rune.GetUnicodeCategory(rune) is not (UnicodeCategory.OpenPunctuation
+                    or UnicodeCategory.InitialQuotePunctuation or UnicodeCategory.FinalQuotePunctuation)
+                && rune.Value is not ('\'' or '"'))
+            {
+                return 0d;
+            }
+
+            var owner = word.OwnerBox;
+            return g.MeasureString(rune.ToString(), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
+        /// <summary>
+        /// The first word of <paramref name="container"/>'s first line, found through inline descendants only:
+        /// a nested block, float, absolutely positioned or atomic inline box ends the search, and an inline
+        /// with its own start border or padding (which would sit between the edge and the word) returns null.
+        /// </summary>
+        private static CssRect? FirstTextWordOf(CssBox container)
+        {
+            foreach (var child in container.Boxes)
+            {
+                foreach (var word in child.Words)
+                {
+                    if (!word.IsSpaces) return word;
+                }
+
+                if (child.IsOutOfFlow) return null;
+
+                if (child.IsBlock)
+                {
+                    if (child.Words.Count == 0) return FirstTextWordOf(child);
+                    return null;
+                }
+
+                if (child.DerivedStyle.ActualDisplay != Keywords.Inline) return null;
+
+                var rtl = child.Direction.Value == DirectionMode.Rtl;
+                if ((rtl ? child.ActualPaddingRight + child.ActualBorderRightWidth
+                        : child.ActualPaddingLeft + child.ActualBorderLeftWidth) > 0)
+                {
+                    return null;
+                }
+
+                if (FirstTextWordOf(child) is { } nested) return nested;
+            }
+
+            return null;
         }
 
         /// <summary>
