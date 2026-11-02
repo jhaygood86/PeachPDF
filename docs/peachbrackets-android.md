@@ -100,8 +100,15 @@ monospace font from `/system/fonts`, and a document's own `@font-face` fonts wor
 The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
 and range are drawn from their own CSS like the rest of the page; no native widget is placed over it. A tap on a check box or radio button toggles it
 (`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. An accessibility service's click action on a check box, radio button or
-switch does the same and the node reports the new checked state. Typing into a text field, picking from a drop-down and moving a range are not handled
-yet: they need the `InputConnection` bridge.
+switch does the same and the node reports the new checked state.
+
+A tap on a text field gives it the focus, puts the caret where the tap landed and shows the soft keyboard; the field shows its selection, the text the
+keyboard is composing and a blinking caret. The view is a text editor to the system while a field has the focus: `OnCreateInputConnection` hands the
+keyboard an `InputConnection` over the field (commit, composing text and its region, deleting around the caret, the selection, the text around the
+caret, the action key), with the keyboard layout and action key chosen from the field's `type` (password, email, URL, telephone, number, search). A
+hardware keyboard works too: arrows, Home and End (Shift selects, Ctrl moves by word), Delete and Backspace (Ctrl by word), printable keys, and
+Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V (a paste into a one-line field turns line breaks into spaces, and a password is never copied). To an accessibility
+service a text field is editable and takes the set-text, set-selection and paste actions. Picking from a drop-down and moving a range are not handled yet.
 
 ## Limits of this version
 

@@ -242,6 +242,19 @@ public sealed partial class HtmlView
                 info.SetCollectionItemInfo(AccessibilityNodeInfo.CollectionItemInfo.Obtain(node.PositionInSet - 1, 1, 0, 1, false, node.Selected ?? false));
             }
 
+            // A text field: an accessibility service can replace its text, move its selection and paste into it.
+            if (node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox)
+            {
+                info.Editable = true;
+                info.InputType = (global::Android.Text.InputTypes)1;
+                info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionSetSelection);
+                if (!node.ReadOnly && !node.Disabled)
+                {
+                    info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionSetText);
+                    info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionPaste);
+                }
+            }
+
             if (AccessibilityMapping.IsCheckable(node.Role))
             {
                 info.Checkable = true;
@@ -327,6 +340,14 @@ public sealed partial class HtmlView
                     return true;
                 case Action.Click when AccessibilityMapping.IsCheckable(node.Role):
                     return view.ActivateControl(node);
+                case Action.SetText when node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox && !node.ReadOnly:
+                    return view.SetFieldText(node, arguments?.GetCharSequence(AccessibilityNodeInfo.ActionArgumentSetTextCharsequence)?.ToString() ?? string.Empty);
+                case Action.SetSelection when node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox:
+                    return view.SetFieldSelection(node, arguments?.GetInt(AccessibilityNodeInfo.ActionArgumentSelectionStartInt, 0) ?? 0,
+                        arguments?.GetInt(AccessibilityNodeInfo.ActionArgumentSelectionEndInt, 0) ?? 0);
+                case Action.Paste when node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox && !node.ReadOnly && view.IsEditing:
+                    view.PasteIntoField();
+                    return true;
                 case Action.NextAtMovementGranularity or Action.PreviousAtMovementGranularity:
                     return view.TraverseText(virtualViewId, node, forward: action == Action.NextAtMovementGranularity, arguments);
                 default:
