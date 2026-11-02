@@ -4,6 +4,7 @@ using Android.OS;
 using Android.Runtime;
 using Android.Util;
 using Android.Views;
+using Android.Views.Accessibility;
 using Android.Widget;
 using PeachBrackets.Android.Logic;
 using PeachDrawing.Core;
@@ -54,7 +55,7 @@ public sealed partial class HtmlView : FrameLayout
     private int _loadVersion;
     private string? _html;
     private bool _attached;
-    private Action? _reflow;
+    private System.Action? _reflow;
 
     /// <summary>Creates a view with nothing in it.</summary>
     /// <param name="context">the context the view lives in</param>
@@ -251,6 +252,7 @@ public sealed partial class HtmlView : FrameLayout
             _loadedWidth = widthDp;
             document.Selection.SelectionChanged += (_, _) => _surface.Invalidate();
             UpdateMetrics();
+            RefreshAccessibility(document);
             ScrollTo(_scrollX, _scrollY);
             _surface.Invalidate();
             DocumentLoaded?.Invoke(this, EventArgs.Empty);
@@ -349,6 +351,7 @@ public sealed partial class HtmlView : FrameLayout
         _scrollX = newX;
         _scrollY = newY;
         _surface.Invalidate();
+        SendAccessibilityEvent(EventTypes.ViewScrolled);
         ScrollChanged?.Invoke(this, EventArgs.Empty);
     }
 

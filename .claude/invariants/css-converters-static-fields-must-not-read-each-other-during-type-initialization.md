@@ -14,3 +14,8 @@ Rule: a static field in a converter type that reads another `Converters` field i
 `NullReferenceException` in a CSS converter's `Convert` that appears on one runtime and not another.
 `GradientConverter.StopColorConverter` is the one known instance; others may exist and will show up the
 same way.
+
+Swept: every other converter-side static that reads `Converters.*` (`BoxShadowGrammar.ColorValidator`, `ExtendedImage.InnerImage`, the `*Property.StyleConverter`
+fields, `SvgOnlyProperty`) is reached only after `Converters` has finished - none is referenced from `Converters`' own initializers - so none can see a
+half-built `Converters`. Keep it that way: a type that `Converters.cs` constructs must not read `Converters.*` in its own static initializer. The Android
+emulator workflow (`.github/workflows/android.yml`) is what would show a new instance, since CoreCLR hides it.
