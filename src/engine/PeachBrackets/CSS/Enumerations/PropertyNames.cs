@@ -178,6 +178,7 @@
         public static readonly string GlyphOrientationHorizontal = "glyph-orientation-horizontal";
         public static readonly string GlyphOrientationVertical = "glyph-orientation-vertical";
         public static readonly string Height = "height";
+        public static readonly string HangingPunctuation = "hanging-punctuation";
         public static readonly string Hyphens = "hyphens";
         public static readonly string HyphenateCharacter = "hyphenate-character";
         public static readonly string HyphenateLimitChars = "hyphenate-limit-chars";

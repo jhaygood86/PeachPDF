@@ -9126,6 +9126,33 @@ await SaveShowcaseAsync("text_indent", "Typography & Text", "text-indent",
     "text-indent's plain, hanging, and each-line forms (CSS Text 3), including their combination and interaction with text-align: center.",
     textIndentHtml, pdfConfig);
 
+// --- hanging-punctuation showcase (CSS Text 3 §8.1: first) ---
+
+const string HangingPunctuationCss = """
+    <style>
+    @page { size: a4; margin: 25mm }
+    body { font: 12pt Georgia, serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em; font-family: Arial, sans-serif }
+    h2 { font-size: 10pt; margin: 0.9em 0 0.3em; font-family: Arial, sans-serif }
+    .col { width: 320px; text-align: justify; border-left: 1px solid #c33; border-right: 1px solid #c33; padding: 0 }
+    .hang { hanging-punctuation: first }
+    </style>
+    """;
+
+var hangingPunctuationHtml = "<!DOCTYPE html><html><head>" + HangingPunctuationCss + "</head><body>" +
+    "<h1>CSS Text 3 hanging-punctuation Test Page</h1>" +
+    "<h2>none: the opening quote pushes the first line's text in</h2>" +
+    "<p class=\"col\">“Typography is the craft of endowing human language with a durable visual form,” wrote Robert Bringhurst, and the edge of a column is part of that form.</p>" +
+    "<h2>first: the quote hangs in the margin and the text edge stays straight</h2>" +
+    "<p class=\"col hang\">“Typography is the craft of endowing human language with a durable visual form,” wrote Robert Bringhurst, and the edge of a column is part of that form.</p>" +
+    "<h2>first with a bracket opening an inline</h2>" +
+    "<p class=\"col hang\"><em>(Parenthetical openings hang too,</em> and the following lines of the paragraph start flush at the column edge as usual.)</p>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("hanging_punctuation", "Typography & Text", "hanging-punctuation",
+    "hanging-punctuation: first (CSS Text 3) hangs an opening quote or bracket outside the start edge so the column's optical edge stays straight.",
+    hangingPunctuationHtml, pdfConfig);
+
 // --- text-align / text-align-last showcase (CSS Text 3 §6.1, §6.3, §6.4.3) ---
 
 const string TextAlignLastCss = """
