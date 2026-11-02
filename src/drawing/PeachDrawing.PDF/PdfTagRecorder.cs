@@ -283,6 +283,9 @@ namespace PeachDrawing.PDF
         /// <returns><see langword="true"/> when it exists</returns>
         public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
 
+        readonly HashSet<string> _idsInUse = new(StringComparer.Ordinal);
+        readonly List<(string Id, PdfStructureElement Element)> _elementsById = [];
+
         PdfDictionary? _pdf2Namespace;
 
         // A PDF 2.0 file says which namespace its structure types come from: the root lists the namespaces it uses and every element names
@@ -322,6 +325,11 @@ namespace PeachDrawing.PDF
                 element.Elements.SetString("/Lang", details.Language, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.Alt))
                 element.Elements.SetString("/Alt", details.Alt, PdfStringEncoding.Unicode);
+            if (!string.IsNullOrEmpty(details.Id) && _idsInUse.Add(details.Id))
+            {
+                element.Elements.SetString("/ID", details.Id, PdfStringEncoding.Unicode);
+                _elementsById.Add((details.Id, element));
+            }
             if (!string.IsNullOrEmpty(details.ActualText))
                 element.Elements.SetString("/ActualText", details.ActualText, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.Title))
@@ -479,6 +487,62 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// Checks the structure recorded so far against requirements of tagged accessible documents (the Matterhorn Protocol's structural checkpoints)
+        /// that the file's content decides and no writer can: a heading that skips a level, a table with no header cell, a figure with no description.
+        /// Call it after <see cref="Finish"/>. It reports, it does not throw: a document can be legitimate and still trip one.
+        /// </summary>
+        /// <returns>a sentence for each finding, in document order; empty when there is none</returns>
+        public IReadOnlyList<string> CheckStructure()
+        {
+            var findings = new List<string>();
+            var lastHeading = 0;
+
+            static string Text(PdfDictionary dictionary, string key) => dictionary.Elements.GetString(key) ?? string.Empty;
+
+            static bool HasDescendant(PdfDictionary element, string type)
+            {
+                foreach (var kid in PdfStructureElement.GetKids(element.Elements))
+                {
+                    if (kid.Elements.GetName("/S") == type || HasDescendant(kid, type))
+                        return true;
+                }
+
+                return false;
+            }
+
+            void Visit(PdfDictionary element)
+            {
+                var type = element.Elements.GetName("/S");
+                if (type is { Length: 3 } && type[1] == 'H' && char.IsDigit(type[2]))
+                {
+                    var level = type[2] - '0';
+                    if (level > lastHeading + 1)
+                        findings.Add(lastHeading == 0
+                            ? $"The first heading is {type[1..]}, not H1."
+                            : $"A heading {type[1..]} follows H{lastHeading}, skipping a level.");
+                    lastHeading = level;
+                }
+                else if (type == "/Table" && !HasDescendant(element, "/TH"))
+                {
+                    findings.Add("A table has no header cell (TH).");
+                }
+                else if (type == "/Figure" && Text(element, "/Alt").Length == 0 && Text(element, "/ActualText").Length == 0)
+                {
+                    findings.Add("A figure has no alternative text.");
+                }
+
+                foreach (var kid in PdfStructureElement.GetKids(element.Elements))
+                {
+                    if (kid.Elements.GetName("/S") is { Length: > 0 })
+                        Visit(kid);
+                }
+            }
+
+            Visit(_documentElement);
+            return findings;
+        }
+
+        /// <summary>
         /// Completes the structure tree after the last page: writes each page's entry in the parent tree and, when the document has a
         /// title, asks readers to show it (required once a document is tagged). Call it before <see cref="LinkAnnotation(object, PdfLink)"/>.
         /// </summary>
@@ -494,6 +558,17 @@ namespace PeachDrawing.PDF
             }
 
             _parentTreeEntriesByKey.Clear();
+
+            // The names elements gave themselves (/ID), indexed so a reader can find the element a Headers attribute names.
+            if (_elementsById.Count > 0 && _root.Elements.GetObject("/IDTree") is null)
+            {
+                var idTree = new PdfNameTreeNode(new PdfDictionary(_document));
+                _document.Internals.AddObject(idTree);
+                foreach (var (id, element) in _elementsById)
+                    idTree.AddName(id, element.RequiredReference);
+
+                _root.Elements.SetReference("/IDTree", idTree);
+            }
 
             if (!string.IsNullOrEmpty(_document.Info.Title))
                 _document.Catalog.ViewerPreferences.DisplayDocTitle = true;

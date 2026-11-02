@@ -54,10 +54,14 @@ namespace PeachPDF.PdfFeatures
                     Attributes = [new PdfStructureAttributes("List", new Dictionary<string, PdfStructureAttributeValue> { ["ListNumbering"] = PdfStructureAttributeValue.FromName(numbering) })],
                 };
 
+            if (details.HeaderIds.Count > 0)
+                table["Headers"] = PdfStructureAttributeValue.FromList(details.HeaderIds.Select(PdfStructureAttributeValue.FromText));
+
             return new PdfStructureDetails
             {
                 Language = details.Language,
                 Alt = details.AlternativeText,
+                Id = details.ElementId,
                 Attributes = table.Count > 0 ? [new PdfStructureAttributes("Table", table)] : [],
             };
         }

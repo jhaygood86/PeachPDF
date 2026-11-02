@@ -568,6 +568,7 @@ PeachPDF.PeachPdfDocument : class
   method Void ConsolidateImages()
   method Void Save(Stream stream)
   property ClipReport ClipReport { get; }
+  property IReadOnlyList<String> AccessibilityWarnings { get; }
   property Int32 PageCount { get; }
 PeachPDF.RuneRange : struct
   ctor(Rune Start, Rune End)

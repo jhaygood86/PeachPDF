@@ -683,6 +683,8 @@ namespace PeachPDF
             // enabled, append further annotation-keyed entries to the same tree: the document hands each
             // link it puts on a page's canvas to the structure builder - see StructureTagBuilder.LinkAdded).
             structureTagBuilder?.Finish();
+            if (structureTagBuilder is not null && config.PdfUAConformance != PdfUAConformance.None)
+                document.AccessibilityWarnings = [.. document.AccessibilityWarnings, .. structureTagBuilder.Recorder.CheckStructure()];
 
             // The hyperlinks, the form controls and the outline, worked out from the laid-out pages in terms of pages and points. The
             // links go on the canvas of their page like any other drawing call (the PDF canvas writes them as link annotations); the

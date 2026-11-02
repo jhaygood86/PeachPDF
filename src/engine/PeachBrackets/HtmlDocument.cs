@@ -456,7 +456,7 @@ public sealed class HtmlDocument : IDisposable
         get
         {
             _ = Pages;
-            return _annotations ??= DocumentAnnotationCollector.Collect(_container, _container.FragmentTree?.Fragmentainers ?? []);
+            return _annotations ??= DocumentAnnotationCollector.Collect(_container, _container.FragmentTree?.Fragmentainers ?? [], GetAccessibilityTree);
         }
     }
 

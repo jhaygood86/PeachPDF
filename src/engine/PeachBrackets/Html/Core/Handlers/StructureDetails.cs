@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace PeachBrackets.Tagging
 {
     /// <summary>
@@ -22,6 +24,18 @@ namespace PeachBrackets.Tagging
         /// <c>None</c>); otherwise <see langword="null"/>.
         /// </summary>
         public string? ListNumbering { get; init; }
+
+        /// <summary>
+        /// A name for the element that is unique in the document, so that another element can refer to it - given to a table header cell, which the
+        /// <see cref="HeaderIds"/> of a data cell name. Null for other elements.
+        /// </summary>
+        public string? ElementId { get; init; }
+
+        /// <summary>
+        /// For a table cell with a <c>headers</c> attribute, the <see cref="ElementId"/> of each header cell that heads it; empty when the cell does
+        /// not say, and its headers are taken from the table's layout and the cells' <see cref="TableScope"/>.
+        /// </summary>
+        public IReadOnlyList<string> HeaderIds { get; init; } = [];
 
         /// <summary>For a table header cell, what it heads: <c>Row</c> or <c>Column</c>; otherwise <see langword="null"/>.</summary>
         public string? TableScope { get; init; }

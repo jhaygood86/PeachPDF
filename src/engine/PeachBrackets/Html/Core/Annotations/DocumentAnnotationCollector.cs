@@ -24,7 +24,9 @@ namespace PeachBrackets.Html.Annotations
         /// </summary>
         /// <param name="container">the laid-out document</param>
         /// <param name="fragmentainers">the pages, in order</param>
-        public static DocumentAnnotations Collect(HtmlContainerInt container, IReadOnlyList<FragmentainerFragment> fragmentainers)
+        /// <param name="accessibilityTree">how to get the accessibility tree, which names the form controls; null leaves them unnamed</param>
+        public static DocumentAnnotations Collect(
+            HtmlContainerInt container, IReadOnlyList<FragmentainerFragment> fragmentainers, Func<PeachBrackets.Accessibility.AccessibilityTree>? accessibilityTree = null)
         {
             var ppp = container.RenderContext.LayoutUnitsPerPoint;
             var (slotToPage, maxMappedSlot) = PageAnchorResolver.BuildSlotToPageMap(fragmentainers);
@@ -103,7 +105,7 @@ namespace PeachBrackets.Html.Annotations
             CollectRunningElementLinks(container, ppp, fragmentainers, ResolveAnchorTarget, links);
 
             var bookmarks = CollectBookmarks(container, ppp, fragmentainers, slotToPage, maxMappedSlot, bookmarkBoxes);
-            var formFields = CollectFormFields(container, ppp, fragmentainers, slotToPage);
+            var formFields = CollectFormFields(container, ppp, fragmentainers, slotToPage, accessibilityTree);
 
             return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields };
         }
@@ -115,7 +117,8 @@ namespace PeachBrackets.Html.Annotations
         /// each field resolves to exactly one page and one rectangle.
         /// </summary>
         private static List<PageFormField> CollectFormFields(
-            HtmlContainerInt container, double ppp, IReadOnlyList<FragmentainerFragment> fragmentainers, IReadOnlyDictionary<int, int> slotToPage)
+            HtmlContainerInt container, double ppp, IReadOnlyList<FragmentainerFragment> fragmentainers, IReadOnlyDictionary<int, int> slotToPage,
+            Func<PeachBrackets.Accessibility.AccessibilityTree>? accessibilityTree)
         {
             var fields = new List<PageFormField>();
             if (!container.InteractiveForms)
@@ -181,6 +184,7 @@ namespace PeachBrackets.Html.Annotations
                     AppearanceTransform = transform,
                     Classification = classification,
                     Appearance = appearance,
+                    AccessibleName = accessibilityTree?.Invoke().NodeFor(box)?.Name is { Length: > 0 } accessibleName ? accessibleName : null,
                 });
             }
 

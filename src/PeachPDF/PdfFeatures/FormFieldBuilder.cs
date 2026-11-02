@@ -44,6 +44,7 @@ namespace PeachPDF.PdfFeatures
                 Password = c.Attributes.Password,
                 MaxLength = c.Attributes.MaxLength,
                 Placeholder = c.Attributes.Placeholder,
+                AccessibleName = field.AccessibleName,
                 PlaceholderShown = c.PlaceholderShown,
                 AutoFontSize = c.AutoFontSize,
                 CombCells = c.Comb,
