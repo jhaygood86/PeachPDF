@@ -1776,6 +1776,10 @@ namespace PeachBrackets.Html
                     && state.Matches(name, tag.SourceOrdinal);
             }
 
+            // :checked, :disabled, :enabled, :required, :optional, :read-only and :read-write follow the attributes the document has now.
+            if (FormStateSelectors.Handles(name))
+                return node is CssBox formBox && FormStateSelectors.Matches(name, formBox);
+
             return false;
         }
 

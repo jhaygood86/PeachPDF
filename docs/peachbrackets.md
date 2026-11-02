@@ -126,6 +126,9 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`SetOpenAsync(element, open, canvas)`** opens or closes a `<details>` element, as a click on its summary does. A closed one shows only its summary, so
+  the document is styled and laid out again with the new state and the result lists the pages to repaint from the first one that moved. The state is kept if
+  the document is loaded again for a `:focus` or pointer rule.
 - **`GetFormState(element)`**, **`SetChecked(element, isChecked)`**, **`SetValue(element, value)`** and **`Activate(element)`** read and change what an
   `<input>` or `<select>` holds in the document itself: whether a check box or radio button is checked (checking a radio button unchecks the rest of its
   name in the same form), a text field's text, a range's number (kept between `min` and `max`), a drop-down's chosen option. `Activate` does what a click

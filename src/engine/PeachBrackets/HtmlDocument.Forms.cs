@@ -5,6 +5,8 @@ using PeachBrackets.Updates;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading.Tasks;
+using PeachDrawing.Core;
 
 namespace PeachBrackets;
 
@@ -165,6 +167,36 @@ public sealed partial class HtmlDocument
         };
     }
 
+    /// <summary>
+    /// Opens or closes a <c>&lt;details&gt;</c> element, as a click on its summary does: a closed one shows only its summary, so the document is styled
+    /// and laid out again with the new state, and the pages from the first one whose layout moved are to be repainted (the element's own state is
+    /// kept if the document is loaded again for a focus or pointer rule).
+    /// </summary>
+    /// <param name="element">the <c>details</c> element</param>
+    /// <param name="open">whether it is open</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether it was applied and the regions to repaint</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async Task<UpdateResult> SetOpenAsync(DocumentElement element, bool open, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        ThrowIfDisposed();
+        _ = Pages;
+        if (element.Box.HtmlTag is not { } tag || !tag.Name.Equals("details", StringComparison.OrdinalIgnoreCase))
+            return UpdateResult.NotApplied("The element is not a details element.");
+        if (tag.HasAttribute("open") == open)
+            return UpdateResult.NotApplied("The element is already so.");
+        if (_source is null || _options is null)
+            return UpdateResult.NotApplied("Only a document loaded from HTML can be restyled for a change of state.");
+        if (_textEdited)
+            return UpdateResult.NotApplied("The text was edited in place, which loading the document again would undo.");
+
+        SetControlAttribute(element.Box, "open", open ? string.Empty : null);
+        return await RestyleAsync([tag.SourceOrdinal], measuringCanvas);
+    }
+
     private static CssBox? ControlOf(DocumentElement element) =>
         element.Box is CssBoxFormField { HtmlTag: not null } field ? field : null;
 
@@ -195,23 +227,6 @@ public sealed partial class HtmlDocument
         changes[name] = value;
     }
 
-    // Puts back what controls held after the source was loaded again.
-    private void ReapplyFormChanges()
-    {
-        foreach (var (ordinal, changes) in _formChanges)
-        {
-            if (FindByOrdinal(_container.Root, ordinal)?.HtmlTag is not { } tag)
-                continue;
-
-            foreach (var (name, value) in changes)
-            {
-                if (value is null)
-                    tag.RemoveAttribute(name);
-                else
-                    tag.SetAttribute(name, value);
-            }
-        }
-    }
 
     // The options of a drop-down, in order, wherever the parser put them (an option left open can hold the next).
     private static List<CssBox> OptionsOf(CssBox select)

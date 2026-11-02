@@ -166,6 +166,11 @@ internal static class HtmlViewLogic
         var extent = Math.Max(maximum - minimum, 0);
         return (extent / 100, extent / 10);
     }
+    /// <summary>How UI Automation processes a notification for a live region: an assertive one interrupts, a polite one waits for the reader to be idle.</summary>
+    public static Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing ToNotificationProcessing(LiveSetting setting) =>
+        setting == LiveSetting.Assertive
+            ? Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.ImportantMostRecent
+            : Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.MostRecent;
 
     /// <summary>Whether a role is a table, grid or tree grid: the roles UI Automation reads through the Grid and Table patterns.</summary>
     public static bool IsGridRole(AccessibilityRole role) => role is AccessibilityRole.Table or AccessibilityRole.Grid or AccessibilityRole.TreeGrid;

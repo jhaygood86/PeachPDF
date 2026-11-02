@@ -317,6 +317,11 @@ namespace PeachBrackets.Html
                them: ten ems wide and one tall, sitting a little below the baseline. Their content is fallback text for a UA that cannot draw them,
                so it is not painted. */
             progress, meter { display: inline-block; width: 10em; height: 1em; vertical-align: -0.2em; box-sizing: border-box; }
+
+            /* A details element that is not open shows only its summary; everything else in it is hidden until it is opened. A second summary child is
+               shown too: telling it from the first takes a sibling combinator, and one in the default sheet turns off the cascade's sibling style
+               sharing for the whole document. */
+            details:not([open]) > :not(summary) { display: none }
         """;
 
         /// <summary>

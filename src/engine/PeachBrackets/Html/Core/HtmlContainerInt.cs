@@ -1331,6 +1331,12 @@ namespace PeachBrackets.Html
         /// <summary>What the user is doing to the document (hover, press, focus) for the state pseudo-classes; null for a static document.</summary>
         internal InteractionState? Interaction { get; set; }
 
+        /// <summary>
+        /// What a host changed on elements since the source was loaded (a control's state, a <c>details</c>' <c>open</c>), by the element's place in the
+        /// source: the parse applies them to the tags before the cascade, so every selector and the layout see the document as it is now. Null for none.
+        /// </summary>
+        internal System.Collections.Generic.IReadOnlyDictionary<int, System.Collections.Generic.Dictionary<string, string?>>? AttributeOverrides { get; set; }
+
         /// <summary>Where the caret and selection of the text field being edited are.</summary>
         internal FormEditSession FormEdit { get; } = new();
 

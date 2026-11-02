@@ -119,6 +119,26 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void Reader_GivesAFaceWithNoOs2TableTheOneAPlainFaceWouldHave()
+        {
+            var bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            // Rename the table's directory entry so the table is no longer found.
+            var tag = Encoding.ASCII.GetBytes("OS/2");
+            var entry = bytes.AsSpan(12).IndexOf(tag);
+            Encoding.ASCII.GetBytes("XXXX").CopyTo(bytes, 12 + entry);
+
+            var face = new OpenTypeFontface(FontFileData.CreateCompiledFont(bytes));
+
+            Assert.NotNull(face.os2);
+            Assert.Equal(face.hhea.ascender, face.os2.sTypoAscender);
+            Assert.Equal(face.hhea.descender, face.os2.sTypoDescender);
+            Assert.Equal(5, face.os2.usWidthClass);
+            Assert.Equal((face.head.macStyle & 1) != 0, face.os2.IsBold);
+            Assert.Equal((face.head.macStyle & 2) != 0, face.os2.IsItalic);
+            Assert.Equal(10, face.os2.panose.Length);
+        }
+
+        [Fact]
         public void Reader_RejectsATrueTypeCollectionThatWasNotExtractedFirst()
         {
             var bytes = new byte[64];
