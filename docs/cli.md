@@ -59,6 +59,9 @@ peachpdf doc.html -s print.css --page-size "A4" --page-margin 20mm \
 # Embed the data behind a report in a PDF/A-3 file
 peachpdf report.html --pdfa=3b --pdf-creation-date=2026-09-21 --attach="q3-sales.csv;rel=data" -o report.pdf
 
+# Produce an accessible PDF/UA-1 file (the page needs a <title> and a language)
+peachpdf report.html --pdfua=1 --pdf-lang=en --pdf-creation-date=2026-09-21 -o report.pdf
+
 # Make a ZUGFeRD / Factur-X e-invoice from an invoice page and its Cross Industry Invoice XML
 peachpdf invoice.html --pdfa=3a --pdf-lang=en --pdf-creation-date=2026-09-21 --facturx-xml=invoice.xml -o invoice.pdf
 ```
@@ -112,6 +115,7 @@ the default media type is **print**.
 | `--pdf-creator=CREATOR` | Set the PDF creator. |
 | `--pdf-lang=LANG` | Set the PDF document language (the catalog `/Lang` entry), used when the document declares no language of its own (a document's own `<html lang>` takes priority). |
 | `--pdfa=LEVEL` | Produce a PDF/A-conformant file: `1a`, `1b`, `2a`, `2b`, `2u`, `3a`, `3b`, `3u`, `4`, `4e` or `4f` (see [Generating PDF/A-conformant output](usage-examples.md#generating-pdfa-conformant-output)). |
+| `--pdfua=PART` | Produce a PDF/UA (accessible) file: `1` (ISO 14289-1, PDF 1.7) or `2` (ISO 14289-2, PDF 2.0). Turns on tagging, gives figures alternative text and needs a document title, a language (`--pdf-lang` or `<html lang>`) and a creation date. Can be combined with `--pdfa` (`1` with `1a`, `2a`, `3a`; `2` with `4`). See [Generating PDF/UA (accessible) output](usage-examples.md#generating-pdfua-accessible-output). |
 | `--pdf-creation-date=DATE` | Set the PDF creation date, as an ISO 8601 date or date-time (a value without an offset is UTC). PDF/A needs a creation date and none is made up: without this option the document's own date (`<meta name="date">`) is used, and a document with none makes `--pdfa` fail. |
 | `--attach=FILE` | Embed a file in the PDF (repeatable). Needs a PDF/A-3 level or no PDF/A at all. The MIME type is guessed from the extension; give it and the relationship explicitly after the name, as `FILE;mime=TYPE;rel=RELATIONSHIP` (`rel` is `source`, `data`, `alternative`, `supplement` or `unspecified`). See [Embedding files](usage-examples.md#embedding-files-pdfa-3-attachments). |
 | `--facturx-xml=FILE` | Make a ZUGFeRD / Factur-X e-invoice by embedding this Cross Industry Invoice XML file. Requires `--pdfa=3a`, `3b` or `3u`. The XML is embedded as it is - it is neither generated nor validated. See [ZUGFeRD / Factur-X e-invoices](usage-examples.md#zugferd--factur-x-e-invoices). |

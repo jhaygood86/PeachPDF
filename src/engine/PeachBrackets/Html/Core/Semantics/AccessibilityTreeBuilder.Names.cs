@@ -227,7 +227,9 @@ namespace PeachBrackets.Html.Semantics
                 case "option":
                     return NonEmpty(tag.TryGetAttribute("label")) is { } optionLabel ? Collapse(optionLabel) : null;
                 case "math":
-                    return NonEmpty(tag.TryGetAttribute("alttext")) is { } alttext ? Collapse(alttext) : null;
+                    return NonEmpty(tag.TryGetAttribute("alttext")) is { } alttext ? Collapse(alttext) : (box as CssBoxMath)?.SpokenText;
+                case "svg":
+                    return (box as CssBoxSvg)?.AccessibleTitle;
                 default:
                     return null;
             }
@@ -283,7 +285,7 @@ namespace PeachBrackets.Html.Semantics
             return null;
         }
 
-        private string ComputeDescription(HtmlTag tag, bool nameFromTitle)
+        private string ComputeDescription(CssBox box, HtmlTag tag, bool nameFromTitle)
         {
             if (NonEmpty(tag.TryGetAttribute("aria-describedby")) is { } ids)
             {
@@ -300,6 +302,9 @@ namespace PeachBrackets.Html.Semantics
 
             if (NonEmpty(tag.TryGetAttribute("aria-description")) is { } description)
                 return Collapse(description);
+
+            if (box is CssBoxSvg { AccessibleDescription: { } svgDescription })
+                return svgDescription;
 
             return !nameFromTitle && NonEmpty(tag.TryGetAttribute("title")) is { } title ? Collapse(title) : string.Empty;
         }

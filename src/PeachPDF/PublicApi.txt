@@ -479,6 +479,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property PdfColorScheme PreferredColorScheme { get; set; }
   property PdfDocumentMetadata Metadata { get; set; }
   property PdfEncryptionOptions Encryption { get; set; }
+  property PdfUAConformance PdfUAConformance { get; set; }
   property PdfVersion PdfVersion { get; set; }
   property PdfXConformance PdfXConformance { get; set; }
   property RNetworkLoader NetworkLoader { get; set; }
@@ -547,6 +548,10 @@ PeachPDF.PdfSize : struct
   method virtual String ToString()
   property Double Height { get; }
   property Double Width { get; }
+PeachPDF.PdfUAConformance : enum Int32
+  None = 0
+  UA1 = 1
+  UA2 = 2
 PeachPDF.PdfVersion : enum Int32
   Pdf17 = 0
   Pdf20 = 1

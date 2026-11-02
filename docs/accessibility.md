@@ -66,6 +66,18 @@ The name of a node is the first of these that gives one (the [Accessible Name an
 
 The description is `aria-describedby`, then `aria-description`, then `title` if the name did not already come from it.
 
+## SVG and MathML
+
+An inline `<svg>` is a `GraphicsDocument` node (or `Image` when it says `role="img"`). Its name is the first of `aria-labelledby`, `aria-label` and the
+text of its own [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/title) child, and its description is `aria-describedby`,
+`aria-description` or its [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/desc) child. An SVG with `aria-hidden="true"` is left out.
+
+A [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) element is a `Math` node. Its name is the first of
+`aria-labelledby`, `aria-label`, `alttext` and a `text/plain` `<annotation>` inside `<semantics>`; with none of them the formula is said in English from
+its structure: `x² + 1` is "x squared plus 1", `a/b` is "a over b", a sum with limits is "sum from i equals 1 to n ...", a matrix is "table with 2 rows and
+2 columns; row 1: a, b; row 2: c, d". Fractions, roots, scripts, limits, fences, tables, the usual operators and Greek letters are covered; anything
+else is read in the order it is written.
+
 ## Tables
 
 Cells are placed the way [HTML lays a table out](https://html.spec.whatwg.org/multipage/tables.html#forming-a-table): left to right in their row,
@@ -88,6 +100,13 @@ tree is not rearranged to match it.
 `aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-disabled`, `aria-required`, `aria-readonly`, `aria-invalid`, `aria-busy`,
 `aria-modal` and `aria-current` are read, and so are their native equivalents: `checked`, `disabled` (also through a disabled `fieldset`), `required`,
 `readonly`, `selected`, and a `details` element's `open`.
+
+## PDF/UA
+
+A tagged PDF built from a document carries the same names, languages and table details (see
+[Tagged PDF (PDF/UA) Support](html-css-support.md#tagged-pdf-pdfua-support)), and `PdfGenerateConfig.PdfUAConformance` makes the file claim
+[PDF/UA](https://pdfa.org/resource/iso-14289-pdfua/): it identifies it in the XMP metadata, requires a title, a language and a creation date, gives every
+figure alternative text, and shows the title in the viewer. See [Generating PDF/UA (accessible) output](usage-examples.md#generating-pdfua-accessible-output).
 
 ## Preferences and text spacing
 
@@ -123,7 +142,8 @@ percentage or a keyword follows the reader's text size setting, and text sized i
   gives nothing, and no relation can point at one.
 - Content moved into the tree by `display: contents` is not in it yet.
 - A table header or footer that repeats on every page is in the tree once, with the rectangle it has on the first page.
-- Inline SVG is one `GraphicsDocument` node named by its `aria-label`; its `<title>` and `<desc>`, and the shapes inside it, are not read. A `math`
-  element is one `Math` node named by its `alttext` or `aria-label`.
+- An inline SVG is one node: the shapes and text inside it are not separate nodes, and a `<title>` or `<desc>` of an element inside it is not read.
+  A `math` element is one node too, and its spoken form is plain English for common formulas, not a full speech-rule system (no language but English,
+  no ClearSpeak or MathSpeak style settings).
 - A `th` with neither `scope` nor a `headers` link is taken to head its column, and `scope=colgroup` and `scope=rowgroup` are not read.
 - Radio buttons are not counted as a set by their `name`.

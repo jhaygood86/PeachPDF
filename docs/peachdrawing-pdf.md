@@ -183,6 +183,12 @@ or a URI.
 
 ## Tagged PDF
 
+A file can claim PDF/UA with `PdfComposerOptions.UAConformance` (`PdfUAConformance.UA1` or `UA2`). The claim needs a tag recorder, a `Title`, a `Language` and a
+`CreationDate`; `Save` throws if the document was drawn without a recorder, and the recorder then gives every `Figure` alternative text (empty marks it decorative).
+The file identifies itself in its XMP metadata (`pdfuaid:part`, and `pdfuaid:rev` for UA-2, declared as a PDF/A extension schema when a PDF/A level is claimed too),
+shows its title, and is a PDF 1.7 (UA-1) or PDF 2.0 (UA-2) file. It can be combined with PDF/A but not PDF/X, and an encrypted file must allow
+`PdfPermissions.AllowAccessibilityExtract`.
+
 `composer.CreateTagRecorder()` returns a `PdfTagRecorder` that records the logical structure of the document while its pages are drawn, so
 a reader can navigate by heading and assistive technology can read the page in order. Call `BeginPage(page)` as each page is added, wrap
 the drawing of each piece of content in the scope an `Open` method returns, and call `Finish()` after the last page:
