@@ -1,3 +1,4 @@
+using PeachBrackets.Accessibility;
 using PeachBrackets.Annotations;
 using PeachBrackets.Building;
 using PeachBrackets.Css;
@@ -7,6 +8,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Html.Pages;
+using PeachBrackets.Html.Semantics;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.TextGeometry;
 using PeachBrackets.Html.Updates;
@@ -54,6 +56,7 @@ public sealed class HtmlDocument : IDisposable
     private DocumentAnnotations? _annotations;
     private IReadOnlyList<DocumentPage>? _pages;
     private IReadOnlyList<TextRun>? _textRuns;
+    private AccessibilityTree? _accessibilityTree;
     private bool _recordTextRuns;
     private bool _selectionStyling;
     private bool _incrementalUpdates;
@@ -579,12 +582,32 @@ public sealed class HtmlDocument : IDisposable
     }
 
     /// <summary>
-    /// What an assistive technology reads: one node for each block of text (a paragraph, a heading, a list item) with a node after it for each
-    /// link inside it, in reading order, positioned on their pages in points. A host that has an accessibility tree builds it from these.
+    /// What the document is to an assistive technology: a tree of the parts of the page that mean something to a reader, each with its role
+    /// (heading, link, list, table cell, landmark, button...), the name it is called by, its state, the language of its content and where it is on
+    /// its pages. An element has the role HTML gives it, or the one its <c>role</c> attribute names; its name comes from <c>aria-labelledby</c>,
+    /// <c>aria-label</c>, its label, its content or its <c>title</c>. A host that has an accessibility tree (UI Automation on Windows, an
+    /// accessibility node provider on Android) builds it from this one. The tree is built when it is first asked for and kept until the
+    /// document is laid out again.
     /// </summary>
-    /// <returns>the nodes</returns>
-    /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> was not set</exception>
-    public IReadOnlyList<AccessibleNode> GetAccessibleNodes() => AccessibilityCollector.Collect(TextRuns);
+    /// <returns>the tree</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public AccessibilityTree GetAccessibilityTree()
+    {
+        _ = Pages;
+        return _accessibilityTree ??= AccessibilityTreeBuilder.Build(_container, Metadata?.Title);
+    }
+
+    /// <summary>The innermost part of the page at a point, as the accessibility tree describes it: what a reader that is pointed at the page, as by touch, lands on.</summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the node, or null if the point is over nothing in the tree</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    public AccessibilityNode? GetAccessibilityNodeAt(int pageIndex, double x, double y)
+    {
+        ThrowIfNotAPage(pageIndex);
+        return GetAccessibilityTree().NodeAt(pageIndex, x, y);
+    }
 
     /// <summary>Finds every place a string occurs in the text of the document, as <see cref="GetText"/> reads it.</summary>
     /// <param name="query">the text to look for</param>
@@ -1018,6 +1041,7 @@ public sealed class HtmlDocument : IDisposable
         _container.SelectionModel = null;
         _container.HighlightLayers = [];
         _textRuns = null;
+        _accessibilityTree = null;
         _annotations = null;
         await LayOutAsync(measuringCanvas);
     }
@@ -1321,6 +1345,7 @@ public sealed class HtmlDocument : IDisposable
         _highlights.Clear();
         _container.HighlightLayers = [];
         _textRuns = null;
+        _accessibilityTree = null;
         _annotations = null;
         var resumedSlot = await LayOutAsync(measuringCanvas, _editAnchor);
         _editAnchor = null;

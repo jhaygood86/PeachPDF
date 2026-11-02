@@ -70,11 +70,13 @@ panning and zooming for a touch that starts on that element, `pan-x` / `pan-y` /
 
 ## Accessibility
 
-The view is an accessibility **node provider**: the page's blocks of text (paragraphs, headings, list items) are virtual `TextView` nodes with the
-text, bounds and visibility they have on screen, headings are marked as headings (API 28 and later), and each link, a child of its block, is
-clickable and follows the link when TalkBack activates it (raising `LinkTapped`, as a tap does). Accessibility focus scrolls the node into view, and
-the host node scrolls forward and backward. The tree is rebuilt when a document loads or reflows. Reading comes from
-`HtmlDocument.GetAccessibleNodes()`, which any other host can use too. You can see the tree an accessibility service sees with
+The view is an accessibility **node provider** over the page's [accessibility tree](accessibility.md): each part of the page is a virtual view
+with the class of the widget it is like (`Button`, `CheckBox`, `RadioButton`, `EditText`, `Spinner`, `SeekBar`, `ProgressBar`, `ImageView`,
+`ListView`, `GridView`, `TextView`), so TalkBack says what it is. Text, bounds and visibility are those on screen; headings are marked as headings
+(API 28 and later); check boxes, radio buttons and switches report their checked state; a disabled control is not enabled; expandable parts report
+expanded or collapsed (API 30 and later); live regions are announced; and a link or button is clickable (a link follows the link when TalkBack
+activates it, raising `LinkTapped`, as a tap does). Accessibility focus scrolls the node into view, and the host node scrolls forward and
+backward. The tree is rebuilt when a document loads or reflows. You can see the tree an accessibility service sees with
 `adb shell uiautomator dump`.
 
 ## Fonts

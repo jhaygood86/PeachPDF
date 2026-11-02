@@ -109,9 +109,10 @@ top-left corner of the sheet. A consumer that writes a format with these concept
 
 - **`GetInteractionAt(pageIndex, x, y)`** tells a pointer or touch host what the document allows at a point: whether it is inert, which gestures a
   touch there may begin (`touch-action`, as `TouchActions`) and whether its text may be selected (`user-select`).
-- **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
-  item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
-  tree builds it from these. Needs `RecordTextRuns`.
+- **`GetAccessibilityTree()`** is what an assistive technology reads: a tree of the parts of the page that mean something to a reader, each with its
+  role (the one HTML gives the element, or its `role` attribute's), the name it is called by, its state, the language of its content and where it is
+  on its pages. A host that has an accessibility tree of its own builds it from this one; **`GetAccessibilityNodeAt(pageIndex, x, y)`** gives the
+  innermost part at a point. See [Accessibility](accessibility.md).
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
   make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
   laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint
@@ -121,9 +122,6 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
-- **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
-  item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
-  tree builds it from these. Needs `RecordTextRuns`.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall

@@ -1,0 +1,92 @@
+# Accessibility
+
+PeachBrackets describes a document to an assistive technology - a screen reader, a switch, a braille display - as an **accessibility tree**: the
+parts of the page that mean something to a reader, each with the role it has, the name it is called by, and what state it is in. A host such as the
+[WinUI](peachbrackets-winui.md) or [Android](peachbrackets-android.md) view builds the tree its platform wants (UI Automation, an accessibility node
+provider) from this one.
+
+```csharp
+var document = await HtmlDocument.LoadAsync(html, renderContext);
+await document.LayoutAsync(canvas);
+
+AccessibilityTree tree = document.GetAccessibilityTree();
+foreach (var node in tree.Nodes)
+    Console.WriteLine($"{node.Role} \"{node.Name}\"");
+
+AccessibilityNode? underTheFinger = document.GetAccessibilityNodeAt(pageIndex: 0, x: 120, y: 340);
+```
+
+The tree is built when it is first asked for and kept until the document is laid out again. It needs no more than layout: text, bounds and
+links come from the laid-out page.
+
+## The tree
+
+`AccessibilityTree.Root` is the document (named by its `<title>`); the nodes below it follow the document. Each `AccessibilityNode` has:
+
+| Member | What it is |
+|---|---|
+| `Role` | What it is: one of the roles of [WAI-ARIA](https://www.w3.org/TR/wai-aria-1.2/#role_definitions) (`Heading`, `Link`, `List`, `Table`, `Button`, `Navigation`...) or `Text` for text itself |
+| `Name`, `Description` | The name it is called by, and more about it; see [Names](#names) |
+| `Text` | The text it holds, white space collapsed |
+| `ReadingText`, `ReadingChildren` | What a reader says for it, and the children it steps to - an element's own text is read as part of the element, so its text nodes are left out |
+| `Level`, `Uri`, `Language`, `ElementId`, `TagName` | The heading level; where a link leads (an address, or `#name` for a place in the document); the language of its content; the element's `id` and name |
+| `Checked`, `Pressed`, `Expanded`, `Selected`, `Disabled`, `Required`, `ReadOnly`, `Invalid`, `Busy`, `Modal`, `Current` | State, from the element's attributes and the elements around it |
+| `Live`, `Atomic` | How changes are announced (`aria-live`, or what the role implies) |
+| `IsFocusable`, `TabIndex`, `AccessKey`, `KeyShortcuts` | What a keyboard can do with it |
+| `Bounds` | One rectangle for each page it is on, in points from the top-left of the sheet |
+| `Id` | A name that is the same each time the document is laid out, so a reader that is on a node stays there |
+
+Elements that mean nothing to a reader (`div`, `span`, a `section` that has no name) are not in the tree; their content is. Content that is not
+shown is not in it either: `display: none`, `visibility: hidden`, `hidden`, `inert`, and anything inside an `aria-hidden="true"` element. An element
+with `role="presentation"` or `role="none"` is left out too, unless it can be focused, and so is an image whose `alt` is empty.
+
+## Roles
+
+An element has the role HTML gives it ([HTML-AAM](https://www.w3.org/TR/html-aam-1.0/#html-element-role-mappings)): `h1`-`h6` are headings,
+`a[href]` links, `ul` and `ol` lists, `table` a table with `th` column or row headers and `td` cells, `nav`, `main`, `aside` and `search` landmarks,
+`header` and `footer` banner and content information landmarks unless they are inside an `article`, `aside`, `main`, `nav` or `section`, `section`
+and `form` landmarks only when they have a name, and the form controls are what their type says (`input type=checkbox` a check box, `type=range` a
+slider, `type=number` a spin button, `select` a combo box or, with `multiple`, a list box...).
+
+A `role` attribute replaces that. When it names several roles the first one that exists is used, as WAI-ARIA lets an author give a fallback.
+
+## Names
+
+The name of a node is the first of these that gives one (the [Accessible Name and Description Computation](https://www.w3.org/TR/accname-1.2/)):
+
+1. the text of the elements `aria-labelledby` points at;
+2. `aria-label`;
+3. what HTML labels the element with: an image's `alt`, a control's `<label>` (with `for`, or around it), a button's `value`, a `fieldset`'s `<legend>`,
+   a `table`'s `<caption>`, a `figure`'s `<figcaption>`, an `input`'s `placeholder`;
+4. its content, for the roles that are named by it (links, buttons, headings, cells, tabs, menu items...);
+5. its `title`.
+
+The description is `aria-describedby`, then `aria-description`, then `title` if the name did not already come from it.
+
+## State
+
+`aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-disabled`, `aria-required`, `aria-readonly`, `aria-invalid`, `aria-busy`,
+`aria-modal` and `aria-current` are read, and so are their native equivalents: `checked`, `disabled` (also through a disabled `fieldset`), `required`,
+`readonly`, `selected`, and a `details` element's `open`.
+
+## Preferences and text spacing
+
+A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with
+[`prefers-reduced-motion`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-motion),
+[`prefers-contrast`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-contrast),
+[`forced-colors`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/forced-colors),
+[`inverted-colors`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/inverted-colors),
+[`prefers-reduced-transparency`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-transparency) and
+`prefers-reduced-data`. The defaults are those of a static document. `HtmlDocumentOptions.TextSpacing` applies the spacing
+[WCAG 1.4.12](https://www.w3.org/TR/WCAG22/#text-spacing) asks a page to survive (`TextSpacingOverrides.Wcag`) over the document's own.
+
+## Limits of this version
+
+- A name that comes from an element that is not shown (`display: none`) is not read, because that element has no box; `aria-labelledby` pointing at one
+  gives nothing.
+- Content moved into the tree by `display: contents` is not in it yet.
+- A table header or footer that repeats on every page is in the tree once, with the rectangle it has on the first page.
+- Inline SVG is one `GraphicsDocument` node named by its `aria-label`; its `<title>` and `<desc>`, and the shapes inside it, are not read. A `math`
+  element is one `Math` node named by its `alttext` or `aria-label`.
+- Tables report cells and headers as nodes, but not yet their row and column positions, spans or header associations.
+- The relations `aria-controls`, `aria-owns`, `aria-flowto` and `aria-errormessage` are not read.

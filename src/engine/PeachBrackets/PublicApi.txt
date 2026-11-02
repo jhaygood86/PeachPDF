@@ -1,23 +1,145 @@
-PeachBrackets.AccessibleNode : sealed class
-  ctor(AccessibleRole Role, Int32 HeadingLevel, String Text, Int32 PageIndex, Rect Bounds, String Uri, Int32 ParentIndex)
-  method AccessibleNode <Clone>$()
-  method Void Deconstruct(out AccessibleRole Role, out Int32 HeadingLevel, out String Text, out Int32 PageIndex, out Rect Bounds, out String Uri, out Int32 ParentIndex)
-  method virtual Boolean Equals(AccessibleNode other)
+PeachBrackets.Accessibility.AccessibilityBounds : struct
+  ctor(Int32 PageIndex, Rect Bounds)
+  method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
+  method virtual Boolean Equals(AccessibilityBounds other)
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
-  property AccessibleRole Role { get; init; }
-  property Int32 HeadingLevel { get; init; }
   property Int32 PageIndex { get; init; }
-  property Int32 ParentIndex { get; init; }
   property Rect Bounds { get; init; }
-  property String Text { get; init; }
-  property String Uri { get; init; }
-PeachBrackets.AccessibleRole : enum Int32
-  Heading = 1
-  Link = 3
-  ListItem = 2
-  Text = 0
+PeachBrackets.Accessibility.AccessibilityNode : sealed class
+  method IEnumerable<AccessibilityNode> DescendantsAndSelf()
+  method virtual String ToString()
+  property AccessibilityNode Parent { get; }
+  property AccessibilityRole Role { get; }
+  property Boolean Atomic { get; }
+  property Boolean Busy { get; }
+  property Boolean Disabled { get; }
+  property Boolean Invalid { get; }
+  property Boolean IsFocusable { get; }
+  property Boolean Modal { get; }
+  property Boolean ReadOnly { get; }
+  property Boolean Required { get; }
+  property Boolean? Expanded { get; }
+  property Boolean? Selected { get; }
+  property IEnumerable<AccessibilityNode> ReadingChildren { get; }
+  property IReadOnlyList<AccessibilityBounds> Bounds { get; }
+  property IReadOnlyList<AccessibilityNode> Children { get; }
+  property Int32 Level { get; }
+  property Int32? TabIndex { get; }
+  property LiveSetting Live { get; }
+  property String AccessKey { get; }
+  property String Current { get; }
+  property String Description { get; }
+  property String ElementId { get; }
+  property String Id { get; }
+  property String KeyShortcuts { get; }
+  property String Language { get; }
+  property String Name { get; }
+  property String ReadingText { get; }
+  property String TagName { get; }
+  property String Text { get; }
+  property String Uri { get; }
+  property ToggleState Checked { get; }
+  property ToggleState Pressed { get; }
+PeachBrackets.Accessibility.AccessibilityRole : enum Int32
+  Alert = 2
+  AlertDialog = 3
+  Application = 4
+  Article = 5
+  Banner = 6
+  BlockQuote = 7
+  Button = 8
+  Caption = 9
+  Cell = 10
+  CheckBox = 11
+  Code = 12
+  ColumnHeader = 13
+  ComboBox = 14
+  Complementary = 15
+  ContentInfo = 16
+  Definition = 17
+  Deletion = 18
+  Dialog = 19
+  Directory = 20
+  Document = 21
+  Emphasis = 22
+  Feed = 23
+  Figure = 24
+  Form = 25
+  Generic = 0
+  GraphicsDocument = 82
+  Grid = 26
+  GridCell = 27
+  Group = 28
+  Heading = 29
+  Image = 30
+  Insertion = 31
+  Link = 32
+  List = 33
+  ListBox = 34
+  ListItem = 35
+  Log = 36
+  Main = 37
+  Marquee = 38
+  Math = 39
+  Menu = 41
+  MenuBar = 42
+  MenuItem = 43
+  MenuItemCheckBox = 44
+  MenuItemRadio = 45
+  Meter = 40
+  Navigation = 46
+  Note = 47
+  Option = 48
+  Paragraph = 49
+  Presentation = 50
+  ProgressBar = 51
+  Radio = 52
+  RadioGroup = 53
+  Region = 54
+  Row = 55
+  RowGroup = 56
+  RowHeader = 57
+  ScrollBar = 58
+  Search = 59
+  SearchBox = 60
+  Separator = 61
+  Slider = 62
+  SpinButton = 63
+  Status = 64
+  Strong = 65
+  Subscript = 66
+  Superscript = 67
+  Switch = 68
+  Tab = 69
+  TabList = 71
+  TabPanel = 72
+  Table = 70
+  Term = 73
+  Text = 1
+  TextBox = 74
+  Time = 75
+  Timer = 76
+  ToolBar = 77
+  ToolTip = 78
+  Tree = 79
+  TreeGrid = 80
+  TreeItem = 81
+PeachBrackets.Accessibility.AccessibilityTree : sealed class
+  method AccessibilityNode FindById(String id)
+  method AccessibilityNode NodeAt(Int32 pageIndex, Double x, Double y)
+  property AccessibilityNode Root { get; }
+  property IReadOnlyList<AccessibilityNode> Nodes { get; }
+PeachBrackets.Accessibility.LiveSetting : enum Int32
+  Assertive = 2
+  Off = 0
+  Polite = 1
+PeachBrackets.Accessibility.ToggleState : enum Int32
+  False = 1
+  Mixed = 3
+  None = 0
+  True = 2
 PeachBrackets.Annotations.Bookmark : sealed class
   ctor()
   property Boolean IsOpen { get; init; }
@@ -227,13 +349,14 @@ PeachBrackets.GenericFontKeyword : struct
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
 PeachBrackets.HtmlDocument : sealed class
+  method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
+  method AccessibilityTree GetAccessibilityTree()
   method Boolean RemoveHighlight(String name)
   method DocumentCursor GetCursorAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
-  method IReadOnlyList<AccessibleNode> GetAccessibleNodes()
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
