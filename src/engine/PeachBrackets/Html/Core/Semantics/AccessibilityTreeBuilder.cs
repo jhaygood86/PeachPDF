@@ -214,7 +214,7 @@ namespace PeachBrackets.Html.Semantics
 
             ApplyStates(node, box, tag, role, context);
             node.Name = ComputeName(box, tag, role, out var nameFromTitle);
-            node.Description = ComputeDescription(tag, nameFromTitle);
+            node.Description = ComputeDescription(box, tag, nameFromTitle);
             parent.AddChild(node);
 
             // The text of something named by its content is its name: it has no text nodes below it, only the parts of it that are more than text.
