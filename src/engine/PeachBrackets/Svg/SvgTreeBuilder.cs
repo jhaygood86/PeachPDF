@@ -1147,7 +1147,7 @@ namespace PeachBrackets.Svg
 
             _useDepth++;
             // The instance's parent is the <use>, not the element's own parent: an animation that leaves a property out of a keyframe starts from what
-            // the element inherits, which below a <use> is the <use>'s value (SVG 2 section 5.6).
+            // the element inherits, which below a <use> is the <use>'s value (SVG 2 section 5.5.3).
             targetNode = targetNode.AsInstanceUnder(node);
             // <symbol> is excluded from BuildElement's general dispatch (like <defs> content, it must
             // never be painted directly if encountered during ordinary traversal) - it only becomes

@@ -123,8 +123,9 @@ namespace PeachBrackets.Html.Animation
 
                     resolved = InUserUnits(property, resolved)!;
 
-                    // A negative number where the property takes none is an invalid declaration, and a browser drops it from the keyframe as it does at parse time.
-                    if (IsNegativeWhereNoneIsAllowed(property, resolved)) continue;
+                    // A literal the property cannot take (a negative number where it takes none, a bare string for d) is an invalid declaration, and a browser
+                    // drops it from the keyframe as it does at parse time. A function (calc(), var()) is valid here and is settled when it is used.
+                    if (stop.IsLiteral(property) && IsInvalidLiteral(property, resolved)) continue;
 
                     stops.Add(new ResolvedStop(stop.Offset, stop.Easing, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { [property] = resolved }));
                 }
@@ -154,9 +155,11 @@ namespace PeachBrackets.Html.Animation
             "r", "rx", "ry", "width", "height", "stroke-width", "font-size"
         };
 
-        private static bool IsNegativeWhereNoneIsAllowed(string property, string value)
+        private static bool IsInvalidLiteral(string property, string value)
         {
             var trimmed = value.Trim();
+
+            if (property.Equals("d", StringComparison.OrdinalIgnoreCase)) return !IsPathOrNone(trimmed);
 
             if (property.Equals("stroke-dasharray", StringComparison.OrdinalIgnoreCase))
                 return trimmed.Split([' ', ','], StringSplitOptions.RemoveEmptyEntries).Any(IsNegativeNumber);
@@ -164,7 +167,18 @@ namespace PeachBrackets.Html.Animation
             return NonNegativeElementProperties.Contains(property) && IsNegativeNumber(trimmed);
         }
 
-        private static bool IsNegativeNumber(string text) => text.Length > 1 && text[0] == '-' && (char.IsAsciiDigit(text[1]) || text[1] == '.');
+        // d takes none or path(<string>) in CSS: the bare data of the attribute, and path() with a fill rule, are not values of it.
+        private static bool IsPathOrNone(string value)
+        {
+            if (value.Equals("none", StringComparison.OrdinalIgnoreCase)) return true;
+            if (!value.StartsWith("path(", StringComparison.OrdinalIgnoreCase)) return false;
+
+            var rest = value.AsSpan(5).TrimStart();
+            return rest.Length > 0 && (rest[0] == '"' || rest[0] == (char)39);
+        }
+
+        // A number that is below zero: -0px is a zero, which is as valid as 0px.
+        private static bool IsNegativeNumber(string text) => CssValueInterpolator.TryReadNumberWithUnit(text, out var number, out _) && number < 0;
 
         private static readonly Regex BareNumber = new(@"(?<![\w.%#-])[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?(?![\w.%])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

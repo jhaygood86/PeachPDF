@@ -494,6 +494,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("4px 8px", "10% 20% 30%", 0.6, "10% 20% 30%")]          // two units would be a calc(), which a dash list cannot hold
         [InlineData("4px", "calc(2px + 1px) 3px", 0.6, "calc(2px + 1px) 3px")]
         [InlineData("4px 8px", "10px -20px 30px", 0.4, "4px 8px")]          // a negative dash is invalid
+        [InlineData("4px 8px", "10px, -20px, 30px", 0.4, "4px 8px")]  // a negative item after a comma
         public void Interpolate_ADashListThatCannotBeMixed_FlipsHalfWay(string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix("stroke-dasharray", from, to, t));
 
@@ -512,6 +513,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A20 10 90 0 1 40 0')", 0.5, "path(\"M 0 0 A 15 10 45 0 1 30 0\")")]
         [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A10 10 0 1 0 20 0')", 0.5, "path(\"M 0 0 A 10 10 0 1 1 20 0\")")]  // the flags round half up
         [InlineData("path('M0 0 A10 10 0 0 1 20 0')", "path('M0 0 A10 10 0 1 0 20 0')", 0.25, "path(\"M 0 0 A 10 10 0 0 1 20 0\")")]
+        [InlineData("path('M10 10 H20 l5 5')", "path('M10 10 H40 l5 5')", 0.5, "path(\"M 10 10 H 30 L 35 15\")")]  // an l after an H starts from where the H ended
+        [InlineData("path('M10 10 V20 l5 5')", "path('M10 10 V40 l5 5')", 0.5, "path(\"M 10 10 V 30 L 15 35\")")]  // and after a V
+        [InlineData("path('M10 10 L20 10 z l5 5')", "path('M10 10 L40 10 z l5 5')", 0.5, "path(\"M 10 10 L 30 10 Z L 15 15\")")]  // a z takes the point back to where the subpath began
+        [InlineData("path('M10 10 L20 20 m5 5 l1 1 z l2 2')", "path('M10 10 L40 40 m5 5 l1 1 z l2 2')", 0.5, "path(\"M 10 10 L 30 30 M 35 35 L 36 36 Z L 37 37\")")]  // the subpath a m begins is what a later z returns to
+        [InlineData("path('m0 0 10 10')", "path('m0 0 30 30')", 0.5, "path(\"M 0 0 L 20 20\")")]  // the pair after a relative m is a relative l
         [InlineData("path('M10 10 h10 v10')", "path('M10 10 h30 v30')", 0.5, "path(\"M 10 10 H 30 V 30\")")]  // relative h and v
         [InlineData("path('M0 0 a10 10 0 0 1 20 0')", "path('M10 10 a10 10 0 0 1 20 0')", 0.5, "path(\"M 5 5 A 10 10 0 0 1 25 5\")")]  // a relative arc moves its end point only
         public void Interpolate_TwoPathsOfTheSameCommands_AreMixedNumberByNumber(string from, string to, double t, string expected) =>
@@ -528,6 +534,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("path(evenodd, 'M0 0 L10 10')", "path('M0 0 L30 30')", 0.4, "path(evenodd, 'M0 0 L10 10')")]  // a fill rule is not part of d
         [InlineData("L0 0 L10 10", "path('M0 0 L30 30')", 0.4, "L0 0 L10 10")]                              // data has to start with a moveto
         [InlineData("10 10 L20 20", "path('M0 0 L30 30')", 0.4, "10 10 L20 20")]                           // numbers before any command
+        [InlineData("L0 0 L10 10", "L0 0 L30 30", 0.4, "L0 0 L10 10")]  // data that starts with anything but a moveto is not a path, even against its twin
+        [InlineData("path('M0 0 L10 10'", "path('M0 0 L30 30')", 0.4, "path('M0 0 L10 10'")]  // a path( that is not closed
         public void Interpolate_PathsThatCannotBeMixed_FlipHalfWay(string from, string to, double t, string expected) =>
             Assert.Equal(expected, Mix("d", from, to, t));
 

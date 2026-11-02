@@ -7,7 +7,7 @@ namespace PeachBrackets.Html.Animation
 {
     /// <summary>
     /// The mix of two <c>d</c> values (the <c>path()</c> function, or the attribute's own data string): two paths of the same commands are mixed number
-    /// by number (SVG 2 section 9.4, CSS Shapes 1 <c>path()</c>), and anything else flips. The commands have to be the same <em>type</em> - an <c>H</c> is
+    /// by number (SVG 2 section 9.3.2, the <c>d</c> property), and anything else flips. The commands have to be the same <em>type</em> - an <c>H</c> is
     /// not an <c>L</c>, an <c>S</c> not a <c>C</c> - but not the same case, nor written the same way: a relative command is taken to its absolute form first,
     /// and a pair of coordinates after a <c>M</c> is the <c>L</c> it stands for. The result is written as absolute commands.
     /// </summary>
@@ -34,9 +34,10 @@ namespace PeachBrackets.Html.Animation
                 for (var j = 0; j < a[i].Args.Length; j++)
                 {
                     var mixed = a[i].Args[j] * (1 - t) + b[i].Args[j] * t;
+                    if (!double.IsFinite(mixed)) return false;
 
                     // An arc's two flags are not numbers to mix: each is the one it is nearer to, a half way mix being the 1 (as a browser rounds it).
-                    if (a[i].Type == 'A' && j is 3 or 4) mixed = mixed >= 0.5 ? 1 : 0;
+                    if (a[i].Type == 'A' && (j is 3 or 4)) mixed = mixed >= 0.5 ? 1 : 0;
 
                     text.Append(' ').Append(CssValueInterpolator.Format(mixed));
                 }
@@ -104,12 +105,12 @@ namespace PeachBrackets.Html.Animation
 
                 for (var i = 0; i < count; i++)
                 {
-                    if (type == 'A' && i is 3 or 4)
+                    if (type == 'A' && (i is 3 or 4))
                     {
                         if (!SvgNumberScanner.TryReadFlag(data, ref pos, out var flag)) return false;
                         args[i] = flag ? 1 : 0;
                     }
-                    else if (!SvgNumberScanner.TryReadNumber(data, ref pos, out args[i]))
+                    else if (!SvgNumberScanner.TryReadNumber(data, ref pos, out args[i]) || !double.IsFinite(args[i]))
                     {
                         return false;
                     }

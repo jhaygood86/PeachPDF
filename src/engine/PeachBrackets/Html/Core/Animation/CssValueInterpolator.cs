@@ -117,7 +117,7 @@ namespace PeachBrackets.Html.Animation
                 if (to.Equals("normal", StringComparison.OrdinalIgnoreCase)) to = "0px";
             }
 
-            // SVG 2 section 9.4: two paths of the same commands are mixed number by number.
+            // SVG 2 section 9.3.2 (the d property): two paths of the same commands are mixed number by number.
             if (property.Equals("d", StringComparison.OrdinalIgnoreCase) && PathDataInterpolator.TryMix(from, to, t, out var path)) return path;
 
             // SVG 2 section 13.5 (stroke-dasharray): lists of different lengths are repeated to the lowest common multiple of the two, then mixed item by item.
@@ -243,25 +243,63 @@ namespace PeachBrackets.Html.Animation
             return true;
         }
 
-        private static readonly System.Text.RegularExpressions.Regex DashItem = new(
-            @"^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)([a-zA-Z%]*)$",
-            System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
-
         private static bool TryReadDashList(string value, out List<(double Number, string Unit)> items)
         {
             items = [];
 
             foreach (var part in value.Split([' ', ',', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries))
             {
-                if (DashItem.Match(part) is not { Success: true } match
-                    || !double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var number)
-                    || number < 0)
-                    return false;
+                if (!TryReadNumberWithUnit(part, out var number, out var unit) || number < 0) return false;
 
-                items.Add((number, match.Groups[2].Value));
+                items.Add((number, unit));
             }
 
             return items.Count > 0;
+        }
+
+        /// <summary>
+        /// A single number with an optional unit (<c>-5px</c>, <c>.5</c>, <c>1e1%</c>) and nothing else. Scanned by hand: the number is one pass over the text, where a
+        /// pattern for it can backtrack in more than one way over a long run of digits.
+        /// </summary>
+        internal static bool TryReadNumberWithUnit(string text, out double number, out string unit)
+        {
+            number = 0;
+            unit = string.Empty;
+
+            var end = 0;
+            if (end < text.Length && text[end] is '+' or '-') end++;
+
+            var digits = 0;
+            while (end < text.Length && char.IsAsciiDigit(text[end])) { end++; digits++; }
+
+            if (end < text.Length && text[end] == '.')
+            {
+                end++;
+                while (end < text.Length && char.IsAsciiDigit(text[end])) { end++; digits++; }
+            }
+
+            if (digits == 0) return false;
+
+            // An exponent is part of the number (1e1px), where the e of em is the start of the unit.
+            if (end < text.Length && (text[end] is 'e' or 'E'))
+            {
+                var exponent = end + 1;
+                if (exponent < text.Length && (text[exponent] is '+' or '-')) exponent++;
+
+                if (exponent < text.Length && char.IsAsciiDigit(text[exponent]))
+                {
+                    end = exponent;
+                    while (end < text.Length && char.IsAsciiDigit(text[end])) end++;
+                }
+            }
+
+            for (var i = end; i < text.Length; i++)
+            {
+                if (!(char.IsAsciiLetter(text[i]) || text[i] == '%')) return false;
+            }
+
+            unit = text[end..];
+            return double.TryParse(text.AsSpan(0, end), NumberStyles.Float, CultureInfo.InvariantCulture, out number);
         }
 
         private static int GreatestCommonDivisor(int a, int b) => b == 0 ? a : GreatestCommonDivisor(b, a % b);

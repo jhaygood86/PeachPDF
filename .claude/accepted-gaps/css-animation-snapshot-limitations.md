@@ -68,8 +68,8 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
 - **CSS animations on inline `<svg>` elements have gaps.** The elements of an inline `<svg>` are animated (see
   docs/supported-svg-features.md), but a standalone SVG (`<img src="x.svg">`) is not; a keyframe shorthand such as `marker` is
   not expanded (`font` is); a `stroke-dasharray` item pair of two units (`4px` against `10%`) flips, where a browser writes a `calc()` (#2126);
-  a constant `calc()` in a keyframe is folded to its number by the parser, so `r: calc(-10px)` is dropped as the invalid `-10px` where a browser
-  clamps it to 0 (#2124); `rem` in an inline svg is the svg root's font size, where it is the HTML root's (#2125, static as well); `currentcolor` in a keyframe is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed
+  two `stroke-dasharray` lists that need more than 256 items to repeat to a common length flip, where a browser mixes them; a `var()` that
+  resolves to a negative number in a keyframe of `r`, `width` and the like is mixed, where a browser treats it as invalid at computed-value time; `rem` in an inline svg is the svg root's font size, where it is the HTML root's (#2125, static as well); `currentcolor` in a keyframe is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed
   frames (which use the element's own `color`) and not by the end points (#1798).
 - **Gradients and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
   way; `@-webkit-keyframes` and `-webkit-animation` are ignored.

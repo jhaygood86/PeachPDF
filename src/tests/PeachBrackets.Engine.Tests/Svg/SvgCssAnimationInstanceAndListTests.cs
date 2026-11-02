@@ -190,7 +190,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         [Fact]
         public async Task DashListsOfDifferentLengths_ThatAnEasingOvershoots_StayAboveZero()
         {
-            // Chrome: cubic-bezier(.5, -1, .5, 2) at the quarter is about 0.1464 along, which takes 2 to 10 above zero but 4 to 20 below it.
+            // Chrome: cubic-bezier(.5, -1, .5, 2) is below zero at the quarter (about -0.18 along), which takes 2 to 10 to 0.54 but 2 to 30 below zero, where a dash stops at 0.
             var document = await SvgCssAnimationTests.BuildAsync(
                 "@keyframes k { from { stroke-dasharray: 2 4 } to { stroke-dasharray: 10 20 30 } } .t { animation: k 1s cubic-bezier(.5, -1, .5, 2) }",
                 "<rect class=\"t\" width=\"10\" height=\"10\" stroke=\"black\"/>", 0.25);

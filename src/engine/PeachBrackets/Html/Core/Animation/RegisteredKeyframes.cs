@@ -9,7 +9,15 @@ namespace PeachBrackets.Html.Animation
     /// <param name="Offset">Where the keyframe sits in the animation, 0 for <c>0%</c>/<c>from</c> to 1 for <c>100%</c>/<c>to</c>.</param>
     /// <param name="Declarations">Property name to specified value; no <c>!important</c> or <c>animation-*</c> entries.</param>
     /// <param name="Easing">The keyframe's own <c>animation-timing-function</c>, which eases the interval that starts here; null to use the animation's.</param>
-    internal sealed record KeyframeStop(double Offset, Dictionary<string, string> Declarations, string? Easing);
+    /// <param name="Functional">The properties whose value was written as a function (see <see cref="IsLiteral"/>); null when none is recorded.</param>
+    internal sealed record KeyframeStop(double Offset, Dictionary<string, string> Declarations, string? Easing, HashSet<string>? Functional = null)
+    {
+        /// <summary>
+        /// Whether <paramref name="property"/> was written as a plain value here, and not as a function (<c>calc()</c>, <c>min()</c>, <c>var()</c>...): the CSS-OM
+        /// folds a function of constants to its number (<c>calc(-5px)</c> is stored as <c>-5px</c>), which is valid where a literal <c>-5px</c> is not.
+        /// </summary>
+        public bool IsLiteral(string property) => Functional is null || !Functional.Contains(property);
+    }
 
     /// <summary>
     /// The keyframes of one <c>@keyframes</c> rule, in order of offset.
@@ -85,7 +93,7 @@ namespace PeachBrackets.Html.Animation
 
                     // Keyframes at one offset combine; the later declaration of a property wins.
                     if (!byOffset.TryGetValue(offset, out var existing))
-                        byOffset[offset] = existing = new KeyframeStop(offset, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null);
+                        byOffset[offset] = existing = new KeyframeStop(offset, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
                     var easing = existing.Easing;
 
@@ -104,6 +112,9 @@ namespace PeachBrackets.Html.Animation
 
                         // The CSS-wide keywords are kept and resolved against the element when sampled.
                         existing.Declarations[property.Name] = KeepZeroUnit(property);
+
+                        if (IsFunction(property)) existing.Functional?.Add(property.Name);
+                        else existing.Functional?.Remove(property.Name);
                     }
 
                     if (!ReferenceEquals(easing, existing.Easing))
@@ -123,6 +134,11 @@ namespace PeachBrackets.Html.Animation
             !name.StartsWith("--", StringComparison.Ordinal)
             && !name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)
             && !name.StartsWith("transition", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Whether a declaration was written as a function that is settled when it is used: <c>calc()</c>, <c>min()</c>, <c>var()</c>... The <c>path()</c> of <c>d</c> is the plain value of that property.</summary>
+        private static bool IsFunction(Property property) =>
+            property.Original.Contains('(')
+            && !(property.Name.Equals("d", StringComparison.OrdinalIgnoreCase) && property.Original.TrimStart().StartsWith("path(", StringComparison.OrdinalIgnoreCase));
 
         /// <summary>
         /// The declared value, except that a zero <em>length</em> keeps its unit where the property also takes a number. The CSS-OM
