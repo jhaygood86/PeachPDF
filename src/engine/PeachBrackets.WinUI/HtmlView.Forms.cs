@@ -1,0 +1,55 @@
+using PeachBrackets;
+using PeachBrackets.Accessibility;
+using PeachBrackets.Updates;
+using System;
+
+namespace PeachBrackets.WinUI;
+
+public sealed partial class HtmlView
+{
+    // A click on a form control does what a click does: toggles a check box, checks a radio button. Returns whether the point was over a control
+    // that took it, so the click is not also taken as a click on a link around it.
+    private bool ActivateControlAt(int page, double x, double y)
+    {
+        if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element || !IsControl(element))
+            return false;
+
+        var result = document.Activate(element);
+        AfterControlChange(document, result);
+        return result.Applied;
+    }
+
+    /// <summary>Does what a click on a control does, for a screen reader or the keyboard.</summary>
+    internal bool ActivateControl(AccessibilityNode node)
+    {
+        if (_document is not { } document || node.ElementId is not { } id || document.GetElement(id) is not { } element)
+            return false;
+
+        var result = document.Activate(element);
+        AfterControlChange(document, result);
+        return result.Applied;
+    }
+
+    /// <summary>The node as the document describes it now: the tree is built again after a control changes, so a peer's own node can be an old one.</summary>
+    internal AccessibilityNode CurrentNode(AccessibilityNode node) => _document?.GetAccessibilityTree().FindById(node.Id) ?? node;
+
+    private static bool IsControl(DocumentElement element) =>
+        element.TagName.Equals("input", StringComparison.OrdinalIgnoreCase) || element.TagName.Equals("select", StringComparison.OrdinalIgnoreCase);
+
+    private void AfterControlChange(PeachBrackets.HtmlDocument document, UpdateResult result)
+    {
+        Repaint(result);
+        if (result.Applied)
+            RefreshAccessibility(document);
+    }
+
+    // Space (or Enter) on a focused check box or radio button toggles it.
+    private bool HandleControlKey(Windows.System.VirtualKey key)
+    {
+        if (key is not (Windows.System.VirtualKey.Space or Windows.System.VirtualKey.Enter) || _document is not { } document)
+            return false;
+
+        var node = _focusTargetId is { } id ? document.GetAccessibilityTree().FindById(id) : document.FocusedNode;
+        return node is not null && HtmlViewLogic.IsToggleControl(node.Role) && ActivateControl(node);
+    }
+}
