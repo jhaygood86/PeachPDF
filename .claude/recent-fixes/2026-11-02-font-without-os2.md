@@ -1,0 +1,6 @@
+# A font with no OS/2 table loads
+
+A face with no OS/2 table threw a `NullReferenceException` in the `LoadedTypeface` constructor (`_fontface.os2.IsBold`), because `OpenTypeFontface.os2` is declared `null!` and only set when the table exists. The table is optional in a TrueType font, and some macOS system fonts leave it out. It showed up as `FaceAttribute_WithResolvableFont_SetsFontFamily` failing on the macOS CI leg of unrelated pull requests: that test picks the first installed font that is not the platform default, and on the macOS runner that font has no OS/2 table.
+
+- **The fix is at the reader, not the caller.** 42 places read `os2`, so guarding the constructor would only move the crash. After the tables are read, a face with none gets `OS2Table.ForFaceWithoutOs2`: regular, or bold and italic from the head table's `macStyle` bits, width class 5, an empty panose and vendor id, and the typographic and win ascent/descent from hhea. Nothing else about such a face is guessed.
+- **Found by reading a CI log, not by reproducing it.** The failure never occurs on Windows (every installed font there has the table); the stack trace in the macOS job log named the line. The test builds the same condition from a bundled font by renaming the OS/2 entry in the table directory (`Reader_GivesAFaceWithNoOs2TableTheOneAPlainFaceWouldHave`).
