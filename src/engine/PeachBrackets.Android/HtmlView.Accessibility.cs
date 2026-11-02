@@ -49,6 +49,7 @@ public sealed partial class HtmlView
             Add(child, AccessibilityNodeProvider.HostViewId);
 
         _a11yNodes = [.. nodes];
+        _textCursor.Clear();
         _a11yParents = [.. parents];
         _a11yIds = ids;
         _accessibilityFocus = focusedId is not null && nodes.FindIndex(n => n.Id == focusedId) is >= 0 and var kept ? kept + 1 : AccessibilityNodeProvider.HostViewId;
@@ -103,6 +104,35 @@ public sealed partial class HtmlView
             ScrollTo(_scrollX, _scrollY + rect.Top - (Height / 8));
         else if (rect.Bottom > Height)
             ScrollTo(_scrollX, _scrollY + (rect.Bottom - Height) + (Height / 8));
+    }
+
+    // Where a service last stopped in a node's text, by node.
+    private readonly Dictionary<int, int> _textCursor = [];
+
+    // Moves through a node's text by the size of step the service asked for, and tells it where it landed (TalkBack reads that piece).
+    private bool TraverseText(int virtualViewId, AccessibilityNode node, bool forward, Bundle? arguments)
+    {
+        var granularity = (TextGranularity)(arguments?.GetInt(AccessibilityNodeInfo.ActionArgumentMovementGranularityInt) ?? 0);
+        var text = node.ReadingText;
+        var from = _textCursor.TryGetValue(virtualViewId, out var at) ? at : (forward ? 0 : text.Length);
+        var step = forward ? TextTraversal.Next(text, from, granularity) : TextTraversal.Previous(text, from, granularity);
+        if (step is not { } move)
+            return false;
+
+        _textCursor[virtualViewId] = forward ? move.End : move.Start;
+        if (IsAccessibilityEnabled() && Parent is not null && AccessibilityEvent.Obtain(EventTypes.ViewTextTraversedAtMovementGranularity) is { } traversed)
+        {
+            traversed.SetSource(this, virtualViewId);
+            traversed.PackageName = Context?.PackageName;
+            traversed.ClassName = AccessibilityMapping.ClassName(node.Role);
+            traversed.Text?.Add(new Java.Lang.String(text));
+            traversed.FromIndex = move.Start;
+            traversed.ToIndex = move.End;
+            traversed.MovementGranularity = (MovementGranularity)(int)granularity;
+            Parent.RequestSendAccessibilityEvent(this, traversed);
+        }
+
+        return true;
     }
 
     private void SendNodeEvent(int virtualViewId, EventTypes type)
@@ -174,6 +204,10 @@ public sealed partial class HtmlView
                 info.ContentDescription = node.ReadingText;
             else
                 info.Text = node.ReadingText;
+
+            // A service can read a node with text by character, word or paragraph; lines and pages depend on layout the node does not carry.
+            if (node.ReadingText.Length > 0 && node.Role is not (AccessibilityRole.Image or AccessibilityRole.GraphicsDocument))
+                info.MovementGranularities = (MovementGranularity)(int)TextTraversal.Supported;
 
             if (node.Description.Length > 0 && OperatingSystem.IsAndroidVersionAtLeast(28))
                 info.TooltipText = node.Description;
@@ -291,6 +325,8 @@ public sealed partial class HtmlView
                 case Action.Click when node.Role == AccessibilityRole.Link:
                     view.FollowLinkNode(node);
                     return true;
+                case Action.NextAtMovementGranularity or Action.PreviousAtMovementGranularity:
+                    return view.TraverseText(virtualViewId, node, forward: action == Action.NextAtMovementGranularity, arguments);
                 default:
                     return false;
             }

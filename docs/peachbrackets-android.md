@@ -86,6 +86,10 @@ the focus. The part with the focus is `HtmlView.FocusedNode`, and `FocusChanged`
 rules apply to it (the built-in style draws a dotted outline) and the view scrolls it into view. To an accessibility service the parts that can take
 the focus are focusable, the one that has it is focused, `ACTION_FOCUS` moves the page's focus there, and `TYPE_VIEW_FOCUSED` is sent when it moves.
 
+A node with text can be read by character, word or paragraph: the provider reports those movement granularities, answers the service's next and
+previous actions by moving from where it last stopped (a character is a whole text element, so an emoji or a letter with an accent is one step) and
+sends the text-traversed event with the piece it landed on. Lines and pages are not offered: they depend on layout the node does not carry.
+
 ## Fonts
 
 Text is drawn with the fonts of the device. The view registers Roboto as `sans-serif` and `Roboto`, Noto Serif as `serif` and the system
