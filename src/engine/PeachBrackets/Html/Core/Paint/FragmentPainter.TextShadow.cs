@@ -57,6 +57,10 @@ namespace PeachBrackets.Html.Paint
             if (string.IsNullOrEmpty(value) || value.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))
                 return;
 
+            // Forced colors mode draws no shadows (CSS Color Adjust 1 section 3.1).
+            if (ForcedColorsAdjuster.DropsDecorations(styleSource))
+                return;
+
             var layers = ParseTextShadow(value);
             for (var i = layers.Count - 1; i >= 0; i--)
             {
