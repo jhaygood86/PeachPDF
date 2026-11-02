@@ -21,7 +21,7 @@ public sealed partial class HtmlView
     internal AccessibilityTreeDiff? LastAccessibilityDiff { get; private set; }
 
     // Called when a document has laid out: the tree a screen reader walks is rebuilt from it.
-    private void RefreshAccessibility(HtmlDocument document)
+    internal void RefreshAccessibility(HtmlDocument document)
     {
         var before = _accessibilityTree;
         var after = _accessibilityTree = document.GetAccessibilityTree();
@@ -52,7 +52,13 @@ public sealed partial class HtmlView
             }
         }
 
-        foreach (var announcement in diff.Announcements)
+        RaiseAnnouncements(peer, diff.Announcements);
+    }
+
+    // What a live region should now say, told to UI Automation as notifications.
+    internal static void RaiseAnnouncements(HtmlViewAutomationPeer peer, IEnumerable<AccessibilityAnnouncement> announcements)
+    {
+        foreach (var announcement in announcements)
         {
             peer.RaiseNotificationEvent(
                 Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind.Other,
