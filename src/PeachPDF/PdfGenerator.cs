@@ -715,6 +715,7 @@ namespace PeachPDF
             Uri = bookmark.Uri,
             PageIndex = bookmark.Destination?.PageIndex,
             TopPoints = bookmark.Destination?.Top ?? 0,
+            StructureTarget = bookmark.Destination?.Target is { } target ? target : null,
         };
 
         /// <summary>

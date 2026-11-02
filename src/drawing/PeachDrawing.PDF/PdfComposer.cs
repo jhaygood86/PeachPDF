@@ -188,6 +188,9 @@ namespace PeachDrawing.PDF
                     outline.Top = outline.DestinationPage.Height - bookmark.TopPoints;
                 }
 
+                if (bookmark.StructureTarget is { } target && _document.Version >= 20 && _tagRecorder?.TryGetStructureElement(target) is { } element)
+                    outline.StructureDestination = element;
+
                 if (stack.Count > 0)
                     stack.Peek().Outline.Outlines.Add(outline);
                 else

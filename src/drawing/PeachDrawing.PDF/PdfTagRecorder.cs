@@ -76,6 +76,7 @@ namespace PeachDrawing.PDF
 
             _documentElement = new PdfStructureElement(document) { StructureType = "/Document" };
             document.Internals.AddObject(_documentElement);
+            UseNamespace(_documentElement);
             _documentElement.Parent = _root;
             _root.SetRootKid(_documentElement);
         }
@@ -282,6 +283,30 @@ namespace PeachDrawing.PDF
         /// <returns><see langword="true"/> when it exists</returns>
         public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
 
+        PdfDictionary? _pdf2Namespace;
+
+        // A PDF 2.0 file says which namespace its structure types come from: the root lists the namespaces it uses and every element names
+        // its own (ISO 32000-2 14.7.4); without it the types are those of PDF 1.7, which PDF/UA-2 does not accept.
+        void UseNamespace(PdfStructureElement element)
+        {
+            if (_document.Version < 20)
+                return;
+
+            if (_pdf2Namespace is null)
+            {
+                _pdf2Namespace = new PdfDictionary(_document);
+                _document.Internals.AddObject(_pdf2Namespace);
+                _pdf2Namespace.Elements.SetName("/Type", "/Namespace");
+                _pdf2Namespace.Elements.SetString("/NS", "http://iso.org/pdf2/ssn", PdfStringEncoding.Unicode);
+
+                var namespaces = new PdfArray(_document);
+                namespaces.Elements.Add(_pdf2Namespace.RequiredReference);
+                _root.Elements.SetObject("/Namespaces", namespaces);
+            }
+
+            element.Elements.SetReference("/NS", _pdf2Namespace);
+        }
+
         // An element is opened once for every page its content reaches: it takes its details the first time.
         readonly HashSet<PdfStructureElement> _detailed = new(ReferenceEqualityComparer.Instance);
 
@@ -295,6 +320,8 @@ namespace PeachDrawing.PDF
         {
             if (!string.IsNullOrEmpty(details.Language))
                 element.Elements.SetString("/Lang", details.Language, PdfStringEncoding.Unicode);
+            if (!string.IsNullOrEmpty(details.Alt))
+                element.Elements.SetString("/Alt", details.Alt, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.ActualText))
                 element.Elements.SetString("/ActualText", details.ActualText, PdfStringEncoding.Unicode);
             if (!string.IsNullOrEmpty(details.Title))
@@ -407,7 +434,17 @@ namespace PeachDrawing.PDF
         /// </summary>
         /// <param name="key">the key of the link's structure element</param>
         /// <param name="link">the link, as returned when it was added to its page</param>
-        public void LinkAnnotation(object key, PdfLink link)
+        public void LinkAnnotation(object key, PdfLink link) => LinkAnnotation(key, link, null, null);
+
+        /// <summary>
+        /// Ties a link to the structure element of the content it covers, and gives the link annotation <paramref name="contents"/> as its
+        /// <c>/Contents</c>: the description a reader announces for the link (PDF/UA requires one on every link).
+        /// </summary>
+        /// <param name="key">the identity of the structure element the link covers</param>
+        /// <param name="link">the link</param>
+        /// <param name="contents">the link's accessible name, or null for none</param>
+        /// <param name="target">the key of the structure element a link within the document leads to, or null; in a PDF 2.0 file the link then also leads to that element</param>
+        public void LinkAnnotation(object key, PdfLink link, string? contents, object? target)
         {
             ArgumentNullException.ThrowIfNull(link);
 
@@ -418,6 +455,12 @@ namespace PeachDrawing.PDF
             var page = link.Page.Page;
             var annotation = link.Annotation;
 
+            if (target is not null && _document.Version >= 20 && TryGetStructureElement(target) is { } targetElement)
+                annotation.SetStructureDestination(targetElement);
+
+            if (!string.IsNullOrEmpty(contents))
+                annotation.Elements.SetString(PdfAnnotation.Keys.Contents, contents, PdfStringEncoding.Unicode);
+
             var objectReference = new PdfObjectReference(_document) { Page = page, Object = annotation };
             _document.Internals.AddObject(objectReference);
             element.AppendKid(objectReference);
@@ -426,9 +469,9 @@ namespace PeachDrawing.PDF
             _root.ParentTreeNextKey = structParentKey + 1;
             annotation.StructParent = structParentKey;
 
-            var array = new PdfArray(_document);
-            array.Elements.Add(element.RequiredReference);
-            _root.ParentTree.AddNumber(structParentKey, array);
+            // An annotation's /StructParent leads to its structure element directly; only a page's marked content (a /StructParents key)
+            // leads to an array indexed by MCID (ISO 32000-1 14.7.4.4).
+            _root.ParentTree.AddNumber(structParentKey, element.RequiredReference);
 
             // PDF/UA requires tab order to follow structure order on any page that has an
             // annotation linked into the structure tree.
@@ -437,7 +480,7 @@ namespace PeachDrawing.PDF
 
         /// <summary>
         /// Completes the structure tree after the last page: writes each page's entry in the parent tree and, when the document has a
-        /// title, asks readers to show it (required once a document is tagged). Call it before <see cref="LinkAnnotation"/>.
+        /// title, asks readers to show it (required once a document is tagged). Call it before <see cref="LinkAnnotation(object, PdfLink)"/>.
         /// </summary>
         public void Finish()
         {
@@ -465,6 +508,7 @@ namespace PeachDrawing.PDF
 
             var element = new PdfStructureElement(_document) { StructureType = "/" + structureType };
             _document.Internals.AddObject(element);
+            UseNamespace(element);
             element.Parent = parent;
             parent.AppendKid(element);
 

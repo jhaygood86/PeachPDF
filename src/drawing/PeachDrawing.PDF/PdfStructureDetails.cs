@@ -63,6 +63,12 @@ namespace PeachDrawing.PDF
         /// <summary>The text the element's content stands for, when it is not what is drawn (a ligature or an image of text).</summary>
         public string? ActualText { get; init; }
 
+        /// <summary>
+        /// An alternative description of the element, for one that groups content instead of standing for a picture itself (a figure whose
+        /// picture is a structure element of its own); a content element takes its description when it is opened.
+        /// </summary>
+        public string? Alt { get; init; }
+
         /// <summary>A title for the element.</summary>
         public string? Title { get; init; }
 

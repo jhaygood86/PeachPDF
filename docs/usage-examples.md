@@ -536,7 +536,7 @@ A claim turns on [tagged PDF](#enabling-tagged-pdf-pdfua-output), gives every fi
 
 It can be combined with PDF/A: `UA1` with PDF/A-1a, 2a or 3a, and `UA2` with PDF/A-4 (the pairs defined against the same PDF version); the `pdfuaid` schema is then declared in the file as a PDF/A extension schema. It cannot be combined with PDF/X, and an encrypted file must keep `PdfPermissions.AllowAccessibilityExtract`. From the command line, use `--pdfua=1` or `--pdfua=2`.
 
-The claim says the file is *structured* for accessibility. Whether its content is accessible depends on the HTML it came from: headings that do not skip levels, a sensible reading order, real alternative text. Check a file with a PDF/UA checker such as [veraPDF](https://verapdf.org/) before relying on it.
+The claim says the file is *structured* for accessibility. Whether its content is accessible depends on the HTML it came from: headings that do not skip levels, a sensible reading order, real alternative text. Check a file with a PDF/UA checker such as [veraPDF](https://verapdf.org/) before relying on it. Files PeachPDF produces for a page of headings, navigation, a figure with a caption, lists, links and a table pass veraPDF's PDF/UA-1 and PDF/UA-2 profiles; for that to hold, a link carries its accessible name as `/Contents`, a figure that groups a picture and its caption is described too, a list says how its items are marked, a text decoration line is an artifact, and a PDF 2.0 file declares the structure namespace and gives each link and outline entry within the document a structure destination.
 
 ## PDF 2.0 output
 

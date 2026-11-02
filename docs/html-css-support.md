@@ -2097,7 +2097,7 @@ ul.decorative li::marker { -peachpdf-pdf-tag-type: none; }
 
 Accepted values (case-insensitive): `auto`, `none`, `Part`, `Art`, `Sect`, `Div`, `Index`, `BlockQuote`, `Caption`, `TOC`, `TOCI`, `P`, `H1`–`H6`, `L`, `LI`, `Lbl`, `LBody`, `DL`, `DL-Div`, `DT`, `DD`, `Span`, `Quote`, `Table`, `TR`, `TH`, `TD`, `THead`, `TBody`, `TFoot`, `BibEntry`, `Code`, `Figure`, `Formula`, `Artifact`, `Note`, `Reference`, `Link`.
 
-- **`auto`** (the initial value) — resolved from the element's own HTML tag via the default mapping table below. An element with no default mapping and no author override resolves to `Div` (block-level) or `Span` (inline-level).
+- **`auto`** (the initial value) — resolved from the element's own HTML tag via the default mapping table below. An element with no default mapping and no author override resolves to `Div` (block-level) or `Span` (inline-level). A block that holds nothing but inline content (text, or inline elements) is a paragraph, so it is tagged `P` instead of `Div`, whether it came from the fallback or from the default `Div` mapping of `div`, `header`, `footer`, `main` and the like; text between two blocks is a `P` as well.
 - **`none`** — the element is fully transparent in the structure tree: no structure element is created for it, and its children attach directly to the nearest tagged ancestor. This is the escape hatch for purely presentational wrapper elements.
 - Any other value is used directly as the element's PDF standard structure type, author-overridable on any element regardless of what (if anything) the default stylesheet set.
 
@@ -2136,7 +2136,7 @@ This property only has an effect when `EnableTaggedPdf` is `true` — with taggi
 | `a[href]` | `Link` (a bare `<a>` with no `href` is not a hyperlink and does not default to `Link`) |
 | `html`, `body` | `none` (transparent — children attach to the synthetic document root) |
 
-Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the `auto` fallback: block-level elements resolve to `Div`, inline-level elements to `Span`.
+Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the `auto` fallback: block-level elements resolve to `Div` (or `P` when they hold only inline content), inline-level elements to `Span`.
 
 #### Known limitation — anonymous (CSS-generated) table structure cannot be tag-overridden
 

@@ -39,7 +39,7 @@ namespace PeachBrackets.Html.Annotations
                 if (anchorId.Length == 0) return null;
 
                 return ResolveElementRectangle(container, ppp, anchorId) is { } anchorRect
-                    ? ToPosition(PageAnchorResolver.ResolveRectToPage(container, ppp, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect))
+                    ? ToPosition(PageAnchorResolver.ResolveRectToPage(container, ppp, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count, anchorRect), ToNode(ElementById(container, anchorId)))
                     : null;
             }
 
@@ -289,7 +289,9 @@ namespace PeachBrackets.Html.Annotations
 
         private static StructureNode? ToNode(CssBox? box) => box is null ? (StructureNode?)null : new StructureNode(box);
 
-        private static PagePosition ToPosition((int PageIndex, double TopPt) resolved) => new(resolved.PageIndex, resolved.TopPt);
+        private static PagePosition ToPosition((int PageIndex, double TopPt) resolved, StructureNode? target = null) => new(resolved.PageIndex, resolved.TopPt, target);
+
+        private static CssBox? ElementById(HtmlContainerInt container, string elementId) => DomUtils.GetBoxById(container.Root, elementId.ToLower());
 
         private static List<Bookmark> CollectBookmarks(
             HtmlContainerInt container, double ppp, IReadOnlyList<FragmentainerFragment> fragmentainers,
@@ -345,6 +347,7 @@ namespace PeachBrackets.Html.Annotations
             var target = ResolveTargetValue(box) is { } raw ? ResolveHref(container, raw) : null;
 
             Rect? rect;
+            CssBox? targetBox = box;
             if (target is null)
             {
                 // A display:none (or otherwise unrendered) box was never painted - falling back to its (typically all-zero) bounds
@@ -359,6 +362,7 @@ namespace PeachBrackets.Html.Annotations
             else if (target.Length > 1 && target[0] == '#')
             {
                 rect = ResolveElementRectangle(container, ppp, target[1..]);
+                targetBox = ElementById(container, target[1..]);
             }
             else if (target.Length > 0)
             {
@@ -372,7 +376,7 @@ namespace PeachBrackets.Html.Annotations
             if (rect is not { } r) return (null, null);
 
             var resolved = PageAnchorResolver.ResolveRectToPage(container, ppp, fragmentainers, slotToPage, maxMappedSlot, fragmentainers.Count, r);
-            return resolved.PageIndex < 0 || resolved.PageIndex >= fragmentainers.Count ? (null, null) : (null, ToPosition(resolved));
+            return resolved.PageIndex < 0 || resolved.PageIndex >= fragmentainers.Count ? (null, null) : (null, ToPosition(resolved, ToNode(targetBox)));
         }
 
         /// <summary>

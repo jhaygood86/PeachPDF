@@ -46,9 +46,18 @@ namespace PeachPDF.PdfFeatures
             if (details.RowSpan > 1)
                 table["RowSpan"] = PdfStructureAttributeValue.FromNumber(details.RowSpan);
 
+            if (details.ListNumbering is { } numbering)
+                return new PdfStructureDetails
+                {
+                    Language = details.Language,
+                    Alt = details.AlternativeText,
+                    Attributes = [new PdfStructureAttributes("List", new Dictionary<string, PdfStructureAttributeValue> { ["ListNumbering"] = PdfStructureAttributeValue.FromName(numbering) })],
+                };
+
             return new PdfStructureDetails
             {
                 Language = details.Language,
+                Alt = details.AlternativeText,
                 Attributes = table.Count > 0 ? [new PdfStructureAttributes("Table", table)] : [],
             };
         }
@@ -77,6 +86,13 @@ namespace PeachPDF.PdfFeatures
         {
             if (link is PdfLink pdfLink)
                 LinkAnnotationToStructureElement(node, pdfLink);
+        }
+
+        /// <inheritdoc/>
+        public void LinkAdded(StructureNode node, object link, string? name, StructureNode? target)
+        {
+            if (link is PdfLink pdfLink)
+                recorder.LinkAnnotation(node, pdfLink, name, target is { } t ? t : null);
         }
 
         /// <summary>Completes the structure tree after the whole page-render loop.</summary>

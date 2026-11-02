@@ -81,6 +81,7 @@ PeachDrawing.PDF.PdfBookmark : sealed class
   property Double TopPoints { get; set; }
   property Int32 Level { get; }
   property Int32? PageIndex { get; set; }
+  property Object StructureTarget { get; set; }
   property String Title { get; }
   property String Uri { get; set; }
 PeachDrawing.PDF.PdfCanvas : sealed class
@@ -425,6 +426,7 @@ PeachDrawing.PDF.PdfStructureDetails : sealed class
   ctor()
   property IReadOnlyList<PdfStructureAttributes> Attributes { get; init; }
   property String ActualText { get; init; }
+  property String Alt { get; init; }
   property String Language { get; init; }
   property String Title { get; init; }
 PeachDrawing.PDF.PdfTagRecorder : sealed class
@@ -442,6 +444,7 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method Void DeclareListItemBody(Object itemKey)
   method Void Finish()
   method Void LinkAnnotation(Object key, PdfLink link)
+  method Void LinkAnnotation(Object key, PdfLink link, String contents, Object target)
   property Boolean IsInMarkedContent { get; }
 PeachDrawing.PDF.PdfTagSession : sealed class
 PeachDrawing.PDF.PdfUAConformance : enum Int32
