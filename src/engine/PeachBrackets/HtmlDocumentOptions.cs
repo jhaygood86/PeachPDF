@@ -63,6 +63,15 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public TextSpacingOverrides? TextSpacing { get; set; }
 
+    /// <summary>
+    /// Whether form controls are drawn with their look: the check mark of a checked check box, the dot of a radio button, the value or placeholder
+    /// of a text field, the label of a button, the chosen option and arrow of a drop-down, the track and thumb of a range. All of it is drawn from the
+    /// control's own CSS (border, background, padding, font, colour, <c>accent-color</c>). Off by default, which leaves a control the plain box it
+    /// has always been in a PDF; a host that shows the page turns it on. With <see cref="CollectFormFields"/> on, the control draws its PDF widget
+    /// appearance instead.
+    /// </summary>
+    public bool PaintFormControls { get; set; }
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 

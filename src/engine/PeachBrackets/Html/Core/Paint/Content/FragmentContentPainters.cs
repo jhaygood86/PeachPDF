@@ -17,6 +17,7 @@ namespace PeachBrackets.Html.Paint.Content
         private static readonly FrameFragmentPainter FramePainter = new();
         private static readonly MarkerFragmentPainter MarkerPainter = new();
         private static readonly FormFieldFragmentPainter FormFieldPainter = new();
+        private static readonly ScreenFormControlPainter ScreenFormPainter = new();
 
         /// <summary>
         /// The painter for <paramref name="box"/>'s content, or null when the generic box paint applies.
@@ -36,6 +37,8 @@ namespace PeachBrackets.Html.Paint.Content
             // rendering byte-for-byte (see FormFieldFragmentPainter's own doc comment).
             CssBoxFormField formField when formField.HtmlContainer?.InteractiveForms == true
                 && FormFieldMapper.Classify(formField).Kind != FormFieldKind.None => FormFieldPainter,
+            // A host that shows the page draws the controls itself, whatever they are.
+            CssBoxFormField formField when formField.HtmlContainer?.PaintFormControls == true => ScreenFormPainter,
             _ => null,
         };
     }
