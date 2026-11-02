@@ -2,6 +2,7 @@ using PeachBrackets;
 using PeachBrackets.Accessibility;
 using PeachBrackets.Updates;
 using System;
+using System.Threading.Tasks;
 
 namespace PeachBrackets.WinUI;
 
@@ -41,6 +42,21 @@ public sealed partial class HtmlView
         Repaint(result);
         if (result.Applied)
             RefreshAccessibility(document);
+
+        // A rule that reads the control's state (input:checked + label) has to be matched again.
+        if (document.NeedsRestyle)
+            QueueFocus(() => RestyleFormAsync(document));
+    }
+
+    private async Task RestyleFormAsync(PeachBrackets.HtmlDocument document)
+    {
+        if (_context is null || !ReferenceEquals(document, _document))
+            return;
+
+        using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
+        var result = await document.RestyleFormAsync(measuring.Canvas);
+        if (ReferenceEquals(document, _document))
+            AfterControlChange(document, result);
     }
 
     // Space (or Enter) on a focused check box or radio button toggles it.

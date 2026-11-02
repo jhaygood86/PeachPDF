@@ -126,6 +126,9 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`NeedsRestyle`** and **`RestyleFormAsync(canvas)`**: after a change to a control, `NeedsRestyle` is true when a style sheet rule reads the state that changed (`:checked`,
+  `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only`, `:read-write`), and `RestyleFormAsync` styles the document again with the controls as they are now and
+  reports the pages to repaint. Typing into a field is not such a change. A restyle for another reason (a `:focus` rule) also settles it.
 - **`SetOpenAsync(element, open, canvas)`** opens or closes a `<details>` element, as a click on its summary does. A closed one shows only its summary, so
   the document is styled and laid out again with the new state and the result lists the pages to repaint from the first one that moved. The state is kept if
   the document is loaded again for a `:focus` or pointer rule.

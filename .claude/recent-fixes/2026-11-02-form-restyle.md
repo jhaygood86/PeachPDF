@@ -1,0 +1,8 @@
+# Restyling after a live form change
+
+`HtmlDocument.NeedsRestyle` / `RestyleFormAsync` close the gap recorded for `:checked` and the other form-state pseudo-classes (issue #2113), and the accepted-gap file for it is deleted.
+
+- **Only what a rule can read.** `SetControlAttribute` marks an element for restyling only when the attribute is `checked`, `selected`, `disabled`, `readonly`, `required` or `contenteditable` *and* `FormStatePseudoClassesInUse` (a selector in the cascade names one of the seven pseudo-classes, found by the same scan of the rule texts that finds `:hover` and `:focus`). Typing changes `value`, which no pseudo-class reads, so a field does not reload the document on every keystroke; this is what `TypingIntoAFieldIsNotAStateAChangeOfStyleReads` pins.
+- **Why not make the form methods async.** `SetChecked`/`SetValue`/`Activate` are synchronous and return an `UpdateResult`; changing them would break every caller. The restyle is a second step the host takes when `NeedsRestyle`, and it reuses the reload that `:focus` rules and `SetOpenAsync` already do (`RestyleAsync`), which is why it needed the attribute changes to reach the parse first (see the details open-state note).
+- **Any restyle settles it.** `RestyleAsync` clears the waiting set at its start, so a reload for a focus rule that happens before the host asks also picks up the checked box; `ARestyleForAnotherReasonAlsoSatisfiesTheWaitingChange`.
+- **Hosts.** `AfterControlChange` in both views queues `RestyleFormAsync` on the same one-at-a-time queue focus changes use, then repaints and refreshes the tree through the same path. The WinUI window test toggles a box under an `input:checked + label` rule and checks the document no longer needs a restyle.

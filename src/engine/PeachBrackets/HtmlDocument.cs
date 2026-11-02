@@ -1117,6 +1117,8 @@ public sealed partial class HtmlDocument : IDisposable
     // else the regions of the elements that changed.
     private async Task<UpdateResult> RestyleAsync(HashSet<int> changed, Canvas measuringCanvas)
     {
+        // Whatever form changes were waiting for a restyle are in this one.
+        _restyleOrdinals.Clear();
         var geometryBefore = GeometrySignature();
         // The text the selection and highlights were built over (the runs are computed on demand, so they may not be there yet).
         var textBefore = _recordTextRuns && (_selectedRanges.Count > 0 || _highlights.Count > 0 || (_selection?.HasSelection ?? false)) ? TextSignature(TextRuns) : null;
