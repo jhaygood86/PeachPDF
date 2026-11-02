@@ -204,6 +204,7 @@ PeachBrackets.HtmlDocument : sealed class
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
+  method PaintColor? GetCaretColor(TextPosition position)
   method Rect? GetElementBounds(String elementId)
   method String GetText(TextPosition from, TextPosition to)
   method Task LayoutAsync(Canvas measuringCanvas)
@@ -217,6 +218,9 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
   method Task<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
   method Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
+  method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
+  method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
+  method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
   method TextRange? ApplyTextFragmentDirective(String directive)
@@ -275,6 +279,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
   property PaintColor SelectionBackground { get; set; }
@@ -283,6 +288,25 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
+PeachBrackets.InputCapabilities : sealed class
+  ctor(PointerTypes PrimaryPointer, Boolean PrimaryCanHover, PointerTypes AnyPointers, Boolean AnyCanHover)
+  method InputCapabilities <Clone>$()
+  method Void Deconstruct(out PointerTypes PrimaryPointer, out Boolean PrimaryCanHover, out PointerTypes AnyPointers, out Boolean AnyCanHover)
+  method virtual Boolean Equals(InputCapabilities other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean AnyCanHover { get; init; }
+  property Boolean PrimaryCanHover { get; init; }
+  property PointerTypes AnyPointers { get; init; }
+  property PointerTypes PrimaryPointer { get; init; }
+  property static InputCapabilities Mouse { get; }
+  property static InputCapabilities None { get; }
+  property static InputCapabilities Touch { get; }
+PeachBrackets.PointerTypes : enum Int32
+  Coarse = 1
+  Fine = 2
+  None = 0
 PeachBrackets.Selection.DocumentSelection : sealed class
   method Boolean ExtendTo(Int32 pageIndex, Double x, Double y)
   method Boolean Modify(Boolean extend, SelectionDirection direction, SelectionGranularity granularity)

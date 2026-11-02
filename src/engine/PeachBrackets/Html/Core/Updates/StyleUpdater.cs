@@ -89,7 +89,7 @@ namespace PeachBrackets.Html.Updates
                 var geometry = fragmentainers[page].Geometry;
                 var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
                 var rects = new List<Rect>();
-                Walk(fragmentainers[page].Root, element, inside: false, frame, rects);
+                Walk(fragmentainers[page].Root, box => ReferenceEquals(box, element), inside: false, frame, rects);
                 foreach (var rect in Merge(rects))
                     regions.Add(new DirtyRegion(page, rect));
             }
@@ -97,9 +97,32 @@ namespace PeachBrackets.Html.Updates
             return regions;
         }
 
-        private static void Walk(BoxFragment fragment, CssBox element, bool inside, TextRunCollector.Frame frame, List<Rect> rects)
+        /// <summary>
+        /// The regions that cover the elements named by their position in the source (and everything inside them), widened to take in a shadow or an
+        /// outline: what to repaint when their state changed but nothing moved.
+        /// </summary>
+        public static List<DirtyRegion> DirtyRegionsFor(HtmlContainerInt container, HashSet<int> ordinals, IReadOnlyList<FragmentainerFragment> fragmentainers)
         {
-            inside |= ReferenceEquals(fragment.Box, element);
+            const double reach = 24;
+            var regions = new List<DirtyRegion>();
+            var ppp = container.RenderContext.LayoutUnitsPerPoint;
+
+            for (var page = 0; page < fragmentainers.Count; page++)
+            {
+                var geometry = fragmentainers[page].Geometry;
+                var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
+                var rects = new List<Rect>();
+                Walk(fragmentainers[page].Root, box => box.HtmlTag is { } tag && ordinals.Contains(tag.SourceOrdinal), inside: false, frame, rects);
+                foreach (var rect in Merge(rects))
+                    regions.Add(new DirtyRegion(page, new Rect(rect.X - reach, rect.Y - reach, rect.Width + (reach * 2), rect.Height + (reach * 2))));
+            }
+
+            return regions;
+        }
+
+        private static void Walk(BoxFragment fragment, Func<CssBox, bool> isTarget, bool inside, TextRunCollector.Frame frame, List<Rect> rects)
+        {
+            inside |= isTarget(fragment.Box);
             if (inside)
             {
                 // The decoration of each line it occupies, and its words (which can overhang the line's rectangle).
@@ -114,7 +137,7 @@ namespace PeachBrackets.Html.Updates
             }
 
             foreach (var child in fragment.Children)
-                Walk(child, element, inside, frame, rects);
+                Walk(child, isTarget, inside, frame, rects);
         }
 
         private static Rect ToPoints(Rect layout, TextRunCollector.Frame frame) =>

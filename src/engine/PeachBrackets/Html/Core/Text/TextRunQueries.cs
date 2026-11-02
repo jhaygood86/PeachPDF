@@ -155,7 +155,7 @@ namespace PeachBrackets.Html.TextGeometry
         }
 
         /// <summary>The plain text from <paramref name="from"/> to <paramref name="to"/>.</summary>
-        public static string GetText(IReadOnlyList<TextRun> runs, TextPosition from, TextPosition to)
+        public static string GetText(IReadOnlyList<TextRun> runs, TextPosition from, TextPosition to, Func<TextWordSlice, bool>? omit = null)
         {
             if (!Normalize(runs, ref from, ref to))
                 return string.Empty;
@@ -170,7 +170,10 @@ namespace PeachBrackets.Html.TextGeometry
                 if (end <= start)
                     continue;
 
-                var piece = run.Text.AsSpan(start, end - start);
+                var piece = omit is null ? run.Text.AsSpan(start, end - start).ToString() : WithoutOmitted(run, start, end, omit);
+                if (piece.Length == 0)
+                    continue;
+
                 if (previous is not null)
                     text.Append(Separator(previous, run, piece[0]));
 
@@ -179,6 +182,29 @@ namespace PeachBrackets.Html.TextGeometry
             }
 
             return text.ToString();
+        }
+
+        // The text of run[start..end] without the words the caller leaves out (text the reader may not select).
+        private static string WithoutOmitted(TextRun run, int start, int end, Func<TextWordSlice, bool> omit)
+        {
+            var kept = new StringBuilder();
+            for (var i = start; i < end; i++)
+            {
+                var omitted = false;
+                foreach (var slice in run.Slices)
+                {
+                    if (i >= slice.TextStart && i < slice.TextStart + slice.Length && omit(slice))
+                    {
+                        omitted = true;
+                        break;
+                    }
+                }
+
+                if (!omitted)
+                    kept.Append(run.Text[i]);
+            }
+
+            return kept.ToString();
         }
 
         /// <summary>Every place <paramref name="query"/> occurs in the text of the document, in order.</summary>

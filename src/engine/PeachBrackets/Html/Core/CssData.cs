@@ -1767,6 +1767,15 @@ namespace PeachBrackets.Html
                 return node is CssBox box && FormFieldMapper.IsPlaceholderShown(box);
             }
 
+            // :hover, :active, :focus, :focus-visible and :focus-within answer only when a host drives the state of the document
+            // (HtmlDocument.SetPointerStateAsync / SetFocusAsync); a static page has no pointer or focus, so they select nothing.
+            if (InteractionState.IsStatePseudoClass(name))
+            {
+                return node is CssBox { HtmlTag: { } tag } stateBox
+                    && stateBox.HtmlContainer?.Interaction is { } state
+                    && state.Matches(name, tag.SourceOrdinal);
+            }
+
             return false;
         }
 
