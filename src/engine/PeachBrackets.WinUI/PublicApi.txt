@@ -17,3 +17,4 @@ PeachBrackets.WinUI.HtmlView : sealed class
   property String Html { get; set; }
   property String SelectedText { get; }
   property Uri Source { get; set; }
+PeachBrackets.WinUI.HtmlViewAutomationPeer : sealed class
