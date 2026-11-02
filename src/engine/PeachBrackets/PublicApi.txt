@@ -537,6 +537,8 @@ PeachBrackets.Tagging.IStructureTagSink : interface
   method abstract IDisposable OpenListItemBodyElement(StructureNode node)
   method abstract IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors)
   method abstract Void AttachMathMlSource(StructureNode node, String mathMlSource)
+  method virtual IDisposable OpenContentElement(Canvas g, StructureNode node, String structureType, String altText, StructureDetails details)
+  method virtual IDisposable OpenGroupingElement(StructureNode node, String structureType, StructureDetails details)
   method virtual Void LinkAdded(StructureNode node, Object link)
   property Boolean IsInMarkedContent { get; }
 PeachBrackets.Tagging.PhantomAncestor : struct
@@ -548,6 +550,12 @@ PeachBrackets.Tagging.PhantomAncestor : struct
   method virtual String ToString()
   property String StructureType { get; init; }
   property StructureNode Node { get; init; }
+PeachBrackets.Tagging.StructureDetails : sealed class
+  ctor()
+  property Int32 ColumnSpan { get; init; }
+  property Int32 RowSpan { get; init; }
+  property String Language { get; init; }
+  property String TableScope { get; init; }
 PeachBrackets.Tagging.StructureNode : struct
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(StructureNode other)

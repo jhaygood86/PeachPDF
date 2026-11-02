@@ -1,6 +1,7 @@
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
+using PeachBrackets.Tagging;
 
 namespace PeachBrackets.Html.Handlers
 {
@@ -94,8 +95,59 @@ namespace PeachBrackets.Html.Handlers
 
             var structureType = CanonicalName(tagType);
             return HasOwnPaintedContent(box)
-                ? StructureTagClassification.Content(structureType, box.HtmlTag?.TryGetAttribute("alt", null))
+                ? StructureTagClassification.Content(structureType, AltFor(box))
                 : StructureTagClassification.Grouping(structureType);
+        }
+
+        /// <summary>
+        /// The alternative text of a box that stands for a picture or a formula: its <c>alt</c> (empty marks it decorative), or else the name the
+        /// accessibility tree gives it - an SVG's title or <c>aria-label</c>, a formula's <c>alttext</c> or spoken text, an image's label.
+        /// </summary>
+        static string? AltFor(CssBox box)
+        {
+            if (box.HtmlTag?.TryGetAttribute("alt", null) is { } alt)
+                return alt;
+
+            if (box is CssBoxMath or CssBoxSvg or CssBoxImage
+                && box.HtmlContainer?.SemanticTree.NodeFor(box) is { Name: { Length: > 0 } name })
+            {
+                return name;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// What else the element's structure element should carry: the language it sets of its own, and for a table cell what a header heads and how
+        /// far a cell reaches. Null when there is nothing to add.
+        /// </summary>
+        public static StructureDetails? DetailsFor(CssBox box, StructureTagClassification classification)
+        {
+            if (box.HtmlTag is not { } tag)
+                return null;
+
+            var language = tag.TryGetAttribute("lang", null) is { } lang && !string.IsNullOrWhiteSpace(lang) ? lang.Trim() : null;
+            string? scope = null;
+            int columns = 1, rows = 1;
+            if (classification.StructureType is "TH" or "TD" && box.HtmlContainer?.SemanticTree.NodeFor(box) is { } node)
+            {
+                if (classification.StructureType == "TH")
+                {
+                    scope = node.Role switch
+                    {
+                        PeachBrackets.Accessibility.AccessibilityRole.RowHeader => "Row",
+                        PeachBrackets.Accessibility.AccessibilityRole.ColumnHeader => "Column",
+                        _ => null,
+                    };
+                }
+
+                columns = node.ColumnSpan;
+                rows = node.RowSpan;
+            }
+
+            return language is null && scope is null && columns == 1 && rows == 1
+                ? null
+                : new StructureDetails { Language = language, TableScope = scope, ColumnSpan = columns, RowSpan = rows };
         }
 
         static StructureTagClassification ClassifyAuto(CssBox box)

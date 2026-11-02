@@ -15,6 +15,13 @@ namespace PeachBrackets.Tagging
         /// <summary>Opens a grouping element for <paramref name="node"/> that nests everything painted until the scope is disposed.</summary>
         IDisposable OpenGroupingElement(StructureNode node, string structureType);
 
+        /// <summary>Opens a grouping element as <see cref="OpenGroupingElement(StructureNode, string)"/> does, with what else is known about it.</summary>
+        IDisposable OpenGroupingElement(StructureNode node, string structureType, StructureDetails? details) => OpenGroupingElement(node, structureType);
+
+        /// <summary>Opens a content element as <see cref="OpenContentElement(Canvas, StructureNode, string, string)"/> does, with what else is known about it.</summary>
+        IDisposable OpenContentElement(Canvas g, StructureNode node, string structureType, string? altText, StructureDetails? details) =>
+            OpenContentElement(g, node, structureType, altText);
+
         /// <summary>Re-opens the elements of the <c>display: contents</c> ancestors some content was lifted out of (outermost first).</summary>
         IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors);
 

@@ -2142,6 +2142,16 @@ Any tag not listed here (e.g. `<cite>`, `<mark>`, `<time>`) falls through to the
 
 A table assembled purely through CSS (`display: table` / `table-row` / `table-cell` on arbitrary elements, rather than real `<table>`/`<tr>`/`<td>` markup) gets its row/cell/group tagging (`TR`/`TH`-or-`TD`/`THead`/`TBody`/`TFoot`) from a hardcoded fallback based on the computed `display` value, **not** from `-peachpdf-pdf-tag-type` — the synthesized anonymous boxes PeachPDF creates to complete the table model have no source HTML element for any selector, author or default stylesheet, to match against. Authors who need override control over table structure tagging (e.g. distinguishing header cells from data cells, which the anonymous fallback cannot do — it always tags anonymous cells `TD`) must use real `<table>`/`<tr>`/`<th>`/`<td>`/etc. markup rather than relying on CSS's table display model to synthesize the structure implicitly.
 
+### What a structure element carries
+
+Besides its type and content, a structure element takes what the document's [accessibility tree](accessibility.md) knows about its element:
+
+- **Alternative text** (`/Alt`) of a `Figure` or `Formula`: the `alt` attribute (empty marks a picture decorative), or else the element's accessible name — an `aria-label`,
+  an `aria-labelledby` target, an inline SVG's `<title>`, a formula's `alttext` or spoken reading.
+- **Language** (`/Lang`) when the element sets one of its own with `lang`; the document's language is on the catalog.
+- **Table cells**: a `TH` has a `/Scope` (`Column` or `Row`, from `scope` or its place), and a cell that spans several columns or rows has `/ColSpan` and `/RowSpan`, as `Table`
+  attributes.
+
 ### MathML Associated Files
 
 When [tagged PDF output](#tagged-pdf-pdfua-support) is enabled, a `<math>` element's own `Formula`
@@ -2161,9 +2171,10 @@ This works regardless of which [`PdfVersion`](usage-examples.md#pdf-20-output) t
 is only fully spec-conformant under `PdfVersion.Pdf20` — `/AF` on a structure element is a PDF 2.0
 addition to ISO 32000-1's structure element dictionary. If an author retargets `<math>`'s own
 `-peachpdf-pdf-tag-type` away from `Formula` (e.g. to `P`), the MathML source is still attached to
-whichever structure element the override produces. No `/Alt` or `/ActualText` (a spoken-math description)
-is synthesized — generating one requires real math-to-speech, which is out of scope; the attached exact
-MathML source is itself a complete, spec-conformant accessible representation on its own.
+whichever structure element the override produces. The formula's `/Alt` is its `alttext`, its `aria-label`,
+or, when the author gave neither, a plain English reading of its structure (`x² + 1` is "x squared plus 1"; see
+[Accessibility](accessibility.md#svg-and-mathml)). No `/ActualText` is set, and the reading is deliberately
+simple: the attached exact MathML source remains the complete, spec-conformant accessible representation.
 
 ---
 

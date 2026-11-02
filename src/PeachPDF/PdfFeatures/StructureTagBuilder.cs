@@ -24,6 +24,35 @@ namespace PeachPDF.PdfFeatures
 
         public IDisposable OpenGroupingElement(StructureNode node, string structureType) => recorder.OpenGroupingElement(node, structureType);
 
+        public IDisposable OpenGroupingElement(StructureNode node, string structureType, StructureDetails? details) =>
+            recorder.OpenGroupingElement(node, structureType, ToPdf(details));
+
+        public IDisposable OpenContentElement(Canvas g, StructureNode node, string structureType, string? altText, StructureDetails? details) =>
+            recorder.OpenContentElement(g, node, structureType, altText, ToPdf(details));
+
+        // The language an element sets, and a table cell's scope and spans, as structure attributes (ISO 32000-1 14.8.5.7).
+        private static PdfStructureDetails? ToPdf(StructureDetails? details)
+        {
+            if (details is null)
+                return null;
+
+            var table = new Dictionary<string, PdfStructureAttributeValue>();
+            if (details.TableScope is { } scope)
+                table["Scope"] = PdfStructureAttributeValue.FromName(scope);
+
+            if (details.ColumnSpan > 1)
+                table["ColSpan"] = PdfStructureAttributeValue.FromNumber(details.ColumnSpan);
+
+            if (details.RowSpan > 1)
+                table["RowSpan"] = PdfStructureAttributeValue.FromNumber(details.RowSpan);
+
+            return new PdfStructureDetails
+            {
+                Language = details.Language,
+                Attributes = table.Count > 0 ? [new PdfStructureAttributes("Table", table)] : [],
+            };
+        }
+
         public IDisposable OpenPhantomAncestors(IReadOnlyList<PhantomAncestor> ancestors) =>
             recorder.OpenPhantomAncestors(ancestors.Select(a => ((object)a.Node, a.StructureType)).ToList());
 
