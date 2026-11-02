@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
@@ -79,7 +81,13 @@ namespace PeachBrackets.Html.Handlers
                 return ClassifyAuto(box);
 
             if (string.Equals(pdfTagType, Keywords.None, System.StringComparison.OrdinalIgnoreCase))
-                return StructureTagClassification.None;
+            {
+                // A page that is only inline content (a label and a field, a line of text and a link) has nothing between the document and its
+                // spans; PDF/UA-2 wants a paragraph there.
+                return box.HtmlTag?.Name.Equals("body", System.StringComparison.OrdinalIgnoreCase) == true && HoldsOnlyInlineContent(box) && HasPlainInlineElement(box)
+                    ? StructureTagClassification.Grouping("P")
+                    : StructureTagClassification.None;
+            }
 
             // "auto" and "none" are both handled above via exact-string checks, and both are the
             // only keywords in Map.PdfTagTypes mapping to PdfTagType.Auto/None respectively - so a
@@ -133,6 +141,8 @@ namespace PeachBrackets.Html.Handlers
 
             var language = tag.TryGetAttribute("lang", null) is { } lang && !string.IsNullOrWhiteSpace(lang) ? lang.Trim() : null;
             string? scope = null;
+            string? elementId = null;
+            IReadOnlyList<string> headerIds = [];
             int columns = 1, rows = 1;
             if (classification.StructureType is "TH" or "TD" && box.HtmlContainer?.SemanticTree.NodeFor(box) is { } node)
             {
@@ -148,6 +158,12 @@ namespace PeachBrackets.Html.Handlers
 
                 columns = node.ColumnSpan;
                 rows = node.RowSpan;
+
+                // A header cell is named so the cells it heads can point at it; a cell that lists its headers says which they are.
+                if (classification.StructureType == "TH")
+                    elementId = node.Id;
+                if (tag.HasAttribute("headers"))
+                    headerIds = [.. node.ColumnHeaders.Concat(node.RowHeaders).Select(h => h.Id).Distinct()];
             }
 
             // A figure that groups its picture and caption is a Figure of its own, and PDF/UA wants every Figure described: the name the
@@ -161,11 +177,11 @@ namespace PeachBrackets.Html.Handlers
 
             var listNumbering = classification.StructureType == "L" ? ListNumberingOf(box) : null;
 
-            return language is null && scope is null && groupAlt is null && listNumbering is null && columns == 1 && rows == 1
+            return language is null && scope is null && groupAlt is null && listNumbering is null && elementId is null && headerIds.Count == 0 && columns == 1 && rows == 1
                 ? null
                 : new StructureDetails
                 {
-                    Language = language, TableScope = scope, AlternativeText = groupAlt, ListNumbering = listNumbering, ColumnSpan = columns, RowSpan = rows,
+                    Language = language, TableScope = scope, AlternativeText = groupAlt, ListNumbering = listNumbering, ElementId = elementId, HeaderIds = headerIds, ColumnSpan = columns, RowSpan = rows,
                 };
         }
 
@@ -231,9 +247,29 @@ namespace PeachBrackets.Html.Handlers
             // A pure-grouping anonymous box (no own Words) is fully transparent - its children
             // attach directly to the nearest real ancestor struct element.
             // An anonymous block (the text between two blocks in a block container) is a paragraph; an anonymous inline run is a span.
-            return HasOwnPaintedContent(box)
-                ? StructureTagClassification.Content(box.IsInline ? "Span" : "P")
-                : StructureTagClassification.None;
+            if (HasOwnPaintedContent(box))
+                return StructureTagClassification.Content(box.IsInline ? "Span" : "P");
+
+            // An anonymous block that holds only inline elements (a label and its field between two blocks) is a paragraph around them.
+            return !box.IsInline && HoldsOnlyInlineContent(box) && HasPlainInlineElement(box) ? StructureTagClassification.Grouping("P") : StructureTagClassification.None;
+        }
+
+        /// <summary>
+        /// Whether a box holds an inline element that becomes a bare <c>Span</c> (not a link, a picture, a formula or a control, which are
+        /// elements of their own that may stand directly in a document); only those need a paragraph around them.
+        /// </summary>
+        static bool HasPlainInlineElement(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.HtmlTag is not null && !child.IsClickable
+                    && child is not (CssBoxImage or CssBoxSvg or CssBoxMath or CssBoxObject or CssBoxFrame or CssBoxFormField))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         static bool HoldsOnlyInlineContent(CssBox box)

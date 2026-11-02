@@ -113,6 +113,12 @@ namespace PeachBrackets.Annotations
 
         /// <summary>Draws each state of the control.</summary>
         public required FormFieldAppearance Appearance { get; init; }
+
+        /// <summary>
+        /// What the control is called to someone who cannot see it: its label, <c>aria-label</c>, <c>title</c> or the like, as the accessibility tree
+        /// names it; null when it has no name.
+        /// </summary>
+        public string? AccessibleName { get; init; }
     }
 
     /// <summary>

@@ -115,6 +115,12 @@ namespace PeachDrawing.PDF
         /// <summary>Whether a check box or radio button is on initially.</summary>
         public bool IsChecked { get; init; }
 
+        /// <summary>
+        /// What the field is called to assistive technology: written as its alternate name (<c>/TU</c>), which readers announce and PDF/UA asks every
+        /// field to have. Takes the place of <see cref="Placeholder"/> as the alternate name when both are set.
+        /// </summary>
+        public string? AccessibleName { get; init; }
+
         /// <summary>The choices of a select or list, in order.</summary>
         public IReadOnlyList<PdfFormOption> Options { get; init; } = [];
 
@@ -262,7 +268,9 @@ namespace PeachDrawing.PDF
         /// </summary>
         static void ApplyAlternateName(PdfAcroField field, PdfFormFieldDefinition a)
         {
-            if (a.Placeholder is { Length: > 0 } placeholder)
+            if (a.AccessibleName is { Length: > 0 } accessibleName)
+                field.AlternateFieldName = accessibleName;
+            else if (a.Placeholder is { Length: > 0 } placeholder)
                 field.AlternateFieldName = placeholder;
         }
 

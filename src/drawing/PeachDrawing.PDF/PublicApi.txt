@@ -255,6 +255,7 @@ PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
   property PdfFormFieldKind Kind { get; init; }
   property Rect Bounds { get; init; }
   property Size ContentSize { get; init; }
+  property String AccessibleName { get; init; }
   property String Name { get; init; }
   property String Placeholder { get; init; }
   property String Value { get; init; }
@@ -427,6 +428,7 @@ PeachDrawing.PDF.PdfStructureDetails : sealed class
   property IReadOnlyList<PdfStructureAttributes> Attributes { get; init; }
   property String ActualText { get; init; }
   property String Alt { get; init; }
+  property String Id { get; init; }
   property String Language { get; init; }
   property String Title { get; init; }
 PeachDrawing.PDF.PdfTagRecorder : sealed class
@@ -438,6 +440,7 @@ PeachDrawing.PDF.PdfTagRecorder : sealed class
   method IDisposable OpenGroupingElement(Object key, String structureType, PdfStructureDetails details)
   method IDisposable OpenListItemBodyElement(Object key)
   method IDisposable OpenPhantomAncestors(IReadOnlyList<ValueTuple<Object, String>> ancestors)
+  method IReadOnlyList<String> CheckStructure()
   method Void AttachMathMlSource(Object key, String mathMlSource)
   method Void BeginPage(PdfComposerPage page)
   method Void DeclareElement(Object key, String structureType, Object parentKey = null, PdfStructureDetails details = null, Boolean parentIsListItemBody = False)

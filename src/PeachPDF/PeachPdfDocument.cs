@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PeachDrawing.PDF;
 using System.IO;
 
@@ -34,6 +35,13 @@ public class PeachPdfDocument
     /// this is the one fact only the engine holds, so it has to be handed over rather than inferred.
     /// </remarks>
     public ClipReport ClipReport { get; internal set; } = new();
+
+    /// <summary>
+    /// What a tagged document's structure breaks of the requirements of an accessible one that the HTML decides, such as a heading that skips a
+    /// level, a table with no header cell or a figure with no alternative text, in document order. Filled for a document that claims PDF/UA
+    /// (<see cref="PdfGenerateConfig.PdfUAConformance"/>); empty otherwise and when nothing is wrong. It reports and does not throw.
+    /// </summary>
+    public IReadOnlyList<string> AccessibilityWarnings { get; internal set; } = [];
 
     /// <summary>
     /// Writes the completed PDF to the given stream.

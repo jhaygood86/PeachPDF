@@ -69,6 +69,12 @@ namespace PeachDrawing.PDF
         /// </summary>
         public string? Alt { get; init; }
 
+        /// <summary>
+        /// A name for the element that is unique in the document (<c>/ID</c>), so that a table cell's <c>Headers</c> attribute can refer to it. The
+        /// recorder indexes them in the structure tree's <c>/IDTree</c>.
+        /// </summary>
+        public string? Id { get; init; }
+
         /// <summary>A title for the element.</summary>
         public string? Title { get; init; }
 

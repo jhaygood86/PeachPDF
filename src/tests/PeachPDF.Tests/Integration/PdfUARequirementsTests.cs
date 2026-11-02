@@ -207,5 +207,99 @@ namespace PeachPDF.Tests.Integration
             Assert.Null(internalLink.Dict("/A")!.Array("/SD"));
             Assert.Null(file.StructureTreeRoot!.Array("/Namespaces"));
         }
-    }
+            [Theory]
+        [InlineData(PdfUAConformance.UA1)]
+        [InlineData(PdfUAConformance.UA2)]
+        public async Task AHeaderCellIsNamed_AndACellThatListsItsHeadersPointsAtThem(PdfUAConformance level)
+        {
+            const string table = "<html lang='en'><head><title>t</title></head><body><table>"
+                + "<tr><th id='h1'>Name</th><th id='h2'>Total</th></tr>"
+                + "<tr><td headers='h1'>North</td><td headers='h1 h2'>10</td></tr></table></body></html>";
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfUAConformance = level,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var document = await new PdfGenerator().GeneratePdf(table, config);
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            var file = PdfFile.Parse(stream.ToArray());
+
+            var cells = Walk(file).Select(x => x.Element).Where(e => e.StructureType is "/TH" or "/TD").ToList();
+            var headers = cells.Where(e => e.StructureType == "/TH").ToList();
+            Assert.Equal(2, headers.Count);
+            var ids = headers.Select(h => h.Dict.Text("/ID")).ToList();
+            Assert.All(ids, id => Assert.False(string.IsNullOrEmpty(id)));
+
+            // Both are findable in the structure tree's ID tree.
+            var idTree = file.StructureTreeRoot!.Dict("/IDTree");
+            Assert.NotNull(idTree);
+            var names = idTree!.Array("/Names")!.Resolved.OfType<PdfText>().Select(t => t.Value).ToList();
+            Assert.All(ids, id => Assert.Contains(id, names));
+
+            // The cell under both headers lists both; the one under the first lists one.
+            static IReadOnlyList<string> Listed(StructElem cell)
+            {
+                var a = cell.Dict["/A"];
+                var dictionaries = a switch { PdfDict d => [d], PdfArr arr => arr.Resolved.OfType<PdfDict>().ToList(), _ => new List<PdfDict>() };
+                return dictionaries.Select(d => d.Array("/Headers")).FirstOrDefault(h => h is not null)?.Resolved.OfType<PdfText>().Select(t => t.Value).ToList() ?? [];
+            }
+
+            var data = cells.Where(e => e.StructureType == "/TD").ToList();
+            Assert.Equal([ids[0]], Listed(data[0]));
+            Assert.Equal([ids[0], ids[1]], Listed(data[1]));
+        }
+        [Fact]
+        public async Task AFindingIsReportedForAHeadingThatSkipsALevel_ATableWithNoHeaderCell_AndAFigureWithNoDescription()
+        {
+            const string html = "<html lang='en'><head><title>t</title></head><body><h1>One</h1><h3>Three</h3>"
+                + "<table><tr><td>a</td></tr></table><img src='data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA=' alt=''></body></html>";
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfUAConformance = PdfUAConformance.UA1,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var document = await new PdfGenerator().GeneratePdf(html, config);
+
+            Assert.Contains("A heading H3 follows H1, skipping a level.", document.AccessibilityWarnings);
+            Assert.Contains("A table has no header cell (TH).", document.AccessibilityWarnings);
+        }
+
+        [Fact]
+        public async Task ADocumentWithASoundStructureHasNoFindings_AndOneWithoutAClaimIsNotChecked()
+        {
+            var sound = await new PdfGenerator().GeneratePdf(Html, new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfUAConformance = PdfUAConformance.UA1,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            });
+            var unclaimed = await new PdfGenerator().GeneratePdf("<html lang='en'><body><h1>a</h1><h4>b</h4></body></html>", new PdfGenerateConfig { PageSize = PageSize.A4, EnableTaggedPdf = true });
+
+            Assert.Empty(sound.AccessibilityWarnings);
+            Assert.Empty(unclaimed.AccessibilityWarnings);
+        }
+
+        [Fact]
+        public async Task AFormFieldIsNamedByItsLabel()
+        {
+            const string html = "<html lang='en'><head><title>t</title></head><body><label for='n'>Your name</label> <input id='n' name='n' value='Ada'></body></html>";
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfUAConformance = PdfUAConformance.UA1,
+                EnableInteractivePdfForms = true,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var document = await new PdfGenerator().GeneratePdf(html, config);
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            var file = PdfFile.Parse(stream.ToArray());
+
+            var field = Assert.Single(file.Fields);
+            Assert.Equal("Your name", field.Text("/TU"));
+        }
+}
 }
