@@ -849,13 +849,6 @@ Two knock-on gaps remain:
   The approximated one-line path described above is the one shape this does not yet cover: it can
   still discover that the box's declared width does not fit only after flowing some of its content,
   rather than moving the opaque box as a unit.
-- A declared `height`/`min-height` taller than the box's natural content grows correctly from
-  whichever edge `vertical-align` anchors, with one narrower exception: the default
-  `vertical-align: baseline` on an **empty box, or one whose `overflow` isn't `visible`** — both have
-  no baseline of their own, so the engine falls back to treating the box's bottom margin edge as its
-  baseline, computed from the box's still-natural (pre-growth) rectangle before the extra height is
-  applied. That case still only grows downward from its own top, which can leave the box positioned
-  too low relative to the rest of the line.
 
 ### Pointer Interaction
 
@@ -1028,7 +1021,6 @@ Known limitations:
 
 - **Static position is used in block flow only.** An absolutely positioned box whose offsets on an axis are both `auto` sits where it would have been in the normal flow on that axis ([CSS 2.1 §10.3.7](https://www.w3.org/TR/CSS21/visudet.html#abs-non-replaced-width)): at its parent's content edge across and below the previous in-flow sibling down. Two shapes still use the containing block's top-left padding corner instead: a box written among inline content, whose static position is on a line, and a box in a `direction: rtl` parent, whose static position is measured from the right edge. Give such a box an explicit `top`/`left` to place it. In a table cell with `vertical-align: middle` or `bottom`, such a box moves with the cell's aligned content.
 - **A positioned inline that a page break falls inside forms its containing block from the fragments placed so far.** An absolutely positioned box in such an inline resolves `bottom` and `right` against the last fragment on the page the box is laid out on, rather than against the inline's true last fragment on a later page. `top` and `left` are unaffected, and so is an inline that does not cross a page break.
-- **An empty positioned inline's own `vertical-align` is not applied.** When the inline holds nothing but the positioned box, its zero-width box sits on the line's baseline even if the inline is raised or lowered with `vertical-align` (`super`, `top`, a length). Offset the positioned box with `top`/`bottom` instead.
 - **An empty positioned inline between runs of opposite direction is placed at the far end of one run.** In mixed-direction text, such as an `rtl` paragraph with an English phrase, a zero-width inline at the boundary between the two directions goes to the far end of the neighbouring run instead of sitting between them. Within a run of one direction it is placed correctly.
 
 | Property | MDN Reference | Notes |

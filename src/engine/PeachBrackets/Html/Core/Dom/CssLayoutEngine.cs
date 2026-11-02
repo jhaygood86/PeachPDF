@@ -673,7 +673,8 @@ namespace PeachBrackets.Html.Dom
         /// but not at a run boundary). Its block extent is the content
         /// area a word in the inline's own font has on the line (baseline less ascent, one font height),
         /// plus the inline's padding; on a line with no word, it starts at the line's top. The inline's own
-        /// <c>vertical-align</c> is not applied, so a raised empty inline sits on the line's baseline. Held
+        /// <c>vertical-align</c> is applied as <see cref="ApplyVerticalAlignment"/> applies it to a box with
+        /// fragments of its own (<see cref="VerticalAlignDeltaOf"/>). Held
         /// only for the duration of the box's layout: nothing later reads it, and the line it describes is
         /// moved afterwards (a table cell's alignment, say) without it.
         /// </para>
@@ -699,13 +700,48 @@ namespace PeachBrackets.Html.Dom
                 ? baseline - font.Ascent
                 : setAside.Y;
 
-            ancestor.EmptyInlineContainingBlock = Rect.FromLTRB(
+            var block = Rect.FromLTRB(
                 x - ancestor.ActualPaddingLeft,
                 contentTop - ancestor.ActualPaddingTop,
                 x + ancestor.ActualPaddingRight,
                 contentTop + font.Height + ancestor.ActualPaddingBottom);
 
+            // The inline's own vertical-align moves it off the baseline exactly as it would move a box with
+            // fragments of its own: the same arithmetic ApplyVerticalAlignment applies.
+            if (line.Words.Count > 0 && line.BaselineY is { } lineBaseline)
+            {
+                var (lineTop, lineBottom) = FinalLineEdgesOf(line, setAside.Y);
+                var align = EffectiveVerticalAlignOf(ancestor, line, out var styledBox);
+                var delta = VerticalAlignDeltaOf(line, align, styledBox, block, 0, lineTop, lineBottom, lineBaseline);
+                block = new Rect(block.X, block.Y + delta, block.Width, block.Height);
+            }
+
+            ancestor.EmptyInlineContainingBlock = block;
+
             return ancestor;
+        }
+
+        /// <summary>
+        /// The top and bottom of a finished line as <see cref="ApplyVerticalAlignment"/> measured them
+        /// before it aligned anything: the line box itself, widened to every rectangle on it, since
+        /// edge-aligned content can reach past the baseline extent.
+        /// </summary>
+        /// <param name="line">the finished line</param>
+        /// <param name="fallbackTop">the line's top when it holds no rectangle and has no flow top</param>
+        private static (double Top, double Bottom) FinalLineEdgesOf(CssLineBox line, double fallbackTop)
+        {
+            var top = line.FlowTop ?? double.MaxValue;
+            var bottom = line.FlowTop is { } flowTop && line.BaselineExtent is { } extent
+                ? flowTop + extent.Height
+                : double.MinValue;
+
+            foreach (var rect in line.Rectangles.Values)
+            {
+                top = Math.Min(top, rect.Top);
+                bottom = Math.Max(bottom, rect.Bottom);
+            }
+
+            return top == double.MaxValue ? (fallbackTop, fallbackTop) : (top, Math.Max(top, bottom));
         }
 
         /// <summary>
@@ -1772,6 +1808,7 @@ namespace PeachBrackets.Html.Dom
                 ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
                 WidenAtomicInlineRectangles(lineBox);
+                GrowBaselessAtomicInlineRectangles(lineBox);
                 ApplyVerticalAlignment(lineBox);
                 HeightenAtomicInlineRectangles(lineBox);
                 ExtendInlineBlockRectanglesToLineHeight(lineBox);
@@ -5573,7 +5610,7 @@ namespace PeachBrackets.Html.Dom
             // generates it for an empty inline element, and §10.8.1 sizes the line from every inline box
             // on it. Nothing else would count it, since a line grows per word (GrowLineToItsExtent). Its
             // inline ancestors are counted too: one whose first word is still to come, on a later line,
-            // has begun on this one all the same. The inline's own vertical-align is not applied (#1308).
+            // has begun on this one all the same. Its vertical-align does not move what it contributes to the line, as for any raised content in this engine.
             //
             // Which line it is on depends on the break opportunity nearest it. With none since the line's
             // last word it goes with that word, onto the current line. After a space, or at the start of a
@@ -7683,13 +7720,7 @@ namespace PeachBrackets.Html.Dom
             Bottom,
 
             /// <summary>The box's own vertical center stays fixed; extra height splits evenly around it.</summary>
-            Middle,
-
-            /// <summary>
-            /// Neither edge is safely knowable post-alignment without risking a worse mispositioning than
-            /// leaving the rectangle's current top fixed — see <see cref="AnchorOf"/>'s own remarks.
-            /// </summary>
-            Circular
+            Middle
         }
 
         /// <summary>
@@ -7726,17 +7757,12 @@ namespace PeachBrackets.Html.Dom
         /// they are folded into <see cref="RectangleGrowthAnchor.Top"/> too.
         /// </para>
         /// <para>
-        /// An empty box, or one whose <c>overflow</c> isn't <c>visible</c>, has no baseline of its own —
-        /// <see cref="AtomicInlineBaselineOf"/> falls back to its bottom margin edge, and that fallback is
-        /// read from inside <see cref="ApplyVerticalAlignment"/>'s own baseline-extent fold, using the
-        /// box's still-natural (pre-growth) rectangle, before this method ever runs. An earlier,
-        /// since-reverted attempt at growing this specific case from its (algebraically bottom-anchored)
-        /// post-alignment position produced a measured regression — an empty bordered box's emitted
-        /// fragment landed at <c>Y = -20</c> instead of <c>20</c> in what is now
-        /// <c>TheEmittedFragmentCarriesTheDeclaredHeight</c> — so this case is classified
-        /// <see cref="RectangleGrowthAnchor.Circular"/> and left growing downward, unchanged, matching this
-        /// box shape's pre-#1169 behavior exactly (<see href="https://github.com/jhaygood86/PeachPDF/issues/1169">
-        /// #1169</see>).
+        /// A box with no baseline of its own (an empty one, or one whose <c>overflow</c> isn't
+        /// <c>visible</c>) never needs an anchor under a baseline-relative alignment: its bottom margin edge
+        /// IS its baseline, so <see cref="GrowBaselessAtomicInlineRectangles"/> has already grown it to its
+        /// declared height before <see cref="ApplyVerticalAlignment"/> placed it, and this method sees a
+        /// rectangle that needs no further growth. It classifies as <see cref="RectangleGrowthAnchor.Top"/>
+        /// only to have an answer for the remaining shapes.
         /// </para>
         /// </remarks>
         private static RectangleGrowthAnchor AnchorOf(CssBox box, CssLineBox line)
@@ -7765,17 +7791,14 @@ namespace PeachBrackets.Html.Dom
                 default:
                     // Default baseline (and the deprecated PeachBaselineMiddle sentinel, which has no
                     // distinct inline-layout effect - see its own Keywords doc comment).
-                    return box.Overflow.Value != Overflow.Visible || !HasWordOnLine(box, line)
-                        ? RectangleGrowthAnchor.Circular
-                        : RectangleGrowthAnchor.Top;
+                    return RectangleGrowthAnchor.Top;
             }
         }
 
         /// <summary>
         /// Grows <paramref name="rect"/> to <paramref name="declaredHeight"/> from
         /// <paramref name="anchor"/>, holding that edge (or, for <see cref="RectangleGrowthAnchor.Middle"/>,
-        /// the midpoint) fixed. <see cref="RectangleGrowthAnchor.Circular"/> grows downward, matching
-        /// <see cref="RectangleGrowthAnchor.Top"/> — see <see cref="AnchorOf"/>'s own remarks for why.
+        /// the midpoint) fixed.
         /// </summary>
         private static Rect GrowAtomicInlineRectangle(Rect rect, double declaredHeight, RectangleGrowthAnchor anchor)
         {
@@ -7787,6 +7810,70 @@ namespace PeachBrackets.Html.Dom
             };
 
             return new Rect(rect.X, newTop, rect.Width, declaredHeight);
+        }
+
+        /// <summary>
+        /// Whether <paramref name="box"/>'s baseline is its bottom margin edge rather than a line box of its
+        /// own (CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#propdef-vertical-align">§10.8.1</see>):
+        /// an <c>inline-block</c> with no in-flow line boxes, or whose <c>overflow</c> is not
+        /// <c>visible</c>. The two conditions <see cref="AtomicInlineBaselineOf"/> falls back on.
+        /// </summary>
+        private static bool BaselineIsBottomMarginEdge(CssBox box, CssLineBox line) =>
+            box.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !box.IsImage
+            && !ReferenceEquals(box, line.OwnerBox)
+            && (box.Overflow.Value != Overflow.Visible
+                || (LastOwnLineBaselineOf(box) is null && !HasWordOnLine(box, line)));
+
+        /// <summary>
+        /// Grows a baseline-aligned atomic inline whose baseline is its bottom margin edge to its declared
+        /// height (CSS 2.1 <see href="https://www.w3.org/TR/CSS22/visudet.html#normal-block">§10.6.3</see>)
+        /// <i>before</i> <see cref="ApplyVerticalAlignment"/> reads it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Such a box rests its bottom margin edge on the line's baseline, so its height decides how far it
+        /// reaches above the baseline: <see cref="ApplyVerticalAlignment"/> folds the whole margin box into
+        /// the line's extent and derives the box's baseline from <c>rect.Bottom</c>, and both need the used
+        /// height, not the empty content's zero. Growing it afterwards
+        /// (<see cref="HeightenAtomicInlineRectangles"/>) can only choose an edge to hold fixed, and every
+        /// choice is wrong for this shape: the top (what it did) hangs the box below the baseline; the
+        /// bottom is itself computed from the height. This is the same ordering
+        /// <see cref="WidenAtomicInlineRectangles"/> already has for width.
+        /// </para>
+        /// <para>
+        /// The edge-anchored alignments (<c>top</c>, <c>bottom</c>, <c>text-top</c>, <c>text-bottom</c>,
+        /// <c>middle</c>) do not use the box's baseline, so they stay with
+        /// <see cref="HeightenAtomicInlineRectangles"/>, whose anchor is correct for them. The
+        /// baseline-relative ones (<c>baseline</c>, <c>sub</c>, <c>super</c>, a length or percentage) offset
+        /// from the baseline this method has just made the grown box's bottom.
+        /// </para>
+        /// </remarks>
+        private static void GrowBaselessAtomicInlineRectangles(CssLineBox line)
+        {
+            List<(CssBox Box, double Height)>? growing = null;
+
+            foreach (var (box, rect) in line.Rectangles)
+            {
+                if (!IsWhollyHostedOnLine(box, line) || !BaselineIsBottomMarginEdge(box, line)) continue;
+
+                var align = EffectiveVerticalAlignOf(box, line, out _).Value;
+                if (!align.IsValue && align.Keyword is not (VerticalAlignment.Baseline or VerticalAlignment.Sub
+                        or VerticalAlignment.Super))
+                {
+                    continue;
+                }
+
+                if (ResolveAtomicInlineDeclaredHeight(box) is not { } declaredHeight || declaredHeight <= rect.Height) continue;
+
+                (growing ??= []).Add((box, declaredHeight));
+            }
+
+            if (growing is null) return;
+
+            foreach (var (box, declaredHeight) in growing)
+            {
+                line.Rectangles[box] = GrowAtomicInlineRectangle(line.Rectangles[box], declaredHeight, RectangleGrowthAnchor.Top);
+            }
         }
 
         /// <summary>
@@ -8779,60 +8866,78 @@ namespace PeachBrackets.Html.Dom
                 // (negative) the box by this distance from its own baseline - a percentage resolves
                 // against the styled box's own line-height, mirroring sub/super's own baseline-relative
                 // offset below rather than any of the line-extent-relative cases.
-                var baselineDelta = baselineDeltas[box];
-                var alignsMarginBox = styledBoxForVerticalAlign.IsImage;
+                OffsetBoxWithinLine(lineBox, box, VerticalAlignDeltaOf(
+                    lineBox, effectiveVerticalAlign, styledBoxForVerticalAlign, rect, baselineDeltas[box], lineTop, lineBottom, flowTop));
+            }
+        }
 
-                if (effectiveVerticalAlign.Value is { IsValue: true, Value: { } lengthOrCalc })
-                {
-                    var offset = CssValueParser.ParseLength(lengthOrCalc, styledBoxForVerticalAlign.ActualLineHeight, styledBoxForVerticalAlign);
-                    OffsetBoxWithinLine(lineBox, box, baselineDelta - offset);
-                    continue;
-                }
+        /// <summary>
+        /// How far an inline box has to move from where the flow left it for its <c>vertical-align</c>
+        /// (CSS 2.1 <see href="https://www.w3.org/TR/CSS21/visudet.html#propdef-vertical-align">§10.8.1</see>),
+        /// the arithmetic <see cref="ApplyVerticalAlignment"/> applies to every box on a line - and the one
+        /// an empty positioned inline's containing block takes too, so the two cannot disagree
+        /// (<see cref="EmptyInlineContainingBlockFor"/>).
+        /// </summary>
+        /// <param name="lineBox">the line the box sits on</param>
+        /// <param name="verticalAlign">the box's effective <c>vertical-align</c></param>
+        /// <param name="styledBox">the element <paramref name="verticalAlign"/> was declared on</param>
+        /// <param name="rect">the box's rectangle where the flow left it</param>
+        /// <param name="baselineDelta">the shift that puts the box's own baseline on the line's</param>
+        /// <param name="lineTop">the line's top edge, from its pre-alignment geometry</param>
+        /// <param name="lineBottom">the line's bottom edge, from its pre-alignment geometry</param>
+        /// <param name="flowTop">where the flow left the line's content, the fallback baseline</param>
+        private static double VerticalAlignDeltaOf(
+            CssLineBox lineBox,
+            CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>> verticalAlign,
+            CssBox styledBox,
+            Rect rect,
+            double baselineDelta,
+            double lineTop,
+            double lineBottom,
+            double flowTop)
+        {
+            // A length/percentage (CSS 2.1 §10.8.1, issue #603) raises (positive) or lowers
+            // (negative) the box by this distance from its own baseline - a percentage resolves
+            // against the styled box's own line-height, mirroring sub/super's own baseline-relative
+            // offset below rather than any of the line-extent-relative cases.
+            if (verticalAlign.Value is { IsValue: true, Value: { } lengthOrCalc })
+            {
+                return baselineDelta - CssValueParser.ParseLength(lengthOrCalc, styledBox.ActualLineHeight, styledBox);
+            }
 
-                //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
-                switch (effectiveVerticalAlign.Value.Keyword)
-                {
-                    case VerticalAlignment.Sub:
-                        OffsetBoxWithinLine(lineBox, box, baselineDelta + rect.Height * .5f);
-                        break;
-                    case VerticalAlignment.Super:
-                        OffsetBoxWithinLine(lineBox, box, baselineDelta - rect.Height * .2f);
-                        break;
-                    case VerticalAlignment.Top:
-                        OffsetBoxWithinLine(lineBox, box,
-                            lineTop + (alignsMarginBox ? styledBoxForVerticalAlign.ActualMarginTop : 0) - rect.Top);
-                        break;
-                    case VerticalAlignment.Bottom:
-                        OffsetBoxWithinLine(lineBox, box,
-                            lineBottom - (alignsMarginBox ? styledBoxForVerticalAlign.ActualMarginBottom : 0) - rect.Bottom);
-                        break;
-                    case VerticalAlignment.Middle:
-                        var lineMiddleTop = lineTop + (lineBottom - lineTop - rect.Height) / 2;
-                        OffsetBoxWithinLine(lineBox, box, lineMiddleTop - rect.Top);
-                        break;
-                    case VerticalAlignment.TextTop:
-                    case VerticalAlignment.TextBottom:
-                        // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
-                        // the line's own extents (that's top/bottom above), so this references the
-                        // parent element's own ActualFont rather than lineTop/lineBottom. Reuses the
-                        // same tagged-ancestor walk computed above for effectiveVerticalAlign.
-                        var styledBox = styledBoxForVerticalAlign;
-                        var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
-                        // The parent's own content area, hung from the line's baseline - not from this
-                        // box's baseline-aligned top, which is already offset by this box's own ascent.
-                        var fontTop = (lineBox.BaselineY ?? flowTop) - referenceFont.Ascent;
-                        var target = effectiveVerticalAlign.Value.Keyword == VerticalAlignment.TextTop
-                            ? fontTop
-                            : fontTop + referenceFont.Height - rect.Height;
-                        OffsetBoxWithinLine(lineBox, box, target - rect.Top);
-                        break;
-                    default:
-                        // baseline, and PeachBaselineMiddle (the deprecated img align=middle sentinel -
-                        // see Keywords.PeachBaselineMiddle - has no distinct inline-layout effect,
-                        // matching its pre-existing behavior before this typed-storage conversion).
-                        OffsetBoxWithinLine(lineBox, box, baselineDelta);
-                        break;
-                }
+            var alignsMarginBox = styledBox.IsImage;
+
+            //Important notes on http://www.w3.org/TR/CSS21/tables.html#height-layout
+            switch (verticalAlign.Value.Keyword)
+            {
+                case VerticalAlignment.Sub:
+                    return baselineDelta + rect.Height * .5f;
+                case VerticalAlignment.Super:
+                    return baselineDelta - rect.Height * .2f;
+                case VerticalAlignment.Top:
+                    return lineTop + (alignsMarginBox ? styledBox.ActualMarginTop : 0) - rect.Top;
+                case VerticalAlignment.Bottom:
+                    return lineBottom - (alignsMarginBox ? styledBox.ActualMarginBottom : 0) - rect.Bottom;
+                case VerticalAlignment.Middle:
+                    return lineTop + (lineBottom - lineTop - rect.Height) / 2 - rect.Top;
+                case VerticalAlignment.TextTop:
+                case VerticalAlignment.TextBottom:
+                    // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
+                    // the line's own extents (that's top/bottom above), so this references the
+                    // parent element's own ActualFont rather than lineTop/lineBottom.
+                    var referenceFont = (styledBox.ParentBox ?? styledBox).ActualFont;
+                    // The parent's own content area, hung from the line's baseline - not from this
+                    // box's baseline-aligned top, which is already offset by this box's own ascent.
+                    var fontTop = (lineBox.BaselineY ?? flowTop) - referenceFont.Ascent;
+                    var target = verticalAlign.Value.Keyword == VerticalAlignment.TextTop
+                        ? fontTop
+                        : fontTop + referenceFont.Height - rect.Height;
+                    return target - rect.Top;
+                default:
+                    // baseline, and PeachBaselineMiddle (the deprecated img align=middle sentinel -
+                    // see Keywords.PeachBaselineMiddle - has no distinct inline-layout effect,
+                    // matching its pre-existing behavior before this typed-storage conversion).
+                    return baselineDelta;
             }
         }
 
