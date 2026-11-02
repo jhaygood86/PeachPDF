@@ -69,6 +69,8 @@ they are (Button, CheckBox, RadioButton, Edit, ComboBox, Slider, ProgressBar, Li
 help text, and a disabled control is not enabled. Every node has its bounding rectangle on the screen and reports whether it is scrolled out
 of view, so Narrator can read the page, jump by heading or landmark and follow links. The tree is rebuilt whenever a document loads or reflows.
 
+A table (or `role="grid"`) has the **Grid** and **Table** patterns - its row and column counts, the cell at a place (a cell that spans reaches every place it covers), and its column and row headers - and each cell has **GridItem** and **TableItem**: its row, column and spans, the table it belongs to, and the header cells that head it, so Narrator announces "Qty, column 2, Pear" and moves between cells with its table commands.
+
 **Keyboard**: the view is a tab stop. Tab and Shift+Tab step through the page's own tab stops - links, buttons, form controls and anything with a
 `tabindex`, in the order HTML defines - and past the last (or before the first) the key moves the XAML focus on to the next control, so the view is not a
 keyboard trap. Enter follows the link that has the focus. The part with the focus is `HtmlView.FocusedNode`; the page's `:focus` and `:focus-visible`
