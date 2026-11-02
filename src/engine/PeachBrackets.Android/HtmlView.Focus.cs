@@ -2,6 +2,7 @@ using Android.Graphics;
 using Android.Views;
 using Android.Views.Accessibility;
 using PeachBrackets.Accessibility;
+using PeachBrackets.Android.Logic;
 using Rect = Android.Graphics.Rect;
 
 namespace PeachBrackets.Android;
@@ -31,12 +32,18 @@ public sealed partial class HtmlView
             case Keycode.Tab:
                 return StepFocus(e is not { IsShiftPressed: true });
 
-            case Keycode.Enter or Keycode.NumpadEnter or Keycode.DpadCenter:
+            case Keycode.Enter or Keycode.NumpadEnter or Keycode.DpadCenter or Keycode.Space:
                 if (_document is { } document
-                    && (_focusTargetId is { } id ? document.GetAccessibilityTree().FindById(id) : document.FocusedNode) is { Role: AccessibilityRole.Link } link)
+                    && (_focusTargetId is { } id ? document.GetAccessibilityTree().FindById(id) : document.FocusedNode) is { } focused)
                 {
-                    FollowLinkNode(link);
-                    return true;
+                    if (focused.Role == AccessibilityRole.Link && keyCode != Keycode.Space)
+                    {
+                        FollowLinkNode(focused);
+                        return true;
+                    }
+
+                    if (AccessibilityMapping.IsCheckable(focused.Role))
+                        return ActivateControl(focused);
                 }
 
                 return false;
