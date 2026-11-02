@@ -93,7 +93,7 @@ namespace PeachBrackets.Html.Semantics
 
                 if (child.HtmlTag is { } tag)
                 {
-                    if (IsTrue(tag, "aria-hidden") || tag.HasAttribute("inert"))
+                    if (IsTrue(tag, "aria-hidden") || tag.HasAttribute("inert") || child.DerivedStyle.ActualDisplay == Keywords.None)
                         continue;
 
                     if (asName && NonEmpty(tag.TryGetAttribute("aria-label")) is { } label)
