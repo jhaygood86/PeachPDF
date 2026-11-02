@@ -1995,6 +1995,25 @@
       }
     },
     {
+      "name": "forced-color-adjust",
+      "comment": "CSS Color Adjust 1 3. Inherited. auto lets forced colors mode (UserPreferences.ForcedColors) replace the element's colours with the system palette, none keeps the author's, preserve-parent-color keeps the text colour the element inherits while the rest is still adjusted. Read by DerivedStyle's Actual*Color getters; outside forced colors mode it changes nothing.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ForcedColorAdjustModeConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ForcedColorAdjustMode",
+        "keywordMap": "Map.ForcedColorAdjustModes",
+        "fallback": "ForcedColorAdjustMode.Auto"
+      },
+      "html": {
+        "propertyPath": "ForcedColorAdjust",
+        "csharpDataType": "CssProperty<ForcedColorAdjustMode>",
+        "area": "BackgroundArea",
+        "getterExpression": "{box}.ForcedColorAdjust.ToString()"
+      }
+    },
+    {
       "name": "image-rendering",
       "comment": "CSS Images 3 5.3. Inherited. Chooses how a raster image is resampled when it is drawn at a size other than its own: auto and smooth filter, high-quality filters with a sharper curve, crisp-edges and pixelated keep hard pixel edges.",
       "inherited": true,

@@ -176,6 +176,9 @@ public sealed partial class HtmlView
     /// <inheritdoc />
     public override bool OnKeyDown(Keycode keyCode, KeyEvent? e)
     {
+        if (HandleFocusKey(keyCode, e))
+            return true;
+
         if (e is { IsCtrlPressed: true })
         {
             if (keyCode == Keycode.C)

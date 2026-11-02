@@ -37,7 +37,8 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | Member | |
 |---|---|
 | `Html`, `Source` | What to show (`Html` wins). Both are dependency properties, so they bind. |
-| `PageBackground` | The colour behind the page. |
+| `PageBackground` | The colour behind the page. While it is opaque (the default) the view's surface has no alpha channel, which lets `Lcd` text blend against what is behind it. |
+| `TextRendering` | How text is drawn; see [`PeachDrawing.Win2D`](peachdrawing-win2d.md#text-rendering-peachdrawing-engine). `Auto` (the default) gives body text hinting, the weight Windows gives it and, when ClearType is on, its colour stripes; large text stays crisp vector text. |
 | `Input` | The pointing devices the `hover` / `pointer` media queries report. By default the control asks the system which are attached. |
 | `Document` | The loaded `HtmlDocument` (replaced whenever the view reloads), for anything the control does not wrap: find, element bounds, annotations. |
 | `SelectedText`, `CopySelection()`, `SelectAll()` | Selection and the clipboard. Ctrl+C and Ctrl+A work when the control has focus. |
@@ -68,12 +69,18 @@ they are (Button, CheckBox, RadioButton, Edit, ComboBox, Slider, ProgressBar, Li
 help text, and a disabled control is not enabled. Every node has its bounding rectangle on the screen and reports whether it is scrolled out
 of view, so Narrator can read the page, jump by heading or landmark and follow links. The tree is rebuilt whenever a document loads or reflows.
 
+**Keyboard**: the view is a tab stop. Tab and Shift+Tab step through the page's own tab stops - links, buttons, form controls and anything with a
+`tabindex`, in the order HTML defines - and past the last (or before the first) the key moves the XAML focus on to the next control, so the view is not a
+keyboard trap. Enter follows the link that has the focus. The part with the focus is `HtmlView.FocusedNode`; the page's `:focus` and `:focus-visible`
+rules apply to it (the built-in style draws a dotted outline), the view scrolls it into view, and UI Automation is told so Narrator reads it. A screen
+reader's `SetFocus` on a node moves the page's focus there, and `IsKeyboardFocusable` and `HasKeyboardFocus` say which nodes can take it and which has it.
+
 `src/examples/PeachBrackets.WinUI.Example/Verify-Accessibility.ps1` starts the example and checks that tree through the UI Automation client
 API (it needs a desktop session).
 
 ## Limits of this version
 
-- Form controls are painted but not interactive, and there is no keyboard navigation between links or controls.
+- Form controls are painted but not interactive: they can be focused with Tab, but nothing can be typed into them or clicked.
 - Zoom scales the rendered surface; it is not re-rendered at the new scale, so very high zoom is soft.
 - A `url()` cursor image uses its first frame, and an SVG image is not used (the keyword's pointer is shown instead).
 - Find in the page is available through `Document` (`FindText`) but has no built-in user interface.

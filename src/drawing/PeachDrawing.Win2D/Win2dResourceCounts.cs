@@ -12,6 +12,7 @@ internal sealed class Win2dResourceCounts
     private int _tiles;
     private int _commandLists;
     private int _sessions;
+    private int _nativeTargets;
 
     /// <summary>Clip layers (<c>CanvasActiveLayer</c>) pushed and not yet popped.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -25,6 +26,11 @@ internal sealed class Win2dResourceCounts
     /// <summary>Drawing sessions this backend opened itself (not borrowed ones) and has not yet closed.</summary>
     public int Sessions => Volatile.Read(ref _sessions);
 
+    /// <summary>Readers of a session's native target (with their staging bitmaps) made and not yet disposed.</summary>
+    public int NativeTargets => Volatile.Read(ref _nativeTargets);
+
+    public void NativeTarget(int delta) => Interlocked.Add(ref _nativeTargets, delta);
+
     public void Layer(int delta) => Interlocked.Add(ref _layers, delta);
 
     public void Tile(int delta) => Interlocked.Add(ref _tiles, delta);
@@ -34,5 +40,5 @@ internal sealed class Win2dResourceCounts
     public void Session(int delta) => Interlocked.Add(ref _sessions, delta);
 
     /// <summary>The sum of everything still alive.</summary>
-    public int Total => Layers + Tiles + CommandLists + Sessions;
+    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets;
 }

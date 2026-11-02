@@ -75,6 +75,37 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Which text engine this context's fonts use.</summary>
     public Win2dTextEngine TextEngine => _textEngine;
 
+    /// <summary>
+    /// How text drawn with the <see cref="Win2dTextEngine.PeachDrawing"/> engine becomes pixels; see <see cref="Win2dTextRendering"/>. The default
+    /// is <see cref="Win2dTextRendering.Auto"/>, which picks for each run. Every value but <see cref="Win2dTextRendering.Outline"/> fits each run to the pixel grid with the font's hinting (the kind named by
+    /// <see cref="RenderContext.TextHinting"/>, or the standard one when that is <see cref="TextHinting.None"/>). It has no effect on
+    /// <see cref="Win2dTextEngine.DirectWrite"/> text.
+    /// </summary>
+    public Win2dTextRendering TextRendering { get; set; } = Win2dTextRendering.Auto;
+
+    /// <summary>
+    /// Whether the stripes of an LCD pixel run blue, green, red from left to right instead of the usual red, green, blue, for
+    /// <see cref="Win2dTextRendering.Lcd"/> text on a display built that way. <see cref="Win2dTextRendering.Auto"/> follows the Windows setting as well.
+    /// </summary>
+    public bool LcdBgrStripes { get; set; }
+
+    /// <summary>The raster context text masks are drawn with, set up with this context's hinting; made on first use.</summary>
+    internal PeachDrawing.RasterRenderContext MaskContext
+    {
+        get
+        {
+            lock (_gate)
+            {
+                _maskContext ??= new PeachDrawing.RasterRenderContext();
+                _maskContext.TextHinting = TextHinting == TextHinting.None ? TextHinting.Standard : TextHinting;
+                _maskContext.TextStemDarkening = TextStemDarkening;
+                return _maskContext;
+            }
+        }
+    }
+
+    private PeachDrawing.RasterRenderContext? _maskContext;
+
     /// <summary>Which decoder turns an encoded image into pixels.</summary>
     public Win2dImageCodec ImageCodec => _imageCodec;
 

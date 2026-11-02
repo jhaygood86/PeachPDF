@@ -98,6 +98,7 @@ public sealed class Win2dComposer : IDisposable
                 var (r, g, b) = options.Background.ToRgb();
                 session.Clear(Windows.UI.Color.FromArgb(options.Background.A, r, g, b));
                 _canvas = Win2dCanvas.OverOwnedSession(renderContext, session, new Rect(0, 0, width, height), options.Links);
+                _canvas.SetBackdrop(_target);
             }
             catch
             {

@@ -35,7 +35,8 @@ namespace PeachBrackets.WinUI.Tests.PublicApi
         }
 
         /// <summary>
-        /// Only this project's own tests are granted its internals; PeachPDF and PeachPDF.Tests use the public API alone.
+        /// Only this project's own tests (the logic tests and the tests that run it in a window) are granted its internals; PeachPDF and
+        /// PeachPDF.Tests use the public API alone.
         /// </summary>
         [Fact]
         public void TheGrantedInternalsAreExactlyTheDocumentedSet()
@@ -44,7 +45,7 @@ namespace PeachBrackets.WinUI.Tests.PublicApi
                 .Select(a => a.AssemblyName)
                 .ToList();
 
-            Assert.Equivalent(new[] { "PeachBrackets.WinUI.Tests" }, granted);
+            Assert.Equivalent(new[] { "PeachBrackets.WinUI.Tests", "PeachBrackets.WinUI.UITests" }, granted);
         }
 
         private static string Describe(Assembly assembly)

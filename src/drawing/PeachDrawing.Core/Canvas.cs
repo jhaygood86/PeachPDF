@@ -647,6 +647,18 @@ namespace PeachDrawing.Core
         }
 
         /// <summary>
+        /// Says what <paramref name="bounds"/> is to someone who cannot see it: a heading, a navigation landmark, a button that is pressed. A canvas
+        /// for a format that carries it (SVG) writes it, so assistive technology can read the drawing; a canvas of pixels, or one that records
+        /// its structure another way (the PDF canvas, through a tag recorder), ignores it, which is what the default does. Areas are added in
+        /// reading order, and each is a region of its own: the nesting of the document is not written.
+        /// </summary>
+        /// <param name="bounds">the area, in this canvas's layout units like every other rectangle</param>
+        /// <param name="info">what it is</param>
+        public virtual void AddSemanticRegion(Rect bounds, SemanticInfo info)
+        {
+        }
+
+        /// <summary>
         /// Names a place on the page this canvas draws, for <see cref="AddDestinationLink"/> to lead to. The default writes nothing.
         /// </summary>
         /// <param name="name">the name the place is given; it must be unique in the document</param>

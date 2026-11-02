@@ -18,6 +18,7 @@ PeachBrackets.Android.HtmlView : sealed class
   ctor(Context context)
   ctor(Context context, IAttributeSet attributes)
   event EventHandler DocumentLoaded
+  event EventHandler FocusChanged
   event EventHandler ScrollChanged
   event EventHandler ZoomChanged
   event EventHandler<HtmlLinkTappedEventArgs> LinkTapped
@@ -36,7 +37,9 @@ PeachBrackets.Android.HtmlView : sealed class
   method virtual Void OnAttachedToWindow()
   method virtual Void OnConfigurationChanged(Configuration newConfig)
   method virtual Void OnDetachedFromWindow()
+  method virtual Void OnFocusChanged(Boolean gainFocus, FocusSearchDirection direction, Rect previouslyFocusedRect)
   method virtual Void OnSizeChanged(Int32 w, Int32 h, Int32 oldw, Int32 oldh)
+  property AccessibilityNode FocusedNode { get; }
   property AccessibilityNodeProvider AccessibilityNodeProvider { get; }
   property Double Zoom { get; }
   property HtmlDocument Document { get; }

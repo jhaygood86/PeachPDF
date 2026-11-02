@@ -73,6 +73,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
+  method virtual Void AddSemanticRegion(Rect bounds, SemanticInfo info)
   method virtual Void DrawImage(Image image, Rect destRect, ImageSampling sampling)
   method virtual Void DrawImage(Image image, Rect destRect, Rect srcRect, ImageSampling sampling)
   method virtual Void DrawRaster(RasterSurface surface)
@@ -810,6 +811,21 @@ PeachDrawing.Core.RenderContext : abstract class
   property Int64 MaxRasterPixels { get; set; }
   property RUri BaseUri { get; }
   property TextHinting TextHinting { get; set; }
+PeachDrawing.Core.SemanticInfo : sealed class
+  ctor(String Role)
+  method SemanticInfo <Clone>$()
+  method Void Deconstruct(out String Role)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SemanticInfo other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property IReadOnlyDictionary<String, String> Properties { get; init; }
+  property Int32 Level { get; init; }
+  property String Description { get; init; }
+  property String Id { get; init; }
+  property String Language { get; init; }
+  property String Name { get; init; }
+  property String Role { get; init; }
 PeachDrawing.Core.Size : struct
   ctor(Double Width, Double Height)
   ctor(PaintPoint pt)

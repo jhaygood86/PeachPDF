@@ -92,6 +92,23 @@ kind, so a font is never measured by one engine and drawn by the other.
   Windows does it, with OpenType features through `CanvasTypography`. **This mode is not feature complete**; see
   [DirectWrite mode](#directwrite-mode-is-not-feature-complete).
 
+### Text rendering (PeachDrawing engine)
+
+`Win2dRenderContext.TextRendering` chooses how the `PeachDrawing` engine's glyphs become pixels. It has no effect in DirectWrite mode.
+
+| `Win2dTextRendering` | What is drawn |
+|---|---|
+| `Auto` (default) | Chooses for each run, so text looks like the rest of Windows wherever that is possible: `Lcd` on screen (a session the host owns) when ClearType is on and the pixels behind the text can be read, `Grayscale` otherwise, and `Outline` for large text and for text that is rotated or skewed. A `Win2dComposer`'s bitmap is an export that may be shown on any display, so it gets `Grayscale`, never colour fringes. |
+| `Outline` | Each run's exact outlines filled as vector geometry: full quality under any transform and brush, but not fitted to the pixel grid and blended as plain coverage, so small text looks lighter and softer than Windows draws it. |
+| `Grayscale` | The run is fitted to the pixel grid by the font's own hinting (the TrueType interpreter and CFF engine of the shared text engine; `RenderContext.TextHinting` picks the dialect, `Standard` when unset), rasterized to a coverage mask, corrected for the brightness of the text colour so light and dark text have the same apparent weight, and drawn as a bitmap on whole device pixels. Close to Windows' grayscale text. |
+| `Lcd` | As `Grayscale`, with a coverage per red, green and blue stripe (3x horizontal detail, a short filter across stripes, `LcdBgrStripes` for the opposite order) blended per channel. |
+
+`Grayscale` and `Lcd` draw a run as `Outline` when it is rotated or skewed, or in a colour font, and a run too large to rasterize over a host's session. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
+
+**What LCD text needs.** Blending each colour channel with its own coverage needs the pixels behind the text. A `Win2dComposer` reads its own bitmap. Over a session you hand to `Win2dCanvas.FromSession`, the canvas asks Win2D for the session's native Direct2D target and copies the rectangle behind each run into a CPU-readable bitmap (about 0.04 ms a run on a GPU), so it works over a control's surface such as `CanvasVirtualControl` as well as over a render target. It applies only when the target has no alpha channel (a `CanvasVirtualControl` gives one while its `ClearColor` is opaque, and a `CanvasRenderTarget` made with `CanvasAlphaMode.Ignore`) and the blend is the ordinary one; drawing inside a clip is fine. A session that records into a command list, or a target with an alpha channel, gets `Grayscale`. Anything unexpected in the native interface (a missing interface, a pixel format that is not 32-bit BGRA, a failed copy) also falls back to `Grayscale`; nothing throws.
+
+**How close it is.** The weight correction and the filter were fitted to what Direct2D's own text renderer produces, so the result is close to DirectWrite's text, not identical: glyph advances and metrics still follow the font file rather than DirectWrite's, and DirectWrite's rasterizer is not available to match exactly. A masked run costs several times an outline run (a page of body text paints in about 95 ms against about 35 ms as outlines on a software device), so choose `Outline` for a text-heavy page that does not need the look.
+
 Fonts a document brings (`@font-face`, `AddFont`) work in both modes; DirectWrite loads them from a temporary file the context deletes.
 
 ### DirectWrite mode is not feature complete

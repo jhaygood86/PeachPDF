@@ -11,10 +11,12 @@ PeachBrackets.WinUI.HtmlView : sealed class
   method Boolean ScrollToElement(String elementId)
   method Void CopySelection()
   method Void SelectAll()
+  property AccessibilityNode FocusedNode { get; }
   property Color PageBackground { get; set; }
   property HtmlDocument Document { get; }
   property InputCapabilities Input { get; set; }
   property String Html { get; set; }
   property String SelectedText { get; }
   property Uri Source { get; set; }
+  property Win2dTextRendering TextRendering { get; set; }
 PeachBrackets.WinUI.HtmlViewAutomationPeer : sealed class
