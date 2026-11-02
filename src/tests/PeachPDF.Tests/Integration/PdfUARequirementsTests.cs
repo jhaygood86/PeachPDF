@@ -229,7 +229,7 @@ namespace PeachPDF.Tests.Integration
             var cells = Walk(file).Select(x => x.Element).Where(e => e.StructureType is "/TH" or "/TD").ToList();
             var headers = cells.Where(e => e.StructureType == "/TH").ToList();
             Assert.Equal(2, headers.Count);
-            var ids = headers.Select(h => h.Dict.Text("/ID")).ToList();
+            var ids = headers.Select(h => h.Dict.Text("/ID")!).ToList();
             Assert.All(ids, id => Assert.False(string.IsNullOrEmpty(id)));
 
             // Both are findable in the structure tree's ID tree.

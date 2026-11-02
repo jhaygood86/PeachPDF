@@ -46,6 +46,7 @@ namespace PeachPDF.PdfFeatures
                 Placeholder = c.Attributes.Placeholder,
                 AccessibleName = field.AccessibleName,
                 PlaceholderShown = c.PlaceholderShown,
+                Multiline = c.Multiline,
                 AutoFontSize = c.AutoFontSize,
                 CombCells = c.Comb,
                 DoNotScroll = c.DoNotScroll,

@@ -75,6 +75,9 @@ namespace PeachBrackets.Annotations
         /// <summary>Whether a checkbox/radio's <c>checked</c> attribute is present. Always false for other kinds.</summary>
         public bool Checked { get; }
 
+        /// <summary>Whether a text field holds several lines (a <c>&lt;textarea&gt;</c>). Only meaningful for <see cref="FormFieldKind.Text"/>.</summary>
+        public bool Multiline { get; private init; }
+
         /// <summary>A select field's &lt;option&gt; children, in document order. Empty for other kinds.</summary>
         public IReadOnlyList<FormFieldOption> Options { get; }
 
@@ -128,8 +131,8 @@ namespace PeachBrackets.Annotations
         public static readonly FormFieldClassification None =
             new(FormFieldKind.None, null, null, false, Array.Empty<FormFieldOption>(), false, null, false, false, FormFieldAttributes.None);
 
-        internal static FormFieldClassification Text(string? name, string? value, bool autoFontSize, int? comb, bool doNotScroll, bool placeholderShown, FormFieldAttributes attributes) =>
-            new(FormFieldKind.Text, name, value, false, Array.Empty<FormFieldOption>(), autoFontSize, comb, doNotScroll, placeholderShown, attributes);
+        internal static FormFieldClassification Text(string? name, string? value, bool autoFontSize, int? comb, bool doNotScroll, bool placeholderShown, FormFieldAttributes attributes, bool multiline = false) =>
+            new(FormFieldKind.Text, name, value, false, Array.Empty<FormFieldOption>(), autoFontSize, comb, doNotScroll, placeholderShown, attributes) { Multiline = multiline };
 
         internal static FormFieldClassification Checkbox(string? name, string? value, bool @checked, FormFieldAttributes attributes) =>
             new(FormFieldKind.Checkbox, name, value, @checked, Array.Empty<FormFieldOption>(), false, null, false, false, attributes);

@@ -245,6 +245,7 @@ PeachBrackets.Annotations.FormFieldClassification : struct
   property Boolean AutoFontSize { get; }
   property Boolean Checked { get; }
   property Boolean DoNotScroll { get; }
+  property Boolean Multiline { get; }
   property Boolean PlaceholderShown { get; }
   property FormFieldAttributes Attributes { get; }
   property FormFieldKind Kind { get; }

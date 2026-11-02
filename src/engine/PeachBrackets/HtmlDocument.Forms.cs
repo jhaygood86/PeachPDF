@@ -201,7 +201,9 @@ public sealed partial class HtmlDocument
         element.Box is CssBoxFormField { HtmlTag: not null } field ? field : null;
 
     private static string TypeOf(CssBox control) =>
-        control.HtmlTag!.Name.Equals("select", StringComparison.OrdinalIgnoreCase) ? "select" : control.GetAttribute("type", "text").ToLowerInvariant();
+        control.HtmlTag!.Name.Equals("select", StringComparison.OrdinalIgnoreCase) ? "select"
+        : control.HtmlTag.Name.Equals("textarea", StringComparison.OrdinalIgnoreCase) ? "textarea"
+        : control.GetAttribute("type", "text").ToLowerInvariant();
 
     private static double Number(CssBox control, string name, double fallback) =>
         double.TryParse(control.GetAttribute(name, string.Empty), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;

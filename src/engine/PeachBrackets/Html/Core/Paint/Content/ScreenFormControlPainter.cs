@@ -5,6 +5,7 @@ using PeachBrackets.Html.Handlers;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.Core;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets.Html.Paint.Content
 {
@@ -83,6 +84,11 @@ namespace PeachBrackets.Html.Paint.Content
                 var style = box.ResolvedPlaceholderStyle ?? box;
                 PaintText(g, box, rect, DateTimeHint(type), centered: false, style.ActualColor, disabled);
             }
+            else if (box.IsTextArea)
+            {
+                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                PaintTextArea(g, box, rect, box.GetAttribute("value", string.Empty), disabled);
+            }
             else
             {
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
@@ -107,6 +113,99 @@ namespace PeachBrackets.Html.Paint.Content
             var overflowClipRecorded = painter.PushOverflowClip(overflowClip, overflowClipCurve);
             painter.PaintReplacedOutline(g, box, rect);
             painter.PopOverflowClip(overflowClipRecorded);
+        }
+
+        // A text area: its value (or its placeholder) broken into lines for its width, then the selection, composition and caret of the one being edited.
+        internal static void PaintTextArea(Canvas g, CssBox box, Rect rect, string value, bool disabled)
+        {
+            var content = ContentRect(box, rect);
+            if (content is not { Width: > 0, Height: > 0 })
+                return;
+
+            var font = box.ActualFont;
+            var text = value;
+            var color = box.ActualColor;
+            if (value.Length == 0 && box.GetAttribute("placeholder", string.Empty) is { Length: > 0 } placeholder)
+            {
+                text = placeholder;
+                color = (box.ResolvedPlaceholderStyle ?? box).ActualColor;
+            }
+
+            var lines = TextAreaLayout.Wrap(g, font, text, content.Width);
+            g.PushClip(content);
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var top = content.Y + (i * font.Height);
+                if (top >= content.Y + content.Height)
+                    break;
+
+                var line = lines[i];
+                if (line.End > line.Start)
+                {
+                    g.DrawString(text[line.Start..line.End].TrimEnd(' '), font, disabled ? Dimmed(color) : color, new PaintPoint(content.X, top),
+                        new Size(content.Width, font.Height), fontPalette: box.ActualFontPalette, features: box.ActualTextShapingFeatures);
+                }
+            }
+
+            PaintTextAreaEditing(g, box, content, value, value.Length > 0 ? lines : TextAreaLayout.Wrap(g, font, value, content.Width));
+            g.PopClip();
+        }
+
+        private static void PaintTextAreaEditing(Canvas g, CssBox box, Rect content, string text, IReadOnlyList<TextAreaLine> lines)
+        {
+            var ordinal = box.HtmlTag!.SourceOrdinal;
+            if (box.HtmlContainer is not { } container || container.Interaction?.Focused != ordinal || box.HtmlTag.HasAttribute("disabled"))
+                return;
+
+            var session = container.FormEdit;
+            var owned = session.Ordinal == ordinal;
+            var start = owned ? Math.Clamp(Math.Min(session.Start, session.End), 0, text.Length) : text.Length;
+            var end = owned ? Math.Clamp(Math.Max(session.Start, session.End), 0, text.Length) : text.Length;
+            var font = box.ActualFont;
+
+            if (start != end)
+            {
+                using var highlight = g.GetSolidBrush(PaintColor.FromArgb(90, 0, 120, 215));
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    var line = lines[i];
+                    var from = Math.Max(start, line.Start);
+                    var to = Math.Min(end, line.End);
+                    if (to <= from)
+                        continue;
+
+                    var x1 = content.X + TextAreaLayout.OffsetOf(g, font, text, line, from);
+                    var x2 = content.X + TextAreaLayout.OffsetOf(g, font, text, line, to);
+                    g.DrawRectangle(highlight, x1, content.Y + (i * font.Height), Math.Max(x2 - x1, 2), font.Height);
+                }
+            }
+
+            if (owned && session.CompositionStart >= 0 && session.CompositionEnd > session.CompositionStart)
+            {
+                var underline = g.GetPen(box.ActualColor);
+                underline.Width = Math.Max(font.Height / 14, 1);
+                for (var i = 0; i < lines.Count; i++)
+                {
+                    var line = lines[i];
+                    var from = Math.Max(session.CompositionStart, line.Start);
+                    var to = Math.Min(session.CompositionEnd, line.End);
+                    if (to <= from)
+                        continue;
+
+                    var y = content.Y + (i * font.Height) + font.Height - underline.Width;
+                    g.DrawLine(underline, content.X + TextAreaLayout.OffsetOf(g, font, text, line, from), y, content.X + TextAreaLayout.OffsetOf(g, font, text, line, to), y);
+                }
+            }
+
+            if (start == end && session.CaretVisible)
+            {
+                var number = TextAreaLayout.LineOf(lines, start);
+                var caret = g.GetPen(box.ActualColor);
+                caret.Width = Math.Max(font.Height / 14, 1);
+                var x = content.X + TextAreaLayout.OffsetOf(g, font, text, lines[number], start) + (caret.Width / 2);
+                var top = content.Y + (number * font.Height);
+                g.DrawLine(caret, x, top, x, top + font.Height);
+            }
         }
 
         /// <summary>What a text field shows for its value: the value, or a bullet for each character of a password.</summary>
