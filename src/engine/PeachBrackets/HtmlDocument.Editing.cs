@@ -73,7 +73,10 @@ public sealed partial class HtmlDocument
         start = Math.Clamp(start, 0, current.Length);
         end = Math.Clamp(end, start, current.Length);
 
-        var insert = text.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
+        // A text area keeps its line breaks (as line feeds); every other field is one line.
+        var insert = TypeOf(field) == "textarea"
+            ? text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n')
+            : text.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
         if (MaxLengthOf(field) is >= 0 and var max)
             insert = Truncate(insert, Math.Max(max - (current.Length - (end - start)), 0));
 
@@ -207,6 +210,15 @@ public sealed partial class HtmlDocument
         var font = field.ActualFont;
         var left = (field.ActualBorderLeftWidth + field.ActualPaddingLeft) / units;
         var top = (field.ActualBorderTopWidth + field.ActualPaddingTop) / units;
+        if (TypeOf(field) == "textarea" && StyleUpdater.BoxRegionOf(_container, field, _container.FragmentTree?.Fragmentainers ?? []) is { } box)
+        {
+            var lines = TextAreaLinesOf(measuringCanvas, field, text, box.Bounds.Width);
+            var number = TextAreaLayout.LineOf(lines, at);
+            return new TextEditPlace(box.PageIndex, new Rect(
+                box.Bounds.X + left + (TextAreaLayout.OffsetOf(measuringCanvas, font, text, lines[number], at) / units),
+                box.Bounds.Y + top + (number * font.Height / units), 1, font.Height / units));
+        }
+
         var contentHeight = Math.Max(region.Bounds.Height - top - ((field.ActualBorderBottomWidth + field.ActualPaddingBottom) / units), 0);
         var offset = ScreenFormControlPainter.OffsetOf(measuringCanvas, field, ScreenFormControlPainter.DisplayText(field, text), at) / units;
         var lineHeight = font.Height / units;
@@ -224,7 +236,21 @@ public sealed partial class HtmlDocument
     /// <returns>the position, or null when the focus is not on a text field or it is not on that page</returns>
     /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public int? GetEditIndexAt(Canvas measuringCanvas, int pageIndex, double x)
+    public int? GetEditIndexAt(Canvas measuringCanvas, int pageIndex, double x) => GetEditIndexAt(measuringCanvas, pageIndex, x, 0);
+
+    /// <summary>
+    /// The position in the focused text field's text that a point on its page is nearest to. For a <c>&lt;textarea&gt;</c> the line comes from
+    /// <paramref name="y"/> (a point above the first line gives the first, below the last gives the last); for any other field only
+    /// <paramref name="x"/> counts.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <param name="pageIndex">the zero-based index of the page the point is on</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <param name="y">the distance from the top edge of the sheet, in points</param>
+    /// <returns>the position, or null when the focus is not on a text field or it is not on that page</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public int? GetEditIndexAt(Canvas measuringCanvas, int pageIndex, double x, double y)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         _ = Pages;
@@ -232,6 +258,16 @@ public sealed partial class HtmlDocument
             return null;
 
         var text = field.GetAttribute("value", string.Empty);
+        if (TypeOf(field) == "textarea")
+        {
+            var region = StyleUpdater.BoxRegionOf(_container, field, _container.FragmentTree?.Fragmentainers ?? [])!.Value;
+            var lines = TextAreaLinesOf(measuringCanvas, field, text, region.Bounds.Width);
+            var inside = new Rect(
+                region.Bounds.X + ((field.ActualBorderLeftWidth + field.ActualPaddingLeft) / _unitsPerPoint),
+                region.Bounds.Y + ((field.ActualBorderTopWidth + field.ActualPaddingTop) / _unitsPerPoint), 0, 0);
+            return TextAreaLayout.IndexAt(measuringCanvas, field.ActualFont, text, lines, (x - inside.X) * _unitsPerPoint, (y - inside.Y) * _unitsPerPoint);
+        }
+
         var display = ScreenFormControlPainter.DisplayText(field, text);
         var target = x - origin.Bounds.X;
         var best = 0;
@@ -249,6 +285,67 @@ public sealed partial class HtmlDocument
         return best;
     }
 
+    /// <summary>
+    /// Where the caret goes when it moves up or down by lines in the focused text area: the position on the line above or below at the same distance
+    /// from the left edge. At the first or last line it goes to the start or end of the text, as a text area does.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <param name="index">the position the caret is at</param>
+    /// <param name="lines">how many lines to move; negative is up</param>
+    /// <returns>the new position, or null when the focus is not on a text area</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public int? GetEditIndexByLine(Canvas measuringCanvas, int index, int lines)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        if (EditableField() is not { } field || TypeOf(field) != "textarea" || GetEditPlace(measuringCanvas, 0) is not { })
+            return null;
+
+        var text = field.GetAttribute("value", string.Empty);
+        var region = StyleUpdater.BoxRegionOf(_container, field, _container.FragmentTree?.Fragmentainers ?? [])!.Value;
+        var layout = TextAreaLinesOf(measuringCanvas, field, text, region.Bounds.Width);
+        var at = Math.Clamp(index, 0, text.Length);
+        var current = TextAreaLayout.LineOf(layout, at);
+        var target = current + lines;
+        if (target < 0)
+            return 0;
+        if (target >= layout.Count)
+            return text.Length;
+
+        var font = field.ActualFont;
+        var x = TextAreaLayout.OffsetOf(measuringCanvas, font, text, layout[current], at);
+        return TextAreaLayout.IndexAt(measuringCanvas, font, text, layout, x, (target * font.Height) + 1);
+    }
+
+    /// <summary>The start and end of the line of the focused text area that a position is on, for Home and End.</summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <param name="index">the position</param>
+    /// <returns>the positions where its line starts and ends, or null when the focus is not on a text area</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public (int Start, int End)? GetEditLineRange(Canvas measuringCanvas, int index)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        if (EditableField() is not { } field || TypeOf(field) != "textarea" || GetEditPlace(measuringCanvas, 0) is not { })
+            return null;
+
+        var text = field.GetAttribute("value", string.Empty);
+        var region = StyleUpdater.BoxRegionOf(_container, field, _container.FragmentTree?.Fragmentainers ?? [])!.Value;
+        var layout = TextAreaLinesOf(measuringCanvas, field, text, region.Bounds.Width);
+        var line = layout[TextAreaLayout.LineOf(layout, Math.Clamp(index, 0, text.Length))];
+        return (line.Start, line.End);
+    }
+
+    // A text area's value broken into lines for the width of its content; the width is the control's, in points, as a region reports it.
+    private IReadOnlyList<TextAreaLine> TextAreaLinesOf(Canvas measuringCanvas, CssBox field, string text, double regionWidthPoints)
+    {
+        var width = (regionWidthPoints * _unitsPerPoint)
+            - field.ActualBorderLeftWidth - field.ActualPaddingLeft - field.ActualBorderRightWidth - field.ActualPaddingRight;
+        return TextAreaLayout.Wrap(measuringCanvas, field.ActualFont, text, Math.Max(width, 0));
+    }
+
     // Every place between two grapheme clusters, the two ends included.
     private static IEnumerable<int> BoundariesOf(string text)
     {
@@ -264,8 +361,8 @@ public sealed partial class HtmlDocument
         if (_focused < 0 || FindByOrdinal(_container.Root, _focused) is not CssBoxFormField { HtmlTag: not null } field)
             return null;
 
-        return field.HtmlTag!.Name.Equals("input", StringComparison.OrdinalIgnoreCase)
-            && TypeOf(field) is "text" or "search" or "url" or "tel" or "email" or "password" or "number"
+        return TypeOf(field) is "textarea" || (field.HtmlTag!.Name.Equals("input", StringComparison.OrdinalIgnoreCase)
+            && TypeOf(field) is "text" or "search" or "url" or "tel" or "email" or "password" or "number")
             ? field
             : null;
     }

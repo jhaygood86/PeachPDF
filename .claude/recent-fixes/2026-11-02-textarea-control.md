@@ -15,5 +15,11 @@ First of a series that makes `textarea` editable in every host. This stage only 
 - Found by rasterizing, not by tests: with the UA sheet unchanged the box had no border at all, and pdfium draws widget text only after
   `init_forms()` + `may_draw_forms=True` (mupdf always does). Both renderers agree on the final output, interactive and static.
 - `FormFieldClassification.Multiline` is new public API (snapshot updated); `FormFieldBuilder` passes it to the writer, which already had the flag.
-- Not done: editing (caret by line, Up/Down, Enter inserts a line break, `GetEditIndexAt` for a point), scrolling a value taller than the box, host
+- Editing model (same PR, because the selection/composition/caret painting needed it to be reachable and tested): `EditableField` accepts a textarea,
+  `ReplaceEditText` keeps line breaks (as line feeds) for it, `GetEditPlace` puts the caret on its line, and new public `GetEditIndexAt(x, y)`,
+  `GetEditIndexByLine` (Up/Down, same column, first/last line go to the start/end) and `GetEditLineRange` (Home/End) take the line breaker's view.
+- Trap: `StyleUpdater.DirtyRegionsOf` is wrong for a textarea - it unions the lines and words of everything inside the box (its unmeasured text
+  children sit at the origin) and inflates the result, so the region started at (-1.25, -2.25) and was far too narrow, which made every character
+  wrap onto its own line. A textarea's geometry comes from `StyleUpdater.BoxRegionOf` (the box's own `PrimaryRect`) instead.
+- Not done: host key handling (Up/Down/Home/End/Enter calls) and the TSF/InputConnection bridges for it, scrolling a value taller than the box, host
   text-input bridges for it, and `resize`. `docs/accessibility.md` says "drawn but not edited yet".
