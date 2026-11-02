@@ -154,6 +154,18 @@ internal static class HtmlViewLogic
     }
 
     /// <summary>Whether a link may be opened by the system: only the schemes a document cannot abuse.</summary>
+    /// <summary>Whether a role is one UI Automation toggles: a check box, a radio button, a switch.</summary>
+    public static bool IsToggleControl(AccessibilityRole role) =>
+        role is AccessibilityRole.CheckBox or AccessibilityRole.Radio or AccessibilityRole.Switch or AccessibilityRole.MenuItemCheckBox or AccessibilityRole.MenuItemRadio;
+
+    /// <summary>The UI Automation toggle state of a node's checked state.</summary>
+    public static Microsoft.UI.Xaml.Automation.ToggleState ToToggleState(PeachBrackets.Accessibility.ToggleState state) => state switch
+    {
+        PeachBrackets.Accessibility.ToggleState.True => Microsoft.UI.Xaml.Automation.ToggleState.On,
+        PeachBrackets.Accessibility.ToggleState.Mixed => Microsoft.UI.Xaml.Automation.ToggleState.Indeterminate,
+        _ => Microsoft.UI.Xaml.Automation.ToggleState.Off,
+    };
+
     public static bool IsLaunchable(string uri) =>
         Uri.TryCreate(uri, UriKind.Absolute, out var parsed)
         && parsed.Scheme is "http" or "https" or "mailto" or "tel";
