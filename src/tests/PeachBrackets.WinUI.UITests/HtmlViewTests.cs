@@ -1,0 +1,231 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Automation.Provider;
+
+namespace PeachBrackets.WinUI.UITests;
+
+public class HtmlViewTests
+{
+    private const string Page = "<h1 id=h>Title</h1><p id=p>Some <a id=l href='https://example.com/'>link</a> text</p>";
+
+    // Puts a view in the test window and waits until its document has laid out.
+    private static async Task<HtmlView> LoadAsync(Window window, string html)
+    {
+        var view = new HtmlView { Html = html };
+        var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        view.DocumentLoaded += (_, _) => loaded.TrySetResult();
+        view.DocumentFailed += (_, e) => loaded.TrySetException(e.Exception);
+        window.Content = view;
+        await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30));
+        return view;
+    }
+
+    [Fact]
+    public async Task ADocumentLoadsAndLaysOut()
+    {
+        var pages = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            return view.Document!.Pages.Count;
+        });
+
+        Assert.True(pages >= 1);
+    }
+
+    [Fact]
+    public async Task TheViewExposesADocumentPeerWithTheTextBlocksBelowIt()
+    {
+        var (type, names) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            var document = DocumentPeer(view)!;
+            return (document.GetAutomationControlType(), document.GetChildren().Select(c => c.GetName()).ToList());
+        });
+
+        Assert.Equal(AutomationControlType.Document, type);
+        Assert.Contains("Title", names);
+        Assert.Contains(names, n => n.StartsWith("Some"));
+    }
+
+    [Fact]
+    public async Task HeadingsLinksAndTextAreToldApartToUiAutomation()
+    {
+        var (heading, level, link, text) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            var children = DocumentPeer(view)!.GetChildren();
+            var h = children.First(c => c.GetName() == "Title");
+            var p = children.First(c => c.GetName().StartsWith("Some"));
+            var a = p.GetChildren().First();
+            return (h.GetAutomationControlType(), h.GetHeadingLevel(), a.GetAutomationControlType(), p.GetAutomationControlType());
+        });
+
+        Assert.Equal(AutomationControlType.Text, heading);
+        Assert.Equal(AutomationHeadingLevel.Level1, level);
+        Assert.Equal(AutomationControlType.Hyperlink, link);
+        Assert.Equal(AutomationControlType.Text, text);
+    }
+
+    [Fact]
+    public async Task InvokingALinkRaisesLinkClickedAndCanBeCancelled()
+    {
+        var (uri, anchor) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            string? seen = null;
+            view.LinkClicked += (_, e) =>
+            {
+                seen = e.Uri;
+                e.Cancel = true;
+            };
+            var link = DocumentPeer(view)!.GetChildren().First(c => c.GetName().StartsWith("Some")).GetChildren().First();
+            ((IInvokeProvider)link.GetPattern(PatternInterface.Invoke)).Invoke();
+            await Task.Delay(100);
+            return (seen, link.GetAutomationId());
+        });
+
+        Assert.Equal("https://example.com/", uri);
+        Assert.StartsWith("node", anchor);
+    }
+
+    [Fact]
+    public async Task EveryNodeHasABoundingRectangleAndTheFirstIsOnScreen()
+    {
+        var (empty, firstOffscreen) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            var nodes = DocumentPeer(view)!.GetChildren();
+            return (nodes.Count(n => n.GetBoundingRectangle().Width <= 0 || n.GetBoundingRectangle().Height <= 0), nodes[0].IsOffscreen());
+        });
+
+        Assert.Equal(0, empty);
+        Assert.False(firstOffscreen);
+    }
+
+    [Fact]
+    public async Task SelectAllSelectsTheTextAndScrollToElementFindsAnId()
+    {
+        var (selected, found, missing) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            view.SelectAll();
+            return (view.SelectedText, view.ScrollToElement("l"), view.ScrollToElement("nope"));
+        });
+
+        Assert.Contains("Title", selected);
+        Assert.True(found);
+        Assert.False(missing);
+    }
+
+    [Fact]
+    public async Task ADocumentCanComeFromAFile_AndAMissingOneIsReported()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"peachbrackets-winui-{Guid.NewGuid():N}.html");
+        await File.WriteAllTextAsync(path, Page, TestContext.Current.CancellationToken);
+        try
+        {
+            var (fromFile, failure) = await UiThread.RunAsync(async window =>
+            {
+                var view = new HtmlView { Source = new Uri(path) };
+                var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                view.DocumentLoaded += (_, _) => loaded.TrySetResult();
+                window.Content = view;
+                await loaded.Task.WaitAsync(TimeSpan.FromSeconds(30));
+                var title = DocumentPeer(view)!.GetChildren().Any(c => c.GetName() == "Title");
+
+                var broken = new HtmlView { Source = new Uri(path + ".missing") };
+                var failed = new TaskCompletionSource<Exception>(TaskCreationOptions.RunContinuationsAsynchronously);
+                broken.DocumentFailed += (_, e) => failed.TrySetResult(e.Exception);
+                window.Content = broken;
+                return (title, await failed.Task.WaitAsync(TimeSpan.FromSeconds(30)));
+            });
+
+            Assert.True(fromFile);
+            Assert.NotNull(failure);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task ALinkToAnAnchorInTheDocumentIsRaisedWithoutAnAddress()
+    {
+        var (uri, anchor) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<a id=go href='#end'>go</a><div style='height:3000px'></div><h2 id=end>End</h2>");
+            string? seenUri = "unset";
+            string? seenAnchor = null;
+            view.LinkClicked += (_, e) =>
+            {
+                seenUri = e.Uri;
+                seenAnchor = e.Destination;
+            };
+            var link = DocumentPeer(view)!.GetChildren()[0].GetChildren().First();
+            ((IInvokeProvider)link.GetPattern(PatternInterface.Invoke)).Invoke();
+            await Task.Delay(100);
+            return (seenUri, seenAnchor);
+        });
+
+        Assert.Null(uri);
+        Assert.Equal("end", anchor);
+    }
+
+    [Fact]
+    public async Task TheDocumentAndItsNodesDescribeThemselvesToUiAutomation()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            var document = DocumentPeer(view)!;
+            var node = document.GetChildren().First(c => c.GetName() == "Title");
+            node.SetFocus();
+            node.ShowContextMenu();
+            return new[]
+            {
+                document.GetClassName(), document.GetName(), node.GetClassName(),
+                node.IsContentElement().ToString(), node.IsControlElement().ToString(), node.IsEnabled().ToString(),
+                node.IsKeyboardFocusable().ToString(), node.HasKeyboardFocus().ToString(),
+            };
+        });
+
+        Assert.Equal(["HtmlView", "HTML document", "HtmlNode", "True", "True", "True", "False", "False"], facts);
+    }
+
+    [Fact]
+    public async Task ResizingTheViewLaysTheDocumentOutAgain()
+    {
+        var reloaded = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, Page);
+            var again = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            view.DocumentLoaded += (_, _) => again.TrySetResult();
+            view.Width = 320;
+            window.Content = null;
+            window.Content = view;
+            view.Width = 480;
+            await again.Task.WaitAsync(TimeSpan.FromSeconds(30));
+            return view.Document is not null;
+        });
+
+        Assert.True(reloaded);
+    }
+
+    // A UserControl has no automation peer of its own: the view's is carried by an element inside it.
+    private static HtmlViewAutomationPeer? DocumentPeer(DependencyObject element)
+    {
+        if (element is UIElement ui && FrameworkElementAutomationPeer.CreatePeerForElement(ui) is HtmlViewAutomationPeer found)
+            return found;
+
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(element); i++)
+        {
+            if (DocumentPeer(VisualTreeHelper.GetChild(element, i)) is { } peer)
+                return peer;
+        }
+
+        return null;
+    }
+}

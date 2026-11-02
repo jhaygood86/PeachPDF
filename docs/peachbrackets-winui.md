@@ -81,3 +81,8 @@ API (it needs a desktop session).
 `src/examples/PeachBrackets.WinUI.Example` is a small app with an `HtmlView`. Started with `--smoke <file>` it loads a page, checks what the
 view and the document report (pointers, hover restyle, `user-select`, `touch-action`), writes the result to the file and exits, which is how the
 control is exercised without anyone looking at it.
+
+The control is also tested in a real window: `src/tests/PeachBrackets.WinUI.UITests` runs one WinUI application on its own thread for the whole test
+run, puts an `HtmlView` in its window and checks what it loads, lays out and reports to UI Automation (control types, heading levels, link
+invocation, bounding rectangles). Run it with `dotnet test --project tests/PeachBrackets.WinUI.UITests/PeachBrackets.WinUI.UITests.csproj` on a
+Windows machine with a desktop session.
