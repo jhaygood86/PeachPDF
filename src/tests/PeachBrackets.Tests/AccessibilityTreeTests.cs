@@ -295,6 +295,8 @@ public class AccessibilityTreeTests
             + "<div inert><p>inert</p></div><p style='visibility:hidden'>invisible</p>");
 
         Assert.Equal(["shown"], tree.Nodes.Where(n => n.Role == AccessibilityRole.Text).Select(n => n.Name).ToArray());
+        // The elements themselves are not there either, not only their text.
+        Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.Paragraph);
     }
 
     [Fact]
