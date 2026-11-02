@@ -451,7 +451,7 @@ public class HtmlViewTests
             var peer = (HtmlViewAutomationPeer)DocumentPeer(view)!;
             var region = view.AccessibilityTree!.Root;
             HtmlView.RaiseAnnouncements(peer,
-            (AccessibilityAnnouncement[])[
+            [
                 new AccessibilityAnnouncement("Saved", LiveSetting.Polite, region),
                 new AccessibilityAnnouncement("Error", LiveSetting.Assertive, region),
             ]);
@@ -504,6 +504,29 @@ public class HtmlViewTests
     }
 
     [Fact]
+    public async Task APressInATextFieldPlacesTheCaretAndADragSelectsFromThere()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=f value=\"hello world\" style=\"width:200px\">");
+            var field = view.Document!.GetElement("f")!;
+            var bounds = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+
+            view._fieldPressed = true;
+            Assert.True(view.FocusTextFieldAt(0, bounds.X + 1, bounds.Y + (bounds.Height / 2)));
+            await Task.Delay(500);
+            await view.FocusIdle;
+            var anchor = view.FieldAnchor;
+            await view.ExtendFieldSelectionAsync(view.Document, 0, bounds.X + bounds.Width - 1, anchor ?? 0);
+            var state = view.Document.GetEditState()!.Value;
+            return (anchor, state.SelectionStart, state.SelectionEnd, state.Text.Length);
+        });
+
+        Assert.Equal(0, facts.anchor);
+        Assert.Equal((0, facts.Length), (facts.SelectionStart, facts.SelectionEnd));
+    }
+
+    [Fact]
     public async Task TheDocumentCanBeReadByWordAndParagraphThroughTheTextPattern()
     {
         var facts = await UiThread.RunAsync(async window =>
@@ -541,5 +564,77 @@ public class HtmlViewTests
         Assert.Equal(0, facts.Item5);
         Assert.Equal(SupportedTextSelection.None, facts.Item6);
         Assert.Equal("typed in\n", facts.typed);
+    }
+
+    [Fact]
+    public async Task TheTextPatternFindsComparesAndLocatesRanges()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<h1>Title here</h1><p>First paragraph.</p>");
+            var document = (HtmlViewAutomationPeer)DocumentPeer(view)!;
+            var text = (ITextProvider)document.GetPattern(PatternInterface.Text);
+            var all = text.DocumentRange;
+
+            var found = all.FindText("paragraph", false, false);
+            var foundBack = all.FindText("TITLE", true, true);
+            var missing = all.FindText("zzz", false, false);
+
+            var clone = all.Clone();
+            var same = all.Compare(clone);
+            var order = all.CompareEndpoints(TextPatternRangeEndpoint.Start, found, TextPatternRangeEndpoint.Start);
+            clone.MoveEndpointByRange(TextPatternRangeEndpoint.Start, found, TextPatternRangeEndpoint.Start);
+            clone.MoveEndpointByRange(TextPatternRangeEndpoint.End, found, TextPatternRangeEndpoint.End);
+            var narrowed = clone.GetText(-1);
+            var wider = found.Clone();
+            wider.MoveEndpointByRange(TextPatternRangeEndpoint.Start, all, TextPatternRangeEndpoint.Start);
+            var widerText = wider.GetText(-1);
+            var backwards = found.Clone();
+            backwards.MoveEndpointByRange(TextPatternRangeEndpoint.End, all, TextPatternRangeEndpoint.Start);
+            var collapsed = backwards.GetText(-1);
+
+            var enclosing = found.GetEnclosingElement();
+            var children = found.GetChildren();
+            found.ScrollIntoView(true);
+            found.Select();
+            found.AddToSelection();
+            found.RemoveFromSelection();
+            var attribute = found.GetAttributeValue(0);
+            var attributeRange = found.FindAttribute(0, 0, false);
+            found.GetBoundingRectangles(out var rectangles);
+
+            var visible = text.GetVisibleRanges();
+            var bounds = document.GetChildren()[0].GetBoundingRectangle();
+            var atPoint = text.RangeFromPoint(new Windows.Foundation.Point(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2)));
+            var outside = text.RangeFromPoint(new Windows.Foundation.Point(-5000, -5000));
+            var fromChild = text.RangeFromChild(document.ProviderOf(document.GetChildren()[0])!);
+            var unknown = text.RangeFromChild(document.ProviderOf(document)!);
+            var emptyView = (ITextProvider)new HtmlTextProvider(document, view, view.AccessibilityTree!.Root);
+
+            return (found.GetText(-1), foundBack.GetText(-1), missing, same, order, narrowed, widerText, collapsed, enclosing is not null,
+                children.Length, attribute, attributeRange, rectangles.Length, visible.Length, atPoint.GetText(-1), outside.GetText(-1), fromChild.GetText(-1),
+                unknown.GetText(-1), text.GetSelection().Length, emptyView.DocumentRange is not null);
+        });
+
+        Assert.Equal("paragraph", facts.Item1);
+        Assert.Equal("Title", facts.Item2);
+        Assert.Null(facts.missing);
+        Assert.True(facts.same);
+        Assert.True(facts.order < 0);
+        Assert.Equal("paragraph", facts.narrowed);
+        Assert.Contains("Title here", facts.widerText);
+        Assert.Equal(string.Empty, facts.collapsed);
+        Assert.True(facts.Item9);
+        Assert.Equal(0, facts.Item10);
+        Assert.Null(facts.attribute);
+        Assert.Null(facts.attributeRange);
+        Assert.True(facts.Item13 > 0 && facts.Item13 % 4 == 0);
+        Assert.True(facts.Item14 > 0);
+        Assert.False(string.IsNullOrEmpty(facts.Item15));
+        Assert.Equal(string.Empty, facts.Item16);
+        Assert.Equal("Title here", facts.Item17);
+        Assert.Equal(string.Empty, facts.Item18);
+        Assert.Equal(0, facts.Item19);
+        Assert.True(facts.Item20);
     }
 }

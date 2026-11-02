@@ -190,6 +190,9 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
     /// <summary>The provider a peer of this tree is known to UI Automation by.</summary>
     internal IRawElementProviderSimple? ProviderOf(AutomationPeer peer) => ProviderFromPeer(peer);
 
+    /// <summary>The node a provider handed out for this tree stands for, or null if it is not one of ours.</summary>
+    internal AccessibilityNode? NodeOf(IRawElementProviderSimple provider) => (PeerFromProvider(provider) as HtmlNodeAutomationPeer)?.Node;
+
     /// <summary>The peer that stands for a node, if the tree of peers has been asked for.</summary>
     internal HtmlNodeAutomationPeer? FindPeer(AccessibilityNode node)
     {

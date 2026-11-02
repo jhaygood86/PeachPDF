@@ -55,10 +55,13 @@ internal sealed class HtmlTextProvider : ITextProvider
     public ITextRangeProvider RangeFromChild(IRawElementProviderSimple childElement)
     {
         var model = Model();
-        foreach (var segment in model.Segments)
+        if (_root.NodeOf(childElement) is { } child)
         {
-            if (segment.Node is { } node && _root.FindPeer(node) is { } peer && ReferenceEquals(_root.ProviderOf(peer), childElement))
-                return new HtmlTextRange(this, model, segment.Start, segment.End);
+            foreach (var segment in model.Segments)
+            {
+                if (segment.Node?.Id == child.Id)
+                    return new HtmlTextRange(this, model, segment.Start, segment.End);
+            }
         }
 
         return new HtmlTextRange(this, model, 0, 0);

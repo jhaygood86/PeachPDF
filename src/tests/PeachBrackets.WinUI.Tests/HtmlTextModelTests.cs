@@ -129,4 +129,26 @@ public class HtmlTextModelTests
     [InlineData(Microsoft.UI.Xaml.Automation.Text.TextUnit.Document, "Document")]
     public void AutomationUnitsMapOntoTheModelsUnits(Microsoft.UI.Xaml.Automation.Text.TextUnit unit, string expected) =>
         Assert.Equal(expected, HtmlViewLogic.ToUnitKind(unit).ToString());
+
+    [Fact]
+    public void ARangeAtTheEndOfTheTextStaysThereWhenWidenedAndMovesBackToTheLastUnit()
+    {
+        var model = Model("one two");
+
+        Assert.Equal((8, 8), model.Expand(8, 8, TextUnitKind.Word));
+        Assert.Equal((4, 8, -1), model.Move(8, 8, TextUnitKind.Word, -1));
+        Assert.Equal((8, 8, 0), model.Move(8, 8, TextUnitKind.Word, 1));
+    }
+
+    [Fact]
+    public void AnEndpointInTheMiddleOfAUnitMovesToTheNextOrPreviousBoundary()
+    {
+        var model = Model("one two three");
+
+        var forward = model.MoveEndpoint(0, 2, moveStart: false, TextUnitKind.Word, 1);
+        Assert.Equal((0, 4, 1), (forward.Start, forward.End, forward.Moved));
+
+        var backward = model.MoveEndpoint(0, 6, moveStart: false, TextUnitKind.Word, -1);
+        Assert.Equal((0, 4, -1), (backward.Start, backward.End, backward.Moved));
+    }
 }

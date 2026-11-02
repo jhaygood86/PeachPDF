@@ -185,9 +185,13 @@ internal sealed class HtmlTextModel
 
         // The places a unit can start are every boundary but the end of the text.
         var starts = bounds.Count > 1 ? bounds.Take(bounds.Count - 1).ToList() : [0];
+        // A range that starts at the end of the text is one past the last unit.
         var index = starts.IndexOf(start);
         if (index < 0)
-            index = starts.Count - 1;
+            index = starts.Count;
+
+        if (index >= starts.Count && count > 0)
+            return (start, end, 0);
 
         var target = Math.Clamp(index + count, 0, starts.Count - 1);
         var moved = target - index;
