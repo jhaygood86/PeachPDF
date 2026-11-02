@@ -1,0 +1,8 @@
+# Form-state pseudo-classes
+
+`FormStateSelectors` answers `:checked`, `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only` and `:read-write` from the box's tag and ancestors, called from `CssData.DoesSelectorMatch(PseudoClassSelector)` before the final `return false`. The names stay in `UnmatchableSelectors.PseudoClasses`: that set only decides which names are *recognized* (so a selector list is not invalidated), and matching is the separate branch above, so no change to the parser was needed.
+
+- **Sibling style sharing is safe.** `SelectorSiblingStability` lets siblings with the same parent, tag and attributes share a computed style; these pseudo-classes depend on exactly those attributes and on ancestors, so they stay in the stable set. The one case that could differ among same-attribute siblings, a control in the first versus a later `legend` of a disabled `fieldset`, has different parents.
+- **The first legend is looked up through anonymous boxes.** `FirstLegendOf` descends through boxes that are not elements, because the box tree can wrap a legend; the first version compared against the fieldset's direct box children and reported a control in the first legend as disabled.
+- **Test trap:** a checked, enabled box matches both `:checked` and `:enabled`, so two `!important` rules on them fight by order; the tests put `:enabled` first. This looked like the matcher not working until a one-rule debug test showed every selector shape matching.
+- **Not done:** restyling after a live change (issue #2113, `.claude/accepted-gaps/form-state-pseudo-classes-do-not-restyle-after-a-live-change.md`).
