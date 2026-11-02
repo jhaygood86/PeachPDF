@@ -29,22 +29,54 @@ namespace PeachDrawing.PDF
 
             var context = new PdfRenderContext();
             using var composer = new PdfComposer(context, options);
+            Append(operation, composer, context, copyMode: null);
+
+            composer.Save(stream);
+        }
+
+        /// <summary>The names an output file has taken so far, shared by every operation added to one composer so that they never collide.</summary>
+        private sealed class AppendState
+        {
+            public HashSet<string> DestinationNames { get; } = new(StringComparer.Ordinal);
+
+            public HashSet<string> FieldNames { get; } = new(StringComparer.Ordinal);
+
+            /// <summary>How many operations were added before this one; it keeps the generated link-target names of one operation from another's.</summary>
+            public int Calls { get; set; }
+        }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfComposer, AppendState> States = new();
+
+        /// <summary>
+        /// Adds the pages of <paramref name="operation"/> after the pages the composer already has, with the navigation of the files they came
+        /// from. The document-level steps (encrypting, linearizing, attachments, metadata) belong to the file being written, not to a part of it.
+        /// </summary>
+        /// <param name="operation">the operation whose pages are added</param>
+        /// <param name="composer">the document to add them to</param>
+        /// <param name="context">the render context the composer draws with</param>
+        /// <param name="copyMode">how to take the pages, or <see langword="null"/> for the operation's own</param>
+        public static void Append(PdfOperation operation, PdfComposer composer, PdfRenderContext context, PdfCopyMode? copyMode)
+        {
+            var pages = operation.OutputPages;
+            var sources = pages.Select(p => p.Source).Distinct().ToList();
+            var state = States.GetOrCreateValue(composer);
+            var call = state.Calls++;
+            var first = composer.PageCount;
             var warnings = new SortedSet<string>(StringComparer.Ordinal);
 
             // Where each page of each file was put; the first place wins, so a link to it has one place to lead to.
             var drawnAt = new Dictionary<(PdfPageSource, int), int>();
             for (var i = 0; i < pages.Count; i++)
-                drawnAt.TryAdd((pages[i].Source, pages[i].SourcePage), i);
+                drawnAt.TryAdd((pages[i].Source, pages[i].SourcePage), first + i);
 
             // The names the sources' named destinations have in the output (a name two files both define keeps the first file's, the second's is
             // numbered), settled before any page is filled so that a copied link can be pointed at its file's own destination.
-            var destinationNames = new HashSet<string>(StringComparer.Ordinal);
-            var nameMap = AssignDestinationNames(sources, drawnAt, destinationNames);
+            var nameMap = AssignDestinationNames(sources, drawnAt, state.DestinationNames);
 
-            var copy = operation.CopyMode == PdfCopyMode.ObjectCopy;
+            var copy = (copyMode ?? operation.CopyMode) == PdfCopyMode.ObjectCopy;
             if (copy)
             {
-                CopyPages(composer, context, pages, sources, nameMap, warnings);
+                CopyPages(composer, context, pages, sources, nameMap, state.FieldNames, warnings);
             }
             else
             {
@@ -62,12 +94,10 @@ namespace PeachDrawing.PDF
             }
 
             // Copied pages carry their own links, form fields and annotations; drawn ones have them added here.
-            CarryNavigation(composer, context, pages, sources, drawnAt, nameMap, destinationNames, carryPageFeatures: !copy);
+            CarryNavigation(composer, context, pages, sources, drawnAt, nameMap, state, call, first, carryPageFeatures: !copy);
 
             foreach (var warning in warnings)
                 operation.WarningsList.Add(warning);
-
-            composer.Save(stream);
         }
 
         private static void Draw(PdfPageSource source, int sourcePage, PdfComposerPage page, SortedSet<string> warnings)
@@ -133,9 +163,9 @@ namespace PeachDrawing.PDF
             IReadOnlyList<PdfOperation.OutputPage> pages,
             List<PdfPageSource> sources,
             Dictionary<PdfPageSource, Dictionary<string, string>> nameMap,
+            HashSet<string> fieldNames,
             SortedSet<string> warnings)
         {
-            var fieldNames = new HashSet<string>(StringComparer.Ordinal);
             var copiers = sources.ToDictionary(s => s, s => new PdfObjectCopier(s.Document, composer.Document, fieldNames,
                 name => nameMap[s].TryGetValue(name, out var renamed) ? renamed : null));
 
@@ -251,19 +281,22 @@ namespace PeachDrawing.PDF
             List<PdfPageSource> sources,
             Dictionary<(PdfPageSource, int), int> drawnAt,
             Dictionary<PdfPageSource, Dictionary<string, string>> nameMap,
-            HashSet<string> destinationNames,
+            AppendState state,
+            int call,
+            int first,
             bool carryPageFeatures)
         {
             var annotations = composer.CreateAnnotationBuilder(context);
             var forms = composer.CreateFormBuilder(context, "PeachPDFMergedField");
-            var fieldNames = new HashSet<string>(StringComparer.Ordinal);
+            var fieldNames = state.FieldNames;
+            var destinationNames = state.DestinationNames;
             var renamed = new Dictionary<(PdfPageSource, int, string), string>();
             var pageOccurrences = new Dictionary<(PdfPageSource, int), int>();
 
             for (var i = 0; carryPageFeatures && i < pages.Count; i++)
             {
                 var entry = pages[i];
-                var target = composer.Pages[i];
+                var target = composer.Pages[first + i];
                 var sourceIndex = sources.IndexOf(entry.Source);
 
                 // A page drawn more than once carries its links every time, but its fields again only under names of their own.
@@ -275,7 +308,8 @@ namespace PeachDrawing.PDF
                     }
                     else if (link.Destination is { } to && drawnAt.TryGetValue((entry.Source, to.PageIndex), out var toPage))
                     {
-                        var name = string.Create(CultureInfo.InvariantCulture, $"PeachPDFMerged{sourceIndex}-{to.PageIndex}-{to.TopPoints:0.###}");
+                        var prefix = call == 0 ? "" : call + "_";
+                        var name = string.Create(CultureInfo.InvariantCulture, $"PeachPDFMerged{prefix}{sourceIndex}-{to.PageIndex}-{to.TopPoints:0.###}");
                         if (destinationNames.Add(name))
                             composer.AddNamedDestination(name, toPage, to.TopPoints);
                         target.AddDestinationLink(link.Bounds, name);

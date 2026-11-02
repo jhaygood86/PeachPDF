@@ -1,4 +1,6 @@
+using PeachDrawing.PDF;
 using System;
+using System.IO;
 
 namespace PeachPDF.Layout
 {
@@ -15,6 +17,67 @@ namespace PeachPDF.Layout
         /// document; each call's content flows and paginates independently of the others.
         /// </summary>
         void Page(Action<IPageDescriptor> handler);
+
+        /// <summary>
+        /// Adds the pages of an existing PDF to the document at this point: pages added by <see cref="Page"/> before the call come before them, pages
+        /// added after come after. May be called more than once, and interleaved with <see cref="Page"/>.
+        /// </summary>
+        /// <param name="pdf">the bytes of the PDF file</param>
+        /// <param name="mode">
+        /// <see cref="PdfCopyMode.Redraw"/> (the default) draws each page again into this document, so it follows this document's conformance level
+        /// and colour settings; <see cref="PdfCopyMode.ObjectCopy"/> copies the page objects as they are, keeping the file's own content byte for
+        /// byte but not bringing it into line with this document's PDF/A or PDF/X profile
+        /// </param>
+        /// <param name="password">the password of the file when it is encrypted</param>
+        /// <remarks>
+        /// The pages become part of this document: its encryption, conformance, metadata and linearization apply to the whole file, and the links,
+        /// outline, named destinations and form fields of the added file are carried across. The document information of the added file is not (the
+        /// title and author are this document's), nor are its attachments.
+        /// </remarks>
+        void Append(byte[] pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null);
+
+        /// <inheritdoc cref="Append(byte[], PdfCopyMode, string?)"/>
+        /// <param name="pdf">a stream holding the PDF file</param>
+        /// <param name="mode">how to take the pages</param>
+        /// <param name="password">the password of the file when it is encrypted</param>
+        void Append(Stream pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null);
+
+        /// <summary>
+        /// Adds the pages an existing <see cref="PdfOperation"/> produces (a chosen range of a file, several files merged, a file with a layer on
+        /// it) at this point. See <see cref="Append(byte[], PdfCopyMode, string?)"/>.
+        /// </summary>
+        /// <param name="operation">
+        /// the operation; it must not encrypt, linearize, attach files or extend the metadata, since those apply to the whole file
+        /// </param>
+        /// <param name="mode">how to take the pages, or <see langword="null"/> for the operation's own (<see cref="PdfOperation.WithCopyMode"/>)</param>
+        void Append(PdfOperation operation, PdfCopyMode? mode = null);
+
+        /// <summary>
+        /// Adds the pages of an existing PDF before everything else in the document, wherever in the callback this is called. Several
+        /// <c>Prepend</c> calls keep the order they were made in. See <see cref="Append(byte[], PdfCopyMode, string?)"/>.
+        /// </summary>
+        /// <param name="pdf">the bytes of the PDF file</param>
+        /// <param name="mode">how to take the pages</param>
+        /// <param name="password">the password of the file when it is encrypted</param>
+        void Prepend(byte[] pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null);
+
+        /// <inheritdoc cref="Prepend(byte[], PdfCopyMode, string?)"/>
+        /// <param name="pdf">a stream holding the PDF file</param>
+        /// <param name="mode">how to take the pages</param>
+        /// <param name="password">the password of the file when it is encrypted</param>
+        void Prepend(Stream pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null);
+
+        /// <inheritdoc cref="Append(PdfOperation, PdfCopyMode?)"/>
+        /// <param name="operation">the operation</param>
+        /// <param name="mode">how to take the pages, or <see langword="null"/> for the operation's own</param>
+        void Prepend(PdfOperation operation, PdfCopyMode? mode = null);
+
+        /// <summary>
+        /// Numbers the pages this document generates as one run with the pages of the added PDFs: <c>counter(page)</c> in a footer continues after the
+        /// PDFs that come before it, and <c>counter(pages)</c> reports the total of all of them. Without this call the generated pages number from 1
+        /// and count only themselves.
+        /// </summary>
+        void UseContinuousPageNumbers();
 
         /// <summary>
         /// Attaches a stylesheet to this document, so a caller-defined <c>.class</c>/<c>#id</c>/compound/

@@ -246,6 +246,35 @@ namespace PeachDrawing.PDF
             PdfOperationWriter.Write(this, stream);
         }
 
+        /// <summary>
+        /// Adds the pages of this operation after the pages <paramref name="composer"/> already has, instead of writing a file of their own: the
+        /// document being composed keeps its own conformance, encryption and metadata, and these pages become part of it.
+        /// </summary>
+        /// <param name="composer">the document to add to</param>
+        /// <param name="context">the render context the composer draws with</param>
+        /// <param name="copyMode">how to take the pages, or <see langword="null"/> for this operation's own (<see cref="WithCopyMode"/>)</param>
+        /// <exception cref="InvalidOperationException">
+        /// there are no pages, or the operation encrypts, linearizes, attaches files or extends the metadata: those apply to a whole file and are
+        /// set where the document is written
+        /// </exception>
+        public void AppendTo(PdfComposer composer, PdfRenderContext context, PdfCopyMode? copyMode = null)
+        {
+            ArgumentNullException.ThrowIfNull(composer);
+            ArgumentNullException.ThrowIfNull(context);
+            if (_pages.Count == 0)
+                throw new InvalidOperationException("There are no pages to add.");
+
+            if (EncryptionOptions is not null || LinearizeOutput || Attachments.Count > 0 || MetadataElements.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "An operation added to a document cannot encrypt, linearize, attach files or extend the metadata: those apply to the whole file " +
+                    "and are set where the document is written.");
+            }
+
+            _warnings.Clear();
+            PdfOperationWriter.Append(this, composer, context, copyMode);
+        }
+
         /// <summary>Writes the output to memory.</summary>
         /// <returns>the bytes of the PDF file</returns>
         public byte[] ToArray()

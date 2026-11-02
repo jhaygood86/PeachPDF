@@ -410,8 +410,8 @@ namespace PeachPDF
             {
                 var probe = new DocumentBuilder();
                 part(probe);
-                counts.Add(merge.Numbering == MergePageNumbering.Continuous || probe.PageHandlers.Count > 1
-                    ? await CountPages(probe, config)
+                counts.Add(merge.Numbering == MergePageNumbering.Continuous || probe.Sections.Count > 1
+                    ? await CountPages(probe, config, countPdfs: merge.Numbering == MergePageNumbering.Continuous || probe.ContinuousPageNumbers)
                     : null);
             }
 
@@ -438,13 +438,23 @@ namespace PeachPDF
             }
         }
 
-        private async Task<int[]> CountPages(DocumentBuilder builder, PdfGenerateConfig config)
+        /// <summary>
+        /// The pages each section of a builder comes to, in order. A section that holds an added PDF comes to its page count when
+        /// <paramref name="countPdfs"/> (the pages are numbered as one run with the generated ones) and to nothing otherwise.
+        /// </summary>
+        private async Task<int[]> CountPages(DocumentBuilder builder, PdfGenerateConfig config, bool countPdfs)
         {
             var buildContext = new DocumentBuildContext(_renderContext);
             var counts = new List<int>();
-            foreach (var pageHandler in builder.PageHandlers)
+            foreach (var section in builder.Sections)
             {
-                var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, builder.DocumentStylesheet);
+                if (section.Pdf is { } pdf)
+                {
+                    counts.Add(countPdfs ? pdf.PageCount : 0);
+                    continue;
+                }
+
+                var (htmlDocument, measure) = await PrepareDeclarativePage(section.Page!, config, buildContext, builder.DocumentStylesheet);
                 using (htmlDocument)
                 using (measure)
                 {
@@ -479,17 +489,65 @@ namespace PeachPDF
             handler(documentBuilder);
 
             var buildContext = new DocumentBuildContext(_renderContext);
+            var sections = documentBuilder.Sections;
+
+            // Pages that run on from the PDFs added around them need those PDFs' page counts before any footer is drawn. A section is numbered by its
+            // place among all the sections, so the PDFs' counts and the generated pages' counts add up the same way for a merge's parts.
+            if (numbering is null && documentBuilder.ContinuousPageNumbers && sections.Count > 1 && sections.Any(s => s.Pdf is not null))
+            {
+                var counts = await CountPages(documentBuilder, config, countPdfs: true);
+                var total = counts.Sum();
+                numbering = section => (counts.Take(section).Sum(), total);
+            }
 
             if (documentBuilder.FileLayers.Count == 0)
             {
-                var section = 0;
-                foreach (var pageHandler in documentBuilder.PageHandlers)
+                // The first generated section is laid out ahead of time when a PDF comes before it: the document's format (PDF/A, encryption, its
+                // title and language) comes from that section and has to be fixed before the first page, PDF or generated, is added.
+                var ahead = new Dictionary<int, (HtmlDocument Document, PdfCanvas Measure)>();
+                try
                 {
-                    var (htmlDocument, measure) = await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(section++));
-                    using (htmlDocument)
-                    using (measure)
+                    var configured = false;
+                    for (var i = 0; i < sections.Count; i++)
                     {
-                        await RenderPagesCore(document, htmlDocument, config);
+                        if (sections[i].Pdf is { } pdf)
+                        {
+                            if (!configured)
+                            {
+                                var firstPage = sections.FindIndex(i, s => s.Page is not null);
+                                HtmlDocument? first = null;
+                                if (firstPage >= 0)
+                                {
+                                    ahead[firstPage] = await PrepareDeclarativePage(sections[firstPage].Page!, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(firstPage));
+                                    first = ahead[firstPage].Document;
+                                }
+
+                                ConfigureDocument(document, first, config, null);
+                                configured = true;
+                            }
+
+                            pdf.AppendTo(document.Composer, _renderContext, sections[i].Mode);
+                            continue;
+                        }
+
+                        var (htmlDocument, measure) = ahead.Remove(i, out var laidOut)
+                            ? laidOut
+                            : await PrepareDeclarativePage(sections[i].Page!, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(i));
+                        using (htmlDocument)
+                        using (measure)
+                        {
+                            await RenderPagesCore(document, htmlDocument, config);
+                        }
+
+                        configured = true;
+                    }
+                }
+                finally
+                {
+                    foreach (var (htmlDocument, measure) in ahead.Values)
+                    {
+                        htmlDocument.Dispose();
+                        measure.Dispose();
                     }
                 }
 
@@ -502,17 +560,28 @@ namespace PeachPDF
             var prepared = new List<(HtmlDocument Document, PdfCanvas Measure)>();
             try
             {
-                var section = 0;
-                foreach (var pageHandler in documentBuilder.PageHandlers)
+                var laidOut = new Dictionary<int, HtmlDocument>();
+                for (var i = 0; i < sections.Count; i++)
                 {
-                    prepared.Add(await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(section++)));
+                    if (sections[i].Page is not { } pageHandler)
+                        continue;
+
+                    var section = await PrepareDeclarativePage(pageHandler, config, buildContext, documentBuilder.DocumentStylesheet, numbering?.Invoke(i));
+                    prepared.Add(section);
+                    laidOut[i] = section.Document;
                 }
 
-                var totalPages = document.Composer.Pages.Count + prepared.Sum(p => p.Document.Pages.Count);
+                var totalPages = document.Composer.Pages.Count + prepared.Sum(p => p.Document.Pages.Count) + sections.Sum(s => s.Pdf?.PageCount ?? 0);
                 var plan = new FileLayerPlan(layers, totalPages);
-                foreach (var (htmlDocument, _) in prepared)
+                if (sections.Count > 0 && sections[0].Pdf is not null)
+                    ConfigureDocument(document, prepared.Count > 0 ? prepared[0].Document : null, config, plan);
+
+                for (var i = 0; i < sections.Count; i++)
                 {
-                    await RenderPagesCore(document, htmlDocument, config, plan);
+                    if (sections[i].Pdf is { } pdf)
+                        pdf.AppendTo(document.Composer, _renderContext, sections[i].Mode);
+                    else
+                        await RenderPagesCore(document, laidOut[i], config, plan);
                 }
 
                 // The links, destinations and outline of the files drawn on the pages, now that every page they can lead to exists.
@@ -622,10 +691,7 @@ namespace PeachPDF
             // Whole-document format, document information, and what the claimed conformance level requires of the file (the output
             // intent, the XMP packet, embedded files, the language) - established once, and checked against any earlier call on this
             // document. Everything that depends on this render's content (title, language, creation date) is known by now.
-            var embeddings = PdfEmbeddingPlan.Create(config);
-            var composerOptions = BuildComposerOptions(config, htmlDocument, embeddings);
-            fileLayers?.ApplyDocumentInformation(composerOptions, canAttachFiles: config.PdfAConformance is PdfAConformance.None or PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F);
-            document.Composer.Configure(composerOptions);
+            ConfigureDocument(document, htmlDocument, config, fileLayers);
 
             // PDF/A-1a/2a/3a build on tagged-PDF output (StructureTagBuilder below) and additionally require a real document language,
             // which Configure has already checked.
@@ -651,6 +717,9 @@ namespace PeachPDF
 
             // One PDF page per page of the laid-out document, painted onto the canvas the PDF page hands out. The sheet size is each page's own
             // resolved physical size, in true PDF points - it already falls back to the document's base size whenever no @page rule overrides it.
+            // The outline entries and form fields below name pages of this section, which are not the document's first pages when an earlier
+            // section or an added PDF came before it.
+            var pageBase = document.Composer.Pages.Count;
             foreach (var htmlPage in htmlDocument.Pages)
             {
                 var pageNumber = document.Composer.Pages.Count + 1;
@@ -700,22 +769,35 @@ namespace PeachPDF
 
             if (formFieldBuilder != null)
             {
-                HandleFormFields(document.Composer, annotations, formFieldBuilder);
+                HandleFormFields(document.Composer, annotations, formFieldBuilder, pageBase);
             }
 
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmarks above and adds no outline.
-            document.Composer.AddBookmarks(annotations.Bookmarks.Select(ToBookmark));
+            document.Composer.AddBookmarks(annotations.Bookmarks.Select(b => ToBookmark(b, pageBase)));
         }
 
         #region Private/Protected methods
 
+        /// <summary>
+        /// Fixes the document's format and information from <paramref name="config"/> and the first generated section (see the comments in
+        /// <see cref="RenderPagesCore"/>). A document made only of added PDFs has no section to take a title or language from, so it gets the
+        /// configured ones.
+        /// </summary>
+        private static void ConfigureDocument(PeachPdfDocument document, HtmlDocument? htmlDocument, PdfGenerateConfig config, FileLayerPlan? fileLayers)
+        {
+            var embeddings = PdfEmbeddingPlan.Create(config);
+            var composerOptions = BuildComposerOptions(config, htmlDocument, embeddings);
+            fileLayers?.ApplyDocumentInformation(composerOptions, canAttachFiles: config.PdfAConformance is PdfAConformance.None or PdfAConformance.PdfA3A or PdfAConformance.PdfA3B or PdfAConformance.PdfA3U or PdfAConformance.PdfA4E or PdfAConformance.PdfA4F);
+            document.Composer.Configure(composerOptions);
+        }
+
         /// <summary>An outline entry the HTML core collected, as the PDF writer's own.</summary>
-        private static PdfBookmark ToBookmark(Bookmark bookmark) => new(bookmark.Level, bookmark.Title, bookmark.IsOpen)
+        private static PdfBookmark ToBookmark(Bookmark bookmark, int pageBase) => new(bookmark.Level, bookmark.Title, bookmark.IsOpen)
         {
             Uri = bookmark.Uri,
-            PageIndex = bookmark.Destination?.PageIndex,
+            PageIndex = bookmark.Destination?.PageIndex + pageBase,
             TopPoints = bookmark.Destination?.Top ?? 0,
             StructureTarget = bookmark.Destination?.Target is { } target ? target : null,
         };
@@ -725,9 +807,9 @@ namespace PeachPDF
         /// <paramref name="config"/>, and the document information - a non-empty field of <see cref="PdfGenerateConfig.Metadata"/> wins over
         /// the value extracted from the HTML, and a missing one falls back to it.
         /// </summary>
-        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlDocument htmlDocument, PdfEmbeddingPlan embeddings)
+        private static PeachDrawing.PDF.PdfComposerOptions BuildComposerOptions(PdfGenerateConfig config, HtmlDocument? htmlDocument, PdfEmbeddingPlan embeddings)
         {
-            var metadata = htmlDocument.Metadata;
+            var metadata = htmlDocument?.Metadata;
             var overrides = config.Metadata;
 
             var options = new PeachDrawing.PDF.PdfComposerOptions
@@ -743,7 +825,7 @@ namespace PeachPDF
                 CreationDate = overrides?.CreationDate
                     ?? (metadata?.Date is { } htmlDate ? new DateTimeOffset(DateTime.SpecifyKind(htmlDate, DateTimeKind.Local)) : null),
                 // Resolved by SetContent: the document's own <html lang> takes priority, else PdfGenerateConfig.DefaultLanguage.
-                Language = htmlDocument.Language,
+                Language = htmlDocument?.Language ?? (string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage),
                 Version = config.PdfVersionExplicit ? config.PdfVersion.ToEngine() : null,
                 Conformance = config.PdfAConformance.ToEngine(),
                 XConformance = config.PdfXConformance.ToEngine(),
@@ -812,14 +894,14 @@ namespace PeachPDF
         /// <summary>
         /// Creates AcroForm fields/widgets for the collected form controls, one per page.
         /// </summary>
-        private static void HandleFormFields(PdfComposer composer, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder)
+        private static void HandleFormFields(PdfComposer composer, DocumentAnnotations annotations, FormFieldBuilder formFieldBuilder, int pageBase)
         {
             foreach (var field in annotations.FormFields)
             {
-                if (field.PageIndex >= composer.Pages.Count)
+                if (field.PageIndex + pageBase >= composer.Pages.Count)
                     continue;
 
-                formFieldBuilder.AddField(composer.Pages[field.PageIndex], field);
+                formFieldBuilder.AddField(composer.Pages[field.PageIndex + pageBase], field);
             }
         }
 

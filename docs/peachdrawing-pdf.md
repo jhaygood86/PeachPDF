@@ -300,6 +300,21 @@ Both modes take the title, author and the rest of the document information from 
 
 Protection is limited to what .NET provides: files are read and written with AES (128-bit files read with the user password; 256-bit files with the user or owner password), and RC4 files, which includes every 40-bit file, are refused.
 
+### Adding the pages to a document you are composing
+
+`PdfOperation.AppendTo(composer, context)` adds the operation's pages after the pages a `PdfComposer` already has, in place of writing a file of their own, so a document you compose with the drawing API can have existing PDFs before, between and after its pages:
+
+```csharp
+using var composer = new PdfComposer(context, new PdfComposerOptions { Conformance = PdfAConformance.PdfA2B });
+PdfOperation.LoadFile("cover.pdf").AppendTo(composer, context);
+var page = composer.AddPage(595, 842);
+// ... draw the page ...
+PdfOperation.LoadFile("terms.pdf").TakePages("1-3").AppendTo(composer, context, PdfCopyMode.ObjectCopy);
+composer.Save(stream);
+```
+
+The optional third argument overrides the copy mode of the operation (`WithCopyMode`). The links, outline, named destinations and form fields of the added files lead to the pages they now are on, and a name that an earlier `AppendTo` call on the same composer already used is numbered (`name_2`); destinations you added to the composer yourself are not looked at, so do not reuse their names. Because the pages become part of the composed document, what applies to the whole file stays with the composer: an operation that encrypts, linearizes, attaches files or extends the metadata throws `InvalidOperationException`, and the document information and attachments of the added files are not taken. With `ObjectCopy` the added pages keep their own content and are not brought into line with the composer's PDF/A or PDF/X profile.
+
 ## Using it from PeachPDF
 
 You do not need this package to render HTML to PDF - [PeachPDF](getting-started.md) depends on it and uses it for you. Reach for it

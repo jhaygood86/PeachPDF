@@ -146,10 +146,17 @@ PeachPDF.Layout.IContainer : interface
   method abstract Void Text(String text)
   method abstract Void UnorderedList(Action<IListDescriptor> handler, PdfListMarkerType markerType = Disc)
 PeachPDF.Layout.IDocumentBuilder : interface
+  method abstract Void Append(Byte[] pdf, PdfCopyMode mode = Redraw, String password = null)
+  method abstract Void Append(PdfOperation operation, PdfCopyMode? mode = null)
+  method abstract Void Append(Stream pdf, PdfCopyMode mode = Redraw, String password = null)
   method abstract Void OverlayFile(Action<IFileLayerDescriptor> handler)
   method abstract Void Page(Action<IPageDescriptor> handler)
+  method abstract Void Prepend(Byte[] pdf, PdfCopyMode mode = Redraw, String password = null)
+  method abstract Void Prepend(PdfOperation operation, PdfCopyMode? mode = null)
+  method abstract Void Prepend(Stream pdf, PdfCopyMode mode = Redraw, String password = null)
   method abstract Void Stylesheet(PeachPdfCssContent content)
   method abstract Void UnderlayFile(Action<IFileLayerDescriptor> handler)
+  method abstract Void UseContinuousPageNumbers()
 PeachPDF.Layout.IFileLayerDescriptor : interface
   method abstract IFileLayerDescriptor File(Byte[] pdf)
   method abstract IFileLayerDescriptor File(Stream pdf)

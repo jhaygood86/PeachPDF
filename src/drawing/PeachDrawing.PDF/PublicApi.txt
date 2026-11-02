@@ -297,6 +297,7 @@ PeachDrawing.PDF.PdfOperation : sealed class
   method PdfOperation TakePages(String pageSelector)
   method PdfOperation UnderlayFile(PdfLayerConfiguration layer)
   method PdfOperation WithCopyMode(PdfCopyMode mode)
+  method Void AppendTo(PdfComposer composer, PdfRenderContext context, PdfCopyMode? copyMode = null)
   method Void Save(Stream stream)
   method Void Save(String filePath)
   method static PdfOperation LoadBytes(Byte[] pdf, String password = null)
