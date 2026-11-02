@@ -18,11 +18,20 @@ for _ in $(seq 1 180); do
   sleep 1
 done
 
-# A swipe up scrolls the page: the view must report it.
+# A swipe up scrolls the page: the view must report it. `input swipe` may send only a down and an up, which the view rightly takes for a tap
+# at the end point, so the finger is moved in steps.
 size=$(adb shell wm size | grep -o '[0-9]*x[0-9]*' | tail -1)
 width=${size%x*}
 height=${size#*x}
-adb shell input swipe $((width / 2)) $((height * 3 / 4)) $((width / 2)) $((height / 4)) 300
+x=$((width / 2))
+top=$((height / 4))
+start=$((height * 3 / 4))
+step=$(((start - top) / 10))
+adb shell input motionevent DOWN "$x" "$start"
+for i in $(seq 1 10); do
+  adb shell input motionevent MOVE "$x" $((start - i * step))
+done
+adb shell input motionevent UP "$x" $((start - 10 * step))
 sleep 3
 
 log=$(adb logcat -d -s PEACH_SMOKE:V)
