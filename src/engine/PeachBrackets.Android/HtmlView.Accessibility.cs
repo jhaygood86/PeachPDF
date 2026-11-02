@@ -291,6 +291,8 @@ public sealed partial class HtmlView
                 case Action.Click when node.Role == AccessibilityRole.Link:
                     view.FollowLinkNode(node);
                     return true;
+                case Action.Click when AccessibilityMapping.IsCheckable(node.Role):
+                    return view.ActivateControl(node);
                 default:
                     return false;
             }
