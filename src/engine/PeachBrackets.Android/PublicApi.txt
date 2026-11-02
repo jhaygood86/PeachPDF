@@ -27,6 +27,7 @@ PeachBrackets.Android.HtmlView : sealed class
   event EventHandler<HtmlTappedEventArgs> Tapped
   event EventHandler<HtmlTouchStartedEventArgs> TouchStarted
   method Boolean ScrollToElement(String elementId)
+  method Void ApplyUpdate(UpdateResult result)
   method Void CopySelection()
   method Void SelectAll()
   method virtual Boolean OnCheckIsTextEditor()
