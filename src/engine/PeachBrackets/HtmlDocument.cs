@@ -1110,6 +1110,13 @@ public sealed partial class HtmlDocument : IDisposable
         if (!affectsStyle)
             return new UpdateResult(true, null, []);
 
+        return await RestyleAsync(changed, measuringCanvas);
+    }
+
+    // Loads the source again with the document's current state and reports what to repaint: every page from the first whose geometry moved, or
+    // else the regions of the elements that changed.
+    private async Task<UpdateResult> RestyleAsync(HashSet<int> changed, Canvas measuringCanvas)
+    {
         var geometryBefore = GeometrySignature();
         // The text the selection and highlights were built over (the runs are computed on demand, so they may not be there yet).
         var textBefore = _recordTextRuns && (_selectedRanges.Count > 0 || _highlights.Count > 0 || (_selection?.HasSelection ?? false)) ? TextSignature(TextRuns) : null;
@@ -1166,8 +1173,8 @@ public sealed partial class HtmlDocument : IDisposable
         _container.PageSize = Utils.ToPixels(sheet, units);
         _container.CssPageSize = null;
 
+        _container.AttributeOverrides = _formChanges;
         await _container.ReparseAsync();
-        ReapplyFormChanges();
 
         var resolvedSheet = _container.CssPageSize ?? sheet;
         var content = new Size(
