@@ -319,6 +319,11 @@ PeachBrackets.ClippedTextEntry : struct
 PeachBrackets.ColorSchemePreference : enum Int32
   Dark = 1
   Light = 0
+PeachBrackets.ContrastPreference : enum Int32
+  Custom = 3
+  Less = 2
+  More = 1
+  NoPreference = 0
 PeachBrackets.DataUri : static class
   method static Boolean TryDecode(String uri, out String mimeType, out Byte[] bytes)
 PeachBrackets.DocumentCursor : sealed class
@@ -462,6 +467,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
+  property TextSpacingOverrides TextSpacing { get; set; }
+  property UserPreferences Preferences { get; set; }
 PeachBrackets.InputCapabilities : sealed class
   ctor(PointerTypes PrimaryPointer, Boolean PrimaryCanHover, PointerTypes AnyPointers, Boolean AnyCanHover)
   method InputCapabilities <Clone>$()
@@ -577,6 +584,19 @@ PeachBrackets.Text.TextRun : sealed class
   property String ElementId { get; }
   property String LinkUri { get; }
   property String Text { get; }
+PeachBrackets.TextSpacingOverrides : sealed class
+  ctor(Double LineHeight, Double ParagraphSpacing, Double LetterSpacing, Double WordSpacing)
+  method TextSpacingOverrides <Clone>$()
+  method Void Deconstruct(out Double LineHeight, out Double ParagraphSpacing, out Double LetterSpacing, out Double WordSpacing)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextSpacingOverrides other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Double LetterSpacing { get; init; }
+  property Double LineHeight { get; init; }
+  property Double ParagraphSpacing { get; init; }
+  property Double WordSpacing { get; init; }
+  property static TextSpacingOverrides Wcag { get; }
 PeachBrackets.TouchActions : enum Int32
   All = 63
   DoubleTapZoom = 32
@@ -627,6 +647,20 @@ PeachBrackets.Updates.UpdateResult : struct
   property Boolean Applied { get; init; }
   property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
   property String Reason { get; init; }
+PeachBrackets.UserPreferences : sealed class
+  ctor()
+  method UserPreferences <Clone>$()
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(UserPreferences other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean ForcedColors { get; init; }
+  property Boolean InvertedColors { get; init; }
+  property Boolean ReducedData { get; init; }
+  property Boolean ReducedMotion { get; init; }
+  property Boolean ReducedTransparency { get; init; }
+  property ContrastPreference Contrast { get; init; }
+  property static UserPreferences Default { get; }
 PeachPDF.HtmlRenderErrorType : enum Int32
   ContextMenu = 8
   CssParsing = 1

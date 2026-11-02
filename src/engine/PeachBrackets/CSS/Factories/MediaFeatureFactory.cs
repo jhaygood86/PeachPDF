@@ -70,6 +70,8 @@ namespace PeachBrackets.Css
                 {FeatureNames.PrefersContrast, () => new PrefersContrastMediaFeature()},
                 {FeatureNames.ForcedColors, () => new ForcedColorsMediaFeature()},
                 {FeatureNames.PrefersReducedTransparency, () => new PrefersReducedTransparencyMediaFeature()},
+                {FeatureNames.PrefersReducedData, () => new PrefersReducedDataMediaFeature()},
+                {FeatureNames.InvertedColors, () => new InvertedColorsMediaFeature()},
                 {FeatureNames.Update, () => new UpdateMediaFeature()},
                 {FeatureNames.AnyHover, () => new AnyHoverMediaFeature()},
                 {FeatureNames.AnyPointer, () => new AnyPointerMediaFeature()},

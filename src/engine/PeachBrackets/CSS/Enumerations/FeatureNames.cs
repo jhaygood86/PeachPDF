@@ -49,6 +49,8 @@ namespace PeachBrackets.Css
         public static readonly string PrefersContrast = "prefers-contrast";
         public static readonly string ForcedColors = "forced-colors";
         public static readonly string PrefersReducedTransparency = "prefers-reduced-transparency";
+        public static readonly string PrefersReducedData = "prefers-reduced-data";
+        public static readonly string InvertedColors = "inverted-colors";
         public static readonly string Update = "update";
         public static readonly string AnyHover = "any-hover";
         public static readonly string AnyPointer = "any-pointer";

@@ -1453,9 +1453,9 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles |
 | `color`, `color-index`, `monochrome`, `grid` | Yes | Fixed device characteristics: color output (8 bits/channel), not a color-index/monochrome device, not a grid/tty |
 | `hover`, `any-hover`, `pointer`, `any-pointer` | Yes | Report the pointing devices of the host, which a PDF does not have: `none` unless `HtmlDocumentOptions.Input` says otherwise (`InputCapabilities.Mouse`, `.Touch`, or a mix of `PointerTypes`; see [PeachBrackets](peachbrackets.md)). The boolean form `(hover)` is true when the device can hover, `(pointer)` when there is any pointer; a keyword the feature does not define never matches |
-| `update`, `scripting`, `forced-colors` | Yes | All report the static-document resting state (`none`) — a PDF cannot be updated or scripted, and is never drawn under a forced palette |
-| `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) |
-| `prefers-contrast`, `prefers-reduced-transparency` | Yes | Report `no-preference` |
+| `update`, `scripting` | Yes | Both report the static-document resting state (`none`) — a PDF cannot be updated or scripted |
+| `prefers-reduced-motion` | Yes | Reports `reduce` (a static PDF has no motion) unless `HtmlDocumentOptions.Preferences` says otherwise |
+| `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency`, `prefers-reduced-data` | Yes | Report their resting state (`no-preference` / `none`; a PDF is never drawn under a forced palette) unless a host passes the reader's settings in `HtmlDocumentOptions.Preferences` (`UserPreferences`; see [PeachBrackets](peachbrackets.md)). `forced-colors: active` only reports the mode to style sheets; the page is not recoloured |
 | A feature name PeachPDF doesn't recognize | No | The whole media query is invalid and its block does not apply (per Media Queries 4, an unknown feature is false) |
 
 ---
