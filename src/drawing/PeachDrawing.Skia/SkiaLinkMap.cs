@@ -75,6 +75,11 @@ public sealed class SkiaLinkActivatingEventArgs : EventArgs
     public bool Cancel { get; set; }
 }
 
+/// <summary>An area of the canvas the document described to assistive technology: what it is, what it is called and what state it is in.</summary>
+/// <param name="Bounds">the area, in the canvas's layout units</param>
+/// <param name="Info">what the area is</param>
+public sealed record SkiaSemanticRegion(Rect Bounds, SemanticInfo Info);
+
 /// <summary>An area of the canvas the document asked to show a pointer of its own over.</summary>
 /// <param name="Bounds">the area, in the canvas's layout units</param>
 /// <param name="Shape">the pointer to show, which stands in when none of <paramref name="Images"/> can be used</param>
@@ -118,6 +123,34 @@ public sealed class SkiaLinkMap
     public IReadOnlyList<SkiaCursorArea> Cursors => _cursors;
 
     internal void AddCursor(SkiaCursorArea area) => _cursors.Add(area);
+
+    private readonly List<SkiaSemanticRegion> _semantics = [];
+
+    /// <summary>The areas the document described to assistive technology, in reading order.</summary>
+    public IReadOnlyList<SkiaSemanticRegion> Semantics => _semantics;
+
+    internal void AddSemantic(SkiaSemanticRegion region) => _semantics.Add(region);
+
+    /// <summary>The innermost described area at <paramref name="x"/>, <paramref name="y"/> in layout units, or <see langword="null"/>: what a screen reader that is pointed at the page, as by touch, lands on.</summary>
+    /// <param name="x">the horizontal position</param>
+    /// <param name="y">the vertical position</param>
+    public SkiaSemanticRegion? SemanticAt(double x, double y)
+    {
+        SkiaSemanticRegion? best = null;
+        foreach (var region in _semantics)
+        {
+            // A later area in reading order lies inside the earlier ones that contain it, so it is the more specific.
+            if (region.Bounds.Contains(x, y))
+                best = region;
+        }
+
+        return best;
+    }
+
+    /// <summary>Like <see cref="SemanticAt"/>, for a position in the host's own pointer coordinates (see <see cref="HitTestDevice"/>).</summary>
+    /// <param name="xDevice">the horizontal position</param>
+    /// <param name="yDevice">the vertical position</param>
+    public SkiaSemanticRegion? SemanticAtDevice(double xDevice, double yDevice) => SemanticAt(xDevice * _unitsPerDevicePixel, yDevice * _unitsPerDevicePixel);
 
     /// <summary>The topmost area asking for a pointer at <paramref name="x"/>, <paramref name="y"/> in layout units, or <see langword="null"/> when the document asks for none there (the host shows its own).</summary>
     /// <param name="x">the horizontal position</param>

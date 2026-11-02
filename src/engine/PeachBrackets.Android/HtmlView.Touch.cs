@@ -203,6 +203,9 @@ public sealed partial class HtmlView
             return false;
 
         var document = _document!;
+        if (ActivateControlAt(page, x, y))
+            return true;
+
         var link = document.Annotations.Links.LastOrDefault(l => l.PageIndex == page && l.Bounds.Contains(x, y));
         if (link is null)
         {

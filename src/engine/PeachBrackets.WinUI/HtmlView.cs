@@ -306,6 +306,7 @@ public sealed partial class HtmlView : UserControl
         RecordTextRuns = true,
         EnableSelectionStyling = true,
         CollectFormFields = true,
+        PaintFormControls = true,
         ColorScheme = ActualTheme == ElementTheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
     };

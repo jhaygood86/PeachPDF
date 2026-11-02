@@ -41,6 +41,9 @@ public sealed partial class HtmlView
             case VirtualKey.Tab:
                 return StepFocus(!IsDown(VirtualKey.Shift));
 
+            case VirtualKey.Space or VirtualKey.Enter when HandleControlKey(e.Key):
+                return true;
+
             case VirtualKey.Enter when (_focusTargetId is { } targetId ? document.GetAccessibilityTree().FindById(targetId) : document.FocusedNode) is { Role: AccessibilityRole.Link } link:
                 ActivateLink(link);
                 return true;

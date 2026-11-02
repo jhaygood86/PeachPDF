@@ -86,10 +86,22 @@ the focus. The part with the focus is `HtmlView.FocusedNode`, and `FocusChanged`
 rules apply to it (the built-in style draws a dotted outline) and the view scrolls it into view. To an accessibility service the parts that can take
 the focus are focusable, the one that has it is focused, `ACTION_FOCUS` moves the page's focus there, and `TYPE_VIEW_FOCUSED` is sent when it moves.
 
+A node with text can be read by character, word or paragraph: the provider reports those movement granularities, answers the service's next and
+previous actions by moving from where it last stopped (a character is a whole text element, so an emoji or a letter with an accent is one step) and
+sends the text-traversed event with the piece it landed on. Lines and pages are not offered: they depend on layout the node does not carry.
+
 ## Fonts
 
 Text is drawn with the fonts of the device. The view registers Roboto as `sans-serif` and `Roboto`, Noto Serif as `serif` and the system
 monospace font from `/system/fonts`, and a document's own `@font-face` fonts work as on any other target.
+
+## Form controls
+
+The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
+and range are drawn from their own CSS like the rest of the page; no native widget is placed over it. A tap on a check box or radio button toggles it
+(`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. An accessibility service's click action on a check box, radio button or
+switch does the same and the node reports the new checked state. Typing into a text field, picking from a drop-down and moving a range are not handled
+yet: they need the `InputConnection` bridge.
 
 ## Limits of this version
 

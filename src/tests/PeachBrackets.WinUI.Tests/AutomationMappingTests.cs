@@ -80,4 +80,22 @@ public class AutomationMappingTests
     [InlineData(LiveSetting.Assertive, AutomationLiveSetting.Assertive)]
     public void ALiveRegionIsToldWithTheSameUrgency(LiveSetting live, AutomationLiveSetting expected) =>
         Assert.Equal(expected, HtmlViewLogic.ToLiveSetting(live));
+
+    [Theory]
+    [InlineData(AccessibilityRole.CheckBox, true)]
+    [InlineData(AccessibilityRole.Radio, true)]
+    [InlineData(AccessibilityRole.Switch, true)]
+    [InlineData(AccessibilityRole.MenuItemCheckBox, true)]
+    [InlineData(AccessibilityRole.Button, false)]
+    [InlineData(AccessibilityRole.Link, false)]
+    public void ARoleIsToggledWhenItIsAChoiceThatIsOnOrOff(AccessibilityRole role, bool expected) =>
+        Assert.Equal(expected, HtmlViewLogic.IsToggleControl(role));
+
+    [Theory]
+    [InlineData(PeachBrackets.Accessibility.ToggleState.True, Microsoft.UI.Xaml.Automation.ToggleState.On)]
+    [InlineData(PeachBrackets.Accessibility.ToggleState.Mixed, Microsoft.UI.Xaml.Automation.ToggleState.Indeterminate)]
+    [InlineData(PeachBrackets.Accessibility.ToggleState.False, Microsoft.UI.Xaml.Automation.ToggleState.Off)]
+    [InlineData(PeachBrackets.Accessibility.ToggleState.None, Microsoft.UI.Xaml.Automation.ToggleState.Off)]
+    public void ACheckedStateIsAToggleState(PeachBrackets.Accessibility.ToggleState state, Microsoft.UI.Xaml.Automation.ToggleState expected) =>
+        Assert.Equal(expected, HtmlViewLogic.ToToggleState(state));
 }

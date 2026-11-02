@@ -105,7 +105,8 @@ public sealed partial class HtmlView
             if (wasSelecting)
                 _document!.Selection.RemoveAllRanges();
 
-            FollowLinkAt(page, x, y);
+            if (!ActivateControlAt(page, x, y))
+                FollowLinkAt(page, x, y);
         }
     }
 

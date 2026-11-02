@@ -114,14 +114,15 @@ figure alternative text, and shows the title in the viewer. See [Generating PDF/
 page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
 level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
 readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
-nesting) and the Skia and Win2D canvases ignore them for now.
+nesting). The Skia and Win2D canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`) beside the links, and
+`SemanticAt` finds the innermost one under a point, which is what a host's touch exploration or UI Automation hit test needs.
 
 ## Form controls
 
 A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the engine draws every `<input>` and `<select>` itself from the
 control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
 buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges; `progress`, `meter`, the date and colour inputs, a `textarea` and
-typing into a field are not drawn or handled yet. The accessibility tree already reports each control's role, name and state.
+the text of a field can be edited through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)), but a `textarea` is not drawn or edited yet. The accessibility tree already reports each control's role, name and state.
 
 ## Preferences and text spacing
 

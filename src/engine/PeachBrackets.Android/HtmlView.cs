@@ -275,6 +275,7 @@ public sealed partial class HtmlView : FrameLayout
         RecordTextRuns = true,
         EnableSelectionStyling = true,
         CollectFormFields = true,
+        PaintFormControls = true,
         ColorScheme = IsNightMode() ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
     };

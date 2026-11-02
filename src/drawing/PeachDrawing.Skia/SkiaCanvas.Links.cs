@@ -41,6 +41,15 @@ public sealed partial class SkiaCanvas
     }
 
     /// <inheritdoc />
+    public override void AddSemanticRegion(Rect bounds, SemanticInfo info)
+    {
+        Guard();
+        ArgumentNullException.ThrowIfNull(info);
+        if (!_isOffscreen)
+            Links.AddSemantic(new SkiaSemanticRegion(bounds, info));
+    }
+
+    /// <inheritdoc />
     public override void AddDestination(string name, double top)
     {
         Guard();

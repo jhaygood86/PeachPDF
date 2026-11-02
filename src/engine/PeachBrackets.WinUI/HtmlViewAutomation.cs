@@ -164,7 +164,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -231,8 +231,12 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
 
     protected override IList<AutomationPeer> GetChildrenCore() => _children;
 
-    protected override object? GetPatternCore(PatternInterface patternInterface) =>
-        patternInterface == PatternInterface.Invoke && _node.Role == AccessibilityRole.Link ? this : null;
+    protected override object? GetPatternCore(PatternInterface patternInterface) => patternInterface switch
+    {
+        PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
+        PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
+        _ => null,
+    };
 
     protected override void ShowContextMenuCore() { }
 
@@ -245,4 +249,9 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
     }
 
     public void Invoke() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateLink(_node));
+
+    // A check box or radio button, as a screen reader toggles it: the page does what a click on it does.
+    public Microsoft.UI.Xaml.Automation.ToggleState ToggleState => HtmlViewLogic.ToToggleState(_view.CurrentNode(_node).Checked);
+
+    public void Toggle() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateControl(_node));
 }
