@@ -95,6 +95,14 @@ sends the text-traversed event with the piece it landed on. Lines and pages are 
 Text is drawn with the fonts of the device. The view registers Roboto as `sans-serif` and `Roboto`, Noto Serif as `serif` and the system
 monospace font from `/system/fonts`, and a document's own `@font-face` fonts work as on any other target.
 
+## Form controls
+
+The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
+and range are drawn from their own CSS like the rest of the page; no native widget is placed over it. A tap on a check box or radio button toggles it
+(`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. An accessibility service's click action on a check box, radio button or
+switch does the same and the node reports the new checked state. Typing into a text field, picking from a drop-down and moving a range are not handled
+yet: they need the `InputConnection` bridge.
+
 ## Limits of this version
 
 - Form controls are painted but not interactive.
