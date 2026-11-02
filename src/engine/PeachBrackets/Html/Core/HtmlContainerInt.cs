@@ -1249,6 +1249,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal ColorSchemePreference PreferredColorScheme { get; set; } = ColorSchemePreference.Light;
 
+        /// <summary>The pointing devices <c>hover</c>/<c>pointer</c> media features report; none unless the host says otherwise.</summary>
+        internal InputCapabilities Input { get; set; } = InputCapabilities.None;
+
         /// <summary>
         /// When true, the document's own author style sheets (<c>&lt;style&gt;</c>/<c>&lt;link&gt;</c>) are
         /// not collected during CSS parsing (see <c>PdfGenerateConfig.IgnoreAuthorStyleSheets</c>).
@@ -1307,6 +1310,27 @@ namespace PeachBrackets.Html
 
         /// <summary>The colour selected text is drawn in where no <c>::selection</c> rule applies, or null to keep the text's own.</summary>
         internal PaintColor? SelectionForeground { get; set; }
+
+        /// <summary>What the user is doing to the document (hover, press, focus) for the state pseudo-classes; null for a static document.</summary>
+        internal InteractionState? Interaction { get; set; }
+
+        /// <summary>Whether any style rule of the document uses <c>:hover</c> or <c>:active</c>; read while it is cascaded.</summary>
+        internal bool PointerPseudoClassesInUse { get; set; }
+
+        /// <summary>
+        /// Whether any style rule uses <c>:focus</c> (including <c>-visible</c> and <c>-within</c>). The user agent style sheet has a
+        /// <c>:focus</c> rule, so this is true for every document: moving focus always restyles it.
+        /// </summary>
+        internal bool FocusPseudoClassesInUse { get; set; }
+
+        /// <summary>Parses and cascades the same source again, now that <see cref="Interaction"/> has changed.</summary>
+        internal async Task ReparseAsync()
+        {
+            if (_lastHtmlSource is null)
+                return;
+
+            await SetHtml(_lastHtmlSource, _lastBaseCssData, PreviousPassContainerSizes);
+        }
 
         /// <summary>
         /// Init with optional document and stylesheet.

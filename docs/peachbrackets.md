@@ -110,6 +110,15 @@ top-left corner of the sheet. A consumer that writes a format with these concept
 - **`GetAccessibleNodes()`** is what an assistive technology reads: a node for each block of text (a paragraph, a heading with its level, a list
   item) with its text, page and bounds in points, and after it a node for each link inside it, with where it leads. A host with an accessibility
   tree builds it from these. Needs `RecordTextRuns`.
+- **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
+  make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
+  laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint
+  (`DirtyRegions`): just the elements whose state changed when nothing moved, or every page from the first one that did. A state change that no
+  rule reads costs nothing, and one that is already in force returns `Applied = false`. Selection and highlights are kept when the text does not
+  change; `DocumentElement` handles taken before a restyle are stale and must be taken again. Combine it with `HtmlDocumentOptions.Input`, so
+  `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
+  restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
+  are not run.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall

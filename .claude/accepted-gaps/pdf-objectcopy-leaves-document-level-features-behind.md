@@ -37,4 +37,3 @@ the entries above it kept as headings.
   were not taken stay in the field with no page.
 - In `Redraw`, a field whose widgets sit on several pages is renamed per page when it clashes with another file's field
   (`total`, `total_2`), splitting it into two fields.
-- `target-counter(..., page)` in a merged document uses part-local page numbers, unlike `counter(page)`, which is shifted.

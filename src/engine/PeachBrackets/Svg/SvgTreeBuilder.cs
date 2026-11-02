@@ -1761,6 +1761,27 @@ namespace PeachBrackets.Svg
             || SvgValueParsers.ParseLength(value, referenceLength: 1) is not null;
 
         /// <summary>
+        /// Whether <paramref name="value"/> is a valid declaration for the length and number properties an animation can start from. A property
+        /// with no check here is taken as valid, as it was before.
+        /// </summary>
+        private static bool IsValidDeclaredValue(string name, string value) => name switch
+        {
+            "letter-spacing" or "word-spacing" => IsSpacingValue(value),
+            // <length-percentage>; the reference length lets a percentage through, which the parser otherwise reads as absent.
+            "stroke-width" or "stroke-dashoffset" => SvgValueParsers.ParseLength(value, referenceLength: 1) is not null,
+            "opacity" or "fill-opacity" or "stroke-opacity" => IsNumberOrPercentage(value),
+            "stroke-miterlimit" => double.TryParse(value.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out _),
+            _ => true,
+        };
+
+        private static bool IsNumberOrPercentage(string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.EndsWith('%')) trimmed = trimmed[..^1];
+            return double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out _);
+        }
+
+        /// <summary>
         /// The value an animation's missing keyframe stands for: the declared value, else the inherited or initial one. A <c>transform</c> written as a
         /// presentation attribute is in the attribute grammar (<c>translate(10 20)</c>, <c>rotate(30)</c>), which the animation mixes as CSS text, so it
         /// goes in as the matrix it means.
@@ -1782,8 +1803,9 @@ namespace PeachBrackets.Svg
                 };
             }
 
-            // A spacing that is not a length computes to the inherited one, so that is what the animation mixes from (the cascade tier that holds it already reads it so).
-            if ((name is "letter-spacing" or "word-spacing") && !IsSpacingValue(declared)) return InheritedOrInitial();
+            // A value that is not valid for the property is dropped, so the property computes to the inherited (or initial) value, and that is what the
+            // animation mixes from rather than the declared text, which it cannot interpolate.
+            if (!IsValidDeclaredValue(name, declared)) return InheritedOrInitial();
 
             if (name == "transform" && declared == node.GetAttribute("transform"))
             {
@@ -1808,10 +1830,62 @@ namespace PeachBrackets.Svg
         /// The value of <paramref name="name"/> on <paramref name="node"/> as an element below it inherits it: its own declaration (animated or not),
         /// else its parent's for an inherited property, else the initial value. Null when nothing up the tree declares it and it has no initial value here.
         /// </summary>
-        private static string? ResolveEffectiveValue(ISvgSourceNode node, string name) =>
-            ResolveStyledAttr(node, name) is { } value
-                ? UnderlyingValue(node, name, value, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
+        private static string? ResolveEffectiveValue(ISvgSourceNode node, string name)
+        {
+            var value = ResolveStyledAttr(node, name) is { } declared
+                ? UnderlyingValue(node, name, declared, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
                 : InheritedOrInitialValue(node, name);
+
+            return value is not null && FontRelativeLengthProperties.Contains(name) ? ToPixelsAtDeclaringElement(node, value) : value;
+        }
+
+        // The inherited length properties whose value can be written in a font-relative unit.
+        private static readonly HashSet<string> FontRelativeLengthProperties = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "letter-spacing", "word-spacing", "stroke-width", "stroke-dashoffset",
+        };
+
+        /// <summary>
+        /// An inherited length is a computed length, fixed where it was declared: <c>2em</c> on a 12px ancestor is 24px for every element below it, not 2em of
+        /// each one's own font. Returns <paramref name="value"/> as pixels resolved against <paramref name="declaring"/>'s font-size, or unchanged when it is not a plain length.
+        /// </summary>
+        private static string ToPixelsAtDeclaringElement(ISvgSourceNode declaring, string value)
+        {
+            var trimmed = value.Trim();
+            if (trimmed.Length == 0 || CssGlobalKeywords.TryParse(trimmed, out _) || trimmed.Equals("normal", StringComparison.OrdinalIgnoreCase)
+                || trimmed.EndsWith('%'))
+                return value;
+
+            return SvgValueParsers.ParseLength(trimmed, null, new EmBasis(FontSizeAt(declaring), FontSizeAt(RootOf(declaring)))) is { } px
+                ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
+                : value;
+        }
+
+        private static ISvgSourceNode RootOf(ISvgSourceNode node)
+        {
+            while (node.Parent is { } parent) node = parent;
+            return node;
+        }
+
+        /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; 16px with none declared.</summary>
+        private static double FontSizeAt(ISvgSourceNode node)
+        {
+            var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+            return ResolveStyledAttr(node, "font-size") is { } text
+                   && SvgValueParsers.ParseLength(text, parentSize, new EmBasis(parentSize, parentSize)) is { } size
+                ? size
+                : parentSize;
+        }
+
+        /// <summary>A length basis with only the em sizes known: the measured units take the spec's fallback ratios.</summary>
+        private sealed class EmBasis(double emPx, double rootEmPx) : ISvgLengthBasis
+        {
+            public double EmPx => emPx;
+
+            public double RootEmPx => rootEmPx;
+
+            public double GetRatio(FontMetric metric, bool rootElement) => FontMetricRatios.Approximate(metric);
+        }
 
         private static string? InheritedOrInitialValue(ISvgSourceNode node, string name) =>
             IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(name);

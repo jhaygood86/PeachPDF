@@ -515,6 +515,20 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         }
 
         [Fact]
+        public async Task ApplyContent_TargetCounterPage_CountsOnFromThePageNumberOffset()
+        {
+            var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");
+            container.PageNumberOffset = 10;
+            var tocBox = DomUtils.GetBoxById(container.Root, "toc")!;
+            tocBox.Content = "target-counter(url(#ch2), page)";
+
+            CssContentEngine.ApplyContent(tocBox);
+
+            // The same shift counter(page) gets in a margin box: this document is the part after ten pages of another.
+            Assert.Equal("11", tocBox.Text);
+        }
+
+        [Fact]
         public async Task ApplyContent_TargetCounterPageWithStyle_FormatsPlaceholderInRequestedStyle()
         {
             var container = await BuildContainer("<div id=\"ch2\">Chapter Two</div><div id=\"toc\"></div>");

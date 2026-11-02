@@ -2,7 +2,7 @@
 {
     internal sealed class HoverMediaFeature : MediaFeature
     {
-        private static readonly IValueConverter TheConverter = Map.HoverAbilities.ToConverter();
+        private static readonly IValueConverter TheConverter = Map.HoverAbilities.ToConverter().Option();
 
         public HoverMediaFeature() : base(FeatureNames.Hover)
         {
