@@ -53,6 +53,16 @@ namespace PeachBrackets.Html.Parse
             _cssParser = cssParser;
         }
 
+        // Numbers the elements in document order, before the cascade adds boxes of its own (generated content, anonymous wrappers).
+        private static void NumberElements(CssBox box, int[] next)
+        {
+            if (box.HtmlTag is { } tag)
+                tag.SourceOrdinal = next[0]++;
+
+            foreach (var child in box.Boxes)
+                NumberElements(child, next);
+        }
+
         /// <summary>
         /// Generate css tree by parsing the given html and applying the given css style data on it.
         /// </summary>
@@ -69,6 +79,7 @@ namespace PeachBrackets.Html.Parse
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html);
             HtmlParser.EnsureHtmlAndBody(root);
+            NumberElements(root, new int[1]);
             root.IsRoot = true;
             root.HtmlContainer = htmlContainer;
 
@@ -95,6 +106,11 @@ namespace PeachBrackets.Html.Parse
 
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
             var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
+
+            var selectors = cssData.EnumerateRulesRecursive().OfType<IStyleRule>().Select(rule => rule.SelectorText).ToList();
+            htmlContainer.PointerPseudoClassesInUse = selectors.Any(text =>
+                text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase));
+            htmlContainer.FocusPseudoClassesInUse = selectors.Any(text => text.Contains(":focus", StringComparison.OrdinalIgnoreCase));
 
             var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
