@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<OutputType>WinExe</OutputType>
+		<TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+		<TargetFrameworks />
+		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+		<UseWinUI>true</UseWinUI>
+		<WindowsPackageType>None</WindowsPackageType>
+		<WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+		<Platforms>x64;ARM64</Platforms>
+		<Platform Condition="'$(Platform)' == 'AnyCPU'">x64</Platform>
+		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+		<IsPackable>false</IsPackable>
+		<EnableMsixTooling>true</EnableMsixTooling>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
+		<PackageReference Include="Microsoft.WindowsAppSDK" />
+		<PackageReference Include="Microsoft.Graphics.Win2D" />
+	</ItemGroup>
+</Project>
