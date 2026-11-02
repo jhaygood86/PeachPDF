@@ -416,4 +416,21 @@ public class HtmlViewTests
 
         Assert.Equal(("Ada", "Adam😀", ">Adam", false, "Lin", false), facts);
     }
+
+    [Fact]
+    public async Task TogglingACheckBoxIsAStateChangeTheViewCanTellUiAutomation()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=a type=checkbox aria-label=agree><p>after</p>");
+            DocumentPeer(view);
+            var box = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.CheckBox);
+            ((IToggleProvider)box.GetPattern(PatternInterface.Toggle)).Toggle();
+            await Task.Delay(300);
+            var diff = view.LastAccessibilityDiff;
+            return diff?.Changes.Select(c => (c.Kind.ToString(), c.Property)).ToArray();
+        });
+
+        Assert.Equal([("StateChanged", "checked")], facts);
+    }
 }

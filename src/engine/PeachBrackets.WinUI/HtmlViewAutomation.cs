@@ -17,14 +17,48 @@ public sealed partial class HtmlView
 
     internal AccessibilityTree? AccessibilityTree => _accessibilityTree;
 
+    /// <summary>What changed in the last refresh of the tree, for the tests: null when there was no tree before it.</summary>
+    internal AccessibilityTreeDiff? LastAccessibilityDiff { get; private set; }
+
     // Called when a document has laid out: the tree a screen reader walks is rebuilt from it.
     private void RefreshAccessibility(HtmlDocument document)
     {
-        _accessibilityTree = document.GetAccessibilityTree();
-        if (AutomationPeer.ListenerExists(AutomationEvents.StructureChanged) && FrameworkElementAutomationPeer.FromElement(_host) is HtmlViewAutomationPeer peer)
-        {
-            peer.Invalidate();
+        var before = _accessibilityTree;
+        var after = _accessibilityTree = document.GetAccessibilityTree();
+        if (FrameworkElementAutomationPeer.FromElement(_host) is not HtmlViewAutomationPeer peer)
+            return;
+
+        // What changed decides what is told: nothing at all when the tree is the same, a structure change when parts came or went, a property change
+        // for a check box that was toggled, and a notification for what a live region should now say.
+        var diff = LastAccessibilityDiff = before is null ? null : AccessibilityTreeDiff.Compare(before, after);
+        if (diff is { IsEmpty: true })
+            return;
+
+        peer.Invalidate();
+        if (AutomationPeer.ListenerExists(AutomationEvents.StructureChanged))
             peer.RaiseAutomationEvent(AutomationEvents.StructureChanged);
+
+        if (diff is null)
+            return;
+
+        foreach (var change in diff.Changes)
+        {
+            if (change is { Kind: AccessibilityChangeKind.StateChanged, Property: "checked" } && peer.FindPeer(change.Node) is { } nodePeer)
+            {
+                var previous = before!.FindById(change.Node.Id)?.Checked ?? PeachBrackets.Accessibility.ToggleState.None;
+                nodePeer.RaisePropertyChangedEvent(
+                    Microsoft.UI.Xaml.Automation.TogglePatternIdentifiers.ToggleStateProperty,
+                    HtmlViewLogic.ToToggleState(previous), HtmlViewLogic.ToToggleState(change.Node.Checked));
+            }
+        }
+
+        foreach (var announcement in diff.Announcements)
+        {
+            peer.RaiseNotificationEvent(
+                Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationKind.Other,
+                HtmlViewLogic.ToNotificationProcessing(announcement.Politeness),
+                announcement.Text,
+                announcement.Region.Id);
         }
     }
 

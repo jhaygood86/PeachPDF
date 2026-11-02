@@ -29,6 +29,10 @@ public sealed partial class HtmlView
     // Called when a document has laid out: the tree an accessibility service walks is rebuilt from it.
     private void RefreshAccessibility(HtmlDocument document)
     {
+        var before = _accessibilityTree;
+        var after = _accessibilityTree = document.GetAccessibilityTree();
+        var diff = before is null ? null : AccessibilityTreeDiff.Compare(before, after);
+
         // Accessibility focus stays on the same part of the page when the tree is taken again (the page was restyled, say), not on the same number.
         var focusedId = _accessibilityFocus > 0 && _accessibilityFocus <= _a11yNodes.Length ? _a11yNodes[_accessibilityFocus - 1].Id : null;
         var nodes = new List<AccessibilityNode>();
@@ -45,7 +49,7 @@ public sealed partial class HtmlView
                 Add(child, id);
         }
 
-        foreach (var child in document.GetAccessibilityTree().Root.ReadingChildren)
+        foreach (var child in after.Root.ReadingChildren)
             Add(child, AccessibilityNodeProvider.HostViewId);
 
         _a11yNodes = [.. nodes];
@@ -54,8 +58,42 @@ public sealed partial class HtmlView
         _a11yIds = ids;
         _accessibilityFocus = focusedId is not null && nodes.FindIndex(n => n.Id == focusedId) is >= 0 and var kept ? kept + 1 : AccessibilityNodeProvider.HostViewId;
         ImportantForAccessibility = ImportantForAccessibility.Yes;
-        if (IsAccessibilityEnabled())
-            NotifySubtreeAccessibilityStateChanged(this, this, ContentChangeTypes.Subtree);
+        if (!IsAccessibilityEnabled() || diff is { IsEmpty: true })
+            return;
+
+        // What changed decides what is told: the whole subtree for a first tree, a part that came or went, or else only the kinds of change that
+        // happened, and for a live region that changed an event from the region itself, which is what makes TalkBack read it.
+        var changeTypes = diff is null ? ContentChangeTypes.Subtree : (ContentChangeTypes)AccessibilityMapping.ContentChangeTypes(diff.Changes.Select(c => c.Kind));
+        NotifySubtreeAccessibilityStateChanged(this, this, changeTypes);
+        if (diff is null)
+            return;
+
+        foreach (var announcement in diff.Announcements)
+        {
+            if (nodes.FindIndex(n => n.Id == announcement.Region.Id) is >= 0 and var index)
+                SendContentChanged(index + 1, ContentChangeTypes.Text);
+        }
+    }
+
+    private AccessibilityTree? _accessibilityTree;
+
+    // A window-content-changed event from one part of the page: for a live region, the text it now holds.
+    private void SendContentChanged(int virtualViewId, ContentChangeTypes types)
+    {
+        if (Parent is null || AccessibilityEvent.Obtain(EventTypes.WindowContentChanged) is not { } accessibilityEvent)
+            return;
+
+        accessibilityEvent.SetSource(this, virtualViewId);
+        accessibilityEvent.PackageName = Context?.PackageName;
+        accessibilityEvent.ContentChangeTypes = types;
+        if (virtualViewId <= _a11yNodes.Length)
+        {
+            var node = _a11yNodes[virtualViewId - 1];
+            accessibilityEvent.ClassName = AccessibilityMapping.ClassName(node.Role);
+            accessibilityEvent.Text?.Add(new Java.Lang.String(node.Text));
+        }
+
+        Parent.RequestSendAccessibilityEvent(this, accessibilityEvent);
     }
 
     private bool IsAccessibilityEnabled() =>

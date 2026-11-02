@@ -38,6 +38,27 @@ internal static class AccessibilityMapping
             or AccessibilityRole.MenuItem or AccessibilityRole.MenuItemCheckBox or AccessibilityRole.MenuItemRadio or AccessibilityRole.Tab;
 
     /// <summary>The value of <c>AccessibilityNodeInfo.getLiveRegion()</c> for a live setting: none, polite or assertive.</summary>
+    /// <summary>
+    /// The <c>CONTENT_CHANGE_TYPE_*</c> bits of the window-content-changed event for the kinds of change a diff holds: a part that came or went changes the subtree, a name
+    /// changes its text, and a state or number changes its state description (API 30; earlier services read the text).
+    /// </summary>
+    public static int ContentChangeTypes(System.Collections.Generic.IEnumerable<AccessibilityChangeKind> kinds)
+    {
+        const int subtree = 1, text = 2, stateDescription = 64;
+        var types = 0;
+        foreach (var kind in kinds)
+        {
+            types |= kind switch
+            {
+                AccessibilityChangeKind.Added or AccessibilityChangeKind.Removed => subtree,
+                AccessibilityChangeKind.NameChanged or AccessibilityChangeKind.DescriptionChanged => text,
+                _ => stateDescription,
+            };
+        }
+
+        return types;
+    }
+
     public static int LiveRegion(LiveSetting live) => live switch
     {
         LiveSetting.Polite => 1,

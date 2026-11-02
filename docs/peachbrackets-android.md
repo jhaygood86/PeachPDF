@@ -76,7 +76,7 @@ with the class of the widget it is like (`Button`, `CheckBox`, `RadioButton`, `E
 (API 28 and later); check boxes, radio buttons and switches report their checked state; a disabled control is not enabled; expandable parts report
 expanded or collapsed (API 30 and later); live regions are announced; and a link or button is clickable (a link follows the link when TalkBack
 activates it, raising `LinkTapped`, as a tap does). Accessibility focus scrolls the node into view, and the host node scrolls forward and
-backward. The tree is rebuilt when a document loads or reflows. You can see the tree an accessibility service sees with
+backward. The tree is rebuilt when a document loads or reflows, and the view compares the new tree with the old one (`AccessibilityTreeDiff`) so a service is told only what changed: nothing when the tree is the same, the subtree when parts came or went, the text for a renamed part and the state description for a state or a number, and for a live region that changed a content-changed event from the region itself, which is what makes TalkBack read it. You can see the tree an accessibility service sees with
 `adb shell uiautomator dump`.
 
 **Touch exploration**: with TalkBack's touch exploration on, a finger moving over the page sends hover events for the part under it (the innermost node
