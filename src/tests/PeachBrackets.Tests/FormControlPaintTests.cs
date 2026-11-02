@@ -100,6 +100,17 @@ public class FormControlPaintTests
     }
 
     [Fact]
+    public async Task TheScreenLookWinsWhenFieldsAreAlsoCollected()
+    {
+        const string body = "<input value='HHHH' style='left:10pt;top:10pt;width:150pt;height:30pt;font-size:20pt;color:rgb(0,0,0)'>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles),
+            new HtmlDocumentOptions { PaintFormControls = true, CollectFormFields = true, Media = "screen" });
+        var canvas = await TestDocument.PaintAsync(context, document);
+
+        Assert.True(InkCount(canvas, 14, 14, 140, 22, IsDark) > 40, "the value is drawn although the field is also collected");
+    }
+
+    [Fact]
     public async Task WithoutTheOptionAControlIsTheBoxItAlwaysWas()
     {
         const string body = "<input type=checkbox checked style='left:10pt;top:10pt;width:40pt;height:40pt;accent-color:red'>"

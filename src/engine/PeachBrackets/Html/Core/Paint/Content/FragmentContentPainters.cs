@@ -35,10 +35,10 @@ namespace PeachBrackets.Html.Paint.Content
             // Only when interactive forms are enabled AND the box actually resolves to a field kind -
             // otherwise this falls through to the generic path, preserving the flag-off static box
             // rendering byte-for-byte (see FormFieldFragmentPainter's own doc comment).
+            // A host that shows the page draws the controls itself, whatever they are, and whether or not it also collects them as fields.
+            CssBoxFormField formField when formField.HtmlContainer?.PaintFormControls == true => ScreenFormPainter,
             CssBoxFormField formField when formField.HtmlContainer?.InteractiveForms == true
                 && FormFieldMapper.Classify(formField).Kind != FormFieldKind.None => FormFieldPainter,
-            // A host that shows the page draws the controls itself, whatever they are.
-            CssBoxFormField formField when formField.HtmlContainer?.PaintFormControls == true => ScreenFormPainter,
             _ => null,
         };
     }
