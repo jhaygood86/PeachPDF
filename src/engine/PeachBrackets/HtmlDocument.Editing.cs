@@ -214,6 +214,50 @@ public sealed partial class HtmlDocument
             region.Bounds.X + left + offset, region.Bounds.Y + top + Math.Max((contentHeight - lineHeight) / 2, 0), 1, lineHeight));
     }
 
+    /// <summary>
+    /// The position in the focused text field's text that a point on its page is nearest to - where a click puts the caret. Clicks left of the text
+    /// give 0, right of it the length, and a point is rounded to the nearest edge between two grapheme clusters.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <param name="pageIndex">the zero-based index of the page the point is on</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <returns>the position, or null when the focus is not on a text field or it is not on that page</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public int? GetEditIndexAt(Canvas measuringCanvas, int pageIndex, double x)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        if (EditableField() is not { } field || GetEditPlace(measuringCanvas, 0) is not { } origin || origin.PageIndex != pageIndex)
+            return null;
+
+        var text = field.GetAttribute("value", string.Empty);
+        var display = ScreenFormControlPainter.DisplayText(field, text);
+        var target = x - origin.Bounds.X;
+        var best = 0;
+        var bestDistance = double.MaxValue;
+        foreach (var index in BoundariesOf(text))
+        {
+            var distance = Math.Abs((ScreenFormControlPainter.OffsetOf(measuringCanvas, field, display, index) / _unitsPerPoint) - target);
+            if (distance < bestDistance)
+            {
+                best = index;
+                bestDistance = distance;
+            }
+        }
+
+        return best;
+    }
+
+    // Every place between two grapheme clusters, the two ends included.
+    private static IEnumerable<int> BoundariesOf(string text)
+    {
+        foreach (var start in StringInfo.ParseCombiningCharacters(text))
+            yield return start;
+
+        yield return text.Length;
+    }
+
     // The focused element, when it is a field whose text can be edited.
     private CssBox? EditableField()
     {

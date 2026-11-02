@@ -384,4 +384,36 @@ public class HtmlViewTests
 
         Assert.Equal((3, 2, true, true, true, "RowMajor", 2, 0, 5, 1, 0, 2, true, 1), facts);
     }
+
+    [Fact]
+    public async Task TypingEditsTheFocusedTextFieldAndAScreenReaderReadsAndSetsIt()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=name value='Ada' style='width:150pt'><input id=agree type=checkbox>");
+            view.StepFocus(true);
+            await view.FocusIdle;
+
+            var field = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.Edit);
+            var value = (IValueProvider)field.GetPattern(PatternInterface.Value);
+            var start = value.Value;
+
+            // Typed characters go in at the caret, which starts at the end; Backspace takes one off; Home moves the caret to the front.
+            view.TypeCharacter('m');
+            view.TypeCharacter('\ud83d');
+            view.TypeCharacter('\ude00');
+            var typed = value.Value;
+            view.HandleEditKey(Windows.System.VirtualKey.Back);
+            view.HandleEditKey(Windows.System.VirtualKey.Home);
+            view.TypeCharacter('>');
+            var edited = value.Value;
+            var control = view.TypeCharacter('\b');
+
+            value.SetValue("Lin");
+            await Task.Delay(300);
+            return (start, typed, edited, control, value.Value, value.IsReadOnly);
+        });
+
+        Assert.Equal(("Ada", "Adam😀", ">Adam", false, "Lin", false), facts);
+    }
 }

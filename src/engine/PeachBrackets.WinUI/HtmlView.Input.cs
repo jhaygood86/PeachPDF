@@ -36,6 +36,7 @@ public sealed partial class HtmlView
         _canvas.Holding += OnHolding;
         KeyDown += OnKeyDown;
         WireFocus();
+        WireTextInput();
     }
 
     // Where a position of the canvas (device-independent pixels) is on the pages, in points from the page's top-left.
@@ -105,7 +106,7 @@ public sealed partial class HtmlView
             if (wasSelecting)
                 _document!.Selection.RemoveAllRanges();
 
-            if (!ActivateControlAt(page, x, y))
+            if (!FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y))
                 FollowLinkAt(page, x, y);
         }
     }
@@ -145,6 +146,12 @@ public sealed partial class HtmlView
     private void OnKeyDown(object sender, KeyRoutedEventArgs e)
     {
         if (HandleFocusKey(e))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (HandleEditKey(e.Key))
         {
             e.Handled = true;
             return;
