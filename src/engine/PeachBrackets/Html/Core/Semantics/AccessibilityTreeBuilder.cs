@@ -210,6 +210,7 @@ namespace PeachBrackets.Html.Semantics
 
             ApplyStates(node, box, tag, role, context);
             ReadStructureAttributes(node, tag);
+            ReadRange(node, tag, role);
             node.Name = ComputeName(box, tag, role, out var nameFromTitle);
             node.Description = ComputeDescription(box, tag, nameFromTitle);
             parent.AddChild(node);

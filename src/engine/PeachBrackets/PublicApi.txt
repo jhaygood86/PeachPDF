@@ -23,6 +23,9 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property Boolean Required { get; }
   property Boolean? Expanded { get; }
   property Boolean? Selected { get; }
+  property Double ValueMax { get; }
+  property Double ValueMin { get; }
+  property Double? Value { get; }
   property IEnumerable<AccessibilityNode> ReadingChildren { get; }
   property IReadOnlyList<AccessibilityBounds> Bounds { get; }
   property IReadOnlyList<AccessibilityNode> Children { get; }
@@ -58,6 +61,7 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property String TagName { get; }
   property String Text { get; }
   property String Uri { get; }
+  property String ValueText { get; }
   property ToggleState Checked { get; }
   property ToggleState Pressed { get; }
 PeachBrackets.Accessibility.AccessibilityRole : enum Int32

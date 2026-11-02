@@ -242,6 +242,20 @@ public sealed partial class HtmlView
                 info.SetCollectionItemInfo(AccessibilityNodeInfo.CollectionItemInfo.Obtain(node.PositionInSet - 1, 1, 0, 1, false, node.Selected ?? false));
             }
 
+            // A progress bar, meter or slider: where it stands in its range, which TalkBack says as a percentage and a slider can be moved through.
+            if (node.Role is AccessibilityRole.ProgressBar or AccessibilityRole.Meter or AccessibilityRole.Slider or AccessibilityRole.ScrollBar or AccessibilityRole.SpinButton)
+            {
+                if (node.Value is { } current)
+                {
+                    info.SetRangeInfo(AccessibilityNodeInfo.RangeInfo.Obtain(RangeType.Float, (float)node.ValueMin, (float)node.ValueMax, (float)current));
+                    if (node.ValueText.Length > 0 && OperatingSystem.IsAndroidVersionAtLeast(30))
+                        info.StateDescription = node.ValueText;
+                }
+
+                if (node.Role == AccessibilityRole.Slider && !node.ReadOnly && !node.Disabled)
+                    info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionSetProgress);
+            }
+
             if (AccessibilityMapping.IsCheckable(node.Role))
             {
                 info.Checkable = true;
@@ -305,6 +319,9 @@ public sealed partial class HtmlView
                 return false;
 
             var node = view._a11yNodes[index];
+            if ((int)action == AccessibilityNodeInfo.AccessibilityAction.ActionSetProgress?.Id && node.Role == AccessibilityRole.Slider && !node.ReadOnly && arguments is not null)
+                return view.SetRangeValue(node, arguments.GetFloat(AccessibilityNodeInfo.ActionArgumentProgressValue));
+
             switch (action)
             {
                 case Action.AccessibilityFocus:
