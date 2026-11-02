@@ -85,8 +85,15 @@ API (it needs a desktop session).
 The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
 and range are drawn from their own CSS like the rest of the page; no XAML widget is placed over it. A click on a check box or radio button toggles it
 (`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. The UI Automation peer of a check box, radio button or switch supports
-the Toggle pattern, which does the same and reports the state. Typing into a text field, picking from a drop-down and moving a range are not handled
-yet: they need the Windows text services bridge.
+the Toggle pattern, which does the same and reports the state.
+
+A click on a text field gives it the focus and puts the caret where the click was; the field shows its selection, the text an input method is composing
+and a blinking caret (at the system's blink rate). Typed characters go in at the caret, and the keys of a text box work: Left, Right, Home and End (with
+Shift to select, with Ctrl to move by word), Backspace and Delete (with Ctrl by word), Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V (a paste into a one-line field
+turns line breaks into spaces, and a password is never copied). A text field also has the Value pattern, so Narrator reads its text and a screen reader
+can set it. The view asks Windows for a text service context (`CoreTextEditContext`) so an input method, handwriting, dictation and the emoji panel can
+put text in a field and place their windows beside the caret; where the window does not offer one, typed characters arrive as the view's own
+character events and everything but composition still works. Picking from a drop-down and moving a range are not handled yet.
 
 ## Limits of this version
 

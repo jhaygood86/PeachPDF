@@ -164,7 +164,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -235,6 +235,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     {
         PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
+        PatternInterface.Value when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => this,
         PatternInterface.Grid or PatternInterface.Table when HtmlViewLogic.IsGridRole(_node.Role) => this,
         PatternInterface.GridItem or PatternInterface.TableItem when HtmlViewLogic.IsGridCellRole(_node.Role) && HtmlViewLogic.TableOf(_node) is not null => this,
         _ => null,
@@ -256,6 +257,13 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     public Microsoft.UI.Xaml.Automation.ToggleState ToggleState => HtmlViewLogic.ToToggleState(_view.CurrentNode(_node).Checked);
 
     public void Toggle() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateControl(_node));
+
+    // A text field, as a screen reader reads and sets it.
+    public string Value => _view.FieldValue(_view.CurrentNode(_node)) ?? string.Empty;
+
+    public bool IsReadOnly => _view.CurrentNode(_node).ReadOnly || _node.Disabled;
+
+    public void SetValue(string value) => _view.DispatcherQueue.TryEnqueue(() => _view.SetFieldValue(_view.CurrentNode(_node), value));
 
     // ---- tables: the table as a grid, a cell as an item of it --------------------------------------------------------------------------
 
