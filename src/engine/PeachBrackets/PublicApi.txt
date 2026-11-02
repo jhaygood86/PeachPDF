@@ -1,3 +1,14 @@
+PeachBrackets.Accessibility.AccessibilityAnnouncement : sealed class
+  ctor(String Text, LiveSetting Politeness, AccessibilityNode Region)
+  method AccessibilityAnnouncement <Clone>$()
+  method Void Deconstruct(out String Text, out LiveSetting Politeness, out AccessibilityNode Region)
+  method virtual Boolean Equals(AccessibilityAnnouncement other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AccessibilityNode Region { get; init; }
+  property LiveSetting Politeness { get; init; }
+  property String Text { get; init; }
 PeachBrackets.Accessibility.AccessibilityBounds : struct
   ctor(Int32 PageIndex, Rect Bounds)
   method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
@@ -7,6 +18,24 @@ PeachBrackets.Accessibility.AccessibilityBounds : struct
   method virtual String ToString()
   property Int32 PageIndex { get; init; }
   property Rect Bounds { get; init; }
+PeachBrackets.Accessibility.AccessibilityChange : sealed class
+  ctor(AccessibilityChangeKind Kind, AccessibilityNode Node, String Property = null)
+  method AccessibilityChange <Clone>$()
+  method Void Deconstruct(out AccessibilityChangeKind Kind, out AccessibilityNode Node, out String Property)
+  method virtual Boolean Equals(AccessibilityChange other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AccessibilityChangeKind Kind { get; init; }
+  property AccessibilityNode Node { get; init; }
+  property String Property { get; init; }
+PeachBrackets.Accessibility.AccessibilityChangeKind : enum Int32
+  Added = 0
+  DescriptionChanged = 3
+  NameChanged = 2
+  Removed = 1
+  StateChanged = 5
+  ValueChanged = 4
 PeachBrackets.Accessibility.AccessibilityNode : sealed class
   method IEnumerable<AccessibilityNode> DescendantsAndSelf()
   method virtual String ToString()
@@ -155,6 +184,11 @@ PeachBrackets.Accessibility.AccessibilityTree : sealed class
   property AccessibilityNode Root { get; }
   property IReadOnlyList<AccessibilityNode> FocusOrder { get; }
   property IReadOnlyList<AccessibilityNode> Nodes { get; }
+PeachBrackets.Accessibility.AccessibilityTreeDiff : sealed class
+  method static AccessibilityTreeDiff Compare(AccessibilityTree before, AccessibilityTree after)
+  property Boolean IsEmpty { get; }
+  property IReadOnlyList<AccessibilityAnnouncement> Announcements { get; }
+  property IReadOnlyList<AccessibilityChange> Changes { get; }
 PeachBrackets.Accessibility.FocusMoveResult : struct
   ctor(AccessibilityNode Node, Boolean LeftDocument, UpdateResult Update)
   method Void Deconstruct(out AccessibilityNode Node, out Boolean LeftDocument, out UpdateResult Update)

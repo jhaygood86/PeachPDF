@@ -179,7 +179,9 @@ namespace PeachBrackets.Html.Semantics
 
             // Something with no role of its own, or one that is only there to look like something, gives its content to what it is in; so does
             // an element that is not shown (its children may still be).
-            if (hidden || role is AccessibilityRole.Generic or AccessibilityRole.Presentation)
+            // An element that says it is a live region keeps its node whatever its role, so a change in it can be told to the reader.
+            var keepsLiveRegion = role == AccessibilityRole.Generic && tag.TryGetAttribute("aria-live")?.Trim().ToLowerInvariant() is "polite" or "assertive";
+            if (hidden || (role is AccessibilityRole.Generic or AccessibilityRole.Presentation && !keepsLiveRegion))
             {
                 foreach (var child in Children(box))
                     Visit(child, inner, parent);
