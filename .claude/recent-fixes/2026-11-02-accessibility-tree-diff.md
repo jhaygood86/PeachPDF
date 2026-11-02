@@ -1,0 +1,7 @@
+# Comparing two accessibility trees
+
+`AccessibilityTreeDiff` (public, `PeachBrackets.Accessibility`) is the one place that decides what changed and what a live region should say, so the WinUI and Android hosts announce the same things instead of each re-deriving it. It matches nodes by `Id` and reports `Added`/`Removed`/`NameChanged`/`DescriptionChanged`/`ValueChanged`/`StateChanged(property)`; the announcements are a second pass over the same result.
+
+- **A `<div aria-live>` was not in the tree at all.** Generic elements are pruned and give their content to the parent, and the live attribute did not stop that, so the diff found no region to speak for. Found by the first test, which printed a tree with only a document and a text node. `AccessibilityTreeBuilder.Visit` now keeps a generic element whose `aria-live` is `polite` or `assertive`.
+- **Announcement rules.** A region that is new in the second tree says nothing (a live region has to exist before its content changes for a reader to be listening); a busy one waits; a region inside another is spoken with the outer one; a non-atomic region says only what is new (an added part's whole text once, or a renamed text node's new text) and an atomic one says all of it, and only when something below it changed.
+- **Not done:** the hosts do not use it yet (WinUI `LiveRegionChanged`/`StructureChanged`, Android content-change types and `announceForAccessibility`), and the roles that imply a live region (`status`, `alert`, `log`) rely on the tree's own `Live` for them.

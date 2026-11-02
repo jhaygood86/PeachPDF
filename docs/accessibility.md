@@ -53,6 +53,16 @@ slider, `type=number` a spin button, `select` a combo box or, with `multiple`, a
 
 A `role` attribute replaces that. When it names several roles the first one that exists is used, as WAI-ARIA lets an author give a fallback.
 
+## Changes and live regions
+
+`AccessibilityTreeDiff.Compare(before, after)` says what differs between two trees of the same document, matching parts by `Id`: parts that came or
+went, a changed name, description, number or value text (`ValueChanged`), and a changed state (`checked`, `pressed`, `expanded`, `selected`, `disabled`,
+`required`, `readonly`, `invalid`, `busy`, `current`, `modal`). A host uses it after a form change or a reflow to raise the platform's change events for
+the parts that changed instead of replacing the whole tree. It also says what a screen reader should say for a live region that changed
+(`aria-live="polite"` or `"assertive"`, or the roles that imply one): the content that is new in it, or all of it when the region is
+`aria-atomic`. A region that is `aria-busy`, one that is new in the second tree, and a region inside another live region (which is spoken with it) say
+nothing. An element that gives `aria-live` keeps a node of its own, a generic one, whatever its role.
+
 ## Names
 
 The name of a node is the first of these that gives one (the [Accessible Name and Description Computation](https://www.w3.org/TR/accname-1.2/)):
