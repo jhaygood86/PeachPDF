@@ -69,9 +69,8 @@ namespace PeachBrackets.Html.Paint.Content
             else
             {
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
-                var value = box.GetAttribute("value", string.Empty);
-                if (type == "password")
-                    value = new string('•', value.Length);
+                var rawValue = box.GetAttribute("value", string.Empty);
+                var value = DisplayText(box, rawValue);
 
                 if (value.Length > 0)
                 {
@@ -82,6 +81,8 @@ namespace PeachBrackets.Html.Paint.Content
                     var style = box.ResolvedPlaceholderStyle ?? box;
                     PaintText(g, box, rect, placeholder, centered: false, style.ActualColor, disabled);
                 }
+
+                PaintEditing(g, box, rect, value);
             }
 
             // Like any replaced control, it takes an outline (css-ui-4 section 3.1), painted after its look.
@@ -89,6 +90,59 @@ namespace PeachBrackets.Html.Paint.Content
             var overflowClipRecorded = painter.PushOverflowClip(overflowClip, overflowClipCurve);
             painter.PaintReplacedOutline(g, box, rect);
             painter.PopOverflowClip(overflowClipRecorded);
+        }
+
+        /// <summary>What a text field shows for its value: the value, or a bullet for each character of a password.</summary>
+        internal static string DisplayText(CssBox box, string value) =>
+            box.GetAttribute("type", "text").Equals("password", StringComparison.OrdinalIgnoreCase) ? new string('•', value.Length) : value;
+
+        /// <summary>How far from the start of the text a position is, in the field's font: the width of what comes before it.</summary>
+        internal static double OffsetOf(Canvas g, CssBox box, string display, int index) =>
+            index <= 0 || display.Length == 0 ? 0 : g.MeasureString(display[..Math.Min(index, display.Length)], box.ActualFont).Width;
+
+        // The selection, the text an input method is composing, and the caret of the text field that has the focus.
+        private static void PaintEditing(Canvas g, CssBox box, Rect rect, string display)
+        {
+            var ordinal = box.HtmlTag!.SourceOrdinal;
+            if (box.HtmlContainer is not { } container || container.Interaction?.Focused != ordinal || box.HtmlTag.HasAttribute("disabled"))
+                return;
+
+            var session = container.FormEdit;
+            var owned = session.Ordinal == ordinal;
+            var start = owned ? Math.Clamp(Math.Min(session.Start, session.End), 0, display.Length) : display.Length;
+            var end = owned ? Math.Clamp(Math.Max(session.Start, session.End), 0, display.Length) : display.Length;
+            var content = ContentRect(box, rect);
+            if (content is not { Width: > 0, Height: > 0 })
+                return;
+
+            var font = box.ActualFont;
+            var top = content.Y + Math.Max((content.Height - font.Height) / 2, 0);
+            double X(int index) => content.X + Math.Min(OffsetOf(g, box, display, index), content.Width);
+
+            g.PushClip(content);
+            if (start != end)
+            {
+                using var highlight = g.GetSolidBrush(PaintColor.FromArgb(90, 0, 120, 215));
+                g.DrawRectangle(highlight, X(start), top, Math.Max(X(end) - X(start), 1), font.Height);
+            }
+
+            if (owned && session.CompositionStart >= 0 && session.CompositionEnd > session.CompositionStart)
+            {
+                var underline = g.GetPen(box.ActualColor);
+                underline.Width = Math.Max(font.Height / 14, 1);
+                var y = top + font.Height - underline.Width;
+                g.DrawLine(underline, X(Math.Min(session.CompositionStart, display.Length)), y, X(Math.Min(session.CompositionEnd, display.Length)), y);
+            }
+
+            if (start == end && session.CaretVisible)
+            {
+                var caret = g.GetPen(box.ActualColor);
+                caret.Width = Math.Max(font.Height / 14, 1);
+                var x = X(start) + (caret.Width / 2);
+                g.DrawLine(caret, x, top, x, top + font.Height);
+            }
+
+            g.PopClip();
         }
 
         private static Rect ContentRect(CssBox box, Rect rect) => new(

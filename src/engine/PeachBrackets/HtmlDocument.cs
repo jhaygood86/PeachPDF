@@ -1167,6 +1167,7 @@ public sealed partial class HtmlDocument : IDisposable
         _container.CssPageSize = null;
 
         await _container.ReparseAsync();
+        ReapplyFormChanges();
 
         var resolvedSheet = _container.CssPageSize ?? sheet;
         var content = new Size(

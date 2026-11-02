@@ -394,6 +394,7 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElementAt(TextPosition position)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
   method FormControlState? GetFormState(DocumentElement element)
+  method FormEditState? GetEditState()
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
@@ -416,13 +417,20 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
+  method TextEditPlace? GetEditPlace(Canvas measuringCanvas, Int32 index = -1)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
   method TextRange? ApplyTextFragmentDirective(String directive)
   method TextRange? GetBlockAt(TextPosition position)
   method TextRange? GetWordAt(TextPosition position)
   method UpdateResult Activate(DocumentElement element)
+  method UpdateResult DeleteEditText(Boolean backward)
+  method UpdateResult InsertText(String text)
+  method UpdateResult ReplaceEditText(Int32 start, Int32 end, String text, Int32 caret = -1)
+  method UpdateResult SetCaretVisible(Boolean visible)
   method UpdateResult SetChecked(DocumentElement element, Boolean isChecked)
+  method UpdateResult SetComposition(Int32 start, Int32 end)
+  method UpdateResult SetEditSelection(Int32 start, Int32 end)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method UpdateResult SetValue(DocumentElement element, String value)
   method Void ClearHighlights()
@@ -691,6 +699,30 @@ PeachBrackets.Updates.FormControlState : struct
   property String Name { get; init; }
   property String Type { get; init; }
   property String Value { get; init; }
+PeachBrackets.Updates.FormEditState : struct
+  ctor(String Text, Int32 SelectionStart, Int32 SelectionEnd, Int32 CompositionStart, Int32 CompositionEnd, String Type, Int32 MaxLength, Boolean ReadOnly)
+  method Void Deconstruct(out String Text, out Int32 SelectionStart, out Int32 SelectionEnd, out Int32 CompositionStart, out Int32 CompositionEnd, out String Type, out Int32 MaxLength, out Boolean ReadOnly)
+  method virtual Boolean Equals(FormEditState other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean ReadOnly { get; init; }
+  property Int32 CompositionEnd { get; init; }
+  property Int32 CompositionStart { get; init; }
+  property Int32 MaxLength { get; init; }
+  property Int32 SelectionEnd { get; init; }
+  property Int32 SelectionStart { get; init; }
+  property String Text { get; init; }
+  property String Type { get; init; }
+PeachBrackets.Updates.TextEditPlace : struct
+  ctor(Int32 PageIndex, Rect Bounds)
+  method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(TextEditPlace other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Int32 PageIndex { get; init; }
+  property Rect Bounds { get; init; }
 PeachBrackets.Updates.TextEditResult : struct
   ctor(Boolean Applied, String Reason, Int32 PagesBefore, Int32 PagesAfter, Int32? FirstDirtyPage, IReadOnlyList<DirtyRegion> DirtyRegions, TextPosition? Caret, DocumentElement Block = null, Int32? ResumedFromPage = null)
   method Void Deconstruct(out Boolean Applied, out String Reason, out Int32 PagesBefore, out Int32 PagesAfter, out Int32? FirstDirtyPage, out IReadOnlyList<DirtyRegion> DirtyRegions, out TextPosition? Caret, out DocumentElement Block, out Int32? ResumedFromPage)
