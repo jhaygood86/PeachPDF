@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
+using Microsoft.UI.Xaml.Automation.Text;
 
 namespace PeachBrackets.WinUI.UITests;
 
@@ -523,5 +524,117 @@ public class HtmlViewTests
 
         Assert.Equal(0, facts.anchor);
         Assert.Equal((0, facts.Length), (facts.SelectionStart, facts.SelectionEnd));
+    }
+
+    [Fact]
+    public async Task TheDocumentCanBeReadByWordAndParagraphThroughTheTextPattern()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<h1>Title here</h1><p>First paragraph.</p><input id=f aria-label=name value=\"typed in\">");
+            var document = DocumentPeer(view)!;
+            var text = (ITextProvider)document.GetPattern(PatternInterface.Text);
+            var range = text.DocumentRange;
+            var all = range.GetText(-1);
+
+            var word = text.DocumentRange;
+            word.MoveEndpointByRange(TextPatternRangeEndpoint.End, word, TextPatternRangeEndpoint.Start);
+            word.ExpandToEnclosingUnit(TextUnit.Word);
+            var firstWord = word.GetText(-1);
+            word.Move(TextUnit.Word, 1);
+            var secondWord = word.GetText(-1);
+
+            var line = text.DocumentRange;
+            line.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Paragraph, -5);
+            line.ExpandToEnclosingUnit(TextUnit.Paragraph);
+            var firstParagraph = line.GetText(-1);
+            line.GetBoundingRectangles(out var rectangles);
+
+            var field = document.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.Edit);
+            var fieldText = (ITextProvider)field.GetPattern(PatternInterface.Text);
+            var typed = fieldText.DocumentRange.GetText(-1);
+            return (all, firstWord, secondWord, firstParagraph, rectangles.Length % 4, text.SupportedTextSelection, typed);
+        });
+
+        Assert.Contains("Title here", facts.all);
+        Assert.Contains("First paragraph.", facts.all);
+        Assert.Equal("Title ", facts.firstWord);
+        Assert.Equal("here\n", facts.secondWord);
+        Assert.Equal("Title here\n", facts.firstParagraph);
+        Assert.Equal(0, facts.Item5);
+        Assert.Equal(SupportedTextSelection.None, facts.Item6);
+        Assert.Equal("typed in\n", facts.typed);
+    }
+
+    [Fact]
+    public async Task TheTextPatternFindsComparesAndLocatesRanges()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<h1>Title here</h1><p>First paragraph.</p>");
+            var document = (HtmlViewAutomationPeer)DocumentPeer(view)!;
+            var text = (ITextProvider)document.GetPattern(PatternInterface.Text);
+            var all = text.DocumentRange;
+
+            var found = all.FindText("paragraph", false, false);
+            var foundBack = all.FindText("TITLE", true, true);
+            var missing = all.FindText("zzz", false, false);
+
+            var clone = all.Clone();
+            var same = all.Compare(clone);
+            var order = all.CompareEndpoints(TextPatternRangeEndpoint.Start, found, TextPatternRangeEndpoint.Start);
+            clone.MoveEndpointByRange(TextPatternRangeEndpoint.Start, found, TextPatternRangeEndpoint.Start);
+            clone.MoveEndpointByRange(TextPatternRangeEndpoint.End, found, TextPatternRangeEndpoint.End);
+            var narrowed = clone.GetText(-1);
+            var wider = found.Clone();
+            wider.MoveEndpointByRange(TextPatternRangeEndpoint.Start, all, TextPatternRangeEndpoint.Start);
+            var widerText = wider.GetText(-1);
+            var backwards = found.Clone();
+            backwards.MoveEndpointByRange(TextPatternRangeEndpoint.End, all, TextPatternRangeEndpoint.Start);
+            var collapsed = backwards.GetText(-1);
+
+            var enclosing = found.GetEnclosingElement();
+            var children = found.GetChildren();
+            found.ScrollIntoView(true);
+            found.Select();
+            found.AddToSelection();
+            found.RemoveFromSelection();
+            var attribute = found.GetAttributeValue(0);
+            var attributeRange = found.FindAttribute(0, 0, false);
+            found.GetBoundingRectangles(out var rectangles);
+
+            var visible = text.GetVisibleRanges();
+            var bounds = document.GetChildren()[0].GetBoundingRectangle();
+            var atPoint = text.RangeFromPoint(new Windows.Foundation.Point(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2)));
+            var outside = text.RangeFromPoint(new Windows.Foundation.Point(-5000, -5000));
+            var fromChild = text.RangeFromChild(document.ProviderOf(document.GetChildren()[0])!);
+            var unknown = text.RangeFromChild(document.ProviderOf(document)!);
+            var emptyView = (ITextProvider)new HtmlTextProvider(document, view, view.AccessibilityTree!.Root);
+
+            return (found.GetText(-1), foundBack.GetText(-1), missing, same, order, narrowed, widerText, collapsed, enclosing is not null,
+                children.Length, attribute, attributeRange, rectangles.Length, visible.Length, atPoint.GetText(-1), outside.GetText(-1), fromChild.GetText(-1),
+                unknown.GetText(-1), text.GetSelection().Length, emptyView.DocumentRange is not null);
+        });
+
+        Assert.Equal("paragraph", facts.Item1);
+        Assert.Equal("Title", facts.Item2);
+        Assert.Null(facts.missing);
+        Assert.True(facts.same);
+        Assert.True(facts.order < 0);
+        Assert.Equal("paragraph", facts.narrowed);
+        Assert.Contains("Title here", facts.widerText);
+        Assert.Equal(string.Empty, facts.collapsed);
+        Assert.True(facts.Item9);
+        Assert.Equal(0, facts.Item10);
+        Assert.Null(facts.attribute);
+        Assert.Null(facts.attributeRange);
+        Assert.True(facts.Item13 > 0 && facts.Item13 % 4 == 0);
+        Assert.True(facts.Item14 > 0);
+        Assert.False(string.IsNullOrEmpty(facts.Item15));
+        Assert.Equal(string.Empty, facts.Item16);
+        Assert.Equal("Title here", facts.Item17);
+        Assert.Equal(string.Empty, facts.Item18);
+        Assert.Equal(0, facts.Item19);
+        Assert.True(facts.Item20);
     }
 }
