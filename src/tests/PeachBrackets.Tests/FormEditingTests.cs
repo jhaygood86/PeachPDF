@@ -273,4 +273,24 @@ public class FormEditingTests
         Assert.Equal("Grace", document.GetFormState(document.GetElement("name")!)!.Value.Value);
         Assert.True(document.GetFormState(document.GetElement("agree")!)!.Value.Checked);
     }
+
+    [Fact]
+    public async Task AClickIsRoundedToTheNearestEdgeBetweenCharacters()
+    {
+        var (_, document, measuring) = await LoadAsync();
+        await Focus(document, measuring, "name");
+        var start = document.GetEditPlace(measuring, 0)!.Value.Bounds.X;
+        var one = document.GetEditPlace(measuring, 1)!.Value.Bounds.X;
+        var two = document.GetEditPlace(measuring, 2)!.Value.Bounds.X;
+
+        Assert.Equal(0, document.GetEditIndexAt(measuring, 0, start - 30));
+        Assert.Equal(0, document.GetEditIndexAt(measuring, 0, start + ((one - start) * 0.2)));
+        Assert.Equal(1, document.GetEditIndexAt(measuring, 0, start + ((one - start) * 0.8)));
+        Assert.Equal(2, document.GetEditIndexAt(measuring, 0, two + 1));
+        Assert.Equal(3, document.GetEditIndexAt(measuring, 0, 5000));
+        Assert.Null(document.GetEditIndexAt(measuring, 1, start));
+
+        await Focus(document, measuring, "agree");
+        Assert.Null(document.GetEditIndexAt(measuring, 0, start));
+    }
 }
