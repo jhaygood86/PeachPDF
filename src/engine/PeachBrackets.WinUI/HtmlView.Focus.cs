@@ -173,6 +173,10 @@ public sealed partial class HtmlView
     // When the focus goes to something outside the view, the page keeps none.
     private void OnLostFocus(object sender, RoutedEventArgs e)
     {
+        // The menu of a text field is a popup: while it is open the field keeps its focus.
+        if (_fieldMenuOpen)
+            return;
+
         if (XamlRoot is { } root && FocusManager.GetFocusedElement(root) is DependencyObject focused && IsInside(focused))
             return;
 

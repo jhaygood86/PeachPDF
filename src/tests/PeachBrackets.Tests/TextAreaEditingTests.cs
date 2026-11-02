@@ -141,4 +141,32 @@ public class TextAreaEditingTests
 
         Assert.Equal(0, Count(canvas, 14, 14, 190, 80, IsBlueish));
     }
+
+    [Fact]
+    public async Task ATallValueScrollsToKeepTheCaretInView()
+    {
+        var lf = ((char)10).ToString();
+        var body = "<textarea id=t style='height:56pt'>" + string.Join(lf, "HHHH", "", "", "", "", "HHHH") + "</textarea>";
+        var (context, document, measuring) = await LoadAsync(body);
+
+        var atEnd = await TestDocument.PaintAsync(context, document);
+        var endPlace = document.GetEditPlace(measuring)!.Value;
+        document.SetEditSelection(0, 0);
+        var atStart = await TestDocument.PaintAsync(context, document);
+        var startPlace = document.GetEditPlace(measuring)!.Value;
+
+        var dark = ((byte R, byte G, byte B, byte A) p) => p.R < 100 && p.G < 100 && p.B < 100;
+        // The caret is at the end: the first line has scrolled out and the last shows. At the start it is the other way round.
+        Assert.Equal(0, Count(atEnd, 14, 12, 150, 22, dark));
+        Assert.True(Count(atEnd, 14, 12, 150, 56, dark) > 50);
+        Assert.True(Count(atStart, 14, 12, 150, 22, dark) > 50);
+        Assert.True(endPlace.Bounds.Y >= 10 && endPlace.Bounds.Y + endPlace.Bounds.Height <= 70);
+        Assert.True(startPlace.Bounds.Y < endPlace.Bounds.Y);
+
+        // A point on the last line (which is scrolled into view) picks a position on it, not on the first.
+        document.SetEditSelection(13, 13);
+        await TestDocument.PaintAsync(context, document);
+        var place = document.GetEditPlace(measuring, 11)!.Value;
+        Assert.True(document.GetEditIndexAt(measuring, place.PageIndex, place.Bounds.X, place.Bounds.Y + 2) >= 9);
+    }
 }

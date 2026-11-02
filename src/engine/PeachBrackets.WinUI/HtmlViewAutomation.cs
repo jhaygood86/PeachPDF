@@ -20,6 +20,21 @@ public sealed partial class HtmlView
     /// <summary>What changed in the last refresh of the tree, for the tests: null when there was no tree before it.</summary>
     internal AccessibilityTreeDiff? LastAccessibilityDiff { get; private set; }
 
+    /// <summary>
+    /// Shows a change an application made to the document itself - through its text-editing and style-setting methods - which the view cannot see: it repaints what changed, and tells a screen reader what a live region (<c>aria-live</c>) now says and what
+    /// else about the page changed.
+    /// </summary>
+    /// <param name="result">what the document returned for the change</param>
+    public void ApplyUpdate(PeachBrackets.Updates.UpdateResult result)
+    {
+        if (_document is not { } document)
+            return;
+
+        Repaint(result);
+        if (result.Applied)
+            RefreshAccessibility(document);
+    }
+
     // Called when a document has laid out: the tree a screen reader walks is rebuilt from it.
     internal void RefreshAccessibility(HtmlDocument document)
     {

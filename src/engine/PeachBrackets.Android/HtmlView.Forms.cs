@@ -33,6 +33,17 @@ public sealed partial class HtmlView
     private static bool IsControl(DocumentElement element) =>
         element.TagName.Equals("input", StringComparison.OrdinalIgnoreCase) || element.TagName.Equals("select", StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Shows a change an application made to the document itself - through its text-editing and style-setting methods - which the view cannot see: it repaints, and tells an accessibility service what a live region (<c>aria-live</c>) now says and what
+    /// else about the page changed.
+    /// </summary>
+    /// <param name="result">what the document returned for the change</param>
+    public void ApplyUpdate(UpdateResult result)
+    {
+        if (_document is { } document)
+            AfterControlChange(document, result);
+    }
+
     private void AfterControlChange(HtmlDocument document, UpdateResult result)
     {
         if (!result.Applied)

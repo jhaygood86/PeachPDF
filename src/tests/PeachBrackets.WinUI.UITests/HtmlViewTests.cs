@@ -517,7 +517,7 @@ public class HtmlViewTests
             await Task.Delay(500);
             await view.FocusIdle;
             var anchor = view.FieldAnchor;
-            await view.ExtendFieldSelectionAsync(view.Document, 0, bounds.X + bounds.Width - 1, anchor ?? 0);
+            await view.ExtendFieldSelectionAsync(view.Document, 0, bounds.X + bounds.Width - 1, bounds.Y + (bounds.Height / 2), anchor ?? 0);
             var state = view.Document.GetEditState()!.Value;
             return (anchor, state.SelectionStart, state.SelectionEnd, state.Text.Length);
         });
@@ -562,7 +562,7 @@ public class HtmlViewTests
         Assert.Equal("here\n", facts.secondWord);
         Assert.Equal("Title here\n", facts.firstParagraph);
         Assert.Equal(0, facts.Item5);
-        Assert.Equal(SupportedTextSelection.None, facts.Item6);
+        Assert.Equal(SupportedTextSelection.Single, facts.Item6);
         Assert.Equal("typed in\n", facts.typed);
     }
 
@@ -626,7 +626,7 @@ public class HtmlViewTests
         Assert.Equal(string.Empty, facts.collapsed);
         Assert.True(facts.Item9);
         Assert.Equal(0, facts.Item10);
-        Assert.Null(facts.attribute);
+        Assert.Equal(Microsoft.UI.Xaml.DependencyProperty.UnsetValue, facts.attribute);
         Assert.Null(facts.attributeRange);
         Assert.True(facts.Item13 > 0 && facts.Item13 % 4 == 0);
         Assert.True(facts.Item14 > 0);
@@ -636,5 +636,179 @@ public class HtmlViewTests
         Assert.Equal(string.Empty, facts.Item18);
         Assert.Equal(0, facts.Item19);
         Assert.True(facts.Item20);
+    }
+
+    [Fact]
+    public async Task ATextAreaTakesEnterAndMovesByLineWithTheArrowKeys()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<textarea id=t style=\"width:200px;height:100px;font-size:16px\">one" + (char)10 + "two</textarea>");
+            var bounds = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "t").Bounds[0].Bounds;
+            view._fieldPressed = true;
+            Assert.True(view.FocusTextFieldAt(0, bounds.X + 3, bounds.Y + 3));
+            await Task.Delay(500);
+            await view.FocusIdle;
+
+            var steps = new List<(int Start, int End, string Text)>();
+            void Note() { var s = view.Document!.GetEditState()!.Value; steps.Add((s.SelectionStart, s.SelectionEnd, s.Text)); }
+            Note();
+            view.HandleEditKey(Windows.System.VirtualKey.Down);
+            Note();
+            view.HandleEditKey(Windows.System.VirtualKey.End);
+            Note();
+            view.HandleEditKey(Windows.System.VirtualKey.Enter);
+            Note();
+            view.HandleEditKey(Windows.System.VirtualKey.Up);
+            Note();
+            view.HandleEditKey(Windows.System.VirtualKey.Home);
+            Note();
+            return steps;
+        });
+
+        const char Lf = (char)10;
+        var two = "one" + Lf + "two";
+        var three = two + Lf;
+        Assert.Equal((0, 0, two), facts[0]);
+        Assert.Equal((4, 4, two), facts[1]);
+        Assert.Equal((7, 7, two), facts[2]);
+        Assert.Equal((8, 8, three), facts[3]);
+        Assert.Equal((4, 4, three), facts[4]);
+        Assert.Equal((4, 4, three), facts[5]);
+    }
+
+    [Fact]
+    public async Task ALongPressOnATextFieldSelectsItsWordAndOpensTheMenu()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=f value=\"hello world\" style=\"width:200px\"><p>text</p>");
+            var bounds = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+            var opened = view.OpenFieldMenu(0, bounds.X + 2, bounds.Y + (bounds.Height / 2), new Windows.Foundation.Point(bounds.X, bounds.Y), selectWord: true);
+            await Task.Delay(700);
+            await view.FocusIdle;
+            var state = view.Document!.GetEditState()!.Value;
+            var elsewhere = view.OpenFieldMenu(0, 1, bounds.Y + bounds.Height + 40, new Windows.Foundation.Point(1, 1), selectWord: false);
+            view.CloseFlyouts();
+            await Task.Delay(400);
+            return (opened, state.SelectionStart, state.SelectionEnd, elsewhere);
+        });
+
+        Assert.True(facts.opened);
+        Assert.Equal((0, 5), (facts.SelectionStart, facts.SelectionEnd));
+        Assert.False(facts.elsewhere);
+    }
+
+    [Fact]
+    public async Task ARangeIsDraggedAndDropDownsAndPickersOpen()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window,
+                "<input id=r type=range min=0 max=100 style=\"width:200px;display:block\">"
+                + "<select id=s style=\"display:block\"><option value=a>A</option><option value=b selected>B</option></select>"
+                + "<input id=d type=date value=2026-11-02 style=\"display:block\">"
+                + "<input id=t type=time value=14:30 style=\"display:block\">"
+                + "<input id=c type=color value=#ff8000 style=\"display:block\">"
+                + "<input id=x type=text style=\"display:block\">");
+            PeachDrawing.Core.Rect B(string id) => view.AccessibilityTree!.Nodes.First(n => n.ElementId == id).Bounds[0].Bounds;
+            var r = B("r");
+
+            var began = view.BeginRangeDrag(0, r.X + (r.Width / 2), r.Y + (r.Height / 2));
+            var middle = double.Parse(view.Document!.GetFormState(view.Document.GetElement("r")!)!.Value.Value, System.Globalization.CultureInfo.InvariantCulture);
+            view.SetRange(r.X + r.Width);
+            var end = double.Parse(view.Document.GetFormState(view.Document.GetElement("r")!)!.Value.Value, System.Globalization.CultureInfo.InvariantCulture);
+
+            var opened = new List<bool>();
+            foreach (var id in new[] { "s", "d", "t", "c", "x" })
+            {
+                var b = B(id);
+                opened.Add(view.OpenPickerAt(0, b.X + 2, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y)));
+                view.CloseFlyouts();
+                await Task.Delay(400);
+            }
+
+            view.CloseFlyouts();
+            await Task.Delay(400);
+            var none = view.BeginRangeDrag(0, B("x").X + 2, B("x").Y + 2);
+            return (began, middle, end, opened, none);
+        });
+
+        Assert.True(facts.began);
+        Assert.InRange(facts.middle, 45, 55);
+        Assert.Equal(100, facts.end);
+        Assert.Equal([true, true, true, true, false], facts.opened);
+        Assert.False(facts.none);
+    }
+
+    [Fact]
+    public async Task TheTextPatternReportsAndSetsTheSelectionOfAFocusedFieldAndTheAttributesOfText()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<h2 lang=fr>Titre</h2><input id=f value=\"hello world\" style=\"width:200px\"><p>plain</p>");
+            var document = (HtmlViewAutomationPeer)DocumentPeer(view)!;
+            var text = (ITextProvider)document.GetPattern(PatternInterface.Text);
+            var before = text.GetSelection().Length;
+
+            var bounds = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+            view._fieldPressed = true;
+            Assert.True(view.FocusTextFieldAt(0, bounds.X + 2, bounds.Y + (bounds.Height / 2)));
+            await Task.Delay(500);
+            await view.FocusIdle;
+            view.Document!.SetEditSelection(2, 7);
+            var selected = text.GetSelection();
+            var selectedText = selected.Length == 1 ? selected[0].GetText(-1) : string.Empty;
+
+            var all = text.DocumentRange;
+            var word = all.FindText("world", false, false);
+            word.Select();
+            await Task.Delay(300);
+            var afterSelect = view.Document.GetEditState()!.Value;
+
+            var heading = all.FindText("Titre", false, false);
+            var plain = all.FindText("plain", false, false);
+            var styleOfHeading = heading.GetAttributeValue(40034);
+            var cultureOfHeading = heading.GetAttributeValue(40004);
+            var readOnlyOfPlain = plain.GetAttributeValue(40015);
+            var readOnlyOfField = word.GetAttributeValue(40015);
+            var unsupported = heading.GetAttributeValue(40005);
+            var foundHeading = all.FindAttribute(40034, 70002, false);
+            var foundBack = all.FindAttribute(40015, false, true);
+            var notFound = all.FindAttribute(40034, 70005, false);
+            return (before, selectedText, afterSelect.SelectionStart, afterSelect.SelectionEnd, styleOfHeading, cultureOfHeading, readOnlyOfPlain,
+                readOnlyOfField, unsupported == Microsoft.UI.Xaml.DependencyProperty.UnsetValue, foundHeading.GetText(-1), foundBack.GetText(-1), notFound);
+        });
+
+        Assert.Equal(0, facts.before);
+        Assert.Equal("llo w", facts.selectedText);
+        Assert.Equal((6, 11), (facts.Item3, facts.Item4));
+        Assert.Equal(70002, facts.Item5);
+        Assert.Equal(12, facts.Item6);
+        Assert.Equal(true, facts.Item7);
+        Assert.Equal(false, facts.Item8);
+        Assert.True(facts.Item9);
+        Assert.Equal("Titre", facts.Item10);
+        Assert.Equal("hello world", facts.Item11);
+        Assert.Null(facts.Item12);
+    }
+
+    [Fact]
+    public async Task AChangeAnApplicationMakesToTheDocumentIsShownAndTold()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=a type=checkbox aria-label=agree>");
+            var peerTree = DocumentPeer(view)!.GetChildren();
+            var result = view.Document!.SetChecked(view.Document.GetElement("a")!, true);
+            view.ApplyUpdate(result);
+            var changed = view.LastAccessibilityDiff?.Changes.Any(c => c.Property == "checked") == true;
+
+            view.ApplyUpdate(new PeachBrackets.Updates.UpdateResult(false, "nothing", []));
+            return (peerTree.Count, changed);
+        });
+
+        Assert.Equal(1, facts.Item1);
+        Assert.True(facts.changed);
     }
 }

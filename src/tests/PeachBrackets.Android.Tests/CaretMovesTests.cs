@@ -65,4 +65,35 @@ public class CaretMovesTests
     [InlineData('\u001b', false)]
     public void OnlyTextIsTypedIntoAField(char character, bool expected) =>
         Assert.Equal(expected, CaretMoves.IsTypedText(character));
+
+    [Fact]
+    public void ATextAreaKeepsLineBreaksAndEveryOtherFieldIsOneLine()
+    {
+        Assert.Equal("a\nb\nc", CaretMoves.ForField("textarea", "a\r\nb\rc"));
+        Assert.Equal("a b c", CaretMoves.ForField("text", "a\r\nb\nc"));
+    }
+
+    [Fact]
+    public void TheLineKeysAskForTheLineAboveBelowAndTheEndsOfTheLine()
+    {
+        Func<int, int?> byLine = lines => 100 + lines;
+        Func<int, (int Start, int End)?> range = caret => (caret - 1, caret + 1);
+
+        Assert.Equal(99, CaretMoves.LineMove("Up", 5, byLine, range));
+        Assert.Equal(101, CaretMoves.LineMove("Down", 5, byLine, range));
+        Assert.Equal(4, CaretMoves.LineMove("Home", 5, byLine, range));
+        Assert.Equal(6, CaretMoves.LineMove("End", 5, byLine, range));
+        Assert.Null(CaretMoves.LineMove("Left", 5, byLine, range));
+        Assert.Null(CaretMoves.LineMove("Home", 5, byLine, _ => null));
+    }
+
+    [Theory]
+    [InlineData("hello world", 2, 0, 5)]
+    [InlineData("hello world", 5, 0, 5)]
+    [InlineData("hello world", 6, 6, 11)]
+    [InlineData("hello, world", 6, 6, 6)]
+    [InlineData("", 0, 0, 0)]
+    [InlineData("ab", 99, 0, 2)]
+    public void ALongPressSelectsTheWordItIsOn(string text, int index, int start, int end) =>
+        Assert.Equal((start, end), CaretMoves.WordAt(text, index));
 }

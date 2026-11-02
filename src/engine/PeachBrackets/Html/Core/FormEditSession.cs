@@ -18,6 +18,9 @@ namespace PeachBrackets.Html
 
         public int CompositionEnd { get; set; } = -1;
 
+        /// <summary>How far a text area's lines are scrolled up, in layout units; the painter keeps the caret in view by changing it.</summary>
+        public double ScrollTop { get; set; }
+
         /// <summary>Whether the caret is drawn; a host turns it off and on to make it blink.</summary>
         public bool CaretVisible { get; set; } = true;
     }

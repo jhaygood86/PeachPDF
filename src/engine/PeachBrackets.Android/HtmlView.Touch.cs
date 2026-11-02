@@ -19,6 +19,7 @@ public sealed partial class HtmlView
     private float _longPressX;
     private float _longPressY;
     private bool _dragExtended;
+    private bool _selectingInField;
     private bool _scaling;
     private ActionMode? _actionMode;
     private (int Page, double X, double Y, bool Pressed)? _pendingPointer;
@@ -54,6 +55,12 @@ public sealed partial class HtmlView
             case MotionEventActions.Down:
                 BeginTouch(e);
                 break;
+            case MotionEventActions.Move when _rangeElement is not null:
+                // The thumb of a range control follows the finger.
+                if (TryLocate(e.GetX(), e.GetY(), out _, out var rangeX, out _))
+                    SetRange(rangeX);
+
+                return true;
             case MotionEventActions.Move when _selectingAfterLongPress:
                 // A finger rests with a little jitter; only a real drag moves the end of the selection.
                 var slop = ViewConfiguration.Get(Context!)?.ScaledTouchSlop ?? 8;
@@ -61,7 +68,15 @@ public sealed partial class HtmlView
                     && TryLocate(e.GetX(), e.GetY(), out var page, out var x, out var y))
                 {
                     _dragExtended = true;
-                    _document.Selection.ExtendTo(page, x, y);
+                    if (_selectingInField)
+                    {
+                        if (_fieldAnchor is { } anchor)
+                            _ = ExtendFieldSelectionAsync(_document, page, x, y, anchor);
+                    }
+                    else
+                    {
+                        _document.Selection.ExtendTo(page, x, y);
+                    }
                 }
 
                 return true;
@@ -87,10 +102,14 @@ public sealed partial class HtmlView
         _scroller?.ForceFinished(true);
         _touchStarted = true;
         _selectingAfterLongPress = false;
+        _selectingInField = false;
+        _fieldAnchor = null;
+        _rangeElement = null;
 
         var document = _document!;
         if (TryLocate(e.GetX(), e.GetY(), out var page, out var x, out var y))
         {
+            BeginRangeDrag(page, x, y);
             var args = new HtmlTouchStartedEventArgs(page, x, y, document.GetInteractionAt(page, x, y));
             TouchStarted?.Invoke(this, args);
             _allowed = args.Allowed;
@@ -114,6 +133,8 @@ public sealed partial class HtmlView
 
         _touchStarted = false;
         _selectingAfterLongPress = false;
+        _selectingInField = false;
+        _rangeElement = null;
         _allowed = TouchActions.All;
         if (_document is not null && TryLocate(e.GetX(), e.GetY(), out var page, out var x, out var y))
             RequestState(page, x, y, pressed: false);
@@ -206,7 +227,7 @@ public sealed partial class HtmlView
             return false;
 
         var document = _document!;
-        if (FocusTextFieldAt(page, x, y) || ActivateControlAt(page, x, y))
+        if (FocusTextFieldAt(page, x, y) || ActivateControlAt(page, x, y) || OpenPickerAt(page, x, y))
             return true;
 
         var link = document.Annotations.Links.LastOrDefault(l => l.PageIndex == page && l.Bounds.Contains(x, y));
@@ -246,6 +267,17 @@ public sealed partial class HtmlView
 
         LongPressed?.Invoke(this, new HtmlTappedEventArgs(page, x, y));
         var document = _document!;
+        if (LongPressField(document, page, x, y))
+        {
+            // The finger stays down: moving it now extends the selection inside the field.
+            _selectingAfterLongPress = true;
+            _dragExtended = false;
+            _selectingInField = true;
+            _longPressX = px;
+            _longPressY = py;
+            return;
+        }
+
         if (document.GetInteractionAt(page, x, y).CanSelectText && document.Selection.SelectWordAt(page, x, y))
         {
             // The finger stays down: moving it now extends the selection, and the copy menu appears beside it.

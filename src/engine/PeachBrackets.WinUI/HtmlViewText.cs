@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Automation.Text;
@@ -34,10 +35,27 @@ internal sealed class HtmlTextProvider : ITextProvider
         }
     }
 
-    // The selection is not mirrored into the pattern yet.
-    public SupportedTextSelection SupportedTextSelection => SupportedTextSelection.None;
+    public SupportedTextSelection SupportedTextSelection => SupportedTextSelection.Single;
 
-    public ITextRangeProvider[] GetSelection() => [];
+    // The selection of the text field that has the focus; the selection of the page's own text is not reported.
+    public ITextRangeProvider[] GetSelection()
+    {
+        if (_view.Document?.GetEditState() is not { } state || _view.FocusedNode is not { } focused)
+            return [];
+
+        var model = Model();
+        foreach (var segment in model.Segments)
+        {
+            if (segment.Node?.Id == focused.Id)
+            {
+                var from = Math.Clamp(Math.Min(state.SelectionStart, state.SelectionEnd), 0, segment.Length);
+                var to = Math.Clamp(Math.Max(state.SelectionStart, state.SelectionEnd), 0, segment.Length);
+                return [new HtmlTextRange(this, model, segment.Start + from, segment.Start + to)];
+            }
+        }
+
+        return [];
+    }
 
     public ITextRangeProvider[] GetVisibleRanges()
     {
@@ -123,7 +141,21 @@ internal sealed class HtmlTextRange : ITextRangeProvider
 
     public void ExpandToEnclosingUnit(TextUnit unit) => (_start, _end) = _model.Expand(_start, _end, HtmlViewLogic.ToUnitKind(unit));
 
-    public ITextRangeProvider FindAttribute(int attributeId, object value, bool backward) => null!;
+    public ITextRangeProvider FindAttribute(int attributeId, object value, bool backward)
+    {
+        // The first block, in the direction asked, whose text has the value; the range is that block's text.
+        var segments = _model.SegmentsIn(_start, _end).ToList();
+        if (backward)
+            segments.Reverse();
+
+        foreach (var segment in segments)
+        {
+            if (HtmlTextModel.AttributeValue(segment.Node, attributeId) is { } actual && actual.Equals(value))
+                return new HtmlTextRange(_provider, _model, segment.Start, segment.End);
+        }
+
+        return null!;
+    }
 
     public ITextRangeProvider FindText(string text, bool backward, bool ignoreCase)
     {
@@ -131,8 +163,10 @@ internal sealed class HtmlTextRange : ITextRangeProvider
         return at < 0 ? null! : new HtmlTextRange(_provider, _model, at, at + text.Length);
     }
 
-    // No text attribute (font, colour, language) is reported yet.
-    public object GetAttributeValue(int attributeId) => null!;
+    // The language, the style (a heading's level) and whether the text is read-only, taken from the block the range starts in; a stretch across blocks
+    // that differ is not reported as mixed. Anything else is not supported, which UI Automation spells as the unset value.
+    public object GetAttributeValue(int attributeId) =>
+        HtmlTextModel.AttributeValue(_model.SegmentAt(_start)?.Node, attributeId) ?? Microsoft.UI.Xaml.DependencyProperty.UnsetValue;
 
     public void GetBoundingRectangles(out double[] returnValue)
     {
@@ -198,8 +232,12 @@ internal sealed class HtmlTextRange : ITextRangeProvider
             _provider.View.BringIntoView(node);
     }
 
-    // The selection is not mirrored into the pattern, so a range cannot be selected.
-    public void Select() { }
+    // Selects the range in the text field that has the focus, when the range is inside that field's text.
+    public void Select()
+    {
+        if (_model.SegmentAt(_start) is { Node: { } node } segment && _end <= segment.End)
+            _provider.View.SetFieldSelection(node, _start - segment.Start, _end - segment.Start);
+    }
 
     public void AddToSelection() { }
 

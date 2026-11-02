@@ -436,6 +436,7 @@ PeachBrackets.HtmlDocument : sealed class
   method FormControlState? GetFormState(DocumentElement element)
   method FormEditState? GetEditState()
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
+  method IReadOnlyList<SelectOption> GetSelectOptions(DocumentElement element)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
   method Int32? GetEditIndexAt(Canvas measuringCanvas, Int32 pageIndex, Double x)
@@ -476,6 +477,7 @@ PeachBrackets.HtmlDocument : sealed class
   method UpdateResult SetChecked(DocumentElement element, Boolean isChecked)
   method UpdateResult SetComposition(Int32 start, Int32 end)
   method UpdateResult SetEditSelection(Int32 start, Int32 end)
+  method UpdateResult SetRangeAtPoint(DocumentElement element, Int32 pageIndex, Double x)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method UpdateResult SetValue(DocumentElement element, String value)
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
@@ -763,6 +765,17 @@ PeachBrackets.Updates.FormEditState : struct
   property Int32 SelectionStart { get; init; }
   property String Text { get; init; }
   property String Type { get; init; }
+PeachBrackets.Updates.SelectOption : struct
+  ctor(String Value, String Label, Boolean Selected, Boolean Disabled)
+  method Void Deconstruct(out String Value, out String Label, out Boolean Selected, out Boolean Disabled)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SelectOption other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean Disabled { get; init; }
+  property Boolean Selected { get; init; }
+  property String Label { get; init; }
+  property String Value { get; init; }
 PeachBrackets.Updates.TextEditPlace : struct
   ctor(Int32 PageIndex, Rect Bounds)
   method Void Deconstruct(out Int32 PageIndex, out Rect Bounds)

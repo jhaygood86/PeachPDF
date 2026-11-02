@@ -46,6 +46,8 @@ internal static class ImeEdits
         "tel" => (PhoneClass, ActionDone),
         "number" => (NumberClass | NumberDecimal | NumberSigned, ActionDone),
         "search" => (TextClass, ActionSearch),
+        // A text area takes line breaks: multi-line text, and the Enter key inserts one rather than acting.
+        "textarea" => (TextClass | MultiLineFlag | AutoCorrectFlag, ActionNone),
         _ => (TextClass, ActionDone),
     };
 
@@ -57,6 +59,9 @@ internal static class ImeEdits
     private const int PasswordVariation = 0x80;
     private const int NumberSigned = 0x1000;
     private const int NumberDecimal = 0x2000;
+    private const int MultiLineFlag = 0x20000;
+    private const int AutoCorrectFlag = 0x8000;
+    private const int ActionNone = 1;
     private const int ActionGo = 2;
     private const int ActionSearch = 3;
     private const int ActionDone = 6;

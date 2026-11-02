@@ -62,6 +62,38 @@ internal static class CaretMoves
         return extend ? (start, caret) : (caret, caret);
     }
 
+    /// <summary>The word a position is in or touches, as a start and end; an empty range at the position when it is not beside a word.</summary>
+    public static (int Start, int End) WordAt(string text, int index)
+    {
+        index = Math.Clamp(index, 0, text.Length);
+        var start = index;
+        while (start > 0 && IsWordCharacter(text[start - 1]))
+            start--;
+
+        var end = index;
+        while (end < text.Length && IsWordCharacter(text[end]))
+            end++;
+
+        return (start, end);
+    }
+
+    /// <summary>The text a paste or an input method puts in a field of the given type: a text area keeps its line breaks, every other field is one line.</summary>
+    public static string ForField(string type, string text) =>
+        type == "textarea" ? text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n') : ForSingleLine(text);
+
+    /// <summary>
+    /// Where a key that works on lines takes the caret in a text area: Up and Down by line, Home and End to the ends of the line; null when the key is
+    /// not one of those or there is no such place.
+    /// </summary>
+    public static int? LineMove(string key, int caret, Func<int, int?> byLine, Func<int, (int Start, int End)?> range) => key switch
+    {
+        "Up" => byLine(-1),
+        "Down" => byLine(1),
+        "Home" => range(caret)?.Start,
+        "End" => range(caret)?.End,
+        _ => null,
+    };
+
     /// <summary>The text a paste puts in a single-line field: line breaks become spaces, so a pasted paragraph is not run together.</summary>
     public static string ForSingleLine(string text) =>
         text.Replace("\r\n", " ", StringComparison.Ordinal).Replace('\r', ' ').Replace('\n', ' ');

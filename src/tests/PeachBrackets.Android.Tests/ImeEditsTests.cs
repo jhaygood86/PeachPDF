@@ -81,6 +81,7 @@ public class ImeEditsTests
     [InlineData("password", 0x81, 6)]
     [InlineData("tel", 3, 6)]
     [InlineData("number", 0x3002, 6)]
+    [InlineData("textarea", 0x28001, 1)]
     public void EachKindOfFieldAsksTheKeyboardForItsLayoutAndAction(string type, int inputType, int action) =>
         Assert.Equal((inputType, action), ImeEdits.InputTypeFor(type));
 }

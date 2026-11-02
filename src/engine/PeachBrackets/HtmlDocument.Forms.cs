@@ -145,6 +145,72 @@ public sealed partial class HtmlDocument
     }
 
     /// <summary>
+    /// Sets a range control from a point on its page, as a press or a drag on its track does: the point is mapped onto the track the way the control
+    /// draws it, and the number is kept between <c>min</c> and <c>max</c> and rounded to <c>step</c> (a step of <c>any</c> or none that is a number
+    /// is one). Not applied to a control that is not a range, or is disabled.
+    /// </summary>
+    /// <param name="element">the range control</param>
+    /// <param name="pageIndex">the zero-based index of the page the point is on</param>
+    /// <param name="x">the distance from the left edge of the sheet, in points</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult SetRangeAtPoint(DocumentElement element, int pageIndex, double x)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _ = Pages;
+        if (ControlOf(element) is not { } control || TypeOf(control) != "range")
+            return UpdateResult.NotApplied("The element is not a range control.");
+        if (StyleUpdater.BoxRegionOf(_container, control, _container.FragmentTree?.Fragmentainers ?? []) is not { } region || region.PageIndex != pageIndex)
+            return UpdateResult.NotApplied("The control is not on that page.");
+
+        var units = _unitsPerPoint;
+        var left = region.Bounds.X + ((control.ActualBorderLeftWidth + control.ActualPaddingLeft) / units);
+        var width = region.Bounds.Width - ((control.ActualBorderLeftWidth + control.ActualPaddingLeft + control.ActualBorderRightWidth + control.ActualPaddingRight) / units);
+        var height = region.Bounds.Height - ((control.ActualBorderTopWidth + control.ActualPaddingTop + control.ActualBorderBottomWidth + control.ActualPaddingBottom) / units);
+        var thumb = Math.Min(height, width / 2);
+        var span = Math.Max(width - thumb, 0);
+        var fraction = span <= 0 ? 0 : Math.Clamp((x - left - (thumb / 2)) / span, 0, 1);
+
+        var min = Number(control, "min", 0);
+        var max = Number(control, "max", 100);
+        if (max <= min)
+            max = min + 100;
+
+        var value = min + (fraction * (max - min));
+        if (control.GetAttribute("step", string.Empty) is var step && !step.Equals("any", StringComparison.OrdinalIgnoreCase))
+        {
+            var size = Number(control, "step", 1);
+            if (size > 0)
+                value = min + (Math.Round((value - min) / size) * size);
+        }
+
+        return SetValue(element, Math.Clamp(value, min, max).ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>The options of a drop-down, in document order, for a host that lets the user choose one (see <see cref="SetValue"/>).</summary>
+    /// <param name="element">the drop-down</param>
+    /// <returns>its options; empty for anything that is not a drop-down</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public IReadOnlyList<SelectOption> GetSelectOptions(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _ = Pages;
+        if (ControlOf(element) is not { } control || TypeOf(control) != "select")
+            return [];
+
+        var options = new List<SelectOption>();
+        foreach (var option in OptionsOf(control))
+        {
+            var tag = option.HtmlTag!;
+            options.Add(new SelectOption(tag.TryGetAttribute("value") ?? OptionText(option), OptionText(option), tag.HasAttribute("selected"), tag.HasAttribute("disabled")));
+        }
+
+        return options;
+    }
+
+    /// <summary>
     /// Does what a click on a control does: toggles a check box and checks a radio button. Anything else is not applied. A host calls it when a
     /// pointer is released over a control.
     /// </summary>

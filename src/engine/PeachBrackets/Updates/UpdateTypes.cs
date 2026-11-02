@@ -33,6 +33,13 @@ public sealed class DocumentElement
 /// <param name="Bounds">the area to repaint</param>
 public readonly record struct DirtyRegion(int PageIndex, Rect Bounds);
 
+/// <summary>One option of a drop-down (<see cref="HtmlDocument.GetSelectOptions"/>).</summary>
+/// <param name="Value">what choosing it sets the control to: its <c>value</c>, or its text</param>
+/// <param name="Label">the text to show</param>
+/// <param name="Selected">whether it is the one chosen now</param>
+/// <param name="Disabled">whether it cannot be chosen</param>
+public readonly record struct SelectOption(string Value, string Label, bool Selected, bool Disabled);
+
 /// <summary>What an edit of the document's text did (<see cref="HtmlDocument.ReplaceTextAsync"/>).</summary>
 /// <param name="Applied">whether the change was made; when false the document is exactly as it was</param>
 /// <param name="Reason">why it was not applied, or null when it was</param>
