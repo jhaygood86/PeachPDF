@@ -98,4 +98,11 @@ public class AutomationMappingTests
     [InlineData(PeachBrackets.Accessibility.ToggleState.None, Microsoft.UI.Xaml.Automation.ToggleState.Off)]
     public void ACheckedStateIsAToggleState(PeachBrackets.Accessibility.ToggleState state, Microsoft.UI.Xaml.Automation.ToggleState expected) =>
         Assert.Equal(expected, HtmlViewLogic.ToToggleState(state));
+
+    [Theory]
+    [InlineData(LiveSetting.Assertive, Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.ImportantMostRecent)]
+    [InlineData(LiveSetting.Polite, Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.MostRecent)]
+    [InlineData(LiveSetting.Off, Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing.MostRecent)]
+    public void AnAssertiveRegionInterruptsAndAPoliteOneWaits(LiveSetting setting, Microsoft.UI.Xaml.Automation.Peers.AutomationNotificationProcessing expected) =>
+        Assert.Equal(expected, HtmlViewLogic.ToNotificationProcessing(setting));
 }

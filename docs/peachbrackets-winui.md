@@ -67,7 +67,7 @@ follows the link exactly as a click does, including `LinkClicked`), and controls
 they are (Button, CheckBox, RadioButton, Edit, ComboBox, Slider, ProgressBar, List, ListItem, Table, HeaderItem, Image, Separator...). Landmarks
 (`main`, `nav`, `search`, forms, banners) report their `AutomationLandmarkType`, live regions their `AutomationLiveSetting`, a description is the
 help text, and a disabled control is not enabled. Every node has its bounding rectangle on the screen and reports whether it is scrolled out
-of view, so Narrator can read the page, jump by heading or landmark and follow links. The tree is rebuilt whenever a document loads or reflows.
+of view, so Narrator can read the page, jump by heading or landmark and follow links. The tree is rebuilt whenever a document loads or reflows, and the view compares the new tree with the old one (`AccessibilityTreeDiff`): it tells UI Automation nothing when the tree is the same, raises a structure change when parts came or went, a property change when a check box was toggled, and a notification (`RaiseNotificationEvent`) for what a live region now says - assertive regions interrupt, polite ones wait for the reader to be idle.
 
 A table (or `role="grid"`) has the **Grid** and **Table** patterns - its row and column counts, the cell at a place (a cell that spans reaches every place it covers), and its column and row headers - and each cell has **GridItem** and **TableItem**: its row, column and spans, the table it belongs to, and the header cells that head it, so Narrator announces "Qty, column 2, Pear" and moves between cells with its table commands.
 

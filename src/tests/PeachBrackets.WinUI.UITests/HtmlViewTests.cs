@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using PeachBrackets.Accessibility;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
@@ -415,5 +416,47 @@ public class HtmlViewTests
         });
 
         Assert.Equal(("Ada", "Adam😀", ">Adam", false, "Lin", false), facts);
+    }
+
+    [Fact]
+    public async Task TogglingACheckBoxIsAStateChangeTheViewCanTellUiAutomation()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=a type=checkbox aria-label=agree><p>after</p>");
+            DocumentPeer(view);
+            var box = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.CheckBox);
+            ((IToggleProvider)box.GetPattern(PatternInterface.Toggle)).Toggle();
+            await Task.Delay(300);
+            var diff = view.LastAccessibilityDiff;
+            return diff?.Changes.Select(c => (c.Kind.ToString(), c.Property)).ToArray();
+        });
+
+        Assert.NotNull(facts);
+        Assert.Equal([("StateChanged", "checked")], facts);
+    }
+
+    [Fact]
+    public async Task ALiveRegionAnnouncementIsToldToUiAutomationAndAViewNobodyAsksAboutTellsNothing()
+    {
+        var told = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<p>text</p>");
+
+            // A view no automation client has asked about has no peer to tell, so a refresh does nothing and does not fail.
+            var unasked = new HtmlView();
+            unasked.RefreshAccessibility(view.Document!);
+
+            var peer = (HtmlViewAutomationPeer)DocumentPeer(view)!;
+            var region = view.AccessibilityTree!.Root;
+            HtmlView.RaiseAnnouncements(peer,
+            [
+                new AccessibilityAnnouncement("Saved", LiveSetting.Polite, region),
+                new AccessibilityAnnouncement("Error", LiveSetting.Assertive, region),
+            ]);
+            return true;
+        });
+
+        Assert.True(told);
     }
 }
