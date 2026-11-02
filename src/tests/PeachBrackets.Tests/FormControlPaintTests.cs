@@ -120,4 +120,40 @@ public class FormControlPaintTests
         Assert.Equal(0, InkCount(canvas, 10, 10, 40, 40, IsRed));
         Assert.Equal(0, InkCount(canvas, 14, 64, 140, 22, IsDark));
     }
+
+    [Fact]
+    public async Task AColorInputShowsItsColorAsABlock()
+    {
+        const string body = "<input type=color value='#ff0000' style='left:10pt;top:10pt;width:60pt;height:30pt;padding:0'>"
+            + "<input type=color value='#0f0' style='left:100pt;top:10pt;width:60pt;height:30pt;padding:0'>"
+            + "<input type=color style='left:200pt;top:10pt;width:60pt;height:30pt;padding:0'>";
+        var canvas = await PaintAsync(body, paintControls: true);
+
+        Assert.True(InkCount(canvas, 12, 12, 56, 26, IsRed) > 1000);
+        Assert.True(InkCount(canvas, 102, 12, 56, 26, p => p.G > 200 && p.R < 60 && p.B < 60) > 1000);
+        Assert.True(InkCount(canvas, 202, 12, 56, 26, IsDark) > 1000, "no value is black");
+    }
+
+    [Fact]
+    public async Task AFileInputShowsAChooseButtonAndWhatIsChosen()
+    {
+        const string body = "<input type=file style='left:10pt;top:10pt;width:250pt;height:30pt;font-size:14pt'>";
+        var canvas = await PaintAsync(body, paintControls: true);
+
+        Assert.True(InkCount(canvas, 12, 12, 100, 26, p => p is { R: > 220 and < 250, G: > 220 and < 250 }) > 500, "the button");
+        Assert.True(InkCount(canvas, 120, 12, 130, 26, p => p.R < 200 && p.A > 0) > 40, "the words beside it");
+    }
+
+    [Fact]
+    public async Task ADateFieldWithNoValueShowsItsShapeAndOneWithAValueShowsTheValue()
+    {
+        const string body = "<input type=date style='left:10pt;top:10pt;width:150pt;height:30pt;font-size:16pt'>"
+            + "<input type=date value='2024-05-01' style='left:10pt;top:60pt;width:150pt;height:30pt;font-size:16pt;color:rgb(0,0,0)'>"
+            + "<input type=time style='left:10pt;top:110pt;width:150pt;height:30pt;font-size:16pt'>";
+        var canvas = await PaintAsync(body, paintControls: true);
+
+        Assert.True(InkCount(canvas, 14, 14, 140, 22, p => p.R < 200 && p.A > 0) > 40, "the date pattern");
+        Assert.True(InkCount(canvas, 14, 64, 140, 22, IsDark) > 40, "the value");
+        Assert.True(InkCount(canvas, 14, 114, 140, 22, p => p.R < 200 && p.A > 0) > 20, "the time pattern");
+    }
 }
