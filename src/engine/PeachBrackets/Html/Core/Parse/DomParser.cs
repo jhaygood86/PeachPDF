@@ -169,6 +169,20 @@ namespace PeachBrackets.Html.Parse
             // resolved yet at the DocumentLanguage assignment above.
             htmlContainer.RootWritingMode = htmlBox?.WritingMode.Value ?? WritingMode.HorizontalTb;
 
+            // The page context's em/rem basis is the real <html> element's font (css-values-4 §6.1.1,
+            // css-page-3 §3), which only exists once the cascade above has run - the first resolve, before
+            // it, can see only the synthetic wrapper's default font. Reading the html box's font any earlier
+            // would memoize the default on it (DerivedStyle.ActualFont caches on first read), which is why
+            // this is a second resolve rather than a moved one.
+            if (htmlBox is not null)
+            {
+                var rootFontPt = htmlBox.GetEmHeight();
+                if (htmlContainer.PageLengthContext is not { } captured || Math.Abs(captured.RemPt - rootFontPt) > 0.001)
+                {
+                    CascadeApplyPageStyles(htmlContainer, root, cssData, rootFontPt: rootFontPt);
+                }
+            }
+
             // Must run after the whole tree's cascade above, not from inside it - see
             // ApplyTablePresentationalAttributesToCells's remarks / issue #636.
             ApplyTablePresentationalAttributesToCells(root);
@@ -646,9 +660,14 @@ namespace PeachBrackets.Html.Parse
         /// <param name="allowMarginRight">Same as <paramref name="allowMarginLeft"/>, for <c>margin-right</c>.</param>
         /// <param name="allowMarginBottom">Same as <paramref name="allowMarginLeft"/>, for <c>margin-bottom</c>.</param>
         /// <param name="allowSize">Same as <paramref name="allowMarginLeft"/>, for <c>size</c>.</param>
+        /// <param name="rootFontPt">
+        /// The real <c>&lt;html&gt;</c> element's font size, once the cascade has resolved it, used as the
+        /// <c>em</c>/<c>rem</c> basis; null (the pre-cascade pass) reads the synthetic root's default font.
+        /// </param>
         internal static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData,
             bool allowMarginLeft = true, bool allowMarginTop = true,
-            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true,
+            double? rootFontPt = null)
         {
             // HtmlContainerInt.MarginTop/Bottom/Left/Right live in the same "internal pixel space" as
             // every other layout coordinate (PageSize, Location, box positions) - under ShrinkToFit/
@@ -672,7 +691,7 @@ namespace PeachBrackets.Html.Parse
             var pixelsPerPoint = htmlContainer.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
-                allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
+                allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize, rootFontPt);
 
             // Issue #582 / "Direction 1": this method runs before CascadeApplyStyles and every box-tree
             // correction pass in GenerateCssTree - none of that expensive work has started yet - so if
@@ -704,13 +723,14 @@ namespace PeachBrackets.Html.Parse
             {
                 htmlContainer.PageSize = PeachBrackets.Utilities.Utils.ToPixels(cssPageSize, pixelsPerPoint);
                 ApplyPageStylesOnce(htmlContainer, root, cssData, pixelsPerPoint,
-                    allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize);
+                    allowMarginLeft, allowMarginTop, allowMarginRight, allowMarginBottom, allowSize, rootFontPt);
             }
         }
 
         private static void ApplyPageStylesOnce(HtmlContainerInt htmlContainer, CssBox root, CssData cssData, double pixelsPerPoint,
             bool allowMarginLeft = true, bool allowMarginTop = true,
-            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true)
+            bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true,
+            double? rootFontPt = null)
         {
             // ParseLength's absolute-unit branches (pt/mm/cm/in/pc, and px at the spec-correct
             // 1px = 0.75pt via Length.PointsPerPx) resolve straight to raw, unscaled points - for
@@ -744,12 +764,12 @@ namespace PeachBrackets.Html.Parse
                 .Select(r => r.Style?.FontSize)
                 .LastOrDefault(fs => !string.IsNullOrEmpty(fs));
             var emPt = string.IsNullOrEmpty(basePageFontSize)
-                ? root.GetEmHeight()
+                ? rootFontPt ?? root.GetEmHeight()
                 : MarginBoxRenderer.ResolveFontSizePt(basePageFontSize);
 
             var lengthContext = new PageLengthContext(
                 emPt,
-                root.GetRemHeight(),
+                rootFontPt ?? root.GetRemHeight(),
                 htmlContainer.PageSize.Width / pixelsPerPoint,
                 htmlContainer.PageSize.Height / pixelsPerPoint);
             htmlContainer.PageLengthContext = lengthContext;
