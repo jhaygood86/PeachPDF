@@ -49,6 +49,15 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task RemMargin_StaysRootBased_EvenWhenThePageSetsItsOwnFontSize()
+        {
+            // css-values-4 section 6.1.1: rem is the root element's em. (Chromium resolves it against the
+            // page context's own font here, which the spec does not ask for.)
+            var (margin, _, _) = await Run("html { font-size: 32px } @page { font-size: 10pt; margin-top: 1rem }");
+            Assert.Equal(24, margin, 0.01);
+        }
+
+        [Fact]
         public async Task ADefaultRootFont_LeavesMarginsUnchanged()
         {
             var (_, container) = await LayoutHarness.LayoutAsync(
