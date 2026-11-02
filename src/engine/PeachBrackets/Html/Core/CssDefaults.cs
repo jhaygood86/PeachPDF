@@ -312,6 +312,11 @@ namespace PeachBrackets.Html
             input::placeholder { color: #7f7f7f; }
             input[type=checkbox],
             input[type=radio] { padding: 0; margin: 3px 3px 3px 4px; }
+
+            /* A progress bar and a meter are drawn by the renderer (MeterFragmentPainter) at the size the HTML standard's rendering section gives
+               them: ten ems wide and one tall, sitting a little below the baseline. Their content is fallback text for a UA that cannot draw them,
+               so it is not painted. */
+            progress, meter { display: inline-block; width: 10em; height: 1em; vertical-align: -0.2em; box-sizing: border-box; }
         """;
 
         /// <summary>

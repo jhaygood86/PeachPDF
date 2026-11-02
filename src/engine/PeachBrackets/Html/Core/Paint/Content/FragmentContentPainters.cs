@@ -18,6 +18,7 @@ namespace PeachBrackets.Html.Paint.Content
         private static readonly MarkerFragmentPainter MarkerPainter = new();
         private static readonly FormFieldFragmentPainter FormFieldPainter = new();
         private static readonly ScreenFormControlPainter ScreenFormPainter = new();
+        private static readonly MeterFragmentPainter MeterPainter = new();
 
         /// <summary>
         /// The painter for <paramref name="box"/>'s content, or null when the generic box paint applies.
@@ -39,6 +40,8 @@ namespace PeachBrackets.Html.Paint.Content
             CssBoxFormField formField when formField.HtmlContainer?.PaintFormControls == true => ScreenFormPainter,
             CssBoxFormField formField when formField.HtmlContainer?.InteractiveForms == true
                 && FormFieldMapper.Classify(formField).Kind != FormFieldKind.None => FormFieldPainter,
+            // A progress bar or meter is a plain box with a drawn look, in a PDF as on a screen.
+            _ when MeterFragmentPainter.IsMeterLike(box) => MeterPainter,
             _ => null,
         };
     }

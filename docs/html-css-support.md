@@ -798,6 +798,15 @@ Elements whose rendering CSS does not fully control compute to `display: none` i
 `<textarea>`, and inline `<svg>` and `<math>` themselves. `<button>`, `<details>`, `<fieldset>` and
 `<legend>` just lose their box. A `::before`/`::after` with `display: contents` is laid out as `inline`.
 
+### `<progress>` and `<meter>`
+
+A [`<progress>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/progress) bar and a [`<meter>`](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/meter)
+gauge are drawn as a rounded track with a fill, at the size browsers give them - ten ems wide and one em tall, sitting slightly below the baseline - in a PDF as on a
+screen. They are inline-blocks, so `width`, `height`, `border`, `background` and `vertical-align` style them like any other box. A progress bar fills to
+`value` out of `max` (default 1) in its `accent-color` (a blue for `auto`); one with no `value` is indeterminate and shows only the track. A meter fills to
+`value` between `min` and `max` and takes the usual traffic-light color: green when the value is in the region the `optimum` is in (below `low`, between `low` and
+`high`, or above `high`), yellow in the next region and red in the farthest. The element's content is fallback text for a browser that cannot draw it, so it is not drawn.
+
 **Known gaps:** `display: contents` on an element *inside* an inline `<svg>` or `<math>` (`<g>`, `<tspan>`,
 `<use>`, `<mrow>`, …) has no effect, because those renderers do not read the CSS `display` property.
 
