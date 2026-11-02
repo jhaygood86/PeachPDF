@@ -19,8 +19,8 @@ namespace PeachDrawing.PDF
     /// <remarks>
     /// <para>
     /// Get one from <see cref="PdfComposer.CreateTagRecorder"/>, call <see cref="BeginPage"/> as each page is added, and wrap the drawing of
-    /// each piece of content in the scope an <c>Open</c> method returns: <see cref="OpenContentElement"/> tags what is drawn inside it
-    /// (a paragraph's text), <see cref="OpenGroupingElement"/> nests the elements opened inside it (a list around its items), and
+    /// each piece of content in the scope an <c>Open</c> method returns: <see cref="OpenContentElement(Canvas, object, string, string)"/> tags what is drawn inside it
+    /// (a paragraph's text), <see cref="OpenGroupingElement(object, string)"/> nests the elements opened inside it (a list around its items), and
     /// <see cref="OpenArtifact"/> marks decoration that is not part of the structure. Call <see cref="Finish"/> after the last page and
     /// before adding links that should be tied to structure elements.
     /// </para>
@@ -104,9 +104,20 @@ namespace PeachDrawing.PDF
         /// <param name="key">identifies the element; the same key opens the same element again</param>
         /// <param name="structureType">the structure type, such as <c>L</c>, <c>Sect</c> or <c>Table</c> (without the slash)</param>
         /// <returns>a scope that closes the element when disposed</returns>
-        public IDisposable OpenGroupingElement(object key, string structureType)
+        public IDisposable OpenGroupingElement(object key, string structureType) => OpenGroupingElement(key, structureType, null);
+
+        /// <summary>
+        /// Opens a grouping structure element as <see cref="OpenGroupingElement(object, string)"/> does, giving it a language, a title or attributes the
+        /// first time it is opened.
+        /// </summary>
+        /// <param name="key">identifies the element; the same key opens the same element again</param>
+        /// <param name="structureType">the structure type, without the slash</param>
+        /// <param name="details">what else to give the element, or <see langword="null"/></param>
+        /// <returns>a scope that closes the element when disposed</returns>
+        public IDisposable OpenGroupingElement(object key, string structureType, PdfStructureDetails? details)
         {
             var element = GetOrCreateElement(_elementsByBox, key, structureType);
+            ApplyDetailsOnce(element, details);
             _parentStack.Push(element);
             return new PopParentScope(_parentStack);
         }
@@ -166,10 +177,24 @@ namespace PeachDrawing.PDF
         /// alternative text when the recorder was created to require it (the accessible PDF/A levels), which marks it decorative.
         /// </param>
         /// <returns>a scope that ends the marked content when disposed</returns>
-        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText = null)
+        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText = null) =>
+            OpenContentElement(canvas, key, structureType, altText, null);
+
+        /// <summary>
+        /// Opens a content element as <see cref="OpenContentElement(Canvas, object, string, string)"/> does, giving it a language, a title or attributes
+        /// the first time it is opened.
+        /// </summary>
+        /// <param name="canvas">the canvas the content is drawn on</param>
+        /// <param name="key">identifies the element; the same key opens the same element again</param>
+        /// <param name="structureType">the structure type, without the slash</param>
+        /// <param name="altText">the alternative text of a figure or formula, or <see langword="null"/></param>
+        /// <param name="details">what else to give the element, or <see langword="null"/></param>
+        /// <returns>a scope that ends the marked content when disposed</returns>
+        public IDisposable OpenContentElement(Canvas canvas, object key, string structureType, string? altText, PdfStructureDetails? details)
         {
             var g = canvas;
             var element = GetOrCreateElement(_elementsByBox, key, structureType);
+            ApplyDetailsOnce(element, details);
 
             if (!string.IsNullOrEmpty(altText))
                 element.AlternateText = altText;
@@ -256,6 +281,15 @@ namespace PeachDrawing.PDF
         /// <param name="key">identifies the element</param>
         /// <returns><see langword="true"/> when it exists</returns>
         public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
+
+        // An element is opened once for every page its content reaches: it takes its details the first time.
+        readonly HashSet<PdfStructureElement> _detailed = new(ReferenceEqualityComparer.Instance);
+
+        void ApplyDetailsOnce(PdfStructureElement element, PdfStructureDetails? details)
+        {
+            if (details is not null && _detailed.Add(element))
+                ApplyDetails(element, details);
+        }
 
         void ApplyDetails(PdfStructureElement element, PdfStructureDetails details)
         {

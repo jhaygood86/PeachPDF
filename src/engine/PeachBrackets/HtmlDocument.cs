@@ -56,7 +56,6 @@ public sealed class HtmlDocument : IDisposable
     private DocumentAnnotations? _annotations;
     private IReadOnlyList<DocumentPage>? _pages;
     private IReadOnlyList<TextRun>? _textRuns;
-    private AccessibilityTree? _accessibilityTree;
     private bool _recordTextRuns;
     private bool _selectionStyling;
     private bool _incrementalUpdates;
@@ -596,7 +595,7 @@ public sealed class HtmlDocument : IDisposable
     public AccessibilityTree GetAccessibilityTree()
     {
         _ = Pages;
-        return _accessibilityTree ??= AccessibilityTreeBuilder.Build(_container, Metadata?.Title);
+        return _container.SemanticTree;
     }
 
     /// <summary>The innermost part of the page at a point, as the accessibility tree describes it: what a reader that is pointed at the page, as by touch, lands on.</summary>
@@ -1096,7 +1095,7 @@ public sealed class HtmlDocument : IDisposable
         _container.SelectionModel = null;
         _container.HighlightLayers = [];
         _textRuns = null;
-        _accessibilityTree = null;
+        _container.ResetSemanticTree();
         _annotations = null;
         await LayOutAsync(measuringCanvas);
     }
@@ -1400,7 +1399,7 @@ public sealed class HtmlDocument : IDisposable
         _highlights.Clear();
         _container.HighlightLayers = [];
         _textRuns = null;
-        _accessibilityTree = null;
+        _container.ResetSemanticTree();
         _annotations = null;
         var resumedSlot = await LayOutAsync(measuringCanvas, _editAnchor);
         _editAnchor = null;

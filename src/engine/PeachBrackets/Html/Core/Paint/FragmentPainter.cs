@@ -789,12 +789,12 @@ namespace PeachBrackets.Html.Paint
                     break;
 
                 case StructureTagKind.Grouping:
-                    using (builder.OpenGroupingElement(StructureNode.Of(box), classification.StructureType!))
+                    using (builder.OpenGroupingElement(StructureNode.Of(box), classification.StructureType!, StructureTagMapper.DetailsFor(box, classification)))
                         PaintContent(g, fragment);
                     break;
 
                 case StructureTagKind.Content:
-                    using (builder.OpenContentElement(g, StructureNode.Of(box), classification.StructureType!, classification.AltText))
+                    using (builder.OpenContentElement(g, StructureNode.Of(box), classification.StructureType!, classification.AltText, StructureTagMapper.DetailsFor(box, classification)))
                     {
                         // Attach the original MathML source as a PDF 2.0 Associated File on this
                         // formula's own structure element - see StructureTagBuilder.AttachMathMlSource
