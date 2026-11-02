@@ -121,6 +121,93 @@ namespace PeachDrawing.PDF.Tests.Operations
             Assert.DoesNotContain(trimmed.GetLinks(0), l => l.Destination is not null);
         }
 
+        /// <summary>Three pages whose first one links, by the name <c>intro</c>, to the page at <paramref name="introPage"/>.</summary>
+        private static byte[] WithIntro(int introPage)
+        {
+            using var composer = new PdfComposer(new PdfRenderContext(), new PdfComposerOptions { CompressContentStreams = false });
+            for (var i = 0; i < 3; i++)
+                composer.AddPage(100, 100);
+            composer.AddNamedDestination("intro", introPage, 10);
+            composer.Pages[0].AddDestinationLink(new Rect(10, 10, 20, 20), "intro");
+            using var stream = new MemoryStream();
+            composer.Save(stream);
+            return stream.ToArray();
+        }
+
+        [Fact]
+        public void NamedDestinationLinks_LeadToTheirOwnFilesDestination_WhenTwoFilesUseTheSameName()
+        {
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(WithIntro(1)).MergeBytes(WithIntro(2))));
+
+            Assert.Equal(1, Assert.Single(result.GetLinks(0)).Destination!.PageIndex);
+            Assert.Equal(5, Assert.Single(result.GetLinks(3)).Destination!.PageIndex);   // the second file's page 3, not the first file's "intro"
+            Assert.Equal(["intro", "intro_2"], result.GetNamedDestinations().Keys.OrderBy(k => k));
+        }
+
+        /// <summary>
+        /// A two-page file whose first page has a link given directly as <c>/Dest</c> (not as an action): a string or a name, to the old-style
+        /// <c>/Dests</c> destination <c>intro</c> on the second page, or to <c>missing</c>, which is not defined.
+        /// </summary>
+        private static byte[] WithDirectDestLink(string dest)
+        {
+            string[] objects =
+            [
+                "<< /Type /Catalog /Pages 2 0 R /Dests << /intro [4 0 R /Fit] >> >>",
+                "<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Annots [5 0 R] >>",
+                "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] >>",
+                "<< /Type /Annot /Subtype /Link /Rect [10 10 50 50] /Dest " + dest + " >>",
+            ];
+            var sb = new StringBuilder("%PDF-1.4\n");
+            var offsets = new List<int>();
+            foreach (var body in objects)
+            {
+                offsets.Add(sb.Length);
+                sb.Append(offsets.Count).Append(" 0 obj\n").Append(body).Append("\nendobj\n");
+            }
+
+            var xref = sb.Length;
+            sb.Append("xref\n0 ").Append(offsets.Count + 1).Append("\n0000000000 65535 f \n");
+            foreach (var o in offsets)
+                sb.Append(o.ToString("D10")).Append(" 00000 n \n");
+            sb.Append("trailer\n<< /Size ").Append(offsets.Count + 1).Append(" /Root 1 0 R >>\nstartxref\n").Append(xref).Append("\n%%EOF\n");
+            return Encoding.Latin1.GetBytes(sb.ToString());
+        }
+
+        [Theory]
+        [InlineData("(intro)")]
+        [InlineData("/intro")]
+        public void DirectDestLinks_ByStringOrName_FollowTheirOwnFilesDestination(string dest)
+        {
+            var file = WithDirectDestLink(dest);
+
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(file).MergeBytes(file)));
+
+            // The second file's page 2 is output page 4 (index 3), and its link must not lead to the first file's intro (index 1).
+            Assert.Equal(1, Assert.Single(result.GetLinks(0)).Destination!.PageIndex);
+            Assert.Equal(3, Assert.Single(result.GetLinks(2)).Destination!.PageIndex);
+        }
+
+        [Theory]
+        [InlineData("(intro)")]
+        [InlineData("/intro")]
+        [InlineData("(missing)")]
+        public void DirectDestLinks_WithNoDestinationInTheOutput_AreRemoved(string dest)
+        {
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(WithDirectDestLink(dest)).TakePages("1")));
+
+            Assert.Empty(result.GetLinks(0));
+        }
+
+        [Fact]
+        public void NamedDestinationLink_IsRemoved_WhenItsPageWasNotTaken()
+        {
+            var result = PdfPageSource.Open(Copy(PdfOperation.LoadBytes(WithIntro(2)).TakePages("1-2")));
+
+            Assert.Empty(result.GetLinks(0));
+            Assert.Empty(result.GetNamedDestinations());
+        }
+
         [Fact]
         public void Outline_IsCarriedToTheNewPages()
         {
