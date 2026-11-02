@@ -660,6 +660,10 @@ namespace PeachBrackets.Html.Parse
         /// <param name="allowMarginRight">Same as <paramref name="allowMarginLeft"/>, for <c>margin-right</c>.</param>
         /// <param name="allowMarginBottom">Same as <paramref name="allowMarginLeft"/>, for <c>margin-bottom</c>.</param>
         /// <param name="allowSize">Same as <paramref name="allowMarginLeft"/>, for <c>size</c>.</param>
+        /// <param name="rootFontPt">
+        /// The real <c>&lt;html&gt;</c> element's font size, once the cascade has resolved it, used as the
+        /// <c>em</c>/<c>rem</c> basis; null (the pre-cascade pass) reads the synthetic root's default font.
+        /// </param>
         internal static void CascadeApplyPageStyles(HtmlContainerInt htmlContainer, CssBox root, CssData cssData,
             bool allowMarginLeft = true, bool allowMarginTop = true,
             bool allowMarginRight = true, bool allowMarginBottom = true, bool allowSize = true,
