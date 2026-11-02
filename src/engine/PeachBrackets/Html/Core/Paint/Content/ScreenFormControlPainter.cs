@@ -66,6 +66,23 @@ namespace PeachBrackets.Html.Paint.Content
             {
                 painter.PaintBoxContent(g, fragment);
             }
+            else if (type == "color")
+            {
+                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                PaintColorSwatch(g, box, rect);
+            }
+            else if (type == "file")
+            {
+                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                PaintFileChooser(g, box, rect, disabled);
+            }
+            else if (type is "date" or "time" or "datetime-local" or "month" or "week" && box.GetAttribute("value", string.Empty).Length == 0)
+            {
+                // A date or time field with no value shows the shape its value would take, in the placeholder's color.
+                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                var style = box.ResolvedPlaceholderStyle ?? box;
+                PaintText(g, box, rect, DateTimeHint(type), centered: false, style.ActualColor, disabled);
+            }
             else
             {
                 FormFieldChrome.PaintBorderAndBackground(g, box, rect);
@@ -143,6 +160,64 @@ namespace PeachBrackets.Html.Paint.Content
             }
 
             g.PopClip();
+        }
+
+        /// <summary>The text a date or time field shows while it has no value: the pattern its value follows.</summary>
+        internal static string DateTimeHint(string type) => type switch
+        {
+            "date" => "mm/dd/yyyy",
+            "time" => "--:-- --",
+            "datetime-local" => "mm/dd/yyyy, --:-- --",
+            "month" => "------ ----",
+            _ => "Week --, ----",
+        };
+
+        /// <summary>The color a <c>color</c> input holds: <c>#rrggbb</c> or <c>#rgb</c>, black when it holds none or something else.</summary>
+        internal static PaintColor ColorOf(string value)
+        {
+            var hex = value.Trim().TrimStart('#');
+            if (hex.Length == 3 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var shortValue))
+                return PaintColor.FromArgb(255, ((shortValue >> 8) & 0xF) * 17, ((shortValue >> 4) & 0xF) * 17, (shortValue & 0xF) * 17);
+            if (hex.Length == 6 && int.TryParse(hex, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var longValue))
+                return PaintColor.FromArgb(255, (longValue >> 16) & 0xFF, (longValue >> 8) & 0xFF, longValue & 0xFF);
+
+            return PaintColor.FromArgb(255, 0, 0, 0);
+        }
+
+        // The color the input holds, as a filled block inside its border.
+        private static void PaintColorSwatch(Canvas g, CssBox box, Rect rect)
+        {
+            var content = ContentRect(box, rect);
+            if (content is not { Width: > 0, Height: > 0 })
+                return;
+
+            var swatch = new Rect(content.X + 1, content.Y + 1, Math.Max(content.Width - 2, 0), Math.Max(content.Height - 2, 0));
+            using var brush = g.GetSolidBrush(ColorOf(box.GetAttribute("value", string.Empty)));
+            g.DrawRectangle(brush, swatch.X, swatch.Y, swatch.Width, swatch.Height);
+        }
+
+        // A button that says what it does, and beside it what has been chosen.
+        private static void PaintFileChooser(Canvas g, CssBox box, Rect rect, bool disabled)
+        {
+            var content = ContentRect(box, rect);
+            if (content is not { Width: > 0, Height: > 0 })
+                return;
+
+            var font = box.ActualFont;
+            const string label = "Choose File";
+            var buttonWidth = Math.Min(g.MeasureString(label, font).Width + 8, content.Width);
+            using (var fill = g.GetSolidBrush(PaintColor.FromArgb(255, 239, 239, 239)))
+                g.DrawRectangle(fill, content.X, content.Y, buttonWidth, content.Height);
+
+            PaintText(g, box, new Rect(rect.X, rect.Y, buttonWidth + box.ActualBorderLeftWidth + box.ActualPaddingLeft + box.ActualBorderRightWidth + box.ActualPaddingRight, rect.Height),
+                label, centered: true, box.ActualColor, disabled);
+
+            var restX = content.X + buttonWidth + 6;
+            if (restX < content.X + content.Width)
+            {
+                var rest = new Rect(restX - box.ActualBorderLeftWidth - box.ActualPaddingLeft, rect.Y, rect.Width - (restX - rect.X) + box.ActualBorderLeftWidth + box.ActualPaddingLeft, rect.Height);
+                PaintText(g, box, rest, "No file chosen", centered: false, PaintColor.FromArgb(255, 117, 117, 117), disabled);
+            }
         }
 
         private static Rect ContentRect(CssBox box, Rect rect) => new(
