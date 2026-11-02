@@ -186,6 +186,26 @@ public sealed partial class HtmlView
             if (node.Role == AccessibilityRole.Heading && OperatingSystem.IsAndroidVersionAtLeast(28))
                 info.Heading = true;
 
+            // Where it is in a list or a table, so TalkBack can say "item 2 of 5" or "row 3, column 2" and step through cells.
+            if (node.Role is AccessibilityRole.Table or AccessibilityRole.Grid or AccessibilityRole.TreeGrid)
+            {
+                info.SetCollectionInfo(AccessibilityNodeInfo.CollectionInfo.Obtain(node.RowCount, node.ColumnCount, false));
+            }
+            else if (node.Role is AccessibilityRole.List or AccessibilityRole.ListBox)
+            {
+                info.SetCollectionInfo(AccessibilityNodeInfo.CollectionInfo.Obtain(node.ReadingChildren.Count(c => c.SetSize > 0), 1, false));
+            }
+
+            if (node.RowIndex >= 0 && node.ColumnIndex >= 0)
+            {
+                var heading = node.Role is AccessibilityRole.ColumnHeader or AccessibilityRole.RowHeader;
+                info.SetCollectionItemInfo(AccessibilityNodeInfo.CollectionItemInfo.Obtain(node.RowIndex, node.RowSpan, node.ColumnIndex, node.ColumnSpan, heading, node.Selected ?? false));
+            }
+            else if (node.PositionInSet > 0)
+            {
+                info.SetCollectionItemInfo(AccessibilityNodeInfo.CollectionItemInfo.Obtain(node.PositionInSet - 1, 1, 0, 1, false, node.Selected ?? false));
+            }
+
             if (AccessibilityMapping.IsCheckable(node.Role))
             {
                 info.Checkable = true;
