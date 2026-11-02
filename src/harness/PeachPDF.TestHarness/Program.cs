@@ -15747,6 +15747,82 @@ await SaveDeclarativeShowcaseAsync("document_merge", "Document Building", "Mergi
         return await gen.CreateMergedDocument(DocumentMerge.Of(Report("Q1", 14), Report("Q2", 22)).UseContinuousPageNumbers());
     });
 
+const string documentAppendPdfSource =
+    """"
+    // A static file the project ships (here made on the spot), put in front of and behind a generated page.
+    var regulations = File.ReadAllBytes("regulations.pdf");
+
+    var document = await generator.CreateDocument(doc =>
+    {
+        doc.Prepend(regulations, PdfCopyMode.ObjectCopy);   // the file's own content, byte for byte
+
+        doc.Page(page =>
+        {
+            page.Size(300, 300);
+            page.Margin(24);
+            page.Footer(footer => footer.Text(t =>
+            {
+                t.Span("Page ");
+                t.CurrentPageNumber();
+                t.Span(" of ");
+                t.TotalPages();
+            }));
+            page.Content(container => container.Column(column => column.Item().Text("The permit, generated on demand.")));
+        });
+
+        doc.Append(PdfOperation.LoadBytes(regulations).TakePages("1"));   // redrawn into this document
+        doc.UseContinuousPageNumbers();
+    });
+    """";
+
+await SaveDeclarativeShowcaseAsync("document_append_pdf", "Document Building", "Adding Existing PDFs",
+    "Append and Prepend on the document builder: a static two-page PDF is copied in front of a generated page and its first page is redrawn behind it, so the generated page's footer reads 3 of 4 while the whole file follows the document's own settings.",
+    documentAppendPdfSource,
+    async gen =>
+    {
+        var regulations = await gen.CreateDocument(doc =>
+        {
+            for (var i = 1; i <= 2; i++)
+            {
+                var number = i;
+                doc.Page(page =>
+                {
+                    page.Size(300, 300);
+                    page.Margin(24);
+                    page.Content(container => container.Background(PdfColor.FromHex("#F4EFE6")).Padding(16).Column(column =>
+                    {
+                        column.Spacing(8);
+                        column.Item().Text(t => t.Span($"Regulations, sheet {number}").Bold());
+                        column.Item().Text("A file the project ships, written once and dropped into every permit.");
+                    }));
+                });
+            }
+        });
+        using var regulationsStream = new MemoryStream();
+        regulations.Save(regulationsStream);
+        var regulationsFile = regulationsStream.ToArray();
+
+        return await gen.CreateDocument(doc =>
+        {
+            doc.Prepend(regulationsFile, PeachDrawing.PDF.PdfCopyMode.ObjectCopy);
+            doc.Page(page =>
+            {
+                page.Size(300, 300);
+                page.Margin(24);
+                page.Footer(footer => footer.Text(t =>
+                {
+                    t.Span("Page ");
+                    t.CurrentPageNumber();
+                    t.Span(" of ");
+                    t.TotalPages();
+                }));
+                page.Content(container => container.Column(column => column.Item().Text("The permit, generated on demand.")));
+            });
+            doc.Append(PeachDrawing.PDF.PdfOperation.LoadBytes(regulationsFile).TakePages("1"));
+            doc.UseContinuousPageNumbers();
+        });
+    });
+
 const string declarativeApiSource =
     """"
     var generator = new PdfGenerator();

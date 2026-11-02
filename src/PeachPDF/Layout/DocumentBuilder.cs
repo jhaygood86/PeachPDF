@@ -1,6 +1,8 @@
 using PeachBrackets.Building;
+using PeachDrawing.PDF;
 using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace PeachPDF.Layout
 {
@@ -13,7 +15,23 @@ namespace PeachPDF.Layout
     /// </summary>
     internal sealed class DocumentBuilder : IDocumentBuilder
     {
-        public List<Action<IPageDescriptor>> PageHandlers { get; } = [];
+        /// <summary>One part of the document, in the order it is written: a page section or the pages of an existing PDF.</summary>
+        internal sealed class Section
+        {
+            public Action<IPageDescriptor>? Page { get; init; }
+
+            public PdfOperation? Pdf { get; init; }
+
+            public PdfCopyMode? Mode { get; init; }
+        }
+
+        /// <summary>The parts of the document in order: the <see cref="Page"/> calls, with the PDFs added around and between them.</summary>
+        public List<Section> Sections { get; } = [];
+
+        /// <summary>Whether the generated pages count the pages of the added PDFs - see <see cref="UseContinuousPageNumbers"/>.</summary>
+        public bool ContinuousPageNumbers { get; private set; }
+
+        private int _prepended;
 
         /// <summary>The last-set document-level stylesheet, or null - see <see cref="Stylesheet"/>.</summary>
         public PeachPdfCssContent? DocumentStylesheet { get; private set; }
@@ -21,7 +39,54 @@ namespace PeachPDF.Layout
         public void Page(Action<IPageDescriptor> handler)
         {
             ArgumentNullException.ThrowIfNull(handler);
-            PageHandlers.Add(handler);
+            Sections.Add(new Section { Page = handler });
+        }
+
+        public void Append(byte[] pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null)
+        {
+            ArgumentNullException.ThrowIfNull(pdf);
+            Add(PdfOperation.LoadBytes(pdf, password), mode, prepend: false);
+        }
+
+        public void Append(Stream pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null)
+        {
+            ArgumentNullException.ThrowIfNull(pdf);
+            Add(PdfOperation.LoadStream(pdf, password), mode, prepend: false);
+        }
+
+        public void Append(PdfOperation operation, PdfCopyMode? mode = null)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            Add(operation, mode, prepend: false);
+        }
+
+        public void Prepend(byte[] pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null)
+        {
+            ArgumentNullException.ThrowIfNull(pdf);
+            Add(PdfOperation.LoadBytes(pdf, password), mode, prepend: true);
+        }
+
+        public void Prepend(Stream pdf, PdfCopyMode mode = PdfCopyMode.Redraw, string? password = null)
+        {
+            ArgumentNullException.ThrowIfNull(pdf);
+            Add(PdfOperation.LoadStream(pdf, password), mode, prepend: true);
+        }
+
+        public void Prepend(PdfOperation operation, PdfCopyMode? mode = null)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            Add(operation, mode, prepend: true);
+        }
+
+        public void UseContinuousPageNumbers() => ContinuousPageNumbers = true;
+
+        private void Add(PdfOperation operation, PdfCopyMode? mode, bool prepend)
+        {
+            var section = new Section { Pdf = operation, Mode = mode };
+            if (prepend)
+                Sections.Insert(_prepended++, section);
+            else
+                Sections.Add(section);
         }
 
         /// <summary>The PDF files to stamp over or under the document, in the order added.</summary>
