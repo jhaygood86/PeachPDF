@@ -97,6 +97,7 @@ public sealed class HtmlDocument : IDisposable
             container.Media = string.IsNullOrEmpty(options.Media) ? "print" : options.Media;
             container.PreferredColorScheme = options.ColorScheme;
             container.Input = options.Input ?? InputCapabilities.None;
+            container.Preferences = options.Preferences ?? UserPreferences.Default;
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;
             container.SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels;
             container.SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels;
@@ -114,10 +115,11 @@ public sealed class HtmlDocument : IDisposable
             var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
 
+            var userCss = options.TextSpacing is { } spacing ? options.UserStyleSheet + "\n" + spacing.ToCss() : options.UserStyleSheet;
             var userStyles = options.StyleSheet?.Data
-                ?? (string.IsNullOrWhiteSpace(options.UserStyleSheet)
+                ?? (string.IsNullOrWhiteSpace(userCss)
                     ? null
-                    : await PeachBrackets.Html.CssData.Parse(renderContext, options.UserStyleSheet, combineWithDefault: true));
+                    : await PeachBrackets.Html.CssData.Parse(renderContext, userCss, combineWithDefault: true));
 
             document._source = html;
             document._options = options;
