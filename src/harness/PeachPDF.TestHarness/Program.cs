@@ -14721,11 +14721,21 @@ code { font-size: 7.5pt; color: #444 }
 @keyframes pulse { from { fill: #e63946; opacity: .35 } to { fill: #1d4ed8; opacity: 1 } }
 @keyframes swing { from { transform: rotate(0deg) } to { transform: rotate(180deg) } }
 @keyframes dawn  { from { stop-color: #e63946 } to { stop-color: #ffe066 } }
+@keyframes morph { from { d: path('M10 70 L40 20 L70 70 Z') } to { d: path('M30 80 L60 10 L110 80 Z') } }
+@keyframes dashes { from { stroke-dasharray: 4 6 } to { stroke-dasharray: 20 6 2 } }
+@keyframes lend  { to { fill: #e63946 } }
+@keyframes textgrow { to { font-size: 40px } }
 svg.anim { display: block; margin: 4px 0; background: #eef1f5 }
 .draw  { fill: none; stroke: #2a9d8f; stroke-width: 4; stroke-dasharray: 300; animation: draw 4s linear }
 .pulse { animation: pulse 4s linear }
 .swing { fill: #6a4c93; transform-box: fill-box; transform-origin: 50% 50%; animation: swing 4s ease-in-out }
 .dawn  { animation: dawn 4s linear }
+.morph { fill: #2a9d8f; animation: morph 4s linear }
+.dashes { fill: none; stroke: #1d4ed8; stroke-width: 3; animation: dashes 4s linear }
+.lend  { animation: lend 4s linear }
+.textgrow { fill: #222; animation: textgrow 4s linear }
+svg.units { font-size: 10px }
+svg.units g { font-size: 2em }
 </style></head><body>
 <h1>CSS animations as a still frame</h1>
 <p class="note">PdfGenerateConfig.AnimationProgress samples every animation at one point of its own run. This page is rendered at the start, the midpoint and the end. (docs/html-css-support.md#animations)</p>
@@ -14759,11 +14769,13 @@ svg.anim { display: block; margin: 4px 0; background: #eef1f5 }
 <p class="note"><code>stroke-dashoffset: 300 → 0</code> on a path with <code>stroke-dasharray: 300</code>: the line draws itself (a bare number is user units).</p>
 <svg class="anim" width="320" height="80"><circle class="pulse" cx="50" cy="40" r="26"/><rect class="swing" x="124" y="26" width="56" height="26"/><defs><linearGradient id="dusk"><stop class="dawn" offset="0" stop-color="#1d4ed8"/><stop offset="1" stop-color="#1d4ed8"/></linearGradient></defs><rect x="220" y="14" width="86" height="52" fill="url(#dusk)"/></svg>
 <p class="note"><code>fill</code> and <code>opacity</code> of a circle, a <code>rotate()</code> of a rect about its own centre (<code>transform-box: fill-box</code>), and a gradient's <code>stop-color</code>: an element of an inline SVG takes the value its animation has at the sampled point, as an HTML box does.</p>
+<svg class="anim units" width="320" height="100"><path class="morph" d="M10 70 L40 20 L70 70 Z"/><line class="dashes" x1="130" y1="20" x2="310" y2="20"/><defs><rect id="swatch" class="lend" width="40" height="30"/></defs><use href="#swatch" x="130" y="40" fill="#1d4ed8"/><g><text class="textgrow" x="200" y="80">Ab</text></g></svg>
+<p class="note"><code>d: path(...) → path(...)</code> mixes the two triangles point by point; <code>stroke-dasharray: 4 6 → 20 6 2</code> repeats both lists to six items and mixes them item by item; a rect animated with <code>to { fill: red }</code> and drawn through a <code>&lt;use fill="#1d4ed8"&gt;</code> mixes from the use's blue (not from black); and the text grows from the <code>2em</code> (20px) its parent group computes to, to 40px.</p>
 </body></html>
 """;
 
 await SaveStatesShowcaseAsync("css_animation", "Graphics & Effects", "CSS Animations: Start, Midpoint and End",
-    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box, a box on a linear() spring curve, a border that mixes toward currentcolor, a gradient whose stops mix with currentcolor, an oklch() color mixed in Oklab and a box whose two transform lists differ in their functions (mixed through matrix decomposition) move between the states. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
+    "One page animated with CSS, rendered at three points by PdfGenerateConfig.AnimationProgress: page 1 at 0 (the start of every animation), page 2 at 0.5 (half way through each animation's own run) and page 3 at 1 (the end). The two logos cross-fade (without the option they are drawn on top of each other), and a bar, a color, a rotating tile with a growing shadow, a stepped box, a box on a linear() spring curve, a border that mixes toward currentcolor, a gradient whose stops mix with currentcolor, an oklch() color mixed in Oklab and a box whose two transform lists differ in their functions (mixed through matrix decomposition) move between the states, and in an inline SVG a path that morphs, dash lists of different lengths, a <use> instance and text under an em ancestor do too. With animation-direction: alternate the first cycle still runs forward, so the end is the 100% keyframe.",
     AnimationHtml,
     ("start (AnimationProgress = 0)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0 }),
     ("midpoint (AnimationProgress = 0.5)", new PdfGenerateConfig { PageSize = PageSize.A4, PageOrientation = PageOrientation.Portrait, AnimationProgress = 0.5 }),

@@ -67,12 +67,12 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   (it flips), and `#rrggbbaa` inside a shadow list does not mix even without `currentcolor`.
 - **CSS animations on inline `<svg>` elements have gaps.** The elements of an inline `<svg>` are animated (see
   docs/supported-svg-features.md), but a standalone SVG (`<img src="x.svg">`) is not; a keyframe shorthand such as `marker` is
-  not expanded (`font` is); content reached through `<use>` mixes from the referenced tree's value; an ancestor's `em`/`%` underlying value
-  is read raw; unequal `stroke-dasharray` lists flip; a negative `r` in a keyframe is not rejected; `currentcolor` in a keyframe
-  is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed frames (which use the element's own `color`) and not by the end
-  points (#1798).
-- **Gradients, `calc()` of another shape and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
-  way; `calc()` against a value of another shape flips; `@-webkit-keyframes` and `-webkit-animation` are ignored.
+  not expanded (`font` is); a `stroke-dasharray` item pair of two units (`4px` against `10%`) flips, where a browser writes a `calc()` (#2126);
+  two `stroke-dasharray` lists that need more than 256 items to repeat to a common length flip, where a browser mixes them; a `var()` that
+  resolves to a negative number in a keyframe of `r`, `width` and the like is mixed, where a browser treats it as invalid at computed-value time; `rem` in an inline svg is the svg root's font size, where it is the HTML root's (#2125, static as well); an ancestor's `font-size` as a keyword (`larger`, `x-large`) or in `vw` is not resolved when an animation starts from it (#2131); `var()` and `currentcolor` in a keyframe on a `<use>` instance read the referenced element's own custom properties and `color` (#2130); `currentcolor` in a keyframe is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed
+  frames (which use the element's own `color`) and not by the end points (#1798).
+- **Gradients and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
+  way; `@-webkit-keyframes` and `-webkit-animation` are ignored.
 - **`prefers-reduced-motion` is reported as `reduce`** (a static PDF has no motion), so the common
   `@media (prefers-reduced-motion: reduce) { * { animation: none !important } }` reset switches every animation off even
   when a progress is set. That is the browser-faithful answer for the media feature; a caller who wants a frame despite such a
