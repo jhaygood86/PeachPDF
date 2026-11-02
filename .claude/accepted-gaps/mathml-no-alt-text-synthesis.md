@@ -1,14 +1,9 @@
-# No /Alt or /ActualText spoken-math synthesis for a tagged Formula structure element
+# The spoken form of a formula is plain, and there is no /ActualText
 
-`StructureTagBuilder.AttachMathMlSource` attaches a `<math>` element's original MathML markup as a PDF
-2.0 Associated File on its `Formula` structure element (see
-[MathML Associated Files](../../docs/html-css-support.md#mathml-associated-files)), but does not set the
-structure element's `/Alt` (alternate description) or `/ActualText` (a textual substitute for the marked
-content) entries to any kind of generated spoken-math description (e.g. "x squared plus one" for
-`x^2 + 1`). Generating one would require a real math-to-speech engine - out of scope for this project.
+A tagged `Formula` structure element has an `/Alt`: the `<math>` element's `alttext`, its `aria-label`, or else a plain English reading from `MathSpeech`
+(`x² + 1` is "x squared plus 1"). That reading covers fractions, roots, scripts, sums and limits, fences, tables, the usual operators and Greek letters; it is
+not a full speech-rule system - no other language, no ClearSpeak or MathSpeak styles, no pausing or prosody hints. Nothing sets `/ActualText`.
 
-This is arguably not a functional accessibility gap rather than a deliberate omission: the `/AF`-attached
-exact MathML source is itself a complete, spec-conformant accessible representation per PDF/UA-2 (assistive
-technology reads the attached MathML directly, rather than relying on a lossy natural-language
-approximation baked into `/Alt`). Recorded here mainly so a future reader auditing PDF/UA-2 conformance
-claims for this feature knows the omission was considered, not missed.
+This is arguably not a functional accessibility gap: the original MathML is attached to the element as a PDF 2.0 Associated File (`/AF`, see
+[MathML Associated Files](../../docs/html-css-support.md#mathml-associated-files)), an exact and complete accessible representation that assistive technology can read
+directly, which is better than any natural-language approximation in `/Alt`. An author who needs a precise reading gives `alttext`.

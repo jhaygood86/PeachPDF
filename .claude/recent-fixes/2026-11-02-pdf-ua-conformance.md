@@ -1,0 +1,10 @@
+# A PDF/UA claim: `PdfUAConformance`
+
+`PdfComposerOptions.UAConformance` / `PdfGenerateConfig.PdfUAConformance` (`UA1`, `UA2`; CLI `--pdfua=1|2`) make a file claim ISO 14289. It follows PDF/X's shape (an enum on both layers, `ToEngine` cast, a setting on `PdfDocumentOptions`) and PDF/A's accessible levels' requirements.
+
+- **What a claim does:** XMP `pdfuaid:part` (+ `pdfuaid:rev` 2024 for UA-2); an XMP packet is always written, so a creation date is required; a title and a language are required (the message names the missing one); figures get `/Alt` (empty = decorative) because the tag recorder is created with `requireAlternateText`; `/ViewerPreferences /DisplayDocTitle` is set by `Save` itself (the recorder's `Finish` does it only when called); `Save` throws if there is no tag recorder, since an untagged file cannot be PDF/UA.
+- **Versions:** UA-1 is PDF 1.7 (the header is raised to 1.7 - the writer's default for PDF/A-1 is 1.4 and does not need it - and an explicit `Pdf20` is rejected), UA-2 is PDF 2.0. UA-1 with PDF/A-4 or UA-2 with PDF/A-1/2/3 is a contradiction and throws. PDF/X is refused outright.
+- **PDF/A + PDF/UA needs an extension schema.** `pdfuaid` is not a predefined PDF/A schema, so when a PDF/A level is claimed too the packet gets a `pdfaExtension:schemas` description (`PdfUAExtensionSchemaDescription`, built like the Factur-X one; `part` and, for UA-2, `rev`, both `Integer`/`internal`). Without PDF/A it is not written (a test pins both).
+- **Encryption** is allowed only with `PdfPermissions.AllowAccessibilityExtract`.
+- **Not checked** (the writer cannot see them): heading level skips, reading order (the structure tree still follows paint order), the real quality of alternative text. Not done yet: `/Headers` and `/ID`, annotation names (`/Contents`, `/TU`), `/RoleMap` and PDF 2.0 namespaces, and a Matterhorn-style validator. Verify output with veraPDF.
+- Evidence: 16 tests through `PdfGenerator` reading the XMP and the written structure back, 6 on the composer, 5 CLI tests.

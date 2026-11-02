@@ -190,6 +190,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal string? SerializedSource => _serializedSource;
 
+        /// <summary>The formula said in English (see <see cref="MathSpeech"/>), worked out with <see cref="SerializedSource"/> before the child boxes were dropped; null before layout.</summary>
+        internal string? SpokenText { get; private set; }
+
         /// <summary>
         /// Builds the presentation tree and lays it out from this element's own children, once.
         /// Synchronous: unlike <see cref="CssBoxSvg"/>, MathML has no external resources
@@ -202,6 +205,7 @@ namespace PeachBrackets.Html.Dom
 
             IMathSourceNode sourceNode = _source is { } source ? source : new CssBoxMathSourceNode(this);
             _serializedSource = MathMlSerializer.Serialize(sourceNode);
+            SpokenText = MathSpeech.Speak(sourceNode);
             _document = MathTreeBuilder.Build(sourceNode, HtmlContainer!.RenderContext);
 
             // The root-relative units (rem/rex/rch/...) are the HTML root element's, found from this box; its size is in true points.

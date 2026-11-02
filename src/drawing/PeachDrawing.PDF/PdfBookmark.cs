@@ -43,6 +43,13 @@ namespace PeachDrawing.PDF
         /// </summary>
         public int? PageIndex { get; set; }
 
+        /// <summary>
+        /// The key the entry's destination was given when its structure element was opened with the <see cref="PdfTagRecorder"/>, or
+        /// <see langword="null"/>. In a PDF 2.0 file an entry that has one leads to that element (a structure destination, which PDF/UA-2
+        /// requires of every destination within the document); otherwise it leads to <see cref="PageIndex"/>.
+        /// </summary>
+        public object? StructureTarget { get; set; }
+
         /// <summary>How far below the top edge of <see cref="PageIndex"/>'s page the destination is, in points.</summary>
         public double TopPoints { get; set; }
     }

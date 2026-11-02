@@ -20,6 +20,9 @@ namespace PeachBrackets.Tagging
         /// <summary>Wraps the document element a box was generated for.</summary>
         internal StructureNode(CssBox box) => _box = box;
 
+        /// <summary>The box this node identifies.</summary>
+        internal CssBox Box => _box;
+
         /// <summary>Wraps a box as the node that identifies it.</summary>
         internal static StructureNode Of(CssBox box) => new(box);
 

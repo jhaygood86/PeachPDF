@@ -24,6 +24,7 @@ namespace PeachBrackets.Html.Semantics
         private readonly Dictionary<string, CssBox> _byElementId = new(StringComparer.Ordinal);
         private readonly Dictionary<string, List<CssBox>> _labelsFor = new(StringComparer.Ordinal);
         private readonly Dictionary<AccessibilityNode, int> _textCounts = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, AccessibilityNode> _nodeByBox = new(ReferenceEqualityComparer.Instance);
         private readonly HashSet<CssBox> _visitedSources = new(ReferenceEqualityComparer.Instance);
         private int _anonymous;
 
@@ -57,7 +58,7 @@ namespace PeachBrackets.Html.Semantics
                 ResolveStructure(root);
             }
 
-            return new AccessibilityTree(root);
+            return new AccessibilityTree(root, _nodeByBox);
         }
 
         private static IEnumerable<string> Texts(AccessibilityNode node)
@@ -210,8 +211,9 @@ namespace PeachBrackets.Html.Semantics
             ApplyStates(node, box, tag, role, context);
             ReadStructureAttributes(node, tag);
             node.Name = ComputeName(box, tag, role, out var nameFromTitle);
-            node.Description = ComputeDescription(tag, nameFromTitle);
+            node.Description = ComputeDescription(box, tag, nameFromTitle);
             parent.AddChild(node);
+            _nodeByBox[box] = node;
 
             // The text of something named by its content is its name: it has no text nodes below it, only the parts of it that are more than text.
             var below = inner with { SuppressText = RoleResolver.NamesFromContent(role) || IsLeaf(role) };

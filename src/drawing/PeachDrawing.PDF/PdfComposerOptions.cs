@@ -67,6 +67,13 @@ namespace PeachDrawing.PDF
         /// <summary>The PDF/A level the file claims. Defaults to <see cref="PdfAConformance.None"/>. Cannot be combined with <see cref="XConformance"/> or <see cref="Encryption"/>.</summary>
         public PdfAConformance Conformance { get; set; }
 
+        /// <summary>
+        /// The PDF/UA level the file claims. Defaults to <see cref="PdfUAConformance.None"/>. Can be combined with <see cref="Conformance"/> but not with
+        /// <see cref="XConformance"/>. A claim needs a tag recorder (<see cref="PdfComposer.CreateTagRecorder"/>), a <see cref="Title"/> and a
+        /// <see cref="Language"/>, and writes an XMP metadata packet (which needs <see cref="CreationDate"/>).
+        /// </summary>
+        public PdfUAConformance UAConformance { get; set; }
+
         /// <summary>The PDF/X level the file claims. Defaults to <see cref="PdfXConformance.None"/>. Needs a <see cref="ColorOptions"/> output intent.</summary>
         public PdfXConformance XConformance { get; set; }
 
