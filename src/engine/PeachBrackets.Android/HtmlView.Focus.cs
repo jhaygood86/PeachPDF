@@ -136,6 +136,7 @@ public sealed partial class HtmlView
             _surface.Invalidate();
         }
 
+        UpdateEditing();
         if (focusedId is not null && document.GetAccessibilityTree().FindById(focusedId) is { } focused)
         {
             RevealNode(focused);
