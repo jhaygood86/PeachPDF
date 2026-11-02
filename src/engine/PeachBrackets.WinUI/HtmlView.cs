@@ -344,9 +344,17 @@ public sealed partial class HtmlView : UserControl
         if ((uint)page >= (uint)_pageTops.Length)
             return;
 
-        _canvas.Invalidate(new Windows.Foundation.Rect(
-            pointsBounds.X * PixelsPerPoint, _pageTops[page] + (pointsBounds.Y * PixelsPerPoint),
-            pointsBounds.Width * PixelsPerPoint, pointsBounds.Height * PixelsPerPoint));
+        try
+        {
+            _canvas.Invalidate(new Windows.Foundation.Rect(
+                pointsBounds.X * PixelsPerPoint, _pageTops[page] + (pointsBounds.Y * PixelsPerPoint),
+                pointsBounds.Width * PixelsPerPoint, pointsBounds.Height * PixelsPerPoint));
+        }
+        catch (ArgumentException)
+        {
+            // The canvas refuses a region outside the size it has been laid out at, as when the document has just grown; all of it is painted again.
+            _canvas.Invalidate();
+        }
     }
 
     private void OnRegionsInvalidated(CanvasVirtualControl sender, CanvasRegionsInvalidatedEventArgs args)
