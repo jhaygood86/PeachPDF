@@ -66,6 +66,8 @@ public sealed class MainActivity : Activity
         };
         view.LinkTapped += (_, e) => Log.Info(Tag, $"link-tapped {e.Uri}");
         view.ScrollChanged += (_, _) => Log.Info(Tag, "scroll");
+        view.FocusChanged += (_, _) => Log.Info(Tag, $"focus={view.FocusedNode?.Name ?? "none"}");
+        view.RequestFocus();
         view.ZoomChanged += (_, _) => Log.Info(Tag, $"zoom {view.Zoom:0.00}");
     }
 }

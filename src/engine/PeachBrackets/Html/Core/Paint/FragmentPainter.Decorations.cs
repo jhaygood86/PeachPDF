@@ -529,6 +529,10 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         private static void PaintBoxShadows(Canvas g, CssBox box, in BoxDecorationGeometry geometry, bool inset)
         {
+            // Forced colors mode draws no shadows (CSS Color Adjust 1 section 3.1).
+            if (ForcedColorsAdjuster.DropsDecorations(box))
+                return;
+
             List<BoxShadowGrammar.ShadowLayer> layers;
             using (var pooledTokens = CssValueParser.GetCssTokensPooled(box.BoxShadow))
             {

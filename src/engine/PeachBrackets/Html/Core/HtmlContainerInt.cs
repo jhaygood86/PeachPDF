@@ -1304,6 +1304,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool InteractiveForms { get; set; }
 
+        /// <summary>Whether form controls are drawn with their look (check marks, values, labels) for a host that shows the page.</summary>
+        internal bool PaintFormControls { get; set; }
+
         /// <summary>
         /// The selected words and the parts of them that are selected, painted in their <c>::selection</c> style (or the defaults below).
         /// Null (the default) paints no selection, so the painter does nothing extra.

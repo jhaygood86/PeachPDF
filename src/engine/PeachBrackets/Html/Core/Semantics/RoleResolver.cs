@@ -53,6 +53,24 @@ namespace PeachBrackets.Html.Semantics
             ["treegrid"] = AccessibilityRole.TreeGrid, ["treeitem"] = AccessibilityRole.TreeItem, ["graphics-document"] = AccessibilityRole.GraphicsDocument,
         };
 
+        private static readonly Dictionary<AccessibilityRole, string> AriaNames = BuildAriaNames();
+
+        private static Dictionary<AccessibilityRole, string> BuildAriaNames()
+        {
+            var names = new Dictionary<AccessibilityRole, string>();
+            foreach (var (name, role) in RoleNames)
+            {
+                // "img" before "image", "presentation" before "none": the first spelling of a role is its name.
+                if (name is not ("image" or "none"))
+                    names.TryAdd(role, name);
+            }
+
+            return names;
+        }
+
+        /// <summary>The WAI-ARIA name of a role, or null for one that has none (plain text).</summary>
+        public static string? AriaName(AccessibilityRole role) => AriaNames.GetValueOrDefault(role);
+
         /// <summary>The roles whose name may come from the content of the element (WAI-ARIA 1.2, "Name From: contents").</summary>
         private static readonly HashSet<AccessibilityRole> NameFromContent =
         [

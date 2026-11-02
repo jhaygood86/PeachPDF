@@ -108,6 +108,21 @@ A tagged PDF built from a document carries the same names, languages and table d
 [PDF/UA](https://pdfa.org/resource/iso-14289-pdfua/): it identifies it in the XMP metadata, requires a title, a language and a creation date, gives every
 figure alternative text, and shows the title in the viewer. See [Generating PDF/UA (accessible) output](usage-examples.md#generating-pdfua-accessible-output).
 
+## Other formats
+
+`HtmlDocument.PaintAccessibility(pageIndex, canvas)` hands the tree to any `Canvas` as `AddSemanticRegion` calls: one unpainted region per part of a
+page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
+level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
+readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
+nesting) and the Skia and Win2D canvases ignore them for now.
+
+## Form controls
+
+A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the engine draws every `<input>` and `<select>` itself from the
+control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
+buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges; `progress`, `meter`, the date and colour inputs, a `textarea` and
+typing into a field are not drawn or handled yet. The accessibility tree already reports each control's role, name and state.
+
 ## Preferences and text spacing
 
 A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with
@@ -118,6 +133,23 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 [`prefers-reduced-transparency`](https://developer.mozilla.org/en-US/docs/Web/CSS/@media/prefers-reduced-transparency) and
 `prefers-reduced-data`. The defaults are those of a static document. `HtmlDocumentOptions.TextSpacing` applies the spacing
 [WCAG 1.4.12](https://www.w3.org/TR/WCAG22/#text-spacing) asks a page to survive (`TextSpacingOverrides.Wcag`) over the document's own.
+
+### Forced colors
+
+With `UserPreferences.ForcedColors` on, the document is also drawn in the colours of `UserPreferences.ForcedPalette` (a
+`SystemColorPalette`: `Canvas`, `CanvasText`, `LinkText`, `ButtonFace`... filled from the platform, or `SystemColorPalette.Light` / `.Dark`), as a
+browser does under a Windows high contrast theme: text takes `CanvasText` (`LinkText` in a link, `ButtonText` in a button, `FieldText` in a field),
+backgrounds take `Canvas` (`ButtonFace`, `Field`, `Mark`), borders, outlines and column rules take `CanvasText` (`ButtonBorder` on a control),
+and box shadows and text shadows are not drawn. A fully transparent colour stays transparent. An element opts out with
+[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text colour with
+`preserve-parent-color`. The CSS [system colour keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
+work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes. Gradient backgrounds are
+not dropped yet.
+
+### Text size
+
+`HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a
+percentage or a keyword follows the reader's text size setting, and text sized in `px` or `pt` does not, as in a browser.
 
 ## Limits of this version
 

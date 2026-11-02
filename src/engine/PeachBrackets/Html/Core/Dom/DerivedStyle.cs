@@ -259,7 +259,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (BorderColors._top.IsEmpty)
                     BorderColors._top = ResolveBorderSideColor(Style.Border.BorderTopColor, Style.Border.BorderTopStyle.Value);
-                return BorderColors._top;
+                return ForcedColorsAdjuster.Border(Owner, BorderColors._top);
             }
         }
 
@@ -269,7 +269,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (BorderColors._right.IsEmpty)
                     BorderColors._right = ResolveBorderSideColor(Style.Border.BorderRightColor, Style.Border.BorderRightStyle.Value);
-                return BorderColors._right;
+                return ForcedColorsAdjuster.Border(Owner, BorderColors._right);
             }
         }
 
@@ -279,7 +279,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (BorderColors._bottom.IsEmpty)
                     BorderColors._bottom = ResolveBorderSideColor(Style.Border.BorderBottomColor, Style.Border.BorderBottomStyle.Value);
-                return BorderColors._bottom;
+                return ForcedColorsAdjuster.Border(Owner, BorderColors._bottom);
             }
         }
 
@@ -289,7 +289,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (BorderColors._left.IsEmpty)
                     BorderColors._left = ResolveBorderSideColor(Style.Border.BorderLeftColor, Style.Border.BorderLeftStyle.Value);
-                return BorderColors._left;
+                return ForcedColorsAdjuster.Border(Owner, BorderColors._left);
             }
         }
 
@@ -351,7 +351,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (Paint._actualColumnRuleColor.IsEmpty) Paint._actualColumnRuleColor = Owner.GetActualColor(Style.MultiColumn.ColumnRuleColor);
-                return Paint._actualColumnRuleColor;
+                return ForcedColorsAdjuster.Line(Owner, Paint._actualColumnRuleColor);
             }
         }
 
@@ -413,7 +413,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (Paint._actualOutlineColor.IsEmpty) Paint._actualOutlineColor = Owner.GetActualColor(Style.Border.OutlineColor);
-                return Paint._actualOutlineColor;
+                return ForcedColorsAdjuster.Line(Owner, Paint._actualOutlineColor);
             }
         }
 
@@ -1249,7 +1249,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (_actualColor.IsEmpty) _actualColor = Owner.GetActualColor(Style.Text.Color);
-                return _actualColor;
+                return ForcedColorsAdjuster.Text(Owner, _actualColor);
             }
         }
 
@@ -1258,7 +1258,7 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 if (_actualBackgroundColor.IsEmpty) _actualBackgroundColor = Owner.GetActualColor(Style.Background.BackgroundColor);
-                return _actualBackgroundColor;
+                return ForcedColorsAdjuster.Background(Owner, _actualBackgroundColor);
             }
         }
 
