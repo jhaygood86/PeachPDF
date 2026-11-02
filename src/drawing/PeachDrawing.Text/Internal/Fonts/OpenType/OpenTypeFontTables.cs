@@ -1191,6 +1191,33 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             Read();
         }
 
+        // A face with no OS/2 table (the table is optional in a TrueType font, and some system fonts leave it out) is given the one a plain face
+        // would have: regular or bold and italic as the head table's style bits say, and the vertical metrics the hhea table gives.
+        private OS2Table(OpenTypeFontface fontData, FontHeaderTable? head, HorizontalHeaderTable? hhea)
+            : base(fontData, Tag)
+        {
+            var bold = head is not null && (head.macStyle & 1) != 0;
+            var italic = head is not null && (head.macStyle & 2) != 0;
+            usWeightClass = bold ? (ushort)700 : (ushort)400;
+            usWidthClass = 5;
+            fsSelection = (ushort)((italic ? FontSelectionFlags.Italic : 0) | (bold ? FontSelectionFlags.Bold : 0) | (!bold && !italic ? FontSelectionFlags.Regular : 0));
+            panose = new byte[10];
+            achVendID = string.Empty;
+            usLastCharIndex = 0xFFFF;
+            usBreakChar = 0x20;
+            if (hhea is not null)
+            {
+                sTypoAscender = hhea.ascender;
+                sTypoDescender = hhea.descender;
+                sTypoLineGap = hhea.lineGap;
+                usWinAscent = (ushort)Math.Max((int)hhea.ascender, 0);
+                usWinDescent = (ushort)Math.Max(-(int)hhea.descender, 0);
+            }
+        }
+
+        /// <summary>The table to use for a face that has none, from its <paramref name="head"/> and <paramref name="hhea"/> tables (either may be missing).</summary>
+        internal static OS2Table ForFaceWithoutOs2(OpenTypeFontface fontData, FontHeaderTable? head, HorizontalHeaderTable? hhea) => new(fontData, head, hhea);
+
         public void Read()
         {
             try

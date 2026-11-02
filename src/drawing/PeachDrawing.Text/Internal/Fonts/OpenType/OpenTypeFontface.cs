@@ -297,6 +297,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 if (Seek(OS2Table.Tag) != -1)
                     os2 = new OS2Table(this);
 
+                if (os2 is null)
+                    os2 = OS2Table.ForFaceWithoutOs2(this, head, hhea);
+
                 if (Seek(PostScriptTable.Tag) != -1)
                     post = new PostScriptTable(this);
 
