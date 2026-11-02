@@ -60,11 +60,13 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 
 ## Accessibility
 
-The view is exposed to UI Automation as a **Document** whose children are the page's blocks of text - paragraphs and list items as **Text**,
-headings as **Text** with a heading level (`AutomationHeadingLevel`), and each link, below the block that holds it, as a **Hyperlink** with the
-**Invoke** pattern (invoking it follows the link exactly as a click does, including `LinkClicked`). Every node has its bounding rectangle on the
-screen and reports whether it is scrolled out of view, so Narrator can read the page, jump by heading and follow links. The tree is rebuilt
-whenever a document loads or reflows. Reading comes from `HtmlDocument.GetAccessibleNodes()`, which any other host can use too.
+The view is exposed to UI Automation as a **Document** whose children follow the page's [accessibility tree](accessibility.md): a paragraph,
+a list item or a heading (with its `AutomationHeadingLevel`) is **Text**, a link is a **Hyperlink** with the **Invoke** pattern (invoking it
+follows the link exactly as a click does, including `LinkClicked`), and controls, lists, tables, images and separators have the control type of what
+they are (Button, CheckBox, RadioButton, Edit, ComboBox, Slider, ProgressBar, List, ListItem, Table, HeaderItem, Image, Separator...). Landmarks
+(`main`, `nav`, `search`, forms, banners) report their `AutomationLandmarkType`, live regions their `AutomationLiveSetting`, a description is the
+help text, and a disabled control is not enabled. Every node has its bounding rectangle on the screen and reports whether it is scrolled out
+of view, so Narrator can read the page, jump by heading or landmark and follow links. The tree is rebuilt whenever a document loads or reflows.
 
 `src/examples/PeachBrackets.WinUI.Example/Verify-Accessibility.ps1` starts the example and checks that tree through the UI Automation client
 API (it needs a desktop session).

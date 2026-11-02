@@ -87,7 +87,7 @@ public class HtmlViewTests
         });
 
         Assert.Equal("https://example.com/", uri);
-        Assert.StartsWith("node", anchor);
+        Assert.False(string.IsNullOrEmpty(anchor));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public class HtmlViewTests
                 seenUri = e.Uri;
                 seenAnchor = e.Destination;
             };
-            var link = DocumentPeer(view)!.GetChildren()[0].GetChildren().First();
+            var link = DocumentPeer(view)!.GetChildren()[0];
             ((IInvokeProvider)link.GetPattern(PatternInterface.Invoke)).Invoke();
             await Task.Delay(100);
             return (seenUri, seenAnchor);
@@ -212,6 +212,39 @@ public class HtmlViewTests
         });
 
         Assert.True(reloaded);
+    }
+
+    [Fact]
+    public async Task LandmarksControlsAndTablesAreToldToUiAutomationWithTheirOwnTypes()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<nav aria-label='Site'><a href='#x'>Home</a></nav><main><button disabled aria-describedby=d>Save</button><span id=d>Saves it</span>"
+                + "<table><tr><th>Head</th></tr><tr><td>Cell</td></tr></table></main>");
+            var top = DocumentPeer(view)!.GetChildren();
+            var nav = top.First(c => c.GetLandmarkType() == AutomationLandmarkType.Navigation);
+            var main = top.First(c => c.GetLandmarkType() == AutomationLandmarkType.Main);
+            var button = Descend(main).First(c => c.GetAutomationControlType() == AutomationControlType.Button);
+            var table = Descend(main).First(c => c.GetAutomationControlType() == AutomationControlType.Table);
+            return new[]
+            {
+                nav.GetName(), nav.GetChildren()[0].GetAutomationControlType().ToString(),
+                button.GetName(), button.IsEnabled().ToString(), button.GetHelpText(),
+                Descend(table).Any(c => c.GetAutomationControlType() == AutomationControlType.HeaderItem).ToString(),
+            };
+        });
+
+        Assert.Equal(["Site", "Hyperlink", "Save", "False", "Saves it", "True"], facts);
+    }
+
+    private static IEnumerable<AutomationPeer> Descend(AutomationPeer peer)
+    {
+        foreach (var child in peer.GetChildren() ?? [])
+        {
+            yield return child;
+            foreach (var below in Descend(child))
+                yield return below;
+        }
     }
 
     // A UserControl has no automation peer of its own: the view's is carried by an element inside it.

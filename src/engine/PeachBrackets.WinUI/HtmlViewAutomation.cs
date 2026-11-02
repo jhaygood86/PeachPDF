@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
 using Microsoft.UI.Xaml.Controls;
+using PeachBrackets.Accessibility;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,14 +13,14 @@ namespace PeachBrackets.WinUI;
 
 public sealed partial class HtmlView
 {
-    private IReadOnlyList<AccessibleNode> _accessibleNodes = [];
+    private AccessibilityTree? _accessibilityTree;
 
-    internal IReadOnlyList<AccessibleNode> AccessibleNodes => _accessibleNodes;
+    internal AccessibilityTree? AccessibilityTree => _accessibilityTree;
 
     // Called when a document has laid out: the tree a screen reader walks is rebuilt from it.
     private void RefreshAccessibility(HtmlDocument document)
     {
-        _accessibleNodes = document.GetAccessibleNodes();
+        _accessibilityTree = document.GetAccessibilityTree();
         if (AutomationPeer.ListenerExists(AutomationEvents.StructureChanged) && FrameworkElementAutomationPeer.FromElement(_host) is HtmlViewAutomationPeer peer)
         {
             peer.Invalidate();
@@ -28,26 +29,28 @@ public sealed partial class HtmlView
     }
 
     /// <summary>Where a node is on the screen, in the screen's own pixels, given where the view is.</summary>
-    internal Rect NodeBounds(AccessibleNode node, Rect viewOnScreen)
+    internal Rect NodeBounds(AccessibilityNode node, Rect viewOnScreen)
     {
-        if ((uint)node.PageIndex >= (uint)_pageTops.Length)
+        // A node that crosses a page break is on more than one page; it is reported where it starts.
+        if (node.Bounds.Count == 0 || (uint)node.Bounds[0].PageIndex >= (uint)_pageTops.Length)
             return default;
 
+        var (pageIndex, bounds) = node.Bounds[0];
         var zoom = _scroller.ZoomFactor;
-        var x = (node.Bounds.X * PixelsPerPoint * zoom) - _scroller.HorizontalOffset;
-        var y = ((_pageTops[node.PageIndex] + (node.Bounds.Y * PixelsPerPoint)) * zoom) - _scroller.VerticalOffset;
-        return new Rect(viewOnScreen.X + x, viewOnScreen.Y + y, node.Bounds.Width * PixelsPerPoint * zoom, node.Bounds.Height * PixelsPerPoint * zoom);
+        var x = (bounds.X * PixelsPerPoint * zoom) - _scroller.HorizontalOffset;
+        var y = ((_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * zoom) - _scroller.VerticalOffset;
+        return new Rect(viewOnScreen.X + x, viewOnScreen.Y + y, bounds.Width * PixelsPerPoint * zoom, bounds.Height * PixelsPerPoint * zoom);
     }
 
     /// <summary>Whether a node lies outside what the view shows.</summary>
-    internal bool IsOffscreen(AccessibleNode node)
+    internal bool IsOffscreen(AccessibilityNode node)
     {
         var rect = NodeBounds(node, new Rect(0, 0, 0, 0));
         return rect.Bottom < 0 || rect.Top > _scroller.ViewportHeight || rect.Right < 0 || rect.Left > _scroller.ViewportWidth;
     }
 
     /// <summary>Follows a link a screen reader activated, as a click on it would.</summary>
-    internal void ActivateLink(AccessibleNode node)
+    internal void ActivateLink(AccessibilityNode node)
     {
         if (node.Uri is not { } uri)
             return;
@@ -64,12 +67,13 @@ public sealed partial class HtmlView
     }
 
     /// <summary>Scrolls a node into view when a screen reader moves to it.</summary>
-    internal void BringIntoView(AccessibleNode node)
+    internal void BringIntoView(AccessibilityNode node)
     {
-        if ((uint)node.PageIndex >= (uint)_pageTops.Length)
+        if (node.Bounds.Count == 0 || (uint)node.Bounds[0].PageIndex >= (uint)_pageTops.Length)
             return;
 
-        var y = (_pageTops[node.PageIndex] + (node.Bounds.Y * PixelsPerPoint)) * _scroller.ZoomFactor;
+        var (pageIndex, bounds) = node.Bounds[0];
+        var y = (_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * _scroller.ZoomFactor;
         _scroller.ChangeView(null, Math.Max(0, y - 40), null);
     }
 }
@@ -122,20 +126,11 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
     {
         if (_children is null)
         {
-            var nodes = _view.AccessibleNodes;
             var peers = new List<AutomationPeer>();
-            var blocks = new Dictionary<int, HtmlNodeAutomationPeer>();
-            for (var i = 0; i < nodes.Count; i++)
+            if (_view.AccessibilityTree is { } tree)
             {
-                if (nodes[i].ParentIndex >= 0 && blocks.TryGetValue(nodes[i].ParentIndex, out var block))
-                {
-                    block.AddChild(new HtmlNodeAutomationPeer(this, block, _view, nodes[i], i));
-                    continue;
-                }
-
-                var peer = new HtmlNodeAutomationPeer(this, this, _view, nodes[i], i);
-                peers.Add(peer);
-                blocks[i] = peer;
+                foreach (var node in tree.Root.ReadingChildren)
+                    peers.Add(new HtmlNodeAutomationPeer(this, this, _view, node));
             }
 
             _children = peers;
@@ -147,42 +142,49 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
     internal Rect ViewBounds => GetBoundingRectangle();
 }
 
-/// <summary>One block of text, or one link, in the tree a screen reader walks.</summary>
+/// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
 internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
-    private readonly AccessibleNode _node;
-    private readonly int _index;
+    private readonly AccessibilityNode _node;
     private readonly List<AutomationPeer> _children = [];
 
-    public HtmlNodeAutomationPeer(HtmlViewAutomationPeer root, AutomationPeer parent, HtmlView view, AccessibleNode node, int index)
+    public HtmlNodeAutomationPeer(HtmlViewAutomationPeer root, AutomationPeer parent, HtmlView view, AccessibilityNode node)
     {
         _root = root;
         _view = view;
         _node = node;
-        _index = index;
         SetParent(parent);
+        foreach (var child in node.ReadingChildren)
+            _children.Add(new HtmlNodeAutomationPeer(root, this, view, child));
     }
 
-    public void AddChild(AutomationPeer child) => _children.Add(child);
-
-    protected override AutomationControlType GetAutomationControlTypeCore() => _node.Role switch
-    {
-        AccessibleRole.Link => AutomationControlType.Hyperlink,
-        AccessibleRole.ListItem => AutomationControlType.ListItem,
-        _ => AutomationControlType.Text,
-    };
+    protected override AutomationControlType GetAutomationControlTypeCore() => HtmlViewLogic.ToControlType(_node.Role);
 
     protected override string GetClassNameCore() => "HtmlNode";
 
-    protected override string GetNameCore() => _node.Text;
+    protected override string GetNameCore() => _node.ReadingText;
 
-    protected override string GetAutomationIdCore() => "node" + _index;
+    protected override string GetHelpTextCore() => _node.Description;
 
-    protected override AutomationHeadingLevel GetHeadingLevelCore() => _node.Role == AccessibleRole.Heading
-        ? (AutomationHeadingLevel)Math.Clamp(_node.HeadingLevel, 1, 9)
+    protected override string GetAutomationIdCore() => _node.Id;
+
+    protected override AutomationHeadingLevel GetHeadingLevelCore() => _node.Role == AccessibilityRole.Heading
+        ? (AutomationHeadingLevel)Math.Clamp(_node.Level, 1, 9)
         : AutomationHeadingLevel.None;
+
+    protected override AutomationLandmarkType GetLandmarkTypeCore() => HtmlViewLogic.ToLandmarkType(_node.Role);
+
+    protected override string GetLocalizedLandmarkTypeCore() => HtmlViewLogic.LandmarkName(_node.Role) ?? base.GetLocalizedLandmarkTypeCore();
+
+    protected override AutomationLiveSetting GetLiveSettingCore() => HtmlViewLogic.ToLiveSetting(_node.Live);
+
+    protected override string GetAcceleratorKeyCore() => _node.KeyShortcuts ?? string.Empty;
+
+    protected override string GetAccessKeyCore() => _node.AccessKey ?? string.Empty;
+
+    protected override bool IsRequiredForFormCore() => _node.Required;
 
     protected override Rect GetBoundingRectangleCore() => _view.NodeBounds(_node, _root.ViewBounds);
 
@@ -192,8 +194,9 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
 
     protected override bool IsControlElementCore() => true;
 
-    protected override bool IsEnabledCore() => true;
+    protected override bool IsEnabledCore() => !_node.Disabled;
 
+    // The view does not move keyboard focus between the parts of a page yet, so none of them claims to take it.
     protected override bool IsKeyboardFocusableCore() => false;
 
     protected override bool HasKeyboardFocusCore() => false;
@@ -201,7 +204,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
     protected override IList<AutomationPeer> GetChildrenCore() => _children;
 
     protected override object? GetPatternCore(PatternInterface patternInterface) =>
-        patternInterface == PatternInterface.Invoke && _node.Role == AccessibleRole.Link ? this : null;
+        patternInterface == PatternInterface.Invoke && _node.Role == AccessibilityRole.Link ? this : null;
 
     protected override void ShowContextMenuCore() { }
 

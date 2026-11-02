@@ -3,6 +3,7 @@ using Android.OS;
 using Android.Runtime;
 using Android.Views;
 using Android.Views.Accessibility;
+using PeachBrackets.Accessibility;
 using PeachBrackets.Android.Logic;
 using AndroidUri = Android.Net.Uri;
 using Action = Android.Views.Accessibility.Action;
@@ -15,17 +16,39 @@ namespace PeachBrackets.Android;
 
 public sealed partial class HtmlView
 {
-    private IReadOnlyList<AccessibleNode> _accessibleNodes = [];
+    // The parts of the page an accessibility service steps to, in reading order: virtual view i + 1 is _a11yNodes[i], and the host is -1.
+    private AccessibilityNode[] _a11yNodes = [];
+    private int[] _a11yParents = [];
+    private Dictionary<AccessibilityNode, int> _a11yIds = new(ReferenceEqualityComparer.Instance);
     private TextNodeProvider? _accessibility;
     private int _accessibilityFocus = AccessibilityNodeProvider.HostViewId;
 
-    /// <inheritdoc />
+    /// <inheritdoc/>
     public override AccessibilityNodeProvider? AccessibilityNodeProvider => _accessibility ??= new TextNodeProvider(this);
 
     // Called when a document has laid out: the tree an accessibility service walks is rebuilt from it.
     private void RefreshAccessibility(HtmlDocument document)
     {
-        _accessibleNodes = document.GetAccessibleNodes();
+        var nodes = new List<AccessibilityNode>();
+        var parents = new List<int>();
+        var ids = new Dictionary<AccessibilityNode, int>(ReferenceEqualityComparer.Instance);
+
+        void Add(AccessibilityNode node, int parentId)
+        {
+            nodes.Add(node);
+            parents.Add(parentId);
+            var id = nodes.Count;
+            ids[node] = id;
+            foreach (var child in node.ReadingChildren)
+                Add(child, id);
+        }
+
+        foreach (var child in document.GetAccessibilityTree().Root.ReadingChildren)
+            Add(child, AccessibilityNodeProvider.HostViewId);
+
+        _a11yNodes = [.. nodes];
+        _a11yParents = [.. parents];
+        _a11yIds = ids;
         _accessibilityFocus = AccessibilityNodeProvider.HostViewId;
         ImportantForAccessibility = ImportantForAccessibility.Yes;
         if (IsAccessibilityEnabled())
@@ -35,19 +58,20 @@ public sealed partial class HtmlView
     private bool IsAccessibilityEnabled() =>
         Context?.GetSystemService(Context.AccessibilityService) is AccessibilityManager { IsEnabled: true };
 
-    // A node's rectangle in the view's own pixels, as it is drawn now.
-    private global::Android.Graphics.Rect NodeRect(AccessibleNode node)
+    // A node's rectangle in the view's own pixels, as it is drawn now. A node that crosses a page break is reported where it starts.
+    private global::Android.Graphics.Rect NodeRect(AccessibilityNode node)
     {
-        if ((uint)node.PageIndex >= (uint)_pageTops.Length)
+        if (node.Bounds.Count == 0 || (uint)node.Bounds[0].PageIndex >= (uint)_pageTops.Length)
             return new global::Android.Graphics.Rect();
 
+        var (pageIndex, bounds) = node.Bounds[0];
         var scale = Scale;
-        var left = (node.Bounds.X * PixelsPerPoint * scale) - _scrollX;
-        var top = ((_pageTops[node.PageIndex] + (node.Bounds.Y * PixelsPerPoint)) * scale) - _scrollY;
-        return new global::Android.Graphics.Rect((int)left, (int)top, (int)(left + (node.Bounds.Width * PixelsPerPoint * scale)), (int)(top + (node.Bounds.Height * PixelsPerPoint * scale)));
+        var left = (bounds.X * PixelsPerPoint * scale) - _scrollX;
+        var top = ((_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * scale) - _scrollY;
+        return new global::Android.Graphics.Rect((int)left, (int)top, (int)(left + (bounds.Width * PixelsPerPoint * scale)), (int)(top + (bounds.Height * PixelsPerPoint * scale)));
     }
 
-    private void FollowLinkNode(AccessibleNode node)
+    private void FollowLinkNode(AccessibilityNode node)
     {
         if (node.Uri is not { } uri)
             return;
@@ -70,7 +94,7 @@ public sealed partial class HtmlView
     }
 
     // Scrolls so that a node an accessibility service moved to is on screen.
-    private void RevealNode(AccessibleNode node)
+    private void RevealNode(AccessibilityNode node)
     {
         var rect = NodeRect(node);
         if (rect.Top < 0)
@@ -90,18 +114,19 @@ public sealed partial class HtmlView
 
         accessibilityEvent.SetSource(this, virtualViewId);
         accessibilityEvent.PackageName = Context?.PackageName;
-        accessibilityEvent.ClassName = "android.widget.TextView";
-        if (virtualViewId > 0 && virtualViewId <= _accessibleNodes.Count)
-            accessibilityEvent.Text?.Add(new Java.Lang.String(_accessibleNodes[virtualViewId - 1].Text));
+        if (virtualViewId > 0 && virtualViewId <= _a11yNodes.Length)
+        {
+            var node = _a11yNodes[virtualViewId - 1];
+            accessibilityEvent.ClassName = AccessibilityMapping.ClassName(node.Role);
+            accessibilityEvent.Text?.Add(new Java.Lang.String(node.ReadingText));
+        }
 
         Parent.RequestSendAccessibilityEvent(this, accessibilityEvent);
     }
 
-    // The blocks of text and the links of the document as virtual views: the host is -1 and node i is i + 1.
+    // The parts of the document as virtual views: the host is -1 and node i is i + 1.
     private sealed class TextNodeProvider(HtmlView view) : AccessibilityNodeProvider
     {
-        private const string TextClass = "android.widget.TextView";
-
         public override AccessibilityNodeInfo? CreateAccessibilityNodeInfo(int virtualViewId)
         {
             return virtualViewId == HostViewId ? CreateHost() : CreateNode(virtualViewId);
@@ -116,9 +141,9 @@ public sealed partial class HtmlView
             info.Scrollable = true;
             info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionScrollForward);
             info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionScrollBackward);
-            for (var i = 0; i < view._accessibleNodes.Count; i++)
+            for (var i = 0; i < view._a11yNodes.Length; i++)
             {
-                if (view._accessibleNodes[i].ParentIndex < 0)
+                if (view._a11yParents[i] == HostViewId)
                     info.AddChild(view, i + 1);
             }
 
@@ -128,18 +153,28 @@ public sealed partial class HtmlView
         private AccessibilityNodeInfo? CreateNode(int virtualViewId)
         {
             var index = virtualViewId - 1;
-            if ((uint)index >= (uint)view._accessibleNodes.Count)
+            if ((uint)index >= (uint)view._a11yNodes.Length)
                 return null;
 
-            var node = view._accessibleNodes[index];
+            var node = view._a11yNodes[index];
             var info = AccessibilityNodeInfo.Obtain()!;
             info.SetSource(view, virtualViewId);
-            info.SetParent(view, node.ParentIndex >= 0 ? node.ParentIndex + 1 : HostViewId);
+            info.SetParent(view, view._a11yParents[index]);
             info.PackageName = view.Context?.PackageName;
-            info.ClassName = TextClass;
-            info.Text = node.Text;
-            info.Enabled = true;
+            info.ClassName = AccessibilityMapping.ClassName(node.Role);
+            info.Enabled = !node.Disabled;
             info.VisibleToUser = true;
+            info.ContentInvalid = node.Invalid;
+            info.LiveRegion = (AccessibilityLiveRegion)AccessibilityMapping.LiveRegion(node.Live);
+
+            // An image has no text to read, only what it is described as; everything else is read as its text.
+            if (node.Role is AccessibilityRole.Image or AccessibilityRole.GraphicsDocument)
+                info.ContentDescription = node.ReadingText;
+            else
+                info.Text = node.ReadingText;
+
+            if (node.Description.Length > 0 && OperatingSystem.IsAndroidVersionAtLeast(28))
+                info.TooltipText = node.Description;
 
             var rect = view.NodeRect(node);
             info.SetBoundsInParent(rect);
@@ -148,10 +183,22 @@ public sealed partial class HtmlView
             rect.Offset(location[0], location[1]);
             info.SetBoundsInScreen(rect);
 
-            if (node.Role == AccessibleRole.Heading && OperatingSystem.IsAndroidVersionAtLeast(28))
+            if (node.Role == AccessibilityRole.Heading && OperatingSystem.IsAndroidVersionAtLeast(28))
                 info.Heading = true;
 
-            if (node.Role == AccessibleRole.Link)
+            if (AccessibilityMapping.IsCheckable(node.Role))
+            {
+                info.Checkable = true;
+                info.Checked = node.Checked == ToggleState.True;
+            }
+
+            if (node.Selected is { } selected)
+                info.Selected = selected;
+
+            if (node.Expanded is { } expanded && OperatingSystem.IsAndroidVersionAtLeast(30))
+                info.StateDescription = expanded ? "expanded" : "collapsed";
+
+            if (AccessibilityMapping.IsClickable(node.Role))
             {
                 info.Clickable = true;
                 info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionClick);
@@ -162,10 +209,10 @@ public sealed partial class HtmlView
                 ? AccessibilityNodeInfo.AccessibilityAction.ActionClearAccessibilityFocus
                 : AccessibilityNodeInfo.AccessibilityAction.ActionAccessibilityFocus);
 
-            for (var i = 0; i < view._accessibleNodes.Count; i++)
+            foreach (var child in node.ReadingChildren)
             {
-                if (view._accessibleNodes[i].ParentIndex == index)
-                    info.AddChild(view, i + 1);
+                if (view._a11yIds.TryGetValue(child, out var childId))
+                    info.AddChild(view, childId);
             }
 
             return info;
@@ -189,10 +236,10 @@ public sealed partial class HtmlView
             }
 
             var index = virtualViewId - 1;
-            if ((uint)index >= (uint)view._accessibleNodes.Count)
+            if ((uint)index >= (uint)view._a11yNodes.Length)
                 return false;
 
-            var node = view._accessibleNodes[index];
+            var node = view._a11yNodes[index];
             switch (action)
             {
                 case Action.AccessibilityFocus:
@@ -207,7 +254,7 @@ public sealed partial class HtmlView
 
                     view.SendNodeEvent(virtualViewId, EventTypes.ViewAccessibilityFocusCleared);
                     return true;
-                case Action.Click when node.Role == AccessibleRole.Link:
+                case Action.Click when node.Role == AccessibilityRole.Link:
                     view.FollowLinkNode(node);
                     return true;
                 default:
@@ -221,9 +268,9 @@ public sealed partial class HtmlView
             if (string.IsNullOrEmpty(text))
                 return found;
 
-            for (var i = 0; i < view._accessibleNodes.Count; i++)
+            for (var i = 0; i < view._a11yNodes.Length; i++)
             {
-                if (view._accessibleNodes[i].Text.Contains(text, StringComparison.OrdinalIgnoreCase) && CreateNode(i + 1) is { } info)
+                if (view._a11yNodes[i].ReadingText.Contains(text, StringComparison.OrdinalIgnoreCase) && CreateNode(i + 1) is { } info)
                     found.Add(info);
             }
 
