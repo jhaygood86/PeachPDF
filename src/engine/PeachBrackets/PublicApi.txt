@@ -421,6 +421,7 @@ PeachBrackets.HtmlDocument : sealed class
   method TextRange? GetWordAt(TextPosition position)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method Void ClearHighlights()
+  method Void PaintAccessibility(Int32 pageIndex, Canvas canvas)
   method Void PaintCursors(Int32 pageIndex, Canvas canvas)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
   method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)

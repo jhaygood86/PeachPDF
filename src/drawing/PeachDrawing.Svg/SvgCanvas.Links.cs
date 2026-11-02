@@ -15,6 +15,38 @@ public sealed partial class SvgCanvas
     // Pointer areas lie under the links: a link's area is reached first (and the browser shows its own pointer for it), so one that a cursor
     // area happens to cover is still clickable.
     private readonly List<string> _cursors = [];
+    private readonly List<string> _semantics = [];
+
+    /// <inheritdoc/>
+    public override void AddSemanticRegion(Rect bounds, SemanticInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        if (_isTile || _completed is not null || string.IsNullOrEmpty(info.Role))
+            return;
+
+        // An element with a role and no paint: assistive technology reads it from the tree, a pointer passes through it.
+        var shape = new StringBuilder("<rect")
+            .Append(" x=\"").Append(N(bounds.X)).Append("\" y=\"").Append(N(bounds.Y))
+            .Append("\" width=\"").Append(N(bounds.Width)).Append("\" height=\"").Append(N(bounds.Height))
+            .Append("\" fill=\"none\" pointer-events=\"none\" role=\"").Append(SvgDefs.Escape(info.Role)).Append('"');
+        if (info.Id is { Length: > 0 } id)
+            shape.Append(" id=\"node-").Append(SvgDefs.Escape(id)).Append('"');
+        if (info.Name is { Length: > 0 } name)
+            shape.Append(" aria-label=\"").Append(SvgDefs.Escape(name)).Append('"');
+        if (info.Description is { Length: > 0 } description)
+            shape.Append(" aria-description=\"").Append(SvgDefs.Escape(description)).Append('"');
+        if (info.Language is { Length: > 0 } language)
+            shape.Append(" lang=\"").Append(SvgDefs.Escape(language)).Append('"');
+        if (info.Level > 0)
+            shape.Append(" aria-level=\"").Append(info.Level.ToString(System.Globalization.CultureInfo.InvariantCulture)).Append('"');
+        if (info.Properties is not null)
+        {
+            foreach (var (key, value) in info.Properties)
+                shape.Append(' ').Append(SvgDefs.Escape(key)).Append("=\"").Append(SvgDefs.Escape(value)).Append('"');
+        }
+
+        _semantics.Add(shape.Append("/>").ToString());
+    }
 
     /// <inheritdoc/>
     public override object? AddLink(Rect bounds, string uri, IReadOnlyList<PaintPoint>? quad = null)
@@ -140,6 +172,9 @@ public sealed partial class SvgCanvas
     {
         foreach (var cursor in _cursors)
             _body.Append(cursor).Append('\n');
+
+        foreach (var region in _semantics)
+            _body.Append(region).Append('\n');
 
         foreach (var link in _links)
             _body.Append(link).Append('\n');

@@ -124,6 +124,9 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
+- **`PaintAccessibility(pageIndex, canvas)`** puts the roles, names and states of the [accessibility tree](accessibility.md) on a canvas as
+  `Canvas.AddSemanticRegion` calls in reading order, for a canvas that writes them (SVG), so a drawing made from the document can be read by
+  assistive technology. Containers and runs of text are left out; the regions are flat.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall

@@ -89,6 +89,14 @@ tree is not rearranged to match it.
 `aria-modal` and `aria-current` are read, and so are their native equivalents: `checked`, `disabled` (also through a disabled `fieldset`), `required`,
 `readonly`, `selected`, and a `details` element's `open`.
 
+## Other formats
+
+`HtmlDocument.PaintAccessibility(pageIndex, canvas)` hands the tree to any `Canvas` as `AddSemanticRegion` calls: one unpainted region per part of a
+page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
+level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
+readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
+nesting) and the Skia and Win2D canvases ignore them for now.
+
 ## Preferences and text spacing
 
 A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with

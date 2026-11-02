@@ -446,6 +446,84 @@ public sealed class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// Puts what each part of one page is - the roles, names and states of the <see cref="GetAccessibilityTree">accessibility tree</see> - on
+    /// <paramref name="canvas"/> as <see cref="Canvas.AddSemanticRegion"/> calls, in reading order, so a canvas for a format that carries them (SVG)
+    /// writes a drawing that assistive technology can read. A part that a reader gets nothing from (a container, a run of text) is left out. A
+    /// canvas that ignores them is unaffected.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page <paramref name="canvas"/> draws</param>
+    /// <param name="canvas">the canvas of that page</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public void PaintAccessibility(int pageIndex, Canvas canvas)
+    {
+        ArgumentNullException.ThrowIfNull(canvas);
+        ThrowIfNotAPage(pageIndex);
+        var units = _unitsPerPoint;
+        foreach (var node in GetAccessibilityTree().Nodes)
+        {
+            if (RoleResolver.AriaName(node.Role) is not { } role || node.Role is AccessibilityRole.Document or AccessibilityRole.Presentation)
+                continue;
+
+            foreach (var part in node.Bounds)
+            {
+                if (part.PageIndex != pageIndex)
+                    continue;
+
+                var bounds = new Rect(part.Bounds.X * units, part.Bounds.Y * units, part.Bounds.Width * units, part.Bounds.Height * units);
+                canvas.AddSemanticRegion(bounds, SemanticInfoOf(node, role));
+            }
+        }
+    }
+
+    private static SemanticInfo SemanticInfoOf(AccessibilityNode node, string role)
+    {
+        var properties = new Dictionary<string, string>();
+
+        static string State(ToggleState state) => state == ToggleState.Mixed ? "mixed" : state == ToggleState.True ? "true" : "false";
+
+        if (node.Checked != ToggleState.None)
+            properties["aria-checked"] = State(node.Checked);
+        if (node.Pressed != ToggleState.None)
+            properties["aria-pressed"] = State(node.Pressed);
+        if (node.Expanded is { } expanded)
+            properties["aria-expanded"] = expanded ? "true" : "false";
+        if (node.Selected is { } selected)
+            properties["aria-selected"] = selected ? "true" : "false";
+        if (node.Disabled)
+            properties["aria-disabled"] = "true";
+        if (node.Required)
+            properties["aria-required"] = "true";
+        if (node.ReadOnly)
+            properties["aria-readonly"] = "true";
+        if (node.Invalid)
+            properties["aria-invalid"] = "true";
+        if (node.Busy)
+            properties["aria-busy"] = "true";
+        if (node.Modal)
+            properties["aria-modal"] = "true";
+        if (node.Current is { Length: > 0 } current)
+            properties["aria-current"] = current;
+        if (node.Live != LiveSetting.Off)
+            properties["aria-live"] = node.Live == LiveSetting.Assertive ? "assertive" : "polite";
+        if (node.PositionInSet > 0 && node.SetSize > 0)
+        {
+            properties["aria-posinset"] = node.PositionInSet.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            properties["aria-setsize"] = node.SetSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return new SemanticInfo(role)
+        {
+            Name = node.Name,
+            Description = node.Description,
+            Language = node.Language,
+            Level = node.Level,
+            Id = node.Id,
+            Properties = properties.Count > 0 ? properties : null,
+        };
+    }
+
+    /// <summary>
     /// What the pages hold besides pixels: the links, the outline and the form controls, positioned on their pages in points.
     /// </summary>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
