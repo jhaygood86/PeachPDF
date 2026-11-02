@@ -63,6 +63,18 @@ The name of a node is the first of these that gives one (the [Accessible Name an
 
 The description is `aria-describedby`, then `aria-description`, then `title` if the name did not already come from it.
 
+## SVG and MathML
+
+An inline `<svg>` is a `GraphicsDocument` node (or `Image` when it says `role="img"`). Its name is the first of `aria-labelledby`, `aria-label` and the
+text of its own [`<title>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/title) child, and its description is `aria-describedby`,
+`aria-description` or its [`<desc>`](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Element/desc) child. An SVG with `aria-hidden="true"` is left out.
+
+A [`<math>`](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) element is a `Math` node. Its name is the first of
+`aria-labelledby`, `aria-label`, `alttext` and a `text/plain` `<annotation>` inside `<semantics>`; with none of them the formula is said in English from
+its structure: `x² + 1` is "x squared plus 1", `a/b` is "a over b", a sum with limits is "sum from i equals 1 to n ...", a matrix is "table with 2 rows and
+2 columns; row 1: a, b; row 2: c, d". Fractions, roots, scripts, limits, fences, tables, the usual operators and Greek letters are covered; anything
+else is read in the order it is written.
+
 ## State
 
 `aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-disabled`, `aria-required`, `aria-readonly`, `aria-invalid`, `aria-busy`,
@@ -86,7 +98,8 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
   gives nothing.
 - Content moved into the tree by `display: contents` is not in it yet.
 - A table header or footer that repeats on every page is in the tree once, with the rectangle it has on the first page.
-- Inline SVG is one `GraphicsDocument` node named by its `aria-label`; its `<title>` and `<desc>`, and the shapes inside it, are not read. A `math`
-  element is one `Math` node named by its `alttext` or `aria-label`.
+- An inline SVG is one node: the shapes and text inside it are not separate nodes, and a `<title>` or `<desc>` of an element inside it is not read.
+  A `math` element is one node too, and its spoken form is plain English for common formulas, not a full speech-rule system (no language but English,
+  no ClearSpeak or MathSpeak style settings).
 - Tables report cells and headers as nodes, but not yet their row and column positions, spans or header associations.
 - The relations `aria-controls`, `aria-owns`, `aria-flowto` and `aria-errormessage` are not read.

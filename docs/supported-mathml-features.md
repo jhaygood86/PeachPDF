@@ -134,6 +134,13 @@ require an entirely separate semantic-to-visual layout layer.
 
 ---
 
+## Accessibility
+
+A `<math>` element is one `Math` node in the [accessibility tree](accessibility.md#svg-and-mathml). It is named by `aria-labelledby`, `aria-label`,
+`alttext` or a `text/plain` `<annotation>` inside `<semantics>`, in that order; with none of them it is said in English from its structure (fractions,
+roots, scripts, sums and limits, fences, tables, the common operators and Greek letters). The speech is plain by design: an author who needs a precise
+reading gives one.
+
 ## Accepted Gaps
 
 Each gap noted above with "an accepted gap" is deliberately left out of v1 and, where it is a genuine
