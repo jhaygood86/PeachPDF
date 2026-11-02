@@ -164,7 +164,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -235,6 +235,8 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     {
         PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
+        PatternInterface.Grid or PatternInterface.Table when HtmlViewLogic.IsGridRole(_node.Role) => this,
+        PatternInterface.GridItem or PatternInterface.TableItem when HtmlViewLogic.IsGridCellRole(_node.Role) && HtmlViewLogic.TableOf(_node) is not null => this,
         _ => null,
     };
 
@@ -254,4 +256,38 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     public Microsoft.UI.Xaml.Automation.ToggleState ToggleState => HtmlViewLogic.ToToggleState(_view.CurrentNode(_node).Checked);
 
     public void Toggle() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateControl(_node));
+
+    // ---- tables: the table as a grid, a cell as an item of it --------------------------------------------------------------------------
+
+    public int RowCount => _node.RowCount;
+
+    public int ColumnCount => _node.ColumnCount;
+
+    public IRawElementProviderSimple? GetItem(int row, int column) => ProviderOf(HtmlViewLogic.CellAt(_node, row, column));
+
+    public RowOrColumnMajor RowOrColumnMajor => RowOrColumnMajor.RowMajor;
+
+    public IRawElementProviderSimple[] GetColumnHeaders() => ProvidersOf(HtmlViewLogic.HeadersOf(_node, columns: true));
+
+    public IRawElementProviderSimple[] GetRowHeaders() => ProvidersOf(HtmlViewLogic.HeadersOf(_node, columns: false));
+
+    public int Row => Math.Max(_node.RowIndex, 0);
+
+    public int Column => Math.Max(_node.ColumnIndex, 0);
+
+    public int RowSpan => Math.Max(_node.RowSpan, 1);
+
+    public int ColumnSpan => Math.Max(_node.ColumnSpan, 1);
+
+    public IRawElementProviderSimple? ContainingGrid => ProviderOf(HtmlViewLogic.TableOf(_node));
+
+    public IRawElementProviderSimple[] GetColumnHeaderItems() => ProvidersOf(_node.ColumnHeaders);
+
+    public IRawElementProviderSimple[] GetRowHeaderItems() => ProvidersOf(_node.RowHeaders);
+
+    private IRawElementProviderSimple? ProviderOf(AccessibilityNode? node) =>
+        node is not null && _root.FindPeer(node) is { } peer ? ProviderFromPeer(peer) : null;
+
+    private IRawElementProviderSimple[] ProvidersOf(IEnumerable<AccessibilityNode> nodes) =>
+        [.. nodes.Select(ProviderOf).OfType<IRawElementProviderSimple>()];
 }

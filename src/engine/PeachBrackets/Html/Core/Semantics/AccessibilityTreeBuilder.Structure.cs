@@ -34,6 +34,34 @@ namespace PeachBrackets.Html.Semantics
             }
         }
 
+        // The number a progress bar, meter, slider, scroll bar or spin button stands at and the range it can be in.
+        private static void ReadRange(AccessibilityNode node, HtmlTag tag, AccessibilityRole role)
+        {
+            if (role is not (AccessibilityRole.ProgressBar or AccessibilityRole.Meter or AccessibilityRole.Slider or AccessibilityRole.ScrollBar or AccessibilityRole.SpinButton))
+                return;
+
+            var element = tag.Name.ToLowerInvariant();
+            var native = element is "progress" or "meter" || (element == "input" && tag.TryGetAttribute("type")?.Trim().ToLowerInvariant() is "range" or "number");
+            var fraction = element is "progress" or "meter";
+
+            node.ValueMin = Decimal(tag, native ? "min" : null) ?? Decimal(tag, "aria-valuemin") ?? 0;
+            node.ValueMax = Decimal(tag, native ? "max" : null) ?? Decimal(tag, "aria-valuemax") ?? (fraction ? 1 : 100);
+            if (node.ValueMax < node.ValueMin)
+                node.ValueMax = node.ValueMin;
+
+            var value = Decimal(tag, native ? "value" : null) ?? Decimal(tag, "aria-valuenow");
+            if (value is null && element == "input" && tag.TryGetAttribute("type")?.Trim().Equals("range", StringComparison.OrdinalIgnoreCase) == true)
+                value = node.ValueMin + ((node.ValueMax - node.ValueMin) / 2);
+
+            node.Value = value is { } v ? Math.Clamp(v, node.ValueMin, node.ValueMax) : null;
+            node.ValueText = NonEmpty(tag.TryGetAttribute("aria-valuetext")) ?? string.Empty;
+        }
+
+        private static double? Decimal(HtmlTag tag, string? attribute) =>
+            attribute is not null && double.TryParse(tag.TryGetAttribute(attribute)?.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) && double.IsFinite(value)
+                ? value
+                : null;
+
         private static int? Number(HtmlTag tag, string attribute) =>
             int.TryParse(tag.TryGetAttribute(attribute)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) ? value : null;
 

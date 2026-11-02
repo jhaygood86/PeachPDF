@@ -79,6 +79,11 @@ activates it, raising `LinkTapped`, as a tap does). Accessibility focus scrolls 
 backward. The tree is rebuilt when a document loads or reflows. You can see the tree an accessibility service sees with
 `adb shell uiautomator dump`.
 
+**Touch exploration**: with TalkBack's touch exploration on, a finger moving over the page sends hover events for the part under it (the innermost node
+the tree reads), so TalkBack announces what the finger is on and moves its accessibility focus there. A progress bar, meter or slider reports its
+range (`RangeInfo`: least, most and current number) and, when the author gave `aria-valuetext`, its state description (API 30 and later); a slider that
+can be changed also takes the set-progress action, which sets it within its range.
+
 **Keyboard**: the view takes focus, and Tab and Shift+Tab step through the page's own tab stops - links, buttons, form controls and anything with a
 `tabindex`, in the order HTML defines. Past the last stop (or before the first) the key is left to Android, which moves the focus to the next view, so
 the view is not a keyboard trap; coming in from another view with Tab (or Shift+Tab) lands on the first (or last) stop. Enter follows the link that has

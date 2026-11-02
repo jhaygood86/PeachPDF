@@ -97,6 +97,21 @@ public sealed class AccessibilityNode
     /// <summary>The state of a check box, radio button or switch: <c>checked</c> or <c>aria-checked</c>. <see cref="ToggleState.None"/> if it cannot be checked.</summary>
     public ToggleState Checked { get; internal set; }
 
+    /// <summary>
+    /// For a progress bar, meter, slider, scroll bar or spin button, its current number (<c>aria-valuenow</c>, or the <c>value</c> of a native
+    /// <c>progress</c>, <c>meter</c>, range or number input); null when it has none, as an indeterminate progress bar does not.
+    /// </summary>
+    public double? Value { get; internal set; }
+
+    /// <summary>For something that has a <see cref="Value"/>, the least it can be (<c>aria-valuemin</c>, <c>min</c>); 0 if it does not say.</summary>
+    public double ValueMin { get; internal set; }
+
+    /// <summary>For something that has a <see cref="Value"/>, the most it can be (<c>aria-valuemax</c>, <c>max</c>); 100 for a slider or 1 for a native <c>progress</c> or <c>meter</c> if it does not say.</summary>
+    public double ValueMax { get; internal set; } = 100;
+
+    /// <summary>For something that has a <see cref="Value"/>, the words that say what it is (<c>aria-valuetext</c>); empty if the author gave none.</summary>
+    public string ValueText { get; internal set; } = string.Empty;
+
     /// <summary>The state of a toggle button: <c>aria-pressed</c>. <see cref="ToggleState.None"/> if it is not one.</summary>
     public ToggleState Pressed { get; internal set; }
 
