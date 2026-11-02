@@ -44,7 +44,7 @@ namespace PeachBrackets;
 /// the sheet and y growing downward. A document is not thread safe.
 /// </para>
 /// </remarks>
-public sealed class HtmlDocument : IDisposable
+public sealed partial class HtmlDocument : IDisposable
 {
     private readonly HtmlContainerInt _container;
 
