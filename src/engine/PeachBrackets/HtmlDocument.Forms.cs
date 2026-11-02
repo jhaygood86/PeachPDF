@@ -258,7 +258,7 @@ public sealed partial class HtmlDocument
 
     private UpdateResult Changed(IReadOnlyList<CssBox> controls)
     {
-        _accessibilityTree = null;
+        _container.ResetSemanticTree();
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
         var regions = new List<DirtyRegion>();
         foreach (var control in controls)
