@@ -181,6 +181,15 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 
     internal Rect ViewBounds => GetBoundingRectangle();
 
+    /// <inheritdoc />
+    protected override object? GetPatternCore(PatternInterface patternInterface) =>
+        patternInterface == PatternInterface.Text && _view.AccessibilityTree is { } tree
+            ? new HtmlTextProvider(this, _view, tree.Root)
+            : base.GetPatternCore(patternInterface);
+
+    /// <summary>The provider a peer of this tree is known to UI Automation by.</summary>
+    internal IRawElementProviderSimple? ProviderOf(AutomationPeer peer) => ProviderFromPeer(peer);
+
     /// <summary>The peer that stands for a node, if the tree of peers has been asked for.</summary>
     internal HtmlNodeAutomationPeer? FindPeer(AccessibilityNode node)
     {
@@ -276,6 +285,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
         PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
         PatternInterface.Value when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => this,
+        PatternInterface.Text when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => new HtmlTextProvider(_root, _view, _node),
         PatternInterface.RangeValue when HtmlViewLogic.IsRangeRole(_node.Role) => this,
         PatternInterface.Grid or PatternInterface.Table when HtmlViewLogic.IsGridRole(_node.Role) => this,
         PatternInterface.GridItem or PatternInterface.TableItem when HtmlViewLogic.IsGridCellRole(_node.Role) && HtmlViewLogic.TableOf(_node) is not null => this,

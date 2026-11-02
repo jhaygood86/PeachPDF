@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Automation.Provider;
+using Microsoft.UI.Xaml.Automation.Text;
 
 namespace PeachBrackets.WinUI.UITests;
 
@@ -450,7 +451,7 @@ public class HtmlViewTests
             var peer = (HtmlViewAutomationPeer)DocumentPeer(view)!;
             var region = view.AccessibilityTree!.Root;
             HtmlView.RaiseAnnouncements(peer,
-            [
+            (AccessibilityAnnouncement[])[
                 new AccessibilityAnnouncement("Saved", LiveSetting.Polite, region),
                 new AccessibilityAnnouncement("Error", LiveSetting.Assertive, region),
             ]);
@@ -500,5 +501,45 @@ public class HtmlViewTests
         Assert.Equal((3.0, 0.0, 10.0, true, 10.0, 50.0, false, 5.0, 0.5), facts.before);
         Assert.Equal(3.0, facts.Item2);
         Assert.Equal(40.0, facts.Item3);
+    }
+
+    [Fact]
+    public async Task TheDocumentCanBeReadByWordAndParagraphThroughTheTextPattern()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<h1>Title here</h1><p>First paragraph.</p><input id=f aria-label=name value=\"typed in\">");
+            var document = DocumentPeer(view)!;
+            var text = (ITextProvider)document.GetPattern(PatternInterface.Text);
+            var range = text.DocumentRange;
+            var all = range.GetText(-1);
+
+            var word = text.DocumentRange;
+            word.MoveEndpointByRange(TextPatternRangeEndpoint.End, word, TextPatternRangeEndpoint.Start);
+            word.ExpandToEnclosingUnit(TextUnit.Word);
+            var firstWord = word.GetText(-1);
+            word.Move(TextUnit.Word, 1);
+            var secondWord = word.GetText(-1);
+
+            var line = text.DocumentRange;
+            line.MoveEndpointByUnit(TextPatternRangeEndpoint.End, TextUnit.Paragraph, -5);
+            line.ExpandToEnclosingUnit(TextUnit.Paragraph);
+            var firstParagraph = line.GetText(-1);
+            line.GetBoundingRectangles(out var rectangles);
+
+            var field = document.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.Edit);
+            var fieldText = (ITextProvider)field.GetPattern(PatternInterface.Text);
+            var typed = fieldText.DocumentRange.GetText(-1);
+            return (all, firstWord, secondWord, firstParagraph, rectangles.Length % 4, text.SupportedTextSelection, typed);
+        });
+
+        Assert.Contains("Title here", facts.all);
+        Assert.Contains("First paragraph.", facts.all);
+        Assert.Equal("Title ", facts.firstWord);
+        Assert.Equal("here\n", facts.secondWord);
+        Assert.Equal("Title here\n", facts.firstParagraph);
+        Assert.Equal(0, facts.Item5);
+        Assert.Equal(SupportedTextSelection.None, facts.Item6);
+        Assert.Equal("typed in\n", facts.typed);
     }
 }
