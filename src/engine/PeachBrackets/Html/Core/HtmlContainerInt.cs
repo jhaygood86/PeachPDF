@@ -1249,6 +1249,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal ColorSchemePreference PreferredColorScheme { get; set; } = ColorSchemePreference.Light;
 
+        /// <summary>The pointing devices <c>hover</c>/<c>pointer</c> media features report; none unless the host says otherwise.</summary>
+        internal InputCapabilities Input { get; set; } = InputCapabilities.None;
+
         /// <summary>
         /// When true, the document's own author style sheets (<c>&lt;style&gt;</c>/<c>&lt;link&gt;</c>) are
         /// not collected during CSS parsing (see <c>PdfGenerateConfig.IgnoreAuthorStyleSheets</c>).

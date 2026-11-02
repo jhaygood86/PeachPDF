@@ -124,10 +124,25 @@ namespace PeachBrackets.Html
                 // boolean form `(prefers-reduced-motion)` is true (MQ5 §5.3).
                 case "prefers-reduced-motion":
                     return MatchesKeyword(feature, "reduce", booleanContextResult: true);
+                // The pointing devices the host reports (none for a PDF, which cannot be pointed at). The value form picks one
+                // of the feature's keywords; the boolean form is true unless the device is at its "none" resting state.
                 case "hover":
+                    return MatchesKeyword(feature, (context.Input ?? InputCapabilities.None).PrimaryCanHover ? "hover" : "none", booleanContextResult: (context.Input ?? InputCapabilities.None).PrimaryCanHover);
                 case "any-hover":
+                    return MatchesKeyword(feature, (context.Input ?? InputCapabilities.None).AnyCanHover ? "hover" : "none", booleanContextResult: (context.Input ?? InputCapabilities.None).AnyCanHover);
                 case "pointer":
+                    var primary = (context.Input ?? InputCapabilities.None).PrimaryPointer;
+                    return MatchesKeyword(feature, primary == PointerTypes.Fine ? "fine" : primary == PointerTypes.Coarse ? "coarse" : "none", booleanContextResult: primary != PointerTypes.None);
                 case "any-pointer":
+                    var any = (context.Input ?? InputCapabilities.None).AnyPointers;
+                    if (!feature.HasValue) return any != PointerTypes.None;
+                    return feature.Value?.ToLowerInvariant() switch
+                    {
+                        "none" => any == PointerTypes.None,
+                        "coarse" => any.HasFlag(PointerTypes.Coarse),
+                        "fine" => any.HasFlag(PointerTypes.Fine),
+                        _ => false,
+                    };
                 case "update":
                 case "scripting":
                 // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors).

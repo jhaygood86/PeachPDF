@@ -291,6 +291,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
   property PaintColor SelectionBackground { get; set; }
@@ -299,6 +300,25 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
+PeachBrackets.InputCapabilities : sealed class
+  ctor(PointerTypes PrimaryPointer, Boolean PrimaryCanHover, PointerTypes AnyPointers, Boolean AnyCanHover)
+  method InputCapabilities <Clone>$()
+  method Void Deconstruct(out PointerTypes PrimaryPointer, out Boolean PrimaryCanHover, out PointerTypes AnyPointers, out Boolean AnyCanHover)
+  method virtual Boolean Equals(InputCapabilities other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean AnyCanHover { get; init; }
+  property Boolean PrimaryCanHover { get; init; }
+  property PointerTypes AnyPointers { get; init; }
+  property PointerTypes PrimaryPointer { get; init; }
+  property static InputCapabilities Mouse { get; }
+  property static InputCapabilities None { get; }
+  property static InputCapabilities Touch { get; }
+PeachBrackets.PointerTypes : enum Int32
+  Coarse = 1
+  Fine = 2
+  None = 0
 PeachBrackets.Selection.DocumentSelection : sealed class
   method Boolean ExtendTo(Int32 pageIndex, Double x, Double y)
   method Boolean Modify(Boolean extend, SelectionDirection direction, SelectionGranularity granularity)
