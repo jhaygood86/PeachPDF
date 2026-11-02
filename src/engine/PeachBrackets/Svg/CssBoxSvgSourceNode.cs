@@ -108,6 +108,8 @@ namespace PeachBrackets.Svg
             : ReferenceEquals(_box, _svgRoot) || _box.ParentBox is not { } parent ? null
             : new CssBoxSvgSourceNode(parent, _svgRoot, _cssData, _media, _varContext, _instance);
 
+        public object? IdentityKey => _instance is { } instance && instance.Use.IdentityKey is { } useKey ? (_box, useKey) : _box;
+
         public ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => new CssBoxSvgSourceNode(_box, _svgRoot, _cssData, _media, _varContext, (_box, use));
 
         public bool IsAnimated => _box.HtmlContainer?.AnimationProgress is not null && _box.GetSvgAnimationPlan() is not null;

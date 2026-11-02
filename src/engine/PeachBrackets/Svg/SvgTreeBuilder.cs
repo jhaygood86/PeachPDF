@@ -1727,6 +1727,27 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? ApplyAnimation(ISvgSourceNode node, string name, string? declared)
         {
+            // What an element inherits is worked out up the tree and, for a font-size, by two walks (the value, and the size it is a share of), each of which reads the
+            // animations of the ancestors in turn: on a deep tree of animated elements that doubles at every level. Within one lookup nothing changes, so what the walk
+            // has found is kept until the outermost lookup is done.
+            var outermost = _lookupCache is null;
+            if (outermost) _lookupCache = new Dictionary<(object, string), string?>();
+
+            try
+            {
+                return ApplyAnimationCore(node, name, declared);
+            }
+            finally
+            {
+                if (outermost) _lookupCache = null;
+            }
+        }
+
+        [ThreadStatic]
+        private static Dictionary<(object Node, string Name), string?>? _lookupCache;
+
+        private static string? ApplyAnimationCore(ISvgSourceNode node, string name, string? declared)
+        {
             // The parent's value is walked up for once however many of the keyframes' keywords and the underlying value ask for it: asking each
             // time doubles the work at every level of nesting.
             string? parentValue = null;
@@ -1835,6 +1856,20 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? ResolveEffectiveValue(ISvgSourceNode node, string name)
         {
+            if (_lookupCache is { } cache && node.IdentityKey is { } key)
+            {
+                if (cache.TryGetValue((key, name), out var known)) return known;
+
+                var found = ResolveEffectiveValueCore(node, name);
+                cache[(key, name)] = found;
+                return found;
+            }
+
+            return ResolveEffectiveValueCore(node, name);
+        }
+
+        private static string? ResolveEffectiveValueCore(ISvgSourceNode node, string name)
+        {
             var value = ResolveStyledAttr(node, name) is { } declared
                 ? UnderlyingValue(node, name, declared, IsInheritedProperty(name), () => node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : null)
                 : InheritedOrInitialValue(node, name);
@@ -1893,6 +1928,23 @@ namespace PeachBrackets.Svg
 
         /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; 16px with none declared.</summary>
         private static double FontSizeAt(ISvgSourceNode node)
+        {
+            if (_lookupCache is { } cache && node.IdentityKey is { } key)
+            {
+                if (cache.TryGetValue((key, FontSizeCacheName), out var known)) return double.Parse(known!, CultureInfo.InvariantCulture);
+
+                var size = FontSizeAtCore(node);
+                cache[(key, FontSizeCacheName)] = size.ToString("R", CultureInfo.InvariantCulture);
+                return size;
+            }
+
+            return FontSizeAtCore(node);
+        }
+
+        // The used font size is kept beside the effective values, under a name no property has.
+        private const string FontSizeCacheName = "(used font-size)";
+
+        private static double FontSizeAtCore(ISvgSourceNode node)
         {
             var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
             return ResolveStyledAttr(node, "font-size") is { } text

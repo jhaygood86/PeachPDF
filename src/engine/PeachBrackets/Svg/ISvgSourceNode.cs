@@ -91,6 +91,12 @@ namespace PeachBrackets.Svg
         ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => this;
 
         /// <summary>
+        /// A key that is equal for two nodes that stand for the same element in the same place (<see cref="Parent"/> makes a new node on every call, so the node
+        /// itself is no key), or null for a source that has none. What <see cref="SvgTreeBuilder"/> caches the values it reads up the tree by, while one animated value is worked out.
+        /// </summary>
+        object? IdentityKey => null;
+
+        /// <summary>
         /// The value a CSS animation gives <paramref name="name"/> on this element at the sampled point, or null when no animation does (the
         /// default, and every element of a standalone SVG, which is not animated). The animation origin sits above normal declarations and below
         /// <c>!important</c> ones (CSS Cascade 4, section 6.1), which the caller settles.

@@ -155,6 +155,25 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(30, FirstText(document).Font!.Size, 2);
         }
 
+        [Fact]
+        public async Task DeeplyNestedAnimatedFontSizes_AreWorkedOutInTimeThatGrowsWithTheDepth()
+        {
+            // Each level animates font-size from the one above, which no level declares: reading the size an ancestor is a share of read the ancestors' animations
+            // again, twice at every level, which took minutes at this depth and takes milliseconds when what the walk found is kept.
+            const int depth = 22;
+            var open = string.Concat(Enumerable.Repeat("<g class=\"a\">", depth));
+            var close = string.Concat(Enumerable.Repeat("</g>", depth));
+
+            var clock = System.Diagnostics.Stopwatch.StartNew();
+            var document = await SvgCssAnimationTests.BuildAsync("@keyframes k { to { font-size: 30px } } .a { animation: k 10s linear }",
+                $"{open}<text class=\"a\" y=\"100\">H</text>{close}", 0.5);
+            clock.Stop();
+
+            // Every level moves half way to 30px from the size above it, so the text is within a rounding of it.
+            Assert.InRange(FirstText(document).Font!.Size, 29.99, 30);
+            Assert.True(clock.Elapsed < TimeSpan.FromSeconds(15), $"took {clock.Elapsed}");
+        }
+
         private static SvgTextElement FirstText(SvgDocument document)
         {
             SvgElement element = document.Children[0];
