@@ -82,7 +82,7 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 
 ## Limits of this version
 
-- A name that comes from an element that is not shown (`display: none`) is not read, because that element has no box; `aria-labelledby` pointing at one
+- A name that comes from an element that is not shown (`display: none`) is not read, because it is never laid out; `aria-labelledby` pointing at one
   gives nothing.
 - Content moved into the tree by `display: contents` is not in it yet.
 - A table header or footer that repeats on every page is in the tree once, with the rectangle it has on the first page.
