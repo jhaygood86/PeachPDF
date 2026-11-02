@@ -53,6 +53,16 @@ slider, `type=number` a spin button, `select` a combo box or, with `multiple`, a
 
 A `role` attribute replaces that. When it names several roles the first one that exists is used, as WAI-ARIA lets an author give a fallback.
 
+## Changes and live regions
+
+`AccessibilityTreeDiff.Compare(before, after)` says what differs between two trees of the same document, matching parts by `Id`: parts that came or
+went, a changed name, description, number or value text (`ValueChanged`), and a changed state (`checked`, `pressed`, `expanded`, `selected`, `disabled`,
+`required`, `readonly`, `invalid`, `busy`, `current`, `modal`). A host uses it after a form change or a reflow to raise the platform's change events for
+the parts that changed instead of replacing the whole tree. It also says what a screen reader should say for a live region that changed
+(`aria-live="polite"` or `"assertive"`, or the roles that imply one): the content that is new in it, or all of it when the region is
+`aria-atomic`. A region that is `aria-busy`, one that is new in the second tree, and a region inside another live region (which is spoken with it) say
+nothing. An element that gives `aria-live` keeps a node of its own, a generic one, whatever its role.
+
 ## Names
 
 The name of a node is the first of these that gives one (the [Accessible Name and Description Computation](https://www.w3.org/TR/accname-1.2/)):
@@ -151,6 +161,38 @@ not dropped yet.
 
 `HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a
 percentage or a keyword follows the reader's text size setting, and text sized in `px` or `pt` does not, as in a browser.
+
+## Checking with a screen reader
+
+The tests read the accessibility tree and the UI Automation and `AccessibilityNodeInfo` trees a host builds from it, but they cannot tell what a person
+hears. Before relying on a host for real readers, walk a page that has headings, landmarks, a link, a table with headers, a check box, a text field, a
+progress bar and an image with a description through it with the platform's screen reader. The list below says what to listen for.
+
+**Windows, [WinUI view](peachbrackets-winui.md) with Narrator** (Win+Ctrl+Enter starts it)
+
+- Caps Lock+Right Arrow reads the page in order; each heading is announced as a heading with its level, a landmark as its kind (main, navigation, search), and
+  an image by its description.
+- H and Shift+H jump by heading, D by landmark, K by link, T by table; Enter on a link follows it.
+- In a table, Ctrl+Alt+Arrow moves between cells and Narrator reads the column and row header with each cell, and "row 2 of 3, column 1 of 2".
+- Space on a check box toggles it and Narrator says the new state; Tab reaches it and a text field, and the focus ring is visible on both.
+- In a text field, typing, Backspace, the arrow keys and Ctrl+Arrow work and Narrator echoes the characters; Caps Lock+Tab reads the field's name and text.
+  An input method (the Japanese or Chinese keyboard) shows its candidate window next to the caret - the first thing to look at, because the position is
+  estimated.
+- Tab past the last stop and the focus leaves the page for the next control, and Shift+Tab returns to the last.
+
+**Android, [Android view](peachbrackets-android.md) with TalkBack** (volume keys held for three seconds, or Settings > Accessibility)
+
+- Swipe right and left reads the page in order, with headings, links, buttons and images announced as what they are.
+- Drag one finger over the page: TalkBack reads what is under it (touch exploration), and lifting the finger leaves the focus there.
+- The reading controls (swipe up then down) switch to character, word and paragraph: a text node is read by each in turn.
+- Double-tap a check box toggles it and TalkBack says "checked"; a progress bar or slider is announced with its percentage, and a slider adjusts with a
+  swipe up or down.
+- Double-tap a text field: the keyboard opens and the caret is where the tap was. Type, delete and compose (a keyboard that suggests words, and a
+  Chinese or Japanese one): composing text replaces the underlined text and does not add to it.
+- With a hardware keyboard: Tab and Shift+Tab step through the page's tab stops, and arrow keys move the caret in a field.
+
+Anything that is announced wrongly, silently or twice is worth recording with the page and the setting, since the tree it came from can then be dumped
+(`adb shell uiautomator dump` on Android, the Accessibility Insights tool on Windows) and compared with what the document means.
 
 ## Limits of this version
 

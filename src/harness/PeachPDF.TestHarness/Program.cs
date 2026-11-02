@@ -796,6 +796,26 @@ const string pointerHtml = """
     <p><a class="live" href="https://example.com/live">A live link</a><a class="dead" href="https://example.com/dead">A link with pointer-events: none</a></p>
     """;
 
+await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Meter",
+    "<progress> bars filled to their value in the accent color (a blue by default), an indeterminate bar, and <meter> gauges that turn green, yellow or red by the region their value is in.",
+    """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; font-size: 12pt; margin: 24pt }
+      p { margin: 10pt 0 }
+      progress, meter { width: 220pt; height: 14pt }
+    </style></head><body>
+      <h2>Progress</h2>
+      <p>25% <progress value="25" max="100"></progress></p>
+      <p>70% in the accent color <progress value="70" max="100" style="accent-color: #c0392b"></progress></p>
+      <p>Indeterminate <progress></progress></p>
+      <h2>Meter</h2>
+      <p>Optimum <meter min="0" max="100" low="30" high="70" optimum="90" value="85"></meter></p>
+      <p>Acceptable <meter min="0" max="100" low="30" high="70" optimum="90" value="50"></meter></p>
+      <p>Poor <meter min="0" max="100" low="30" high="70" optimum="90" value="12"></meter></p>
+      <p>At the default size: <progress value="0.5"></progress> <meter value="0.8"></meter></p>
+    </body></html>
+    """, pdfConfig);
+
 await SaveShowcaseAsync("pointer_interaction", "Interaction", "Pointer Interaction",
     "cursor and pointer-events: the cursor a screen host shows is read from the document, while in the PDF a link under pointer-events: none is not written as an annotation.",
     pointerHtml, pdfConfig);

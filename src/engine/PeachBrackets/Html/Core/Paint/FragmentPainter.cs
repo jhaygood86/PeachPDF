@@ -1191,7 +1191,12 @@ namespace PeachBrackets.Html.Paint
             // always on top (CSS UI 4 §3.1).
             if (!_textOnly && !_stopped && box.CollapsedBorderSegments is { Count: > 0 })
             {
-                PaintCollapsedTableBorders(g, box, fragment.OriginY, clip, container.SnapBoxDecorationsToCssPixels);
+                // The grid lines are drawn, not content: an artifact in a tagged document.
+                var borderBuilder = _taggingSuppressed ? null : box.HtmlContainer?.StructureTagBuilder;
+                using (borderBuilder is { IsInMarkedContent: false } ? borderBuilder.OpenArtifact(g) : null)
+                {
+                    PaintCollapsedTableBorders(g, box, fragment.OriginY, clip, container.SnapBoxDecorationsToCssPixels);
+                }
             }
 
             // Before this box's own overflow clip is popped: a deferred outline records it for replay.

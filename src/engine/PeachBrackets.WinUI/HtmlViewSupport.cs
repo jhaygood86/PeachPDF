@@ -3,6 +3,8 @@ using Microsoft.UI.Xaml.Automation.Peers;
 using PeachBrackets.Accessibility;
 using PeachDrawing.Core;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachBrackets.WinUI;
 
@@ -154,6 +156,67 @@ internal static class HtmlViewLogic
     }
 
     /// <summary>Whether a link may be opened by the system: only the schemes a document cannot abuse.</summary>
+    /// <summary>Whether a role is a table, grid or tree grid: the roles UI Automation reads through the Grid and Table patterns.</summary>
+    public static bool IsGridRole(AccessibilityRole role) => role is AccessibilityRole.Table or AccessibilityRole.Grid or AccessibilityRole.TreeGrid;
+
+    /// <summary>Whether a role is a cell of a table or grid, a header included: the roles UI Automation reads through the GridItem and TableItem patterns.</summary>
+    public static bool IsGridCellRole(AccessibilityRole role) =>
+        role is AccessibilityRole.Cell or AccessibilityRole.GridCell or AccessibilityRole.ColumnHeader or AccessibilityRole.RowHeader;
+
+    /// <summary>The cells of a table in order, through its rows and row groups but not into a table inside it.</summary>
+    public static IReadOnlyList<AccessibilityNode> CellsOf(AccessibilityNode table)
+    {
+        var cells = new List<AccessibilityNode>();
+        void Visit(AccessibilityNode node)
+        {
+            foreach (var child in node.ReadingChildren)
+            {
+                if (IsGridCellRole(child.Role))
+                    cells.Add(child);
+                else if (!IsGridRole(child.Role))
+                    Visit(child);
+            }
+        }
+
+        Visit(table);
+        return cells;
+    }
+
+    /// <summary>The cell that covers a place of a table - the cell itself, or the one whose span reaches it - or null when the place is empty.</summary>
+    public static AccessibilityNode? CellAt(AccessibilityNode table, int row, int column)
+    {
+        foreach (var cell in CellsOf(table))
+        {
+            if (cell.RowIndex >= 0 && cell.ColumnIndex >= 0
+                && row >= cell.RowIndex && row < cell.RowIndex + Math.Max(cell.RowSpan, 1)
+                && column >= cell.ColumnIndex && column < cell.ColumnIndex + Math.Max(cell.ColumnSpan, 1))
+            {
+                return cell;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The header cells of a table: those across its top (<paramref name="columns"/>) or down its side.</summary>
+    public static IReadOnlyList<AccessibilityNode> HeadersOf(AccessibilityNode table, bool columns)
+    {
+        var role = columns ? AccessibilityRole.ColumnHeader : AccessibilityRole.RowHeader;
+        return CellsOf(table).Where(c => c.Role == role).ToList();
+    }
+
+    /// <summary>The table or grid a cell belongs to, or null for a cell outside one.</summary>
+    public static AccessibilityNode? TableOf(AccessibilityNode cell)
+    {
+        for (var parent = cell.Parent; parent is not null; parent = parent.Parent)
+        {
+            if (IsGridRole(parent.Role))
+                return parent;
+        }
+
+        return null;
+    }
+
     /// <summary>Whether a role is one UI Automation toggles: a check box, a radio button, a switch.</summary>
     public static bool IsToggleControl(AccessibilityRole role) =>
         role is AccessibilityRole.CheckBox or AccessibilityRole.Radio or AccessibilityRole.Switch or AccessibilityRole.MenuItemCheckBox or AccessibilityRole.MenuItemRadio;
