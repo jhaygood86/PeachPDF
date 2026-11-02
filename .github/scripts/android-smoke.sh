@@ -38,6 +38,13 @@ for _ in 1 2 3; do
   if [[ "$(adb logcat -d -s PEACH_SMOKE:V)" == *scroll* ]]; then break; fi
 done
 
+# Tab moves the page's keyboard focus to its first tab stop, the link, which the example logs; a second Tab leaves the page (the only stop)
+# and the focus goes to nothing.
+adb shell input keyevent KEYCODE_TAB
+sleep 2
+adb shell input keyevent KEYCODE_TAB
+sleep 2
+
 log=$(adb logcat -d -s PEACH_SMOKE:V)
 echo "$log"
 
@@ -54,6 +61,8 @@ check 'link-cursor=Pointer' 'a link asks for the pointer cursor'
 check 'locked-selectable=False' 'user-select: none is reported'
 check 'pinned-touch=None' 'touch-action: none is reported'
 check 'scroll' 'a swipe scrolled the page'
+check 'focus=a link' 'Tab moved the focus to the link'
+check 'focus=none' 'a second Tab gave the focus up'
 if grep -q 'FAILED' <<<"$log"; then
   echo 'The document failed to load.' >&2
   fail=1

@@ -79,6 +79,13 @@ activates it, raising `LinkTapped`, as a tap does). Accessibility focus scrolls 
 backward. The tree is rebuilt when a document loads or reflows. You can see the tree an accessibility service sees with
 `adb shell uiautomator dump`.
 
+**Keyboard**: the view takes focus, and Tab and Shift+Tab step through the page's own tab stops - links, buttons, form controls and anything with a
+`tabindex`, in the order HTML defines. Past the last stop (or before the first) the key is left to Android, which moves the focus to the next view, so
+the view is not a keyboard trap; coming in from another view with Tab (or Shift+Tab) lands on the first (or last) stop. Enter follows the link that has
+the focus. The part with the focus is `HtmlView.FocusedNode`, and `FocusChanged` is raised when it changes; the page's `:focus` and `:focus-visible`
+rules apply to it (the built-in style draws a dotted outline) and the view scrolls it into view. To an accessibility service the parts that can take
+the focus are focusable, the one that has it is focused, `ACTION_FOCUS` moves the page's focus there, and `TYPE_VIEW_FOCUSED` is sent when it moves.
+
 ## Fonts
 
 Text is drawn with the fonts of the device. The view registers Roboto as `sans-serif` and `Roboto`, Noto Serif as `serif` and the system
@@ -90,7 +97,7 @@ monospace font from `/system/fonts`, and a document's own `@font-face` fonts wor
 - Selection has no drag handles; a drag after the long press extends it.
 - A custom `url()` cursor is shown as its keyword.
 - Zoom re-renders at the new scale, which is slow on very large pages.
-- The public surface has no reviewed `PublicApi.txt` snapshot yet: the assembly cannot be loaded by a plain .NET test project.
+- Form controls can be focused with Tab, but nothing can be typed into them.
 
 ## Trying it, on an emulator
 
