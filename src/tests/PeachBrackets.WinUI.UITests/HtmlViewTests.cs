@@ -351,4 +351,37 @@ public class HtmlViewTests
         Assert.Equal(("Off", "On"), (facts.Item1, facts.Item2));
         Assert.Equal(["Off", "On"], facts.states);
     }
+
+    [Fact]
+    public async Task ATableIsAGridWhoseCellsKnowTheirPlaceSpanAndHeaders()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<table><tr><th>Name</th><th>Qty</th></tr><tr><td>Pear</td><td>3</td></tr><tr><td colspan=2>Total</td></tr></table>");
+            var table = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.Table);
+            var grid = (IGridProvider)table.GetPattern(PatternInterface.Grid);
+            var tableInfo = (ITableProvider)table.GetPattern(PatternInterface.Table);
+
+            var cells = new List<AutomationPeer>();
+            void Collect(AutomationPeer peer)
+            {
+                foreach (var child in peer.GetChildren())
+                {
+                    if (child.GetPattern(PatternInterface.GridItem) is not null)
+                        cells.Add(child);
+                    else
+                        Collect(child);
+                }
+            }
+
+            Collect(table);
+            var items = cells.Select(c => (IGridItemProvider)c.GetPattern(PatternInterface.GridItem)).ToList();
+            var pear = (ITableItemProvider)cells[2].GetPattern(PatternInterface.TableItem);
+            return (grid.RowCount, grid.ColumnCount, grid.GetItem(1, 0) is not null, grid.GetItem(2, 1) is not null, grid.GetItem(5, 5) is null,
+                tableInfo.RowOrColumnMajor.ToString(), tableInfo.GetColumnHeaders().Length, tableInfo.GetRowHeaders().Length,
+                cells.Count, items[2].Row, items[2].Column, items[4].ColumnSpan, items[4].ContainingGrid is not null, pear.GetColumnHeaderItems().Length);
+        });
+
+        Assert.Equal((3, 2, true, true, true, "RowMajor", 2, 0, 5, 1, 0, 2, true, 1), facts);
+    }
 }
