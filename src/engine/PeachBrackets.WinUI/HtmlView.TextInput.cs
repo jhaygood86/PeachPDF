@@ -441,7 +441,7 @@ public sealed partial class HtmlView
     }
 
     // A click on a text field gives it the focus and puts the caret where the click was. Returns whether the point was over a text field.
-    private bool FocusTextFieldAt(int page, double x, double y)
+    internal bool FocusTextFieldAt(int page, double x, double y)
     {
         if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element
             || document.GetFormState(element) is not { Type: "text" or "search" or "url" or "tel" or "email" or "password" or "number" })
@@ -452,6 +452,31 @@ public sealed partial class HtmlView
         Focus(Microsoft.UI.Xaml.FocusState.Pointer);
         _ = FocusFieldAtAsync(document, element, page, x);
         return true;
+    }
+
+    // The anchor of a drag that selects text inside the focused field, once the press has put the caret there; null when no such drag is under way.
+    internal int? FieldAnchor { get => _fieldAnchor; }
+    private int? _fieldAnchor;
+    internal bool _fieldPressed;
+    private bool _fieldDragBusy;
+
+    // A drag from inside a field selects between where it began and the pointer.
+    internal async Task ExtendFieldSelectionAsync(HtmlDocument document, int page, double x, int anchor)
+    {
+        if (_context is null || _fieldDragBusy)
+            return;
+
+        _fieldDragBusy = true;
+        try
+        {
+            using var measuring = new Win2dComposer(_context, 1, 1);
+            if (ReferenceEquals(document, _document) && document.GetEditIndexAt(measuring.Canvas, page, x) is { } index)
+                AfterEdit(document.SetEditSelection(anchor, index), CurrentFieldText());
+        }
+        finally
+        {
+            _fieldDragBusy = false;
+        }
     }
 
     private async Task FocusFieldAtAsync(HtmlDocument document, DocumentElement element, int page, double x)
@@ -466,7 +491,11 @@ public sealed partial class HtmlView
 
         AfterFocusChange(document, result, document.FocusedNode?.Id);
         if (document.GetEditIndexAt(measuring.Canvas, page, x) is { } index)
+        {
             AfterEdit(document.SetEditSelection(index, index), CurrentFieldText());
+            if (_fieldPressed)
+                _fieldAnchor = index;
+        }
     }
 
     /// <summary>The text a field holds, for a screen reader's Value pattern.</summary>

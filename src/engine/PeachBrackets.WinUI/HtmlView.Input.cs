@@ -67,6 +67,8 @@ public sealed partial class HtmlView
 
         if (_dragSelecting)
             document.Selection.ExtendTo(page, x, y);
+        else if (_fieldAnchor is { } anchor)
+            _ = ExtendFieldSelectionAsync(document, page, x, anchor);
     }
 
     private void OnPointerPressed(object sender, PointerRoutedEventArgs e)
@@ -89,7 +91,12 @@ public sealed partial class HtmlView
         }
 
         RequestState(page, x, y, pressed: true);
-        if (point.Properties.IsLeftButtonPressed && document.GetInteractionAt(page, x, y).CanSelectText)
+        if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        // A press on a text field puts the caret there at once, so a drag can select inside it.
+        _fieldPressed = FocusTextFieldAt(page, x, y);
+        if (!_fieldPressed && document.GetInteractionAt(page, x, y).CanSelectText)
             _dragSelecting = document.Selection.SelectAt(page, x, y);
     }
 
@@ -98,6 +105,7 @@ public sealed partial class HtmlView
         var position = e.GetCurrentPoint(_canvas).Position;
         var wasClick = Math.Abs(position.X - _pressPoint.X) <= ClickSlop && Math.Abs(position.Y - _pressPoint.Y) <= ClickSlop;
         var wasSelecting = _dragSelecting;
+        var wasField = _fieldPressed;
         EndPress();
         _canvas.ReleasePointerCapture(e.Pointer);
 
@@ -106,7 +114,7 @@ public sealed partial class HtmlView
             if (wasSelecting)
                 _document!.Selection.RemoveAllRanges();
 
-            if (!FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y))
+            if (!wasField && !FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y))
                 FollowLinkAt(page, x, y);
         }
     }
@@ -118,6 +126,8 @@ public sealed partial class HtmlView
 
         _pressed = false;
         _dragSelecting = false;
+        _fieldAnchor = null;
+        _fieldPressed = false;
         RestoreTouchPolicy();
         if (_document is not null && TryLocate(_pressPoint, out var page, out var x, out var y))
             RequestState(page, x, y, pressed: false);
