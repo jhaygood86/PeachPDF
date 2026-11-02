@@ -10,6 +10,7 @@ PeachBrackets.Accessibility.AccessibilityBounds : struct
 PeachBrackets.Accessibility.AccessibilityNode : sealed class
   method IEnumerable<AccessibilityNode> DescendantsAndSelf()
   method virtual String ToString()
+  property AccessibilityNode ActiveDescendant { get; }
   property AccessibilityNode Parent { get; }
   property AccessibilityRole Role { get; }
   property Boolean Atomic { get; }
@@ -25,7 +26,24 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property IEnumerable<AccessibilityNode> ReadingChildren { get; }
   property IReadOnlyList<AccessibilityBounds> Bounds { get; }
   property IReadOnlyList<AccessibilityNode> Children { get; }
+  property IReadOnlyList<AccessibilityNode> ColumnHeaders { get; }
+  property IReadOnlyList<AccessibilityNode> Controls { get; }
+  property IReadOnlyList<AccessibilityNode> DescribedBy { get; }
+  property IReadOnlyList<AccessibilityNode> Details { get; }
+  property IReadOnlyList<AccessibilityNode> ErrorMessages { get; }
+  property IReadOnlyList<AccessibilityNode> FlowTo { get; }
+  property IReadOnlyList<AccessibilityNode> LabelledBy { get; }
+  property IReadOnlyList<AccessibilityNode> Owns { get; }
+  property IReadOnlyList<AccessibilityNode> RowHeaders { get; }
+  property Int32 ColumnCount { get; }
+  property Int32 ColumnIndex { get; }
+  property Int32 ColumnSpan { get; }
   property Int32 Level { get; }
+  property Int32 PositionInSet { get; }
+  property Int32 RowCount { get; }
+  property Int32 RowIndex { get; }
+  property Int32 RowSpan { get; }
+  property Int32 SetSize { get; }
   property Int32? TabIndex { get; }
   property LiveSetting Live { get; }
   property String AccessKey { get; }
