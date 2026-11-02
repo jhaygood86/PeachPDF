@@ -80,6 +80,13 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
     PdfDictionary _action = default!;
 
     /// <summary>
+    /// Makes the link also lead to a structure element (the action's <c>/SD</c> entry, PDF 2.0), as PDF/UA-2 requires of a link within the
+    /// document.
+    /// </summary>
+    internal void SetStructureDestination(PeachDrawing.PDF.Engine.Structure.PdfStructureElement element) =>
+        _action.Elements.SetObject("/SD", new PdfArray(Owner, element.RequiredReference, new PdfLiteral("/Fit")));
+
+    /// <summary>
     /// Sets the quadrilateral the link is active in (<c>/QuadPoints</c>), for a link whose area is not the axis-aligned
     /// <see cref="PdfAnnotation.Rectangle"/> that bounds it. The corners are in default user space.
     /// </summary>

@@ -243,14 +243,15 @@ PeachBrackets.Annotations.PageLink : sealed class
   property String Uri { get; init; }
   property StructureNode? Source { get; init; }
 PeachBrackets.Annotations.PagePosition : struct
-  ctor(Int32 PageIndex, Double Top)
-  method Void Deconstruct(out Int32 PageIndex, out Double Top)
+  ctor(Int32 PageIndex, Double Top, StructureNode? Target = null)
+  method Void Deconstruct(out Int32 PageIndex, out Double Top, out StructureNode? Target)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(PagePosition other)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property Double Top { get; init; }
   property Int32 PageIndex { get; init; }
+  property StructureNode? Target { get; init; }
 PeachBrackets.Building.DeclarativePage : sealed class
   method Void AddMarginBox(String marginBox, String content)
   property DocumentNode Root { get; }
@@ -555,6 +556,7 @@ PeachBrackets.Tagging.IStructureTagSink : interface
   method virtual IDisposable OpenContentElement(Canvas g, StructureNode node, String structureType, String altText, StructureDetails details)
   method virtual IDisposable OpenGroupingElement(StructureNode node, String structureType, StructureDetails details)
   method virtual Void LinkAdded(StructureNode node, Object link)
+  method virtual Void LinkAdded(StructureNode node, Object link, String name, StructureNode? target)
   property Boolean IsInMarkedContent { get; }
 PeachBrackets.Tagging.PhantomAncestor : struct
   ctor(StructureNode Node, String StructureType)
@@ -569,7 +571,9 @@ PeachBrackets.Tagging.StructureDetails : sealed class
   ctor()
   property Int32 ColumnSpan { get; init; }
   property Int32 RowSpan { get; init; }
+  property String AlternativeText { get; init; }
   property String Language { get; init; }
+  property String ListNumbering { get; init; }
   property String TableScope { get; init; }
 PeachBrackets.Tagging.StructureNode : struct
   method virtual Boolean Equals(Object obj)

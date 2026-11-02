@@ -383,8 +383,11 @@ public sealed class HtmlDocument : IDisposable
                 ? canvas.AddDestinationLink(bounds, anchor, quad)
                 : canvas.AddLink(bounds, link.Uri ?? string.Empty, quad);
 
-            if (handle is not null && link.Source is { } source)
-                StructureTagSink?.LinkAdded(source, handle);
+            if (handle is not null && link.Source is { } source && StructureTagSink is { } sink)
+            {
+                var name = GetAccessibilityTree().NodeFor(source.Box)?.Name;
+                sink.LinkAdded(source, handle, string.IsNullOrWhiteSpace(name) ? link.Uri ?? link.Anchor : name, link.Destination?.Target);
+            }
         }
     }
 
