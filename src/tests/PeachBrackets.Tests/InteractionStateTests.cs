@@ -191,4 +191,36 @@ public class InteractionStateTests
         Assert.False(result.Applied);
         Assert.Contains("edited", result.Reason);
     }
+
+    [Fact]
+    public async Task ASelectionSurvivesSeveralRestylesInARow_AndStaysPainted()
+    {
+        var (context, document, measuring) = await LoadAsync(
+            "<p id=p style='font-size:30px'>Select these words</p><div id=a style='height:40px'></div>",
+            "<style>#a:hover { background: rgb(255,0,0) }</style>",
+            new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true, Media = "screen" });
+        var run = document.TextRuns[0];
+        Assert.True(document.Selection.SelectWordAt(0, run.Bounds.X + 5, run.Bounds.Y + (run.Bounds.Height / 2)));
+        var selected = document.Selection.GetText();
+        var (x, y) = Center(document, "a");
+
+        // Each restyle clears the cached runs; the next one must still know what to carry over.
+        await document.SetPointerStateAsync(0, x, y, false, measuring);
+        await document.ClearPointerStateAsync(measuring);
+        await document.SetPointerStateAsync(0, x, y, true, measuring);
+
+        Assert.Equal(selected, document.Selection.GetText());
+        using var canvas = await TestDocument.PaintAsync(context, document);
+        var highlighted = false;
+        for (var py = 0; py < 80 && !highlighted; py++)
+        {
+            for (var px = 0; px < 200 && !highlighted; px++)
+            {
+                var (r, g, b, a) = TestDocument.Pixel(canvas, px, py);
+                highlighted = a > 0 && Math.Abs(r - 173) < 6 && Math.Abs(g - 214) < 6 && Math.Abs(b - 255) < 6;
+            }
+        }
+
+        Assert.True(highlighted);
+    }
 }

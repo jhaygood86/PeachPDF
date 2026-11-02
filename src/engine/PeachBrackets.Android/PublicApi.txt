@@ -1,0 +1,48 @@
+PeachBrackets.Android.HtmlLinkTappedEventArgs : sealed class
+  property Boolean Cancel { get; set; }
+  property String Destination { get; }
+  property String Uri { get; }
+PeachBrackets.Android.HtmlLoadFailedEventArgs : sealed class
+  property Exception Exception { get; }
+PeachBrackets.Android.HtmlTappedEventArgs : sealed class
+  property Double X { get; }
+  property Double Y { get; }
+  property Int32 PageIndex { get; }
+PeachBrackets.Android.HtmlTouchStartedEventArgs : sealed class
+  property DocumentInteraction Interaction { get; }
+  property Double X { get; }
+  property Double Y { get; }
+  property Int32 PageIndex { get; }
+  property TouchActions Allowed { get; set; }
+PeachBrackets.Android.HtmlView : sealed class
+  ctor(Context context)
+  ctor(Context context, IAttributeSet attributes)
+  event EventHandler DocumentLoaded
+  event EventHandler ScrollChanged
+  event EventHandler ZoomChanged
+  event EventHandler<HtmlLinkTappedEventArgs> LinkTapped
+  event EventHandler<HtmlLoadFailedEventArgs> DocumentFailed
+  event EventHandler<HtmlTappedEventArgs> LongPressed
+  event EventHandler<HtmlTappedEventArgs> Tapped
+  event EventHandler<HtmlTouchStartedEventArgs> TouchStarted
+  method Boolean ScrollToElement(String elementId)
+  method Void CopySelection()
+  method Void SelectAll()
+  method virtual Boolean OnGenericMotionEvent(MotionEvent e)
+  method virtual Boolean OnKeyDown(Keycode keyCode, KeyEvent e)
+  method virtual Boolean OnTouchEvent(MotionEvent e)
+  method virtual PointerIcon OnResolvePointerIcon(MotionEvent e, Int32 pointerIndex)
+  method virtual Void ComputeScroll()
+  method virtual Void OnAttachedToWindow()
+  method virtual Void OnConfigurationChanged(Configuration newConfig)
+  method virtual Void OnDetachedFromWindow()
+  method virtual Void OnSizeChanged(Int32 w, Int32 h, Int32 oldw, Int32 oldh)
+  property AccessibilityNodeProvider AccessibilityNodeProvider { get; }
+  property Double Zoom { get; }
+  property HtmlDocument Document { get; }
+  property InputCapabilities Input { get; set; }
+  property SKColor PageBackground { get; set; }
+  property String Html { get; set; }
+  property String SelectedText { get; }
+PeachBrackets.Android.Resource : class
+  ctor()
