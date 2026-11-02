@@ -79,7 +79,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (_, plain, _) = await Layout("xx<span style='font-size:40pt'>X</span>xx");
             var (root, offset, _) = await Layout($"xx<span id='s' style='font-size:40pt;{align}'>X</span>xx");
 
-            Assert.True(LineHeight(offset) > LineHeight(plain) + 2, $"{align}: {LineHeight(offset)} vs {LineHeight(plain)}");
+            // By how much depends on the system serif font's metrics (how much room the line already had above
+            // the baseline), so only that it grew is asserted; the exact amount is ARaisedBox_GrowsTheLine...
+            Assert.True(LineHeight(offset) > LineHeight(plain) + 0.5, $"{align}: {LineHeight(offset)} vs {LineHeight(plain)}");
             AssertInsideItsLine(root, offset);
         }
 
