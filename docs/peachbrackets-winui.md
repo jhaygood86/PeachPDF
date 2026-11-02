@@ -49,7 +49,7 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 
 | The document says | The control |
 |---|---|
-| `cursor` | Sets the pointer over the element under the mouse: the keyword, mapped to the nearest system pointer (see the table in [PeachDrawing.Win2D](peachdrawing-win2d.md#cursors)). A custom `url()` cursor image is shown as its keyword, since WinUI offers only system pointers. |
+| `cursor` | Sets the pointer over the element under the mouse: the keyword, mapped to the nearest system pointer (see the table in [PeachDrawing.Win2D](peachdrawing-win2d.md#cursors)). A custom `url()` cursor image is shown as the pointer itself: the first image that loads (a `data:`, `http`, `https` or `file` address, up to 2 MB, scaled down to 128 pixels a side) becomes a native cursor with the hotspot the style or a `.cur` file gives. Until it has loaded, or when none can be used, the keyword's pointer stands in. |
 | `:hover`, `:active` | Reported to the document as the pointer moves and the button goes down and up, one update at a time, so a rule may restyle or even resize an element; only the regions that changed are repainted when nothing moved. |
 | `pointer-events`, `interactivity`, `inert` | Honored by every hit test: an element that does not receive pointer events lets the pointer through to what is beneath. |
 | `user-select: none` | A selection does not start there, and the text is left out of the copy. |
@@ -63,7 +63,7 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 - Form controls are painted but not interactive, and there is no keyboard navigation between links or controls.
 - Text is not exposed to UI Automation, so a screen reader cannot read it.
 - Zoom scales the rendered surface; it is not re-rendered at the new scale, so very high zoom is soft.
-- A custom `url()` cursor is shown as its keyword.
+- A `url()` cursor image uses its first frame, and an SVG image is not used (the keyword's pointer is shown instead).
 - Find in the page is available through `Document` (`FindText`) but has no built-in user interface.
 
 ## Trying it

@@ -51,7 +51,7 @@ public sealed partial class HtmlView
         var position = e.GetCurrentPoint(_canvas).Position;
         if (!TryLocate(position, out var page, out var x, out var y))
         {
-            ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Arrow);
+            SetSystemCursor(CursorShape.Default);
             return;
         }
 
@@ -59,7 +59,7 @@ public sealed partial class HtmlView
         if (e.Pointer.PointerDeviceType != PointerDeviceType.Touch)
         {
             // The pointer the document asks for here, and the state that :hover and :active rules read.
-            ProtectedCursor = InputSystemCursor.Create(HtmlViewLogic.ToSystemCursor(document.GetCursorAt(page, x, y).Shape));
+            ShowCursor(document.GetCursorAt(page, x, y));
             RequestState(page, x, y, _pressed);
         }
 
@@ -214,7 +214,7 @@ public sealed partial class HtmlView
     {
         _pendingPointer = null;
         _clearPending = true;
-        ProtectedCursor = InputSystemCursor.Create(InputSystemCursorShape.Arrow);
+        SetSystemCursor(CursorShape.Default);
         _ = PumpStateAsync();
     }
 

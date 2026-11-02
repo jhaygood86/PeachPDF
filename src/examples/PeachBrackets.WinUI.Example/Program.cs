@@ -26,6 +26,7 @@ public sealed class ExampleApp : Application
         .card:hover { background: #f7e3c4; height: 72px }
         a { color: #1a5fb4 }
         .locked { user-select: none; color: #777 }
+        .badge { display: block; width: 200px; padding: 8px; margin: 8px 0; background: #fcc; cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAALElEQVR4nO3OIQEAAAwEoetf+hdjBoGn1T4lICAgICAgICAgICAgICCw58ABVA34aguOkNgAAAAASUVORK5CYII=) 8 8, pointer }
         .pinned { touch-action: none; padding: 8px; background: #eee }
         @media (hover: hover) { .hint::after { content: ' (hover capable)' } }
         </style>
@@ -33,6 +34,7 @@ public sealed class ExampleApp : Application
         <p id="lead">Select this text, or follow <a id="link" href="https://peachpdf.net/">a link</a>. <span class="hint">Hint</span></p>
         <div class="card" id="card">A card that grows on hover and asks for a crosshair.</div>
         <p class="locked" id="locked">This line cannot be selected.</p>
+        <div class="badge" id="badge">A red square pointer, hotspot 8,8</div>
         <div class="pinned" id="pinned">touch-action: none</div>
         """;
 
