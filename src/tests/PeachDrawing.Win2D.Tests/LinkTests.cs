@@ -205,4 +205,18 @@ public class LinkTests
         Assert.Null(scene.Canvas.Links.CursorAt(50, 50));
         Assert.Equal(CursorShape.Grab, scene.Canvas.Links.CursorAtDips(15, 15)!.Shape);
     }
+
+    [Fact]
+    public void Semantic_regions_are_recorded_and_the_innermost_one_is_found_by_position()
+    {
+        using var scene = SceneWith(new FakeLauncher());
+        scene.Canvas.AddSemanticRegion(new Rect(0, 0, 40, 40), new SemanticInfo("navigation") { Name = "Sections" });
+        scene.Canvas.AddSemanticRegion(new Rect(10, 10, 10, 10), new SemanticInfo("link") { Name = "Jump" });
+
+        Assert.Equal(2, scene.Canvas.Links.Semantics.Count);
+        Assert.Equal("navigation", scene.Canvas.Links.SemanticAt(2, 2)!.Info.Role);
+        Assert.Equal("Jump", scene.Canvas.Links.SemanticAt(15, 15)!.Info.Name);
+        Assert.Null(scene.Canvas.Links.SemanticAt(50, 50));
+        Assert.Equal("Jump", scene.Canvas.Links.SemanticAtDips(15, 15)!.Info.Name);
+    }
 }

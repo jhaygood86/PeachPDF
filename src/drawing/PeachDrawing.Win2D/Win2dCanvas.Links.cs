@@ -33,6 +33,14 @@ public sealed partial class Win2dCanvas
     }
 
     /// <inheritdoc />
+    public override void AddSemanticRegion(Rect bounds, SemanticInfo info)
+    {
+        ArgumentNullException.ThrowIfNull(info);
+        if (!_isTile)
+            Links.AddSemantic(new Win2dSemanticRegion(bounds, info));
+    }
+
+    /// <inheritdoc />
     public override void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage>? images = null)
     {
         Guard();

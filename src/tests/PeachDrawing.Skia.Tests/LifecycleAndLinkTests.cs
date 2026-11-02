@@ -205,4 +205,21 @@ public class LifecycleAndLinkTests
 
         Assert.Empty(scene.Composer.Links.Cursors);
     }
+
+    [Fact]
+    public void Semantic_regions_are_recorded_and_the_innermost_one_is_found_by_position()
+    {
+        using var scene = Scene.Create();
+        scene.Canvas.AddSemanticRegion(new Rect(0, 0, 40, 40), new SemanticInfo("navigation") { Name = "Sections" });
+        scene.Canvas.AddSemanticRegion(new Rect(10, 10, 10, 10), new SemanticInfo("link") { Name = "Jump" });
+        var (tile, _) = scene.Canvas.CreateTile(10, 10)!.Value;
+        tile.AddSemanticRegion(new Rect(0, 0, 5, 5), new SemanticInfo("button"));
+        tile.Dispose();
+
+        Assert.Equal(2, scene.Composer.Links.Semantics.Count);
+        Assert.Equal("navigation", scene.Composer.Links.SemanticAt(2, 2)!.Info.Role);
+        Assert.Equal("Jump", scene.Composer.Links.SemanticAt(15, 15)!.Info.Name);
+        Assert.Null(scene.Composer.Links.SemanticAt(50, 50));
+        Assert.Equal("Jump", scene.Composer.Links.SemanticAtDevice(15, 15)!.Info.Name);
+    }
 }
