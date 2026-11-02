@@ -166,8 +166,8 @@ namespace PeachBrackets.Html.Semantics
                 return;
             }
 
-            // Left out of the tree with everything in it.
-            if (IsTrue(tag, "aria-hidden") || tag.HasAttribute("inert"))
+            // Left out of the tree with everything in it. An element with display: none still has a box, but nothing of it is shown or read.
+            if (IsTrue(tag, "aria-hidden") || tag.HasAttribute("inert") || box.DerivedStyle.ActualDisplay == Keywords.None)
                 return;
 
             var hidden = box.Visibility.Value != Visibility.Visible;
