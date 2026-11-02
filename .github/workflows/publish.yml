@@ -157,6 +157,46 @@ jobs:
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
 
+  # PeachBrackets.Android is a .NET for Android view: it needs the android workload, so it is built and pushed by its own job once the packages
+  # it depends on (PeachBrackets, PeachDrawing.Skia and what they need) are on the feed.
+  publish-android:
+    needs: publish
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          10.0.x
+
+    - name: Install the android workload
+      run: dotnet workload install android
+
+    - name: Read package version
+      id: version
+      run: |
+        VERSION=$(grep -oP '(?<=<PackageVersion>)[0-9][^<]*' src/Version.props | head -n 1)
+        echo "value=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Version: $VERSION"
+
+    - name: Build and pack
+      run: |
+        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
+        dotnet pack src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
+
+    - name: NuGet login
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Push to NuGet.org
+      run: dotnet nuget push "./packages/PeachBrackets.Android.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
   # PeachDrawing.Win2D builds on Windows only (Win2D is a Windows App SDK component), so it is packed and pushed by its own job once
   # the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
   publish-win2d:

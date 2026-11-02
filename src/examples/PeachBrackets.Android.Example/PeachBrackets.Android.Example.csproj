@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<TargetFramework>net10.0-android</TargetFramework>
+		<TargetFrameworks />
+		<SupportedOSPlatformVersion>24</SupportedOSPlatformVersion>
+		<OutputType>Exe</OutputType>
+		<Nullable>enable</Nullable>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<ApplicationId>net.peachpdf.brackets.example</ApplicationId>
+		<ApplicationTitle>PeachBrackets</ApplicationTitle>
+		<ApplicationVersion>1</ApplicationVersion>
+		<IsPackable>false</IsPackable>
+		<!-- Everything in the APK, so `adb install` runs it without the fast-deployment tooling. -->
+		<EmbedAssembliesIntoApk>true</EmbedAssembliesIntoApk>
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<RuntimeIdentifiers>android-x64;android-arm64</RuntimeIdentifiers>
+		<RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">android-x64</RuntimeIdentifier>
+	</PropertyGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\..\engine\PeachBrackets.Android\PeachBrackets.Android.csproj" />
+		<PackageReference Include="SkiaSharp.NativeAssets.Android" />
+	</ItemGroup>
+</Project>
