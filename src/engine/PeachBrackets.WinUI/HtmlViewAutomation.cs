@@ -140,6 +140,27 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
     }
 
     internal Rect ViewBounds => GetBoundingRectangle();
+
+    /// <summary>The peer that stands for a node, if the tree of peers has been asked for.</summary>
+    internal HtmlNodeAutomationPeer? FindPeer(AccessibilityNode node)
+    {
+        GetChildrenCore();
+        return _children is null ? null : Find(_children, node);
+
+        static HtmlNodeAutomationPeer? Find(IEnumerable<AutomationPeer> peers, AccessibilityNode node)
+        {
+            foreach (var peer in peers.OfType<HtmlNodeAutomationPeer>())
+            {
+                if (peer.Node.Id == node.Id)
+                    return peer;
+
+                if (Find(peer.Peers, node) is { } below)
+                    return below;
+            }
+
+            return null;
+        }
+    }
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
@@ -159,6 +180,10 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
         foreach (var child in node.ReadingChildren)
             _children.Add(new HtmlNodeAutomationPeer(root, this, view, child));
     }
+
+    internal AccessibilityNode Node => _node;
+
+    internal IReadOnlyList<AutomationPeer> Peers => _children;
 
     protected override AutomationControlType GetAutomationControlTypeCore() => HtmlViewLogic.ToControlType(_node.Role);
 
@@ -200,10 +225,9 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
 
     protected override bool IsEnabledCore() => !_node.Disabled;
 
-    // The view does not move keyboard focus between the parts of a page yet, so none of them claims to take it.
-    protected override bool IsKeyboardFocusableCore() => false;
+    protected override bool IsKeyboardFocusableCore() => _node.IsFocusable;
 
-    protected override bool HasKeyboardFocusCore() => false;
+    protected override bool HasKeyboardFocusCore() => _view.FocusedNode?.Id == _node.Id;
 
     protected override IList<AutomationPeer> GetChildrenCore() => _children;
 
@@ -212,7 +236,13 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider
 
     protected override void ShowContextMenuCore() { }
 
-    protected override void SetFocusCore() => _view.BringIntoView(_node);
+    protected override void SetFocusCore()
+    {
+        if (_node.IsFocusable)
+            _view.DispatcherQueue.TryEnqueue(() => _view.FocusFromAutomation(_node));
+        else
+            _view.BringIntoView(_node);
+    }
 
     public void Invoke() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateLink(_node));
 }
