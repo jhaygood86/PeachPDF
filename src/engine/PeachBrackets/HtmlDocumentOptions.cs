@@ -50,6 +50,19 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public InputCapabilities? Input { get; set; }
 
+    /// <summary>
+    /// The settings of the reader that <c>prefers-reduced-motion</c>, <c>prefers-contrast</c>, <c>forced-colors</c>, <c>inverted-colors</c>,
+    /// <c>prefers-reduced-transparency</c> and <c>prefers-reduced-data</c> report. <see langword="null"/> (the default) is
+    /// <see cref="UserPreferences.Default"/>, the settings of a static document.
+    /// </summary>
+    public UserPreferences? Preferences { get; set; }
+
+    /// <summary>
+    /// Spacing to apply over the document's own for a reader who needs more room around text, or <see langword="null"/> (the default) to leave
+    /// the document's spacing alone. <see cref="TextSpacingOverrides.Wcag"/> is the spacing WCAG 1.4.12 asks to be supported.
+    /// </summary>
+    public TextSpacingOverrides? TextSpacing { get; set; }
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 

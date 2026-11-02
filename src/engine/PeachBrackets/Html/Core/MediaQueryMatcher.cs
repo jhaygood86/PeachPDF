@@ -123,7 +123,8 @@ namespace PeachBrackets.Html
                 // The renderer's stance is `reduce`, which is NOT the `no-preference` resting value, so the
                 // boolean form `(prefers-reduced-motion)` is true (MQ5 §5.3).
                 case "prefers-reduced-motion":
-                    return MatchesKeyword(feature, "reduce", booleanContextResult: true);
+                    var reduceMotion = (context.Preferences ?? UserPreferences.Default).ReducedMotion;
+                    return MatchesKeyword(feature, reduceMotion ? "reduce" : "no-preference", booleanContextResult: reduceMotion);
                 // The pointing devices the host reports (none for a PDF, which cannot be pointed at). The value form picks one
                 // of the feature's keywords; the boolean form is true unless the device is at its "none" resting state.
                 case "hover":
@@ -145,12 +146,29 @@ namespace PeachBrackets.Html
                     };
                 case "update":
                 case "scripting":
-                // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors).
+                // A PDF is not drawn under a user agent's forced palette (Media Queries 5, forced-colors), and has no other
+                // settings of its reader to report, unless the host passes some in.
                 case "forced-colors":
-                    return MatchesKeyword(feature, "none", booleanContextResult: false);
+                    var forced = (context.Preferences ?? UserPreferences.Default).ForcedColors;
+                    return MatchesKeyword(feature, forced ? "active" : "none", booleanContextResult: forced);
+                case "inverted-colors":
+                    var inverted = (context.Preferences ?? UserPreferences.Default).InvertedColors;
+                    return MatchesKeyword(feature, inverted ? "inverted" : "none", booleanContextResult: inverted);
                 case "prefers-contrast":
+                    var contrast = (context.Preferences ?? UserPreferences.Default).Contrast;
+                    return MatchesKeyword(feature, contrast switch
+                    {
+                        ContrastPreference.More => "more",
+                        ContrastPreference.Less => "less",
+                        ContrastPreference.Custom => "custom",
+                        _ => "no-preference",
+                    }, booleanContextResult: contrast != ContrastPreference.NoPreference);
                 case "prefers-reduced-transparency":
-                    return MatchesKeyword(feature, "no-preference", booleanContextResult: false);
+                    var reduceTransparency = (context.Preferences ?? UserPreferences.Default).ReducedTransparency;
+                    return MatchesKeyword(feature, reduceTransparency ? "reduce" : "no-preference", booleanContextResult: reduceTransparency);
+                case "prefers-reduced-data":
+                    var reduceData = (context.Preferences ?? UserPreferences.Default).ReducedData;
+                    return MatchesKeyword(feature, reduceData ? "reduce" : "no-preference", booleanContextResult: reduceData);
 
                 default:
                     // A registered feature this matcher does not evaluate (e.g. `scan`): treat as not

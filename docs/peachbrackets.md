@@ -90,6 +90,8 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `MarginTopPoints`, `MarginRightPoints`, `MarginBottomPoints`, `MarginLeftPoints`, `SetMargins(points)` | The page margins, 20 points each by default. `@page { margin }` overrides them. |
 | `Media` | The media type `@media` queries see. `print` by default. |
 | `ColorScheme` | What `prefers-color-scheme` reports: `Light` (the default) or `Dark`. |
+| `Preferences` | The reader's settings that `prefers-reduced-motion`, `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency` and `prefers-reduced-data` report (`UserPreferences`). The default is a static document's: reduced motion on, everything else off, so a document reports what it always did. A window or phone reads them from the system (Windows high contrast, Android's text-contrast and remove-animations settings). |
+| `TextSpacing` | Spacing applied over the document's own for a reader who needs more room around text: line height, paragraph spacing, letter spacing and word spacing as multiples of the font size. `TextSpacingOverrides.Wcag` is what WCAG 2.2 success criterion 1.4.12 asks a page to survive. Added to `UserStyleSheet` as `!important` rules, so it is ignored when `StyleSheet` is set. |
 | `UserStyleSheet` | CSS applied after the built-in defaults and before the document's own style sheets. |
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
