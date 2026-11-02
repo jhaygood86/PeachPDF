@@ -37,7 +37,8 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | Member | |
 |---|---|
 | `Html`, `Source` | What to show (`Html` wins). Both are dependency properties, so they bind. |
-| `PageBackground` | The colour behind the page. |
+| `PageBackground` | The colour behind the page. While it is opaque (the default) the view's surface has no alpha channel, which lets `Lcd` text blend against what is behind it. |
+| `TextRendering` | How text is drawn; see [`PeachDrawing.Win2D`](peachdrawing-win2d.md#text-rendering-peachdrawing-engine). `Auto` (the default) gives body text hinting, the weight Windows gives it and, when ClearType is on, its colour stripes; large text stays crisp vector text. |
 | `Input` | The pointing devices the `hover` / `pointer` media queries report. By default the control asks the system which are attached. |
 | `Document` | The loaded `HtmlDocument` (replaced whenever the view reloads), for anything the control does not wrap: find, element bounds, annotations. |
 | `SelectedText`, `CopySelection()`, `SelectAll()` | Selection and the clipboard. Ctrl+C and Ctrl+A work when the control has focus. |
