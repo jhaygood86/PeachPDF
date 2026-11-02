@@ -1331,6 +1331,9 @@ namespace PeachBrackets.Html
         /// <summary>What the user is doing to the document (hover, press, focus) for the state pseudo-classes; null for a static document.</summary>
         internal InteractionState? Interaction { get; set; }
 
+        /// <summary>Where the caret and selection of the text field being edited are.</summary>
+        internal FormEditSession FormEdit { get; } = new();
+
         /// <summary>Whether any style rule of the document uses <c>:hover</c> or <c>:active</c>; read while it is cascaded.</summary>
         internal bool PointerPseudoClassesInUse { get; set; }
 

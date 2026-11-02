@@ -10,6 +10,9 @@ namespace PeachBrackets;
 
 public sealed partial class HtmlDocument
 {
+    // What was changed on each control since the source was loaded, by the control's place in the source.
+    private readonly Dictionary<int, Dictionary<string, string?>> _formChanges = [];
+
     /// <summary>
     /// What a form control holds now: the value of a text field, range or button, whether a check box or radio button is checked, and the label of
     /// the chosen option of a drop-down.
@@ -134,7 +137,8 @@ public sealed partial class HtmlDocument
                 break;
         }
 
-        control.HtmlTag.SetAttribute("value", value);
+        SetControlAttribute(control, "value", value);
+        ClearComposition(control);
         return Changed([control]);
     }
 
@@ -170,12 +174,43 @@ public sealed partial class HtmlDocument
     private static double Number(CssBox control, string name, double fallback) =>
         double.TryParse(control.GetAttribute(name, string.Empty), NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
-    private static void SetFlag(CssBox box, string name, bool on)
+    // Every change to what a control holds goes through here, which remembers it: loading the source again (a change of :focus can do that)
+    // would otherwise put the control back as the source has it.
+    private void SetFlag(CssBox box, string name, bool on) => SetControlAttribute(box, name, on ? string.Empty : null);
+
+    private void SetControlAttribute(CssBox box, string name, string? value)
     {
-        if (on)
-            box.HtmlTag!.SetAttribute(name, string.Empty);
+        var tag = box.HtmlTag!;
+        if (value is null)
+            tag.RemoveAttribute(name);
         else
-            box.HtmlTag!.RemoveAttribute(name);
+            tag.SetAttribute(name, value);
+
+        if (tag.SourceOrdinal < 0)
+            return;
+
+        if (!_formChanges.TryGetValue(tag.SourceOrdinal, out var changes))
+            _formChanges[tag.SourceOrdinal] = changes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+
+        changes[name] = value;
+    }
+
+    // Puts back what controls held after the source was loaded again.
+    private void ReapplyFormChanges()
+    {
+        foreach (var (ordinal, changes) in _formChanges)
+        {
+            if (FindByOrdinal(_container.Root, ordinal)?.HtmlTag is not { } tag)
+                continue;
+
+            foreach (var (name, value) in changes)
+            {
+                if (value is null)
+                    tag.RemoveAttribute(name);
+                else
+                    tag.SetAttribute(name, value);
+            }
+        }
     }
 
     // The options of a drop-down, in order, wherever the parser put them (an option left open can hold the next).

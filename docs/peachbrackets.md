@@ -130,7 +130,14 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   `<input>` or `<select>` holds in the document itself: whether a check box or radio button is checked (checking a radio button unchecks the rest of its
   name in the same form), a text field's text, a range's number (kept between `min` and `max`), a drop-down's chosen option. `Activate` does what a click
   does (toggles a check box, checks a radio button). Each returns an `UpdateResult` with the regions to repaint; no layout pass runs, and the accessibility
-  tree follows. A disabled control, and a read-only one for `SetValue`, is left alone.
+  tree follows. A disabled control, and a read-only one for `SetValue`, is left alone. What a control holds is kept when a change of focus loads the
+  source again for a `:focus` rule.
+- **`GetEditState()`**, **`SetEditSelection(start, end)`**, **`InsertText(text)`**, **`ReplaceEditText(start, end, text, caret)`**,
+  **`DeleteEditText(backward)`**, **`SetComposition(start, end)`**, **`SetCaretVisible(visible)`** and **`GetEditPlace(canvas, index)`** edit the text
+  field that has the focus (text, search, URL, telephone, email, password and number inputs): its text and selection, the text an input method is still
+  composing, and where the caret is on the page for the system's candidate window. The field draws its selection, an underline under the composition and
+  a caret, which a host blinks with `SetCaretVisible`. Typing is cut to `maxlength`, line breaks are dropped, a read-only or disabled field is left alone,
+  and deleting takes a whole grapheme cluster. A host maps its text-input service (Windows TSF, Android `InputConnection`) onto these calls.
 - **`PaintAccessibility(pageIndex, canvas)`** puts the roles, names and states of the [accessibility tree](accessibility.md) on a canvas as
   `Canvas.AddSemanticRegion` calls in reading order, for a canvas that writes them (SVG), so a drawing made from the document can be read by
   assistive technology. Containers and runs of text are left out; the regions are flat.
