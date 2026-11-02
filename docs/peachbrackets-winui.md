@@ -78,6 +78,14 @@ reader's `SetFocus` on a node moves the page's focus there, and `IsKeyboardFocus
 `src/examples/PeachBrackets.WinUI.Example/Verify-Accessibility.ps1` starts the example and checks that tree through the UI Automation client
 API (it needs a desktop session).
 
+## Form controls
+
+The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
+and range are drawn from their own CSS like the rest of the page; no XAML widget is placed over it. A click on a check box or radio button toggles it
+(`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. The UI Automation peer of a check box, radio button or switch supports
+the Toggle pattern, which does the same and reports the state. Typing into a text field, picking from a drop-down and moving a range are not handled
+yet: they need the Windows text services bridge.
+
 ## Limits of this version
 
 - Form controls are painted but not interactive: they can be focused with Tab, but nothing can be typed into them or clicked.

@@ -325,4 +325,30 @@ public class HtmlViewTests
 
         return null;
     }
+
+    [Fact]
+    public async Task AScreenReaderTogglesACheckBoxAndTheRadioButtonsOfAGroupFollow()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<label><input type=checkbox id=agree> I agree</label><input type=radio name=p id=a checked><input type=radio name=p id=b>");
+            var top = DocumentPeer(view)!.GetChildren();
+            var checkBox = top.First(c => c.GetAutomationControlType() == AutomationControlType.CheckBox);
+            var toggle = (IToggleProvider)checkBox.GetPattern(PatternInterface.Toggle);
+            var before = toggle.ToggleState;
+            toggle.Toggle();
+            await Task.Delay(300);
+            var after = ((IToggleProvider)DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.CheckBox).GetPattern(PatternInterface.Toggle)).ToggleState;
+
+            var radios = DocumentPeer(view)!.GetChildren().Where(c => c.GetAutomationControlType() == AutomationControlType.RadioButton).ToList();
+            ((IToggleProvider)radios[1].GetPattern(PatternInterface.Toggle)).Toggle();
+            await Task.Delay(300);
+            var states = DocumentPeer(view)!.GetChildren().Where(c => c.GetAutomationControlType() == AutomationControlType.RadioButton)
+                .Select(r => ((IToggleProvider)r.GetPattern(PatternInterface.Toggle)).ToggleState.ToString()).ToArray();
+            return (before.ToString(), after.ToString(), states);
+        });
+
+        Assert.Equal(("Off", "On"), (facts.Item1, facts.Item2));
+        Assert.Equal(["Off", "On"], facts.states);
+    }
 }
