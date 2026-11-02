@@ -134,6 +134,7 @@ public sealed partial class HtmlView
         if (result.Applied && result.DirtyRegions.Count > 0)
             RefreshAccessibility(document);
 
+        UpdateEditing();
         if (focusedId is not null && _accessibilityTree?.FindById(focusedId) is { } focused)
         {
             BringIntoView(focused);
