@@ -10,6 +10,7 @@ PeachBrackets.Accessibility.AccessibilityBounds : struct
 PeachBrackets.Accessibility.AccessibilityNode : sealed class
   method IEnumerable<AccessibilityNode> DescendantsAndSelf()
   method virtual String ToString()
+  property AccessibilityNode ActiveDescendant { get; }
   property AccessibilityNode Parent { get; }
   property AccessibilityRole Role { get; }
   property Boolean Atomic { get; }
@@ -25,7 +26,24 @@ PeachBrackets.Accessibility.AccessibilityNode : sealed class
   property IEnumerable<AccessibilityNode> ReadingChildren { get; }
   property IReadOnlyList<AccessibilityBounds> Bounds { get; }
   property IReadOnlyList<AccessibilityNode> Children { get; }
+  property IReadOnlyList<AccessibilityNode> ColumnHeaders { get; }
+  property IReadOnlyList<AccessibilityNode> Controls { get; }
+  property IReadOnlyList<AccessibilityNode> DescribedBy { get; }
+  property IReadOnlyList<AccessibilityNode> Details { get; }
+  property IReadOnlyList<AccessibilityNode> ErrorMessages { get; }
+  property IReadOnlyList<AccessibilityNode> FlowTo { get; }
+  property IReadOnlyList<AccessibilityNode> LabelledBy { get; }
+  property IReadOnlyList<AccessibilityNode> Owns { get; }
+  property IReadOnlyList<AccessibilityNode> RowHeaders { get; }
+  property Int32 ColumnCount { get; }
+  property Int32 ColumnIndex { get; }
+  property Int32 ColumnSpan { get; }
   property Int32 Level { get; }
+  property Int32 PositionInSet { get; }
+  property Int32 RowCount { get; }
+  property Int32 RowIndex { get; }
+  property Int32 RowSpan { get; }
+  property Int32 SetSize { get; }
   property Int32? TabIndex { get; }
   property LiveSetting Live { get; }
   property String AccessKey { get; }
@@ -128,9 +146,21 @@ PeachBrackets.Accessibility.AccessibilityRole : enum Int32
   TreeItem = 81
 PeachBrackets.Accessibility.AccessibilityTree : sealed class
   method AccessibilityNode FindById(String id)
+  method AccessibilityNode NextFocus(AccessibilityNode current, Boolean forward)
   method AccessibilityNode NodeAt(Int32 pageIndex, Double x, Double y)
   property AccessibilityNode Root { get; }
+  property IReadOnlyList<AccessibilityNode> FocusOrder { get; }
   property IReadOnlyList<AccessibilityNode> Nodes { get; }
+PeachBrackets.Accessibility.FocusMoveResult : struct
+  ctor(AccessibilityNode Node, Boolean LeftDocument, UpdateResult Update)
+  method Void Deconstruct(out AccessibilityNode Node, out Boolean LeftDocument, out UpdateResult Update)
+  method virtual Boolean Equals(FocusMoveResult other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AccessibilityNode Node { get; init; }
+  property Boolean LeftDocument { get; init; }
+  property UpdateResult Update { get; init; }
 PeachBrackets.Accessibility.LiveSetting : enum Int32
   Assertive = 2
   Off = 0
@@ -371,6 +401,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task LayoutAsync(Canvas measuringCanvas)
   method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
   method Task PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region)
+  method Task<FocusMoveResult> MoveFocusAsync(Boolean forward, Canvas measuringCanvas)
   method Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
   method Task<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
   method Task<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
@@ -380,6 +411,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
   method Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
   method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
+  method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
@@ -396,6 +428,7 @@ PeachBrackets.HtmlDocument : sealed class
   method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
   method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
+  property AccessibilityNode FocusedNode { get; }
   property DocumentAnnotations Annotations { get; }
   property DocumentSelection Selection { get; }
   property HtmlDocumentMetadata Metadata { get; }

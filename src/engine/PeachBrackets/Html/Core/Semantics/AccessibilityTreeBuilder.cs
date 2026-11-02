@@ -54,6 +54,7 @@ namespace PeachBrackets.Html.Semantics
                 var context = new SemanticContext(false, false, false, false, _container.DocumentLanguage, false);
                 Visit(top, context, root);
                 root.Text = Collapse(string.Join(' ', Texts(root)));
+                ResolveStructure(root);
             }
 
             return new AccessibilityTree(root);
@@ -150,22 +151,16 @@ namespace PeachBrackets.Html.Semantics
 
         private void Visit(CssBox box, SemanticContext context, AccessibilityNode parent)
         {
-            // A table header or footer that repeats on every page is taken out of the table and replaced by one proxy for each page it is on; the
-            // original is what the table has, once, where its first proxy is.
-            if (box is CssProxyBox proxy)
-            {
-                if (_visitedSources.Add(proxy.SourceBox))
-                    Visit(proxy.SourceBox, context, parent);
-
+            // A proxy is visited by the box it was taken out of (see Children).
+            if (box is CssProxyBox)
                 return;
-            }
 
             if (box.HtmlTag is not { } tag)
             {
                 if (!context.SuppressText && HasOwnText(box))
                     AddText(box, parent);
 
-                foreach (var child in box.Boxes)
+                foreach (var child in Children(box))
                     Visit(child, context, parent);
 
                 return;
@@ -185,7 +180,7 @@ namespace PeachBrackets.Html.Semantics
             // an element that is not shown (its children may still be).
             if (hidden || role is AccessibilityRole.Generic or AccessibilityRole.Presentation)
             {
-                foreach (var child in box.Boxes)
+                foreach (var child in Children(box))
                     Visit(child, inner, parent);
 
                 return;
@@ -213,18 +208,41 @@ namespace PeachBrackets.Html.Semantics
             }
 
             ApplyStates(node, box, tag, role, context);
+            ReadStructureAttributes(node, tag);
             node.Name = ComputeName(box, tag, role, out var nameFromTitle);
             node.Description = ComputeDescription(box, tag, nameFromTitle);
             parent.AddChild(node);
 
             // The text of something named by its content is its name: it has no text nodes below it, only the parts of it that are more than text.
             var below = inner with { SuppressText = RoleResolver.NamesFromContent(role) || IsLeaf(role) };
-            foreach (var child in box.Boxes)
+            foreach (var child in Children(box))
                 Visit(child, below, node);
 
             node.Text = Collapse(string.Join(' ', Texts(node)));
             if (node.Text.Length == 0)
                 node.Text = TextOf(box);
+        }
+
+        // The boxes of an element in the order a reader meets them. A table header or footer that repeats on every page is taken out of the
+        // table and replaced by one proxy for each page it is on; the original is what the table has, once, and HTML puts a header before the
+        // rows and a footer after them wherever the source has them.
+        private IEnumerable<CssBox> Children(CssBox box)
+        {
+            if (!box.Boxes.Exists(c => c is CssProxyBox))
+                return box.Boxes;
+
+            var headers = new List<CssBox>();
+            var footers = new List<CssBox>();
+            var others = new List<CssBox>();
+            foreach (var child in box.Boxes)
+            {
+                if (child is not CssProxyBox proxy)
+                    others.Add(child);
+                else if (_visitedSources.Add(proxy.SourceBox))
+                    (proxy.SourceBox.HtmlTag is { } tag && IsTag(tag, "tfoot") ? footers : headers).Add(proxy.SourceBox);
+            }
+
+            return [.. headers, .. others, .. footers];
         }
 
         // What the nodes below an element are told about it.
