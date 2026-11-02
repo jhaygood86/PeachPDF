@@ -33,6 +33,9 @@ links come from the laid-out page.
 | `Checked`, `Pressed`, `Expanded`, `Selected`, `Disabled`, `Required`, `ReadOnly`, `Invalid`, `Busy`, `Modal`, `Current` | State, from the element's attributes and the elements around it |
 | `Live`, `Atomic` | How changes are announced (`aria-live`, or what the role implies) |
 | `IsFocusable`, `TabIndex`, `AccessKey`, `KeyShortcuts` | What a keyboard can do with it |
+| `RowIndex`, `ColumnIndex`, `RowSpan`, `ColumnSpan`, `RowCount`, `ColumnCount`, `ColumnHeaders`, `RowHeaders` | Where a cell or row is in its table or grid (counted from 0), how many rows and columns it covers, how big the table is, and the cells that head a cell; see [Tables](#tables) |
+| `PositionInSet`, `SetSize` | The place of a list item, option, tab, menu item or tree item among its siblings (counted from 1), and how many there are |
+| `Controls`, `Owns`, `FlowTo`, `Details`, `ErrorMessages`, `LabelledBy`, `DescribedBy`, `ActiveDescendant` | The nodes that `aria-controls`, `aria-owns`, `aria-flowto`, `aria-details`, `aria-errormessage`, `aria-labelledby`, `aria-describedby` and `aria-activedescendant` point at |
 | `Bounds` | One rectangle for each page it is on, in points from the top-left of the sheet |
 | `Id` | A name that is the same each time the document is laid out, so a reader that is on a node stays there |
 
@@ -63,6 +66,23 @@ The name of a node is the first of these that gives one (the [Accessible Name an
 
 The description is `aria-describedby`, then `aria-description`, then `title` if the name did not already come from it.
 
+## Tables
+
+Cells are placed the way [HTML lays a table out](https://html.spec.whatwg.org/multipage/tables.html#forming-a-table): left to right in their row,
+skipping the places a cell from a row above reaches down into, each taking as many places as its `colspan` and `rowspan` say. A header or footer
+row group goes first or last whatever order the source has it in. `aria-rowindex`, `aria-colindex`, `aria-rowcount` and `aria-colcount` replace the
+computed numbers for a grid that shows only part of its data.
+
+A data cell's `ColumnHeaders` are the column headers above it that overlap its columns, and its `RowHeaders` the `th scope=row` cells before it that
+overlap its rows; a cell with a `headers` attribute is headed by exactly the cells it names.
+
+## Sets and references
+
+The items of a list are numbered among the siblings with the same role; `aria-posinset` and `aria-setsize` replace that, and an item without a
+position follows the one before it. A reference such as `aria-controls="panel"` is resolved to the node `id="panel"` is when there is one: an
+element that is not in the tree (a `div` or `span` with no role, or one that is not shown) cannot be pointed at. `aria-owns` is reported but the
+tree is not rearranged to match it.
+
 ## State
 
 `aria-checked`, `aria-pressed`, `aria-expanded`, `aria-selected`, `aria-disabled`, `aria-required`, `aria-readonly`, `aria-invalid`, `aria-busy`,
@@ -83,10 +103,10 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 ## Limits of this version
 
 - A name that comes from an element that is not shown (`display: none`) is not read, because it is never laid out; `aria-labelledby` pointing at one
-  gives nothing.
+  gives nothing, and no relation can point at one.
 - Content moved into the tree by `display: contents` is not in it yet.
 - A table header or footer that repeats on every page is in the tree once, with the rectangle it has on the first page.
 - Inline SVG is one `GraphicsDocument` node named by its `aria-label`; its `<title>` and `<desc>`, and the shapes inside it, are not read. A `math`
   element is one `Math` node named by its `alttext` or `aria-label`.
-- Tables report cells and headers as nodes, but not yet their row and column positions, spans or header associations.
-- The relations `aria-controls`, `aria-owns`, `aria-flowto` and `aria-errormessage` are not read.
+- A `th` with neither `scope` nor a `headers` link is taken to head its column, and `scope=colgroup` and `scope=rowgroup` are not read.
+- Radio buttons are not counted as a set by their `name`.
