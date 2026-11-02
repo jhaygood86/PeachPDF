@@ -468,6 +468,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
+  property Boolean PaintFormControls { get; set; }
   property Boolean RecordTextRuns { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
