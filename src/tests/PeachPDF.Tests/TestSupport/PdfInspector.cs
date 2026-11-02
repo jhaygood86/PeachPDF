@@ -169,6 +169,9 @@ namespace PeachPDF.Tests.TestSupport
                 var data = StoredBytes;
                 foreach (var filter in filters)
                 {
+                    if (data.Length == 0)
+                        break;
+
                     if (filter is "/FlateDecode" or "/Fl")
                     {
                         using var input = new MemoryStream(data, 2, data.Length - 2);
