@@ -501,4 +501,27 @@ public class HtmlViewTests
         Assert.Equal(3.0, facts.Item2);
         Assert.Equal(40.0, facts.Item3);
     }
+
+    [Fact]
+    public async Task APressInATextFieldPlacesTheCaretAndADragSelectsFromThere()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=f value=\"hello world\" style=\"width:200px\">");
+            var field = view.Document!.GetElement("f")!;
+            var bounds = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+
+            view._fieldPressed = true;
+            Assert.True(view.FocusTextFieldAt(0, bounds.X + 1, bounds.Y + (bounds.Height / 2)));
+            await Task.Delay(500);
+            await view.FocusIdle;
+            var anchor = view.FieldAnchor;
+            await view.ExtendFieldSelectionAsync(view.Document, 0, bounds.X + bounds.Width - 1, anchor ?? 0);
+            var state = view.Document.GetEditState()!.Value;
+            return (anchor, state.SelectionStart, state.SelectionEnd, state.Text.Length);
+        });
+
+        Assert.Equal(0, facts.anchor);
+        Assert.Equal((0, facts.Length), (facts.SelectionStart, facts.SelectionEnd));
+    }
 }
