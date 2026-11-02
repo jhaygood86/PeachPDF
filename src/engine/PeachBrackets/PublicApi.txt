@@ -204,6 +204,7 @@ PeachBrackets.HtmlDocument : sealed class
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
+  method PaintColor? GetCaretColor(TextPosition position)
   method Rect? GetElementBounds(String elementId)
   method String GetText(TextPosition from, TextPosition to)
   method Task LayoutAsync(Canvas measuringCanvas)
