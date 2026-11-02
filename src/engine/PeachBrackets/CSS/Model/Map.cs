@@ -427,6 +427,13 @@ namespace PeachBrackets.Css
                 {"optimizeLegibility", TextRenderingMode.OptimizeLegibility},
                 {"geometricPrecision", TextRenderingMode.GeometricPrecision}
             }.Freeze();
+        public static readonly KeywordMap<ForcedColorAdjustMode> ForcedColorAdjustModes =
+            new KeywordMap<ForcedColorAdjustMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, ForcedColorAdjustMode.Auto},
+                {Keywords.None, ForcedColorAdjustMode.None},
+                {"preserve-parent-color", ForcedColorAdjustMode.PreserveParentColor}
+            }.Freeze();
         public static readonly KeywordMap<FontKerningMode> FontKerningModes =
             new KeywordMap<FontKerningMode>(StringComparer.OrdinalIgnoreCase)
             {

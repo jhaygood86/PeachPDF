@@ -466,6 +466,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
+  property Double FontScale { get; set; }
   property Double MarginBottomPoints { get; set; }
   property Double MarginLeftPoints { get; set; }
   property Double MarginRightPoints { get; set; }
@@ -545,6 +546,30 @@ PeachBrackets.Selection.SelectionGranularity : enum Int32
 PeachBrackets.Svg.SvgGlyphPainter : sealed class
   ctor(Canvas host, RenderContext renderContext)
   method virtual Boolean TryPaint(Typeface typeface, UInt16 glyph, SvgGlyph svg, Double fontSize, Double originX, Double baselineY, PaintColor foreground, Int32 paletteIndex, IReadOnlyDictionary<Int32, PaintColor> overrides)
+PeachBrackets.SystemColorPalette : sealed class
+  ctor()
+  method SystemColorPalette <Clone>$()
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SystemColorPalette other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property PaintColor ActiveText { get; init; }
+  property PaintColor ButtonBorder { get; init; }
+  property PaintColor ButtonFace { get; init; }
+  property PaintColor ButtonText { get; init; }
+  property PaintColor Canvas { get; init; }
+  property PaintColor CanvasText { get; init; }
+  property PaintColor Field { get; init; }
+  property PaintColor FieldText { get; init; }
+  property PaintColor GrayText { get; init; }
+  property PaintColor Highlight { get; init; }
+  property PaintColor HighlightText { get; init; }
+  property PaintColor LinkText { get; init; }
+  property PaintColor Mark { get; init; }
+  property PaintColor MarkText { get; init; }
+  property PaintColor VisitedText { get; init; }
+  property static SystemColorPalette Dark { get; }
+  property static SystemColorPalette Light { get; }
 PeachBrackets.Tagging.IStructureTagSink : interface
   method abstract IDisposable OpenArtifact(Canvas g)
   method abstract IDisposable OpenContentElement(Canvas g, StructureNode node, String structureType, String altText = null)
@@ -675,6 +700,7 @@ PeachBrackets.UserPreferences : sealed class
   property Boolean ReducedMotion { get; init; }
   property Boolean ReducedTransparency { get; init; }
   property ContrastPreference Contrast { get; init; }
+  property SystemColorPalette ForcedPalette { get; init; }
   property static UserPreferences Default { get; }
 PeachPDF.HtmlRenderErrorType : enum Int32
   ContextMenu = 8

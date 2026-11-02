@@ -63,6 +63,14 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public TextSpacingOverrides? TextSpacing { get; set; }
 
+    /// <summary>
+    /// How much larger (or smaller) than the document asks text is drawn, for a reader who sets a text size on their system: 1 (the default) leaves it
+    /// alone, 1.5 makes the root font size 150% of the default. Text the document sizes in <c>em</c>, <c>rem</c>, a percentage or a keyword follows;
+    /// text sized in <c>px</c> or <c>pt</c> does not, as in a browser's font size setting. It is added to <see cref="UserStyleSheet"/>, so it is
+    /// ignored when <see cref="StyleSheet"/> is set.
+    /// </summary>
+    public double FontScale { get; set; } = 1;
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 
