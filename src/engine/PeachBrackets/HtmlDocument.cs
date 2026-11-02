@@ -44,7 +44,7 @@ namespace PeachBrackets;
 /// the sheet and y growing downward. A document is not thread safe.
 /// </para>
 /// </remarks>
-public sealed class HtmlDocument : IDisposable
+public sealed partial class HtmlDocument : IDisposable
 {
     private readonly HtmlContainerInt _container;
 
@@ -108,6 +108,7 @@ public sealed class HtmlDocument : IDisposable
             container.TotalPagesOverride = options.TotalPagesOverride;
             container.AnimationProgress = options.AnimationProgress;
             container.InteractiveForms = options.CollectFormFields;
+            container.PaintFormControls = options.PaintFormControls;
             document.ApplyTextOptions(options);
 
             // Read while the DOM tree is generated, when every text box is cut into words: hyphens: auto and the language-dependent

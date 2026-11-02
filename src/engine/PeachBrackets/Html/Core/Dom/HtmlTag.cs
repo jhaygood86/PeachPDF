@@ -131,6 +131,9 @@ namespace PeachBrackets.Html.Dom
             Attributes[name] = value;
         }
 
+        /// <summary>Removes an attribute, when this tag has it.</summary>
+        internal void RemoveAttribute(string name) => Attributes?.Remove(name);
+
         public override string ToString()
         {
             if (Attributes is null)

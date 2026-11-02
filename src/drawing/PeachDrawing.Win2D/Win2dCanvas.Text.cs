@@ -106,6 +106,12 @@ public sealed partial class Win2dCanvas
             return;
         }
 
+        if (_context.TextRendering != Win2dTextRendering.Outline
+            && TryDrawMasked(str, font, color, point, letterSpacing, fontPalette, features ?? ShapeSettings.Default))
+        {
+            return;
+        }
+
         var typeface = font.Typeface!;
         var unitsPerEm = typeface.Metrics.UnitsPerEm;
         if (unitsPerEm == 0)

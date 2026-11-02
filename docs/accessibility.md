@@ -89,6 +89,13 @@ tree is not rearranged to match it.
 `aria-modal` and `aria-current` are read, and so are their native equivalents: `checked`, `disabled` (also through a disabled `fieldset`), `required`,
 `readonly`, `selected`, and a `details` element's `open`.
 
+## Form controls
+
+A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the engine draws every `<input>` and `<select>` itself from the
+control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
+buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges; `progress`, `meter`, the date and colour inputs, a `textarea` and
+typing into a field are not drawn or handled yet. The accessibility tree already reports each control's role, name and state.
+
 ## Preferences and text spacing
 
 A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with
