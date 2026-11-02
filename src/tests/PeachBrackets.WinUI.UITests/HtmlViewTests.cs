@@ -416,4 +416,30 @@ public class HtmlViewTests
 
         Assert.Equal(("Ada", "Adam😀", ">Adam", false, "Lin", false), facts);
     }
+
+    [Fact]
+    public async Task AProgressBarAndASliderAreRangesAndOnlyTheSliderCanBeMoved()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<progress id=p value=3 max=10></progress><input id=s type=range min=0 max=50 value=10 aria-label=volume>");
+            var top = DocumentPeer(view)!.GetChildren();
+            var bar = (IRangeValueProvider)top.First(c => c.GetAutomationControlType() == AutomationControlType.ProgressBar).GetPattern(PatternInterface.RangeValue);
+            var sliderPeer = top.First(c => c.GetAutomationControlType() == AutomationControlType.Slider);
+            var slider = (IRangeValueProvider)sliderPeer.GetPattern(PatternInterface.RangeValue);
+
+            var before = (bar.Value, bar.Minimum, bar.Maximum, bar.IsReadOnly, slider.Value, slider.Maximum, slider.IsReadOnly, slider.LargeChange, slider.SmallChange);
+            bar.SetValue(9);
+            slider.SetValue(40);
+            await Task.Delay(300);
+            var after = DocumentPeer(view)!.GetChildren();
+            var barAfter = (IRangeValueProvider)after.First(c => c.GetAutomationControlType() == AutomationControlType.ProgressBar).GetPattern(PatternInterface.RangeValue);
+            var sliderAfter = (IRangeValueProvider)after.First(c => c.GetAutomationControlType() == AutomationControlType.Slider).GetPattern(PatternInterface.RangeValue);
+            return (before, barAfter.Value, sliderAfter.Value);
+        });
+
+        Assert.Equal((3.0, 0.0, 10.0, true, 10.0, 50.0, false, 5.0, 0.5), facts.before);
+        Assert.Equal(3.0, facts.Item2);
+        Assert.Equal(40.0, facts.Item3);
+    }
 }

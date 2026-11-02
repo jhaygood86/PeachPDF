@@ -164,7 +164,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IRangeValueProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -236,6 +236,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
         PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
         PatternInterface.Value when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => this,
+        PatternInterface.RangeValue when HtmlViewLogic.IsRangeRole(_node.Role) => this,
         PatternInterface.Grid or PatternInterface.Table when HtmlViewLogic.IsGridRole(_node.Role) => this,
         PatternInterface.GridItem or PatternInterface.TableItem when HtmlViewLogic.IsGridCellRole(_node.Role) && HtmlViewLogic.TableOf(_node) is not null => this,
         _ => null,
@@ -264,6 +265,26 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     public bool IsReadOnly => _view.CurrentNode(_node).ReadOnly || _node.Disabled;
 
     public void SetValue(string value) => _view.DispatcherQueue.TryEnqueue(() => _view.SetFieldValue(_view.CurrentNode(_node), value));
+
+    // A progress bar, meter or slider, as a screen reader reads it and a slider is moved. These are explicit because a text field's Value and
+    // IsReadOnly (above) have the same names with other types.
+    double IRangeValueProvider.Value => _view.CurrentNode(_node).Value ?? _node.ValueMin;
+
+    double IRangeValueProvider.Minimum => _view.CurrentNode(_node).ValueMin;
+
+    double IRangeValueProvider.Maximum => _view.CurrentNode(_node).ValueMax;
+
+    double IRangeValueProvider.SmallChange => HtmlViewLogic.RangeSteps(_view.CurrentNode(_node).ValueMin, _view.CurrentNode(_node).ValueMax).Small;
+
+    double IRangeValueProvider.LargeChange => HtmlViewLogic.RangeSteps(_view.CurrentNode(_node).ValueMin, _view.CurrentNode(_node).ValueMax).Large;
+
+    bool IRangeValueProvider.IsReadOnly => _node.Role != AccessibilityRole.Slider || _node.ReadOnly || _node.Disabled;
+
+    void IRangeValueProvider.SetValue(double value)
+    {
+        if (_node.Role == AccessibilityRole.Slider && !_node.ReadOnly && !_node.Disabled)
+            _view.DispatcherQueue.TryEnqueue(() => _view.SetFieldValue(_view.CurrentNode(_node), value.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+    }
 
     // ---- tables: the table as a grid, a cell as an item of it --------------------------------------------------------------------------
 
