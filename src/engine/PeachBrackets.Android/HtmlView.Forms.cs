@@ -1,6 +1,7 @@
 using PeachBrackets.Accessibility;
 using PeachBrackets.Updates;
 using System;
+using System.Threading.Tasks;
 
 namespace PeachBrackets.Android;
 
@@ -40,5 +41,26 @@ public sealed partial class HtmlView
         // The tree is built again after a change, so the nodes an accessibility service holds are replaced.
         RefreshAccessibility(document);
         _surface.Invalidate();
+
+        // A rule that reads the control's state (input:checked + label) has to be matched again.
+        if (document.NeedsRestyle)
+            QueueFocus(() => RestyleFormAsync(document));
+    }
+
+    private async Task RestyleFormAsync(HtmlDocument document)
+    {
+        if (_context is not { } context || !ReferenceEquals(document, _document))
+            return;
+
+        UpdateResult result;
+        using (var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(1, 1)))
+        using (var measuring = new PeachDrawing.Skia.SkiaComposer(context, surface, 1, 1))
+            result = await document.RestyleFormAsync(measuring.Canvas);
+
+        if (ReferenceEquals(document, _document))
+        {
+            UpdateMetrics();
+            AfterControlChange(document, result);
+        }
     }
 }

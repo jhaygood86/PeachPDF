@@ -1,7 +1,0 @@
-# Form-state pseudo-classes do not restyle after a live change
-
-`:checked`, `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only` and `:read-write` match the attributes the document has when it is styled (`FormStateSelectors`). A host that changes a control later (`SetChecked`, `SetValue`, `Activate`, typing) repaints the control but does not re-run the cascade, so `input:checked + label { ... }` keeps its load-time look until the document is loaded again. Tracked in issue #2113.
-
-Why it is not done: the form API is synchronous and returns `UpdateResult`, while restyling is the async reload the `:focus` rules use (`ApplyStateAsync` -> `ReloadAsync`). That reload parses, cascades and lays out again, and the recorded form changes (`_formChanges`) are re-applied *after* the parse, which is too late for a selector that reads them; they would have to be applied to the tags between numbering the elements (`NumberElements`) and the cascade. Doing it means either an async restyle step plus a flag on `UpdateResult` telling the host to call it, or an incremental restyle of the elements a selector reaches (siblings for `+`/`~`, descendants, ancestors for `:has()`).
-
-Not recorded here: `:valid`, `:invalid`, `:in-range`, `:out-of-range` (they need a constraint-validation model), `:default` and `:indeterminate` (the form's own structure and a user action) still parse and select nothing.

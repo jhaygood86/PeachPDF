@@ -138,6 +138,11 @@ namespace PeachBrackets.Html.Parse
             htmlContainer.PointerPseudoClassesInUse = selectors.Any(text =>
                 text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase));
             htmlContainer.FocusPseudoClassesInUse = selectors.Any(text => text.Contains(":focus", StringComparison.OrdinalIgnoreCase));
+            htmlContainer.FormStatePseudoClassesInUse = selectors.Any(text =>
+                text.Contains(":checked", StringComparison.OrdinalIgnoreCase) || text.Contains(":disabled", StringComparison.OrdinalIgnoreCase)
+                || text.Contains(":enabled", StringComparison.OrdinalIgnoreCase) || text.Contains(":required", StringComparison.OrdinalIgnoreCase)
+                || text.Contains(":optional", StringComparison.OrdinalIgnoreCase) || text.Contains(":read-only", StringComparison.OrdinalIgnoreCase)
+                || text.Contains(":read-write", StringComparison.OrdinalIgnoreCase));
 
             var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 

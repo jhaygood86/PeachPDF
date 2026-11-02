@@ -225,6 +225,43 @@ public sealed partial class HtmlDocument
             _formChanges[tag.SourceOrdinal] = changes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
 
         changes[name] = value;
+
+        // A rule that reads the state this attribute is (checked, disabled...) has to be matched again; the text of a field is not such state.
+        if (_container.FormStatePseudoClassesInUse && name.ToLowerInvariant() is "checked" or "selected" or "disabled" or "readonly" or "required" or "contenteditable")
+            _restyleOrdinals.Add(tag.SourceOrdinal);
+    }
+
+    // The controls whose state changed since the document was last styled, when a rule reads that state.
+    private readonly HashSet<int> _restyleOrdinals = [];
+
+    /// <summary>
+    /// Whether the document has to be styled again after changes to controls (<see cref="SetChecked"/>, <see cref="SetValue"/>, <see cref="Activate"/>): true
+    /// when a style sheet rule reads <c>:checked</c>, <c>:disabled</c>, <c>:enabled</c>, <c>:required</c>, <c>:optional</c>, <c>:read-only</c> or
+    /// <c>:read-write</c> and a control's state it reads has changed. A host that sees it calls <see cref="RestyleFormAsync"/>.
+    /// </summary>
+    public bool NeedsRestyle => _restyleOrdinals.Count > 0;
+
+    /// <summary>
+    /// Styles the document again with the controls as they are now, so rules such as <c>input:checked + label</c> match what a change made, and reports the
+    /// pages to repaint from the first one whose layout moved. Does nothing when <see cref="NeedsRestyle"/> is false.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether it was applied and the regions to repaint</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async Task<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        ThrowIfDisposed();
+        _ = Pages;
+        if (_restyleOrdinals.Count == 0)
+            return UpdateResult.NotApplied("No control the style sheet reads has changed.");
+        if (_source is null || _options is null)
+            return UpdateResult.NotApplied("Only a document loaded from HTML can be restyled for a change of state.");
+        if (_textEdited)
+            return UpdateResult.NotApplied("The text was edited in place, which loading the document again would undo.");
+
+        return await RestyleAsync([.. _restyleOrdinals], measuringCanvas);
     }
 
 
