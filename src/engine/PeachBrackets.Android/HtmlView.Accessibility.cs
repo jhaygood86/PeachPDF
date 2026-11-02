@@ -29,6 +29,8 @@ public sealed partial class HtmlView
     // Called when a document has laid out: the tree an accessibility service walks is rebuilt from it.
     private void RefreshAccessibility(HtmlDocument document)
     {
+        // Accessibility focus stays on the same part of the page when the tree is taken again (the page was restyled, say), not on the same number.
+        var focusedId = _accessibilityFocus > 0 && _accessibilityFocus <= _a11yNodes.Length ? _a11yNodes[_accessibilityFocus - 1].Id : null;
         var nodes = new List<AccessibilityNode>();
         var parents = new List<int>();
         var ids = new Dictionary<AccessibilityNode, int>(ReferenceEqualityComparer.Instance);
@@ -49,7 +51,7 @@ public sealed partial class HtmlView
         _a11yNodes = [.. nodes];
         _a11yParents = [.. parents];
         _a11yIds = ids;
-        _accessibilityFocus = AccessibilityNodeProvider.HostViewId;
+        _accessibilityFocus = focusedId is not null && nodes.FindIndex(n => n.Id == focusedId) is >= 0 and var kept ? kept + 1 : AccessibilityNodeProvider.HostViewId;
         ImportantForAccessibility = ImportantForAccessibility.Yes;
         if (IsAccessibilityEnabled())
             NotifySubtreeAccessibilityStateChanged(this, this, ContentChangeTypes.Subtree);
@@ -224,6 +226,15 @@ public sealed partial class HtmlView
                 info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionClick);
             }
 
+            // Input focus is the page's keyboard focus; accessibility focus is where the screen reader is.
+            if (node.IsFocusable)
+            {
+                info.Focusable = true;
+                info.Focused = view.FocusedNode?.Id == node.Id;
+                if (!info.Focused)
+                    info.AddAction(AccessibilityNodeInfo.AccessibilityAction.ActionFocus);
+            }
+
             info.AccessibilityFocused = view._accessibilityFocus == virtualViewId;
             info.AddAction(info.AccessibilityFocused
                 ? AccessibilityNodeInfo.AccessibilityAction.ActionClearAccessibilityFocus
@@ -273,6 +284,9 @@ public sealed partial class HtmlView
                         view._accessibilityFocus = HostViewId;
 
                     view.SendNodeEvent(virtualViewId, EventTypes.ViewAccessibilityFocusCleared);
+                    return true;
+                case Action.Focus when node.IsFocusable:
+                    view.FocusFromAccessibility(node);
                     return true;
                 case Action.Click when node.Role == AccessibilityRole.Link:
                     view.FollowLinkNode(node);
