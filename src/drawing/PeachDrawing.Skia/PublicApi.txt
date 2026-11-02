@@ -20,6 +20,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
+  method virtual Void AddSemanticRegion(Rect bounds, SemanticInfo info)
   method virtual Void BeginArtifact()
   method virtual Void BeginMarkedContent(String structureType, Int32 mcid)
   method virtual Void BeginVariableText()
@@ -118,11 +119,14 @@ PeachDrawing.Skia.SkiaLinkMap : sealed class
   method SkiaCursorArea CursorAtDevice(Double xDevice, Double yDevice)
   method SkiaLink HitTest(Double x, Double y)
   method SkiaLink HitTestDevice(Double xDevice, Double yDevice)
+  method SkiaSemanticRegion SemanticAt(Double x, Double y)
+  method SkiaSemanticRegion SemanticAtDevice(Double xDevice, Double yDevice)
   method Task<Boolean> ActivateAsync(SkiaLink link)
   method Task<Boolean> TryActivateAsync(Double x, Double y)
   property IReadOnlyDictionary<String, Double> Destinations { get; }
   property IReadOnlyList<SkiaCursorArea> Cursors { get; }
   property IReadOnlyList<SkiaLink> Links { get; }
+  property IReadOnlyList<SkiaSemanticRegion> Semantics { get; }
 PeachDrawing.Skia.SkiaLinkOptions : sealed class
   ctor()
   property ISet<String> AllowedSchemes { get; init; }
@@ -140,6 +144,16 @@ PeachDrawing.Skia.SkiaRenderContext : class
   property ISkiaTextShaper TextShaper { get; }
   property SkiaImageCodec ImageCodec { get; }
   property SkiaTextEngine TextEngine { get; }
+PeachDrawing.Skia.SkiaSemanticRegion : sealed class
+  ctor(Rect Bounds, SemanticInfo Info)
+  method SkiaSemanticRegion <Clone>$()
+  method Void Deconstruct(out Rect Bounds, out SemanticInfo Info)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(SkiaSemanticRegion other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Rect Bounds { get; init; }
+  property SemanticInfo Info { get; init; }
 PeachDrawing.Skia.SkiaShapedRun : sealed class
   ctor(UInt16[] Glyphs, Single[] XOffsets, Single[] YOffsets, UInt32[] Clusters, Single Width)
   method SkiaShapedRun <Clone>$()
