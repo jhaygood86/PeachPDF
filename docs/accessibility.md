@@ -108,6 +108,14 @@ A tagged PDF built from a document carries the same names, languages and table d
 [PDF/UA](https://pdfa.org/resource/iso-14289-pdfua/): it identifies it in the XMP metadata, requires a title, a language and a creation date, gives every
 figure alternative text, and shows the title in the viewer. See [Generating PDF/UA (accessible) output](usage-examples.md#generating-pdfua-accessible-output).
 
+## Other formats
+
+`HtmlDocument.PaintAccessibility(pageIndex, canvas)` hands the tree to any `Canvas` as `AddSemanticRegion` calls: one unpainted region per part of a
+page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
+level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
+readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
+nesting) and the Skia and Win2D canvases ignore them for now.
+
 ## Preferences and text spacing
 
 A host reports what the reader has asked of the system with `HtmlDocumentOptions.Preferences`, so style sheets can answer with

@@ -151,4 +151,55 @@ public class SvgLinkTests
         var rect = Assert.Single(scene.Drawn());
         Assert.Equal("cursor:url('a.png'), pointer", Attr(rect, "style"));
     }
+    [Fact]
+    public void ASemanticRegionIsAnUnpaintedRectangleWithItsRoleNameAndStates()
+    {
+        using var scene = Create();
+        scene.Canvas.AddSemanticRegion(new Rect(1, 2, 30, 8), new SemanticInfo("heading")
+        {
+            Name = "A <b> & \"c\"",
+            Description = "more",
+            Language = "fr",
+            Level = 2,
+            Id = "e7",
+            Properties = new Dictionary<string, string> { ["aria-expanded"] = "false" },
+        });
+        scene.Canvas.AddSemanticRegion(new Rect(0, 0, 1, 1), new SemanticInfo(string.Empty)); // no role: nothing to say
+        var (tile, _) = scene.Canvas.CreateTile(10, 10)!.Value;
+        tile.AddSemanticRegion(new Rect(0, 0, 1, 1), new SemanticInfo("button")); // a tile is not the page
+        tile.Dispose();
+
+        var rect = Assert.Single(scene.Drawn());
+        Assert.Equal(("1", "2", "30", "8"), (Attr(rect, "x"), Attr(rect, "y"), Attr(rect, "width"), Attr(rect, "height")));
+        Assert.Equal(("none", "none"), (Attr(rect, "fill"), Attr(rect, "pointer-events")));
+        Assert.Equal(("heading", "A <b> & \"c\"", "more", "fr", "2", "node-e7", "false"),
+            (Attr(rect, "role"), Attr(rect, "aria-label"), Attr(rect, "aria-description"), Attr(rect, "lang"), Attr(rect, "aria-level"), Attr(rect, "id"), Attr(rect, "aria-expanded")));
+    }
+
+    [Fact]
+    public async Task ADocumentPaintsItsAccessibilityTreeAsRolesInReadingOrder()
+    {
+        var context = new SvgRenderContext();
+        await using (var stream = File.OpenRead(BundledFonts.Ttf))
+            await context.AddFont(stream, "Source Sans 3");
+        var html = """
+            <!DOCTYPE html><html lang="en"><head><style>body{font:16px 'Source Sans 3'} @page{size:300pt 400pt;margin:10pt}</style></head><body>
+            <nav aria-label="Sections"><a href="#a">Jump</a></nav><h2 id="a">Title</h2><button aria-pressed="true">Go</button>
+            </body></html>
+            """;
+
+        using var document = await HtmlDocument.LoadAsync(html, context, new HtmlDocumentOptions { PageWidthPoints = 300, PageHeightPoints = 400 });
+        await document.LayoutAsync(new SvgComposer(context, 300, 400).Canvas);
+        var page = new SvgComposer(context, 300, 400);
+        await document.PaintPageAsync(0, page.Canvas);
+        document.PaintAccessibility(0, page.Canvas);
+
+        var roles = XDocument.Parse(page.ToSvg()).Root!.Elements(Ns + "rect").Where(r => r.Attribute("role") is not null).ToList();
+        Assert.Equal(["navigation", "link", "heading", "button"], roles.Select(r => Attr(r, "role")));
+        Assert.Equal("Sections", Attr(roles[0], "aria-label"));
+        Assert.Equal("Jump", Attr(roles[1], "aria-label"));
+        Assert.Equal(("Title", "2"), (Attr(roles[2], "aria-label"), Attr(roles[2], "aria-level")));
+        Assert.Equal(("Go", "true"), (Attr(roles[3], "aria-label"), Attr(roles[3], "aria-pressed")));
+        Assert.All(roles, r => Assert.Equal("en", Attr(r, "lang")));
+    }
 }

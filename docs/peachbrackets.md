@@ -130,6 +130,9 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   name in the same form), a text field's text, a range's number (kept between `min` and `max`), a drop-down's chosen option. `Activate` does what a click
   does (toggles a check box, checks a radio button). Each returns an `UpdateResult` with the regions to repaint; no layout pass runs, and the accessibility
   tree follows. A disabled control, and a read-only one for `SetValue`, is left alone.
+- **`PaintAccessibility(pageIndex, canvas)`** puts the roles, names and states of the [accessibility tree](accessibility.md) on a canvas as
+  `Canvas.AddSemanticRegion` calls in reading order, for a canvas that writes them (SVG), so a drawing made from the document can be read by
+  assistive technology. Containers and runs of text are left out; the regions are flat.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
   records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall
