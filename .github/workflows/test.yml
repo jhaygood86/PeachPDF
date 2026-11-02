@@ -218,9 +218,10 @@ jobs:
       if: matrix.suite == 'small' && runner.os == 'Windows'
       run: dotnet build src/tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj --configuration Release
 
+    # HtmlView*.cs, HtmlViewAutomation.cs and Win32Cursors.cs need a window and a desktop session: winui.yml runs them (smoke + UI Automation), so they are not measured here.
     - name: Test WinUI control (PeachBrackets.WinUI)
       if: matrix.suite == 'small' && runner.os == 'Windows'
-      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename winui-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix winui-test-results --results-directory coverage
+      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.WinUI.Tests/PeachBrackets.WinUI.Tests.csproj --no-build --configuration Release --report-trx --report-trx-filename winui-test-results.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-exclude-by-file "**/PeachBrackets.WinUI/HtmlView.cs" --coverlet-exclude-by-file "**/PeachBrackets.WinUI/HtmlView.Input.cs" --coverlet-exclude-by-file "**/PeachBrackets.WinUI/HtmlView.Cursors.cs" --coverlet-exclude-by-file "**/PeachBrackets.WinUI/HtmlViewAutomation.cs" --coverlet-exclude-by-file "**/PeachBrackets.WinUI/Win32Cursors.cs" --coverlet-file-prefix winui-test-results --results-directory coverage
 
     - name: Test HTML engine (PeachBrackets)
       if: matrix.suite == 'small'
