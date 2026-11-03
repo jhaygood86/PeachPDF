@@ -2,7 +2,7 @@
 
 A flex item in a row or column container is floored at its automatic minimum size (css-flexbox-1 §4.5) and a grid item in a bare `fr` track
 keeps its min-content width (css-grid-1 §6.6), see [the #1916 fix](../recent-fixes/2026-11-03-automatic-minimum-size-for-column-flex-items-and-grid-fr-tracks.md).
-What is left:
+What is left (tracked by #2163):
 
 - **The floor is applied only when a line overflows** (`ResolveAutoMinimums` returns early otherwise), so an item that would be *grown* below its
   min-content size is not floored: `flex: 1` items (basis 0) with one unbreakable long word still split the row (or column) equally instead of
