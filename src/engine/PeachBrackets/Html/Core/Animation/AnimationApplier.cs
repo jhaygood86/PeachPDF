@@ -32,7 +32,9 @@ namespace PeachBrackets.Html.Animation
         /// <param name="colorIsImportant">Whether an <c>!important</c> declaration sets the box's <c>color</c>. It outranks the
         /// animation origin (CSS Cascade 4 §6.1), so the cascade has already put it on the box and an animation of <c>color</c>
         /// is left unapplied: every <c>currentcolor</c> the animation mixes then stands for the colour the box really has.</param>
-        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot, bool colorIsImportant)
+        /// <param name="importantCustomProperties">The custom properties an <c>!important</c> declaration sets; like <c>color</c> they outrank the
+        /// animation origin, so a keyframe that names one is left unapplied.</param>
+        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot, bool colorIsImportant, HashSet<string>? importantCustomProperties = null)
         {
             // Nearly every box names no animation; settle that before allocating anything.
             if (box.HtmlContainer?.Keyframes is not { Count: > 0 } keyframes) return;
@@ -134,10 +136,54 @@ namespace PeachBrackets.Html.Animation
 
                 foreach (var property in animated)
                 {
+                    if (PropertyFactory.IsCustomPropertyName(property))
+                    {
+                        if (importantCustomProperties?.Contains(property) != true) ApplyCustomProperty(valueParser, box, stops, property, directed, easing);
+                        continue;
+                    }
+
                     var value = Sample(valueParser, box, stops, property, directed, easing, CssUtils.GetPropertyValue(box, property));
                     if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
+        }
+
+        /// <summary>
+        /// Writes a custom property's value at the sampled moment onto the box, where a <c>var()</c> that names it resolves later in the cascade.
+        /// An unregistered one is discrete (the first keyframe's value for the first half of an interval, the second's after it); a registered one
+        /// is mixed by its <c>syntax</c> (CSS Properties and Values API 1 §5.1), when both values are of one interpolable type, and is discrete otherwise.
+        /// </summary>
+        private static void ApplyCustomProperty(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction easing)
+        {
+            RegisteredProperty? registered = null;
+            box.HtmlContainer?.RegisteredProperties?.TryGetValue(property, out registered);
+
+            // The value the box has without the animation: its cascaded one, or the registered initial value.
+            string? underlying = null;
+            if (box.CustomProperties?.TryGetValue(property, out var declared) == true) underlying = declared;
+            else if (registered is not null) underlying = registered.InitialValue;
+
+            var value = Sample(valueParser, box, stops, property, progress, easing, underlying,
+                (from, to, eased) => MixCustomProperty(valueParser, registered, property, from, to, eased));
+
+            if (value is null) return;
+
+            box.CustomProperties ??= new Dictionary<string, string>();
+            box.CustomProperties[property] = value;
+        }
+
+        private static string MixCustomProperty(CssValueParser valueParser, RegisteredProperty? registered, string property, string from, string to, double t)
+        {
+            var type = registered?.InterpolableTypeOf(from, to, valueParser);
+            if (type is null) return t < 0.5 ? from : to;
+
+            var mixed = CssValueInterpolator.Interpolate(valueParser, property, from, to, t, null);
+
+            // An <integer> is mixed as a number and rounded to the nearest whole value.
+            if (type == "<integer>" && double.TryParse(mixed, NumberStyles.Float, CultureInfo.InvariantCulture, out var number))
+                return Math.Round(number, MidpointRounding.AwayFromZero).ToString(CultureInfo.InvariantCulture);
+
+            return mixed;
         }
 
         /// <summary>Which of the box's animated properties a pass of <see cref="Apply"/> samples.</summary>
@@ -252,6 +298,8 @@ namespace PeachBrackets.Html.Animation
         {
             if (!CssGlobalKeywords.TryParse(value, out var keyword)) return value;
 
+            if (PropertyFactory.IsCustomPropertyName(name)) return ResolveCustomGlobalKeyword(box, name, keyword);
+
             return keyword switch
             {
                 CssGlobalKeyword.Inherit when box.ParentBox is not null => CssUtils.GetPropertyValue(box.ParentBox, name),
@@ -262,6 +310,23 @@ namespace PeachBrackets.Html.Animation
                     : CssDefaults.GetInitialValue(name),
                 CssGlobalKeyword.RevertLayer => CssUtils.GetPropertyValue(box, name),
                 _ => CssDefaults.GetInitialValue(name)
+            };
+        }
+
+        /// <summary>A global keyword in a keyframe's custom property: <c>inherit</c> is the parent's value, <c>initial</c> the registered initial value, <c>unset</c> one or the other by whether it inherits.</summary>
+        private static string? ResolveCustomGlobalKeyword(CssBox box, string name, CssGlobalKeyword keyword)
+        {
+            RegisteredProperty? registered = null;
+            box.HtmlContainer?.RegisteredProperties?.TryGetValue(name, out registered);
+
+            string? Parent() => box.ParentBox?.CustomProperties is { } parent && parent.TryGetValue(name, out var value) ? value : null;
+
+            return keyword switch
+            {
+                CssGlobalKeyword.Inherit => Parent(),
+                CssGlobalKeyword.Unset => registered is null || registered.Inherits ? Parent() : registered.InitialValue,
+                CssGlobalKeyword.Initial => registered?.InitialValue,
+                _ => box.CustomProperties is { } own && own.TryGetValue(name, out var current) ? current : registered?.InitialValue
             };
         }
 
@@ -295,7 +360,7 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
-        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying)
+        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying, Func<string, string, double, string>? mix = null)
         {
             var frames = new List<(double Offset, string Value, string? Easing)>();
 
@@ -341,7 +406,7 @@ namespace PeachBrackets.Html.Animation
             if (eased == 0) return from.Value;
             if (eased == 1) return to.Value;
 
-            return CssValueInterpolator.Interpolate(valueParser, property, from.Value, to.Value, eased, box);
+            return mix is not null ? mix(from.Value, to.Value, eased) : CssValueInterpolator.Interpolate(valueParser, property, from.Value, to.Value, eased, box);
         }
 
         /// <summary>Substitutes <c>var()</c> in a keyframe value against the box's custom properties; null when it cannot be resolved.</summary>

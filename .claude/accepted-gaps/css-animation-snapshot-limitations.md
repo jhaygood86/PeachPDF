@@ -41,8 +41,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   `rem` in the matrix part of a `transform` mix resolve against the box's font at the animation step, before the
   `!important` phase and before a `font-size` the same animation sets later; a pair mixed per function keeps the text
   and resolves at paint. They differ only when the font size changes after the animation step.
-- **Not animated:** custom properties (registered with `@property` or not; the keyframes drop every `--*` declaration; Chrome flips an
-  unregistered one at 50% and mixes a registered one by its syntax, #1765), `animation-composition` (`add`/`accumulate`),
+- **Not animated:** `animation-composition` (`add`/`accumulate`),
   `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).
 - **Overshoot is clamped only for a whole-value, non-negative property.** An easing that overshoots is followed past the end
@@ -79,3 +78,9 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   reset has no option for it.
 - **SMIL** (`<animate>`, `<animateTransform>`) is separate and out of scope - see
   [svg-features-out-of-scope](svg-features-out-of-scope.md).
+- **A registered custom property is mixed only for a single interpolable type** (`<length>`, `<number>`, `<integer>`,
+  `<percentage>`, `<length-percentage>`, `<color>`, `<angle>`, `<transform-function>`, `<transform-list>`) that both keyframe values
+  match. A list syntax (`<length>#`, `<length>+`), a pair that matches two different components of an alternation
+  (`<length> | auto`), `<time>`, `<resolution>`, `<image>`, `<ratio>` and the universal `*` flip at 50%, where the spec mixes a list
+  item by item when the lengths agree. A length in `em` or `rem` is mixed as written and resolves on the element that uses the
+  `var()`, not on the one that registers the value; a keyframe name `--W` and `--w` is one key, as other property names are.
