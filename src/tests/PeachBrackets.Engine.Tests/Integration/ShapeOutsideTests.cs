@@ -101,4 +101,61 @@ public class ShapeOutsideTests
         Assert.True(string.IsNullOrEmpty(kid.ShapeOutside) || kid.ShapeOutside == "none");
         Assert.True(string.IsNullOrEmpty(kid.ShapeMargin) || kid.ShapeMargin == "0");
     }
+
+    // 100x100 PNGs: the first is opaque below the diagonal (x <= y); the second adds a 100/255-alpha band 20px wide to its right.
+    private const string Triangle = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAABa0lEQVR4nO3RQUEAQQwAsfWv7FzBBw+k7TyiIO977+d778Xw/kJKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUPOp4ghp1PUkLMpcsjJFD3kXMqEkFMpU0LOpEwKOZEyLWR9ysSQ1SlTQ9amTA5ZmTI9ZF3KhpBVKVtC1qRsClmRsi1kfMrGkNEpW0PGpmwOGZmyPWRcyoWQUSlXQsakXAoZkXIthE+5GEKnXA1hUy6HkCnXQ7iUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQv5fIaBCQIWACvkwv6qnLbVlTiivAAAAAElFTkSuQmCC";
+    private const string TriangleWithBand = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAABc0lEQVR4nO3RwU0lQAxAsSmWYn9Xy4UKENI6yTu4Ar/Pe/8+7339sZffeT8hpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAhpYAh51PEkNMpasjZFDnkZIoeci5lQsiplCkhZ1ImhZxImRayPmViyOqUqSFrUyaHrEyZHrIuZUPIqpQtIWtSNoWsSNkWMj5lY8jolK0hY1M2h4xM2R4yLuVCyKiUKyFjUi6FjEi5FsKnXAyhU66GsCmXQ8iU6yFcSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiFYSiH/XyGgQkCFgAr5YL4BvA/pC6APP1IAAAAASUVORK5CYII=";
+
+    private static async Task<(int Top, double Left)[]> SmallFloatLinesAsync(string style)
+    {
+        var (root, _) = await LayoutAsync(Wrap(
+            $"<div id='c' style='width:200pt;font:10pt/12pt Arial'><div style='float:left;width:75pt;height:75pt;{style}'></div>{Text}</div>"));
+        var c = FindById(root, "c")!;
+        return Descendants(c).SelectMany(b => b.Words)
+            .GroupBy(w => (int)System.Math.Round(w.Top - c.Location.Y))
+            .OrderBy(g => g.Key)
+            .Select(g => (g.Key, g.Min(w => w.Left) - c.Location.X))
+            .ToArray();
+    }
+
+    private static void AssertLines((int Top, double Left)[] lines, string expected)
+    {
+        foreach (var (top, left) in Parse(expected))
+        {
+            var actual = lines.FirstOrDefault(l => l.Top == top);
+            Assert.True(actual != default, $"no line at y={top}: {string.Join(" ", lines.Select(l => $"{l.Top}:{l.Left:F1}"))}");
+            Assert.True(System.Math.Abs(actual.Left - left) < 1.0, $"line at y={top} starts at {actual.Left:F1}, expected {left:F1}");
+        }
+    }
+
+    // Expected line starts for the image cases were measured in Chrome for the same markup.
+    [Theory]
+    [InlineData("shape-outside:url(%T)", "0:12 12:24 24:36 36:48 48:60 60:72 72:75")]
+    [InlineData("shape-outside:url(%T);shape-margin:6pt", "0:20.3 12:32.3 24:44.3 36:56.3 48:68.3 60:75 72:75")]
+    public async Task AnImageShapeFollowsItsAlpha(string style, string chrome) =>
+        AssertLines(await SmallFloatLinesAsync(style.Replace("%T", Triangle)), chrome);
+
+    [Theory]
+    [InlineData("0", "0:27 12:39 24:51 36:63 48:75 60:75 72:75")]
+    [InlineData("0.3", "0:27 12:39 24:51 36:63 48:75 60:75 72:75")]
+    [InlineData("0.5", "0:12 12:24 24:36 36:48 48:60 60:72 72:75")]
+    public async Task TheThresholdDecidesWhichAlphaIsPartOfTheShape(string threshold, string chrome) =>
+        AssertLines(await SmallFloatLinesAsync($"shape-outside:url({TriangleWithBand});shape-image-threshold:{threshold}"), chrome);
+
+    [Fact]
+    public async Task AnImageThatIsNotAnImageLeavesTheRectangle()
+    {
+        var lines = await SmallFloatLinesAsync("shape-outside:url(data:image/png;base64,AAAA)");
+
+        Assert.All(lines.Where(l => l.Top < 70), l => Assert.Equal(75, l.Left, 0.5));
+    }
+
+    [Fact]
+    public async Task APathShapeIsPlacedAtTheReferenceBoxOrigin()
+    {
+        // A triangle below the diagonal, in CSS px: 100px is the 75pt box, so the right edge at a line's bottom row is that row's y.
+        var lines = await SmallFloatLinesAsync("shape-outside:path(&quot;M 0 0 L 100 100 L 0 100 Z&quot;)");
+
+        AssertLines(lines, "0:12 12:24 24:36 36:48 48:60 60:72 72:75");
+    }
 }

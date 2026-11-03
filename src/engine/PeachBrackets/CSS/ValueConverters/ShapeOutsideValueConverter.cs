@@ -21,11 +21,14 @@ namespace PeachBrackets.Css
             var tokens = value.Where(t => t.Type != TokenType.Whitespace).ToArray();
             if (tokens is [{ Type: TokenType.Ident } ident] && ident.Data.Isi(Keywords.None)) return true;
 
+            // An <image> shape is a url() alone: a <shape-box> goes only with a basic shape (css-shapes-1 §2.1).
+            if (tokens.Any(t => t.Type == TokenType.Url)) return tokens.Length == 1;
+
             var shape = BasicShapeGrammar.TryParse(tokens);
             return shape is not null
                 && shape.Kind is BasicShapeGrammar.BasicShapeKind.None or BasicShapeGrammar.BasicShapeKind.Polygon
                     or BasicShapeGrammar.BasicShapeKind.Inset or BasicShapeGrammar.BasicShapeKind.Circle
-                    or BasicShapeGrammar.BasicShapeKind.Ellipse;
+                    or BasicShapeGrammar.BasicShapeKind.Ellipse or BasicShapeGrammar.BasicShapeKind.Path;
         }
 
         public IPropertyValue Convert(IReadOnlyList<Token> value) => IsValid(value) ? new ShapeOutsideValue(value) : null;
