@@ -112,10 +112,7 @@ internal sealed class HtmlTextProvider : ITextProvider
         var n = document.FindText(phrase).ToList().FindIndex(r => r.Equals(range));
         var model = Model();
         var at = n < 0 ? -1 : model.OffsetOfOccurrence(phrase, n);
-        if (at < 0)
-            return [];
-
-        return [new HtmlTextRange(this, model, at, at + phrase.Length)];
+        return at < 0 ? [] : [new HtmlTextRange(this, model, at, at + phrase.Length)];
     }
 
     internal HtmlTextModel Model()
