@@ -232,6 +232,12 @@ namespace PeachBrackets.Html.Parse
 #if DEBUG
                 Console.WriteLine($"parse token, tag open: {tagName}. current box: {curBox}");
 #endif
+                // Formatting elements (<b>, <i>, <a>...) still open inside what this start tag ends: they are closed with it, and opened again inside the new
+                // element, as the HTML tree construction algorithm "reconstructs the active formatting elements" - <li><b>a<li>b is two items, the second bold.
+                var reopen = FormattingOpenInsideAnEndedElement(curBox, tagName);
+                if (reopen is not null)
+                    curBox = FirstNonFormattingAncestor(curBox);
+
                 while (true)
                 {
                     if (curBox.HtmlTag is not null && HtmlUtils.CanEndTagBeOmitted(curBox.HtmlTag.Name.ToLowerInvariant(), tagName.ToLowerInvariant()))
@@ -262,8 +268,48 @@ namespace PeachBrackets.Html.Parse
                     // go one level down, make the new box the current box
                     curBox = CssBox.CreateBox(tag, curBox);
                     EnsureWithinMaxDepth(curBox);
+                    if (reopen is not null)
+                    {
+                        foreach (var formatting in reopen)
+                        {
+                            curBox = CssBox.CreateBox(new HtmlTag(formatting.Name, false, (formatting.Attributes ?? []).ToDictionary(a => a.Key, a => a.Value, StringComparer.OrdinalIgnoreCase)), curBox);
+                            EnsureWithinMaxDepth(curBox);
+                        }
+                    }
                 }
             }
+        }
+
+        private static bool IsFormattingElement(CssBox box) =>
+            box.HtmlTag?.Name.ToLowerInvariant() is "a" or "b" or "big" or "code" or "em" or "font" or "i" or "nobr" or "s" or "small" or "strike" or "strong" or "tt" or "u";
+
+        private static CssBox FirstNonFormattingAncestor(CssBox box)
+        {
+            while (IsFormattingElement(box) && box.ParentBox is { } parent)
+                box = parent;
+
+            return box;
+        }
+
+        // The formatting elements, outermost first, that are open at the insertion point on top of an element that a start tag of this name ends; null when
+        // there are none or the element below them is not one it ends.
+        private static List<HtmlTag>? FormattingOpenInsideAnEndedElement(CssBox curBox, string tagName)
+        {
+            if (!IsFormattingElement(curBox))
+                return null;
+
+            var chain = new List<HtmlTag>();
+            var probe = curBox;
+            while (IsFormattingElement(probe) && probe.ParentBox is { } parent)
+            {
+                chain.Insert(0, probe.HtmlTag!);
+                probe = parent;
+            }
+
+            return probe.HtmlTag is { } ended && !IsFormattingElement(probe)
+                && HtmlUtils.CanEndTagBeOmitted(ended.Name.ToLowerInvariant(), tagName.ToLowerInvariant())
+                ? chain
+                : null;
         }
 
         /// <summary>

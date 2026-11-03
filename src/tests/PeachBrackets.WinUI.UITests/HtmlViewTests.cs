@@ -855,7 +855,7 @@ public class HtmlViewTests
         });
 
         Assert.True(facts.opened);
-        Assert.Equal(1, facts.Count);
+        Assert.Equal(1, facts.Item2);
         Assert.Equal((true, ".txt"), (facts.Item3.Multiple, facts.Item3.Accept));
         Assert.Equal("a.txt, b.txt", facts.value);
         Assert.Equal("a.txt, b.txt", facts.after);
@@ -983,5 +983,74 @@ public class HtmlViewTests
         Assert.Equal(3, facts.Count);
         Assert.Equal("post", facts.Method);
         Assert.Equal(new (string, string?, string?, int?)[] { ("title", "hello", null, null), ("doc", null, "note.txt", 3), ("go", "1", null, null) }, facts.Item5);
+    }
+
+    [Fact]
+    public async Task EnterInAFieldSubmitsAValidFormAndAnInvalidOneFocusesTheFirstProblem()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<form action=\"/go\"><input id=q name=q value=hi style=\"display:block\"><input id=need name=need required style=\"display:block\"><button id=go name=go>Go</button></form>");
+            var submitted = new List<PeachBrackets.Updates.FormSubmission>();
+            var invalid = new List<HtmlFormInvalidEventArgs>();
+            view.FormSubmitting += (_, e) => submitted.Add(e.Submission);
+            view.FormInvalid += (_, e) => invalid.Add(e);
+            var q = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "q").Bounds[0].Bounds;
+            view._fieldPressed = true;
+            Assert.True(view.FocusTextFieldAt(0, q.X + 3, q.Y + 3));
+            await Task.Delay(500);
+            await view.FocusIdle;
+
+            var handled = view.HandleEditKey(Windows.System.VirtualKey.Enter);
+            await Task.Delay(500);
+            await view.FocusIdle;
+            var focusedAfterInvalid = view.FocusedNode?.ElementId;
+
+            view.Document!.SetValue(view.Document.GetElement("need")!, "now valid");
+            var again = view.SubmitFromField(view.Document.GetElement("q")!);
+            return (handled, invalid.Count, invalid[0].Problems[0].Element.Id, invalid[0].Problems[0].Kind, focusedAfterInvalid, again, submitted.Count,
+                submitted[0].Entries.Select(e => e.Name).ToList());
+        });
+
+        Assert.True(facts.handled);
+        Assert.Equal(1, facts.Item2);
+        Assert.Equal(("need", PeachBrackets.Updates.ValidationKind.ValueMissing), (facts.Item3, facts.Item4));
+        Assert.Equal("need", facts.focusedAfterInvalid);
+        Assert.True(facts.again);
+        Assert.Equal(1, facts.Item7);
+        Assert.Equal(new[] { "q", "need", "go" }, facts.Item8);
+    }
+
+    [Fact]
+    public async Task ClickingAResetButtonPutsTheFormBackAndAnImageButtonSendsWhereItWasPressed()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<form><input id=t name=t value=start style=\"display:block\"><input id=c type=checkbox name=c checked style=\"display:block\">"
+                + "<input id=r type=reset value=Reset style=\"display:block\"><input id=img type=image name=pic src=none.png style=\"width:100px;height:40px;display:block\"></form>");
+            var submitted = new List<PeachBrackets.Updates.FormSubmission>();
+            view.FormSubmitting += (_, e) => submitted.Add(e.Submission);
+            view.Document!.SetValue(view.Document.GetElement("t")!, "changed");
+            view.Document.SetChecked(view.Document.GetElement("c")!, false);
+            PeachDrawing.Core.Rect B(string id) => view.AccessibilityTree!.Nodes.First(n => n.ElementId == id).Bounds[0].Bounds;
+            var r = B("r");
+            var reset = view.ResetFormAt(0, r.X + 3, r.Y + 3);
+            await Task.Delay(500);
+            await view.FocusIdle;
+            var t = view.Document.GetFormState(view.Document.GetElement("t")!)!.Value.Value;
+            var c = view.Document.GetFormState(view.Document.GetElement("c")!)!.Value.Checked;
+            var notReset = view.ResetFormAt(0, B("t").X + 3, B("t").Y + 3);
+
+            var img = B("img");
+            var sent = view.SubmitFormAt(0, img.X + 30, img.Y + 12);
+            return (reset, t, c, notReset, sent, submitted[0].Entries.Select(e => (e.Name, e.Value)).ToList());
+        });
+
+        Assert.True(facts.reset);
+        Assert.Equal("start", facts.t);
+        Assert.True(facts.c);
+        Assert.False(facts.notReset);
+        Assert.True(facts.sent);
+        Assert.Equal(new (string, string?)[] { ("t", "start"), ("c", "on"), ("pic.x", "40"), ("pic.y", "16") }, facts.Item6.Select(e => (e.Name, (string?)e.Value)).ToArray());
     }
 }
