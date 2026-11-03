@@ -1694,6 +1694,17 @@ namespace PeachBrackets.Html.Dom
         /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
         /// <see cref="DomUtils.InlineContainingBlockOf"/>).
         /// </summary>
+        /// <summary>
+        /// The floats this box's child loop left for the next column because their margin box did not fit below the content
+        /// already in the column being filled (CSS 2.1 §9.5.1 rules 1 and 3 applied to the column box). They take no part in the
+        /// column they were laid out in: the loop went on placing the in-flow content after them there, and the column's
+        /// fragment excludes them (<c>CssLayoutEngineColumns.AddBoxesBeyond</c>). The next column's fill lays them out first.
+        /// </summary>
+        internal List<CssBox>? DeferredFloats { get => _rare?.DeferredFloats; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.DeferredFloats = value; } }
+
+        /// <summary>Whether the break record naming the deferred floats exists only for them: every child was placed.</summary>
+        private bool DeferredFloatsOnly { get => _rare?.DeferredFloatsOnly ?? false; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.DeferredFloatsOnly = value; } }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
@@ -5090,6 +5101,40 @@ namespace PeachBrackets.Html.Dom
             var resumeAt = resume as BlockBreakToken;
             var start = resumeAt?.ResumeChildIndex ?? 0;
 
+            // Floats a column before this one could not hold are laid out first, at the top of the column now being filled.
+            if (resumeAt is null)
+            {
+                DeferredFloats = null;
+                DeferredFloatsOnly = false;
+            }
+            else if (DeferredFloats is { Count: > 0 } carried
+                     && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } carriedColumn })
+            {
+                var onlyTheFloats = DeferredFloatsOnly;
+                DeferredFloats = null;
+                DeferredFloatsOnly = false;
+
+                PassRewind.RollBackTo(null, carried);
+
+                foreach (var floated in carried)
+                {
+                    floated._resumeTopOverride = ContentTopOfTheContainingBlockIn(carriedColumn, floated.ContainingBlock);
+                    await LayoutBlockChild(g, floated);
+
+                    // One that still breaks continues in the column after this one, from the record it left.
+                    if (floated.PendingBreakToken is { } floatToken)
+                    {
+                        PendingBreakToken = new BlockBreakToken(
+                            this, floatToken.ResumeSlotIndex, Boxes.IndexOf(floated), floatToken, IsBreakBefore: false, null);
+                        return true;
+                    }
+                }
+
+                if (onlyTheFloats) return false;
+            }
+
+            List<CssBox>? deferredFloats = null;
+
             // An outside ::marker is not one of this box's block children: it is positioned beside the item's
             // principal block box rather than in its flow (CSS 2.1 §12.5.1), by the one call
             // CssBox.LayoutOutsideMarker makes. It reaches this loop only for a list item whose content is
@@ -5154,6 +5199,24 @@ namespace PeachBrackets.Html.Dom
                     {
                         _cursorToRestoreAfterFloat = null;
                         HtmlContainer?.CurrentFragmentainer?.StepBackTo(restoring.Slot);
+                    }
+
+                    // A float whose margin box does not fit below what the column already holds moves to the top of the next
+                    // column; the in-flow content after it keeps filling this one. A float with nothing above it, or one taller
+                    // than any column, has nowhere better to be and stays.
+                    if (i > start
+                        && childBox.IsFloated
+                        && childBox.DerivedStyle.ActualDisplay != Keywords.None
+                        && childBox.PendingBreakToken is null
+                        && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } floatColumn }
+                        && childBox.ActualBottom + childBox.ActualMarginBottom > floatColumn.BandBottom
+                        && childBox.ActualBottom - childBox.Location.Y + childBox.ActualMarginTop + childBox.ActualMarginBottom
+                            <= floatColumn.BandBottom - floatColumn.BandTop)
+                    {
+                        deferredFloats ??= [];
+                        deferredFloats.Add(childBox);
+                        DeferredFloats = deferredFloats;
+                        continue;
                     }
 
                     if (_requestedChildRestart is { } restart)
@@ -5433,6 +5496,15 @@ namespace PeachBrackets.Html.Dom
                     {
                         HtmlContainer.CurrentFragmentainer.StepOverTo(HtmlContainer.SlotEndingAt(childBox.ActualBottom));
                     }
+                }
+
+                // Every child was placed, but a float is still owed a column: the record names it alone.
+                if (deferredFloats is not null && HtmlContainer?.CurrentFragmentainer is { HasOwnBand: true } lastColumn)
+                {
+                    DeferredFloatsOnly = true;
+                    PendingBreakToken = new BlockBreakToken(
+                        this, lastColumn.SlotIndex, Boxes.IndexOf(deferredFloats[^1]), null, IsBreakBefore: true, null);
+                    return true;
                 }
             }
             finally
