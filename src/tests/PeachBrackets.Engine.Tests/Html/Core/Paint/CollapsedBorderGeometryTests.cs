@@ -39,7 +39,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Paint
             var (root, _) = await LayoutHarness.LayoutAsync(html);
             var table = FindTable(root);
 
-            var rows = table.Boxes.Where(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow).ToList();
+            var rows = LayoutHarness.Descendants(table).Where(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow).ToList();
             Assert.Equal(2, rows.Count);
             var rowAbove = rows[0];
             var rowBelow = rows[1];
@@ -75,7 +75,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Paint
             var (root, _) = await LayoutHarness.LayoutAsync(html);
             var table = FindTable(root);
 
-            var firstRowCells = table.Boxes
+            var firstRowCells = LayoutHarness.Descendants(table)
                 .First(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow).Boxes
                 .Where(b => b.DerivedStyle.ActualDisplay == Keywords.TableCell)
                 .ToList();

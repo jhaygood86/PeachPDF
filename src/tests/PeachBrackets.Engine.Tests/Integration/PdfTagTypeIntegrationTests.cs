@@ -74,6 +74,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 "th" or "td" => Wrap(
                     $"<table><tbody><tr><{tag} id='p'>x</{tag}></tr></tbody></table>"),
                 "thead" => Wrap("<table><thead id='p'><tr><td>H</td></tr></thead><tbody><tr><td>x</td></tr></tbody></table>"),
+                "caption" => Wrap("<table><caption id='p'>x</caption><tbody><tr><td>x</td></tr></tbody></table>"),
                 "tbody" => Wrap("<table><tbody id='p'><tr><td>x</td></tr></tbody></table>"),
                 "tfoot" => Wrap("<table><tbody><tr><td>x</td></tr></tbody><tfoot id='p'><tr><td>F</td></tr></tfoot></table>"),
                 _ => Wrap($"<{tag} id='p'>text</{tag}>")

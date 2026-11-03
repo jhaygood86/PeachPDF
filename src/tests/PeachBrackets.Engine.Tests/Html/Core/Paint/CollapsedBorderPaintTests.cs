@@ -44,7 +44,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Paint
             // The shared edge between row 1 and row 2 - both rows' own ActualBottom/Location.Y agree on
             // it (that's the whole point of the border-collapse overlap), so either row's geometry names
             // the same Y.
-            var firstRow = table.Boxes.First(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow);
+            var firstRow = LayoutHarness.Descendants(table).First(b => b.DerivedStyle.ActualDisplay == Keywords.TableRow);
             var sharedEdgeY = firstRow.ActualBottom;
 
             var backgroundFillIndices = recording.Log

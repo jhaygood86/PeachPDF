@@ -78,7 +78,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task NowrapAttribute_SetsWhiteSpaceNoWrap()
         {
-            var (root, _) = await BuildAndLayout(Wrap("<td id='d' nowrap='nowrap'>x</td>"));
+            var (root, _) = await BuildAndLayout(Wrap("<table><tr><td id='d' nowrap='nowrap'>x</td></tr></table>"));
             var td = FindById(root, "d")!;
 
             Assert.Equal(Whitespace.NoWrap, td.WhiteSpace.Value);

@@ -254,8 +254,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         public async Task BareRow_HasNoRowGroup()
         {
             var (_, grid) = await Build(LayoutHarness.Wrap(@"
-                <table><tr><td id='a'>a</td></tr></table>"));
+                <div style='display:table'><div style='display:table-row'><div id='a' style='display:table-cell'>a</div></div></div>"));
 
+            // The HTML parser puts every <tr> in a <tbody>, so a row with no group comes from CSS.
             Assert.Null(grid.RowGroupAt(0));
         }
 
@@ -306,11 +307,11 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         public async Task BareColsWithNoColgroup_HaveNoColumnGroup()
         {
             var (_, grid) = await Build(LayoutHarness.Wrap(@"
-                <table>
-                    <col />
-                    <col />
-                    <tr><td>a</td><td>b</td></tr>
-                </table>"));
+                <div style='display:table'>
+                    <div style='display:table-column'></div>
+                    <div style='display:table-column'></div>
+                    <div style='display:table-row'><div style='display:table-cell'>a</div><div style='display:table-cell'>b</div></div>
+                </div>"));
 
             Assert.Equal(2, grid.ColumnCount);
             Assert.NotNull(grid.ColumnAt(0));

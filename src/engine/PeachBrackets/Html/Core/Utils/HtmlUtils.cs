@@ -381,56 +381,6 @@ namespace PeachBrackets.Html.Utils
             return str;
         }
 
-        // https://html.spec.whatwg.org/dev/dom.html#concept-element-tag-omission
-        public static bool CanEndTagBeOmitted(string currentTagName, string tagName)
-        {
-            return currentTagName switch
-            {
-                "p" => ShouldTagCloseParagraph(tagName),
-                "td" or "th" => ShouldTagCloseTableCell(tagName),
-                "tr" => ShouldTagCloseTableRow(tagName),
-                // https://html.spec.whatwg.org/dev/tables.html#the-thead-element and #the-tbody-element
-                "thead" or "tbody" => tagName is "tbody" or "tfoot",
-                // https://html.spec.whatwg.org/dev/grouping-content.html#the-li-element and #the-dd-element
-                "li" => tagName is "li",
-                "dt" or "dd" => tagName is "dt" or "dd",
-                // https://html.spec.whatwg.org/dev/form-elements.html#the-option-element and #the-optgroup-element
-                "option" => tagName is "option" or "optgroup",
-                "optgroup" => tagName is "optgroup",
-                _ => false
-            };
-        }
-
-        // Close <p> tags per https://html.spec.whatwg.org/dev/grouping-content.html#the-p-element
-        public static bool ShouldTagCloseParagraph(string tagName)
-        {
-            return tagName switch
-            {
-                "address" or "article" or "aside" or "blockquote" or "details" or "dialog" or "div" or "dl"
-                    or "fieldset" or "figcaption" or "figure" or "footer" or "form" or "h1" or "h2" or "h3" or "h4"
-                    or "h5" or "h6" or "header" or "hgroup" or "hr" or "main" or "menu" or "nav" or "ol" or "p" or "pre"
-                    or "search" or "section" or "table" or "ul"
-                    // A list item or a description starts a new one, which ends a paragraph still open in the one before.
-                    or "li" or "dt" or "dd" => true,
-                _ => false
-            };
-        }
-
-        // Close <td> tags per https://html.spec.whatwg.org/dev/tables.html#the-td-element
-        public static bool ShouldTagCloseTableCell(string tagName)
-        {
-            return tagName switch
-            {
-                "td" or "th" or "tr" or "tbody" or "thead" or "tfoot" => true,
-                _ => false
-            };
-        }
-
-        public static bool ShouldTagCloseTableRow(string tagName)
-        {
-            return tagName is "tr" or "tbody" or "thead" or "tfoot";
-        }
-
         #region Private methods
         private static StringBuilder DecodeHtmlCharByCode(StringBuilder str)
         {
