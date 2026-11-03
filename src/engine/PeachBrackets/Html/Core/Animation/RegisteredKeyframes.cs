@@ -64,14 +64,20 @@ namespace PeachBrackets.Html.Animation
         {
             var registry = new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
 
-            // EnumerateRulesRecursive descends into @layer/@container, a true @supports and an @media that matches the document's medium
-            // (an @keyframes rule has no candidate box to evaluate the query against later), and keeps source order,
-            // so a later @keyframes of the same name replaces an earlier one (§4.1: the last one wins).
-            foreach (var rule in cssData.EnumerateRulesRecursive(media).OfType<KeyframesRule>())
+            // CSS Animations 1 §3.1: among @keyframes of one name the cascade layers order picks the winner (CSS Cascade 5 §6.4.2) -
+            // an unlayered rule over any layered one, a later layer over an earlier - and source order breaks a tie (the last wins).
+            // The walk descends into @layer/@container, a true @supports and an @media that matches the document's medium
+            // (an @keyframes rule has no candidate box to evaluate the query against later).
+            var winners = new Dictionary<string, (KeyframesRule Rule, int Rank)>(StringComparer.Ordinal);
+            foreach (var (rule, rank) in cssData.EnumerateKeyframesWithLayerRank(media))
             {
                 if (string.IsNullOrEmpty(rule.Name)) continue;
-                registry[rule.Name] = Build(rule);
+                if (!winners.TryGetValue(rule.Name, out var current) || rank >= current.Rank)
+                    winners[rule.Name] = (rule, rank);
             }
+
+            foreach (var (name, winner) in winners)
+                registry[name] = Build(winner.Rule);
 
             return registry;
         }
