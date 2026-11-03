@@ -1,3 +1,4 @@
+using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachDrawing.Text.Unicode;
 using PeachBrackets.Html.Utils;
@@ -22,8 +23,12 @@ namespace PeachBrackets.Svg
                 return;
             }
 
-            LayoutGlyphs(g, glyphs, isVertical);
-            ApplyBidiReordering(text, glyphs, overrides, isVertical);
+            var bottomToTop = text.WritingMode == WritingMode.SidewaysLr;
+            LayoutGlyphs(g, glyphs, isVertical, bottomToTop: bottomToTop);
+
+            // Bidi reordering assumes positions grow along the run; a bottom-to-top run keeps its logical order.
+            if (!bottomToTop)
+                ApplyBidiReordering(text, glyphs, overrides, isVertical);
         }
 
         /// <summary>One place a wrapped line can break, with the width of the line if it breaks there.</summary>
