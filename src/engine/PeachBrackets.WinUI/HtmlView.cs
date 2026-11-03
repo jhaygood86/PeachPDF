@@ -159,6 +159,19 @@ public sealed partial class HtmlView : UserControl
     /// <summary>Raised when a document could not be loaded.</summary>
     public event EventHandler<HtmlLoadFailedEventArgs>? DocumentFailed;
 
+    /// <summary>Raised when a submit button of a form is clicked or invoked, with the form as it would be submitted. The view sends nothing itself.</summary>
+    public event EventHandler<HtmlFormSubmittingEventArgs>? FormSubmitting;
+
+    // Raises FormSubmitting for the form a button belongs to; false when the element is not a submit button in a form.
+    internal bool SubmitForm(PeachBrackets.Updates.DocumentElement submitter)
+    {
+        if (_document?.CreateFormSubmission(submitter) is not { } submission)
+            return false;
+
+        FormSubmitting?.Invoke(this, new HtmlFormSubmittingEventArgs(submission));
+        return true;
+    }
+
     /// <summary>Raised before a link is followed. Set <see cref="HtmlLinkClickedEventArgs.Cancel"/> to handle it yourself.</summary>
     public event EventHandler<HtmlLinkClickedEventArgs>? LinkClicked;
 

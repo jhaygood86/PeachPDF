@@ -231,6 +231,15 @@ public sealed partial class HtmlDocument
 
         var chosen = names.Select(n => n.Replace('\n', ' ').Trim()).Where(n => n.Length > 0).ToList();
         SetControlAttribute(control, ScreenFormControlPainter.ChosenFilesAttribute, chosen.Count == 0 ? null : string.Join('\n', chosen));
+
+        // Names alone replace any files held before (SetFiles puts them back); a name that was already chosen keeps its bytes.
+        var ordinal = control.HtmlTag.SourceOrdinal;
+        var before = _chosenFiles.GetValueOrDefault(ordinal) ?? [];
+        if (chosen.Count == 0)
+            _chosenFiles.Remove(ordinal);
+        else
+            _chosenFiles[ordinal] = [.. chosen.Select(n => before.FirstOrDefault(f => f.Name == n) ?? new ChosenFile(n, string.Empty, []))];
+
         return Changed([control]);
     }
 

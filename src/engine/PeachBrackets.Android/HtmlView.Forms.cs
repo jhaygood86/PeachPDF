@@ -46,6 +46,10 @@ public sealed partial class HtmlView
             AfterControlChange(document, result);
     }
 
+    // A tap on a submit button raises FormSubmitting.
+    private bool SubmitFormAt(int page, double x, double y) =>
+        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element);
+
     // Scrolls the text area under a point by an amount in points; false when the point is not over one or it cannot move that way.
     private bool ScrollTextAreaAt(int page, double x, double y, double points)
     {

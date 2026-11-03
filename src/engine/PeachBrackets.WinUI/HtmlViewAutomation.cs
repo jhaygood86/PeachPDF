@@ -300,7 +300,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
 
     protected override object? GetPatternCore(PatternInterface patternInterface) => patternInterface switch
     {
-        PatternInterface.Invoke when _node.Role is AccessibilityRole.Link => this,
+        PatternInterface.Invoke when _node.Role is AccessibilityRole.Link or AccessibilityRole.Button => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
         PatternInterface.Value when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => this,
         PatternInterface.Text when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => new HtmlTextProvider(_root, _view, _node),
@@ -320,7 +320,13 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
             _view.BringIntoView(_node);
     }
 
-    public void Invoke() => _view.DispatcherQueue.TryEnqueue(() => _view.ActivateLink(_node));
+    public void Invoke() => _view.DispatcherQueue.TryEnqueue(() =>
+    {
+        if (_node.Role == AccessibilityRole.Button)
+            _view.SubmitForm(_node);
+        else
+            _view.ActivateLink(_node);
+    });
 
     // A check box or radio button, as a screen reader toggles it: the page does what a click on it does.
     public Microsoft.UI.Xaml.Automation.ToggleState ToggleState => HtmlViewLogic.ToToggleState(_view.CurrentNode(_node).Checked);

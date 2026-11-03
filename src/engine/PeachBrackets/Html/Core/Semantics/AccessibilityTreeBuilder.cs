@@ -295,6 +295,17 @@ namespace PeachBrackets.Html.Semantics
             node.FontSize = font.Size;
             node.FontWeight = (int)Math.Clamp(Math.Round(box.ActualNumericWeight), 1, 1000);
             node.IsItalic = font.Typeface?.IsItalic == true || ((int)font.SyntheticStyle & 2) != 0;
+            // A decoration set on an element is drawn on the text inside it, so it is looked for on the way up.
+            for (var decorated = box; decorated is not null; decorated = decorated.ParentBox)
+            {
+                var line = decorated.TextDecorationLine;
+                if (string.IsNullOrEmpty(line) || line == Keywords.None)
+                    continue;
+
+                node.Underline |= line.Contains("underline", StringComparison.Ordinal);
+                node.Strikethrough |= line.Contains("line-through", StringComparison.Ordinal);
+            }
+
             node.ForegroundColor = Argb(box.ActualColor);
             node.BackgroundColor = box.ActualBackgroundColor is { A: > 0 } background ? Argb(background) : null;
         }

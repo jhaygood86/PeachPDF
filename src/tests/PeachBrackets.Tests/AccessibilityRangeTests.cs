@@ -93,4 +93,22 @@ public class AccessibilityRangeTests
         Assert.NotNull(plain.ForegroundColor);
         Assert.All(styled.DescendantsAndSelf(), n => Assert.Equal(700, n.FontWeight));
     }
+
+    [Fact]
+    public async Task ANodeKnowsWhetherItsTextIsUnderlinedOrStruckThroughByItselfOrAnElementAround()
+    {
+        var (_, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap("<p id=u style='text-decoration:underline'>under <span id=s>inside</span></p><p id=l style='text-decoration:underline line-through'>both</p><p id=n>none</p>",
+                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var nodes = document.GetAccessibilityTree().Nodes;
+
+        var under = nodes.First(n => n.ElementId == "u");
+        var both = nodes.First(n => n.ElementId == "l");
+        var none = nodes.First(n => n.ElementId == "n");
+
+        Assert.Equal((true, false), (under.Underline, under.Strikethrough));
+        Assert.All(under.DescendantsAndSelf(), n => Assert.True(n.Underline));
+        Assert.Equal((true, true), (both.Underline, both.Strikethrough));
+        Assert.Equal((false, false), (none.Underline, none.Strikethrough));
+    }
 }
