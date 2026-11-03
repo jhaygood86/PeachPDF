@@ -195,9 +195,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task AnInlineBlockMovedToTheBaseline_KeepsItsOwnLineTopWithItsWords()
         {
-            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><p id='p'>" +
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><div id='p'>" +
                        "<span style='font-size:30pt'>Big</span> " +
-                       "<span id='ib' style='display:inline-block;border:1px solid'><div>small</div></span></p></body></html>";
+                       "<span id='ib' style='display:inline-block;border:1px solid'><div>small</div></span></div></body></html>";
 
             var (root, _) = await Layout(html, 300, 200);
             var box = LayoutHarness.FindById(root, "ib")!;
@@ -216,8 +216,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task ALineWhoseWordsLiveOnAnotherLine_IsNotAnInlineBlocksBaseline()
         {
-            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><p id='p'>a " +
-                       "<span id='ib' style='display:inline-block'><div>x</div></span></p></body></html>";
+            var html = $"<!DOCTYPE html><html><head>{Style}</head><body><div id='p'>a " +
+                       "<span id='ib' style='display:inline-block'><div>x</div></span></div></body></html>";
 
             var (root, _) = await Layout(html, 300, 200);
             var box = LayoutHarness.FindById(root, "ib")!;

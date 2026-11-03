@@ -99,9 +99,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var (root, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><body>
-                <p>before <span style="display:inline-grid; grid-template-columns: 1fr 1fr; width:120pt;">
+                <div>before <span style="display:inline-grid; grid-template-columns: 1fr 1fr; width:120pt;">
                 <div id="a">A</div><div id="b">B</div>
-                </span> after</p>
+                </span> after</div>
                 </body></html>
                 """);
 

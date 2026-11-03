@@ -17,8 +17,8 @@ What the previous note left out of submission, and the parser rule behind the la
   go too - the first test left the select on "b". Hosts: a click or tap on `IsResetButton` queues the reset like the other restyles.
 - **Formatting reconstruction.** When a start tag ends an element and formatting elements are open on top of it, `ParseHtmlTag` closes them with it and opens
   clones inside the new element (`FormattingOpenInsideAnEndedElement`). It covers every implied end (`li`, `dt`/`dd`, cells, rows, `option`, and `p` closed by a
-  block); it is not the adoption agency algorithm, so a *misnested end tag* (`<b><p>x</b>y`) is still handled the old way.
+  block); the adoption agency algorithm, which handles a *misnested end tag* (`<b><p>x</b>y`), followed in [the adoption agency note](2026-11-03-adoption-agency.md).
 - **Font weight (issue 2137).** The text-node `FontWeight` read 900 inside `<b>` because `ActualNumericWeight` steps a relative keyword again on every
   descendant; the builder now reads the element's own weight. The deviation itself is tracked in the issue.
 - **Not done:** `:valid`/`:invalid` pseudo-classes, localisation of the validation messages (English only), `datetime-local`/`week` step checking, a
-  constraint-validation API on individual controls (`setCustomValidity`, `reportValidity`), and the adoption agency algorithm.
+  constraint-validation API on individual controls (`setCustomValidity`, `reportValidity`).

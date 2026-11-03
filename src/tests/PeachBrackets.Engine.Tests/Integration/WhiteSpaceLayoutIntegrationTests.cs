@@ -253,7 +253,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // placed here yet" has to consult the line's rectangles as well - otherwise the space
             // after one reads as line-leading and disappears.
             var (root, _) = await BuildAndLayout(Wrap(
-                "<p id='p'><span id='a' style='display:inline-block'><div>AA</div></span> <span>BB</span></p>"));
+                "<div id='p'><span id='a' style='display:inline-block'><div>AA</div></span> <span>BB</span></div>"));
             var p = FindById(root, "p")!;
             var a = FindById(root, "a")!;
 
