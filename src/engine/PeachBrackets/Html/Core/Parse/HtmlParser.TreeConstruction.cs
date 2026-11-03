@@ -65,8 +65,7 @@ namespace PeachBrackets.Html.Parse
         {
             Default,
             ListItem,
-            Button,
-            Select
+            Button
         }
 
         private const int AdoptionOuterLoopLimit = 8;
@@ -162,9 +161,6 @@ namespace PeachBrackets.Html.Parse
         private static bool IsScopeBoundary(CssBox box, Scope scope)
         {
             var name = box.HtmlTag!.Name;
-            if (scope == Scope.Select)
-                return box.IsWithinForeignContent || !(name.Equals("optgroup", StringComparison.OrdinalIgnoreCase) || name.Equals("option", StringComparison.OrdinalIgnoreCase));
-
             if (box.IsWithinForeignContent)
                 return ForeignIntegrationNames.Contains(name);
 

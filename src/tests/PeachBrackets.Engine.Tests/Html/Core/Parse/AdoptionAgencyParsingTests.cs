@@ -42,6 +42,23 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         [InlineData("<div><i>a</div><div>b</div>", "<div><i>a</i></div><div><i>b</i></div>")]
         public void FormattingOpenWhenABlockEnds_IsReconstructedInTheNextContent(string html, string expected) => Assert.Equal(expected, Body(html));
 
+        [Theory]
+        // Formatting elements between the one ended and the block inside it are copied around the block; others are left behind.
+        [InlineData("<b><i><div>1</b>2</i>3", "<b><i></i></b><i></i><div><i><b>1</b>2</i>3</div>")]
+        [InlineData("<b><span><div>1</b>2", "<b><span></span></b><div><b>1</b>2</div>")]
+        // The inner loop copies at most three of them.
+        [InlineData("<b><i><u><s><small><div>x</b>y",
+            "<b><i><u><s><small></small></s></u></i></b><u><s><small><div><b>x</b>y</div></small></s></u>")]
+        // An end tag for an element the list remembers but that is no longer open just forgets it.
+        [InlineData("<p><b>1</p></b>2", "<p><b>1</b></p>2")]
+        // The oldest of four identical elements is not in the list, so its end tag is a plain close.
+        [InlineData("<b><b><b><b>x</b></b></b></b>y", "<b><b><b><b>x</b></b></b></b>y")]
+        // An element outside the scope of a table is not reached.
+        [InlineData("<b>1<table></b><tr><td>x</td></tr></table>", "<b>1<table><tr><td>x</td></tr></table></b>")]
+        // Cells and rows whose end tags are omitted.
+        [InlineData("<table><tr><td>a<td>b<tr><td>c</table>", "<table><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></table>")]
+        public void TheRestOfTheAdoptionAgencyAlgorithm_IsFollowed(string html, string expected) => Assert.Equal(expected, Body(html));
+
         [Fact]
         public void IdenticalReopenedElements_AreLimitedToThree()
         {
