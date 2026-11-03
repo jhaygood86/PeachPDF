@@ -7,6 +7,7 @@ using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Utilities;
 using PeachDrawing.Core;
+using PeachDrawing.Core.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -105,6 +106,8 @@ namespace PeachBrackets.Html.Pages
                 geom.BandHeight,
                 isBlankPage);
 
+            var extras = PagePrintExtras.Resolve(applicablePageStyle?.Bleed, applicablePageStyle?.Marks, _container.PageLengthContext);
+
             var (mL, mT, mR, mB) = (geom.MarginLeftPt, geom.MarginTopPt, geom.MarginRightPt, geom.MarginBottomPt);
             // The page box's own resolved border/padding (issue #1147) - all zero for a page with no
             // @page border/padding declared, which is exactly the pre-#1147 behavior.
@@ -181,8 +184,13 @@ namespace PeachBrackets.Html.Pages
                 // just the content rect. The canvas fill is a distinct paint step from the page box's
                 // own background above - CSS2.1 §14.2's canvas propagation always fills the whole
                 // sheet regardless of the page box's own border/padding, exactly as before #1147.
+                // css-page-3 §13: the bleed area is part of the page's artwork, so the canvas fill runs out to its edge.
+                var bleedUnits = extras.BleedPt * _renderContext.LayoutUnitsPerPoint;
+                var canvasRect = bleedUnits > 0
+                    ? new Rect(-bleedUnits, -bleedUnits, sheetRect.Width + (2 * bleedUnits), sheetRect.Height + (2 * bleedUnits))
+                    : sheetRect;
                 using var canvasGraphics = Lease();
-                FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, sheetRect);
+                FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, canvasRect);
             }
 
             // css-page-3 §3.1's third paint layer: the page box's OWN border (issue #1147) - a
@@ -296,11 +304,72 @@ namespace PeachBrackets.Html.Pages
                     marginBoxBackgroundImageCache);
             }
 
+            if (extras.Marks != PageMarkKinds.None)
+            {
+                using var marksCanvas = Lease();
+                PaintMarks(marksCanvas, extras, geom.SheetWidthPt, geom.SheetHeightPt, _renderContext.LayoutUnitsPerPoint);
+            }
+
             // The page's content is complete: write it now rather than holding every page's drawing state until the document is saved.
 
         }
 
         private CanvasLease Lease() => _lease();
+
+        /// <summary>The bleed and marks the <c>@page</c> rule applying to the given page declares.</summary>
+        public PagePrintExtras ResolvePrintExtras(FragmentainerFragment fragmentainer, int pageNumber)
+        {
+            var geom = fragmentainer.Geometry;
+            var style = SelectApplicablePageStyle(
+                _container.PageRules, pageNumber, _container.NamedPageElements, geom.Top, geom.BandHeight,
+                _container.IsReservedBlankSlot(fragmentainer.SlotIndex));
+            return PagePrintExtras.Resolve(style?.Bleed, style?.Marks, _container.PageLengthContext);
+        }
+
+        /// <summary>
+        /// Draws the printer's marks of css-page-3 §12 outside the bleed area, around the page box at (0, 0)-(width, height): crop marks are the
+        /// pair of strokes at each corner that continue the trim edges, and cross marks are registration targets (a circle with a cross through
+        /// it) centred on the middle of each edge. Marks are registration black at hairline width, which is what a printer's plate setter expects.
+        /// </summary>
+        private static void PaintMarks(Canvas g, PagePrintExtras extras, double widthPt, double heightPt, double unitsPerPoint)
+        {
+            var gap = extras.BleedPt + PagePrintExtras.MarkGapPt;
+            var pen = g.GetPen(PaintColor.FromArgb(255, 0, 0, 0));
+            pen.Width = 0.5; // a pen is in points, a line's coordinates in layout units
+            pen.DashStyle = DashStyle.Solid;
+
+            void Line(double x1, double y1, double x2, double y2) =>
+                g.DrawLine(pen, x1 * unitsPerPoint, y1 * unitsPerPoint, x2 * unitsPerPoint, y2 * unitsPerPoint);
+
+            if ((extras.Marks & PageMarkKinds.Crop) != 0)
+            {
+                var far = gap + PagePrintExtras.CropLengthPt;
+                foreach (var (x, dx) in new[] { (0.0, -1), (widthPt, 1) })
+                {
+                    foreach (var (y, dy) in new[] { (0.0, -1), (heightPt, 1) })
+                    {
+                        Line(x + (dx * gap), y, x + (dx * far), y);
+                        Line(x, y + (dy * gap), x, y + (dy * far));
+                    }
+                }
+            }
+
+            if ((extras.Marks & PageMarkKinds.Cross) != 0)
+            {
+                const double radius = 3;
+                const double arm = 6;
+                var offset = gap + (PagePrintExtras.CropLengthPt / 2);
+                foreach (var (cx, cy) in new[] { (widthPt / 2, -offset), (widthPt / 2, heightPt + offset), (-offset, heightPt / 2), (widthPt + offset, heightPt / 2) })
+                {
+                    Line(cx - arm, cy, cx + arm, cy);
+                    Line(cx, cy - arm, cx, cy + arm);
+                    // A path is in points like a pen, unlike a line's coordinates.
+                    using var circle = g.GetGraphicsPath();
+                    circle.AddEllipse(cx, cy, radius, radius);
+                    g.DrawPath(pen, circle);
+                }
+            }
+        }
 
         private static void PaintFootnoteArea(CanvasLease lease, RenderContext renderContext, HtmlContainerInt htmlContainer, FootnoteAreaFragment footnoteArea)
         {

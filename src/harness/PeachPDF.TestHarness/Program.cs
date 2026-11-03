@@ -935,6 +935,18 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// @page bleed and marks (css-page-3 §12-13): the sheet grows around the trimmed page, the page's background runs into the bleed
+// area, crop and cross marks are drawn outside it, and the PDF carries /TrimBox and /BleedBox for the printer.
+var printHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "@page { size: 90mm 55mm; margin: 6mm; bleed: 3mm; marks: crop cross }" +
+    "html { background: linear-gradient(135deg, #f5a623, #d0021b) } body { margin: 0; font: 11pt/14pt Arial; color: #fff }" +
+    "h1 { margin: 0 0 4pt; font-size: 18pt } p { margin: 0 }</style></head><body>" +
+    "<h1>Print-ready card</h1><p>The background runs 3mm past the trim edge, and the marks sit outside the bleed.</p></body></html>";
+
+await SaveShowcaseAsync("page_bleed_marks", "Paged Media", "Page Bleed and Marks",
+    "@page bleed and marks: the sheet grows around the trimmed page, the background runs into the bleed area, crop and cross marks are drawn outside it, and the PDF carries a TrimBox and BleedBox.",
+    printHtml, pdfConfig);
+
 // shape-outside / shape-margin (css-shapes-1): text wraps around each float's shape rather than its rectangle.
 // Each box is a float with the same paragraph beside it, so the curve each shape cuts into the lines is visible.
 var shapeText = string.Concat(Enumerable.Repeat("Text follows the outline of the shape instead of the box around it, so each line starts where the shape ends. ", 8));

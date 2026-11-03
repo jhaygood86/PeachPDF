@@ -724,6 +724,8 @@ namespace PeachPDF
             {
                 var pageNumber = document.Composer.Pages.Count + 1;
                 var page = document.Composer.AddPage(htmlPage.WidthPoints, htmlPage.HeightPoints);
+                if (htmlPage.HasPrintBoxes)
+                    page.SetPrintBoxes(htmlPage.BleedPoints, htmlPage.MarksPoints);
 
                 structureTagBuilder?.BeginPage(page);
 
