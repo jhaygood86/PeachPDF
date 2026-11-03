@@ -143,7 +143,8 @@ namespace PeachBrackets.Html.Dom
 
             var index = CssCounterEngine.GetCounter(this, Keywords.ListItem)?.Value ?? 1;
 
-            Text = CssCounterEngine.FormatCounterValue(index, listStyleType) + ".";
+            // The East Asian longhand styles carry their own suffix (section 7.1) in place of the "." every other named style gets.
+            Text = CssCounterEngine.FormatCounterValue(index, listStyleType) + (EastAsianCounterStyles.SuffixOf(listStyleType) ?? ".");
         }
 
         internal override async ValueTask MeasureWordsSize(Canvas g)

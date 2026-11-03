@@ -189,6 +189,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("hebrew", 15, "טו.")]
         [InlineData("hebrew", 16, "טז.")]
         [InlineData("hebrew", 1000, "א׳.")]
+        // The longhand East Asian styles (§7.1): their own numerals and their own marker suffix instead of ".".
+        [InlineData("simp-chinese-informal", 11, "十一、")]
+        [InlineData("trad-chinese-formal", 2, "貳、")]
+        [InlineData("japanese-informal", 110, "百十、")]
+        [InlineData("korean-hangul-formal", 10, "일십, ")]
         // hiragana-iroha/katakana-iroha (§6.2) - previously silently reused the dictionary-order table.
         [InlineData("hiragana-iroha", 1, "い.")]
         [InlineData("katakana-iroha", 1, "イ.")]

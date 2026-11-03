@@ -243,6 +243,16 @@
         public const string Open = "open";
         public const string Closed = "closed";
         public const string EthiopicNumeric = "ethiopic-numeric";
+        public const string CjkIdeographic = "cjk-ideographic";
+        public const string JapaneseFormal = "japanese-formal";
+        public const string JapaneseInformal = "japanese-informal";
+        public const string KoreanHangulFormal = "korean-hangul-formal";
+        public const string KoreanHanjaFormal = "korean-hanja-formal";
+        public const string KoreanHanjaInformal = "korean-hanja-informal";
+        public const string SimpChineseFormal = "simp-chinese-formal";
+        public const string SimpChineseInformal = "simp-chinese-informal";
+        public const string TradChineseFormal = "trad-chinese-formal";
+        public const string TradChineseInformal = "trad-chinese-informal";
         public const string Gujarati = "gujarati";
         public const string Gurmukhi = "gurmukhi";
         public const string Kannada = "kannada";
