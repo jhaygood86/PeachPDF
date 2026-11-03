@@ -328,6 +328,34 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>
+        /// Splits a dash list on commas and whitespace outside parentheses, so an item that is a <c>calc()</c> (which holds spaces) stays whole.
+        /// </summary>
+        internal static List<string> SplitDashItems(string value)
+        {
+            var items = new List<string>();
+            var depth = 0;
+            var start = -1;
+
+            for (var i = 0; i <= value.Length; i++)
+            {
+                var c = i < value.Length ? value[i] : ' ';
+
+                if (depth == 0 && c is ',' or ' ' or '\t' or '\n' or '\r')
+                {
+                    if (start >= 0) items.Add(value[start..i]);
+                    start = -1;
+                    continue;
+                }
+
+                if (start < 0) start = i;
+                if (c == '(') depth++;
+                else if (c == ')' && depth > 0) depth--;
+            }
+
+            return items;
+        }
+
+        /// <summary>
         /// Parses a <c>stroke-dasharray</c> value: <c>none</c> or a comma/whitespace-separated list of
         /// non-negative lengths (percentages resolve against <paramref name="referenceLength"/>, per
         /// the same diagonal-formula convention used for other non-axis-specific lengths like
@@ -345,14 +373,14 @@ namespace PeachBrackets.Svg
             if (trimmed.Equals("none", StringComparison.OrdinalIgnoreCase))
                 return [];
 
-            var parts = trimmed.Split([',', ' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries);
+            var parts = SplitDashItems(trimmed);
 
-            if (parts.Length == 0)
+            if (parts.Count == 0)
                 return null;
 
-            var values = new double[parts.Length];
+            var values = new double[parts.Count];
 
-            for (var i = 0; i < parts.Length; i++)
+            for (var i = 0; i < parts.Count; i++)
             {
                 if (ParseLength(parts[i], referenceLength, basis) is not { } v || v < 0)
                     return null;

@@ -213,31 +213,44 @@ namespace PeachBrackets.Html.Animation
         private const int MaxDashItems = 256;
 
         /// <summary>
-        /// Two <c>stroke-dasharray</c> lists of different lengths mixed item by item once each is repeated to the lowest common multiple of the two lengths
-        /// (<c>4</c> against <c>20 10</c> is <c>4 4</c> against <c>20 10</c>). False when the lists are of the same length (the generic mix does those), or either is not a
-        /// plain list of numbers and lengths (<c>none</c>, a <c>calc()</c>), or an item pair has two units (which would be a <c>calc()</c> a dash list cannot hold).
+        /// Two <c>stroke-dasharray</c> lists mixed item by item once each is repeated to the lowest common multiple of the two lengths
+        /// (<c>4</c> against <c>20 10</c> is <c>4 4</c> against <c>20 10</c>). An item pair with two units is mixed as a <c>calc()</c> of the two
+        /// terms (<c>4px</c> against <c>10%</c> is <c>calc(2px + 5%)</c> halfway), which the SVG length parser resolves against the viewport.
+        /// False when the lists are of the same length and share their units (the generic mix does those), or either is not a plain list of
+        /// numbers and lengths (<c>none</c>, a <c>calc()</c>).
         /// </summary>
         private static bool TryMixDashLists(string from, string to, double t, out string result)
         {
             result = string.Empty;
 
-            if (!TryReadDashList(from, out var a) || !TryReadDashList(to, out var b) || a.Count == b.Count) return false;
+            if (!TryReadDashList(from, out var a) || !TryReadDashList(to, out var b)) return false;
 
             var count = a.Count / GreatestCommonDivisor(a.Count, b.Count) * b.Count;
             if (count > MaxDashItems) return false;
 
             var text = new StringBuilder();
+            var mixesUnits = false;
 
             for (var i = 0; i < count; i++)
             {
                 var (fromNumber, fromUnit) = a[i % a.Count];
                 var (toNumber, toUnit) = b[i % b.Count];
-                if (!fromUnit.Equals(toUnit, StringComparison.OrdinalIgnoreCase)) return false;
 
-                // A dash is never negative, which an easing that overshoots would make it.
                 if (i > 0) text.Append(' ');
-                text.Append(Format(Math.Max(0, fromNumber * (1 - t) + toNumber * t))).Append(fromUnit);
+
+                if (fromUnit.Equals(toUnit, StringComparison.OrdinalIgnoreCase))
+                {
+                    // A dash is never negative, which an easing that overshoots would make it.
+                    text.Append(Format(Math.Max(0, fromNumber * (1 - t) + toNumber * t))).Append(fromUnit);
+                    continue;
+                }
+
+                mixesUnits = true;
+                var mixed = $"calc({Format(fromNumber * (1 - t))}{fromUnit} + {Format(toNumber * t)}{toUnit})";
+                text.Append(t is >= 0 and <= 1 ? mixed : $"max(0px, {mixed})");
             }
+
+            if (a.Count == b.Count && !mixesUnits) return false;
 
             result = text.ToString();
             return true;
