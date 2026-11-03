@@ -29,7 +29,7 @@ See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the ful
 
 ## PeachPDF Requirements
 
-- .NET 8 or newer (every currently-supported .NET version, per [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core))
+- .NET 8 or newer (every currently-supported .NET version, per [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)). Which PeachPDF releases receive fixes, and on which .NET versions, is set out in the [support policy](https://peachpdf.net/support.html#support-policy).
 
 _Note: This package embeds a PDF writing engine derived from PDFsharp directly in its source tree; that engine carries its own license (see `src/drawing/PeachDrawing.PDF/Engine/LICENSE.md`), but the end result is still open source_
 
