@@ -1,6 +1,12 @@
 using PeachBrackets.Svg;
 using PeachDrawing.Core;
+using PeachBrackets.Css;
+using PeachBrackets.Html;
+using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Utils;
+using PeachDrawing.PDF;
 using PeachPDF.Rendering;
+using PeachPDF.Tests.TestSupport;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -109,6 +115,85 @@ namespace PeachBrackets.Engine.Tests.Svg
 
             var text = Assert.IsType<SvgTextElement>(document.Children[0]);
             Assert.Equal(expected, property == "letter-spacing" ? text.LetterSpacing : text.WordSpacing, 2);
+        }
+
+        // ─── the root-element units measure the HTML root's font ─────────────────
+
+        private static async Task<SvgDocument> BuildWithMonospaceRootAsync(string svgBody)
+        {
+            // Source Code Pro is monospace: its "0" is exactly 0.6em, so 1rch of a 20px root is 12.
+            var renderContext = new HtmlRenderContext();
+            await BundledFonts.RegisterFont(renderContext, BundledFonts.Otf, "SvgRootMono");
+            var container = new HtmlContainerInt(renderContext);
+            await container.SetHtml($"<!DOCTYPE html><html><head><style>html {{ font-family: SvgRootMono; font-size: 20px }} body {{ font-family: Arial; font-size: 12px }}</style></head><body><svg width=\"300\" height=\"100\">{svgBody}</svg></body></html>", null);
+
+            var size = new PeachDrawing.Core.Size(595, 842);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
+            await container.PerformLayout(graphics);
+
+            return Assert.IsType<CssBoxSvg>(DomUtils.GetBoxByTagName(container.Root!, "svg")).Document!;
+        }
+
+        [Fact]
+        public async Task Rch_IsMeasuredFromTheFontOfTheHtmlRoot_AtItsSize()
+        {
+            // Chrome: the root's font and size, not the font of the svg or of its parent (Arial, 12px here).
+            var document = await BuildWithMonospaceRootAsync("<circle cx=\"50\" cy=\"50\" r=\"2rch\"/>");
+
+            Assert.Equal(24, Assert.IsType<SvgCircleElement>(document.Children[0]).R, 2);
+        }
+
+        [Fact]
+        public async Task Rem_WithAMonospaceRoot_IsStillTheRootsSize()
+        {
+            var document = await BuildWithMonospaceRootAsync("<circle cx=\"50\" cy=\"50\" r=\"2rem\"/>");
+
+            Assert.Equal(40, Assert.IsType<SvgCircleElement>(document.Children[0]).R, 2);
+        }
+
+        // ─── a length that comes out below zero is zero where it is used ──────────
+
+        [Theory]
+        [InlineData("circle { r: calc(5px - 30px) }", "<circle class=\"t\" cx=\"50\" cy=\"50\" r=\"10\"/>")]
+        [InlineData("ellipse { rx: calc(5px - 1em) }", "<ellipse class=\"t\" cx=\"50\" cy=\"50\" rx=\"9\" ry=\"7\"/>")]
+        public async Task ANegativeRadius_IsZero(string css, string body)
+        {
+            var document = await BuildAsync("body { font-size: 12px } " + css, body);
+
+            Assert.Equal(0, document.Children[0] switch { SvgCircleElement c => c.R, SvgEllipseElement e => e.Rx, _ => double.NaN }, 2);
+        }
+
+        [Fact]
+        public async Task ANegativeWidthAndHeight_AreZero()
+        {
+            var document = await BuildAsync("body { font-size: 12px } rect { width: calc(5px - 30px); height: calc(1em - 30px) }", "<rect width=\"20\" height=\"12\"/>");
+
+            var rect = Assert.IsType<SvgRectElement>(document.Children[0]);
+            Assert.Equal((0d, 0d), (rect.Width, rect.Height));
+        }
+
+        [Fact]
+        public async Task ANegativeStrokeWidth_IsZero()
+        {
+            var document = await BuildAsync("rect { stroke-width: calc(5px - 30px) }", "<rect width=\"20\" height=\"12\" stroke=\"black\"/>");
+
+            Assert.Equal(0, document.Children[0].StrokeWidth, 2);
+        }
+
+        [Fact]
+        public async Task ANegativeFontSize_IsZero() =>
+            Assert.Equal(0, FontSizeOf(await BuildAsync("text { font-size: calc(5px - 30px) }", TextWith())), 2);
+
+        [Fact]
+        public async Task ANegativeCalcWithAnEmTermAtAKeyframe_IsZeroAtTheKeyframe()
+        {
+            // Chrome: calc(5px - 1em) is -7px at the first keyframe, which is 0 for a radius (and was drawn as a circle of about 7).
+            var document = await BuildAsync("body { font-size: 12px } @keyframes k { from { r: calc(5px - 1em) } to { r: 40px } } .t { animation: k 1s linear }",
+                "<circle class=\"t\" cx=\"50\" cy=\"50\" r=\"10\"/>", 0);
+
+            Assert.Equal(0, Assert.IsType<SvgCircleElement>(document.Children[0]).R, 2);
         }
 
         // ─── what an animation starts from ───────────────────────────────────────

@@ -138,6 +138,8 @@ namespace PeachBrackets.Svg
         /// <summary>The font size of the HTML root element, which is <c>rem</c>.</summary>
         public double? RootFontSizePx => HasFonts ? _box.GetRemHeight() / Length.PointsPerPx : null;
 
+        public double? GetRootFontRatio(FontMetric metric) => HasFonts ? ((IFontMetricSource)_box.DerivedStyle).GetRatio(metric, true) : null;
+
         // A box tree read with no container (a unit test of the builder, say) has no render context to measure a font with.
         private bool HasFonts => _box.HtmlContainer?.RenderContext is not null;
     }

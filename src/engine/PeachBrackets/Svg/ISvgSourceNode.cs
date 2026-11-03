@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.Css;
 using System;
 using System.Collections.Generic;
 
@@ -132,6 +133,12 @@ namespace PeachBrackets.Svg
         /// whose root <c>&lt;svg&gt;</c> is the root element.
         /// </summary>
         double? RootFontSizePx => null;
+
+        /// <summary>
+        /// What the font of the embedding document's root element measures, as a multiple of its em, for <c>rex</c>/<c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c>
+        /// (CSS Values 4 §6.1.2). Null (the default) when there is no such font: a standalone SVG measures its own root <c>&lt;svg&gt;</c>'s.
+        /// </summary>
+        double? GetRootFontRatio(FontMetric metric) => null;
     }
 
     /// <summary>

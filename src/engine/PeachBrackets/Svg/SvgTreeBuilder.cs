@@ -93,6 +93,9 @@ namespace PeachBrackets.Svg
         /// written. Null for a standalone SVG, whose own root is the basis.</summary>
         private double? _htmlRootFontSize;
 
+        /// <summary>The root <c>&lt;svg&gt;</c> node of the document being built, which says what the embedding document's root font measures.</summary>
+        private ISvgSourceNode? _rootNode;
+
         /// <summary>The root element's resolved font context, and the length basis built on it (what the
         /// root-element units <c>rem</c>/<c>rex</c>/<c>rch</c>/... resolve against). Null until
         /// <see cref="BuildDocument"/> has computed it, and while it is being computed - so the root's own
@@ -511,6 +514,7 @@ namespace PeachBrackets.Svg
             if (root.InheritedFontSizePx is { } inheritedSize)
                 seed = seed with { Size = inheritedSize, SizeDeclared = true };
             _htmlRootFontSize = root.RootFontSizePx;
+            _rootNode = root;
             // Before the root's font is computed, not only after: the root's own font-size may be written in rem (svg { font-size: 2rem }).
             _rootFontSize = _htmlRootFontSize ?? Html.Utils.DefaultFontResolver.FontSize;
 
@@ -1053,7 +1057,8 @@ namespace PeachBrackets.Svg
             {
                 Cx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cx"), _viewportWidth, _lengthBasis) ?? 0,
                 Cy = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cy"), _viewportHeight, _lengthBasis) ?? 0,
-                R = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "r"), ViewportDiagonal, _lengthBasis) ?? 0,
+                // A length that comes out below zero (a calc() or an em that does) is zero where it is used (CSS Values 4, range checking of calc()).
+                R = Math.Max(0, SvgValueParsers.ParseLength(ResolveStyledAttr(node, "r"), ViewportDiagonal, _lengthBasis) ?? 0),
             };
             ApplyCommon(circle, node, inherited);
             return circle;
@@ -1075,8 +1080,8 @@ namespace PeachBrackets.Svg
 
         private SvgRectElement BuildRect(ISvgSourceNode node, InheritedPaint inherited)
         {
-            var width = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? 0;
-            var height = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? 0;
+            var width = Math.Max(0, SvgValueParsers.ParseLength(ResolveStyledAttr(node, "width"), _viewportWidth, _lengthBasis) ?? 0);
+            var height = Math.Max(0, SvgValueParsers.ParseLength(ResolveStyledAttr(node, "height"), _viewportHeight, _lengthBasis) ?? 0);
 
             // rx/ry each default to the other when only one is specified; both default to 0 (no
             // rounding) when neither is specified.
@@ -1104,8 +1109,8 @@ namespace PeachBrackets.Svg
             {
                 Cx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cx"), _viewportWidth, _lengthBasis) ?? 0,
                 Cy = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "cy"), _viewportHeight, _lengthBasis) ?? 0,
-                Rx = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "rx"), _viewportWidth, _lengthBasis) ?? 0,
-                Ry = SvgValueParsers.ParseLength(ResolveStyledAttr(node, "ry"), _viewportHeight, _lengthBasis) ?? 0,
+                Rx = Math.Max(0, SvgValueParsers.ParseLength(ResolveStyledAttr(node, "rx"), _viewportWidth, _lengthBasis) ?? 0),
+                Ry = Math.Max(0, SvgValueParsers.ParseLength(ResolveStyledAttr(node, "ry"), _viewportHeight, _lengthBasis) ?? 0),
             };
             ApplyCommon(ellipse, node, inherited);
             return ellipse;
@@ -1472,6 +1477,7 @@ namespace PeachBrackets.Svg
             if (strokeWidthAttr is null || strokeWidthAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-width", strokeWidthAttr, in ctx))
                 element.StrokeWidth = inherited.StrokeWidth;
+            element.StrokeWidth = Math.Max(0, element.StrokeWidth);
 
             var strokeMiterLimitAttr = DeclaredOrInitial(node, "stroke-miterlimit");
             if (strokeMiterLimitAttr is null || strokeMiterLimitAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
@@ -2087,7 +2093,7 @@ namespace PeachBrackets.Svg
                 : NormalizeFamilyList(familyAttr);
 
             var declaredSize = ResolveFontSize(ResolveStyledAttr(node, "font-size"), inherited);
-            var size = declaredSize ?? inherited.Size;
+            var size = Math.Max(0, declaredSize ?? inherited.Size);
 
             var weightAttr = ResolveStyledAttr(node, "font-weight");
             var weight = ResolveNumericWeight(weightAttr, inherited.Weight);
@@ -2501,8 +2507,9 @@ namespace PeachBrackets.Svg
             public double GetRatio(FontMetric metric, bool rootElement)
             {
                 // Null while the root's own font is being computed, which is what keeps that from recursing.
+                // An inline svg's rex/rch/rlh measure the font of the HTML root element, whose size is what RootEmPx is; a standalone SVG's root is its own <svg>.
                 if (rootElement)
-                    return _builder._rootBasis?.GetRatio(metric, false) ?? FontMetricRatios.Approximate(metric);
+                    return _builder._rootNode?.GetRootFontRatio(metric) ?? _builder._rootBasis?.GetRatio(metric, false) ?? FontMetricRatios.Approximate(metric);
 
                 _ratios ??= new double?[5];
                 if (_ratios[(int)metric] is { } cached) return cached;
