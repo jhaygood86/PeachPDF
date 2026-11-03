@@ -584,11 +584,28 @@ namespace PeachDrawing.PDF
             var element = new PdfStructureElement(_document) { StructureType = "/" + structureType };
             _document.Internals.AddObject(element);
             UseNamespace(element);
+            MapNonStandardType(structureType);
             element.Parent = parent;
             parent.AppendKid(element);
 
             cache[key] = element;
             return element;
+        }
+
+        // THead, TBody and TFoot are additions of PDF 1.5. In an older file (PDF/A-1) they are non-standard structure types, which ISO 19005-1 6.8.3.4
+        // requires the role map to map to the nearest standard one.
+        void MapNonStandardType(string structureType)
+        {
+            if (_document.Version >= 15 || structureType is not ("THead" or "TBody" or "TFoot"))
+                return;
+
+            if (_root.Elements.GetObject("/RoleMap") is not PdfDictionary roleMap)
+            {
+                roleMap = new PdfDictionary(_document);
+                _root.Elements.SetObject("/RoleMap", roleMap);
+            }
+
+            roleMap.Elements.SetName("/" + structureType, "/Sect");
         }
 
         /// <summary>
