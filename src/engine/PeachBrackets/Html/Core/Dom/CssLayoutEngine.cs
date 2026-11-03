@@ -4321,7 +4321,7 @@ namespace PeachBrackets.Html.Dom
             var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
-                actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
+                actualLimitRight = FloatRightEdge(g, rightFloat, coordinates);
             }
 
             if (isRtl)
@@ -4349,10 +4349,10 @@ namespace PeachBrackets.Html.Dom
             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
                 coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
 
-            var leftFloat = LeftFloatAt(coordinates, box);
+            var leftFloat = LeftFloatAt(coordinates, box, g);
             if (leftFloat is not null)
             {
-                coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
+                coordinates.CurrentX = FloatLeftEdge(g, leftFloat, coordinates);
             }
 
             coordinates.CurrentX += leftSpacing + (clonesDecorations
@@ -5017,6 +5017,14 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>The x a line at <paramref name="coordinates"/> must start at to clear the left float <paramref name="floatBox"/>: its margin edge, or its <c>shape-outside</c> edge over the line's band.</summary>
+        private static double FloatLeftEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
+            FloatShapeOutline.LeftEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentLeft);
+
+        /// <summary>The right-float counterpart of <see cref="FloatLeftEdge"/>: the x a line must end at.</summary>
+        private static double FloatRightEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
+            FloatShapeOutline.RightEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentRight);
+
         /// <summary>
         /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
         /// position - combining <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (a float preceding
@@ -5036,7 +5044,19 @@ namespace PeachBrackets.Html.Dom
         /// word's, and a plain <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> call there would miss
         /// it precisely as this method's own remarks describe.
         /// </remarks>
-        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference, Canvas? g = null)
+        {
+            var found = LeftFloatAtCore(coordinates, reference);
+
+            // A float with a shape-outside narrows only the lines its shape reaches, and only until the cursor is past the
+            // shape's edge at this line's band: past it, the float no longer collides with the cursor (css-shapes-1 §2.1).
+            return found is not null && g is not null && FloatShapeOutline.HasShape(found)
+                   && coordinates.CurrentX >= FloatLeftEdge(g, found, coordinates) - 0.01
+                ? null
+                : found;
+        }
+
+        private static CssBox? LeftFloatAtCore(CssLineBoxCoordinates coordinates, CssBox reference)
         {
             var ancestorFloat = LineOwnerIsIsolatedFromOuterFloats(coordinates, reference)
                 ? null
@@ -5953,11 +5973,11 @@ namespace PeachBrackets.Html.Dom
                 // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
                 var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone ? leftSpacing : 0;
 
-                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
+                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box, g);
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
-                    coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
+                    coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
                 }
 
                 // Where b's own content box starts on this line, after every branch above that can
@@ -6094,9 +6114,8 @@ namespace PeachBrackets.Html.Dom
 
                         if (lastRightIntersectingFloatBox is not null)
                         {
-                            actualLimitRight = lastRightIntersectingFloatBox.Location.X -
-                                               lastRightIntersectingFloatBox.ActualMarginLeft - rightSpacing;
-                            var floatEdge = lastRightIntersectingFloatBox.Location.X - lastRightIntersectingFloatBox.ActualMarginLeft;
+                            var floatEdge = FloatRightEdge(g, lastRightIntersectingFloatBox, coordinates);
+                            actualLimitRight = floatEdge - rightSpacing;
                             coordinates.Line.FloatLimitRight = Math.Min(coordinates.Line.FloatLimitRight ?? floatEdge, floatEdge);
                         }
 
@@ -6230,11 +6249,11 @@ namespace PeachBrackets.Html.Dom
                             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
                                 word.IsLineBreak, isRtl);
 
-                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b);
+                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b, g);
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
-                                coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+                                coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + leftSpacing;
 
                                 // The line the word wrapped onto may have no room beside that float, as when the float is wider
                                 // than the line; the word goes below it, as it would have had it been about to open the line.
@@ -6369,11 +6388,11 @@ namespace PeachBrackets.Html.Dom
                             UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
                                 coordinates.TrailingGraphemeContext);
 
-                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
+                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box, g);
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {
-                            coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
+                            coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
                         }
 
                         // A preserved tab (CssRect.OriginalText - stable even though CssBox.MeasureWordsSize/

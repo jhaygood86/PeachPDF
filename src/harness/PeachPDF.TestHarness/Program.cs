@@ -935,6 +935,28 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// shape-outside / shape-margin (css-shapes-1): text wraps around each float's shape rather than its rectangle.
+// Each box is a float with the same paragraph beside it, so the curve each shape cuts into the lines is visible.
+var shapeText = string.Concat(Enumerable.Repeat("Text follows the outline of the shape instead of the box around it, so each line starts where the shape ends. ", 8));
+string ShapeBox(string label, string style) =>
+    "<div class='cell'><h3>" + label + "</h3><div class='f' style='" + style + "'></div><p>" + shapeText + "</p></div>";
+var shapeHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "body { font: 9pt/12pt Arial; margin: 14pt } h1 { font-size: 15pt; margin: 0 0 8pt } h3 { font-size: 9pt; margin: 0 0 4pt; color: #555 }" +
+    ".cell { display: inline-block; vertical-align: top; width: 230pt; margin: 0 12pt 14pt 0 } .cell p { margin: 0 }" +
+    ".f { float: left; width: 90pt; height: 90pt; background: #f5a3a3; margin-right: 6pt }</style></head><body>" +
+    "<h1>shape-outside</h1>" +
+    ShapeBox("circle(50%)", "shape-outside: circle(50%); border-radius: 50%") +
+    ShapeBox("circle(50%) + shape-margin: 8pt", "shape-outside: circle(50%); shape-margin: 8pt; border-radius: 50%") +
+    ShapeBox("ellipse(40pt 45pt)", "shape-outside: ellipse(40pt 45pt at 40% 50%); clip-path: ellipse(40pt 45pt at 40% 50%)") +
+    ShapeBox("polygon(0 0, 100% 0, 50% 100%)", "shape-outside: polygon(0 0, 100% 0, 50% 100%); clip-path: polygon(0 0, 100% 0, 50% 100%)") +
+    ShapeBox("inset(0 round 30pt)", "shape-outside: inset(0 round 30pt); border-radius: 30pt") +
+    ShapeBox("float: right, circle(50%)", "float: right; margin: 0 0 0 6pt; shape-outside: circle(50%); border-radius: 50%") +
+    "</body></html>";
+
+await SaveShowcaseAsync("shape_outside", "Layout", "Shape Outside",
+    "shape-outside with circle(), ellipse(), polygon() and inset(round) shapes, shape-margin growing the shape outward, and a right float: text follows each shape's outline instead of the float's rectangle.",
+    shapeHtml, pdfConfig);
+
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
 // overflow-clip curve above is built from a HtmlRenderContext.PixelsPerPoint-inflated layout-space
