@@ -6763,7 +6763,16 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "A heading spanning both columns" +
         "</h2>" +
         McEntries(6, "after") +
-        "</div></div>") +
+        "</div></div>" +
+        "<div class=\"frame\"><div class=\"label\">the same heading nested in a bordered wrapper &mdash; the wrapper is sliced around it, the top border above the first run, the bottom one below the second</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        "<div style=\"border:1pt solid #2e86c1;padding:3pt\">" +
+        McEntries(4, "before") +
+        "<h2 style=\"column-span:all;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0.3em 0\">" +
+        "A nested heading spanning both columns" +
+        "</h2>" +
+        McEntries(4, "after") +
+        "</div></div></div>") +
 
     // css-multicol-1 §2: a float belongs to the column box it appears in, and the container contains its
     // floats. The right float sits at the right edge of the first column, not of the container, and the
