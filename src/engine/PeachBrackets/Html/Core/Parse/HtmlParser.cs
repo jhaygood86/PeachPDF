@@ -35,11 +35,13 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         /// <param name="source">the html source to parse</param>
         /// <param name="root">the root box (null for document root)</param>
+        /// <param name="document">whether the source is a whole document, which gets the <c>html</c>, <c>head</c> and <c>body</c> elements it leaves out,
+        /// rather than a fragment whose elements go in as they come</param>
         /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static CssBox ParseDocument(string source, CssBox? root = null)
+        public static CssBox ParseDocument(string source, CssBox? root = null, bool document = false)
         {
             root ??= CssBox.CreateBlock();
-            var state = new ParserState(root);
+            var state = new ParserState(root) { IsDocument = document, Phase = document ? DocumentPhase.Initial : DocumentPhase.InBody };
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
@@ -119,57 +121,9 @@ namespace PeachBrackets.Html.Parse
                 }
             }
 
+            if (document) FinishDocument(state);
+
             return root;
-        }
-
-
-        /// <summary>
-        /// Inserts the <c>html</c> and <c>body</c> elements the HTML parsing algorithm creates implicitly
-        /// (<see href="https://html.spec.whatwg.org/multipage/parsing.html#the-before-html-insertion-mode">"before html"</see>
-        /// and <see href="https://html.spec.whatwg.org/multipage/parsing.html#the-after-head-insertion-mode">"after head"</see>
-        /// insertion modes) when the source omits their start tags, so <c>body { }</c>/<c>html { }</c>
-        /// rules match a fragment such as <c>&lt;p&gt;a&lt;/p&gt;</c> exactly as they match the written-out form.
-        /// Leading head-content elements (<c>style</c>, <c>meta</c>, ...) stay outside the implicit body.
-        /// Applied to whole documents only - never to a fragment spliced into an existing tree.
-        /// </summary>
-        public static void EnsureHtmlAndBody(CssBox root)
-        {
-            if (root.Boxes.Count == 0) return;
-
-            var html = root.Boxes.Find(IsHtml);
-            if (html is null)
-            {
-                html = CssBox.CreateBox(new HtmlTag("html", false, null), root);
-                foreach (var child in root.Boxes.Where(b => b != html).ToList())
-                    child.ParentBox = html;
-            }
-
-            if (html.Boxes.Exists(b => IsTag(b, "body") || IsTag(b, "frameset"))) return;
-
-            var toMove = new List<CssBox>();
-            var bodyStarted = false;
-            foreach (var child in html.Boxes)
-            {
-                if (!bodyStarted)
-                {
-                    var isHeadContent = IsTag(child, "head") || (child.HtmlTag is { } t
-                        && t.Name.ToLowerInvariant() is "title" or "meta" or "link" or "style" or "script" or "base" or "template");
-                    var isBlankText = child.HtmlTag is null && string.IsNullOrWhiteSpace(child.Text);
-                    if (isHeadContent || isBlankText) continue;
-                    bodyStarted = true;
-                }
-
-                if (!IsTag(child, "head")) toMove.Add(child);
-            }
-
-            if (toMove.Count == 0) return;
-
-            var body = CssBox.CreateBox(new HtmlTag("body", false, null), html);
-            foreach (var child in toMove)
-                child.ParentBox = body;
-
-            static bool IsHtml(CssBox b) => IsTag(b, "html");
-            static bool IsTag(CssBox b, string name) => b.HtmlTag?.Name.Equals(name, StringComparison.OrdinalIgnoreCase) == true;
         }
 
 

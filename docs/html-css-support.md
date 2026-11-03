@@ -249,8 +249,8 @@ Form elements are rendered as static boxes by default. There is no interactive b
 The HTML Standard's [tree-construction](https://html.spec.whatwg.org/multipage/parsing.html#tree-construction)
 error-recovery rules change the **element tree** a stylesheet then matches against — most visibly
 through the sibling combinators `+` and `~`, and through `:first-child`/`:nth-child()`. The body of a
-document follows them for formatting elements, paragraphs, lists, headings and buttons; tables and
-`<select>` follow the table and select insertion modes; the `<template>` and `<html>`/`<head>`/`<body>` rules are simpler approximations (see below).
+document follows them for formatting elements, paragraphs, lists, headings and buttons; tables, `<select>`,
+`<template>` and the `<html>`/`<head>`/`<body>` skeleton follow the standard's insertion modes.
 
 - **Misnested formatting elements** (`a`, `b`, `big`, `code`, `em`, `font`, `i`, `nobr`, `s`, `small`,
   `strike`, `strong`, `tt`, `u`) follow the
@@ -267,6 +267,10 @@ document follows them for formatting elements, paragraphs, lists, headings and b
 - **An end tag whose element is not open is ignored**, and the insertion point does not move. Content
   after it stays where it was rather than being reparented.
 - **Table parts are implied and kept in place.** `<table><tr>` gets a `<tbody>`, a `<td>` outside a row gets a `<tr>`, a `<col>` a `<colgroup>`, so `table > tbody > tr` matches; a `<td>`, `<tr>` or `<caption>` outside a table is dropped. Text and elements a table cannot hold (`<table>x<tr>…`, `<table><div>`) are moved in front of it (*foster parenting*). In a `<select>`, options close each other and anything but options, option groups and text is dropped.
+- **The document skeleton is supplied.** The `<html>`, `<head>` and `<body>` elements the source leaves out exist, `<title>`, `<meta>`, `<link>`, `<style>` and `<script>` before the body go into the head, a repeated `<html>` or `<body>` only adds its missing attributes, and text or elements after `</body>` or `</html>` still go into the body.
+- **`<template>` contents are parsed by their first tag** (a `<tr>` as a row, a `<td>` as a cell) and are not rendered.
+- **`<svg>` and `<math>` end at an HTML element that cannot be inside them** (`<svg><p>` ends the `<svg>`), and SVG element names are given their mixed case (`<clippath>` is `clipPath`).
+- **A line feed that starts a `<pre>`, `<listing>` or `<textarea>` is dropped**, and `<image>` is an `<img>`.
 - **A second `<form>` inside a `<form>` is ignored**, and `</form>` ends the form without closing what is open inside it.
 - **`</br>` is a `<br>`.**
 - **`</p>` is the exception**: when no `<p>` is open it generates an *empty* `<p>`, immediately closed.
@@ -275,10 +279,9 @@ document follows them for formatting elements, paragraphs, lists, headings and b
   a real, empty paragraph element behind, so `p + table + p` matches *that* element rather than the
   next authored paragraph.
 
-Not yet the spec's: `<template>` contents are not tracked, `</body>` and `</html>` close their element
-rather than switching the insertion mode, a `<table>` closes an open `<p>` whether or not the document is in
-quirks mode (which the engine does not model), and the tokenizer is MimeKit's rather than the standard's
-state machine.
+Not yet the spec's: a `<table>` closes an open `<p>` whether or not the document is in quirks mode (which the
+engine does not model), the legacy `frameset` modes, the mixed-case form of SVG and MathML attribute names, and
+the tokenizer, which is MimeKit's rather than the standard's state machine.
 
 ---
 

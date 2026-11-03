@@ -117,9 +117,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         public void TheRestOfTheInBodyRules_AreFollowed(string html, string expected) => Assert.Equal(expected, Body(html));
 
         [Fact]
-        public void FormattingTags_InsideSvg_AreLeftAlone()
+        public void FormattingTags_InsideSvg_BreakOutOfIt()
         {
-            Assert.Equal("<svg><b>x</b></svg>", Body("<svg><b>x</b></svg>"));
+            Assert.Equal("<svg></svg><b>x</b>", Body("<svg><b>x</b></svg>"));
         }
 
         [Fact]

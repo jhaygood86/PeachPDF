@@ -39,6 +39,34 @@ namespace PeachBrackets.Html.Parse
 
             /// <summary>The form element pointer: the last <c>form</c> opened and not yet closed by its end tag.</summary>
             public CssBox? FormPointer { get; set; }
+
+            /// <summary>The head element pointer: the <c>head</c> of a document being parsed.</summary>
+            public CssBox? HeadPointer { get; set; }
+
+            /// <summary>Whether this is a whole document (the document insertion modes apply) rather than a fragment.</summary>
+            public bool IsDocument { get; init; }
+
+            /// <summary>Where a document is, from before its <c>html</c> element to after its end; <see cref="DocumentPhase.InBody"/> from the start for a fragment.</summary>
+            public DocumentPhase Phase { get; set; } = DocumentPhase.InBody;
+
+            /// <summary>The stack of template insertion modes: one for each open <c>template</c>, the innermost last.</summary>
+            public List<Mode> TemplateModes { get; } = [];
+
+            /// <summary>Whether a line feed that starts the next text is dropped (after <c>pre</c>, <c>listing</c> and <c>textarea</c>).</summary>
+            public bool IgnoreNextNewline { get; set; }
+        }
+
+        /// <summary>The document-level insertion modes, which are not a function of the stack.</summary>
+        private enum DocumentPhase
+        {
+            Initial,
+            BeforeHtml,
+            BeforeHead,
+            InHead,
+            AfterHead,
+            InBody,
+            AfterBody,
+            AfterAfterBody
         }
 
         /// <summary>An element in the list of active formatting elements, a marker, or the adoption agency's bookmark.</summary>
@@ -86,6 +114,7 @@ namespace PeachBrackets.Html.Parse
         private enum Mode
         {
             InBody,
+            InTemplate,
             InTable,
             InCaption,
             InColumnGroup,
@@ -147,13 +176,32 @@ namespace PeachBrackets.Html.Parse
             "figcaption", "figure", "footer", "header", "hgroup", "listing", "main", "menu", "nav", "ol", "pre", "search", "section",
             "summary", "ul", "dd", "dt", "applet", "marquee", "object");
 
-        // The end tags this parser still answers by closing up to the nearest open element of that name, until the document insertion modes
-        // and <template> replace that.
-        private static readonly FrozenSet<string> NearestAncestorEndTags = Names("html", "body", "head", "frameset", "template");
+        // The end tags of a fragment's html and body, and of the legacy frame elements, are answered by closing the nearest open element of that name.
+        private static readonly FrozenSet<string> NearestAncestorEndTags = Names("html", "body", "head", "frameset");
 
         // Text goes to the current node without the active formatting elements being reconstructed in these.
         private static readonly FrozenSet<string> NoReconstructTextParents =
             Names("head", "html", "title", "style", "script", "textarea", "noscript");
+
+        // Elements whose content is text, not markup: the tokenizer hands it over as one run, and it goes into the element whatever the mode is.
+        private static readonly FrozenSet<string> RawTextNames =
+            Names("title", "style", "script", "textarea", "xmp", "iframe", "noembed", "noframes", "plaintext");
+
+        // The start tags that break out of foreign content.
+        private static readonly FrozenSet<string> ForeignBreakoutNames = Names(
+            "b", "big", "blockquote", "body", "br", "center", "code", "dd", "div", "dl", "dt", "em", "embed", "h1", "h2", "h3", "h4", "h5", "h6",
+            "head", "hr", "i", "img", "li", "listing", "menu", "meta", "nobr", "ol", "p", "pre", "ruby", "s", "small", "span", "strong", "strike",
+            "sub", "sup", "table", "tt", "u", "ul", "var");
+
+        // SVG element names the tokenizer lowercases but the standard gives mixed case.
+        private static readonly FrozenDictionary<string, string> SvgElementNames = new[]
+        {
+            "altGlyph", "altGlyphDef", "altGlyphItem", "animateColor", "animateMotion", "animateTransform", "clipPath", "feBlend", "feColorMatrix",
+            "feComponentTransfer", "feComposite", "feConvolveMatrix", "feDiffuseLighting", "feDisplacementMap", "feDistantLight", "feDropShadow",
+            "feFlood", "feFuncA", "feFuncB", "feFuncG", "feFuncR", "feGaussianBlur", "feImage", "feMerge", "feMergeNode", "feMorphology",
+            "feOffset", "fePointLight", "feSpecularLighting", "feSpotLight", "feTile", "feTurbulence", "foreignObject", "glyphRef",
+            "linearGradient", "radialGradient", "textPath"
+        }.ToFrozenDictionary(n => n.ToLowerInvariant(), n => n);
 
         private static readonly FrozenSet<string> TableStructureNames = Names("table", "tbody", "tfoot", "thead", "tr");
         private static readonly FrozenSet<string> CaptionAndCellNames = Names("caption", "td", "th");
@@ -213,7 +261,7 @@ namespace PeachBrackets.Html.Parse
             if (index < 0) return;
 
             state.Stack.RemoveRange(index, state.Stack.Count - index);
-            ClearClosedMarkers(state);
+            AfterPop(state);
         }
 
         private static void Pop(ParserState state)
@@ -221,7 +269,20 @@ namespace PeachBrackets.Html.Parse
             if (state.Stack.Count == 0) return;
 
             state.Stack.RemoveAt(state.Stack.Count - 1);
+            AfterPop(state);
+        }
+
+        // What follows elements leaving the stack: their markers go from the list of active formatting elements and their templates' modes from the stack of modes.
+        private static void AfterPop(ParserState state)
+        {
             ClearClosedMarkers(state);
+
+            if (state.TemplateModes.Count > 0)
+            {
+                var open = state.Stack.Count(b => IsNamed(b, "template"));
+                while (state.TemplateModes.Count > open)
+                    state.TemplateModes.RemoveAt(state.TemplateModes.Count - 1);
+            }
         }
 
         private static bool IsScopeBoundary(CssBox box, Scope scope)
@@ -297,9 +358,9 @@ namespace PeachBrackets.Html.Parse
                 PopThrough(state, paragraph);
         }
 
-        private static void GenerateImpliedEndTags(ParserState state)
+        private static void GenerateImpliedEndTags(ParserState state, bool exceptRtc = false)
         {
-            while (state.Stack.Count > 0 && IsAmong(state.Current, ImpliedEndTagNames))
+            while (state.Stack.Count > 0 && IsAmong(state.Current, ImpliedEndTagNames) && !(exceptRtc && IsNamed(state.Current, "rtc")))
                 Pop(state);
         }
 
@@ -486,8 +547,11 @@ namespace PeachBrackets.Html.Parse
         {
             if (FormattingNames.Contains(name))
                 PushFormatting(state, element);
-            else if (name is "applet" or "object" or "marquee" or "td" or "th" or "caption")
+            else if (name is "applet" or "object" or "marquee" or "td" or "th" or "caption" or "template")
                 state.Formatting.Add(FormattingEntry.MarkerFor(element));
+
+            if (name == "template")
+                state.TemplateModes.Add(Mode.InTemplate);
         }
 
         // The insertion mode, which the standard keeps in a variable and switches whenever it pushes or pops the element that names it: the
@@ -508,6 +572,7 @@ namespace PeachBrackets.Html.Parse
                     case "caption": return Mode.InCaption;
                     case "colgroup": return Mode.InColumnGroup;
                     case "table": return Mode.InTable;
+                    case "template": return Mode.InTemplate;
                     case "select":
                         for (var j = i - 1; j >= 0; j--)
                         {
@@ -524,6 +589,7 @@ namespace PeachBrackets.Html.Parse
 
         private static void ProcessStartTag(ParserState state, StartTag tag)
         {
+            state.IgnoreNextNewline = false;
             for (var i = 0; i < ReprocessLimit; i++)
             {
                 if (!StartTagInCurrentMode(state, tag)) return;
@@ -534,13 +600,14 @@ namespace PeachBrackets.Html.Parse
         private static bool StartTagInCurrentMode(ParserState state, StartTag tag)
         {
             if (state.Current.IsWithinForeignContent)
-            {
-                InsertElement(state, tag);
-                return false;
-            }
+                return ForeignStartTag(state, tag);
+
+            if (state.TemplateModes.Count == 0 && state.Phase != DocumentPhase.InBody)
+                return PhaseStartTag(state, tag);
 
             return ModeOf(state) switch
             {
+                Mode.InTemplate => TemplateStartTag(state, tag),
                 Mode.InTable => TableStartTag(state, tag),
                 Mode.InTableBody => TableBodyStartTag(state, tag),
                 Mode.InRow => RowStartTag(state, tag),
@@ -558,11 +625,38 @@ namespace PeachBrackets.Html.Parse
             if (TablePartStartTags.Contains(tag.LowerName)) return false;
             if (tag.LowerName == "form" && state.FormPointer is not null) return false;
 
+            switch (tag.LowerName)
+            {
+                case "html" when state.Stack.Count > 0 && IsNamed(state.Stack[0], "html"):
+                    MergeMissingAttributes(state.Stack[0], tag.Attributes);
+                    return false;
+                case "body" when state.Stack.Count > 1 && IsNamed(state.Stack[1], "body") && state.TemplateModes.Count == 0:
+                    MergeMissingAttributes(state.Stack[1], tag.Attributes);
+                    return false;
+                case "head" when state.IsDocument:
+                    return false;
+                case "image":
+                    tag = new StartTag("img", "img", tag.Attributes, true);
+                    break;
+            }
+
             PrepareStartTag(state, tag.LowerName);
             var box = InsertElement(state, tag);
             if (tag.LowerName == "form") state.FormPointer = box;
+            if (tag.LowerName is "pre" or "listing" or "textarea") state.IgnoreNextNewline = true;
 
             return false;
+        }
+
+        // An html or body start tag that is not the first adds the attributes the element does not have yet.
+        private static void MergeMissingAttributes(CssBox element, Dictionary<string, string>? attributes)
+        {
+            if (attributes is null) return;
+
+            foreach (var (name, value) in attributes)
+            {
+                if (!element.HtmlTag!.HasAttribute(name)) element.HtmlTag.SetAttribute(name, value);
+            }
         }
 
         // The rules of "in table" for a token they have no rule for: those of "in body", with foster parenting on.
@@ -762,6 +856,11 @@ namespace PeachBrackets.Html.Parse
             if (name.Length == 2 && name[0] == 'h' && name[1] is >= '1' and <= '6' && IsHeading(state.Current))
                 Pop(state);
 
+            if (name is "rb" or "rtc" && FindInScope(state, "ruby") is not null)
+                GenerateImpliedEndTags(state);
+            else if (name is "rp" or "rt" && FindInScope(state, "ruby") is not null)
+                GenerateImpliedEndTags(state, exceptRtc: true);
+
             if (name == "button" && FindInScope(state, "button") is { } button)
                 PopThrough(state, button);
 
@@ -808,20 +907,328 @@ namespace PeachBrackets.Html.Parse
 
         #endregion
 
+        #region Document, template and foreign content
+
+        private static bool TemplateStartTag(ParserState state, StartTag tag)
+        {
+            var top = state.TemplateModes[^1];
+            if (top != Mode.InTemplate)
+                return StartTagInMode(state, top, tag);
+
+            switch (tag.LowerName)
+            {
+                case "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title":
+                    InsertElement(state, tag);
+                    return false;
+                case "caption" or "colgroup" or "tbody" or "tfoot" or "thead":
+                    state.TemplateModes[^1] = Mode.InTable;
+                    return true;
+                case "col":
+                    state.TemplateModes[^1] = Mode.InColumnGroup;
+                    return true;
+                case "tr":
+                    state.TemplateModes[^1] = Mode.InTableBody;
+                    return true;
+                case "td" or "th":
+                    state.TemplateModes[^1] = Mode.InRow;
+                    return true;
+                default:
+                    state.TemplateModes[^1] = Mode.InBody;
+                    return true;
+            }
+        }
+
+        private static bool StartTagInMode(ParserState state, Mode mode, StartTag tag) => mode switch
+        {
+            Mode.InTable => TableStartTag(state, tag),
+            Mode.InTableBody => TableBodyStartTag(state, tag),
+            Mode.InRow => RowStartTag(state, tag),
+            Mode.InColumnGroup => ColumnGroupStartTag(state, tag),
+            _ => BodyStartTag(state, tag)
+        };
+
+        private static bool PhaseStartTag(ParserState state, StartTag tag)
+        {
+            switch (state.Phase)
+            {
+                case DocumentPhase.Initial:
+                    state.Phase = DocumentPhase.BeforeHtml;
+                    return true;
+                case DocumentPhase.BeforeHtml:
+                    if (tag.LowerName == "html")
+                    {
+                        InsertElement(state, tag);
+                        state.Phase = DocumentPhase.BeforeHead;
+                        return false;
+                    }
+
+                    InsertImplied(state, "html");
+                    state.Phase = DocumentPhase.BeforeHead;
+                    return true;
+                case DocumentPhase.BeforeHead:
+                    if (tag.LowerName == "html") return BodyStartTag(state, tag);
+                    if (tag.LowerName == "head")
+                    {
+                        state.HeadPointer = InsertElement(state, tag);
+                        state.Phase = DocumentPhase.InHead;
+                        return false;
+                    }
+
+                    state.HeadPointer = InsertImplied(state, "head");
+                    state.Phase = DocumentPhase.InHead;
+                    return true;
+                case DocumentPhase.InHead:
+                    return HeadStartTag(state, tag);
+                case DocumentPhase.AfterHead:
+                    return AfterHeadStartTag(state, tag);
+                default:
+                    if (tag.LowerName == "html") return BodyStartTag(state, tag);
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+            }
+        }
+
+        private static bool HeadStartTag(ParserState state, StartTag tag)
+        {
+            switch (tag.LowerName)
+            {
+                case "html":
+                    return BodyStartTag(state, tag);
+                case "base" or "basefont" or "bgsound" or "link" or "meta":
+                    InsertElement(state, tag);
+                    if (!tag.IsSingle) Pop(state);
+                    return false;
+                case "title" or "noscript" or "noframes" or "style" or "script" or "template":
+                    InsertElement(state, tag);
+                    return false;
+                case "head":
+                    return false;
+                default:
+                    if (state.HeadPointer is { } head) PopThrough(state, head);
+                    state.Phase = DocumentPhase.AfterHead;
+                    return true;
+            }
+        }
+
+        private static bool AfterHeadStartTag(ParserState state, StartTag tag)
+        {
+            switch (tag.LowerName)
+            {
+                case "html":
+                    return BodyStartTag(state, tag);
+                case "body" or "frameset":
+                    InsertElement(state, tag);
+                    state.Phase = DocumentPhase.InBody;
+                    return false;
+                case "base" or "basefont" or "bgsound" or "link" or "meta" or "noframes" or "script" or "style" or "template" or "title":
+                    // Head content after the head goes into it: the head is put back on the stack for the token.
+                    if (state.HeadPointer is not { } head) return false;
+                    state.Stack.Add(head);
+                    try
+                    {
+                        HeadStartTag(state, tag);
+                    }
+                    finally
+                    {
+                        state.Stack.Remove(head);
+                    }
+
+                    return false;
+                case "head":
+                    return false;
+                default:
+                    InsertImplied(state, "body");
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+            }
+        }
+
+        private static bool PhaseEndTag(ParserState state, string name)
+        {
+            // A title, style or script left open in the head or after it still ends with its own end tag.
+            if (state.Phase is DocumentPhase.InHead or DocumentPhase.AfterHead && state.Stack.Count > 0
+                && !IsNamed(state.Current, "head") && !IsNamed(state.Current, "html"))
+            {
+                CloseByAnyOtherEndTag(state, name);
+                return false;
+            }
+
+            var closesHead = name is "head" or "body" or "html" or "br";
+            switch (state.Phase)
+            {
+                case DocumentPhase.Initial:
+                    state.Phase = DocumentPhase.BeforeHtml;
+                    return true;
+                case DocumentPhase.BeforeHtml:
+                    if (!closesHead) return false;
+                    InsertImplied(state, "html");
+                    state.Phase = DocumentPhase.BeforeHead;
+                    return true;
+                case DocumentPhase.BeforeHead:
+                    if (!closesHead) return false;
+                    state.HeadPointer = InsertImplied(state, "head");
+                    state.Phase = DocumentPhase.InHead;
+                    return true;
+                case DocumentPhase.InHead:
+                    if (!closesHead) return false;
+                    if (state.HeadPointer is { } head) PopThrough(state, head);
+                    state.Phase = DocumentPhase.AfterHead;
+                    return name != "head";
+                case DocumentPhase.AfterHead:
+                    if (name is not ("body" or "html" or "br")) return false;
+                    InsertImplied(state, "body");
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+                case DocumentPhase.AfterBody:
+                    if (name == "html")
+                    {
+                        state.Phase = DocumentPhase.AfterAfterBody;
+                        return false;
+                    }
+
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+                default:
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+            }
+        }
+
+        // Text before the body starts: leading white space is dropped (before the head) or kept (in and after it), and the rest starts what comes next.
+        // Returns true when the rest of the text is to be processed again.
+        private static bool PhaseText(ParserState state, ref string text)
+        {
+            var rest = text.TrimStart(' ', '\t', '\n', '\r', '\f');
+            var whitespace = text[..^rest.Length];
+
+            switch (state.Phase)
+            {
+                case DocumentPhase.Initial:
+                    if (rest.Length == 0) return false;
+                    state.Phase = DocumentPhase.BeforeHtml;
+                    break;
+                case DocumentPhase.BeforeHtml:
+                    if (rest.Length == 0) return false;
+                    InsertImplied(state, "html");
+                    state.Phase = DocumentPhase.BeforeHead;
+                    break;
+                case DocumentPhase.BeforeHead:
+                    if (rest.Length == 0) return false;
+                    state.HeadPointer = InsertImplied(state, "head");
+                    state.Phase = DocumentPhase.InHead;
+                    break;
+                case DocumentPhase.InHead:
+                    if (whitespace.Length > 0) InsertText(state, whitespace);
+                    if (rest.Length == 0) return false;
+                    if (state.HeadPointer is { } head) PopThrough(state, head);
+                    state.Phase = DocumentPhase.AfterHead;
+                    break;
+                case DocumentPhase.AfterHead:
+                    if (whitespace.Length > 0) InsertText(state, whitespace);
+                    if (rest.Length == 0) return false;
+                    InsertImplied(state, "body");
+                    state.Phase = DocumentPhase.InBody;
+                    break;
+                default:
+                    if (rest.Length == 0)
+                    {
+                        InsertBodyText(state, text);
+                        return false;
+                    }
+
+                    state.Phase = DocumentPhase.InBody;
+                    return true;
+            }
+
+            text = rest;
+            return true;
+        }
+
+        // At the end of the source, a document that has not got as far as its body gets the rest of its skeleton.
+        private static void FinishDocument(ParserState state)
+        {
+            if (state.Phase == DocumentPhase.Initial) state.Phase = DocumentPhase.BeforeHtml;
+
+            if (state.Phase == DocumentPhase.BeforeHtml)
+            {
+                InsertImplied(state, "html");
+                state.Phase = DocumentPhase.BeforeHead;
+            }
+
+            if (state.Phase == DocumentPhase.BeforeHead)
+            {
+                state.HeadPointer = InsertImplied(state, "head");
+                state.Phase = DocumentPhase.InHead;
+            }
+
+            if (state.Phase == DocumentPhase.InHead)
+            {
+                if (state.HeadPointer is { } head) PopThrough(state, head);
+                state.Phase = DocumentPhase.AfterHead;
+            }
+
+            if (state.Phase == DocumentPhase.AfterHead)
+            {
+                InsertImplied(state, "body");
+                state.Phase = DocumentPhase.InBody;
+            }
+        }
+
+        // A start tag with an SVG or MathML element open: HTML elements that cannot be there end the foreign content first.
+        private static bool ForeignStartTag(ParserState state, StartTag tag)
+        {
+            var breaksOut = ForeignBreakoutNames.Contains(tag.LowerName)
+                || (tag.LowerName == "font" && tag.Attributes is { } a && (a.ContainsKey("color") || a.ContainsKey("face") || a.ContainsKey("size")));
+
+            if (breaksOut)
+            {
+                while (state.Stack.Count > 0 && state.Current.IsWithinForeignContent && !ForeignIntegrationNames.Contains(state.Current.HtmlTag!.Name))
+                    Pop(state);
+
+                if (!state.Current.IsWithinForeignContent) return true;
+            }
+            else if (SvgElementNames.TryGetValue(tag.LowerName, out var fixedName) && state.Stack.Any(b => b is CssBoxSvg))
+            {
+                tag = tag with { Name = fixedName };
+            }
+
+            InsertElement(state, tag);
+            return false;
+        }
+
+        #endregion
+
         #region Text
 
         private static void ProcessText(ParserState state, string text)
         {
+            if (state.IgnoreNextNewline)
+            {
+                state.IgnoreNextNewline = false;
+                if (text.StartsWith("\r\n", StringComparison.Ordinal)) text = text[2..];
+                else if (text.StartsWith('\n')) text = text[1..];
+                if (text.Length == 0) return;
+            }
+
             for (var i = 0; i < ReprocessLimit; i++)
             {
-                if (state.Current.IsWithinForeignContent)
+                if (state.Current.IsWithinForeignContent || (state.Stack.Count > 0 && IsAmong(state.Current, RawTextNames)))
                 {
                     InsertText(state, text);
                     return;
                 }
 
+                if (state.TemplateModes.Count == 0 && state.Phase != DocumentPhase.InBody)
+                {
+                    if (!PhaseText(state, ref text)) return;
+                    continue;
+                }
+
                 switch (ModeOf(state))
                 {
+                    case Mode.InTemplate:
+                        InsertBodyText(state, text);
+                        return;
                     case Mode.InTable or Mode.InTableBody or Mode.InRow:
                         if (IsAmong(state.Current, TableStructureNames) && IsHtmlWhitespace(text))
                         {
@@ -880,9 +1287,11 @@ namespace PeachBrackets.Html.Parse
 
         private static void ProcessEndTag(ParserState state, string name)
         {
-            if (state.Stack.Count == 0) return;
+            state.IgnoreNextNewline = false;
 
-            if (state.Current.IsWithinForeignContent)
+            if (state.Stack.Count == 0 && (state.TemplateModes.Count > 0 || state.Phase == DocumentPhase.InBody)) return;
+
+            if (state.Stack.Count > 0 && state.Current.IsWithinForeignContent)
             {
                 // https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inforeign: look for the element through the foreign ones.
                 for (var i = state.Stack.Count - 1; i >= 0 && state.Stack[i].IsWithinForeignContent; i--)
@@ -903,8 +1312,12 @@ namespace PeachBrackets.Html.Parse
 
         private static bool EndTagInCurrentMode(ParserState state, string name)
         {
+            if (state.TemplateModes.Count == 0 && state.Phase != DocumentPhase.InBody)
+                return PhaseEndTag(state, name);
+
             switch (ModeOf(state))
             {
+                case Mode.InTemplate: return TemplateEndTag(state, name);
                 case Mode.InTable: return TableEndTag(state, name);
                 case Mode.InTableBody: return TableBodyEndTag(state, name);
                 case Mode.InRow: return RowEndTag(state, name);
@@ -1104,6 +1517,19 @@ namespace PeachBrackets.Html.Parse
             {
                 CloseHeading(state);
             }
+            else if (name is "body" or "html" && state.IsDocument)
+            {
+                if (FindInScope(state, "body") is null) return;
+                state.Phase = name == "body" ? DocumentPhase.AfterBody : DocumentPhase.AfterAfterBody;
+            }
+            else if (name == "template")
+            {
+                var template = state.Stack.LastOrDefault(b => IsNamed(b, "template"));
+                if (template is null) return;
+
+                GenerateImpliedEndTags(state);
+                PopThrough(state, template);
+            }
             else if (name == "form")
             {
                 var form = state.FormPointer;
@@ -1137,6 +1563,31 @@ namespace PeachBrackets.Html.Parse
             {
                 CloseByAnyOtherEndTag(state, name);
             }
+        }
+
+        private static bool TemplateEndTag(ParserState state, string name)
+        {
+            var top = state.TemplateModes[^1];
+            if (top != Mode.InTemplate)
+                return EndTagInMode(state, top, name);
+
+            if (name == "template") BodyEndTag(state, name);
+            return false;
+        }
+
+        private static bool EndTagInMode(ParserState state, Mode mode, string name) => mode switch
+        {
+            Mode.InTable => TableEndTag(state, name),
+            Mode.InTableBody => TableBodyEndTag(state, name),
+            Mode.InRow => RowEndTag(state, name),
+            Mode.InColumnGroup => ColumnGroupEndTag(state, name),
+            _ => BodyEndTagFalse(state, name)
+        };
+
+        private static bool BodyEndTagFalse(ParserState state, string name)
+        {
+            BodyEndTag(state, name);
+            return false;
         }
 
         // An end tag for a heading closes the innermost open heading that is in scope, whichever level it is.
