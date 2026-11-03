@@ -40,6 +40,18 @@ namespace PeachBrackets.Engine.Tests.Integration
             return DataUri(ms.ToArray(), "image/png");
         }
 
+        /// <summary>A BMP that records <paramref name="dpi"/> in its header; decoded to pixels rather than passed through.</summary>
+        private static string Bmp(double dpi)
+        {
+            using var image = Raster();
+            using var ms = new MemoryStream();
+            image.Save(ms, "bmp");
+            var bmp = ms.ToArray();
+            BinaryPrimitives.WriteInt32LittleEndian(bmp.AsSpan(38), (int)Math.Round(dpi * PerInch));
+            BinaryPrimitives.WriteInt32LittleEndian(bmp.AsSpan(42), (int)Math.Round(dpi * PerInch));
+            return DataUri(bmp, "image/bmp");
+        }
+
         private static async Task<(double W, double H)> ImgSizeAsync(string src, string style = "", string wrapperStyle = "")
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
@@ -163,6 +175,14 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Equal(24, w, 0.2);
             Assert.Equal(48, h, 0.2);
+        }
+
+        [Fact]
+        public async Task Sizing_FromImageUsesADecodedFormatsDensity()
+        {
+            var (w, _) = await ImgSizeAsync(Bmp(300), "image-resolution: from-image");
+
+            Assert.Equal(24, w, 0.2);
         }
 
         [Fact]
