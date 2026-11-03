@@ -1135,6 +1135,7 @@ namespace PeachBrackets.Html.Dom
             var inheritedBackground = _computedStyle.Background;
             inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
             inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageOrientation, parentStyle.Background.ImageOrientation, static (a, v) => a with { ImageOrientation = v });
+            inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageResolution, parentStyle.Background.ImageResolution, static (a, v) => a with { ImageResolution = v });
             _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)

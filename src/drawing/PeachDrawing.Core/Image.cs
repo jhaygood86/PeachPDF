@@ -62,5 +62,14 @@ namespace PeachDrawing.Core
         /// carries none or is not a decoded raster.
         /// </summary>
         public virtual int ExifOrientation => 1;
+
+        /// <summary>
+        /// The horizontal pixel density the image's file records, in pixels per inch, or null when it records none, the format has
+        /// no field for it, or the image is not a decoded raster. Consumed by CSS <c>image-resolution: from-image</c>.
+        /// </summary>
+        public virtual double? ResolutionDpiX => null;
+
+        /// <summary>The vertical pixel density the image's file records, in pixels per inch; see <see cref="ResolutionDpiX"/>.</summary>
+        public virtual double? ResolutionDpiY => null;
     }
 }

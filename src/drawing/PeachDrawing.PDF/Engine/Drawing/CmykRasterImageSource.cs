@@ -34,6 +34,8 @@ internal sealed class CmykRasterImageSource : IImageSource, IRgbaPixelProvider
     public bool Transparent => false;
     public bool IsCmyk => true;
     public int ExifOrientation { get; set; } = 1;
+    public double? ResolutionDpiX { get; set; }
+    public double? ResolutionDpiY { get; set; }
     public bool IsGrayscale => false;
     public JpegPassthroughData? JpegPassthrough => _passthrough;
     public CmykRasterData? CmykRaster => _raster;

@@ -49,6 +49,8 @@ internal sealed class JxlPassthroughImageSource : IImageSource, IRgbaPixelProvid
     public bool IsGrayscale => _inner.IsGrayscale;
     public bool IsCmyk => _inner.IsCmyk;
     public int ExifOrientation => _inner.ExifOrientation;
+    public double? ResolutionDpiX => _inner.ResolutionDpiX;
+    public double? ResolutionDpiY => _inner.ResolutionDpiY;
     public JpegPassthroughData? JpegPassthrough => _inner.JpegPassthrough;
     public CmykRasterData? CmykRaster => _inner.CmykRaster;
     public PngPassthroughData? PngPassthrough => _inner.PngPassthrough;

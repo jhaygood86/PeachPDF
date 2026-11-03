@@ -1,0 +1,7 @@
+# `image-resolution`: density is read where the image is decoded, and applied where natural size is read
+
+Load-bearing idea: `Image` (PeachDrawing.Core) gained `ResolutionDpiX/Y`, filled by `PeachImageSource` from `ImageMetadata.HorizontalDpi/VerticalDpi` (PeachImage 0.7.2, pixels per metre normalised from JFIF/EXIF/TIFF/PNG/BMP/JP2), and every place that read an image's natural size goes through `ImageResolutionResolver.NaturalSize` (stored pixels / dppx per axis, then `image-orientation`'s swap). The border-image slice path keeps image pixels on purpose: `border-image-slice` numbers count image pixels.
+
+Traps found by running it: (1) PeachImage's per-format `PixelFormatConverter` builds a new image for `DecoderOptions.TargetPixelFormat`, which is exactly what PeachPDF forces (`Rgba32DecoderOptions`) for every non-pass-through raster, and it dropped the density (and the EXIF that WebP/AVIF/JXL carry it in) - fixed in PeachImage 0.7.3; until then only the JPEG native-format path and the PNG pass-through path report a density. (2) A PNG that is embedded by pass-through is never decoded to an `Image`, so `PeachImageSource.WithPngDensity` reads its `pHYs` itself. (3) Snap: below 1dppx the used value is 1 over a whole number of device pixels (72 dpi -> 1dppx), at or above 1 it is the nearest whole number (300 dpi -> 3dppx), matching the spec's two examples.
+
+`image-orientation` (the other half of the old orientation/resolution issue) was already implemented.

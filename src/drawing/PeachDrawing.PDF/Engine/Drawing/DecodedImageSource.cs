@@ -26,6 +26,8 @@ internal sealed class DecodedImageSource : IImageSource, IRgbaPixelProvider
     public bool Transparent { get; }
     public bool IsCmyk => false;
     public int ExifOrientation { get; set; } = 1;
+    public double? ResolutionDpiX => _rgba.Metadata.HorizontalDpi;
+    public double? ResolutionDpiY => _rgba.Metadata.VerticalDpi;
 
     // Only ever true for a JPEG source decoded via DecodeRgbOrGrayJpeg's native (not
     // Rgba32-forced) path - every other format still forces Rgba32 (see Rgba32DecoderOptions'

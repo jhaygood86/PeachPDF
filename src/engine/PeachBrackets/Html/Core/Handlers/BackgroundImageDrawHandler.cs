@@ -56,8 +56,12 @@ namespace PeachBrackets.Html.Handlers
             var orientedWidth = orientation.SwapsAxes ? image.Height : image.Width;
             var orientedHeight = orientation.SwapsAxes ? image.Width : image.Height;
 
-            var intrinsicWidth = orientedWidth > 0 ? orientedWidth * pxFactor : (double?)null;
-            var intrinsicHeight = orientedHeight > 0 ? orientedHeight * pxFactor : (double?)null;
+            // image-resolution sets how many of a natural bitmap's pixels make a CSS pixel; a generated tile is already in layout units.
+            var (naturalWidth, naturalHeight) = intrinsicSizeInCssPixels
+                ? ImageResolutionResolver.NaturalSize(box, image)
+                : (orientedWidth, orientedHeight);
+            var intrinsicWidth = orientedWidth > 0 ? naturalWidth * pxFactor : (double?)null;
+            var intrinsicHeight = orientedHeight > 0 ? naturalHeight * pxFactor : (double?)null;
             var intrinsicRatio = intrinsicWidth is not null && intrinsicHeight is not null
                 ? intrinsicWidth.Value / intrinsicHeight.Value
                 : (double?)null;

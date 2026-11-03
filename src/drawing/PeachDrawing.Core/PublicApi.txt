@@ -470,6 +470,8 @@ PeachDrawing.Core.Image : abstract class
   property Boolean Interpolate { get; set; }
   property Double Height { get; }
   property Double Width { get; }
+  property Double? ResolutionDpiX { get; }
+  property Double? ResolutionDpiY { get; }
   property Int32 ExifOrientation { get; }
 PeachDrawing.Core.ImageSampling : enum Int32
   Automatic = 0
