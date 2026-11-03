@@ -125,5 +125,35 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(WordOf(root, "aaa").Right, a.Location.X, 0.5);
             Assert.Equal(c.Location.Y + 30, a.Location.Y, 0.5);
         }
+
+        [Fact]
+        public async Task InADirectionRtlParent_TheRightMarginEdgeSitsAtTheParentsContentRightEdge()
+        {
+            var (c, p, a) = await Layout("<div id='c' dir='rtl'><div id='p'>para</div><div id='a' style='margin-right:7pt'>x</div></div>");
+
+            Assert.Equal(c.ClientRight, a.ActualRight + 7, 0.5);
+            Assert.Equal(p.ActualBottom, a.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task InADirectionRtlParent_AnOffsetOnTheAcrossAxisIsKept()
+        {
+            var (c, _, a) = await Layout("<div id='c' dir='rtl'><div id='p'>para</div><div id='a' style='left:30pt'>x</div></div>");
+
+            Assert.Equal(c.Location.X + 30, a.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task AmongInlineContentInADirectionRtlParent_TheRightEdgeSitsAtThePlaceOnTheLine()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{width:300pt;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style>"
+                + "<div id='c' dir='rtl'><span>aaa</span><span id='a'></span><span>bbb</span></div>"));
+            var a = LayoutHarness.FindById(root, "a")!;
+            var aaa = WordOf(root, "aaa");
+
+            // Latin words form a left-to-right run inside the rtl line; the place is after "aaa" and the box's right edge is there.
+            Assert.Equal(aaa.Right, a.ActualRight, 0.5);
+        }
     }
 }
