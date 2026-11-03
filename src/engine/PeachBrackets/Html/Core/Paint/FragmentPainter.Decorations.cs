@@ -322,9 +322,8 @@ namespace PeachBrackets.Html.Paint
         /// already resolves for paint (so the two can never disagree on where a character sits), while a
         /// rotated/sideways run's outline is built once for the whole word in its natural (pre-rotation)
         /// frame and then transformed by the same <see cref="SidewaysRotation"/> matrix
-        /// <see cref="DrawWordGlyphs"/> paints it through. <c>writing-mode: sideways-rl</c>/<c>sideways-lr</c>
-        /// - a different, out-of-scope writing-mode value entirely (<see cref="IsHorizontalWritingMode"/>'s
-        /// own remarks) - stays on the unsupported/fallback path exactly as before this issue.
+        /// <see cref="DrawWordGlyphs"/> paints it through. <c>sideways-rl</c>/<c>sideways-lr</c> take the same
+        /// path: every run in them is a rotated one.
         /// </remarks>
         private static GraphicsPath? BuildTextClipPath(Canvas g, BoxFragment fragment)
         {
@@ -437,7 +436,7 @@ namespace PeachBrackets.Html.Paint
                     return;
                 }
 
-                outline.Transform(SidewaysRotation(rect));
+                outline.Transform(SidewaysRotationFor(rect, styleSource));
                 AddOutline(outline);
             }
 
@@ -465,14 +464,6 @@ namespace PeachBrackets.Html.Paint
                 if (IsVerticalDecorationGeometry(f.Box))
                 {
                     CollectVerticalWords(f);
-                    return;
-                }
-
-                if (!IsHorizontalWritingMode(f.Box))
-                {
-                    // writing-mode: sideways-rl/-lr - a different, out-of-scope writing-mode value
-                    // (see this method's own remarks and IsHorizontalWritingMode).
-                    anyUnsupportedRun = true;
                     return;
                 }
 
@@ -1136,8 +1127,7 @@ namespace PeachBrackets.Html.Paint
             // CssLayoutEngine's vertical path records no per-line rectangle for an atomic inline at all,
             // so there is no layout fact to exclude around even if the band math were made axis-aware
             // (see .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
-            // This stays confined to a horizontal writing mode, unchanged since before #1075 (sideways-*
-            // included) - do not remove this guard as apparent dead code without first making both the
+            // This stays confined to a horizontal writing mode, unchanged since before #1075 - do not remove this guard as apparent dead code without first making both the
             // band math AND vertical layout's own line-box recording axis-aware.
             var horizontal = IsHorizontalWritingMode(box);
 
@@ -1564,26 +1554,19 @@ namespace PeachBrackets.Html.Paint
 
         /// <summary>
         /// Whether <paramref name="box"/>'s lines run left to right, which is what both decoration
-        /// subtractions assume. See <see cref="PaintDecoration"/> for why neither applies otherwise -
-        /// this is deliberately not the same test as <see cref="IsVerticalDecorationGeometry"/> (a
-        /// sideways-rl/-lr box answers false to both, since its own inline-axis band math is still
-        /// horizontal even though its glyphs are rotated).
+        /// subtractions assume. See <see cref="PaintDecoration"/> for why neither applies otherwise.
         /// </summary>
         private static bool IsHorizontalWritingMode(CssBox box) =>
             box.WritingMode.Value is WritingMode.HorizontalTb;
 
         /// <summary>
         /// Whether <paramref name="box"/>'s own line boxes are laid out along the physical Y axis
-        /// (<c>vertical-rl</c>/<c>vertical-lr</c>) rather than physical X - the geometry
-        /// <see cref="PaintDecoration"/>'s span/over/under math branches on (issue #1075). Deliberately
-        /// excludes <c>sideways-rl</c>/<c>sideways-lr</c>, matching
-        /// <see cref="Utils.WritingModeFrame.ForContentBox"/>'s own <c>IsVertical</c> check: a sideways
-        /// box's own line boxes are still laid out horizontally (rectangle.Width is the line's inline
-        /// extent, not a column's thickness) - only the glyphs painted on them are rotated 90° (see
-        /// <see cref="SidewaysRotation"/>) - so its decoration geometry is horizontal too.
+        /// (any vertical <c>writing-mode</c>, <c>sideways-rl</c>/<c>sideways-lr</c> included) rather than physical X - the
+        /// geometry <see cref="PaintDecoration"/>'s span/over/under math branches on (issue #1075), matching
+        /// <see cref="Utils.WritingModeFrame.ForContentBox"/>'s own <c>IsVertical</c> check.
         /// </summary>
         private static bool IsVerticalDecorationGeometry(CssBox box) =>
-            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            box.WritingMode.Value.IsVertical();
 
         /// <summary>
         /// Appends the ink crossings of <paramref name="words"/> against a decoration line whose
@@ -1666,7 +1649,10 @@ namespace PeachBrackets.Html.Paint
                     // the natural Y that corresponds to this decoration's physical cross position is
                     // rect.Right - cross, and the band around it inverts the same way a physical band
                     // would (± half the line's own thickness).
-                    var naturalCenter = rect.Right - cross;
+                    // sideways-lr turns the run the other way (see SidewaysRotationFor): natural (x, y) lands at
+                    // (rect.X + y, rect.Bottom - x), so the natural Y is cross - rect.X and a crossing runs up from the bottom edge.
+                    var counterClockwise = placed.Owner.WritingMode.Value == WritingMode.SidewaysLr;
+                    var naturalCenter = counterClockwise ? cross - rect.X : rect.Right - cross;
 
                     var crossings = g.GetInkCrossings(text, font, naturalOrigin,
                         naturalCenter - half, naturalCenter + half, wordStyle.ActualLetterSpacing, features);
@@ -1675,8 +1661,8 @@ namespace PeachBrackets.Html.Paint
 
                     foreach (var crossing in crossings)
                     {
-                        var physicalStart = rect.Y + crossing.Start;
-                        var physicalEnd = rect.Y + crossing.End;
+                        var physicalStart = counterClockwise ? rect.Bottom - crossing.End : rect.Y + crossing.Start;
+                        var physicalEnd = counterClockwise ? rect.Bottom - crossing.Start : rect.Y + crossing.End;
                         into.Add(new DecorationInterval(physicalStart, physicalEnd).Dilated(clearance));
                     }
 

@@ -46,7 +46,7 @@ namespace PeachBrackets.Html.Fragmentation
             CssValueParser.IsValidLength(box.MaxHeight)
             && MonolithicContent.IsScrollContainer(box)
             && !MonolithicContent.IsMonolithic(box)
-            && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+            && !box.WritingMode.Value.IsVertical()
             && CssLayoutEngine.ResolveMaxHeight(box) is not null;
 
         /// <summary>

@@ -125,7 +125,7 @@ namespace PeachBrackets.Html.Paint
                     logicalText = Bidi.Reverse(rectWord.PreMirrorText);
                 var separatorEdge = PrecedingWordEdge(g, word, wordFragment.Rect);
                 if ((container.SelectionModel is not null || container.HighlightLayers.Count > 0)
-                    && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+                    && !box.WritingMode.Value.IsVertical()
                     && HighlightLayersOf(word) is { } highlightLayers)
                 {
                     PaintHighlightedWord(g, box, word, wordFragment.Rect, text, logicalText, separatorEdge, highlightLayers);
@@ -316,7 +316,7 @@ namespace PeachBrackets.Html.Paint
             // box-level shaping-feature request - see ResolveWordShapingFeatures.
             var wordFeatures = styleSource.ResolveWordShapingFeatures(word);
 
-            if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
+            if (box.WritingMode.Value.IsVertical())
             {
                 var isUpright = IsUprightWordOrientation(box, word);
 
@@ -333,7 +333,7 @@ namespace PeachBrackets.Html.Paint
                     // width/height for a vertical box - so the glyph run's own natural (pre-rotation)
                     // size is that swap undone.
                     var naturalSize = new Size(rect.Height, rect.Width);
-                    var rotation = SidewaysRotation(rect);
+                    var rotation = SidewaysRotationFor(rect, box);
                     g.PushTransform(rotation);
                     if (precededBySeparator)
                         PaintWordSeparator(g, styleSource, word, new Rect(0, 0, naturalSize.Width, naturalSize.Height), baselineShift, SeparatorPlacement.Inline, null);
@@ -466,7 +466,7 @@ namespace PeachBrackets.Html.Paint
         /// about which run is upright.
         /// </summary>
         private static bool IsUprightWordOrientation(CssBox box, CssRect word) =>
-            box.TextOrientation.Value switch
+            box.EffectiveTextOrientation switch
             {
                 TextOrientation.Upright => true,
                 TextOrientation.Sideways => false,
@@ -658,6 +658,17 @@ namespace PeachBrackets.Html.Paint
         /// </remarks>
         private static Matrix3x2 SidewaysRotation(Rect physicalFootprint) =>
             new(0, 1, -1, 0, (float)(physicalFootprint.X + physicalFootprint.Width), (float)physicalFootprint.Y);
+
+        /// <summary>
+        /// <see cref="SidewaysRotation"/> for the glyphs of <paramref name="box"/>: 90° clockwise, except under
+        /// <c>writing-mode: sideways-lr</c> (CSS Writing Modes 4 section 5.1), where the glyphs are turned 90° counter-clockwise so the
+        /// text reads bottom to top with the tops of the letters to the left. Natural (x, y) then lands at
+        /// (<c>rect.X + y</c>, <c>rect.Bottom - x</c>).
+        /// </summary>
+        private static Matrix3x2 SidewaysRotationFor(Rect physicalFootprint, CssBox box) =>
+            box.WritingMode.Value == WritingMode.SidewaysLr
+                ? new Matrix3x2(0, -1, 1, 0, (float)physicalFootprint.X, (float)(physicalFootprint.Y + physicalFootprint.Height))
+                : SidewaysRotation(physicalFootprint);
 
         /// <summary>
         /// Paints a <c>leader()</c> content-list item (css-content-3 §6) - the "Chapter One ..........

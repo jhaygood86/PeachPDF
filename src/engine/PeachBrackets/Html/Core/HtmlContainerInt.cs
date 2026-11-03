@@ -1795,7 +1795,7 @@ namespace PeachBrackets.Html
                     // inline-size/block-size (CSS Writing Modes 4 §7.1) rotate onto the orthogonal
                     // physical axis under a vertical-rl/vertical-lr container - width/height/aspect-ratio/
                     // orientation stay physical regardless (CSS Containment 3 §7.3).
-                    var isVertical = box.WritingMode.Value is Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr;
+                    var isVertical = box.WritingMode.Value.IsVertical();
 
                     byId[box.Id] = new ContainerQueryContext(
                         WidthPt: widthPt,
