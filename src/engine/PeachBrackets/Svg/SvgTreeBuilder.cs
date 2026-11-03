@@ -84,10 +84,14 @@ namespace PeachBrackets.Svg
         private bool _contextOnly;
 
         /// <summary>
-        /// The root element's used <c>font-size</c> (the value <c>rem</c> font-sizes resolve against),
-        /// captured once in <see cref="BuildDocument"/>. Defaults to the UA initial font size until then.
+        /// The <c>rem</c> basis of this document, captured once in <see cref="BuildDocument"/>: the embedding document's root size for an inline svg
+        /// (<see cref="_htmlRootFontSize"/>), else the root <c>&lt;svg&gt;</c>'s used <c>font-size</c>. Defaults to the UA initial font size until then.
         /// </summary>
         private double _rootFontSize = Html.Utils.DefaultFontResolver.FontSize;
+
+        /// <summary>The embedding document's root font size in user units, when the SVG is inline in one: what <c>rem</c> is wherever it is
+        /// written. Null for a standalone SVG, whose own root is the basis.</summary>
+        private double? _htmlRootFontSize;
 
         /// <summary>The root element's resolved font context, and the length basis built on it (what the
         /// root-element units <c>rem</c>/<c>rex</c>/<c>rch</c>/... resolve against). Null until
@@ -210,8 +214,8 @@ namespace PeachBrackets.Svg
         /// context, never realize a font. Relative <c>font-size</c> (<c>em</c>/<c>ex</c>/<c>%</c>) resolves
         /// against <see cref="Size"/> (the parent's used size); <c>rem</c> against the root's (see
         /// <see cref="_rootFontSize"/>). <c>SizeDeclared</c> records whether any element on the way down
-        /// actually declared a <c>font-size</c>: text always has a size (the UA default), but a geometry
-        /// <c>em</c> in an SVG that never mentions one keeps meaning the CSS initial 16px.
+        /// actually declared a <c>font-size</c> (an inline svg's seed counts as declared: it is the size it inherits): text always has a size (the UA default), but a geometry
+        /// <c>em</c> in a standalone SVG that never mentions one keeps meaning the CSS initial 16px.
         /// </summary>
         private readonly record struct FontContext(
             string Family, double Size, bool Bold, bool Italic, double Stretch,
@@ -497,13 +501,21 @@ namespace PeachBrackets.Svg
             CollectColorProfiles(root);
             CollectDefinitions(root);
 
-            // The root <svg>'s own font-* seeds inheritance for the whole tree, and its font-size is the
-            // basis for rem. (When the root sets no font-size, this stays the UA default.) Language
-            // inheritance seeds from the embedding context's own fallback (an inline <svg>'s surrounding
-            // HTML document's resolved lang, if any) - root's own lang/xml:lang, resolved right below,
-            // still wins over this when present.
-            var rootFont = ComputeFontContext(root, FontContext.Default with { Language = root.DocumentLanguageFallback });
-            _rootFontSize = rootFont.Size;
+            // The root <svg>'s own font-* seeds inheritance for the whole tree. Language inheritance seeds from
+            // the embedding context's own fallback (an inline <svg>'s surrounding HTML document's resolved lang,
+            // if any) - root's own lang/xml:lang, resolved right below, still wins over this when present.
+            // An inline <svg> inherits the font size of its HTML parent (so a size it never declares is that one),
+            // and its rem is the HTML root's. For a standalone SVG neither exists: the root's own font-size is
+            // the basis for rem, and the UA default stands when it sets none.
+            var seed = FontContext.Default with { Language = root.DocumentLanguageFallback };
+            if (root.InheritedFontSizePx is { } inheritedSize)
+                seed = seed with { Size = inheritedSize, SizeDeclared = true };
+            _htmlRootFontSize = root.RootFontSizePx;
+            // Before the root's font is computed, not only after: the root's own font-size may be written in rem (svg { font-size: 2rem }).
+            _rootFontSize = _htmlRootFontSize ?? Html.Utils.DefaultFontResolver.FontSize;
+
+            var rootFont = ComputeFontContext(root, seed);
+            _rootFontSize = _htmlRootFontSize ?? rootFont.Size;
             _rootFont = rootFont;
             _rootBasis = new LengthBasis(this, rootFont);
 
@@ -1770,7 +1782,7 @@ namespace PeachBrackets.Svg
                 name,
                 () => UnderlyingValue(node, name, declared, inherited, ParentValue),
                 ParentValue,
-                () => AnimatedInitialValue(name),
+                () => InitialKeywordValue(name),
                 inherited);
 
             return animated is not null && !IsImportantDeclaration(node, name) ? animated : declared;
@@ -1812,7 +1824,7 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static string? UnderlyingValue(ISvgSourceNode node, string name, string? declared, bool inherited, Func<string?> parentValue)
         {
-            string? InheritedOrInitial() => inherited && node.Parent is not null ? parentValue() : AnimatedInitialValue(name);
+            string? InheritedOrInitial() => inherited && node.Parent is not null ? parentValue() : AnimatedInitialValue(node, name);
 
             if (declared is null) return InheritedOrInitial();
 
@@ -1821,8 +1833,8 @@ namespace PeachBrackets.Svg
             {
                 return keyword switch
                 {
-                    CssGlobalKeyword.Inherit => node.Parent is not null ? parentValue() : AnimatedInitialValue(name),
-                    CssGlobalKeyword.Initial => AnimatedInitialValue(name),
+                    CssGlobalKeyword.Inherit => node.Parent is not null ? parentValue() : AnimatedInitialValue(node, name),
+                    CssGlobalKeyword.Initial => InitialKeywordValue(name),
                     _ => InheritedOrInitial(),
                 };
             }
@@ -1898,7 +1910,7 @@ namespace PeachBrackets.Svg
                 || trimmed.EndsWith('%'))
                 return value;
 
-            return SvgValueParsers.ParseLength(trimmed, null, new EmBasis(FontSizeAt(declaring), FontSizeAt(RootOf(declaring)))) is { } px
+            return SvgValueParsers.ParseLength(trimmed, null, new EmBasis(FontSizeAt(declaring), RemSize(declaring))) is { } px
                 ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
                 : value;
         }
@@ -1913,11 +1925,18 @@ namespace PeachBrackets.Svg
             var trimmed = value.Trim();
             if (trimmed.Length == 0 || CssGlobalKeywords.TryParse(trimmed, out _)) return value;
 
-            var parentSize = declaring.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+            var parentSize = declaring.Parent is { } parent ? FontSizeAt(parent) : declaring.InheritedFontSizePx ?? SvgValueParsers.DefaultEmPx;
 
-            return SvgValueParsers.ParseLength(trimmed, parentSize, new EmBasis(parentSize, FontSizeAt(RootOf(declaring)))) is { } px
+            return SvgValueParsers.ParseLength(trimmed, parentSize, new EmBasis(parentSize, RemSize(declaring))) is { } px
                 ? string.Create(CultureInfo.InvariantCulture, $"{px:R}px")
                 : value;
+        }
+
+        /// <summary>What <c>rem</c> is for a length found while walking the tree: the embedding document's root size for an inline svg, else the size of the svg's own root.</summary>
+        private static double RemSize(ISvgSourceNode node)
+        {
+            var root = RootOf(node);
+            return root.RootFontSizePx ?? FontSizeAt(root);
         }
 
         private static ISvgSourceNode RootOf(ISvgSourceNode node)
@@ -1926,7 +1945,7 @@ namespace PeachBrackets.Svg
             return node;
         }
 
-        /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; 16px with none declared.</summary>
+        /// <summary>The used <c>font-size</c> of <paramref name="node"/> in user units: its own declaration against its parent's size, else its parent's; the size an inline svg inherits from its HTML parent (16px for a standalone one) with none declared.</summary>
         private static double FontSizeAt(ISvgSourceNode node)
         {
             if (_lookupCache is { } cache && node.IdentityKey is { } key)
@@ -1946,9 +1965,9 @@ namespace PeachBrackets.Svg
 
         private static double FontSizeAtCore(ISvgSourceNode node)
         {
-            var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : SvgValueParsers.DefaultEmPx;
+            var parentSize = node.Parent is { } parent ? FontSizeAt(parent) : node.InheritedFontSizePx ?? SvgValueParsers.DefaultEmPx;
             return ResolveStyledAttr(node, "font-size") is { } text
-                   && SvgValueParsers.ParseLength(text, parentSize, new EmBasis(parentSize, parentSize)) is { } size
+                   && SvgValueParsers.ParseLength(text, parentSize, new EmBasis(parentSize, RootOf(node).RootFontSizePx ?? parentSize)) is { } size
                 ? size
                 : parentSize;
         }
@@ -1964,7 +1983,7 @@ namespace PeachBrackets.Svg
         }
 
         private static string? InheritedOrInitialValue(ISvgSourceNode node, string name) =>
-            IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(name);
+            IsInheritedProperty(name) && node.Parent is { } parent ? ResolveEffectiveValue(parent, name) : AnimatedInitialValue(node, name);
 
         /// <summary>
         /// The value an element declares for <paramref name="name"/>, with <c>initial</c> replaced by the property's initial value rather than left to be read as an
@@ -1976,10 +1995,14 @@ namespace PeachBrackets.Svg
             return text is not null && text.Trim().Equals("initial", StringComparison.OrdinalIgnoreCase) ? SvgPropertyRegistry.GetInitialValue(name) : text;
         }
 
-        // What an animation starts from when a keyframe leaves the property out: the registry's initial value, except font-size, which is the resting text size, because a
-        // declared initial does not read it (font-size initial is the CSS medium, 16px).
-        private static string? AnimatedInitialValue(string name) =>
-            name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{FontContext.Default.Size}px")
+        // What the initial keyword stands for: the property's initial value, which for font-size is the CSS medium (16px), not the size an element inherits.
+        private static string? InitialKeywordValue(string name) =>
+            name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{SvgValueParsers.DefaultEmPx}px") : SvgPropertyRegistry.GetInitialValue(name);
+
+        // What an animation starts from when nothing above the element gives the property a value: the registry's initial value, except font-size, which is the size the svg
+        // inherits from its HTML parent (the resting text size for a standalone one) - font-size is inherited, and the initial keyword is InitialKeywordValue's.
+        private static string? AnimatedInitialValue(ISvgSourceNode node, string name) =>
+            name.Equals("font-size", StringComparison.OrdinalIgnoreCase) ? string.Create(CultureInfo.InvariantCulture, $"{RootOf(node).InheritedFontSizePx ?? FontContext.Default.Size}px")
             : SvgPropertyRegistry.GetInitialValue(name);
 
         // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).
@@ -2473,7 +2496,7 @@ namespace PeachBrackets.Svg
 
             public double EmPx => Font.SizeDeclared ? Font.Size : SvgValueParsers.DefaultEmPx;
 
-            public double RootEmPx => _builder._rootFont is { SizeDeclared: true } root ? root.Size : SvgValueParsers.DefaultEmPx;
+            public double RootEmPx => _builder._htmlRootFontSize ?? (_builder._rootFont is { SizeDeclared: true } root ? root.Size : SvgValueParsers.DefaultEmPx);
 
             public double GetRatio(FontMetric metric, bool rootElement)
             {
