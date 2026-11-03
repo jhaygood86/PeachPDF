@@ -40,16 +40,18 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task AColumnFlexItemLaysOutTheSameAsWithAnExplicitZeroMinimum()
+        public async Task AColumnFlexItemKeepsItsContentHeightUnlessTheMinimumIsExplicitlyZero()
         {
-            // Behaviour pin: the initial value change must not move a flex item, whichever way it resolves.
+            // `auto` is the automatic minimum size (css-flexbox-1 section 4.5): an item of an overflowing column keeps its content
+            // height. An authored `0` is not `auto`, and shrinks.
             var (root, _) = await LayoutAsync(Wrap(
                 "<div style='display:flex;flex-direction:column;height:10pt;font-size:10pt'>" +
                 "<div id='auto'>one<br>two<br>three</div></div>" +
                 "<div style='display:flex;flex-direction:column;height:10pt;font-size:10pt'>" +
                 "<div id='zero' style='min-height:0'>one<br>two<br>three</div></div>"));
 
-            Assert.Equal(HeightOf(FindById(root, "zero")!), HeightOf(FindById(root, "auto")!), 2);
+            Assert.True(HeightOf(FindById(root, "auto")!) > HeightOf(FindById(root, "zero")!) + 5);
+            Assert.True(HeightOf(FindById(root, "zero")!) <= 10.5);
         }
     }
 }

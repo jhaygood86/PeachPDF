@@ -6932,6 +6932,36 @@ var flexColumnBreakPointsHtml = $$"""
     </body></html>
     """;
 
+var automaticMinimumHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 8mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h2 { font-size: 9.5pt; margin: 0.8em 0 0.3em }
+    p.note { color: #6b7280; font-size: 7.5pt; margin: 0 0 0.4em }
+    .col { display: flex; flex-direction: column; height: 22mm; width: 40mm; border: 0.75pt solid #64748b; float: left; margin-right: 4mm }
+    .col > div { background: #eef2ff; border: 0.5pt solid #94a3b8; line-height: 11pt }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; width: 70mm; border: 0.75pt solid #64748b; clear: both }
+    .grid > div { background: #fdf3e3; border: 0.5pt solid #d68910; font-size: 14pt }
+    </style></head><body>
+    <h2>Column flex items keep their content height</h2>
+    <p class="note">Three three-line items in a 22mm column. Left: min-height: auto (the default) - the items stay as tall as their text and the column overflows. Right: min-height: 0 - they shrink and their text spills out.</p>
+    <div class="col"><div>one<br>two<br>three</div><div>one<br>two<br>three</div><div>one<br>two<br>three</div></div>
+    <div class="col"><div style="min-height:0">one<br>two<br>three</div><div style="min-height:0">one<br>two<br>three</div><div style="min-height:0">one<br>two<br>three</div></div>
+    <div style="clear:both;height:30mm"></div>
+    <h2>Grid items keep their content width</h2>
+    <p class="note">1fr 1fr in 70mm. The first item's unbreakable word is wider than half the grid, so its track grows to fit it.</p>
+    <div class="grid"><div>Unbreakableword</div><div>x</div></div>
+    <p class="note">minmax(0, 1fr) minmax(0, 1fr) lets the tracks shrink, and the word overflows.</p>
+    <div class="grid" style="grid-template-columns: minmax(0,1fr) minmax(0,1fr)"><div>Unbreakableword</div><div>x</div></div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("automatic_minimum_size", "Layout", "Automatic Minimum Size of Flex and Grid Items",
+    "min-height: auto on a column flex item and min-width: auto on a grid item in a 1fr track stop the item shrinking "
+    + "below its content (css-flexbox-1 section 4.5, css-grid-1 section 6.6); min-height: 0 and minmax(0, 1fr) opt out.",
+    automaticMinimumHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
+
 await SaveShowcaseAsync("flex_column_break_points", "Layout", "Break Points Between Column Flex Items",
     "A break-before/break-after/break-inside:avoid value between two items of the same "
     + "flex-direction:column line is now honored, moving just that item (and whatever follows it in the "
