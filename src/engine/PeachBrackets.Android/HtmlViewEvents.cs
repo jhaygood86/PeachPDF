@@ -3,6 +3,15 @@ using PeachBrackets;
 namespace PeachBrackets.Android;
 
 /// <summary>Raised when a link in an <see cref="HtmlView"/> is tapped or clicked.</summary>
+public sealed class HtmlFormSubmittingEventArgs : EventArgs
+{
+    internal HtmlFormSubmittingEventArgs(PeachBrackets.Updates.FormSubmission submission) => Submission = submission;
+
+    /// <summary>The form as it is submitted: where to, how, and what each control holds. The view does not send it; <see cref="PeachBrackets.Updates.FormSubmission.Serialize"/> makes the body.</summary>
+    public PeachBrackets.Updates.FormSubmission Submission { get; }
+}
+
+/// <summary>What a tap on a link is about to do.</summary>
 public sealed class HtmlLinkTappedEventArgs : EventArgs
 {
     internal HtmlLinkTappedEventArgs(string? uri, string? destination)

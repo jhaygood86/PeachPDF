@@ -223,6 +223,12 @@ public sealed class AccessibilityNode
     /// <summary>Whether its text is set in an italic or oblique face.</summary>
     public bool IsItalic { get; internal set; }
 
+    /// <summary>Whether its text is underlined, by its own <c>text-decoration</c> or that of an element around it.</summary>
+    public bool Underline { get; internal set; }
+
+    /// <summary>Whether its text is struck through, by its own <c>text-decoration</c> or that of an element around it.</summary>
+    public bool Strikethrough { get; internal set; }
+
     /// <summary>The colour of its text as 0xAARRGGBB; null when it has no text.</summary>
     public int? ForegroundColor { get; internal set; }
 

@@ -122,7 +122,7 @@ public sealed partial class HtmlView
             if (wasSelecting)
                 _document!.Selection.RemoveAllRanges();
 
-            if (!wasField && !FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y) && !OpenPickerAt(page, x, y, position))
+            if (!wasField && !FocusTextFieldAt(page, x, y) && !ActivateControlAt(page, x, y) && !OpenPickerAt(page, x, y, position) && !SubmitFormAt(page, x, y))
                 FollowLinkAt(page, x, y);
         }
     }

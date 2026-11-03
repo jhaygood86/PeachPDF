@@ -109,6 +109,9 @@ internal sealed class HtmlTextModel
     public const int BackgroundColorAttribute = 40001, FontNameAttribute = 40005, FontSizeAttribute = 40006, FontWeightAttribute = 40007,
         ForegroundColorAttribute = 40008, IsItalicAttribute = 40014;
 
+    /// <summary>UI Automation's ids of the StrikethroughStyle and UnderlineStyle text attributes; their value is 0 for none and 1 for a single line.</summary>
+    public const int StrikethroughStyleAttribute = 40018, UnderlineStyleAttribute = 40019;
+
     /// <summary>A colour as 0xAARRGGBB, as the colour reference (0x00BBGGRR) UI Automation takes.</summary>
     public static int ColorReference(int argb) => ((argb & 0xFF) << 16) | (argb & 0xFF00) | ((argb >> 16) & 0xFF);
 
@@ -128,6 +131,10 @@ internal sealed class HtmlTextModel
                 return node.FontWeight > 0 ? node.FontWeight : null;
             case IsItalicAttribute:
                 return node.FontSize > 0 ? node.IsItalic : null;
+            case UnderlineStyleAttribute:
+                return node.FontSize > 0 ? (node.Underline ? 1 : 0) : null;
+            case StrikethroughStyleAttribute:
+                return node.FontSize > 0 ? (node.Strikethrough ? 1 : 0) : null;
             case ForegroundColorAttribute:
                 return node.ForegroundColor is { } foreground ? ColorReference(foreground) : null;
             case BackgroundColorAttribute:

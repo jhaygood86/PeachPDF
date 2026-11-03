@@ -724,8 +724,6 @@ public class HtmlViewTests
             {
                 var b = B(id);
                 opened.Add(view.OpenPickerAt(0, b.X + 2, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y)));
-                view.CloseFlyouts();
-                await Task.Delay(400);
             }
 
             view.CloseFlyouts();
@@ -772,7 +770,7 @@ public class HtmlViewTests
             var cultureOfHeading = heading.GetAttributeValue(40004);
             var readOnlyOfPlain = plain.GetAttributeValue(40015);
             var readOnlyOfField = word.GetAttributeValue(40015);
-            var unsupported = heading.GetAttributeValue(40019);
+            var unsupported = heading.GetAttributeValue(40000);
             var foundHeading = all.FindAttribute(40034, 70002, false);
             var foundBack = all.FindAttribute(40015, false, true);
             var notFound = all.FindAttribute(40034, 70005, false);
@@ -842,7 +840,7 @@ public class HtmlViewTests
             view.FilePicker = info =>
             {
                 asked.Add(info);
-                return Task.FromResult(new[] { "a.txt", "b.txt" });
+                return Task.FromResult(new[] { new PeachBrackets.Updates.ChosenFile("a.txt", "text/plain", [1, 2]), new PeachBrackets.Updates.ChosenFile("b.txt", string.Empty, [3]) });
             };
             var b = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
             var opened = view.OpenPickerAt(0, b.X + 5, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y));
@@ -913,14 +911,77 @@ public class HtmlViewTests
             // A range that runs across blocks is not one the pattern can select, and selecting it does nothing.
             all.Select();
             view.Document.Selection.SelectAll();
-            var multiBlock = text.GetSelection().Length;
-            return (none, selectedInDocument, reportedText, reportedStart, multiBlock);
+            var multi = text.GetSelection();
+            var multiText = multi.Length == 1 ? multi[0].GetText(-1) : string.Empty;
+            var multiBlock = multi.Length;
+
+            // Select a range across two blocks through the pattern.
+            var across = all.Clone();
+            across.MoveEndpointByRange(TextPatternRangeEndpoint.Start, all.FindText("two", false, false), TextPatternRangeEndpoint.Start);
+            across.MoveEndpointByRange(TextPatternRangeEndpoint.End, all.FindText("other", false, false), TextPatternRangeEndpoint.End);
+            across.Select();
+            await Task.Delay(300);
+            var acrossSelected = view.Document.Selection.GetText();
+            return (none, selectedInDocument, reportedText, reportedStart, multiBlock, multiText, acrossSelected);
         });
 
         Assert.Equal(0, facts.none);
         Assert.Equal("dup", facts.selectedInDocument);
         Assert.Equal("dup", facts.reportedText);
         Assert.Equal(0, facts.reportedStart);
-        Assert.Equal(0, facts.multiBlock);
+        Assert.Equal(1, facts.multiBlock);
+        Assert.Contains("other", facts.multiText);
+        Assert.Contains((char)10, facts.multiText);
+        Assert.StartsWith("two", facts.acrossSelected);
+        Assert.EndsWith("other", facts.acrossSelected);
+    }
+
+    [Fact]
+    public async Task TheTextPatternReportsUnderlineAndStrikethrough()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<p style=\"text-decoration:underline line-through\">marked</p><p>plain</p>");
+            var all = ((ITextProvider)DocumentPeer(view)!.GetPattern(PatternInterface.Text)).DocumentRange;
+            var marked = all.FindText("marked", false, false);
+            var plain = all.FindText("plain", false, false);
+            return (marked.GetAttributeValue(40019), marked.GetAttributeValue(40018), plain.GetAttributeValue(40019), plain.GetAttributeValue(40018));
+        });
+
+        Assert.Equal(new object[] { 1, 1, 0, 0 }, new[] { facts.Item1, facts.Item2, facts.Item3, facts.Item4 });
+    }
+
+    [Fact]
+    public async Task ASubmitButtonRaisesFormSubmittingWithTheFormsEntriesAndFileContents()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<form method=post enctype=\"multipart/form-data\" action=\"/up\"><input name=title value=hello style=\"display:block\">"
+                + "<input id=f type=file name=doc style=\"width:300px;display:block\"><button id=go name=go value=1>Send</button></form>");
+            var submissions = new List<PeachBrackets.Updates.FormSubmission>();
+            view.FormSubmitting += (_, e) => submissions.Add(e.Submission);
+            view.FilePicker = _ => Task.FromResult(new[] { new PeachBrackets.Updates.ChosenFile("note.txt", "text/plain", [9, 8, 7]) });
+            var b = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+            view.OpenPickerAt(0, b.X + 5, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y));
+            await Task.Delay(300);
+
+            var viaCode = view.SubmitForm(view.Document!.GetElement("go")!);
+            var notAButton = view.SubmitForm(view.Document.GetElement("f")!);
+
+            var button = DocumentPeer(view)!.GetChildren().First(c => c.GetAutomationControlType() == AutomationControlType.Button && c.GetName() == "Send");
+            ((IInvokeProvider)button.GetPattern(PatternInterface.Invoke)).Invoke();
+            await Task.Delay(300);
+
+            var go = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "go").Bounds[0].Bounds;
+            var viaPoint = view.SubmitFormAt(0, go.X + 3, go.Y + 3);
+            return (viaCode, notAButton, submissions.Count, viaPoint, submissions[0].Entries.Select(e => (e.Name, e.Value, e.File?.Name, e.File?.Content.Length)).ToList(), submissions[0].Method);
+        });
+
+        Assert.True(facts.viaCode);
+        Assert.False(facts.notAButton);
+        Assert.True(facts.viaPoint);
+        Assert.Equal(3, facts.Count);
+        Assert.Equal("post", facts.Method);
+        Assert.Equal(new (string, string?, string?, int?)[] { ("title", "hello", null, null), ("doc", null, "note.txt", 3), ("go", "1", null, null) }, facts.Item5);
     }
 }

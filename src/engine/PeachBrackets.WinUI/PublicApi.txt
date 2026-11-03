@@ -1,3 +1,5 @@
+PeachBrackets.WinUI.HtmlFormSubmittingEventArgs : sealed class
+  property FormSubmission Submission { get; }
 PeachBrackets.WinUI.HtmlLinkClickedEventArgs : sealed class
   property Boolean Cancel { get; set; }
   property String Destination { get; }

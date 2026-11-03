@@ -108,4 +108,24 @@ public class RangeAndSelectTests
         Assert.False(document.SetFileNames(document.GetElement("off")!, ["x"]).Applied);
         Assert.False(document.SetFileNames(document.GetElement("t")!, ["x"]).Applied);
     }
+
+    [Fact]
+    public async Task ListItemsDescriptionsAndTableSectionsEndWhenTheNextOneStarts()
+    {
+        var document = await LoadAsync(
+            "<ul id=l><li>a<li>b<ul><li>b1<li>b2</ul><li><p>c<li>d</ul>"
+            + "<dl id=d><dt>t1<dd>d1<dt>t2<dd><p>d2<dt>t3<dd>d3</dl>"
+            + "<table id=t><thead><tr><th>h1<th>h2<tbody><tr><td>1<td>2<tr><td>3<td>4<tfoot><tr><td>f1<td>f2</table>");
+        var tree = document.GetAccessibilityTree();
+
+        var list = tree.Nodes.First(n => n.ElementId == "l");
+        Assert.Equal(4, list.Children.Count(c => c.Role == PeachBrackets.Accessibility.AccessibilityRole.ListItem));
+        Assert.Equal("a", list.Children.First(c => c.Role == PeachBrackets.Accessibility.AccessibilityRole.ListItem).ReadingText.Trim());
+
+        Assert.Equal(3, tree.Nodes.Count(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Term));
+        Assert.Equal(3, tree.Nodes.Count(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Definition));
+
+        var table = tree.Nodes.First(n => n.ElementId == "t");
+        Assert.Equal((4, 2), (table.RowCount, table.ColumnCount));
+    }
 }

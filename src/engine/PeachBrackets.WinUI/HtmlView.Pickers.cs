@@ -65,15 +65,15 @@ public sealed partial class HtmlView
     }
 
     /// <summary>Replaces the system's file picker, which a file input opens; given what the input asks for, it returns the names of the chosen files. For tests.</summary>
-    internal Func<FileInputInfo, Task<string[]>>? FilePicker { get; set; }
+    internal Func<FileInputInfo, Task<ChosenFile[]>>? FilePicker { get; set; }
 
     private async Task PickFilesAsync(PeachBrackets.HtmlDocument document, DocumentElement element)
     {
         var info = document.GetFileInputInfo(element) ?? new FileInputInfo(false, string.Empty);
-        string[] names;
+        ChosenFile[] files;
         try
         {
-            names = FilePicker is { } picker ? await picker(info) : await ShowFilePickerAsync(info);
+            files = FilePicker is { } picker ? await picker(info) : await ShowFilePickerAsync(info);
         }
         catch (Exception)
         {
@@ -81,14 +81,14 @@ public sealed partial class HtmlView
             return;
         }
 
-        if (ReferenceEquals(document, _document) && names.Length > 0)
-            AfterControlChange(document, document.SetFileNames(element, names));
+        if (ReferenceEquals(document, _document) && files.Length > 0)
+            AfterControlChange(document, document.SetFiles(element, files));
     }
 
     // The system's file picker, which needs the window the view is in; it opens a modal dialog, so a test cannot drive it (the window tests replace it with
     // FilePicker).
     [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(Justification = "Opens the system's modal file picker.")]
-    private async Task<string[]> ShowFilePickerAsync(FileInputInfo info)
+    private async Task<ChosenFile[]> ShowFilePickerAsync(FileInputInfo info)
     {
         if (XamlRoot?.ContentIslandEnvironment?.AppWindowId is not { } windowId)
             return [];
@@ -98,30 +98,51 @@ public sealed partial class HtmlView
         foreach (var extension in HtmlViewPickers.ExtensionsFor(info.Accept))
             picker.FileTypeFilter.Add(extension);
 
-        if (info.Multiple)
-            return [.. (await picker.PickMultipleFilesAsync()).Select(f => f.Name)];
+        var chosen = new List<ChosenFile>();
+        var picked = info.Multiple ? [.. await picker.PickMultipleFilesAsync()] : (await picker.PickSingleFileAsync() is { } one ? new[] { one } : []);
+        foreach (var file in picked)
+        {
+            var buffer = await Windows.Storage.FileIO.ReadBufferAsync(file);
+            chosen.Add(new ChosenFile(file.Name, file.ContentType, System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.ToArray(buffer)));
+        }
 
-        return await picker.PickSingleFileAsync() is { } file ? [file.Name] : [];
+        return [.. chosen];
     }
 
     private FlyoutBase? _openFlyout;
 
-    // Shows a flyout over the page; the view keeps track of it so that taking the view out of the window closes it.
+    private (FlyoutBase Flyout, Point At)? _pendingFlyout;
+
+    // Shows a flyout over the page; the view keeps track of it so that taking the view out of the window closes it. One that is open is closed first and
+    // the new one is shown once it has finished closing: showing a flyout while another is mid-close brings the process down.
     private void ShowFlyout(FlyoutBase flyout, Point at)
     {
-        _openFlyout?.Hide();
+        if (_openFlyout is { } open)
+        {
+            _pendingFlyout = (flyout, at);
+            open.Hide();
+            return;
+        }
+
         _openFlyout = flyout;
         flyout.Closed += (_, _) =>
         {
             if (ReferenceEquals(_openFlyout, flyout))
                 _openFlyout = null;
+
+            if (_pendingFlyout is { } next)
+            {
+                _pendingFlyout = null;
+                ShowFlyout(next.Flyout, next.At);
+            }
         };
         flyout.ShowAt(_canvas, new FlyoutShowOptions { Position = at });
     }
 
-    /// <summary>Closes the picker or menu that is open over the page, if one is.</summary>
+    /// <summary>Closes the picker or menu that is open over the page, if one is, and forgets one waiting to be shown.</summary>
     internal void CloseFlyouts()
     {
+        _pendingFlyout = null;
         _openFlyout?.Hide();
         _openFlyout = null;
     }

@@ -167,16 +167,22 @@ public sealed partial class HtmlView
             uris.Add(single);
         }
 
-        var names = new List<string>();
+        var files = new List<ChosenFile>();
         foreach (var uri in uris)
         {
             using var cursor = resolver.Query(uri, [IOpenableColumns.DisplayName], null, null, null);
             var name = cursor is not null && cursor.MoveToFirst() ? cursor.GetString(0) : uri.LastPathSegment;
-            if (!string.IsNullOrEmpty(name))
-                names.Add(name);
+            if (string.IsNullOrEmpty(name))
+                continue;
+
+            using var memory = new System.IO.MemoryStream();
+            using (var input = resolver.OpenInputStream(uri))
+                input?.CopyTo(memory);
+
+            files.Add(new ChosenFile(name, resolver.GetType(uri) ?? string.Empty, memory.ToArray()));
         }
 
-        AfterControlChange(document, document.SetFileNames(element, names));
+        AfterControlChange(document, document.SetFiles(element, files));
         return true;
     }
 

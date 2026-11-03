@@ -5,7 +5,7 @@ Android); nothing was tried with a real wheel, picker dialog, finger, Narrator o
 
 - **`</option>` / `</optgroup>`** are now implied by `HtmlUtils.CanEndTagBeOmitted` (an `option` start tag ends an open option; `optgroup` ends an open
   option or optgroup), so `<option>a<option>b` is two options instead of one nested in the other with its text included in the label.
-  `<li>`, `<dt>`, `<dd>`, `<th>`, `<thead>`/`<tbody>` are still not implied (the architecture doc's old example list said `</li>`; corrected).
+  `<li>`, `<dt>`, `<dd>`, `<th>` and the table sections were done next, in [the final gaps note](2026-11-02-final-gaps.md).
 - **Textarea wheel.** The scroll position moved from the edit session to the container (`TextAreaScroll`, by source ordinal) so a text area scrolls
   whether or not it has the focus. `FormEditSession.FollowCaret` replaces "always keep the caret in view": it is set by the focus and by every selection
   or text change and cleared by the paint that follows, so a wheel can scroll away from the caret and the next edit brings it back.

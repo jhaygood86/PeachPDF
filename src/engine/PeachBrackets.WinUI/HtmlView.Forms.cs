@@ -20,6 +20,14 @@ public sealed partial class HtmlView
         return result.Applied;
     }
 
+    // A click on a submit button raises FormSubmitting.
+    internal bool SubmitFormAt(int page, double x, double y) =>
+        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element);
+
+    /// <summary>Submits the form a button belongs to, for a screen reader or the keyboard.</summary>
+    internal bool SubmitForm(AccessibilityNode node) =>
+        _document is { } document && node.ElementId is { } id && document.GetElement(id) is { } element && SubmitForm(element);
+
     /// <summary>Does what a click on a control does, for a screen reader or the keyboard.</summary>
     internal bool ActivateControl(AccessibilityNode node)
     {
@@ -66,6 +74,6 @@ public sealed partial class HtmlView
             return false;
 
         var node = _focusTargetId is { } id ? document.GetAccessibilityTree().FindById(id) : document.FocusedNode;
-        return node is not null && HtmlViewLogic.IsToggleControl(node.Role) && ActivateControl(node);
+        return node is not null && ((HtmlViewLogic.IsToggleControl(node.Role) && ActivateControl(node)) || (node.Role == AccessibilityRole.Button && SubmitForm(node)));
     }
 }

@@ -106,7 +106,7 @@ internal sealed class HtmlTextProvider : ITextProvider
             return [];
 
         var phrase = selection.GetText();
-        if (phrase.Length == 0 || phrase.Contains('\n', StringComparison.Ordinal))
+        if (phrase.Length == 0)
             return [];
 
         var n = document.FindText(phrase).ToList().FindIndex(r => r.Equals(range));
@@ -252,18 +252,20 @@ internal sealed class HtmlTextRange : ITextRangeProvider
     // Selects the range in the text field that has the focus, when the range is inside that field's text.
     public void Select()
     {
-        if (_model.SegmentAt(_start) is not { Node: { } node } segment || _end > segment.End)
+        if (_model.SegmentAt(_start) is not { Node: { } node } segment)
             return;
 
-        if (_provider.View.FocusedNode?.Id == node.Id)
+        // Inside the field that has the focus; a range that runs on past it is page text.
+        if (_end <= segment.End && _provider.View.FocusedNode?.Id == node.Id)
         {
             _provider.View.SetFieldSelection(node, _start - segment.Start, _end - segment.Start);
             return;
         }
 
-        // Text of the page: the same phrase, found the document's way, is what gets selected.
-        var phrase = _model.Slice(_start, _end);
-        if (phrase.Length > 0 && !phrase.Contains('\n', StringComparison.Ordinal))
+        // Text of the page, across blocks too: the same phrase, found the document's way, is what gets selected. A trailing line break is the end of a
+        // block, which the document's own text does not have.
+        var phrase = _model.Slice(_start, _end).TrimEnd('\n');
+        if (phrase.Length > 0)
             _provider.View.SelectPageText(phrase, _model.OccurrenceAt(phrase, _start));
     }
 

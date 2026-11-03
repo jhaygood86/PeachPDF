@@ -1,3 +1,5 @@
+PeachBrackets.Android.HtmlFormSubmittingEventArgs : sealed class
+  property FormSubmission Submission { get; }
 PeachBrackets.Android.HtmlLinkTappedEventArgs : sealed class
   property Boolean Cancel { get; set; }
   property String Destination { get; }
@@ -21,6 +23,7 @@ PeachBrackets.Android.HtmlView : sealed class
   event EventHandler FocusChanged
   event EventHandler ScrollChanged
   event EventHandler ZoomChanged
+  event EventHandler<HtmlFormSubmittingEventArgs> FormSubmitting
   event EventHandler<HtmlLinkTappedEventArgs> LinkTapped
   event EventHandler<HtmlLoadFailedEventArgs> DocumentFailed
   event EventHandler<HtmlTappedEventArgs> LongPressed
