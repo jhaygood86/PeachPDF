@@ -404,6 +404,26 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// content is inlines-only stays at a line-local value layout never updates (see
         /// <c>CssLineBox.AssignRectanglesToBoxes</c>) - these rectangles are the box's real geometry.
         /// </summary>
+        [Theory]
+        [InlineData("<svg width='40' height='40'><rect width='40' height='40' fill='red'/></svg>")]
+        [InlineData("<img width='40' height='40' src='data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='>")]
+        public async Task InlineFlexUnderline_IsNotDrawnUnderAReplacedFlexItem(string replaced)
+        {
+            // A flex item is blockified, so it is no longer an atomic inline - but a replaced element has no inline content for
+            // the decoration to land on (css-text-decor-3 §2.4), and browsers draw nothing under it. Only the text gets a line.
+            var (root, container) = await LayoutHarness.LayoutAsync(Wrap(
+                "<a id='d' style='display:inline-flex; text-decoration:underline; gap:6pt; align-items:center'>"
+                + replaced + "<span id='t'>Pricing</span></a>"));
+            var d = LayoutHarness.FindById(root, "d")!;
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, d, g);
+
+            // The 40px (30pt) item is first in the row; the line starts after it, with the text.
+            var line = Assert.Single(Lines(g));
+            Assert.True(line.X1 >= 30 - 0.01, $"the line ({line.X1}) should start after the replaced item, with the text");
+        }
+
         private static double Left(CssBox box) => box.Rectangles.Values.Single().Left;
 
         /// <summary>The right edge of <paramref name="box"/>'s own border box; see <see cref="Left"/>.</summary>
