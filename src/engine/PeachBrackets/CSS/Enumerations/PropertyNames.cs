@@ -91,6 +91,8 @@
         public static readonly string ClipRight = "clip-right";
         public static readonly string ClipBottom = "clip-bottom";
         public static readonly string ClipPath = "clip-path";
+        public static readonly string ShapeOutside = "shape-outside";
+        public static readonly string ShapeMargin = "shape-margin";
         public static readonly string ClipRule = "clip-rule";
         public static readonly string Color = "color";
         public static readonly string ColorInterpolationFilters = "color-interpolation-filters";

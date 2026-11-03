@@ -430,7 +430,7 @@ namespace PeachBrackets.Html.Dom
             _enclosingGrid = EnclosingSlicedRowGrid(tableBox);
 
             var writingMode = tableBox.WritingMode.Value;
-            _isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            _isVertical = writingMode.IsVertical();
             _rowAxisStartIsAtMax = LogicalPropertyResolver.BlockStart(writingMode) is PhysicalSide.Right or PhysicalSide.Bottom;
             _isFixedLayout = tableBox.TableLayout.Value == TableLayoutMode.Fixed
                 && CssValueParser.IsValidLength(_isVertical ? tableBox.Height : tableBox.Width);

@@ -137,6 +137,8 @@ namespace PeachBrackets.Html.Dom
             _document = SvgTreeBuilder.Build(source, HtmlContainer!.RenderContext, ActualColor, _prefetchedImages,
                 fontPaletteValues: HtmlContainer.FontPaletteValues, fontFeatureValues: HtmlContainer.FontFeatureValues);
 
+            ForcedColorsAdjuster.RecolorSvg(this, _document);
+
             // The parser builds a real (generic) CssBox for every SVG child element so
             // SvgTreeBuilder can read tag names/attributes off them - but once the scene graph above
             // is built, those boxes must not stick around: the base CssBox layout/paint pipeline
