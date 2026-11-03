@@ -3644,9 +3644,6 @@ namespace PeachBrackets.Html.Dom
                 Top = startY,
                 MaxBottom = startY,
                 MarginTop = box.ActualMarginTop,
-                // The position handed over is read as the margin edge, as it always was for a right float: taking a
-                // negative margin-top back out of it puts a second float with a larger one over the first.
-                OuterTop = startY,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth
@@ -4791,8 +4788,11 @@ namespace PeachBrackets.Html.Dom
 
         private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
         {
+            // The float's margin box starts at the line top (CSS 2.1 section 9.5.1 rule 6) and its margins never
+            // collapse (section 8.3.1), so the border box sits margin-top below it, a negative one above.
             b.Location = new PaintPoint(
-                blockBox.ClientLeft + b.ActualMarginLeft, coordinates.Line.FlowTop ?? coordinates.CurrentY);
+                blockBox.ClientLeft + b.ActualMarginLeft,
+                (coordinates.Line.FlowTop ?? coordinates.CurrentY) + b.ActualMarginTop);
             b.ActualBottom = b.Location.Y;
 
             var width = await GetBoxWidth(g, b, b.Location.Y);

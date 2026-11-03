@@ -1037,6 +1037,50 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Theory]
+        [InlineData("left")]
+        [InlineData("right")]
+        public async Task FirstChildFloat_AppliesItsNegativeMarginTop_SoASecondFloatSitsBesideIt(string side)
+        {
+            // A float's margins never collapse (css2 8.3.1), so a first-child float's negative margin-top moves its
+            // border box above the containing block's content top, exactly as it does after a paragraph. F2's margin
+            // edge (-30pt) is above F1's bottom edge (-15 + 22 = 7pt), so F2 sits beside F1 rather than over it.
+            var html = Wrap($@"
+                <div id='c' style='width:450pt; padding-top:40pt'>
+                    <div id='a' style='float:{side}; width:56pt; height:22pt; margin-top:-15pt'>F1</div>
+                    <div id='b' style='float:{side}; width:48pt; height:25pt; margin-top:-30pt'>F2</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+            var c = FindById(root, "c")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(c.ClientTop - 15, a.Location.Y, 3);
+            Assert.Equal(c.ClientTop - 30, b.Location.Y, 3);
+            if (side == "left")
+            {
+                Assert.Equal(a.ActualRight, b.Location.X, 3);
+            }
+            else
+            {
+                Assert.Equal(a.Location.X, b.ActualRight, 3);
+            }
+        }
+
+        [Fact]
+        public async Task FirstChildFloat_AppliesItsPositiveMarginTop()
+        {
+            var html = Wrap(@"
+                <div id='c' style='width:300pt; padding-top:40pt'>
+                    <div id='a' style='float:left; width:56pt; height:22pt; margin-top:9pt'>F1</div>
+                </div>");
+
+            var (root, _) = await BuildAndLayout(html);
+
+            Assert.Equal(FindById(root, "c")!.ClientTop + 9, FindById(root, "a")!.Location.Y, 3);
+        }
+
+        [Theory]
         [InlineData("margin-top:-3pt")]
         [InlineData("margin:-3pt")]
         [InlineData("margin-top:-12pt")]
