@@ -1109,6 +1109,13 @@ namespace PeachBrackets.Html.Dom
 
                         beyond.AddFrom(link.Box.Boxes, from);
 
+                        // Floats the column could not hold, laid out here and again by the next column, which is the only one that
+                        // holds them.
+                        if (link.Box.DeferredFloats is { } deferred)
+                        {
+                            foreach (var floated in deferred) beyond.Add(floated);
+                        }
+
                         // A floated child of the flow that stopped, placed on the line it discarded: laid out here, and
                         // again by the next column, which is the only one that holds it.
                         if (link.ChildToken is InlineBreakToken { Box.FloatsOfTheDiscardedLine: { } floats })
