@@ -519,7 +519,7 @@ namespace PeachBrackets.Html.Utils
         private static void CollectSvgLinks(SvgDocument document, Rect viewportRect, CssBox owner, List<(Rect Rect, string Href, CssBox Owner)> sink)
         {
             var found = new List<(Rect Rect, string Href)>();
-            SvgRenderer.CollectLinks(document, viewportRect, found);
+            SvgRenderer.CollectLinks(document, viewportRect, found, owner.PointerEvents.Value);
 
             foreach (var (rect, href) in found)
                 sink.Add((rect, href, owner));
