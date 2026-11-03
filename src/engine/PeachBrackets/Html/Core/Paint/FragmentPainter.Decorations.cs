@@ -226,6 +226,11 @@ namespace PeachBrackets.Html.Paint
                 var layerImage = box.BackgroundImages![layerIndex];
                 if (layerImage is null) continue;
 
+                // Forced colors (CSS Color Adjust 1 §3.1) sets background-image to none for a gradient; a url() image is kept.
+                if (layerImage is PeachBrackets.Html.Entities.CssImage.LinearGradient or PeachBrackets.Html.Entities.CssImage.RadialGradient or PeachBrackets.Html.Entities.CssImage.ConicGradient
+                    && ForcedColorsAdjuster.DropsDecorations(box))
+                    continue;
+
                 var originRect = BoxModelRect(BackgroundLayerResolver.LayerAt(originLayers, layerIndex));
                 var clipValue  = BackgroundLayerResolver.LayerAt(clipLayers, layerIndex);
                 var (clipRect, clipShape, shapeShared) = ResolveClip(clipValue);

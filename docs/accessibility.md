@@ -152,12 +152,11 @@ With `UserPreferences.ForcedColors` on, the document is also drawn in the colour
 `SystemColorPalette`: `Canvas`, `CanvasText`, `LinkText`, `ButtonFace`... filled from the platform, or `SystemColorPalette.Light` / `.Dark`), as a
 browser does under a Windows high contrast theme: text takes `CanvasText` (`LinkText` in a link, `ButtonText` in a button, `FieldText` in a field),
 backgrounds take `Canvas` (`ButtonFace`, `Field`, `Mark`), borders, outlines and column rules take `CanvasText` (`ButtonBorder` on a control),
-and box shadows and text shadows are not drawn. A fully transparent colour stays transparent. An element opts out with
+box shadows, text shadows and gradient backgrounds are not drawn (a `url()` image is kept), and an inline `<svg>`'s `fill` and `stroke`
+(solid, gradient or pattern) take `CanvasText`. A fully transparent colour stays transparent. An element opts out with
 [`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text colour with
 `preserve-parent-color`. The CSS [system colour keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
-work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes. Gradient backgrounds are
-not dropped yet.
-
+work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes.
 ### Text size
 
 `HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a

@@ -60,6 +60,39 @@ public class ForcedColorsTests
     }
 
     [Fact]
+    public async Task ForcedColorsDropAGradientBackground_ButKeepItOtherwise()
+    {
+        const string body = "<div style='position:absolute;left:0;top:0;width:100pt;height:50pt;background:linear-gradient(rgb(255,0,0),rgb(255,0,0))'></div>";
+        var wrapped = TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>");
+
+        var (plainContext, plainDocument) = await TestDocument.LoadAsync(wrapped, new HtmlDocumentOptions { Media = "screen" });
+        var plain = await TestDocument.PaintAsync(plainContext, plainDocument);
+        Assert.Equal((255, 0, 0), Rgb(TestDocument.Pixel(plain, 50, 25)));
+
+        var (context, document) = await TestDocument.LoadAsync(wrapped, new HtmlDocumentOptions
+        {
+            Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = SystemColorPalette.Dark },
+            Media = "screen",
+        });
+        var forced = await TestDocument.PaintAsync(context, document);
+        Assert.Equal((255, 255, 255), Rgb(TestDocument.Pixel(forced, 50, 25)));
+    }
+
+    [Fact]
+    public async Task ForcedColorsRecolorInlineSvgFillAndStroke()
+    {
+        const string body = "<svg style='position:absolute;left:0;top:0' width='100' height='50'><rect width='100' height='50' fill='rgb(255,0,0)'/></svg>";
+        var palette = SystemColorPalette.Dark;
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions
+        {
+            Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = palette },
+            Media = "screen",
+        });
+        var page = await TestDocument.PaintAsync(context, document);
+        Assert.Equal(Rgb(palette.CanvasText), Rgb(TestDocument.Pixel(page, 30, 20)));
+    }
+
+    [Fact]
     public async Task ForcedColorAdjustNoneKeepsTheElementsOwnColours()
     {
         var page = await PaintAsync(new UserPreferences { ForcedColors = true, ForcedPalette = SystemColorPalette.Dark });
