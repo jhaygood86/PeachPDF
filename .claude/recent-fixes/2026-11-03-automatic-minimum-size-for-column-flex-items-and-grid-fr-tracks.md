@@ -21,3 +21,9 @@ rewritten. A scroll container (`overflow: hidden`) item of an auto-height column
 `automatic_minimum_size` showcase was checked in PDFium and MuPDF.
 
 **Not done.** See the accepted gap (grow case, replaced column items, spanning items, auto tracks' exemptions).
+
+**Follow-up: the grow side (#2163).** `ResolveAutoMinimums` now also runs for a line with free space and a growing item. The minimum is stored
+uncapped (`RecordAutoMinimum`, and only for an item that sits under it, so lines with no violation keep the plain arithmetic), and
+`DistributeFlex` routes such a line through `GrowAgainstAutoMinimums`, the §9.7 freeze loop for min violations while growing. A column
+item with a zero hypothetical size takes `NaturalMainSize` as its content height without another layout, since `MeasureItem` laid it out at its own
+height. All 234 showcases rasterize identically.

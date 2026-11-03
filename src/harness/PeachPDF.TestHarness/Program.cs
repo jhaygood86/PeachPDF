@@ -6994,6 +6994,9 @@ var automaticMinimumHtml = $$"""
     <div class="grid"><div>Unbreakableword</div><div>x</div></div>
     <p class="note">minmax(0, 1fr) minmax(0, 1fr) lets the tracks shrink, and the word overflows.</p>
     <div class="grid" style="grid-template-columns: minmax(0,1fr) minmax(0,1fr)"><div>Unbreakableword</div><div>x</div></div>
+    <h2>Items a flex line grows</h2>
+    <p class="note">flex: 1 on all three. The first holds an unbreakable word wider than a third of the row, so it keeps its width and the others share the rest.</p>
+    <div style="display:flex;width:80mm;font-size:14pt;border:0.75pt solid #64748b"><div style="flex:1;background:#eef2ff">Unbreakableword</div><div style="flex:1;background:#fdf3e3">x</div><div style="flex:1;background:#eaf6ee">y</div></div>
     </body></html>
     """;
 
