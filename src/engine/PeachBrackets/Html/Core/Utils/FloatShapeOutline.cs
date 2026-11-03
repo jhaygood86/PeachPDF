@@ -35,7 +35,10 @@ namespace PeachBrackets.Html.Utils
             var marginRight = floatBox.ActualRight + floatBox.ActualMarginRight;
             if (g is null || !HasShape(floatBox)) return marginRight;
 
-            var edge = Resolve(g, floatBox)?.Extent(top, Math.Max(height, 0.01), left: true);
+            // No outline at all (an image that has not loaded, a shape that does not resolve) leaves the rectangle; an outline that
+            // misses this band leaves the line unnarrowed.
+            if (Resolve(g, floatBox) is not { } outline) return marginRight;
+            var edge = outline.Extent(top, Math.Max(height, 0.01), left: true);
             return edge is null ? clearX : Math.Min(edge.Value, marginRight);
         }
 
@@ -45,7 +48,8 @@ namespace PeachBrackets.Html.Utils
             var marginLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
             if (g is null || !HasShape(floatBox)) return marginLeft;
 
-            var edge = Resolve(g, floatBox)?.Extent(top, Math.Max(height, 0.01), left: false);
+            if (Resolve(g, floatBox) is not { } outline) return marginLeft;
+            var edge = outline.Extent(top, Math.Max(height, 0.01), left: false);
             return edge is null ? clearX : Math.Max(edge.Value, marginLeft);
         }
 
@@ -53,8 +57,8 @@ namespace PeachBrackets.Html.Utils
         {
             var borderBox = new Rect(floatBox.Location.X, floatBox.Location.Y,
                 Math.Max(0, floatBox.ActualRight - floatBox.Location.X), Math.Max(0, floatBox.ActualBottom - floatBox.Location.Y));
-            var key = (borderBox, floatBox.ShapeOutside, floatBox.ShapeMargin, floatBox.ActualMarginLeft, floatBox.ActualMarginTop,
-                floatBox.ActualMarginRight, floatBox.ActualMarginBottom);
+            var key = (borderBox, floatBox.ShapeOutside, floatBox.ShapeMargin, floatBox.ShapeImageThreshold, floatBox.ShapeOutsideImage?.Image,
+                floatBox.ActualMarginLeft, floatBox.ActualMarginTop, floatBox.ActualMarginRight, floatBox.ActualMarginBottom);
 
             if (Cache.TryGetValue(floatBox, out var cached) && cached.Key.Equals(key)) return cached.Valid ? cached : null;
 
@@ -70,6 +74,7 @@ namespace PeachBrackets.Html.Utils
             if (!text.Contains("-box", StringComparison.OrdinalIgnoreCase)) text += " margin-box";
 
             var invalid = new Outline(key, [], 0, default, valid: false);
+            if (text.Contains("url(", StringComparison.OrdinalIgnoreCase)) return BuildImage(floatBox, text, borderBox, key);
             if (!CssClipPathResolver.TryBuildClipPath(g, text, borderBox, floatBox, out var path, out _) || path is null) return invalid;
 
             using (path)
@@ -96,8 +101,73 @@ namespace PeachBrackets.Html.Utils
             }
         }
 
+        /// <summary>
+        /// An <c>&lt;image&gt;</c> shape (css-shapes-1 §2.1): the image is stretched over the float's content box and a pixel is part of the
+        /// shape when its alpha is above <c>shape-image-threshold</c>. Only raster images are read; one that has not loaded, or an SVG, leaves
+        /// the float with its rectangle.
+        /// </summary>
+        private static Outline BuildImage(CssBox floatBox, string text, Rect borderBox, object key)
+        {
+            var invalid = new Outline(key, [], 0, default, valid: false);
+            if (floatBox.ShapeOutsideImage?.Image?.GetPixels() is not { } pixels || pixels.Width <= 0 || pixels.Height <= 0) return invalid;
+
+            var marginLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+            var marginTop = floatBox.Location.Y - floatBox.ActualMarginTop;
+            var marginBox = new Rect(marginLeft, marginTop,
+                floatBox.ActualRight + floatBox.ActualMarginRight - marginLeft,
+                floatBox.ActualBottom + floatBox.ActualMarginBottom - marginTop);
+
+            // §2.1: the image is sized and positioned as a replaced element with the float's used content box size.
+            var reference = new Rect(borderBox.X + floatBox.ActualBorderLeftWidth + floatBox.ActualPaddingLeft,
+                borderBox.Y + floatBox.ActualBorderTopWidth + floatBox.ActualPaddingTop,
+                Math.Max(0, borderBox.Width - floatBox.ActualBorderLeftWidth - floatBox.ActualBorderRightWidth - floatBox.ActualPaddingLeft - floatBox.ActualPaddingRight),
+                Math.Max(0, borderBox.Height - floatBox.ActualBorderTopWidth - floatBox.ActualBorderBottomWidth - floatBox.ActualPaddingTop - floatBox.ActualPaddingBottom));
+
+            if (reference.Width <= 0 || reference.Height <= 0) return invalid;
+
+            var threshold = double.TryParse(floatBox.ShapeImageThreshold, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var t)
+                ? Math.Clamp(t, 0, 1) : 0;
+            var limit = threshold * 255;
+
+            // Per pixel row: the leftmost and rightmost pixel whose alpha is above the threshold, mapped to the reference box.
+            var data = pixels.PremultipliedRgba.Span;
+            var rows = new (double Min, double Max)?[pixels.Height];
+            var any = false;
+            for (var y = 0; y < pixels.Height; y++)
+            {
+                int first = -1, last = -1;
+                var rowStart = y * pixels.Width * 4;
+                for (var x = 0; x < pixels.Width; x++)
+                {
+                    if (data[rowStart + (x * 4) + 3] > limit)
+                    {
+                        if (first < 0) first = x;
+                        last = x;
+                    }
+                }
+
+                if (first < 0) continue;
+                rows[y] = (reference.X + (reference.Width * first / pixels.Width), reference.X + (reference.Width * (last + 1) / pixels.Width));
+                any = true;
+            }
+
+            if (!any) return invalid;
+
+            var margin = string.IsNullOrWhiteSpace(floatBox.ShapeMargin)
+                ? 0
+                : Math.Max(0, CssValueParser.ParseLength(floatBox.ShapeMargin, floatBox.ContainingBlock?.AvailableWidth ?? 0, floatBox));
+            return new Outline(key, [], margin, marginBox, valid: true) { MaskRows = rows, MaskTop = reference.Y, MaskHeight = reference.Height };
+        }
+
         private sealed class Outline(object key, List<(double X, double Y)[]> contours, double margin, Rect marginBox, bool valid)
         {
+            /// <summary>For an image shape: per pixel row of the image, the x range of the pixels in the shape (null for an empty row).</summary>
+            public (double Min, double Max)?[]? MaskRows { get; init; }
+
+            public double MaskTop { get; init; }
+
+            public double MaskHeight { get; init; }
+
             private readonly Dictionary<(double, double, bool), double?> _bands = [];
 
             public object Key { get; } = key;
@@ -152,6 +222,13 @@ namespace PeachBrackets.Html.Utils
             /// <summary>The rightmost (or leftmost) x where the shape's outline crosses the horizontal line at <paramref name="y"/>.</summary>
             private double? Row(double y, bool left)
             {
+                if (MaskRows is { } mask)
+                {
+                    var index = (int)Math.Floor((y - MaskTop) / MaskHeight * mask.Length);
+                    if (index < 0 || index >= mask.Length || mask[index] is not { } range) return null;
+                    return left ? range.Max : range.Min;
+                }
+
                 double? best = null;
                 foreach (var pts in contours)
                 {

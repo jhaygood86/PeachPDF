@@ -949,6 +949,8 @@ await SaveShowcaseAsync("page_bleed_marks", "Paged Media", "Page Bleed and Marks
 
 // shape-outside / shape-margin (css-shapes-1): text wraps around each float's shape rather than its rectangle.
 // Each box is a float with the same paragraph beside it, so the curve each shape cuts into the lines is visible.
+// A 100x100 PNG, opaque below the diagonal, used as both the shape and the picture of the image-shape box.
+const string ShapeTriangleDataUri = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGQAAABkCAYAAABw4pVUAAABa0lEQVR4nO3RQUEAQQwAsfWv7FzBBw+k7TyiIO977+d778Xw/kJKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUNKAUPOp4ghp1PUkLMpcsjJFD3kXMqEkFMpU0LOpEwKOZEyLWR9ysSQ1SlTQ9amTA5ZmTI9ZF3KhpBVKVtC1qRsClmRsi1kfMrGkNEpW0PGpmwOGZmyPWRcyoWQUSlXQsakXAoZkXIthE+5GEKnXA1hUy6HkCnXQ7iUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQrCUQv5fIaBCQIWACvkwv6qnLbVlTiivAAAAAElFTkSuQmCC";
 var shapeText = string.Concat(Enumerable.Repeat("Text follows the outline of the shape instead of the box around it, so each line starts where the shape ends. ", 8));
 string ShapeBox(string label, string style) =>
     "<div class='cell'><h3>" + label + "</h3><div class='f' style='" + style + "'></div><p>" + shapeText + "</p></div>";
@@ -962,6 +964,8 @@ var shapeHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
     ShapeBox("ellipse(40pt 45pt)", "shape-outside: ellipse(40pt 45pt at 40% 50%); clip-path: ellipse(40pt 45pt at 40% 50%)") +
     ShapeBox("polygon(0 0, 100% 0, 50% 100%)", "shape-outside: polygon(0 0, 100% 0, 50% 100%); clip-path: polygon(0 0, 100% 0, 50% 100%)") +
     ShapeBox("inset(0 round 30pt)", "shape-outside: inset(0 round 30pt); border-radius: 30pt") +
+    ShapeBox("path('M 0 0 L 90 90 L 0 90 Z') (px)", "shape-outside: path(&quot;M 0 0 L 120 120 L 0 120 Z&quot;); clip-path: polygon(0 0, 100% 100%, 0 100%)") +
+    ShapeBox("url(image) + shape-image-threshold", "shape-outside: url(" + ShapeTriangleDataUri + "); shape-image-threshold: 0.5; background: url(" + ShapeTriangleDataUri + ") 0 0 / 100% 100%") +
     ShapeBox("float: right, circle(50%)", "float: right; margin: 0 0 0 6pt; shape-outside: circle(50%); border-radius: 50%") +
     "</body></html>";
 

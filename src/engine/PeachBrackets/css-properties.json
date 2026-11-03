@@ -788,13 +788,26 @@
     },
     {
       "name": "shape-outside",
-      "comment": "css-shapes-1 §2.1. Stored as the declaration text and read at use by FloatShapeOutline, which resolves it with the same CssClipPathResolver clip-path uses (one basic-shape grammar, BasicShapeGrammar). none, or a circle()/ellipse()/inset()/polygon() and/or a shape-box; an <image> value (alpha-threshold shapes) is not supported and is dropped at parse time.",
+      "comment": "css-shapes-1 §2.1. Stored as the declaration text and read at use by FloatShapeOutline, which resolves it with the same CssClipPathResolver clip-path uses (one basic-shape grammar, BasicShapeGrammar). none, or a circle()/ellipse()/inset()/polygon() and/or a shape-box; a url() image is read for its alpha (see shape-image-threshold); gradients and SVG images are not shapes here.",
       "inherited": false,
       "cssom": {"converter": "new ShapeOutsideValueConverter()"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ShapeOutsideValueConverter.Validate", "acceptsNoneLiteral": true },
       "html": {
         "propertyPath": "ShapeOutside",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "shape-image-threshold",
+      "comment": "css-shapes-1 §2.3. A <number>, stored as its declaration text and clamped to 0..1 at use by FloatShapeOutline: the alpha above which a pixel of a shape-outside <image> is part of the shape.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.NumberConverter"},
+      "initialValue": "0",
+      "cssDataType": "number",
+      "html": {
+        "propertyPath": "ShapeImageThreshold",
         "csharpDataType": "string",
         "area": "DisplayPositioningArea"
       }

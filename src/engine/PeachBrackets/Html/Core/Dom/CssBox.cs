@@ -2700,6 +2700,7 @@ namespace PeachBrackets.Html.Dom
 
             ListStyleImage?.Dispose();
             ContentImage?.Dispose();
+            ShapeOutsideImage?.Dispose();
 
             foreach (var childBox in Boxes)
             {
@@ -8201,7 +8202,27 @@ namespace PeachBrackets.Html.Dom
 
             if (BorderImageSource != null)
                 await BorderImageSource.EnsureLoadedAsync(HtmlContainer!);
+
+            if (Float.Value != Floating.None && ShapeOutside is { Length: > 0 } shapeText
+                && shapeText.Contains("url(", StringComparison.OrdinalIgnoreCase))
+            {
+                // The image a shape-outside names is read for its alpha at layout, so it is loaded here with the other auxiliary images.
+                if (!string.Equals(_shapeOutsideImageText, shapeText, StringComparison.Ordinal))
+                {
+                    ShapeOutsideImage?.Dispose();
+                    ShapeOutsideImage = CssValueParser.GetImagePropertyValue(shapeText) as CssImage.Url;
+                    _shapeOutsideImageText = shapeText;
+                }
+
+                if (ShapeOutsideImage != null)
+                    await ShapeOutsideImage.EnsureLoadedAsync(HtmlContainer!);
+            }
         }
+
+        private string? _shapeOutsideImageText;
+
+        /// <summary>The image a floated box's <c>shape-outside: url(...)</c> names (loaded by <see cref="EnsureAuxiliaryImagesLoadedAsync"/>), or null.</summary>
+        internal CssImage.Url? ShapeOutsideImage { get; private set; }
 
         /// <summary>
         /// Upper bound on how many literal space characters a single tab can expand to in
