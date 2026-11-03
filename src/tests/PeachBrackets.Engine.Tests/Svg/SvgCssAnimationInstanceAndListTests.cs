@@ -197,6 +197,46 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(expected, document.Children[0].StrokeDashArray);
         }
 
+        [Theory]
+        [InlineData("4px 8px", "10% 20% 30%", 0.5, new[] { 2d, 4, 2, 4, 2, 4 }, new[] { 0.05, 0.1, 0.15, 0.05, 0.1, 0.15 })]  // Chrome: calc(5% + 2px), calc(10% + 4px), ...
+        [InlineData("10%", "20px", 0.25, new[] { 5d, 5 }, new[] { 0.075, 0.075 })]                                          // one item against one, a percentage against a length
+        [InlineData("4px 8px", "10% 20%", 0.5, new[] { 2d, 4 }, new[] { 0.05, 0.1 })]                                          // the same count, the units still differ
+        [InlineData("4px 8px", "10px 20% 5px", 0.5, new[] { 7d, 4, 4.5, 9, 2, 6.5 }, new[] { 0d, 0.1, 0, 0, 0.1, 0 })]         // only some pairs mix units
+        public async Task DashItemsWithDifferentUnits_AreMixedAsACalcPerItem(string from, string to, double progress, double[] pixels, double[] diagonalShares)
+        {
+            var document = await SvgCssAnimationTests.BuildAsync(
+                $"@keyframes k {{ from {{ stroke-dasharray: {from} }} to {{ stroke-dasharray: {to} }} }} .t {{ animation: k 1s linear }}",
+                "<rect class=\"t\" width=\"10\" height=\"10\" stroke=\"black\"/>", progress);
+
+            // A percentage is of the viewport diagonal, sqrt((200^2 + 100^2) / 2), so the 200 x 100 svg gives 158.11.
+            var diagonal = System.Math.Sqrt((200d * 200 + 100d * 100) / 2);
+            var dashes = document.Children[0].StrokeDashArray;
+            Assert.Equal(pixels.Length, dashes.Length);
+
+            for (var i = 0; i < pixels.Length; i++) Assert.Equal(pixels[i] + diagonalShares[i] * diagonal, dashes[i], 3);
+        }
+
+        [Fact]
+        public async Task DashItemsWithDifferentUnits_ThatAnEasingOvershoots_StayAboveZero()
+        {
+            // cubic-bezier(.5, -1, .5, 2) is about -0.18 along at the quarter, which takes 10px to 0% below zero.
+            var document = await SvgCssAnimationTests.BuildAsync(
+                "@keyframes k { from { stroke-dasharray: 10px } to { stroke-dasharray: 0% } } .t { animation: k 1s cubic-bezier(.5, -1, .5, 2) }",
+                "<rect class=\"t\" width=\"10\" height=\"10\" stroke=\"black\"/>", 0.25);
+
+            Assert.All(document.Children[0].StrokeDashArray, dash => Assert.True(dash >= 0));
+        }
+
+        [Theory]
+        [InlineData("calc(1px + 2px) 3", 2, new[] { 3d, 3 })]
+        [InlineData("1, calc(2px + 1px),  3 ", 3, new[] { 1d, 3, 3, 1, 3, 3 })]
+        [InlineData("calc( 2px * 2 )", 1, new[] { 4d, 4 })]
+        public void ADashListWithACalcItem_IsSplitOutsideTheParentheses(string value, int items, double[] expected)
+        {
+            Assert.Equal(items, PeachBrackets.Svg.SvgValueParsers.SplitDashItems(value).Count);
+            Assert.Equal(expected, PeachBrackets.Svg.SvgValueParsers.ParseDashArray(value, 100));
+        }
+
         [Fact]
         public async Task ADashListInTheAttribute_IsWhatAKeyframeThatLeavesItOutStartsFrom()
         {

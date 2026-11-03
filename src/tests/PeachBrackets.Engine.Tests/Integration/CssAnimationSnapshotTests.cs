@@ -490,8 +490,15 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(expected, Mix("stroke-dasharray", from, to, t));
 
         [Theory]
+        [InlineData("4px 8px", "10% 20% 30%", 0.6, "calc(1.6px + 6%) calc(3.2px + 12%) calc(1.6px + 18%) calc(3.2px + 6%) calc(1.6px + 12%) calc(3.2px + 18%)")]  // each item pair mixed as a calc()
+        [InlineData("4px 8px", "10% 20%", 0.5, "calc(2px + 5%) calc(4px + 10%)")]                                  // the same count, the units differ
+        [InlineData("4px 8px", "10px 20%", 0.5, "7px calc(4px + 10%)")]                                           // only a pair of them
+        [InlineData("4px", "10%", 1.5, "max(0px, calc(-2px + 15%))")]                                              // an overshoot is clamped to zero by max()
+        public void Interpolate_DashItemsWithDifferentUnits_AreMixedAsACalcPerItem(string from, string to, double t, string expected) =>
+            Assert.Equal(expected, Mix("stroke-dasharray", from, to, t));
+
+        [Theory]
         [InlineData("none", "10px 20px", 0.4, "none")]                      // none is not a list
-        [InlineData("4px 8px", "10% 20% 30%", 0.6, "10% 20% 30%")]          // two units would be a calc(), which a dash list cannot hold
         [InlineData("4px", "calc(2px + 1px) 3px", 0.6, "calc(2px + 1px) 3px")]
         [InlineData("4px 8px", "10px -20px 30px", 0.4, "4px 8px")]          // a negative dash is invalid
         [InlineData("4px 8px", "10px, -20px, 30px", 0.4, "4px 8px")]  // a negative item after a comma
