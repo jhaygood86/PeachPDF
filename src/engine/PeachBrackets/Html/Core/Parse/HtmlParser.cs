@@ -28,7 +28,7 @@ namespace PeachBrackets.Html.Parse
     /// <summary>
     /// 
     /// </summary>
-    internal static class HtmlParser
+    internal static partial class HtmlParser
     {
         /// <summary>
         /// Parses the source html to css boxes tree structure.
@@ -39,7 +39,7 @@ namespace PeachBrackets.Html.Parse
         public static CssBox ParseDocument(string source, CssBox? root = null)
         {
             root ??= CssBox.CreateBlock();
-            var curBox = root;
+            var state = new ParserState(root);
             MathSourceParser? mathParser = null;
 
             using var sourceReader = new StringReader(source);
@@ -48,7 +48,7 @@ namespace PeachBrackets.Html.Parse
             while (tokenizer.ReadNextToken(out var token))
             {
 #if DEBUG
-                Console.WriteLine($"parse token start : current box: {curBox}; tag: {token}");
+                Console.WriteLine($"parse token start : current box: {state.Current}; tag: {token}");
 #endif
 
                 // Inside an inline <math> the markup goes into source elements, not boxes (see MathSourceElement), for as long as it
@@ -61,24 +61,27 @@ namespace PeachBrackets.Html.Parse
 
                     if (step == MathStep.Ended)
                     {
-                        curBox = mathParser.Box.ParentBox!;
+                        state.Current = mathParser.Box.ParentBox!;
                         mathParser = null;
                         continue;
                     }
 
-                    curBox = mathParser.Box.MaterializeSource(mathParser.Current)!;
+                    state.Current = mathParser.Box.MaterializeSource(mathParser.Current)!;
                     mathParser = null;
                 }
+
+                if (state.Formatting.Count > 0)
+                    ClearClosedMarkers(state);
 
                 switch (token.Kind)
                 {
                     case HtmlTokenKind.Tag:
                         {
                             var tag = (HtmlTagToken)token;
-                            var before = curBox;
-                            ParseHtmlTag(tag, ref curBox);
+                            var before = state.Current;
+                            ParseHtmlTag(tag, state);
 
-                            if (!tag.IsEndTag && !ReferenceEquals(before, curBox) && curBox is CssBoxMath { SourceStarted: false } mathBox
+                            if (!tag.IsEndTag && !ReferenceEquals(before, state.Current) && state.Current is CssBoxMath { SourceStarted: false } mathBox
                                 && !ParseMathAsBoxes.Value && !IsInsideMath(mathBox))
                             {
                                 mathParser = new MathSourceParser(mathBox);
@@ -90,13 +93,13 @@ namespace PeachBrackets.Html.Parse
                         {
                             var text = (HtmlDataToken)token;
 
-                            if (curBox.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true)
+                            if (state.Current.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true)
                             {
-                                curBox = ParseDocument(text.Data, curBox);
+                                state.Current = ParseDocument(text.Data, state.Current);
                             }
                             else
                             {
-                                AddTextBox(text, ref curBox);
+                                AddTextBox(text, state);
                             }
 
                             break;
@@ -174,17 +177,24 @@ namespace PeachBrackets.Html.Parse
         /// the box is preformatted. At later stage they will be removed if not relevant.
         /// </summary>
         /// <param name="token">the html token to parse</param>
-        /// <param name="curBox">the current box in html tree parsing</param>
-        private static void AddTextBox(HtmlDataToken token, ref CssBox curBox)
+        /// <param name="state">the state of the tree being built</param>
+        private static void AddTextBox(HtmlDataToken token, ParserState state)
         {
             var text = token.Data;
 
             if (text == null) return;
 
             // A MathML token's text stays on its element (see CssBox.ForeignText).
-            if (curBox.TryAbsorbForeignText(text)) return;
+            if (state.Current.TryAbsorbForeignText(text)) return;
 
-            var box = CssBox.CreateBox(curBox);
+            // Text is "a character token" of the "in body" insertion mode, which reconstructs the active formatting elements first.
+            if (state.Formatting.Count > 0 && !state.Current.IsWithinForeignContent
+                && !(state.Current.HtmlTag is { } parentTag && NoReconstructTextParents.Contains(parentTag.Name)))
+            {
+                ReconstructFormatting(state);
+            }
+
+            var box = CssBox.CreateBox(state.Current);
             box.Text = text;
         }
 
@@ -193,123 +203,79 @@ namespace PeachBrackets.Html.Parse
         /// Parse the html part, the part from prev parsing index to the beginning of the next html tag.<br/>
         /// </summary>
         /// <param name="token">the html tag token</param>
-        /// <param name="curBox">the current box in html tree parsing</param>
-        /// <returns>the end of the parsed part, the new start index</returns>
-        private static void ParseHtmlTag(HtmlTagToken token, ref CssBox curBox)
+        /// <param name="state">the state of the tree being built</param>
+        private static void ParseHtmlTag(HtmlTagToken token, ParserState state)
         {
             if (ParseHtmlTag(token, out var tagName, out var tagAttributes))
             {
-                if (!HtmlUtils.IsSingleTag(tagName.ToLowerInvariant()) && curBox.ParentBox != null)
+                var lowerName = tagName.ToLowerInvariant();
+
+                // </br> is a parse error that the tree builder answers as <br>, with no attributes.
+                if (lowerName == "br")
+                {
+                    InsertStartTag(state, token, tagName, null, isSingle: true);
+                }
+                else if (!HtmlUtils.IsSingleTag(lowerName))
                 {
 #if DEBUG
-                    Console.WriteLine($"parse token, tag close: {tagName}. current box: {curBox}");
+                    Console.WriteLine($"parse token, tag close: {tagName}. current box: {state.Current}");
 #endif
-                    // need to find the parent tag to go one level up
-                    var isParagraphEndTag = string.Equals(
-                        tagName, HtmlConstants.P, StringComparison.OrdinalIgnoreCase);
-                    var afterClose = isParagraphEndTag && !HasElementInButtonScope(curBox, HtmlConstants.P)
-                        ? null
-                        : DomUtils.FindParent(curBox.ParentBox!, tagName, curBox);
-
-                    if (afterClose is not null)
-                    {
-                        curBox = afterClose;
-                    }
-                    else if (isParagraphEndTag)
-                    {
-                        // The one unmatched end tag that generates an element rather than being dropped.
-                        HandleStrayParagraphEndTag(curBox);
-                    }
-
-                    // Every other unmatched end tag is a parse error the HTML5 tree construction algorithm
-                    // simply ignores, leaving the insertion point where it is - NOT "close everything up
-                    // to the document root", which would silently reparent the rest of the document under
-                    // <body>/<html>.
+                    // Every unmatched end tag is a parse error the HTML5 tree construction algorithm simply ignores, leaving the
+                    // insertion point where it is - NOT "close everything up to the document root", which would silently reparent
+                    // the rest of the document under <body>/<html>; </p> alone generates an element instead.
+                    ParseEndTag(state, lowerName);
                 }
             }
             else if (!string.IsNullOrEmpty(tagName))
             {
 #if DEBUG
-                Console.WriteLine($"parse token, tag open: {tagName}. current box: {curBox}");
+                Console.WriteLine($"parse token, tag open: {tagName}. current box: {state.Current}");
 #endif
-                // Formatting elements (<b>, <i>, <a>...) still open inside what this start tag ends: they are closed with it, and opened again inside the new
-                // element, as the HTML tree construction algorithm "reconstructs the active formatting elements" - <li><b>a<li>b is two items, the second bold.
-                var reopen = FormattingOpenInsideAnEndedElement(curBox, tagName);
-                if (reopen is not null)
-                    curBox = FirstNonFormattingAncestor(curBox);
-
-                while (true)
-                {
-                    if (curBox.HtmlTag is not null && HtmlUtils.CanEndTagBeOmitted(curBox.HtmlTag.Name.ToLowerInvariant(), tagName.ToLowerInvariant()))
-                    {
-                        var previousBox = curBox;
-                        curBox = CloseElement(curBox, curBox.HtmlTag.Name);
-
-#if DEBUG
-                        Console.WriteLine($"parse token, prev tag omitted, closing: {previousBox}. current box is now: {curBox}");
-#endif
-                    }
-                    else
-                    {
-                        break;
-                    }
-                }
-
                 var isSingle = HtmlUtils.IsSingleTag(tagName.ToLowerInvariant()) || token.IsEmptyElement;
-                var tag = new HtmlTag(tagName, isSingle, tagAttributes);
+                InsertStartTag(state, token, tagName, tagAttributes, isSingle);
+            }
+        }
 
-                if (isSingle)
+        // The "in body" insertion mode's answer to a start tag: close what it ends, reconstruct the formatting elements, insert the element.
+        private static void InsertStartTag(ParserState state, HtmlTagToken token, string tagName, Dictionary<string, string>? tagAttributes, bool isSingle)
+        {
+            var lowerName = tagName.ToLowerInvariant();
+            if (!state.Current.IsWithinForeignContent)
+                PrepareStartTag(state, lowerName);
+
+            while (true)
+            {
+                if (state.Current.HtmlTag is not null && !ReferenceEquals(state.Current, state.Root)
+                    && HtmlUtils.CanEndTagBeOmitted(state.Current.HtmlTag.Name.ToLowerInvariant(), lowerName))
                 {
-                    // the current box is not changed
-                    CssBox.CreateBox(tag, curBox);
+#if DEBUG
+                    Console.WriteLine($"parse token, prev tag omitted, closing: {state.Current}");
+#endif
+                    PopThrough(state, state.Current);
                 }
                 else
                 {
-                    // go one level down, make the new box the current box
-                    curBox = CssBox.CreateBox(tag, curBox);
-                    EnsureWithinMaxDepth(curBox);
-                    if (reopen is not null)
-                    {
-                        foreach (var formatting in reopen)
-                        {
-                            curBox = CssBox.CreateBox(new HtmlTag(formatting.Name, false, (formatting.Attributes ?? []).ToDictionary(a => a.Key, a => a.Value, StringComparer.OrdinalIgnoreCase)), curBox);
-                            EnsureWithinMaxDepth(curBox);
-                        }
-                    }
+                    break;
                 }
             }
-        }
 
-        private static bool IsFormattingElement(CssBox box) =>
-            box.HtmlTag?.Name.ToLowerInvariant() is "a" or "b" or "big" or "code" or "em" or "font" or "i" or "nobr" or "s" or "small" or "strike" or "strong" or "tt" or "u";
+            var tag = new HtmlTag(tagName, isSingle, tagAttributes);
 
-        private static CssBox FirstNonFormattingAncestor(CssBox box)
-        {
-            while (IsFormattingElement(box) && box.ParentBox is { } parent)
-                box = parent;
-
-            return box;
-        }
-
-        // The formatting elements, outermost first, that are open at the insertion point on top of an element that a start tag of this name ends; null when
-        // there are none or the element below them is not one it ends.
-        private static List<HtmlTag>? FormattingOpenInsideAnEndedElement(CssBox curBox, string tagName)
-        {
-            if (!IsFormattingElement(curBox))
-                return null;
-
-            var chain = new List<HtmlTag>();
-            var probe = curBox;
-            while (IsFormattingElement(probe) && probe.ParentBox is { } parent)
+            if (isSingle)
             {
-                chain.Insert(0, probe.HtmlTag!);
-                probe = parent;
+                // the current box is not changed
+                CssBox.CreateBox(tag, state.Current);
             }
+            else
+            {
+                // go one level down, make the new box the current box
+                var box = CssBox.CreateBox(tag, state.Current);
+                state.Current = box;
+                EnsureWithinMaxDepth(box);
 
-            return probe.HtmlTag is { } ended && !IsFormattingElement(probe)
-                && HtmlUtils.CanEndTagBeOmitted(ended.Name.ToLowerInvariant(), tagName.ToLowerInvariant())
-                ? chain
-                : null;
+                if (!box.IsWithinForeignContent)
+                    AfterStartTagInserted(state, lowerName, box);
+            }
         }
 
         /// <summary>
@@ -337,42 +303,6 @@ namespace PeachBrackets.Html.Parse
                         HtmlRenderErrorType.HtmlParsing);
                 }
             }
-        }
-
-        private static bool HasElementInButtonScope(CssBox currentBox, string tagName)
-        {
-            for (CssBox? box = currentBox; box is not null; box = box.ParentBox)
-            {
-                var openTagName = box.HtmlTag?.Name;
-                if (string.Equals(openTagName, tagName, StringComparison.OrdinalIgnoreCase))
-                    return true;
-
-                if (openTagName?.ToLowerInvariant() is "applet" or "caption" or "html" or "table"
-                    or "td" or "th" or "marquee" or "object" or "template" or "button")
-                {
-                    return false;
-                }
-            }
-
-            return false;
-        }
-
-        /// <summary>
-        /// Moves the insertion point up past <paramref name="tagName"/>'s own box. Used for an
-        /// <i>implied</i> end tag (<see cref="HtmlUtils.CanEndTagBeOmitted"/>), where the element being
-        /// closed is <paramref name="cssBox"/> itself and so is always found; an explicit end tag is
-        /// resolved by its caller instead, which has a stray-end-tag case to answer that this does not
-        /// (see <see cref="HandleStrayParagraphEndTag"/>).
-        /// </summary>
-        private static CssBox CloseElement(CssBox cssBox, string tagName)
-        {
-            var currentBox = DomUtils.FindParent(cssBox.ParentBox!, tagName, cssBox) ?? cssBox;
-
-#if DEBUG
-            Console.WriteLine($"parse token, closing: {cssBox}. current box is now: {currentBox}");
-#endif
-
-            return currentBox;
         }
 
         /// <summary>
@@ -503,7 +433,7 @@ namespace PeachBrackets.Html.Parse
 
         /// <summary>
         /// Builds the source elements of one inline <c>&lt;math&gt;</c> from its tokens, doing what the ordinary path does for the same
-        /// tokens (<see cref="ParseHtmlTag(HtmlTagToken, ref CssBox)"/>) in the cases it takes, and answering
+        /// tokens (<see cref="ParseHtmlTag(HtmlTagToken, ParserState)"/>) in the cases it takes, and answering
         /// <see cref="MathStep.Abandon"/> before changing anything for a token it does not: an element that is not MathML, an end tag
         /// for nothing it has open, a <c>&lt;/p&gt;</c>.
         /// </summary>

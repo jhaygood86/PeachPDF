@@ -3,7 +3,7 @@
 - **Implied end tags.** `HtmlUtils.CanEndTagBeOmitted` now also covers `li` (by `li`), `dt`/`dd` (by `dt`/`dd`), `th` like `td`, `thead`/`tbody` (by
   `tbody`/`tfoot`), and a `tbody`/`thead`/`tfoot` start tag ends an open `td`/`th`/`tr`. `li`, `dt` and `dd` were added to the tags that end a
   paragraph, because the tree-construction rule closes a `<p>` still open in the previous item. The check is on the *current* box only (as for `p`), so
-  an item left open inside an unclosed `<b>` is not closed; the spec's reconstruction of formatting elements is not implemented.
+  an item left open inside an unclosed `<b>` was not closed (superseded: [the adoption agency note](2026-11-03-adoption-agency.md) reconstructs formatting elements).
 - **Underline / strikethrough.** `AccessibilityNode.Underline` and `Strikethrough` walk up the boxes for a `text-decoration-line`, because a decoration set
   on an element is drawn on the text inside it. UI Automation's two style attributes are 0 for none and 1 for a single line.
 - **Page selection across blocks.** The one-block limit was only a guard in `HtmlViewText`: `TextRunQueries.Find` joins runs with the same line breaks
