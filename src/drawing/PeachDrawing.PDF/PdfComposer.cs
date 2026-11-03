@@ -241,6 +241,9 @@ namespace PeachDrawing.PDF
                 _document.Catalog.ViewerPreferences.DisplayDocTitle = true;
 
             FinishPages();
+            foreach (var page in _pages)
+                page.ApplyPrintBoxes();
+
             _document.Save(stream);
         }
 

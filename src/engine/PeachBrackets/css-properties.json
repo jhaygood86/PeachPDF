@@ -4994,6 +4994,22 @@
       "cssDataType": "unsupported"
     },
     {
+      "name": "bleed",
+      "comment": "CSS-OM only (@page descriptor, css-page-3 section 13): the render layer reads the declared text through PageBleedMarks, so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "inherited": false,
+      "cssom": {"converter": "LengthConverter.OrAuto()"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "marks",
+      "comment": "CSS-OM only (@page descriptor, css-page-3 section 12): none | [ crop || cross ]. Validated loosely here (one or two identifiers); PageBleedMarks reads the declared text and ignores anything that is not none, crop or cross.",
+      "inherited": false,
+      "cssom": {"converter": "IdentifierConverter.Many(1, 2)"},
+      "initialValue": "none",
+      "cssDataType": "unsupported"
+    },
+    {
       "name": "text-anchor",
       "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
       "inherited": true,

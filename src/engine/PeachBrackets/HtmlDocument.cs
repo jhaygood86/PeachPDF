@@ -305,11 +305,15 @@ public sealed partial class HtmlDocument : IDisposable
             await _container.PerformLayout(measuringCanvas);
 
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
-        _pages = fragmentainers
-            .Select((fragmentainer, index) => new DocumentPage(index, fragmentainer.Geometry.SheetWidthPt, fragmentainer.Geometry.SheetHeightPt))
-            .ToArray();
         _painter?.Dispose();
         _painter = new PagePainter(_container, _renderContext);
+        _pages = fragmentainers
+            .Select((fragmentainer, index) =>
+            {
+                var extras = _painter.ResolvePrintExtras(fragmentainer, index + 1);
+                return new DocumentPage(index, fragmentainer.Geometry.SheetWidthPt, fragmentainer.Geometry.SheetHeightPt, extras.BleedPt, extras.OutsidePt);
+            })
+            .ToArray();
         return resumedSlot;
     }
 
