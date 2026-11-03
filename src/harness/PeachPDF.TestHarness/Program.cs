@@ -14758,8 +14758,6 @@ await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode"
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
 
-<<<<<<< HEAD
-=======
 // --- mask-image showcase (CSS Masking 1 §6) ---
 
 const string MaskImageCss = """
@@ -14787,7 +14785,6 @@ await SaveShowcaseAsync("mask_image", "Graphics & Effects", "mask-image",
     "mask-image with gradient layers fades or cuts out an element and its content through a real PDF soft mask: alpha and luminance modes, tiled masks, and opacity on the masked result.",
     maskImageHtml, pdfConfig);
 
->>>>>>> origin/main
 // --- sideways writing modes showcase (CSS Writing Modes 4 section 4.1: sideways-rl / sideways-lr) ---
 
 const string SidewaysCss = """

@@ -589,15 +589,7 @@ would double-apply the same shift.
   value, producing a rotation mismatch. Per CSS Writing Modes, `writing-mode` has no defined effect on a
   non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
   than a behavior authors should rely on either way.
-<<<<<<< HEAD
 - **`sideways-lr` SVG `<text>` is not bidi-reordered**, and in HTML and SVG alike the words of different font sizes in a column are aligned by their line-over edge rather than a shared baseline (also true for `vertical-rl`/`vertical-lr`). `sideways-rl`/`sideways-lr` otherwise work in both pipelines: vertical modes (`WritingMode.IsVertical()`) with always-sideways glyphs, and `sideways-lr` reading bottom to top.
-=======
-- **`sideways-rl`/`sideways-lr` in SVG `<text>`** (https://github.com/jhaygood86/PeachPDF/issues/2161) still behave as `horizontal-tb` (the SVG pipeline has its own writing-mode
-  check, `SvgRenderer.IsVerticalWritingMode`); in HTML they are vertical modes (`WritingMode.IsVertical()`) with
-  always-sideways glyphs, and `sideways-lr` reads bottom to top via the frame's `InlineStartIsBottom` and a counter-clockwise
-  glyph rotation (`FragmentPainter.SidewaysRotationFor`). Inside a column the words of different font sizes are aligned
-  by their line-over edge rather than a shared baseline, which was already so for `vertical-rl`/`vertical-lr`.
->>>>>>> origin/main
 - **Table's remaining gap, narrowed: real per-column pagination combined with `rowspan`/`colspan`/
   `<caption>`/`<thead>`-`<tfoot>`/collapsed borders** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)
   stays open for exactly this, tracked in its own right as
