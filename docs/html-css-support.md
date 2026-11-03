@@ -1597,6 +1597,7 @@ The `@page` at-rule targets PDF pages. A rule without a selector applies to all 
 | `@page :blank { }` | Full | Applies to a page inserted by a directional break (`left`/`right`/`recto`/`verso`); ranks with `:first`, above `:left`/`:right` |
 | `@page :right { }` | Full | Applies to odd-numbered pages |
 | `@page name { }` — named page | Full | Activated by `page: name` on elements; see [Named pages](#named-pages) |
+| `bleed`, `marks` | Full | Bleed area and crop/cross marks outside the page box; see [Bleed and printer's marks](#bleed-and-printers-marks-bleed-marks) |
 
 **Cascade order:** the base rule is the fallback; a matching named-page rule overrides it; pseudo-selector rules override named-page rules. When both `:first` and `:right` match page 1, the last matching rule in the stylesheet wins.
 
@@ -1648,6 +1649,23 @@ This is **layout-affecting**: the resolved border width plus padding genuinely n
 `border-*-width` never accepts a percentage, matching ordinary elements. `padding-*` percentages resolve against the page box's own overall sheet dimensions — horizontal against the width, vertical against the height — the most direct reading of [css-page-3 §6](https://www.w3.org/TR/css-page-3/#page-margin-properties)'s wording in the absence of page-box-specific guidance.
 
 A per-page (`:first`/`:left`/`:right`/named-page) border/padding override behaves exactly like a per-page margin override (see [Known boundaries of per-page margins](#page-rule) above): it narrows only the pages that rule applies to, and — like an over-large margin override — an override that would leave no room at all for content on a page falls back to the base margin with no border/padding on that page, rather than stalling pagination.
+
+### Bleed and printer's marks (`bleed`, `marks`)
+
+For output that goes to a commercial printer, `@page` accepts `bleed` and `marks` ([css-page-3 §12-13](https://www.w3.org/TR/css-page-3/#marks)). They are per-page like `size` and `margin`, so `:first` and named-page rules can set their own.
+
+```css
+@page {
+  size: 90mm 55mm;
+  bleed: 3mm;
+  marks: crop cross;
+}
+```
+
+- **`bleed: <length> | auto`**: how far the artwork extends past the page box (the trim edge) on every side. `auto` (the initial value) is `6pt` when `marks` includes `crop` and `0` otherwise. A negative or invalid length is treated as `auto`. The canvas background (the root element's or body's `background`, which fills the page) runs out to the bleed edge; the page box's own `@page` background and border, and the content, stay inside the page box.
+- **`marks: none | [ crop || cross ]`**: `crop` draws the pair of hairline strokes at each corner that continue the trim edges, and `cross` draws a registration target (a circle with a cross through it) at the middle of each edge. The marks are black, outside the bleed area. Anything else is `none`.
+- **The sheet grows around the page.** The PDF page is the page box plus the bleed plus a 15pt strip for the marks (when `marks` is not `none`) on every side, so page layout, margins and pagination are exactly what they are without these descriptors. The PDF page's `/TrimBox` is the page box and its `/BleedBox` is the page box plus the bleed, which is what prepress tools read to cut and to check the bleed; its `/MediaBox` is the whole sheet. Links, form fields and bookmarks keep the page-box coordinates.
+- A document painted through [`HtmlDocument`](peachbrackets.md) reports the extra space as `DocumentPage.BleedPoints` and `MarksPoints`; the canvas keeps its origin at the page box's top-left corner, so the bleed and the marks are at negative coordinates.
 
 ### `size` property
 

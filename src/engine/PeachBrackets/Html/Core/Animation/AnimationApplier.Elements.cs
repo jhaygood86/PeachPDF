@@ -134,7 +134,8 @@ namespace PeachBrackets.Html.Animation
 
                 if (Sample(valueParser, box, stops, property, animation.Progress, animation.Easing, result) is { } sampled)
                 {
-                    result = sampled;
+                    // A calc() or min() that came out below zero was kept as it is while mixing, and clamps to the property's range where it is used (CSS Values 4, range checking of calc()).
+                    result = NonNegativeElementProperties.Contains(property) && IsNegativeNumber(sampled.Trim()) ? "0px" : sampled;
                     applied = true;
                 }
             }

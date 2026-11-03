@@ -69,6 +69,35 @@ namespace PeachDrawing.PDF.Tests
         }
 
         [Fact]
+        public async Task SetPrintBoxes_GrowsTheSheetAroundTheTrimBox()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+            var page = composer.AddPage(200, 300);
+            page.SetPrintBoxes(8.5, 15);
+
+            var pdf = Latin1(Save(composer));
+
+            // The page box stays at the origin; the sheet and the bleed box grow around it.
+            Assert.Contains("/MediaBox [-23.5 -23.5 223.5 323.5]", pdf);
+            Assert.Contains("/TrimBox [0 0 200 300]", pdf);
+            Assert.Contains("/BleedBox [-8.5 -8.5 208.5 308.5]", pdf);
+            Assert.Equal(200, page.WidthPoints);
+            Assert.Equal(300, page.HeightPoints);
+        }
+
+        [Fact]
+        public async Task SetPrintBoxes_RejectsANegativeDistance()
+        {
+            var (context, _) = await NewContextAsync();
+            using var composer = new PdfComposer(context, Plain());
+            var page = composer.AddPage(200, 300);
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => page.SetPrintBoxes(-1, 0));
+            Assert.Throws<ArgumentOutOfRangeException>(() => page.SetPrintBoxes(0, double.NaN));
+        }
+
+        [Fact]
         public async Task Pages_AreAddedInOrderWithTheirOwnSizes()
         {
             var (context, _) = await NewContextAsync();

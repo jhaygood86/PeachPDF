@@ -1810,6 +1810,18 @@ namespace PeachBrackets.Css
             set => SetPropertyValue(PropertyNames.Size, value);
         }
 
+        public string Bleed
+        {
+            get => GetPropertyValue(PropertyNames.Bleed);
+            set => SetPropertyValue(PropertyNames.Bleed, value);
+        }
+
+        public string Marks
+        {
+            get => GetPropertyValue(PropertyNames.Marks);
+            set => SetPropertyValue(PropertyNames.Marks, value);
+        }
+
         public string PageName
         {
             get => GetPropertyValue(PropertyNames.PageName);

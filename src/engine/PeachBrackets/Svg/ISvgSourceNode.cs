@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.Css;
 using System;
 using System.Collections.Generic;
 
@@ -117,6 +118,27 @@ namespace PeachBrackets.Svg
         /// default <c>LangSys</c> unless something in the SVG itself sets <c>lang</c>/<c>xml:lang</c>.
         /// </summary>
         string? DocumentLanguageFallback => null;
+
+        /// <summary>
+        /// The <c>font-size</c>, in CSS px, the root <c>&lt;svg&gt;</c> inherits from the document that embeds it - the computed size of its
+        /// HTML parent - which seeds the font its tree inherits (CSS Fonts 4 §2.5: <c>font-size</c> is inherited) and so the <c>em</c> of a
+        /// length or of a descendant's <c>font-size</c>. Null (the default) for a source with no such context: a standalone SVG document
+        /// starts from the initial size.
+        /// </summary>
+        double? InheritedFontSizePx => null;
+
+        /// <summary>
+        /// The <c>font-size</c>, in CSS px, of the root element of the document that embeds this SVG, which is what <c>rem</c> is (CSS Values 4
+        /// §6.1.1) wherever the <c>rem</c> is written, inside an inline <c>&lt;svg&gt;</c> included. Null (the default) for a standalone SVG,
+        /// whose root <c>&lt;svg&gt;</c> is the root element.
+        /// </summary>
+        double? RootFontSizePx => null;
+
+        /// <summary>
+        /// What the font of the embedding document's root element measures, as a multiple of its em, for <c>rex</c>/<c>rch</c>/<c>rcap</c>/<c>ric</c>/<c>rlh</c>
+        /// (CSS Values 4 §6.1.2). Null (the default) when there is no such font: a standalone SVG measures its own root <c>&lt;svg&gt;</c>'s.
+        /// </summary>
+        double? GetRootFontRatio(FontMetric metric) => null;
     }
 
     /// <summary>

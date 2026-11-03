@@ -10,6 +10,7 @@
 // - Sun Tsu,
 // "The Art of War"
 
+using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.Dom;
@@ -129,5 +130,17 @@ namespace PeachBrackets.Svg
         /// nearest HTML ancestor's, else <see cref="HtmlContainerInt.DocumentLanguage"/>) when nothing in
         /// the SVG subtree itself sets <c>lang</c>/<c>xml:lang</c>.</summary>
         public string? DocumentLanguageFallback => _box.Language;
+
+        /// <summary>The computed font size of the HTML parent, which the inline <c>&lt;svg&gt;</c> inherits. The svg's own declaration, if any, is read from the tree
+        /// like any other element's, against this.</summary>
+        public double? InheritedFontSizePx => HasFonts && _box.ParentBox is { } parent ? parent.GetEmHeight() / Length.PointsPerPx : null;
+
+        /// <summary>The font size of the HTML root element, which is <c>rem</c>.</summary>
+        public double? RootFontSizePx => HasFonts ? _box.GetRemHeight() / Length.PointsPerPx : null;
+
+        public double? GetRootFontRatio(FontMetric metric) => HasFonts ? ((IFontMetricSource)_box.DerivedStyle).GetRatio(metric, true) : null;
+
+        // A box tree read with no container (a unit test of the builder, say) has no render context to measure a font with.
+        private bool HasFonts => _box.HtmlContainer?.RenderContext is not null;
     }
 }

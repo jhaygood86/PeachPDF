@@ -64,6 +64,8 @@ namespace PeachDrawing.PDF
             _composer = composer;
             _page = page;
             Index = index;
+            WidthPoints = page.Width;
+            HeightPoints = page.Height;
             _graphics = PdfGraphics.FromPdfPage(page);
             Canvas = CreateCanvas(renderContext);
         }
@@ -72,13 +74,58 @@ namespace PeachDrawing.PDF
         public int Index { get; }
 
         /// <summary>The page's width in points.</summary>
-        public double WidthPoints => _page.Width;
+        public double WidthPoints { get; }
 
         /// <summary>The page's height in points.</summary>
-        public double HeightPoints => _page.Height;
+        public double HeightPoints { get; }
 
         /// <summary>The canvas made with the composer's <see cref="PdfRenderContext"/> when the page was added.</summary>
         public PdfCanvas Canvas { get; }
+
+        private double? _bleedPoints;
+        private double _outsidePoints;
+        private bool _printBoxesApplied;
+
+        /// <summary>
+        /// Makes the sheet larger than the page, for print production: the page box (the size given to <see cref="PdfComposer.AddPage"/>)
+        /// becomes the <c>/TrimBox</c>, the <c>/BleedBox</c> extends it by <paramref name="bleedPoints"/> on every side, and the
+        /// <c>/MediaBox</c> extends it by <paramref name="bleedPoints"/> plus <paramref name="outsidePoints"/>, which is room for printer's marks.
+        /// </summary>
+        /// <remarks>
+        /// Drawing keeps its origin at the page box's top-left corner, so what is drawn at a negative coordinate (or past the page's width or
+        /// height) lands in the bleed and mark area. The boxes are written when the document is saved, and <see cref="WidthPoints"/>,
+        /// <see cref="HeightPoints"/> and the coordinates links and bookmarks use stay the page box's throughout.
+        /// </remarks>
+        /// <param name="bleedPoints">how far the bleed area extends beyond the page box, in points; not negative</param>
+        /// <param name="outsidePoints">how much further the sheet extends beyond the bleed area, in points; not negative</param>
+        /// <exception cref="ArgumentOutOfRangeException">a distance is negative or not a finite number</exception>
+        public void SetPrintBoxes(double bleedPoints, double outsidePoints)
+        {
+            if (!(bleedPoints >= 0) || double.IsInfinity(bleedPoints))
+                throw new ArgumentOutOfRangeException(nameof(bleedPoints), bleedPoints, "A bleed needs a non-negative, finite length.");
+            if (!(outsidePoints >= 0) || double.IsInfinity(outsidePoints))
+                throw new ArgumentOutOfRangeException(nameof(outsidePoints), outsidePoints, "A mark area needs a non-negative, finite length.");
+
+            _bleedPoints = bleedPoints;
+            _outsidePoints = outsidePoints;
+            _printBoxesApplied = false;
+        }
+
+        // Called by the composer once every page is drawn: the engine flips y by the media box's height while drawing and writing links, so
+        // the larger sheet is only written when nothing is left to place on it.
+        internal void ApplyPrintBoxes()
+        {
+            if (_bleedPoints is not { } bleed || _printBoxesApplied)
+                return;
+
+            _printBoxesApplied = true;
+            var width = WidthPoints;
+            var height = HeightPoints;
+            var sheet = bleed + _outsidePoints;
+            _page.MediaBox = new PdfRectangle(-sheet, -sheet, width + sheet, height + sheet);
+            _page.TrimBox = new PdfRectangle(0, 0, width, height);
+            _page.BleedBox = new PdfRectangle(-bleed, -bleed, width + bleed, height + bleed);
+        }
 
         /// <summary>The engine's page, for the rest of the package.</summary>
         internal PdfPage Page => _page;

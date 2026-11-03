@@ -382,6 +382,8 @@
         public static readonly string ImageResolution = "image-resolution";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
+        public static readonly string Bleed = "bleed";
+        public static readonly string Marks = "marks";
 
         // CSS Logical Properties and Values Level 1. PeachPDF is always LTR / horizontal-tb,
         // so each logical property maps 1:1 to a physical one (block-start = top,

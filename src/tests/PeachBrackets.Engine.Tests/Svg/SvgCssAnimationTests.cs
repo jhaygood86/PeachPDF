@@ -488,13 +488,13 @@ namespace PeachBrackets.Engine.Tests.Svg
         [Fact]
         public async Task ATextPropertyNothingDeclares_MixesFromItsInitialValue()
         {
-            // Chrome: letter-spacing 0 to 10px is 5 halfway; font-size from the resting size (11px) to 41px is 26.
-            var document = await BuildAsync("@keyframes k { to { letter-spacing: 10px; font-size: 41px } } text { animation: k 1s linear }",
+            // Chrome: letter-spacing 0 to 10px is 5 halfway; font-size from the size inherited from the page (16px here) to 41px is 28.5.
+            var document = await BuildAsync("body { font-size: 16px } @keyframes k { to { letter-spacing: 10px; font-size: 41px } } text { animation: k 1s linear }",
                 "<text x=\"0\" y=\"20\">a</text>", 0.5);
 
             var text = Assert.IsType<SvgTextElement>(document.Children[0]);
             Assert.Equal(5, text.LetterSpacing, 2);
-            Assert.Equal(26, text.Font!.Size, 2);
+            Assert.Equal(28.5, text.Font!.Size, 2);
         }
 
         [Theory]
@@ -538,8 +538,8 @@ namespace PeachBrackets.Engine.Tests.Svg
         [Fact]
         public async Task AnInheritedEmLength_ResolvesAgainstAFontSizeInheritedInEm()
         {
-            // 1.5em of 16px is 24px on the <g>; its letter-spacing 1em is 24px for the text, not 1em of the text's own 10px.
-            var document = await BuildAsync("@keyframes k { to { stroke-width: 0 } } .t { animation: k 1s linear }",
+            // 1.5em of the page's 16px is 24px on the <g>; its stroke-width 1em is 24px for the rect, not 1em of the rect's own 10px.
+            var document = await BuildAsync("body { font-size: 16px } @keyframes k { to { stroke-width: 0 } } .t { animation: k 1s linear }",
                 "<g font-size=\"1.5em\" stroke-width=\"1em\"><rect class=\"t\" font-size=\"10\" width=\"10\" height=\"10\" stroke=\"black\"/></g>", 0);
 
             var group = Assert.IsType<SvgGroupElement>(document.Children[0]);
