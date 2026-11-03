@@ -54,9 +54,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         // The oldest of four identical elements is not in the list, so its end tag is a plain close.
         [InlineData("<b><b><b><b>x</b></b></b></b>y", "<b><b><b><b>x</b></b></b></b>y")]
         // An element outside the scope of a table is not reached.
-        [InlineData("<b>1<table></b><tr><td>x</td></tr></table>", "<b>1<table><tr><td>x</td></tr></table></b>")]
+        [InlineData("<b>1<table></b><tr><td>x</td></tr></table>", "<b>1<table><tbody><tr><td>x</td></tr></tbody></table></b>")]
         // Cells and rows whose end tags are omitted.
-        [InlineData("<table><tr><td>a<td>b<tr><td>c</table>", "<table><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></table>")]
+        [InlineData("<table><tr><td>a<td>b<tr><td>c</table>", "<table><tbody><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></tbody></table>")]
         public void TheRestOfTheAdoptionAgencyAlgorithm_IsFollowed(string html, string expected) => Assert.Equal(expected, Body(html));
 
         [Fact]
@@ -74,7 +74,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         [Fact]
         public void AMarkerStopsReconstruction_AtTheEndOfATableCell()
         {
-            Assert.Equal("<table><tr><td><b>x</b></td></tr></table>y", Body("<table><tr><td><b>x</td></tr></table>y"));
+            Assert.Equal("<table><tbody><tr><td><b>x</b></td></tr></tbody></table>y", Body("<table><tr><td><b>x</td></tr></table>y"));
         }
 
         [Fact]
@@ -97,7 +97,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
 
         [Theory]
         // A block end tag looks for its element only within scope: a table cell hides what is outside it.
-        [InlineData("<div><table><tr><td></div>x</td></tr></table></div>", "<div><table><tr><td>x</td></tr></table></div>")]
+        [InlineData("<div><table><tr><td></div>x</td></tr></table></div>", "<div><table><tbody><tr><td>x</td></tr></tbody></table></div>")]
         // A special element in the way ignores the end tag of one that is not special.
         [InlineData("<span><div>a</span>b</div>", "<span><div>ab</div></span>")]
         // Any other end tag closes the nearest open element of its name.
@@ -139,7 +139,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
             Assert.Throws<HtmlRenderException>(() => Body(html));
         }
 
-        private static string Body(string html)
+        internal static string Body(string html)
         {
             var sb = new StringBuilder();
             foreach (var child in ParseBody(html).Boxes)
@@ -148,7 +148,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
             return sb.ToString();
         }
 
-        private static CssBox ParseBody(string html)
+        internal static CssBox ParseBody(string html)
         {
             var root = HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{html}</body></html>");
             return Find(root, "body")!;

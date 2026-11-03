@@ -123,9 +123,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await BuildAndLayout("""
                 <!DOCTYPE html><html><head><style>
                 .row { display: flex }
-                .row > div { width: 40px; height: 20px }
+                .row > tbody { width: 40px; height: 20px }
                 </style></head><body>
-                <table class="row"><div class="a">A</div><div class="b">B</div></table>
+                <table class="row"><tbody class="a"><tr><td>A</td></tr></tbody><tbody class="b"><tr><td>B</td></tr></tbody></table>
                 </body></html>
                 """);
 

@@ -61,17 +61,21 @@ namespace PeachBrackets.Html.Parse
 
                     if (step == MathStep.Ended)
                     {
-                        state.Current = mathParser.Box.ParentBox!;
+                        PopThrough(state, mathParser.Box);
                         mathParser = null;
                         continue;
                     }
 
-                    state.Current = mathParser.Box.MaterializeSource(mathParser.Current)!;
+                    // The elements the source tree held are boxes now; the ones still open go on the stack.
+                    var deepest = mathParser.Box.MaterializeSource(mathParser.Current)!;
+                    var opened = new List<CssBox>();
+                    for (var open = deepest; open is not null && !ReferenceEquals(open, mathParser.Box); open = open.ParentBox)
+                        opened.Add(open);
+
+                    opened.Reverse();
+                    state.Stack.AddRange(opened);
                     mathParser = null;
                 }
-
-                if (state.Formatting.Count > 0)
-                    ClearClosedMarkers(state);
 
                 switch (token.Kind)
                 {
@@ -95,11 +99,11 @@ namespace PeachBrackets.Html.Parse
 
                             if (state.Current.HtmlTag?.Name.Equals(HtmlConstants.NoScript, StringComparison.OrdinalIgnoreCase) == true)
                             {
-                                state.Current = ParseDocument(text.Data, state.Current);
+                                ParseDocument(text.Data, state.Current);
                             }
                             else
                             {
-                                AddTextBox(text, state);
+                                if (text.Data is { } data) ProcessText(state, data);
                             }
 
                             break;
@@ -172,34 +176,6 @@ namespace PeachBrackets.Html.Parse
         #region Private methods
 
         /// <summary>
-        /// Add html text anon box to the current box, this box will have the rendered text<br/>
-        /// Adding box also for text that contains only whitespaces because we don't know yet if
-        /// the box is preformatted. At later stage they will be removed if not relevant.
-        /// </summary>
-        /// <param name="token">the html token to parse</param>
-        /// <param name="state">the state of the tree being built</param>
-        private static void AddTextBox(HtmlDataToken token, ParserState state)
-        {
-            var text = token.Data;
-
-            if (text == null) return;
-
-            // A MathML token's text stays on its element (see CssBox.ForeignText).
-            if (state.Current.TryAbsorbForeignText(text)) return;
-
-            // Text is "a character token" of the "in body" insertion mode, which reconstructs the active formatting elements first.
-            if (state.Formatting.Count > 0 && !state.Current.IsWithinForeignContent
-                && !(state.Current.HtmlTag is { } parentTag && NoReconstructTextParents.Contains(parentTag.Name)))
-            {
-                ReconstructFormatting(state);
-            }
-
-            var box = CssBox.CreateBox(state.Current);
-            box.Text = text;
-        }
-
-
-        /// <summary>
         /// Parse the html part, the part from prev parsing index to the beginning of the next html tag.<br/>
         /// </summary>
         /// <param name="token">the html tag token</param>
@@ -213,7 +189,7 @@ namespace PeachBrackets.Html.Parse
                 // </br> is a parse error that the tree builder answers as <br>, with no attributes.
                 if (lowerName == "br")
                 {
-                    InsertStartTag(state, token, tagName, null, isSingle: true);
+                    ProcessStartTag(state, new StartTag(tagName, lowerName, null, true));
                 }
                 else if (!HtmlUtils.IsSingleTag(lowerName))
                 {
@@ -223,7 +199,7 @@ namespace PeachBrackets.Html.Parse
                     // Every unmatched end tag is a parse error the HTML5 tree construction algorithm simply ignores, leaving the
                     // insertion point where it is - NOT "close everything up to the document root", which would silently reparent
                     // the rest of the document under <body>/<html>; </p> alone generates an element instead.
-                    ParseEndTag(state, lowerName);
+                    ProcessEndTag(state, lowerName);
                 }
             }
             else if (!string.IsNullOrEmpty(tagName))
@@ -231,50 +207,9 @@ namespace PeachBrackets.Html.Parse
 #if DEBUG
                 Console.WriteLine($"parse token, tag open: {tagName}. current box: {state.Current}");
 #endif
-                var isSingle = HtmlUtils.IsSingleTag(tagName.ToLowerInvariant()) || token.IsEmptyElement;
-                InsertStartTag(state, token, tagName, tagAttributes, isSingle);
-            }
-        }
-
-        // The "in body" insertion mode's answer to a start tag: close what it ends, reconstruct the formatting elements, insert the element.
-        private static void InsertStartTag(ParserState state, HtmlTagToken token, string tagName, Dictionary<string, string>? tagAttributes, bool isSingle)
-        {
-            var lowerName = tagName.ToLowerInvariant();
-            if (!state.Current.IsWithinForeignContent)
-                PrepareStartTag(state, lowerName);
-
-            while (true)
-            {
-                if (state.Current.HtmlTag is not null && !ReferenceEquals(state.Current, state.Root)
-                    && HtmlUtils.CanEndTagBeOmitted(state.Current.HtmlTag.Name.ToLowerInvariant(), lowerName))
-                {
-#if DEBUG
-                    Console.WriteLine($"parse token, prev tag omitted, closing: {state.Current}");
-#endif
-                    PopThrough(state, state.Current);
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            var tag = new HtmlTag(tagName, isSingle, tagAttributes);
-
-            if (isSingle)
-            {
-                // the current box is not changed
-                CssBox.CreateBox(tag, state.Current);
-            }
-            else
-            {
-                // go one level down, make the new box the current box
-                var box = CssBox.CreateBox(tag, state.Current);
-                state.Current = box;
-                EnsureWithinMaxDepth(box);
-
-                if (!box.IsWithinForeignContent)
-                    AfterStartTagInserted(state, lowerName, box);
+                var lowerName = tagName.ToLowerInvariant();
+                var isSingle = HtmlUtils.IsSingleTag(lowerName) || token.IsEmptyElement;
+                ProcessStartTag(state, new StartTag(tagName, lowerName, tagAttributes, isSingle));
             }
         }
 
@@ -303,60 +238,6 @@ namespace PeachBrackets.Html.Parse
                         HtmlRenderErrorType.HtmlParsing);
                 }
             }
-        }
-
-        /// <summary>
-        /// Handles a <c>&lt;/p&gt;</c> whose <c>&lt;p&gt;</c> is no longer open, by inserting an empty
-        /// one — <see href="https://html.spec.whatwg.org/multipage/parsing.html#parsing-main-inbody">HTML
-        /// §13.2.6.4.7 "in body"</see>: "An end tag whose tag name is <c>p</c>: if the stack of open
-        /// elements does not have a <c>p</c> element in button scope, then this is a parse error; insert
-        /// an HTML element for a <c>p</c> start tag token with no attributes. Close a <c>p</c> element."
-        /// </summary>
-        /// <remarks>
-        /// <c>p</c> is one of only two end tags the spec answers this way rather than by ignoring an
-        /// unmatched end tag outright (<c>br</c> is the other, and is turned into a <i>start</i> tag
-        /// instead — not implemented here). The generated element is empty and immediately closed, so the
-        /// insertion point does not move; what it changes is the <b>element count</b>, and therefore
-        /// sibling-combinator matching.
-        /// <para>
-        /// This is not academic. It is exactly what Acid2 tests with
-        /// <c>&lt;p&gt;&lt;table&gt;…&lt;/table&gt;&lt;/p&gt;&lt;p class="bad"&gt;</c>: <c>&lt;table&gt;</c>
-        /// closes the first <c>&lt;p&gt;</c>, so the <c>&lt;/p&gt;</c> after it is stray and generates the
-        /// empty paragraph that <c>.picture p + table + p</c> then matches. Without it that selector falls
-        /// through onto <c>p.bad</c> instead, which is precisely the element the fixture means to keep it
-        /// away from — <c>p.bad</c> takes a <c>margin-top: 3em</c> meant for the generated element and
-        /// slides a black-and-red bar down across the middle of the face.
-        /// </para>
-        /// </remarks>
-        private static void HandleStrayParagraphEndTag(CssBox curBox)
-        {
-            CssBox? fosterTable = null;
-
-            for (var box = curBox; box is not null; box = box.ParentBox)
-            {
-                var name = box.HtmlTag?.Name.ToLowerInvariant();
-                if (name == HtmlConstants.Select)
-                    return;
-
-                if (name is HtmlConstants.Td or HtmlConstants.Th or "template")
-                    break;
-
-                if (name == HtmlConstants.Table)
-                {
-                    fosterTable = box;
-                    break;
-                }
-            }
-
-#if DEBUG
-            Console.WriteLine($"parse token, stray </p> generating an empty <p>. current box: {curBox}");
-#endif
-
-            var paragraph = new HtmlTag(HtmlConstants.P, isSingle: false);
-            if (fosterTable?.ParentBox is { } fosterParent)
-                CssBox.CreateBox(fosterParent, paragraph, fosterTable);
-            else
-                CssBox.CreateBox(paragraph, curBox);
         }
 
         /// <summary>
