@@ -30,6 +30,9 @@ namespace PeachBrackets.Svg
 
         public SvgPreserveAspectRatio PreserveAspectRatio { get; set; } = SvgPreserveAspectRatio.Default;
 
+        /// <summary>The root <c>&lt;svg&gt;</c>'s own <c>pointer-events</c>, or null when it declares none and takes its host box's.</summary>
+        public PeachBrackets.Css.PointerEvents? PointerEvents { get; set; }
+
         public List<SvgElement> Children { get; init; } = [];
 
         /// <summary>

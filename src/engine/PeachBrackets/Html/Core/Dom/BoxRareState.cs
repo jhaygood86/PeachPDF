@@ -87,6 +87,7 @@ namespace PeachBrackets.Html.Dom
         internal Rect? EmptyInlineContainingBlock;
         internal List<CssBox>? DeferredFloats;
         internal bool DeferredFloatsOnly;
+        internal (double X, double Y)? InlineStaticPosition;
         internal bool _isForcedBreak;
         internal bool FootnotePolicyForcedBreakBefore;
         internal bool _adjoinsForcedBreakPoint;

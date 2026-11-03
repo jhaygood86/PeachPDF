@@ -98,7 +98,7 @@ namespace PeachBrackets.Html.TextGeometry
                 return false;
 
             // Vertical text has its own geometry, which the horizontal model here does not describe.
-            if (box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr)
+            if (box.WritingMode.Value.IsVertical())
                 return false;
 
             return word.OwnerBox.Visibility.Value == Visibility.Visible;

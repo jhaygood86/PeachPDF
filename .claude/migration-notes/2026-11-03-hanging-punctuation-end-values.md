@@ -1,0 +1,3 @@
+# `hanging-punctuation: force-end`, `allow-end` and `last` now hang end punctuation
+
+Before, only `first` had an effect; `last`, `allow-end` and `force-end` were accepted and ignored. Now a stop or comma ending a line hangs outside the end edge for `force-end` (always) and `allow-end` (only when the word would not otherwise fit), and `last` hangs a closing bracket or quote at the end of the block's last line. The hung character is not measured: a word that overflows only by it stays on the line, and right/centre alignment and justification line up the text without it. Left-to-right horizontal lines only.

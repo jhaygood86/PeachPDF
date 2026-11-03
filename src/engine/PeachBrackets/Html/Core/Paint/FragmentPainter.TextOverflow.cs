@@ -93,7 +93,7 @@ namespace PeachBrackets.Html.Paint
         {
             if (OverflowClipOf(g, fragment).Clip is not { } paddingEdge) return null;
 
-            var isVertical = containingBlock.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            var isVertical = containingBlock.WritingMode.Value.IsVertical();
             var isRtl = containingBlock.Direction.Value == DirectionMode.Rtl;
             // The end boundary is where the clip cuts the text, so it follows the clip when that is snapped;
             // the start boundary is where the (unsnapped) text begins, so it does not.
@@ -553,7 +553,7 @@ namespace PeachBrackets.Html.Paint
         }
 
         /// <summary>Whether <paramref name="word"/> paints upright (vs. sideways-rotated) under this box's <c>text-orientation</c> - only meaningful when the box is vertical-writing-mode; mirrors the same decision <see cref="FragmentPainter.DrawWordGlyphs"/> makes for ordinary painting.</summary>
-        private static bool ResolveIsUpright(CssBox box, CssRect word) => box.TextOrientation.Value switch
+        private static bool ResolveIsUpright(CssBox box, CssRect word) => box.EffectiveTextOrientation switch
         {
             TextOrientation.Upright => true,
             TextOrientation.Sideways => false,
