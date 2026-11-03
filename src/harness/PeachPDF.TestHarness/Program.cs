@@ -14740,6 +14740,32 @@ await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode"
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
 
+// --- sideways writing modes showcase (CSS Writing Modes 4 section 4.1: sideways-rl / sideways-lr) ---
+
+const string SidewaysCss = """
+    <style>
+    @page { size: a4; margin: 20mm }
+    body { font: 11pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 .4em } h2 { font-size: 9pt; margin: 0 0 3px; color: #444 }
+    .row { display: flex; gap: 14px; margin-bottom: 14px }
+    .cell { width: 118px }
+    .box { width: 118px; height: 210px; border: 1px solid #889; background: #f2f4ff; font-size: 12pt }
+    </style>
+    """;
+
+static string SidewaysCell(string mode, string extraStyle = "") =>
+    $"<div class=\"cell\"><h2>{mode} {extraStyle}</h2><div class=\"box\" style=\"writing-mode: {mode}; {extraStyle}\">First line of text<br>Second line is <b>bold</b> and <i>italic</i></div></div>";
+
+var sidewaysHtml = "<!DOCTYPE html><html><head>" + SidewaysCss + "</head><body>" +
+    "<h1>writing-mode: sideways-rl / sideways-lr</h1>" +
+    "<div class=\"row\">" + SidewaysCell("vertical-rl", "text-orientation: sideways") + SidewaysCell("sideways-rl") + SidewaysCell("vertical-lr", "text-orientation: sideways") + SidewaysCell("sideways-lr") + "</div>" +
+    "<div class=\"row\">" + SidewaysCell("sideways-rl", "text-align: end") + SidewaysCell("sideways-lr", "text-align: end") + SidewaysCell("sideways-lr", "text-align: center; text-decoration: underline") + SidewaysCell("sideways-rl", "text-orientation: upright") + "</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("sideways_writing_modes", "Typography & Text", "writing-mode: sideways-rl and sideways-lr",
+    "sideways-rl lays out like vertical-rl and sideways-lr like vertical-lr, with every glyph turned sideways; sideways-lr reads bottom to top, so a line starts at the bottom edge and text-align: end is the top.",
+    sidewaysHtml, pdfConfig);
+
 // --- CSS animations rendered as a still frame (PdfGenerateConfig.AnimationProgress) ---
 
 const string AnimationHtml = """

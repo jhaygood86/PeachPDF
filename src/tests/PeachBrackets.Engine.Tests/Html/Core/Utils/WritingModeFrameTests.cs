@@ -29,9 +29,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         [InlineData((int)WritingMode.HorizontalTb, false)]
         [InlineData((int)WritingMode.VerticalRl, true)]
         [InlineData((int)WritingMode.VerticalLr, true)]
-        [InlineData((int)WritingMode.SidewaysRl, false)]
-        [InlineData((int)WritingMode.SidewaysLr, false)]
-        public void IsVertical_TrueOnlyForVerticalRlAndVerticalLr(int writingMode, bool expected)
+        [InlineData((int)WritingMode.SidewaysRl, true)]
+        [InlineData((int)WritingMode.SidewaysLr, true)]
+        public void IsVertical_TrueForEveryModeButHorizontalTb(int writingMode, bool expected)
         {
             Assert.Equal(expected, Frame((WritingMode)writingMode).IsVertical);
         }

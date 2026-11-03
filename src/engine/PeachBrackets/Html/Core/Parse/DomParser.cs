@@ -3904,7 +3904,7 @@ namespace PeachBrackets.Html.Parse
                 && box.Boxes.Count > 0
                 && DomUtils.ContainsInlinesOnly(box)
                 && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
-                && box.WritingMode.Value is not (WritingMode.VerticalRl or WritingMode.VerticalLr)
+                && !box.WritingMode.Value.IsVertical()
                 && !IsHeightBoundedScrollContainer(box)
                 && !(box.Boxes.Any(b => b.IsFloated) && IsInsideTableCell(box));
 

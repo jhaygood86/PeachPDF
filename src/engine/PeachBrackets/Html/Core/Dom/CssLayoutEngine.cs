@@ -1537,7 +1537,7 @@ namespace PeachBrackets.Html.Dom
                 // takes the per-character upright path for that box, reserving the wrong extent for
                 // what's actually painted (the same class of layout/paint desync issue #770's
                 // per-character advance fix addressed on the other axis).
-                var isUpright = word.OwnerBox.TextOrientation.Value switch
+                var isUpright = word.OwnerBox.EffectiveTextOrientation switch
                 {
                     TextOrientation.Upright => true,
                     TextOrientation.Sideways => false,
