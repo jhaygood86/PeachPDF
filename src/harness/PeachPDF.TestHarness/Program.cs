@@ -9167,10 +9167,14 @@ var hangingPunctuationHtml = "<!DOCTYPE html><html><head>" + HangingPunctuationC
     "<p class=\"col hang\">“Typography is the craft of endowing human language with a durable visual form,” wrote Robert Bringhurst, and the edge of a column is part of that form.</p>" +
     "<h2>first with a bracket opening an inline</h2>" +
     "<p class=\"col hang\"><em>(Parenthetical openings hang too,</em> and the following lines of the paragraph start flush at the column edge as usual.)</p>" +
+    "<h2>force-end: a full stop or comma ending a line hangs past the justified edge</h2>" +
+    "<p class=\"col\" style=\"hanging-punctuation: force-end\">Typography is the craft of endowing human language with a durable visual form, and the edge of a column is part of that form, so a comma, or a full stop. Another line of text follows.</p>" +
+    "<h2>last: the closing quote of the last line hangs (right-aligned)</h2>" +
+    "<p class=\"col\" style=\"hanging-punctuation: last; text-align: right\">He wrote, “the edge of a column is part of its form.”</p>" +
     "</body></html>";
 
 await SaveShowcaseAsync("hanging_punctuation", "Typography & Text", "hanging-punctuation",
-    "hanging-punctuation: first (CSS Text 3) hangs an opening quote or bracket outside the start edge so the column's optical edge stays straight.",
+    "hanging-punctuation (CSS Text 3): first hangs an opening quote or bracket outside the start edge; force-end, allow-end and last hang a closing stop, comma, bracket or quote outside the end edge so the column's optical edges stay straight.",
     hangingPunctuationHtml, pdfConfig);
 
 // --- text-align / text-align-last showcase (CSS Text 3 §6.1, §6.3, §6.4.3) ---

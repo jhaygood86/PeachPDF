@@ -497,7 +497,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 AnchorSetAsideBoxes(coordinates);
-                FinalizeLineBoxes(blockBox, completedLines, blockFinished: false);
+                FinalizeLineBoxes(g, blockBox, completedLines, blockFinished: false);
 
                 // The ones on the discarded line are reached again by the resumed pass.
                 await LayoutAbsolutelyPositioned(g, coordinates, stopped.ResumeWordIndex);
@@ -518,7 +518,7 @@ namespace PeachBrackets.Html.Dom
             DropATrailingForcedBreaksOwnLine(blockBox, coordinates);
 
             AnchorSetAsideBoxes(coordinates);
-            FinalizeLineBoxes(blockBox, completedLines);
+            FinalizeLineBoxes(g, blockBox, completedLines);
 
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
@@ -1789,6 +1789,7 @@ namespace PeachBrackets.Html.Dom
         /// fragmentainer; re-running alignment over them would re-align and re-bubble geometry that has
         /// already been consumed, against a later pass's <c>MaxRight</c>.
         /// </summary>
+        /// <param name="g">the canvas, for measuring a hung end character</param>
         /// <param name="blockBox">the block whose lines are being finalized</param>
         /// <param name="firstLine">the first line this pass produced; everything below it is already done</param>
         /// <param name="blockFinished">
@@ -1801,12 +1802,13 @@ namespace PeachBrackets.Html.Dom
         /// alone justified nothing at a page boundary, because the line the pass stopped on is the last one
         /// the list holds.
         /// </param>
-        private static void FinalizeLineBoxes(CssBox blockBox, int firstLine, bool blockFinished = true)
+        private static void FinalizeLineBoxes(Canvas g, CssBox blockBox, int firstLine, bool blockFinished = true)
         {
             for (var i = firstLine; i < blockBox.LineBoxes.Count; i++)
             {
                 var lineBox = blockBox.LineBoxes[i];
                 ApplyLeaderFill(lineBox);
+                ApplyEndHang(g, blockBox, lineBox, blockFinished);
                 ApplyHorizontalAlignment(lineBox, blockFinished);
                 ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
@@ -6112,6 +6114,20 @@ namespace PeachBrackets.Html.Dom
                                          && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
 
+                        // hanging-punctuation: allow-end / force-end (CSS Text 3 §8.1): a stop or comma that
+                        // ends the word is not measured when it is the last thing on its line, so a word that
+                        // overflows only by that character still fits and hangs outside the end edge. A word
+                        // that fits whole is left alone here (force-end hangs it at line close, see
+                        // ApplyEndHang), so nothing else on the line moves.
+                        word.HungEndWidth = 0d;
+                        if (overflows && !isRtl && !word.IsSpaces && !word.IsLineBreak
+                            && MeasureEndHang(g, blockBox, word, HangingPunctuationFlags.AllowEnd | HangingPunctuationFlags.ForceEnd) is > 0d and var endHang
+                            && coordinates.CurrentX + word.Width - endHang + rightSpacing + clonedTrailing <= actualLimitRight + LineFitTolerance)
+                        {
+                            overflows = false;
+                            word.HungEndWidth = endHang;
+                        }
+
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
                         // hyphen or an automatic Hyphenator suggestion) lets a hyphenated prefix
@@ -9416,6 +9432,70 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The advance of the last character of <paramref name="word"/> when it is one that
+        /// <c>hanging-punctuation</c> may hang at a line's end edge for <paramref name="wanted"/> (CSS Text 3
+        /// §8.1), or 0. <see cref="HangingPunctuationFlags.AllowEnd"/>/<see cref="HangingPunctuationFlags.ForceEnd"/>
+        /// qualify a stop or comma, <see cref="HangingPunctuationFlags.Last"/> a closing bracket or quote
+        /// (Pe, Pf, Pi, apostrophe, quotation mark). A border or padding closing the owning inline after the
+        /// character sits between it and the edge, so it blocks hanging.
+        /// </summary>
+        private static double MeasureEndHang(Canvas g, CssBox blockBox, CssRect word, HangingPunctuationFlags wanted)
+        {
+            if (word.Text is not { Length: > 0 } text) return 0d;
+
+            Rune.DecodeLastFromUtf16(text.AsSpan(), out var rune, out _);
+            var isStop = rune.Value is ',' or '.' or '،' or '۔' or '、' or '。' or '，' or '．'
+                or '﹐' or '﹑' or '﹒' or '｡' or '､';
+            var isClosing = !isStop && (rune.Value is '\'' or '"'
+                || Rune.GetUnicodeCategory(rune) is UnicodeCategory.ClosePunctuation
+                    or UnicodeCategory.InitialQuotePunctuation or UnicodeCategory.FinalQuotePunctuation);
+            if (!isStop && !isClosing) return 0d;
+
+            if (blockBox.HangingPunctuation is not { Length: > 0 } declared
+                || !HangingPunctuationGrammar.TryParse(declared, out var flags)) return 0d;
+
+            var applies = isStop
+                ? (flags & wanted & (HangingPunctuationFlags.AllowEnd | HangingPunctuationFlags.ForceEnd)) != 0
+                : (flags & wanted & HangingPunctuationFlags.Last) != 0;
+            if (!applies) return 0d;
+
+            var owner = word.OwnerBox;
+
+            // Each inline the word closes (the word is its last content) puts its border and padding
+            // between the character and the line's edge.
+            var closes = ReferenceEquals(owner.Words[^1], word);
+            for (var inline = owner; closes && inline is not null && !ReferenceEquals(inline, blockBox); inline = inline.ParentBox)
+            {
+                if (inline.ActualBorderRightWidth + inline.ActualPaddingRight > 0) return 0d;
+                closes = inline.ParentBox is { } parent && ReferenceEquals(parent.Boxes[^1], inline);
+            }
+
+            return g.MeasureString(rune.ToString(), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
+        /// <summary>
+        /// <c>hanging-punctuation: force-end</c> and <c>last</c> at line close (CSS Text 3 §8.1): the last
+        /// word of a line whose final character is a stop or comma (force-end), or - on the block's last
+        /// line - a closing bracket or quote (last), has that character excluded from the line's measure
+        /// (<see cref="CssRect.HungEndWidth"/>), so right/centre alignment and justification let it overhang
+        /// the end edge. A word <c>allow-end</c> already hung while fitting keeps its width. The end edge is
+        /// the physical right edge of a horizontal left-to-right line; other directions are left unhung.
+        /// </summary>
+        private static void ApplyEndHang(Canvas g, CssBox blockBox, CssLineBox lineBox, bool blockFinished)
+        {
+            if (blockBox.HangingPunctuation is not { Length: > 0 } || lineBox.Words.Count == 0) return;
+            if (blockBox.Direction.Value == DirectionMode.Rtl) return;
+
+            var word = lineBox.Words[^1];
+            if (word.IsSpaces || word.IsLineBreak || word.HungEndWidth > 0d) return;
+
+            var wanted = HangingPunctuationFlags.ForceEnd;
+            if (blockFinished && lineBox.Equals(blockBox.LineBoxes[^1])) wanted |= HangingPunctuationFlags.Last;
+
+            word.HungEndWidth = MeasureEndHang(g, blockBox, word, wanted);
+        }
+
+        /// <summary>
         /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start
         /// edge of <paramref name="blockBox"/>'s first line (CSS Text 3 §8.1), or 0 when the property is off
         /// or the line does not open with such a character. Qualifying characters are the Unicode categories
@@ -9678,7 +9758,7 @@ namespace PeachBrackets.Html.Dom
             if (line.Words.Count > 0)
             {
                 var lastWord = line.Words[^1];
-                end = lastWord.Right + lastWord.OwnerBox.ActualBorderRightWidth + lastWord.OwnerBox.ActualPaddingRight;
+                end = lastWord.Right - lastWord.HungEndWidth + lastWord.OwnerBox.ActualBorderRightWidth + lastWord.OwnerBox.ActualPaddingRight;
             }
 
             foreach (var box in line.Rectangles.Keys)
