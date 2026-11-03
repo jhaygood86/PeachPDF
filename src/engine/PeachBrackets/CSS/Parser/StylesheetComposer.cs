@@ -409,7 +409,8 @@ namespace PeachBrackets.Css
             var token = NextToken();
             _nodes.Push(rule);
             ParseComments(ref token);
-            rule.Name = GetRuleName(ref token);
+            // CSS Animations 1 §3.1: <keyframes-name> is a <custom-ident> or a <string>; the string names the same animation as the ident.
+            rule.Name = token.Type == TokenType.String ? ConsumeString(ref token) : GetRuleName(ref token);
             ParseComments(ref token);
 
             if (token.Type == TokenType.CurlyBracketOpen)
@@ -2102,6 +2103,13 @@ namespace PeachBrackets.Css
             }
 
             return result;
+        }
+
+        private string ConsumeString(ref Token token)
+        {
+            var text = token.Data.ToString();
+            token = NextToken();
+            return text;
         }
 
         private string GetRuleName(ref Token token)
