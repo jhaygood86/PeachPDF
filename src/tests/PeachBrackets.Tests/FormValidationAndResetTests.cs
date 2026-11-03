@@ -99,7 +99,8 @@ public class FormValidationAndResetTests
         Assert.Equal([("a", ValidationKind.ValueMissing), ("b", ValidationKind.TypeMismatch)], problems.Select(p => (p.Element.Id, p.Kind)));
         Assert.All(problems, p => Assert.False(string.IsNullOrWhiteSpace(p.Message)));
         Assert.Empty(document.GetValidationProblems(document.GetElement("lone")!));
-        Assert.Empty(document.GetValidationProblems(document.GetElement("a")!));
+        // Asked through one of its controls, the whole form is checked.
+        Assert.Equal(2, document.GetValidationProblems(document.GetElement("a")!).Count);
     }
 
     [Fact]
