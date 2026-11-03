@@ -578,6 +578,10 @@ namespace PeachBrackets.Html.Paint
                 // The visible content was drawn already; this pass only supplies its text, so no effect applies.
                 PaintTagged(g, fragment);
             }
+            else if (HasMask(box) && filter is { RequiresRaster: false, HasColorMatrix: false, OpacityMultiplier: >= 1.0 } && PaintMasked(g, fragment))
+            {
+                // Painted through its mask-image: the content in one tile, the mask in another.
+            }
             else if (TryFlatten(g, fragment, filter))
             {
                 // Needs transparency the document forbids: painted as an opaque bitmap in its place.

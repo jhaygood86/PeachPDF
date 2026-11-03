@@ -728,6 +728,32 @@ namespace PeachBrackets.Css
                 {Keywords.Fantasy, "Comic Sans"},
                 {Keywords.Math, "Cambria Math"}
             }.Freeze();
+        public static readonly KeywordMap<MaskModeKeyword> MaskModes =
+            new KeywordMap<MaskModeKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"match-source", MaskModeKeyword.MatchSource},
+                {"alpha", MaskModeKeyword.Alpha},
+                {"luminance", MaskModeKeyword.Luminance}
+            }.Freeze();
+        public static readonly KeywordMap<MaskClipKeyword> MaskClips =
+            new KeywordMap<MaskClipKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.BorderBox, MaskClipKeyword.BorderBox},
+                {Keywords.PaddingBox, MaskClipKeyword.PaddingBox},
+                {Keywords.ContentBox, MaskClipKeyword.ContentBox},
+                {"fill-box", MaskClipKeyword.FillBox},
+                {"stroke-box", MaskClipKeyword.StrokeBox},
+                {"view-box", MaskClipKeyword.ViewBox},
+                {"no-clip", MaskClipKeyword.NoClip}
+            }.Freeze();
+        public static readonly KeywordMap<MaskCompositeKeyword> MaskComposites =
+            new KeywordMap<MaskCompositeKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"add", MaskCompositeKeyword.Add},
+                {"subtract", MaskCompositeKeyword.Subtract},
+                {"intersect", MaskCompositeKeyword.Intersect},
+                {"exclude", MaskCompositeKeyword.Exclude}
+            }.Freeze();
         public static readonly KeywordMap<BackgroundAttachment> BackgroundAttachments =
             new KeywordMap<BackgroundAttachment>(StringComparer.OrdinalIgnoreCase)
             {

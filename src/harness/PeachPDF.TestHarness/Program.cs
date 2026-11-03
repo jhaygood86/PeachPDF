@@ -14675,6 +14675,33 @@ await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode"
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
 
+// --- mask-image showcase (CSS Masking 1 §6) ---
+
+const string MaskImageCss = """
+    <style>
+    @page { size: a4; margin: 20mm }
+    body { font: 11pt Arial, sans-serif; margin: 0; background: #fff }
+    h1 { font-size: 15pt; margin: 0 0 .4em } h2 { font-size: 10pt; margin: 1em 0 .3em }
+    .box { width: 360px; height: 70px; background: linear-gradient(90deg, #0b5fff, #ff3b6b) }
+    </style>
+    """;
+
+var maskImageHtml = "<!DOCTYPE html><html><head>" + MaskImageCss + "</head><body>" +
+    "<h1>CSS mask-image</h1>" +
+    "<h2>alpha gradient: fades to transparent</h2>" +
+    "<div class=\"box\" style=\"mask-image: linear-gradient(to right, #000, transparent)\"></div>" +
+    "<h2>mask-mode: luminance: bright shows, dark hides</h2>" +
+    "<div class=\"box\" style=\"mask-image: linear-gradient(to right, #fff, #000); mask-mode: luminance\"></div>" +
+    "<h2>a radial mask tiled with mask-size</h2>" +
+    "<div class=\"box\" style=\"mask-image: radial-gradient(circle, #000 55%, transparent 58%); mask-size: 36px 36px\"></div>" +
+    "<h2>text and children are masked together, with opacity</h2>" +
+    "<div class=\"box\" style=\"opacity: .8; mask-image: linear-gradient(to bottom, #000 40%, transparent)\"><p style=\"margin: 8px; color: #fff; font-size: 20pt\">Masked text</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("mask_image", "Graphics & Effects", "mask-image",
+    "mask-image with gradient layers fades or cuts out an element and its content through a real PDF soft mask: alpha and luminance modes, tiled masks, and opacity on the masked result.",
+    maskImageHtml, pdfConfig);
+
 // --- CSS animations rendered as a still frame (PdfGenerateConfig.AnimationProgress) ---
 
 const string AnimationHtml = """
