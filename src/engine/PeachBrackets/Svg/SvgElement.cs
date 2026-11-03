@@ -54,6 +54,12 @@ namespace PeachBrackets.Svg
         /// <summary>Inherited. Governs how a self-intersecting fill's interior is determined.</summary>
         public FillMode FillRule { get; set; } = FillMode.Nonzero;
 
+        /// <summary>
+        /// The element's own <c>pointer-events</c> declaration, or null when it declares none (or <c>inherit</c>) and so takes its parent's. The
+        /// inheritance is resolved where the value is read, from the host box down, because the first element's parent is an HTML box.
+        /// </summary>
+        public PeachBrackets.Css.PointerEvents? PointerEvents { get; set; }
+
         /// <summary>The resolved, inherited <c>visibility</c>: false for <c>hidden</c>/<c>collapse</c>. A hidden element is not painted but stays in bounding boxes, clip paths and text layout.</summary>
         public bool Visible { get; set; } = true;
 

@@ -489,6 +489,10 @@ namespace PeachBrackets.Svg
             _document.Width = SvgValueParsers.ParseLength(root.GetAttribute("width"));
             _document.Height = SvgValueParsers.ParseLength(root.GetAttribute("height"));
             _document.PreserveAspectRatio = SvgValueParsers.ParsePreserveAspectRatio(root.GetAttribute("preserveAspectRatio"));
+            _document.PointerEvents = ResolveStyledAttr(root, "pointer-events")?.Trim() is { Length: > 0 } rootPointerEvents
+                && Map.PointerEventsModes.TryGetValue(rootPointerEvents, out var declaredRootPointerEvents)
+                    ? declaredRootPointerEvents
+                    : null;
 
             _viewportWidth = _document.ViewBox?.Width ?? _document.Width;
             _viewportHeight = _document.ViewBox?.Height ?? _document.Height;
@@ -1512,6 +1516,12 @@ namespace PeachBrackets.Svg
                 ?? SvgTransformOrigin.Parse("50% 50%", transformBox, viewBox, _lengthBasis); // the initial value: the middle of the reference box
             element.PreserveThreeD = Attr("transform-style")?.Trim().Equals("preserve-3d", StringComparison.OrdinalIgnoreCase) == true;
             element.BackfaceHidden = Attr("backface-visibility")?.Trim().Equals("hidden", StringComparison.OrdinalIgnoreCase) == true;
+
+            // pointer-events is inherited, but only the link collection reads it, so the element keeps what it declares and the walk inherits.
+            element.PointerEvents = Attr("pointer-events")?.Trim() is { Length: > 0 } pointerEvents
+                && Map.PointerEventsModes.TryGetValue(pointerEvents, out var declaredPointerEvents)
+                    ? declaredPointerEvents
+                    : null;
 
             // fill-rule/stroke-linecap/stroke-linejoin fall back to the INHERITED value (not a hardcoded
             // default) on an invalid value, per SVG 1.1 §11.4 - same shape as stroke-width/etc. above.
