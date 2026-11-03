@@ -1,10 +1,17 @@
-# Column flex items and grid items have no automatic minimum size
+# The automatic minimum size is applied only when a line overflows (shrink), not to grown items
 
-`min-width` now has the spec's initial value `auto`, and a flex item in a **row** container is floored at its automatic minimum size (css-flexbox-1 §4.5: min-content, or the definite `width` when smaller; zero for a scroll container). Two cases are still not covered, tracked in #1916:
+A flex item in a row or column container is floored at its automatic minimum size (css-flexbox-1 §4.5) and a grid item in a bare `fr` track
+keeps its min-content width (css-grid-1 §6.6), see [the #1916 fix](../recent-fixes/2026-11-03-automatic-minimum-size-for-column-flex-items-and-grid-fr-tracks.md).
+What is left:
 
-- a flex item in a **column** container (`min-height: auto`) can still shrink below its content height. `min-height` keeps the initial value `0`: it is read in table rows, block layout and fragmentation as well, and a column's main size comes from laying the item out, not from a min-content measure.
-- a **grid** item can still be sized below its min-content width by its track.
+- **The floor is applied only when a line overflows** (`ResolveAutoMinimums` returns early otherwise), so an item that would be *grown* below its
+  min-content size is not floored: `flex: 1` items (basis 0) with one unbreakable long word still split the row (or column) equally instead of
+  giving that item its min-content size. Closing it means measuring min-content for every item of every line and running the §9.7 freeze loop for
+  grow too; that changes far more layouts than the shrink case.
+- **A replaced item in a column container** (an `<img>` stretched across the cross axis) has no floor: its main size comes from its aspect ratio and
+  stretched width, which the specification gives a transferred minimum of its own.
+- **A grid item spanning several `fr` tracks** contributes nothing to their bases (the simplified span distribution has no flexible-track step), and
+  a grid *row* has no automatic minimum (rows are never `fr`-expanded here).
+- **An `auto` (not `fr`) grid track** still uses the item's min-content, ignoring a scroll container's or an authored `min-width`'s exemption.
 
-Don't "fix" either by flooring in `DistributeFlex` for a column: the column path never calls `ResolveAutoMinimums`, on purpose, and its sizes feed the page-fragmentation code.
-
-A third case: the floor is applied only when a row **overflows** (`ResolveAutoMinimums` returns early otherwise), so an item that would be *grown* below its min-content size is not floored either. `flex: 1` items (basis 0) with one unbreakable long word still split the row equally instead of giving that item its min-content width. Closing it means measuring min-content for every item of every row, not just overflowing ones, and running the §9.7 freeze loop for grow too; that changes far more layouts than the shrink case, so it was left for its own change.
+Don't "fix" the first by flooring in `DistributeFlex`: the grow path has no min-content measure, and its sizes feed the page-fragmentation code.

@@ -1043,7 +1043,10 @@ namespace PeachBrackets.Html.Dom
                     baseSize = limit = ResolveFixedLength(def, contentBase);
                     break;
                 case GridTrackKind.Flex:
+                    // `<flex>` alone is minmax(auto, <flex>): the base is the items' automatic minimum contribution, which
+                    // keeps a track from shrinking below its content. minmax(0, <flex>) is the way to opt out.
                     flex = def.Flex;
+                    baseSize = minContent;
                     break;
                 case GridTrackKind.Minmax:
                     // The min track-sizing function feeds the base; the max function feeds the growth limit.
@@ -1166,15 +1169,20 @@ namespace PeachBrackets.Html.Dom
         {
             var min = new double[colCount];
             var max = new double[colCount];
-            if (!colDefs.Any(IsIntrinsic)) return (min, max);
+            if (!colDefs.Any(d => IsIntrinsic(d) || d.Kind == GridTrackKind.Flex)) return (min, max);
 
             // Single-column items contribute directly to their column.
             // A subgrid item is skipped: measuring it here (with no SubgridContext) would lay it out as an
             // ordinary grid and feed a bogus contribution into an auto parent column. Its contribution to the
             // parent's column sizing is the (accepted) column-axis gap, #276.
-            foreach (var p in placements.Where(p => p.ColSpan == 1 && IsIntrinsic(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
+            // A bare <c>fr</c> track is <c>minmax(auto, fr)</c>, so its base is its items' automatic minimum (§6.6, §12.5),
+            // measured here beside the intrinsic tracks'. A spanning item is not (see below), as the simplified span
+            // distribution has no flexible-track step.
+            foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsSubgridItem(p.Box)
+                         && (IsIntrinsic(colDefs[p.ColStart]) || colDefs[p.ColStart].Kind == GridTrackKind.Flex)))
             {
                 var (mn, mx) = await MeasureItemContribution(g, p.Box);
+                if (colDefs[p.ColStart].Kind == GridTrackKind.Flex) mn = AutoMinimumOf(p.Box, mn, contentWidth);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
             }
@@ -1243,6 +1251,7 @@ namespace PeachBrackets.Html.Dom
             foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsFixed(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
             {
                 var (mn, mx) = MeasureItemContributionSync(g, p.Box);
+                if (colDefs[p.ColStart].Kind == GridTrackKind.Flex) mn = AutoMinimumOf(p.Box, mn, 0);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
             }
@@ -1343,6 +1352,30 @@ namespace PeachBrackets.Html.Dom
 
             var share = extra / intrinsicCols.Count;
             foreach (var c in intrinsicCols) arr[c] += share;
+        }
+
+        /// <summary>
+        /// A grid item's minimum contribution to a track whose minimum sizing function is <c>auto</c> (CSS Grid §6.6, §12.5):
+        /// zero content for a scroll container, the item's own <c>min-width</c> when it has one, and otherwise its automatic
+        /// minimum size - the smaller of its min-content size and its definite <c>width</c>.
+        /// </summary>
+        /// <param name="box">the item</param>
+        /// <param name="minContentOuter">its outer min-content contribution (an explicit <c>width</c> supplies it)</param>
+        /// <param name="basis">what a percentage <c>min-width</c> resolves against</param>
+        private static double AutoMinimumOf(CssBox box, double minContentOuter, double basis)
+        {
+            var outerExtra = box.ActualMarginLeft + box.ActualMarginRight
+                + box.ActualPaddingLeft + box.ActualPaddingRight
+                + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+
+            if (box.Overflow.Value != Css.Overflow.Visible) return outerExtra;
+
+            if (!string.Equals(box.MinWidth, Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+                return CssValueParser.IsValidLength(box.MinWidth)
+                    ? CssValueParser.ParseLength(box.MinWidth, basis, box) + outerExtra
+                    : minContentOuter;
+
+            return minContentOuter;
         }
 
         private static bool IsIntrinsic(GridTrackSize def) =>

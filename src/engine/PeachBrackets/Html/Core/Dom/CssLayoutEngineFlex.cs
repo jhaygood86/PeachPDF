@@ -1006,13 +1006,17 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask ResolveAutoMinimums(Canvas g, FlexLine line, double mainSize)
         {
-            if (!_mainAxisIsPhysicalX) return;
-
             var container = line.MainSize ?? mainSize;
             var used = line.Items.Count > 1 ? ParseMainGap(container) * (line.Items.Count - 1) : 0;
             foreach (var item in line.Items)
                 used += item.HypotheticalMainSize + item.MarginBefore + item.MarginAfter;
             if (used <= container) return;
+
+            if (!_mainAxisIsPhysicalX)
+            {
+                await ResolveColumnAutoMinimums(g, line, container);
+                return;
+            }
 
             foreach (var item in line.Items)
             {
@@ -1028,6 +1032,59 @@ namespace PeachBrackets.Html.Dom
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Width, container, box) + MainBoxSizeIncluded(box));
                 if (CssValueParser.IsValidLength(box.MaxWidth))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxWidth, container, box) + MainBoxSizeIncluded(box));
+
+                item.AutoMinMainSize = Math.Min(minimum, item.HypotheticalMainSize);
+            }
+        }
+
+        /// <summary>
+        /// <see cref="ResolveAutoMinimums"/> for a column container: <c>min-height: auto</c> stops an item of an overflowing
+        /// line shrinking below its content height (CSS Flexbox 1 §4.5), or below its definite <c>height</c> when that is
+        /// smaller. Scroll containers, items with a <c>min-height</c> of their own and items that cannot shrink have none.
+        /// </summary>
+        /// <remarks>
+        /// The content height is the height the item lays out to with <c>height: auto</c> at its cross size. An item whose
+        /// hypothetical size came from <c>height</c> or <c>flex-basis</c> is laid out that way once more to learn it, and
+        /// then laid out again at its hypothetical size, so the box is left as <see cref="MeasureItem"/> left it.
+        /// </remarks>
+        private async ValueTask ResolveColumnAutoMinimums(Canvas g, FlexLine line, double container)
+        {
+            foreach (var item in line.Items)
+            {
+                var box = item.Box;
+                if (!string.Equals(box.MinHeight, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                    || box.Overflow.Value != Css.Overflow.Visible
+                    || ParseFloat(box.FlexShrink) <= 0)
+                    continue;
+                // A replaced item takes its main size from its aspect ratio and its stretched width, which the specification
+                // gives its own transferred minimum; it keeps shrinking as it always did.
+                if (box.IsImage) continue;
+
+                var content = item.NaturalMainSize;
+                var heightIsDefinite = CssValueParser.IsValidLength(box.Height);
+                var hypotheticalFromAuto = !heightIsDefinite && !box.FlexBasis.Value.IsValue
+                    && box.FlexBasis.Value.Keyword is not FlexBasisKeyword.Stretch
+                    && ParseFloat(box.FlexGrow) <= 0;
+
+                if (!hypotheticalFromAuto)
+                {
+                    var saved = box.Height;
+                    box.Height = Keywords.Auto;
+                    box.Location = new PaintPoint(_flexBox.ClientLeft, _flexBox.ClientTop);
+                    box.ActualBottom = box.Location.Y;
+                    box.RectanglesReset();
+                    await PerformLayoutBlockified(g, box);
+                    content = box.ActualBoxSizingHeight;
+                    box.Height = saved;
+
+                    await ResizeItem(g, item, item.HypotheticalMainSize);
+                }
+
+                var minimum = content;
+                if (heightIsDefinite && !box.Height.EndsWith('%'))
+                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Height, container, box) + MainBoxSizeIncluded(box));
+                if (CssValueParser.IsValidLength(box.MaxHeight))
+                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxHeight, container, box) + MainBoxSizeIncluded(box));
 
                 item.AutoMinMainSize = Math.Min(minimum, item.HypotheticalMainSize);
             }
