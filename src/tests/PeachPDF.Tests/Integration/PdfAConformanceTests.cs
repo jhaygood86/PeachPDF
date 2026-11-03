@@ -556,6 +556,26 @@ namespace PeachPDF.Tests.Integration
 
         // --- Helpers ---
 
+        [Theory]
+        [InlineData(PdfAConformance.PdfA1A, true)]
+        [InlineData(PdfAConformance.PdfA2A, false)]
+        public async Task TableSections_AreMappedToAStandardTypeOnlyWhereThePdfVersionLacksThem(PdfAConformance level, bool mapped)
+        {
+            // THead, TBody and TFoot are PDF 1.5 types; ISO 19005-1 6.8.3.4 wants every non-standard type of a PDF 1.4 file in the role map.
+            // The HTML parser puts every row in a tbody, so any table reaches this.
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfAConformance = level,
+                TransparencyPolicy = TransparencyPolicy.Flatten,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var pdfText = await GetPdfText("<html lang='en'><head><title>t</title></head><body><table><tr><td>a</td></tr></table></body></html>", config);
+
+            Assert.Contains("/TBody", pdfText);
+            Assert.Equal(mapped, Regex.IsMatch(pdfText, @"/RoleMap\s*<<[^>]*/TBody\s*/Sect"));
+        }
+
         static async Task<string> GetPdfText(string html, PdfGenerateConfig config)
         {
             var generator = new PdfGenerator();

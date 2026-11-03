@@ -130,6 +130,111 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"column 1's first row ({inFirstColumn[0]}) is beside the float, column 2's ({inSecondColumn[0]}) is not");
         }
 
+        private const string FixedColumns = "columns:2; column-gap:10px; column-fill:auto; width:200px; height:100px; overflow:hidden; font:10px/10px McFixture";
+
+        [Fact]
+        public async Task FloatThatDoesNotFitBelowTheContentOfItsColumn_MovesToTheTopOfTheNextColumn()
+        {
+            // Nine 7.5pt rows leave 7.5pt of the 75pt column; the float's 15pt margin box does not fit there (CSS 2.1 9.5.1 rules 1 and 3
+            // per column box), so it starts column 2, and the container does not grow to hold it.
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <p id='p1' style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i</p>
+                    <div id='f1' style='float:right; width:30px; height:20px'></div>
+                </div>");
+
+            var mc = FindById(root, "mc")!;
+            var f1 = FindById(root, "f1")!;
+
+            Assert.True(f1.Location.X >= SecondColumnLeft - 0.5, $"float at x={f1.Location.X}");
+            Assert.Equal(mc.ClientTop, f1.Location.Y, 3);
+            Assert.True(mc.ActualBottom <= mc.ClientTop + 75 + 0.01, $"container grew to {mc.ActualBottom}");
+        }
+
+        [Fact]
+        public async Task FloatThatIsDeferred_LeavesTheInFlowContentAfterItInThePreviousColumn()
+        {
+            // Only the float moves; the paragraph after it keeps filling column 1 where it has room.
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <p id='p1' style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h</p>
+                    <div id='f1' style='float:right; width:30px; height:24px'></div>
+                    <p id='p2' style='margin:0'>z</p>
+                </div>");
+
+            var mc = FindById(root, "mc")!;
+            var f1 = FindById(root, "f1")!;
+            var p1 = FindById(root, "p1")!;
+            var p2 = FindById(root, "p2")!;
+
+            Assert.True(f1.Location.X >= SecondColumnLeft - 0.5, $"float at x={f1.Location.X}");
+            Assert.Equal(mc.ClientTop, f1.Location.Y, 3);
+            Assert.True(p2.Location.X < SecondColumnLeft - 0.5, $"p2 at x={p2.Location.X}");
+            Assert.Equal(p1.ActualBottom, p2.Location.Y, 0.5);
+        }
+
+        [Fact]
+        public async Task FloatInsideABlock_ThatDoesNotFit_MovesToTheNextColumn()
+        {
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <div id='wrap'>
+                        <p style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i</p>
+                        <div id='f1' style='float:right; width:30px; height:20px'></div>
+                        <p id='p2' style='margin:0'>z</p>
+                    </div>
+                </div>");
+
+            var mc = FindById(root, "mc")!;
+            var f1 = FindById(root, "f1")!;
+
+            Assert.True(f1.Location.X >= SecondColumnLeft - 0.5, $"float at x={f1.Location.X}");
+            Assert.Equal(mc.ClientTop, f1.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task FloatAtTheFootOfABalancedColumn_MovesToTheNextColumnAndTheContainerDoesNotGrow()
+        {
+            var (root, _) = await BuildAndLayout(@"
+                <div id='mc' style='columns:2; column-gap:10px; width:200px; font:10px/10px McFixture'>
+                    <p id='p1' style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i</p>
+                    <div id='f1' style='float:right; width:30px; height:20px'></div>
+                    <p id='p2' style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i</p>
+                </div>");
+
+            var mc = FindById(root, "mc")!;
+            var f1 = FindById(root, "f1")!;
+            var p1 = FindById(root, "p1")!;
+
+            Assert.True(f1.Location.X >= SecondColumnLeft - 0.5, $"float at x={f1.Location.X}");
+            Assert.Equal(mc.ClientTop, f1.Location.Y, 3);
+            Assert.True(mc.ActualBottom <= p1.ActualBottom + 2, $"container bottom {mc.ActualBottom}, column 1 ends {p1.ActualBottom}");
+        }
+
+        [Fact]
+        public async Task FloatThatFitsBelowTheContentOfItsColumn_StaysInThatColumn()
+        {
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <p id='p1' style='margin:0'>a<br>b<br>c</p>
+                    <div id='f1' style='float:right; width:30px; height:20px'></div>
+                </div>");
+
+            Assert.True(FindById(root, "f1")!.Location.X < SecondColumnLeft - 0.5);
+        }
+
+        [Fact]
+        public async Task FloatTallerThanAColumn_StaysWhereItIs()
+        {
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <p id='p1' style='margin:0'>a<br>b<br>c</p>
+                    <div id='f1' style='float:right; width:30px; height:200px'></div>
+                </div>");
+
+            Assert.True(FindById(root, "f1")!.Location.X < SecondColumnLeft - 0.5);
+        }
+
         [Fact]
         public async Task FloatBesideBareText_DoesNotDropTheText()
         {

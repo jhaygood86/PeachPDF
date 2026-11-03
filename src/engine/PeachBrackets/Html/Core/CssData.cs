@@ -457,6 +457,59 @@ namespace PeachBrackets.Html
             }
         }
 
+        /// <summary>
+        /// Every <c>@keyframes</c> rule that applies to the document, each with the rank of the cascade layer it sits in
+        /// (<see cref="UnlayeredRank"/> for an unlayered one), in source order. CSS Animations 1 §3.1: a same-named
+        /// <c>@keyframes</c> is chosen by the cascade layers order (CSS Cascade 5 §6.4.2), so the caller takes the highest rank,
+        /// the later rule among equals. Walks the same grouping rules as <see cref="EnumerateRulesRecursive"/>, with its own
+        /// layer registry (only the ranks relative to one another matter).
+        /// </summary>
+        internal List<(KeyframesRule Rule, int LayerRank)> EnumerateKeyframesWithLayerRank(MediaQueryContext? media)
+        {
+            var registry = new LayerRegistry();
+            var found = new List<(KeyframesRule Rule, string? Layer)>();
+            foreach (var stylesheet in Stylesheets)
+                CollectKeyframes(stylesheet.Rules, null, media, registry, found);
+
+            var ranks = registry.ComputeRanks();
+            return found.ConvertAll(entry => (entry.Rule, entry.Layer is not null && ranks.TryGetValue(entry.Layer, out var rank) ? rank : UnlayeredRank));
+        }
+
+        private void CollectKeyframes(IEnumerable<IRule> rules, string? layer, MediaQueryContext? media, LayerRegistry registry, List<(KeyframesRule, string?)> found)
+        {
+            foreach (var rule in rules)
+            {
+                switch (rule)
+                {
+                    case KeyframesRule keyframes:
+                        found.Add((keyframes, layer));
+                        break;
+                    case LayerStatementRule statement:
+                        foreach (var name in statement.Names)
+                            registry.Register(QualifyLayer(layer, name));
+                        break;
+                    case ILayerRule layerRule:
+                        var qualified = string.IsNullOrEmpty(layerRule.Name)
+                            ? registry.RegisterAnonymous(layer)
+                            : QualifyLayer(layer, layerRule.Name);
+                        if (!string.IsNullOrEmpty(layerRule.Name)) registry.Register(qualified);
+                        CollectKeyframes(layerRule.Rules, qualified, media, registry, found);
+                        break;
+                    case IMediaRule mediaRule:
+                        if (media is not { } mediaContext || MediaQueryMatcher.Matches([mediaRule.Media], mediaContext))
+                            CollectKeyframes(mediaRule.Rules, layer, media, registry, found);
+                        break;
+                    case IContainerRule containerRule:
+                        CollectKeyframes(containerRule.Rules, layer, media, registry, found);
+                        break;
+                    case ISupportsRule supportsRule:
+                        if (supportsRule.Condition.Check(_renderContext))
+                            CollectKeyframes(supportsRule.Rules, layer, media, registry, found);
+                        break;
+                }
+            }
+        }
+
         internal IEnumerable<IRule> FlattenRules(IEnumerable<IRule> rules, MediaQueryContext? media = null)
         {
             foreach (var rule in rules)

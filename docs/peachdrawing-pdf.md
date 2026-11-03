@@ -117,6 +117,16 @@ draws a bitmap with [PeachDrawing](peachdrawing.md)'s `RasterCanvas`.
   embedded in a subset of the font. Text stays selectable and searchable. Colour fonts are drawn as vector artwork.
 - **Colour.** An RGB colour is written as `DeviceRGB` and a CMYK colour as `DeviceCMYK`, each in the space it was made in.
 
+## Bleed and printer's marks
+
+`PdfComposerPage.SetPrintBoxes(bleedPoints, outsidePoints)` makes the sheet larger than the page for print production: the size you gave `AddPage` becomes the `/TrimBox`, the `/BleedBox` extends it by the bleed, and the `/MediaBox` extends it by the bleed plus the extra strip (room for crop and registration marks) on every side. Drawing keeps its origin at the page box's top-left corner, so anything drawn at a negative coordinate, or past the page's width or height, lands in the bleed and mark area. The boxes are written when the document is saved; `WidthPoints` and `HeightPoints` stay the page box's, and so do the coordinates links and bookmarks use.
+
+```csharp
+var page = composer.AddPage(255, 156);   // a 90 x 55 mm card
+page.SetPrintBoxes(bleedPoints: 8.5, outsidePoints: 15);
+page.Canvas.DrawRectangle(page.Canvas.GetSolidBrush(red), -8.5, -8.5, 255 + 17, 156 + 17);   // artwork runs into the bleed
+```
+
 ## Encryption
 
 ```csharp

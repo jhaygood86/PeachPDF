@@ -497,7 +497,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 AnchorSetAsideBoxes(coordinates);
-                FinalizeLineBoxes(blockBox, completedLines, blockFinished: false);
+                FinalizeLineBoxes(g, blockBox, completedLines, blockFinished: false);
 
                 // The ones on the discarded line are reached again by the resumed pass.
                 await LayoutAbsolutelyPositioned(g, coordinates, stopped.ResumeWordIndex);
@@ -518,7 +518,7 @@ namespace PeachBrackets.Html.Dom
             DropATrailingForcedBreaksOwnLine(blockBox, coordinates);
 
             AnchorSetAsideBoxes(coordinates);
-            FinalizeLineBoxes(blockBox, completedLines);
+            FinalizeLineBoxes(g, blockBox, completedLines);
 
             blockBox.ActualBottom = coordinates.MaxBottom + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
 
@@ -567,6 +567,11 @@ namespace PeachBrackets.Html.Dom
                 var box = setAside.Box;
                 var emptyInline = EmptyInlineContainingBlockFor(setAside);
 
+                // Its static position is its place on the final line: the inline position the walk passed it at, carried
+                // through alignment and bidi reordering, and the line's top. CssBox.StaticPositionIn reads it for a
+                // box whose offsets on an axis are both auto.
+                box.InlineStaticPosition = (PlaceOnFinalLine(setAside), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+
                 // The box is left to run as passes of its own: LayoutBlockChild resumes the record its break leaves,
                 // which is what detaching here was written to avoid depending on, and unbroken the box's last line
                 // crossed the page foot and was clipped away. That holds inside a column as well: the box's containing
@@ -583,6 +588,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     if (detach) box.HtmlContainer?.RestoreFragmentainer(previous);
                     if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
+                    box.InlineStaticPosition = null;
                 }
             }
         }
@@ -1789,6 +1795,7 @@ namespace PeachBrackets.Html.Dom
         /// fragmentainer; re-running alignment over them would re-align and re-bubble geometry that has
         /// already been consumed, against a later pass's <c>MaxRight</c>.
         /// </summary>
+        /// <param name="g">the canvas, for measuring a hung end character</param>
         /// <param name="blockBox">the block whose lines are being finalized</param>
         /// <param name="firstLine">the first line this pass produced; everything below it is already done</param>
         /// <param name="blockFinished">
@@ -1801,12 +1808,13 @@ namespace PeachBrackets.Html.Dom
         /// alone justified nothing at a page boundary, because the line the pass stopped on is the last one
         /// the list holds.
         /// </param>
-        private static void FinalizeLineBoxes(CssBox blockBox, int firstLine, bool blockFinished = true)
+        private static void FinalizeLineBoxes(Canvas g, CssBox blockBox, int firstLine, bool blockFinished = true)
         {
             for (var i = firstLine; i < blockBox.LineBoxes.Count; i++)
             {
                 var lineBox = blockBox.LineBoxes[i];
                 ApplyLeaderFill(lineBox);
+                ApplyEndHang(g, blockBox, lineBox, blockFinished);
                 ApplyHorizontalAlignment(lineBox, blockFinished);
                 ApplyBidiReordering(lineBox);
                 BubbleRectangles(blockBox, lineBox);
@@ -3642,9 +3650,6 @@ namespace PeachBrackets.Html.Dom
                 Top = startY,
                 MaxBottom = startY,
                 MarginTop = box.ActualMarginTop,
-                // The position handed over is read as the margin edge, as it always was for a right float: taking a
-                // negative margin-top back out of it puts a second float with a larger one over the first.
-                OuterTop = startY,
                 MarginLeft = box.ActualMarginLeft,
                 MarginRight = box.ActualMarginRight,
                 ReferenceWidth = box.ActualBoxSizingWidth
@@ -4321,7 +4326,7 @@ namespace PeachBrackets.Html.Dom
             var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
-                actualLimitRight = rightFloat.Location.X - rightFloat.ActualMarginLeft;
+                actualLimitRight = FloatRightEdge(g, rightFloat, coordinates);
             }
 
             if (isRtl)
@@ -4349,10 +4354,10 @@ namespace PeachBrackets.Html.Dom
             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX,
                 coordinates.WordOrdinal, followsForcedBreak: false, isRtl);
 
-            var leftFloat = LeftFloatAt(coordinates, box);
+            var leftFloat = LeftFloatAt(coordinates, box, g);
             if (leftFloat is not null)
             {
-                coordinates.CurrentX = leftFloat.ActualRight + leftFloat.ActualMarginRight;
+                coordinates.CurrentX = FloatLeftEdge(g, leftFloat, coordinates);
             }
 
             coordinates.CurrentX += leftSpacing + (clonesDecorations
@@ -4789,8 +4794,11 @@ namespace PeachBrackets.Html.Dom
 
         private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
         {
+            // The float's margin box starts at the line top (CSS 2.1 section 9.5.1 rule 6) and its margins never
+            // collapse (section 8.3.1), so the border box sits margin-top below it, a negative one above.
             b.Location = new PaintPoint(
-                blockBox.ClientLeft + b.ActualMarginLeft, coordinates.Line.FlowTop ?? coordinates.CurrentY);
+                blockBox.ClientLeft + b.ActualMarginLeft,
+                (coordinates.Line.FlowTop ?? coordinates.CurrentY) + b.ActualMarginTop);
             b.ActualBottom = b.Location.Y;
 
             var width = await GetBoxWidth(g, b, b.Location.Y);
@@ -5017,6 +5025,14 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>The x a line at <paramref name="coordinates"/> must start at to clear the left float <paramref name="floatBox"/>: its margin edge, or its <c>shape-outside</c> edge over the line's band.</summary>
+        private static double FloatLeftEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
+            FloatShapeOutline.LeftEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentLeft);
+
+        /// <summary>The right-float counterpart of <see cref="FloatLeftEdge"/>: the x a line must end at.</summary>
+        private static double FloatRightEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
+            FloatShapeOutline.RightEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentRight);
+
         /// <summary>
         /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
         /// position - combining <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> (a float preceding
@@ -5036,7 +5052,19 @@ namespace PeachBrackets.Html.Dom
         /// word's, and a plain <see cref="DomUtils.GetLastLeftIntersectingFloatBox"/> call there would miss
         /// it precisely as this method's own remarks describe.
         /// </remarks>
-        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference)
+        private static CssBox? LeftFloatAt(CssLineBoxCoordinates coordinates, CssBox reference, Canvas? g = null)
+        {
+            var found = LeftFloatAtCore(coordinates, reference);
+
+            // A float with a shape-outside narrows only the lines its shape reaches, and only until the cursor is past the
+            // shape's edge at this line's band: past it, the float no longer collides with the cursor (css-shapes-1 §2.1).
+            return found is not null && g is not null && FloatShapeOutline.HasShape(found)
+                   && coordinates.CurrentX >= FloatLeftEdge(g, found, coordinates) - 0.01
+                ? null
+                : found;
+        }
+
+        private static CssBox? LeftFloatAtCore(CssLineBoxCoordinates coordinates, CssBox reference)
         {
             var ancestorFloat = LineOwnerIsIsolatedFromOuterFloats(coordinates, reference)
                 ? null
@@ -5953,11 +5981,11 @@ namespace PeachBrackets.Html.Dom
                 // amount - re-applying the raw `leftSpacing` would put back exactly what `slice` suppresses.
                 var appliedLeftSpacing = childOpensHere || b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone ? leftSpacing : 0;
 
-                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
+                var lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box, g);
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
-                    coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
+                    coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
                 }
 
                 // Where b's own content box starts on this line, after every branch above that can
@@ -6094,9 +6122,8 @@ namespace PeachBrackets.Html.Dom
 
                         if (lastRightIntersectingFloatBox is not null)
                         {
-                            actualLimitRight = lastRightIntersectingFloatBox.Location.X -
-                                               lastRightIntersectingFloatBox.ActualMarginLeft - rightSpacing;
-                            var floatEdge = lastRightIntersectingFloatBox.Location.X - lastRightIntersectingFloatBox.ActualMarginLeft;
+                            var floatEdge = FloatRightEdge(g, lastRightIntersectingFloatBox, coordinates);
+                            actualLimitRight = floatEdge - rightSpacing;
                             coordinates.Line.FloatLimitRight = Math.Min(coordinates.Line.FloatLimitRight ?? floatEdge, floatEdge);
                         }
 
@@ -6111,6 +6138,20 @@ namespace PeachBrackets.Html.Dom
                         var overflows = b.WhiteSpace.Value != Whitespace.NoWrap && b.WhiteSpace.Value != Whitespace.Pre
                                          && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
                                          && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
+
+                        // hanging-punctuation: allow-end / force-end (CSS Text 3 §8.1): a stop or comma that
+                        // ends the word is not measured when it is the last thing on its line, so a word that
+                        // overflows only by that character still fits and hangs outside the end edge. A word
+                        // that fits whole is left alone here (force-end hangs it at line close, see
+                        // ApplyEndHang), so nothing else on the line moves.
+                        word.HungEndWidth = 0d;
+                        if (overflows && !isRtl && !word.IsSpaces && !word.IsLineBreak
+                            && MeasureEndHang(g, blockBox, word, HangingPunctuationFlags.AllowEnd | HangingPunctuationFlags.ForceEnd) is > 0d and var endHang
+                            && coordinates.CurrentX + word.Width - endHang + rightSpacing + clonedTrailing <= actualLimitRight + LineFitTolerance)
+                        {
+                            overflows = false;
+                            word.HungEndWidth = endHang;
+                        }
 
                         // hyphens:auto/manual: before giving up and wrapping the whole word, see if a
                         // cached candidate break point (from ParseToWords - either an explicit soft
@@ -6230,11 +6271,11 @@ namespace PeachBrackets.Html.Dom
                             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
                                 word.IsLineBreak, isRtl);
 
-                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b);
+                            lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b, g);
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
-                                coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + leftSpacing;
+                                coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + leftSpacing;
 
                                 // The line the word wrapped onto may have no room beside that float, as when the float is wider
                                 // than the line; the word goes below it, as it would have had it been about to open the line.
@@ -6369,11 +6410,11 @@ namespace PeachBrackets.Html.Dom
                             UpdateTrailingTextState(word, coordinates.TrailingRegionalIndicatorCount,
                                 coordinates.TrailingGraphemeContext);
 
-                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box);
+                        lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, box, g);
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {
-                            coordinates.CurrentX = lastLeftIntersectingFloatBox.ActualRight + lastLeftIntersectingFloatBox.ActualMarginRight + appliedLeftSpacing;
+                            coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
                         }
 
                         // A preserved tab (CssRect.OriginalText - stable even though CssBox.MeasureWordsSize/
@@ -9416,6 +9457,70 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The advance of the last character of <paramref name="word"/> when it is one that
+        /// <c>hanging-punctuation</c> may hang at a line's end edge for <paramref name="wanted"/> (CSS Text 3
+        /// §8.1), or 0. <see cref="HangingPunctuationFlags.AllowEnd"/>/<see cref="HangingPunctuationFlags.ForceEnd"/>
+        /// qualify a stop or comma, <see cref="HangingPunctuationFlags.Last"/> a closing bracket or quote
+        /// (Pe, Pf, Pi, apostrophe, quotation mark). A border or padding closing the owning inline after the
+        /// character sits between it and the edge, so it blocks hanging.
+        /// </summary>
+        private static double MeasureEndHang(Canvas g, CssBox blockBox, CssRect word, HangingPunctuationFlags wanted)
+        {
+            if (word.Text is not { Length: > 0 } text) return 0d;
+
+            Rune.DecodeLastFromUtf16(text.AsSpan(), out var rune, out _);
+            var isStop = rune.Value is ',' or '.' or '،' or '۔' or '、' or '。' or '，' or '．'
+                or '﹐' or '﹑' or '﹒' or '｡' or '､';
+            var isClosing = !isStop && (rune.Value is '\'' or '"'
+                || Rune.GetUnicodeCategory(rune) is UnicodeCategory.ClosePunctuation
+                    or UnicodeCategory.InitialQuotePunctuation or UnicodeCategory.FinalQuotePunctuation);
+            if (!isStop && !isClosing) return 0d;
+
+            if (blockBox.HangingPunctuation is not { Length: > 0 } declared
+                || !HangingPunctuationGrammar.TryParse(declared, out var flags)) return 0d;
+
+            var applies = isStop
+                ? (flags & wanted & (HangingPunctuationFlags.AllowEnd | HangingPunctuationFlags.ForceEnd)) != 0
+                : (flags & wanted & HangingPunctuationFlags.Last) != 0;
+            if (!applies) return 0d;
+
+            var owner = word.OwnerBox;
+
+            // Each inline the word closes (the word is its last content) puts its border and padding
+            // between the character and the line's edge.
+            var closes = ReferenceEquals(owner.Words[^1], word);
+            for (var inline = owner; closes && inline is not null && !ReferenceEquals(inline, blockBox); inline = inline.ParentBox)
+            {
+                if (inline.ActualBorderRightWidth + inline.ActualPaddingRight > 0) return 0d;
+                closes = inline.ParentBox is { } parent && ReferenceEquals(parent.Boxes[^1], inline);
+            }
+
+            return g.MeasureString(rune.ToString(), owner.ActualFont, owner.ActualTextShapingFeatures).Width;
+        }
+
+        /// <summary>
+        /// <c>hanging-punctuation: force-end</c> and <c>last</c> at line close (CSS Text 3 §8.1): the last
+        /// word of a line whose final character is a stop or comma (force-end), or - on the block's last
+        /// line - a closing bracket or quote (last), has that character excluded from the line's measure
+        /// (<see cref="CssRect.HungEndWidth"/>), so right/centre alignment and justification let it overhang
+        /// the end edge. A word <c>allow-end</c> already hung while fitting keeps its width. The end edge is
+        /// the physical right edge of a horizontal left-to-right line; other directions are left unhung.
+        /// </summary>
+        private static void ApplyEndHang(Canvas g, CssBox blockBox, CssLineBox lineBox, bool blockFinished)
+        {
+            if (blockBox.HangingPunctuation is not { Length: > 0 } || lineBox.Words.Count == 0) return;
+            if (blockBox.Direction.Value == DirectionMode.Rtl) return;
+
+            var word = lineBox.Words[^1];
+            if (word.IsSpaces || word.IsLineBreak || word.HungEndWidth > 0d) return;
+
+            var wanted = HangingPunctuationFlags.ForceEnd;
+            if (blockFinished && lineBox.Equals(blockBox.LineBoxes[^1])) wanted |= HangingPunctuationFlags.Last;
+
+            word.HungEndWidth = MeasureEndHang(g, blockBox, word, wanted);
+        }
+
+        /// <summary>
         /// The advance of the opening punctuation <c>hanging-punctuation: first</c> hangs outside the start
         /// edge of <paramref name="blockBox"/>'s first line (CSS Text 3 §8.1), or 0 when the property is off
         /// or the line does not open with such a character. Qualifying characters are the Unicode categories
@@ -9678,7 +9783,7 @@ namespace PeachBrackets.Html.Dom
             if (line.Words.Count > 0)
             {
                 var lastWord = line.Words[^1];
-                end = lastWord.Right + lastWord.OwnerBox.ActualBorderRightWidth + lastWord.OwnerBox.ActualPaddingRight;
+                end = lastWord.Right - lastWord.HungEndWidth + lastWord.OwnerBox.ActualBorderRightWidth + lastWord.OwnerBox.ActualPaddingRight;
             }
 
             foreach (var box in line.Rectangles.Keys)

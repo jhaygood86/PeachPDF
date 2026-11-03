@@ -190,6 +190,7 @@ PeachDrawing.PDF.PdfComposerPage : sealed class
   method PdfLink AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method Void Finish()
   method Void SetCustomString(String dictionaryKey, String key, String value)
+  method Void SetPrintBoxes(Double bleedPoints, Double outsidePoints)
   property Double HeightPoints { get; }
   property Double WidthPoints { get; }
   property Int32 Index { get; }

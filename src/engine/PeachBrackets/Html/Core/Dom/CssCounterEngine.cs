@@ -63,6 +63,13 @@ namespace PeachBrackets.Html.Dom
                 return fixedSymbol;
             }
 
+            // The longhand East Asian styles (section 7.1): additive over -9999..9999, cjk-decimal outside it.
+            if (EastAsianCounterStyles.IsEastAsianCounterStyle(style))
+            {
+                return EastAsianCounterStyles.Format(number, style)
+                    ?? CommonUtils.ConvertToPositionalNumber(number, Keywords.CjkDecimal)!;
+            }
+
             if (style.Equals(Keywords.EthiopicNumeric, StringComparison.OrdinalIgnoreCase) && number >= 1)
             {
                 return CommonUtils.ConvertToEthiopicNumber(number);

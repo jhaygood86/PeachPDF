@@ -177,6 +177,17 @@ namespace PeachBrackets.Engine.Tests.CSS
         // Fixed styles - §6.4.
         [InlineData("cjk-earthly-branch", "cjk-earthly-branch")]
         [InlineData("cjk-heavenly-stem", "cjk-heavenly-stem")]
+        // Longhand East Asian styles - §7.1.
+        [InlineData("cjk-ideographic", "cjk-ideographic")]
+        [InlineData("japanese-formal", "japanese-formal")]
+        [InlineData("japanese-informal", "japanese-informal")]
+        [InlineData("korean-hangul-formal", "korean-hangul-formal")]
+        [InlineData("korean-hanja-formal", "korean-hanja-formal")]
+        [InlineData("korean-hanja-informal", "korean-hanja-informal")]
+        [InlineData("simp-chinese-formal", "simp-chinese-formal")]
+        [InlineData("simp-chinese-informal", "simp-chinese-informal")]
+        [InlineData("trad-chinese-formal", "trad-chinese-formal")]
+        [InlineData("trad-chinese-informal", "trad-chinese-informal")]
         // Ethiopic numeric - §7.2.
         [InlineData("ethiopic-numeric", "ethiopic-numeric")]
         // Armenian variants - §6.1.

@@ -1,6 +1,7 @@
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
+using PeachBrackets.Html.Fragmentation;
 using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Utils;
 using System.Collections.Generic;
@@ -216,6 +217,10 @@ namespace PeachBrackets.Html.Paint
         private void Collect(BoxFragment fragment, bool contributesSpan)
         {
             if (fragment.Box.IsOutOfFlow) return;
+
+            // A replaced element that is not inline - an <svg> or <img> blockified as a flex or grid item - is no atomic inline, but it
+            // has no inline content for the decoration to land on either, and its own rectangle is not a line of text (§2.4).
+            if (MonolithicContent.IsReplaced(fragment.Box)) return;
 
             if (DomUtils.IsAtomicInline(fragment.Box))
             {

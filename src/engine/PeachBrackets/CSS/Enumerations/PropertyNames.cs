@@ -91,6 +91,8 @@
         public static readonly string ClipRight = "clip-right";
         public static readonly string ClipBottom = "clip-bottom";
         public static readonly string ClipPath = "clip-path";
+        public static readonly string ShapeOutside = "shape-outside";
+        public static readonly string ShapeMargin = "shape-margin";
         public static readonly string ClipRule = "clip-rule";
         public static readonly string Color = "color";
         public static readonly string ColorInterpolationFilters = "color-interpolation-filters";
@@ -228,6 +230,14 @@
         public static readonly string MarkerMid = "marker-mid";
         public static readonly string MarkerStart = "marker-start";
         public static readonly string Mask = "mask";
+        public static readonly string MaskImage = "mask-image";
+        public static readonly string MaskMode = "mask-mode";
+        public static readonly string MaskRepeat = "mask-repeat";
+        public static readonly string MaskPosition = "mask-position";
+        public static readonly string MaskSize = "mask-size";
+        public static readonly string MaskOrigin = "mask-origin";
+        public static readonly string MaskClip = "mask-clip";
+        public static readonly string MaskComposite = "mask-composite";
         public static readonly string R = "r";
         public static readonly string Cx = "cx";
         public static readonly string Cy = "cy";
@@ -379,6 +389,8 @@
         public static readonly string ImageOrientation = "image-orientation";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
+        public static readonly string Bleed = "bleed";
+        public static readonly string Marks = "marks";
 
         // CSS Logical Properties and Values Level 1. PeachPDF is always LTR / horizontal-tb,
         // so each logical property maps 1:1 to a physical one (block-start = top,

@@ -409,13 +409,16 @@ PeachBrackets.DocumentInteraction : sealed class
   property Boolean Inert { get; init; }
   property TouchActions TouchActions { get; init; }
 PeachBrackets.DocumentPage : struct
-  ctor(Int32 Index, Double WidthPoints, Double HeightPoints)
-  method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints)
+  ctor(Int32 Index, Double WidthPoints, Double HeightPoints, Double BleedPoints = 0, Double MarksPoints = 0)
+  method Void Deconstruct(out Int32 Index, out Double WidthPoints, out Double HeightPoints, out Double BleedPoints, out Double MarksPoints)
   method virtual Boolean Equals(DocumentPage other)
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
+  property Boolean HasPrintBoxes { get; }
+  property Double BleedPoints { get; init; }
   property Double HeightPoints { get; init; }
+  property Double MarksPoints { get; init; }
   property Double WidthPoints { get; init; }
   property Int32 Index { get; init; }
 PeachBrackets.FontDefaults : static class

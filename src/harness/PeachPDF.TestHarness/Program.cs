@@ -935,6 +935,40 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// @page bleed and marks (css-page-3 §12-13): the sheet grows around the trimmed page, the page's background runs into the bleed
+// area, crop and cross marks are drawn outside it, and the PDF carries /TrimBox and /BleedBox for the printer.
+var printHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "@page { size: 90mm 55mm; margin: 6mm; bleed: 3mm; marks: crop cross }" +
+    "html { background: linear-gradient(135deg, #f5a623, #d0021b) } body { margin: 0; font: 11pt/14pt Arial; color: #fff }" +
+    "h1 { margin: 0 0 4pt; font-size: 18pt } p { margin: 0 }</style></head><body>" +
+    "<h1>Print-ready card</h1><p>The background runs 3mm past the trim edge, and the marks sit outside the bleed.</p></body></html>";
+
+await SaveShowcaseAsync("page_bleed_marks", "Paged Media", "Page Bleed and Marks",
+    "@page bleed and marks: the sheet grows around the trimmed page, the background runs into the bleed area, crop and cross marks are drawn outside it, and the PDF carries a TrimBox and BleedBox.",
+    printHtml, pdfConfig);
+
+// shape-outside / shape-margin (css-shapes-1): text wraps around each float's shape rather than its rectangle.
+// Each box is a float with the same paragraph beside it, so the curve each shape cuts into the lines is visible.
+var shapeText = string.Concat(Enumerable.Repeat("Text follows the outline of the shape instead of the box around it, so each line starts where the shape ends. ", 8));
+string ShapeBox(string label, string style) =>
+    "<div class='cell'><h3>" + label + "</h3><div class='f' style='" + style + "'></div><p>" + shapeText + "</p></div>";
+var shapeHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "body { font: 9pt/12pt Arial; margin: 14pt } h1 { font-size: 15pt; margin: 0 0 8pt } h3 { font-size: 9pt; margin: 0 0 4pt; color: #555 }" +
+    ".cell { display: inline-block; vertical-align: top; width: 230pt; margin: 0 12pt 14pt 0 } .cell p { margin: 0 }" +
+    ".f { float: left; width: 90pt; height: 90pt; background: #f5a3a3; margin-right: 6pt }</style></head><body>" +
+    "<h1>shape-outside</h1>" +
+    ShapeBox("circle(50%)", "shape-outside: circle(50%); border-radius: 50%") +
+    ShapeBox("circle(50%) + shape-margin: 8pt", "shape-outside: circle(50%); shape-margin: 8pt; border-radius: 50%") +
+    ShapeBox("ellipse(40pt 45pt)", "shape-outside: ellipse(40pt 45pt at 40% 50%); clip-path: ellipse(40pt 45pt at 40% 50%)") +
+    ShapeBox("polygon(0 0, 100% 0, 50% 100%)", "shape-outside: polygon(0 0, 100% 0, 50% 100%); clip-path: polygon(0 0, 100% 0, 50% 100%)") +
+    ShapeBox("inset(0 round 30pt)", "shape-outside: inset(0 round 30pt); border-radius: 30pt") +
+    ShapeBox("float: right, circle(50%)", "float: right; margin: 0 0 0 6pt; shape-outside: circle(50%); border-radius: 50%") +
+    "</body></html>";
+
+await SaveShowcaseAsync("shape_outside", "Layout", "Shape Outside",
+    "shape-outside with circle(), ellipse(), polygon() and inset(round) shapes, shape-margin growing the shape outward, and a right float: text follows each shape's outline instead of the float's rectangle.",
+    shapeHtml, pdfConfig);
+
 // Renders the exact same document as the border_radius showcase above, but at a non-default
 // PixelsPerInch (issue #812, reopened) - every rounded border stroke, background fill, and
 // overflow-clip curve above is built from a HtmlRenderContext.PixelsPerPoint-inflated layout-space
@@ -6763,7 +6797,16 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "A heading spanning both columns" +
         "</h2>" +
         McEntries(6, "after") +
-        "</div></div>") +
+        "</div></div>" +
+        "<div class=\"frame\"><div class=\"label\">the same heading nested in a bordered wrapper &mdash; the wrapper is sliced around it, the top border above the first run, the bottom one below the second</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-rule:0.5pt solid #000\">" +
+        "<div style=\"border:1pt solid #2e86c1;padding:3pt\">" +
+        McEntries(4, "before") +
+        "<h2 style=\"column-span:all;background:#fdf3e3;border:0.5pt solid #d68910;padding:3pt;margin:0.3em 0\">" +
+        "A nested heading spanning both columns" +
+        "</h2>" +
+        McEntries(4, "after") +
+        "</div></div></div>") +
 
     // css-multicol-1 §2: a float belongs to the column box it appears in, and the container contains its
     // floats. The right float sits at the right edge of the first column, not of the container, and the
@@ -6775,6 +6818,12 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<p style=\"margin:0;text-align:left\"><span style=\"float:right;width:40pt;height:30pt;background:#d68910;margin:0 0 4pt 6pt\"></span>" +
         "Text that wraps around the float in the first column and then carries on into the second column, where the lines run at the full column width because the float is not beside them. " +
         "More text to fill the columns so that the second column is clearly visible and its lines can be compared with the first.</p>" +
+        "</div></div>" +
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-fill: auto; height: 60pt &mdash; the float does not fit below the text in the first column, so it starts the second (the text after it stays in the first)</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px;column-fill:auto;height:60pt;overflow:hidden;column-rule:0.5pt solid #000\">" +
+        "<p style=\"margin:0\">one<br>two<br>three<br>four<br>five</p>" +
+        "<div style=\"float:right;width:40pt;height:24pt;background:#d68910\"></div>" +
+        "<p style=\"margin:0\">six</p>" +
         "</div></div>" +
         "<div class=\"frame\"><div class=\"label\">columns: 2; a container of nothing but floats &mdash; laid out in the first column and contained by the box</div>" +
         "<div class=\"mc\" style=\"columns:2;column-gap:20px;border:0.5pt solid #000\">" +
@@ -6922,6 +6971,36 @@ var flexColumnBreakPointsHtml = $$"""
     </div>
     </body></html>
     """;
+
+var automaticMinimumHtml = $$"""
+    <!DOCTYPE html>
+    <html><head><style>
+    @page { size: a6; margin: 8mm }
+    body { font: 8.5pt Helvetica, Arial, sans-serif; margin: 0; color: #1f2937 }
+    h2 { font-size: 9.5pt; margin: 0.8em 0 0.3em }
+    p.note { color: #6b7280; font-size: 7.5pt; margin: 0 0 0.4em }
+    .col { display: flex; flex-direction: column; height: 22mm; width: 40mm; border: 0.75pt solid #64748b; float: left; margin-right: 4mm }
+    .col > div { background: #eef2ff; border: 0.5pt solid #94a3b8; line-height: 11pt }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; width: 70mm; border: 0.75pt solid #64748b; clear: both }
+    .grid > div { background: #fdf3e3; border: 0.5pt solid #d68910; font-size: 14pt }
+    </style></head><body>
+    <h2>Column flex items keep their content height</h2>
+    <p class="note">Three three-line items in a 22mm column. Left: min-height: auto (the default) - the items stay as tall as their text and the column overflows. Right: min-height: 0 - they shrink and their text spills out.</p>
+    <div class="col"><div>one<br>two<br>three</div><div>one<br>two<br>three</div><div>one<br>two<br>three</div></div>
+    <div class="col"><div style="min-height:0">one<br>two<br>three</div><div style="min-height:0">one<br>two<br>three</div><div style="min-height:0">one<br>two<br>three</div></div>
+    <div style="clear:both;height:30mm"></div>
+    <h2>Grid items keep their content width</h2>
+    <p class="note">1fr 1fr in 70mm. The first item's unbreakable word is wider than half the grid, so its track grows to fit it.</p>
+    <div class="grid"><div>Unbreakableword</div><div>x</div></div>
+    <p class="note">minmax(0, 1fr) minmax(0, 1fr) lets the tracks shrink, and the word overflows.</p>
+    <div class="grid" style="grid-template-columns: minmax(0,1fr) minmax(0,1fr)"><div>Unbreakableword</div><div>x</div></div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("automatic_minimum_size", "Layout", "Automatic Minimum Size of Flex and Grid Items",
+    "min-height: auto on a column flex item and min-width: auto on a grid item in a 1fr track stop the item shrinking "
+    + "below its content (css-flexbox-1 section 4.5, css-grid-1 section 6.6); min-height: 0 and minmax(0, 1fr) opt out.",
+    automaticMinimumHtml, new PdfGenerateConfig { PageSize = PageSize.A6 });
 
 await SaveShowcaseAsync("flex_column_break_points", "Layout", "Break Points Between Column Flex Items",
     "A break-before/break-after/break-inside:avoid value between two items of the same "
@@ -9167,10 +9246,14 @@ var hangingPunctuationHtml = "<!DOCTYPE html><html><head>" + HangingPunctuationC
     "<p class=\"col hang\">“Typography is the craft of endowing human language with a durable visual form,” wrote Robert Bringhurst, and the edge of a column is part of that form.</p>" +
     "<h2>first with a bracket opening an inline</h2>" +
     "<p class=\"col hang\"><em>(Parenthetical openings hang too,</em> and the following lines of the paragraph start flush at the column edge as usual.)</p>" +
+    "<h2>force-end: a full stop or comma ending a line hangs past the justified edge</h2>" +
+    "<p class=\"col\" style=\"hanging-punctuation: force-end\">Typography is the craft of endowing human language with a durable visual form, and the edge of a column is part of that form, so a comma, or a full stop. Another line of text follows.</p>" +
+    "<h2>last: the closing quote of the last line hangs (right-aligned)</h2>" +
+    "<p class=\"col\" style=\"hanging-punctuation: last; text-align: right\">He wrote, “the edge of a column is part of its form.”</p>" +
     "</body></html>";
 
 await SaveShowcaseAsync("hanging_punctuation", "Typography & Text", "hanging-punctuation",
-    "hanging-punctuation: first (CSS Text 3) hangs an opening quote or bracket outside the start edge so the column's optical edge stays straight.",
+    "hanging-punctuation (CSS Text 3): first hangs an opening quote or bracket outside the start edge; force-end, allow-end and last hang a closing stop, comma, bracket or quote outside the end edge so the column's optical edges stay straight.",
     hangingPunctuationHtml, pdfConfig);
 
 // --- text-align / text-align-last showcase (CSS Text 3 §6.1, §6.3, §6.4.3) ---
@@ -14675,6 +14758,36 @@ await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode"
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
 
+<<<<<<< HEAD
+=======
+// --- mask-image showcase (CSS Masking 1 §6) ---
+
+const string MaskImageCss = """
+    <style>
+    @page { size: a4; margin: 20mm }
+    body { font: 11pt Arial, sans-serif; margin: 0; background: #fff }
+    h1 { font-size: 15pt; margin: 0 0 .4em } h2 { font-size: 10pt; margin: 1em 0 .3em }
+    .box { width: 360px; height: 70px; background: linear-gradient(90deg, #0b5fff, #ff3b6b) }
+    </style>
+    """;
+
+var maskImageHtml = "<!DOCTYPE html><html><head>" + MaskImageCss + "</head><body>" +
+    "<h1>CSS mask-image</h1>" +
+    "<h2>alpha gradient: fades to transparent</h2>" +
+    "<div class=\"box\" style=\"mask-image: linear-gradient(to right, #000, transparent)\"></div>" +
+    "<h2>mask-mode: luminance: bright shows, dark hides</h2>" +
+    "<div class=\"box\" style=\"mask-image: linear-gradient(to right, #fff, #000); mask-mode: luminance\"></div>" +
+    "<h2>a radial mask tiled with mask-size</h2>" +
+    "<div class=\"box\" style=\"mask-image: radial-gradient(circle, #000 55%, transparent 58%); mask-size: 36px 36px\"></div>" +
+    "<h2>text and children are masked together, with opacity</h2>" +
+    "<div class=\"box\" style=\"opacity: .8; mask-image: linear-gradient(to bottom, #000 40%, transparent)\"><p style=\"margin: 8px; color: #fff; font-size: 20pt\">Masked text</p></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("mask_image", "Graphics & Effects", "mask-image",
+    "mask-image with gradient layers fades or cuts out an element and its content through a real PDF soft mask: alpha and luminance modes, tiled masks, and opacity on the masked result.",
+    maskImageHtml, pdfConfig);
+
+>>>>>>> origin/main
 // --- sideways writing modes showcase (CSS Writing Modes 4 section 4.1: sideways-rl / sideways-lr) ---
 
 const string SidewaysCss = """
@@ -15613,6 +15726,14 @@ var fontRelativeUnitsHtml =
     "<div style=\"font-size: 16pt; font-family: 'STIX'\">" +
     "<math><mi>a</mi><mspace width=\"4ch\" style=\"background:#fcc\"/><mi>b</mi><mspace width=\"2em\"/><mi>c</mi></math>" +
     " <span style=\"font: 7pt Arial\">mspace width=\"4ch\" then \"2em\" - measured from the math font</span></div>" +
+    "<h2>An inline SVG starts from the font of the page around it</h2>" +
+    "<div style=\"font: 12px Arial\">" +
+    "<svg width=\"420\" height=\"70\" viewBox=\"0 0 420 70\" style=\"border: 1px solid #ccc\">" +
+    "<text x=\"6\" y=\"18\">no font-size: the 12px of the div</text>" +
+    "<text x=\"6\" y=\"46\" font-size=\"2em\">2em: 24px</text>" +
+    "<text x=\"190\" y=\"46\" font-size=\"2rem\">2rem</text>" +
+    "<circle cx=\"385\" cy=\"34\" r=\"1.5em\" fill=\"#fc9\" stroke=\"#c60\"/>" +
+    "</svg></div>" +
     "</body></html>";
 
 await SaveShowcaseAsync("font_relative_units", "Typography & Text", "Font-relative units: ex, ch, cap, ic, lh",
