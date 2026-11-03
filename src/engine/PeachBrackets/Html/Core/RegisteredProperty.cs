@@ -112,6 +112,33 @@ namespace PeachBrackets.Html
         public bool Accepts(string value, CssValueParser valueParser) =>
             SyntaxMatches(Syntax, value, valueParser, forInitialValue: false);
 
+        /// <summary>The single data types a registered property is mixed by (CSS Properties &amp; Values API §5.1.1); the rest are discrete.</summary>
+        private static readonly HashSet<string> InterpolableTypes = new(StringComparer.Ordinal)
+        {
+            "<length>", "<number>", "<integer>", "<percentage>", "<length-percentage>", "<color>", "<angle>", "<transform-function>", "<transform-list>"
+        };
+
+        /// <summary>
+        /// The data type of this property's <c>syntax</c> that both values match and that is mixed by interpolating (<c>&lt;length&gt;</c>,
+        /// <c>&lt;color&gt;</c>, ...), or null when the pair is mixed discretely: a type that cannot interpolate (<c>&lt;custom-ident&gt;</c>, the
+        /// universal syntax), a list (<c>+</c>/<c>#</c>), or two values that match different components of an alternation.
+        /// </summary>
+        public string? InterpolableTypeOf(string from, string to, CssValueParser valueParser)
+        {
+            if (Syntax == "*") return null;
+
+            foreach (var rawComponent in Syntax.Split('|'))
+            {
+                var component = rawComponent.Trim();
+                if (!InterpolableTypes.Contains(component)) continue;
+
+                if (BaseTypeMatches(component, from.Trim(), valueParser, false) && BaseTypeMatches(component, to.Trim(), valueParser, false))
+                    return component;
+            }
+
+            return null;
+        }
+
         private static bool SyntaxMatches(string syntax, string value, CssValueParser valueParser, bool forInitialValue)
         {
             if (syntax == "*") return true;

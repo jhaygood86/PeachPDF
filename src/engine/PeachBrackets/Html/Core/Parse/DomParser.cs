@@ -1439,10 +1439,11 @@ namespace PeachBrackets.Html.Parse
             if (box.HtmlContainer?.AnimationProgress is { } animationProgress)
             {
                 var colorIsImportant = false;
+                HashSet<string>? importantCustomProperties = null;
                 if (box.HtmlContainer.Keyframes.Count > 0)
-                    colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties);
+                    colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties, importantCustomProperties ??= new HashSet<string>(StringComparer.Ordinal));
 
-                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot, colorIsImportant);
+                AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot, colorIsImportant, importantCustomProperties);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to
@@ -2580,20 +2581,21 @@ namespace PeachBrackets.Html.Parse
             CssBox box,
             IReadOnlyList<CssData.LayeredStyleRule> authorImportant,
             IStyleRule? inlineRule,
-            Dictionary<string, string> pendingVarProperties)
+            Dictionary<string, string> pendingVarProperties,
+            HashSet<string> importantCustomProperties)
         {
             var colorIsImportant = false;
 
             foreach (var layered in authorImportant)
-                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, layered.Rule, pendingVarProperties);
+                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, layered.Rule, pendingVarProperties, importantCustomProperties);
 
             if (inlineRule is not null)
-                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, inlineRule, pendingVarProperties);
+                colorIsImportant |= PreApplyImportantDeclarations(valueParser, box, inlineRule, pendingVarProperties, importantCustomProperties);
 
             return colorIsImportant;
         }
 
-        private static bool PreApplyImportantDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties)
+        private static bool PreApplyImportantDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties, HashSet<string> importantCustomProperties)
         {
             var colorIsImportant = false;
 
@@ -2604,7 +2606,8 @@ namespace PeachBrackets.Html.Parse
                 if (PropertyFactory.IsCustomPropertyName(prop.Name))
                 {
                     // A custom property is only stored here; var() against it resolves at the end (or when the animation settles a
-                    // property it owns), so the store alone is what the step needs.
+                    // property it owns), so the store alone is what the step needs. It outranks the animation origin, which therefore leaves it be.
+                    importantCustomProperties.Add(prop.Name);
                     if (prop.Value is not (Keywords.Revert or Keywords.RevertLayer))
                         AssignCustomPropertyDeclaration(box, prop, null, null);
                     continue;

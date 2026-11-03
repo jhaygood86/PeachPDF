@@ -128,12 +128,12 @@ namespace PeachBrackets.Html.Animation
         /// <summary>
         /// Whether a declaration in a keyframe can animate at all. The <c>animation-*</c> and <c>transition-*</c>
         /// properties are excluded by name (§4.2: they are ignored in a keyframe, bar the timing function handled
-        /// separately), and so is a custom property: none animates here, whether or not it is registered with a syntax.
+        /// separately). A custom property animates: discretely when unregistered, by its syntax when registered.
         /// </summary>
         private static bool IsAnimatable(string name) =>
-            !name.StartsWith("--", StringComparison.Ordinal)
-            && !name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)
-            && !name.StartsWith("transition", StringComparison.OrdinalIgnoreCase);
+            name.StartsWith("--", StringComparison.Ordinal)
+            || (!name.StartsWith("animation", StringComparison.OrdinalIgnoreCase)
+                && !name.StartsWith("transition", StringComparison.OrdinalIgnoreCase));
 
         /// <summary>Whether a declaration was written as a function that is settled when it is used: <c>calc()</c>, <c>min()</c>, <c>var()</c>... The <c>path()</c> of <c>d</c> is the plain value of that property.</summary>
         private static bool IsFunction(Property property) =>

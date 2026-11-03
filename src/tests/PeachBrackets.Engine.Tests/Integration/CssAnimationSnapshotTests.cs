@@ -1164,15 +1164,16 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task CustomPropertiesInAKeyframe_AreNotAnimated()
+        public async Task AnUnregisteredCustomPropertyInAKeyframe_IsAnimatedDiscretely()
         {
             var root = await BuildAsync("""
                 <style>@keyframes k { from { --w: 10pt } to { --w: 90pt } }
                 #a { --w: 70pt; width: var(--w); height: 10pt; animation: k 1s linear; }</style><div id="a"></div>
                 """, 0.5);
 
+            // Unregistered, so the value flips at the middle (to the 100% keyframe, which is 90pt) instead of staying at the cascaded 70pt.
             var a = Find(root, "a");
-            Assert.Equal(70.0, a.ActualRight - a.Location.X, 1);
+            Assert.Equal(90.0, a.ActualRight - a.Location.X, 1);
         }
 
         [Fact]
