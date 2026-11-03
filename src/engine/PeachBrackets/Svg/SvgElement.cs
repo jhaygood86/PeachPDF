@@ -292,7 +292,7 @@ namespace PeachBrackets.Svg
         public bool IsAutoWrapped => (InlineSize is not null || ShapeInside is not null) && !IsVerticalWriting;
 
         /// <summary>Whether <see cref="WritingMode"/> is a vertical one (wrapping does not apply to those).</summary>
-        private bool IsVerticalWriting => WritingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+        private bool IsVerticalWriting => WritingMode.IsVertical();
 
         /// <summary>The resolved <c>white-space</c> keyword (<c>normal</c>, <c>nowrap</c>, <c>pre</c>, <c>pre-wrap</c>, <c>pre-line</c>, <c>break-spaces</c>); inherited.</summary>
         public string WhiteSpace { get; set; } = "normal";

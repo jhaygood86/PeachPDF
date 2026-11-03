@@ -586,7 +586,7 @@ namespace PeachBrackets.Svg
                     ResolveComplexScriptRuns(glyphs);
 
                 LayoutTextBlock(g, text, glyphs, overrides, isVertical);
-                PaintGlyphs(g, document, glyphs, opacity, isVertical);
+                PaintGlyphs(g, document, glyphs, opacity, isVertical, text.WritingMode == WritingMode.SidewaysLr);
 
                 // v1 scope: horizontal-tb, straight-baseline text only - see PaintTextDecorations' own
                 // remarks on why vertical writing modes and <textPath> (RenderTextPath, a separate
@@ -1274,7 +1274,7 @@ namespace PeachBrackets.Svg
         /// <c>text-orientation</c> (see <see cref="IsUprightGlyph"/>), the pen-advance axis itself has no
         /// defined meaning changing mid-text.
         /// </summary>
-        private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical, bool measureOnly = false)
+        private static void LayoutGlyphs(Canvas g, List<GlyphInfo> glyphs, bool isVertical, bool measureOnly = false, bool bottomToTop = false)
         {
             double penX = 0, penY = 0;
             var chunkStarts = new List<int> { 0 };
@@ -1410,16 +1410,19 @@ namespace PeachBrackets.Svg
                 var end = c + 1 < chunkStarts.Count ? chunkStarts[c + 1] : glyphs.Count;
 
                 var anchor = glyphs[start].Run.TextAnchor;
-                if (anchor == SvgTextAnchor.Start)
+                if (anchor == SvgTextAnchor.Start && !(isVertical && bottomToTop))
                     continue;
 
                 if (isVertical)
                 {
                     var extent = glyphs[end - 1].Py + glyphs[end - 1].Advance - glyphs[start].Py;
-                    var shift = anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
+                    var shift = anchor == SvgTextAnchor.Start ? 0 : anchor == SvgTextAnchor.Middle ? -extent / 2 : -extent;
 
+                    // sideways-lr runs the text upward: each glyph keeps its distance from the text position but on the other side of it,
+                    // so it starts at the position and its (rotated) glyph body extends up from there; the anchor moves the run the other way.
+                    var origin = glyphs[start].Py;
                     for (var i = start; i < end; i++)
-                        glyphs[i].Py += shift;
+                        glyphs[i].Py = bottomToTop ? 2 * origin - glyphs[i].Py - shift : glyphs[i].Py + shift;
                 }
                 else
                 {
@@ -1433,9 +1436,8 @@ namespace PeachBrackets.Svg
         }
 
         /// <summary>Resolves the pen-advance/inline axis for a <c>&lt;text&gt;</c> root's <c>writing-mode</c> -
-        /// true for <c>vertical-rl</c>/<c>vertical-lr</c>, false otherwise (including <c>sideways-rl</c>/
-        /// <c>sideways-lr</c> and any unrecognized value, matching the HTML pipeline's own scope).</summary>
-        private static bool IsVerticalWritingMode(WritingMode writingMode) => writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+        /// true for every mode but <c>horizontal-tb</c> (<c>sideways-rl</c>/<c>sideways-lr</c> included).</summary>
+        private static bool IsVerticalWritingMode(WritingMode writingMode) => writingMode.IsVertical();
 
         /// <summary>
         /// Whether one glyph paints upright (unrotated) under a vertical writing mode: <c>upright</c>/
@@ -1472,7 +1474,7 @@ namespace PeachBrackets.Svg
         /// over the orientation-driven default when both apply, matching how <c>rotate=""</c> already
         /// overrides in-flow layout today.
         /// </summary>
-        private static void PaintGlyphs(Canvas g, SvgDocument document, List<GlyphInfo> glyphs, double opacity, bool isVertical)
+        private static void PaintGlyphs(Canvas g, SvgDocument document, List<GlyphInfo> glyphs, double opacity, bool isVertical, bool bottomToTop = false)
         {
             var i = 0;
             while (i < glyphs.Count)
@@ -1506,7 +1508,7 @@ namespace PeachBrackets.Svg
                     if (start.IsUpright)
                         PaintUprightGlyph(g, document, start, font, opacity);
                     else
-                        PaintRotatedGlyph(g, document, start, font, 90.0, opacity);
+                        PaintRotatedGlyph(g, document, start, font, bottomToTop ? -90.0 : 90.0, opacity);
                     i++;
                     continue;
                 }
@@ -3081,7 +3083,7 @@ namespace PeachBrackets.Svg
                     var box = isVertical && gi.IsUpright
                         ? new Rect(gi.Px - size.Width / 2, gi.Py, size.Width, gi.Font.Height * gi.GlyphScale)
                         : isVertical
-                            ? RotateRectBounds(new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width * gi.GlyphScale, size.Height), 90.0, gi.Px, gi.Py)
+                            ? RotateRectBounds(new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width * gi.GlyphScale, size.Height), text.WritingMode == WritingMode.SidewaysLr ? -90.0 : 90.0, gi.Px, gi.Py)
                             : new Rect(gi.Px, gi.Py - gi.Font.Ascent, size.Width * gi.GlyphScale, size.Height);
 
                     result = result is { } r ? UnionRects(r, box) : box;

@@ -1609,9 +1609,8 @@ namespace PeachBrackets.Svg
             // parsers for the same CSS grammar across layers" convention). An unrecognized value
             // (including SVG 1.1's legacy tb/tb-rl/lr/lr-tb/rl/rl-tb writing-mode keywords, which Map
             // doesn't define) falls back to the inherited value via GetValueOrDefault, matching every
-            // other inherited property above. sideways-rl/sideways-lr DO parse (Map.WritingModes defines
-            // them) but render as horizontal-tb throughout, same as the HTML pipeline's own scope -
-            // SvgRenderer.IsVerticalWritingMode only recognizes vertical-rl/vertical-lr as vertical.
+            // other inherited property above. sideways-rl/sideways-lr are vertical modes with always-sideways glyphs
+            // (see below); sideways-lr also runs the text bottom to top (SvgRenderer.LayoutGlyphs).
             var writingModeAttr = DeclaredOrInitial(node, "writing-mode");
             var writingMode = writingModeAttr is null || writingModeAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.WritingMode
@@ -1621,6 +1620,10 @@ namespace PeachBrackets.Svg
             var textOrientation = textOrientationAttr is null || textOrientationAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 ? inherited.TextOrientation
                 : Map.TextOrientations.GetValueOrDefault(textOrientationAttr.Trim(), inherited.TextOrientation);
+
+            // sideways-rl/sideways-lr set every glyph sideways, whatever text-orientation says (CSS Writing Modes 4 section 5.1).
+            if (writingMode is WritingMode.SidewaysRl or WritingMode.SidewaysLr)
+                textOrientation = TextOrientation.Sideways;
 
             // visibility is inherited; hidden and collapse (outside a table or flex item, where collapse means hidden) stop the element painting but
             // leave it in the rendering tree, so a descendant can set visible again and the element still sizes a clip path or a bounding box.

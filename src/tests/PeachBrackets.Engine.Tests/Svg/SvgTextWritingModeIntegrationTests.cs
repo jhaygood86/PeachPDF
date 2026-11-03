@@ -90,6 +90,58 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.IsType<TestRecordingGraphics.PopTransformCall>(g.Log[drawB + 1]);
         }
 
+        [Theory]
+        [InlineData("sideways-rl", 1f)]
+        [InlineData("sideways-lr", -1f)]
+        public void Sideways_RotatesEveryGlyph_ClockwiseForRlAndCounterClockwiseForLr(string mode, float sin)
+        {
+            // text-orientation: upright is ignored: even the katakana glyph is turned.
+            var g = Render($"""<text x="10" y="50" font-size="20" writing-mode="{mode}" text-orientation="upright">{Upright}{Latin}</text>""");
+
+            Assert.Equal(3, g.DrawStringCalls.Count);
+            Assert.Equal(3, GlyphTransformPushes(g));
+            var rotations = g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).ToList();
+            Assert.All(rotations, r =>
+            {
+                Assert.Equal(sin, r.Matrix.M12, 3);
+                Assert.Equal(-sin, r.Matrix.M21, 3);
+            });
+        }
+
+        [Fact]
+        public void SidewaysRl_RunsDownTheColumn_AndSidewaysLr_RunsUpFromTheTextPosition()
+        {
+            var rl = Render("""<text x="10" y="100" font-size="20" writing-mode="sideways-rl">ABC</text>""");
+            var lr = Render("""<text x="10" y="100" font-size="20" writing-mode="sideways-lr">ABC</text>""");
+
+            var rlY = rl.DrawStringCalls.Select(c => c.PaintPoint.Y).ToList();
+            var lrY = lr.DrawStringCalls.Select(c => c.PaintPoint.Y).ToList();
+
+            // Each glyph is drawn from its own pen position (before the rotation), so compare the pen travel through the matrices.
+            var rlPens = rl.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).Select(c => c.Matrix.M32).ToList();
+            var lrPens = lr.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).Select(c => c.Matrix.M32).ToList();
+            Assert.Equal(3, rlPens.Count);
+            Assert.Equal(3, lrPens.Count);
+            Assert.True(rlPens[1] > rlPens[0] && rlPens[2] > rlPens[1], "sideways-rl advances down");
+            Assert.True(lrPens[1] < lrPens[0] && lrPens[2] < lrPens[1], "sideways-lr advances up");
+            Assert.NotEmpty(rlY);
+            Assert.NotEmpty(lrY);
+        }
+
+        [Fact]
+        public void SidewaysLr_TextAnchorEnd_PutsTheEndOfTheTextAtThePosition()
+        {
+            var start = Render("""<text x="10" y="100" font-size="20" writing-mode="sideways-lr">ABC</text>""");
+            var end = Render("""<text x="10" y="100" font-size="20" writing-mode="sideways-lr" text-anchor="end">ABC</text>""");
+
+            var s = start.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).Select(c => c.Matrix.M32).ToList();
+            var e = end.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).Select(c => c.Matrix.M32).ToList();
+
+            // Running upward, the run that ends at y starts below it.
+            Assert.True(e[0] > s[0]);
+            Assert.True(e[2] > s[0] && e[2] < e[0], "the last glyph starts one advance below the position and runs up to it");
+        }
+
         [Fact]
         public void Mixed_MultipleBoundaries_AllGlyphsClassifiedIndependently()
         {
