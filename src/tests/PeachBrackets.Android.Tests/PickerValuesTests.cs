@@ -11,7 +11,8 @@ public class PickerValuesTests
     [InlineData("color", "color")]
     [InlineData("select", "select")]
     [InlineData("text", null)]
-    [InlineData("file", null)]
+    [InlineData("file", "file")]
+    [InlineData("number", null)]
     public void EachKindOfControlOpensItsOwnPickerOrNone(string type, string? kind) =>
         Assert.Equal(kind, PickerValues.KindOf(type));
 
@@ -51,5 +52,17 @@ public class PickerValuesTests
         Assert.Equal((0, 0, 0), PickerValues.ParseColor("red"));
         Assert.Equal((0, 0, 0), PickerValues.ParseColor("#12345"));
         Assert.Equal((0, 0, 0), PickerValues.ParseColor("#gggggg"));
+    }
+
+    [Fact]
+    public void AnAcceptAttributeSplitsIntoMediaTypesAndExtensions()
+    {
+        var (mimes, extensions) = PickerValues.AcceptTokens("image/*, .PNG,application/pdf,.,bogus");
+
+        Assert.Equal(["image/*", "application/pdf"], mimes);
+        Assert.Equal(["png"], extensions);
+        var (none, noExtensions) = PickerValues.AcceptTokens(string.Empty);
+        Assert.Empty(none);
+        Assert.Empty(noExtensions);
     }
 }

@@ -772,7 +772,7 @@ public class HtmlViewTests
             var cultureOfHeading = heading.GetAttributeValue(40004);
             var readOnlyOfPlain = plain.GetAttributeValue(40015);
             var readOnlyOfField = word.GetAttributeValue(40015);
-            var unsupported = heading.GetAttributeValue(40005);
+            var unsupported = heading.GetAttributeValue(40019);
             var foundHeading = all.FindAttribute(40034, 70002, false);
             var foundBack = all.FindAttribute(40015, false, true);
             var notFound = all.FindAttribute(40034, 70005, false);
@@ -810,5 +810,117 @@ public class HtmlViewTests
 
         Assert.Equal(1, facts.Item1);
         Assert.True(facts.changed);
+    }
+
+    [Fact]
+    public async Task TheWheelScrollsATextAreaThatHasMoreLinesThanShowAndOtherwiseLeavesItToThePage()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var lines = string.Join("<br>", Enumerable.Range(1, 12).Select(i => "line " + i));
+            var view = await LoadAsync(window, "<textarea id=t style=\"width:200px;height:50px;display:block\">" + string.Join((char)10, Enumerable.Range(1, 12).Select(i => "line " + i)) + "</textarea><input id=i style=\"display:block\">");
+            var t = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "t").Bounds[0].Bounds;
+            var i = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "i").Bounds[0].Bounds;
+            var down = view.ScrollTextAreaAt(0, t.X + 5, t.Y + 5, 20);
+            var up = view.ScrollTextAreaAt(0, t.X + 5, t.Y + 5, -500);
+            var upAgain = view.ScrollTextAreaAt(0, t.X + 5, t.Y + 5, -20);
+            var notAField = view.ScrollTextAreaAt(0, i.X + 5, i.Y + 3, 20);
+            var outside = view.ScrollTextAreaAt(0, 1, 1000, 20);
+            return (down, up, upAgain, notAField, outside);
+        });
+
+        Assert.Equal((true, true, false, false, false), facts);
+    }
+
+    [Fact]
+    public async Task AClickOnAFileInputOpensThePickerAndShowsTheChosenNames()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<input id=f type=file multiple accept=\".txt\" style=\"width:300px;display:block\">");
+            var asked = new List<PeachBrackets.Updates.FileInputInfo>();
+            view.FilePicker = info =>
+            {
+                asked.Add(info);
+                return Task.FromResult(new[] { "a.txt", "b.txt" });
+            };
+            var b = view.AccessibilityTree!.Nodes.First(n => n.ElementId == "f").Bounds[0].Bounds;
+            var opened = view.OpenPickerAt(0, b.X + 5, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y));
+            await Task.Delay(300);
+            var value = view.Document!.GetFormState(view.Document.GetElement("f")!)!.Value.Value;
+
+            view.FilePicker = _ => throw new InvalidOperationException("no window");
+            view.OpenPickerAt(0, b.X + 5, b.Y + (b.Height / 2), new Windows.Foundation.Point(b.X, b.Y));
+            await Task.Delay(200);
+            var after = view.Document.GetFormState(view.Document.GetElement("f")!)!.Value.Value;
+            return (opened, asked.Count, asked[0], value, after);
+        });
+
+        Assert.True(facts.opened);
+        Assert.Equal(1, facts.Count);
+        Assert.Equal((true, ".txt"), (facts.Item3.Multiple, facts.Item3.Accept));
+        Assert.Equal("a.txt, b.txt", facts.value);
+        Assert.Equal("a.txt, b.txt", facts.after);
+    }
+
+    [Fact]
+    public async Task TheTextPatternReportsTheFontAndColoursOfText()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<p style=\"font-size:20pt;font-weight:bold;font-style:italic;color:rgb(255,0,0);background:rgb(0,0,255)\">styled</p><p>plain</p>");
+            var text = (ITextProvider)DocumentPeer(view)!.GetPattern(PatternInterface.Text);
+            var all = text.DocumentRange;
+            var styled = all.FindText("styled", false, false);
+            var plain = all.FindText("plain", false, false);
+            return (styled.GetAttributeValue(40005), styled.GetAttributeValue(40006), styled.GetAttributeValue(40007), styled.GetAttributeValue(40014),
+                styled.GetAttributeValue(40008), styled.GetAttributeValue(40001), plain.GetAttributeValue(40007), plain.GetAttributeValue(40014),
+                plain.GetAttributeValue(40001) == Microsoft.UI.Xaml.DependencyProperty.UnsetValue);
+        });
+
+        Assert.False(string.IsNullOrEmpty((string)facts.Item1));
+        Assert.Equal(20.0, (double)facts.Item2, 1);
+        Assert.Equal(700, facts.Item3);
+        Assert.Equal(true, facts.Item4);
+        Assert.Equal(0x0000FF, facts.Item5);
+        Assert.Equal(0xFF0000, facts.Item6);
+        Assert.Equal(400, facts.Item7);
+        Assert.Equal(false, facts.Item8);
+        Assert.True(facts.Item9);
+    }
+
+    [Fact]
+    public async Task TheTextPatternSelectsAndReportsTheSelectionOfThePagesOwnText()
+    {
+        var facts = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadAsync(window, "<p>dup one dup two</p><p>other</p>");
+            var text = (ITextProvider)DocumentPeer(view)!.GetPattern(PatternInterface.Text);
+            var all = text.DocumentRange;
+            var none = text.GetSelection().Length;
+
+            var firstDup = all.FindText("dup", false, false);
+            var second = all.Clone();
+            second.MoveEndpointByRange(TextPatternRangeEndpoint.Start, firstDup, TextPatternRangeEndpoint.End);
+            var secondDup = second.FindText("dup", false, false);
+            secondDup.Select();
+            await Task.Delay(300);
+            var selectedInDocument = view.Document!.Selection.GetText();
+            var reported = text.GetSelection();
+            var reportedText = reported.Length == 1 ? reported[0].GetText(-1) : string.Empty;
+            var reportedStart = reported.Length == 1 ? reported[0].CompareEndpoints(TextPatternRangeEndpoint.Start, secondDup, TextPatternRangeEndpoint.Start) : 99;
+
+            // A range that runs across blocks is not one the pattern can select, and selecting it does nothing.
+            all.Select();
+            view.Document.Selection.SelectAll();
+            var multiBlock = text.GetSelection().Length;
+            return (none, selectedInDocument, reportedText, reportedStart, multiBlock);
+        });
+
+        Assert.Equal(0, facts.none);
+        Assert.Equal("dup", facts.selectedInDocument);
+        Assert.Equal("dup", facts.reportedText);
+        Assert.Equal(0, facts.reportedStart);
+        Assert.Equal(0, facts.multiBlock);
     }
 }

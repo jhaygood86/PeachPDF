@@ -172,6 +172,13 @@ public sealed partial class HtmlView
                     RequestClear();
                     return true;
                 case MotionEventActions.Scroll:
+                    // Over a text area with more lines than show the wheel scrolls it; otherwise the page.
+                    if (TryLocate(e.GetX(), e.GetY(), out var wheelPage, out var wheelX, out var wheelY)
+                        && ScrollTextAreaAt(wheelPage, wheelX, wheelY, -e.GetAxisValue(Axis.Vscroll) * 42))
+                    {
+                        return true;
+                    }
+
                     ScrollTo(_scrollX - (e.GetAxisValue(Axis.Hscroll) * 64 * _density), _scrollY - (e.GetAxisValue(Axis.Vscroll) * 64 * _density));
                     return true;
             }

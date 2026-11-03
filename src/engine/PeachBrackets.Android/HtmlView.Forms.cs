@@ -1,5 +1,7 @@
 using PeachBrackets.Accessibility;
 using PeachBrackets.Updates;
+using PeachDrawing.Skia;
+using SkiaSharp;
 using System;
 using System.Threading.Tasks;
 
@@ -42,6 +44,21 @@ public sealed partial class HtmlView
     {
         if (_document is { } document)
             AfterControlChange(document, result);
+    }
+
+    // Scrolls the text area under a point by an amount in points; false when the point is not over one or it cannot move that way.
+    private bool ScrollTextAreaAt(int page, double x, double y, double points)
+    {
+        if (_document is not { } document || _context is not { } context || document.GetElementAt(page, x, y) is not { } element)
+            return false;
+
+        using var surface = SKSurface.Create(new SKImageInfo(1, 1));
+        using var measuring = new SkiaComposer(context, surface, 1, 1);
+        var result = document.ScrollTextArea(element, points, measuring.Canvas);
+        if (result.Applied)
+            _surface.Invalidate();
+
+        return result.Applied;
     }
 
     private void AfterControlChange(HtmlDocument document, UpdateResult result)

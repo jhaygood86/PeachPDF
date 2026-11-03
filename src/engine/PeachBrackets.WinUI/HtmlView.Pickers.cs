@@ -2,7 +2,9 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using PeachBrackets.Updates;
 using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 using Windows.Foundation;
 
 namespace PeachBrackets.WinUI;
@@ -49,11 +51,57 @@ public sealed partial class HtmlView
             return false;
         }
 
+        if (kind == "file")
+        {
+            _ = PickFilesAsync(document, element);
+            return true;
+        }
+
         if (BuildPicker(kind, document, element, state.Value) is not { } flyout)
             return false;
 
         ShowFlyout(flyout, at);
         return true;
+    }
+
+    /// <summary>Replaces the system's file picker, which a file input opens; given what the input asks for, it returns the names of the chosen files. For tests.</summary>
+    internal Func<FileInputInfo, Task<string[]>>? FilePicker { get; set; }
+
+    private async Task PickFilesAsync(PeachBrackets.HtmlDocument document, DocumentElement element)
+    {
+        var info = document.GetFileInputInfo(element) ?? new FileInputInfo(false, string.Empty);
+        string[] names;
+        try
+        {
+            names = FilePicker is { } picker ? await picker(info) : await ShowFilePickerAsync(info);
+        }
+        catch (Exception)
+        {
+            // A picker that cannot open (no window to belong to) is the same as nothing chosen.
+            return;
+        }
+
+        if (ReferenceEquals(document, _document) && names.Length > 0)
+            AfterControlChange(document, document.SetFileNames(element, names));
+    }
+
+    // The system's file picker, which needs the window the view is in; it opens a modal dialog, so a test cannot drive it (the window tests replace it with
+    // FilePicker).
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(Justification = "Opens the system's modal file picker.")]
+    private async Task<string[]> ShowFilePickerAsync(FileInputInfo info)
+    {
+        if (XamlRoot?.ContentIslandEnvironment?.AppWindowId is not { } windowId)
+            return [];
+
+        var picker = new Windows.Storage.Pickers.FileOpenPicker();
+        WinRT.Interop.InitializeWithWindow.Initialize(picker, Microsoft.UI.Win32Interop.GetWindowFromWindowId(windowId));
+        foreach (var extension in HtmlViewPickers.ExtensionsFor(info.Accept))
+            picker.FileTypeFilter.Add(extension);
+
+        if (info.Multiple)
+            return [.. (await picker.PickMultipleFilesAsync()).Select(f => f.Name)];
+
+        return await picker.PickSingleFileAsync() is { } file ? [file.Name] : [];
     }
 
     private FlyoutBase? _openFlyout;

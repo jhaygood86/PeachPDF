@@ -69,4 +69,28 @@ public class AccessibilityRangeTests
 
         Assert.Null(node.Value);
     }
+
+    [Fact]
+    public async Task ANodeReportsTheFontSizeWeightSlantAndColoursOfItsText()
+    {
+        var (_, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap("<p id=a style='font-size:20pt;font-weight:bold;font-style:italic;color:rgb(255,0,0);background:rgb(0,0,255)'>styled</p><p id=b>plain</p>",
+                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var tree = document.GetAccessibilityTree();
+
+        var styled = tree.Nodes.First(n => n.ElementId == "a");
+        var plain = tree.Nodes.First(n => n.ElementId == "b");
+
+        Assert.Equal(20, styled.FontSize, 1);
+        Assert.Equal(700, styled.FontWeight);
+        Assert.True(styled.IsItalic);
+        Assert.Equal(unchecked((int)0xFFFF0000), styled.ForegroundColor);
+        Assert.Equal(unchecked((int)0xFF0000FF), styled.BackgroundColor);
+        Assert.False(string.IsNullOrEmpty(styled.FontFamily));
+        Assert.Equal(400, plain.FontWeight);
+        Assert.False(plain.IsItalic);
+        Assert.Null(plain.BackgroundColor);
+        Assert.NotNull(plain.ForegroundColor);
+        Assert.All(styled.DescendantsAndSelf(), n => Assert.Equal(700, n.FontWeight));
+    }
 }

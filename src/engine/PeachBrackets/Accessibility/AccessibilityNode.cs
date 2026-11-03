@@ -211,6 +211,24 @@ public sealed class AccessibilityNode
     /// <summary>The nodes that describe this one (<c>aria-describedby</c>).</summary>
     public IReadOnlyList<AccessibilityNode> DescribedBy { get; internal set; } = [];
 
+    /// <summary>The family name of the font its text is set in, or null when it has no text or the font has no name.</summary>
+    public string? FontFamily { get; internal set; }
+
+    /// <summary>The size of its text in points; 0 when it has no text.</summary>
+    public double FontSize { get; internal set; }
+
+    /// <summary>The weight of its text, from 1 to 1000 (400 is normal, 700 bold); 0 when it has no text.</summary>
+    public int FontWeight { get; internal set; }
+
+    /// <summary>Whether its text is set in an italic or oblique face.</summary>
+    public bool IsItalic { get; internal set; }
+
+    /// <summary>The colour of its text as 0xAARRGGBB; null when it has no text.</summary>
+    public int? ForegroundColor { get; internal set; }
+
+    /// <summary>The colour behind its text as 0xAARRGGBB; null when it paints no background of its own.</summary>
+    public int? BackgroundColor { get; internal set; }
+
     /// <summary>For a composite widget, the node inside it that has the focus although the widget keeps it (<c>aria-activedescendant</c>); otherwise null.</summary>
     public AccessibilityNode? ActiveDescendant { get; internal set; }
 

@@ -389,6 +389,9 @@ namespace PeachBrackets.Html.Utils
                 "p" => ShouldTagCloseParagraph(tagName),
                 "td" => ShouldTagCloseTableCell(tagName),
                 "tr" => ShouldTagCloseTableRow(tagName),
+                // https://html.spec.whatwg.org/dev/form-elements.html#the-option-element and #the-optgroup-element
+                "option" => tagName is "option" or "optgroup",
+                "optgroup" => tagName is "optgroup",
                 _ => false
             };
         }

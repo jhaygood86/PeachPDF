@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 
 namespace PeachBrackets.WinUI;
 
@@ -18,8 +20,47 @@ internal static class HtmlViewPickers
         "datetime-local" => "datetime",
         "color" => "color",
         "select" => "select",
+        "file" => "file",
         _ => null,
     };
+
+    /// <summary>
+    /// The file extensions a picker should list for an <c>accept</c> attribute: the extensions it names, and those of the common media types it names
+    /// (<c>image/*</c>, <c>application/pdf</c>...). A single <c>*</c> - any file - when it names nothing that maps to an extension.
+    /// </summary>
+    public static string[] ExtensionsFor(string accept)
+    {
+        var extensions = new List<string>();
+        foreach (var token in accept.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (token.StartsWith('.') && token.Length > 1)
+            {
+                extensions.Add(token.ToLowerInvariant());
+                continue;
+            }
+
+            var mapped = token.ToLowerInvariant() switch
+            {
+                "image/*" => new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff" },
+                "audio/*" => new[] { ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac" },
+                "video/*" => new[] { ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v" },
+                "text/*" => new[] { ".txt", ".csv", ".html", ".md" },
+                "image/png" => new[] { ".png" },
+                "image/jpeg" => new[] { ".jpg", ".jpeg" },
+                "image/gif" => new[] { ".gif" },
+                "image/webp" => new[] { ".webp" },
+                "application/pdf" => new[] { ".pdf" },
+                "application/json" => new[] { ".json" },
+                "text/plain" => new[] { ".txt" },
+                "text/csv" => new[] { ".csv" },
+                "text/html" => new[] { ".html", ".htm" },
+                _ => Array.Empty<string>(),
+            };
+            extensions.AddRange(mapped);
+        }
+
+        return extensions.Count == 0 ? ["*"] : [.. extensions.Distinct()];
+    }
 
     public static bool TryParseDate(string value, out DateTime date)
     {

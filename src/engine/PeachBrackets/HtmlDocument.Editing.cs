@@ -44,6 +44,7 @@ public sealed partial class HtmlDocument
         var session = SessionOf(field, text);
         session.Start = Math.Clamp(start, 0, text.Length);
         session.End = Math.Clamp(end, 0, text.Length);
+        session.FollowCaret = true;
         return Changed([field]);
     }
 
@@ -86,6 +87,7 @@ public sealed partial class HtmlDocument
         var at = caret >= 0 ? Math.Clamp(caret, 0, value.Length) : start + insert.Length;
         session.Start = session.End = at;
         session.CompositionStart = session.CompositionEnd = -1;
+        session.FollowCaret = true;
         return Changed([field]);
     }
 
@@ -216,7 +218,7 @@ public sealed partial class HtmlDocument
             var number = TextAreaLayout.LineOf(lines, at);
             return new TextEditPlace(box.PageIndex, new Rect(
                 box.Bounds.X + left + (TextAreaLayout.OffsetOf(measuringCanvas, font, text, lines[number], at) / units),
-                box.Bounds.Y + top + (((number * font.Height) - session.ScrollTop) / units), 1, font.Height / units));
+                box.Bounds.Y + top + (((number * font.Height) - ScrollOf(field)) / units), 1, font.Height / units));
         }
 
         var contentHeight = Math.Max(region.Bounds.Height - top - ((field.ActualBorderBottomWidth + field.ActualPaddingBottom) / units), 0);
@@ -265,7 +267,7 @@ public sealed partial class HtmlDocument
             var inside = new Rect(
                 region.Bounds.X + ((field.ActualBorderLeftWidth + field.ActualPaddingLeft) / _unitsPerPoint),
                 region.Bounds.Y + ((field.ActualBorderTopWidth + field.ActualPaddingTop) / _unitsPerPoint), 0, 0);
-            return TextAreaLayout.IndexAt(measuringCanvas, field.ActualFont, text, lines, (x - inside.X) * _unitsPerPoint, ((y - inside.Y) * _unitsPerPoint) + _container.FormEdit.ScrollTop);
+            return TextAreaLayout.IndexAt(measuringCanvas, field.ActualFont, text, lines, (x - inside.X) * _unitsPerPoint, ((y - inside.Y) * _unitsPerPoint) + ScrollOf(field));
         }
 
         var display = ScreenFormControlPainter.DisplayText(field, text);
@@ -338,6 +340,46 @@ public sealed partial class HtmlDocument
         return (line.Start, line.End);
     }
 
+    private double ScrollOf(CssBox field) => _container.TextAreaScroll.GetValueOrDefault(field.HtmlTag!.SourceOrdinal);
+
+    /// <summary>
+    /// Scrolls the lines of a <c>&lt;textarea&gt;</c> up or down, as a mouse wheel over it does. The text stays inside the box (it cannot be scrolled past its first
+    /// or last line), and the next edit or move of the caret scrolls back to show the caret.
+    /// </summary>
+    /// <param name="element">the text area</param>
+    /// <param name="points">how far to scroll, in points; positive moves the text up, showing later lines</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether it scrolled (not applied when it is not a text area, or already at the end it was asked to go towards, so a host can let the page scroll instead) and the regions to repaint</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult ScrollTextArea(DocumentElement element, double points, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        _ = Pages;
+        // The element may be from before a restyle (a change of focus loads the source again), so the box is found again by its place in the source.
+        var ordinal = element.Box.HtmlTag?.SourceOrdinal ?? -1;
+        if (ordinal < 0 || FindByOrdinal(_container.Root, ordinal) is not CssBoxFormField { IsTextArea: true } field
+            || StyleUpdater.BoxRegionOf(_container, field, _container.FragmentTree?.Fragmentainers ?? []) is not { } region)
+        {
+            return UpdateResult.NotApplied("The element is not a text area.");
+        }
+
+        var text = field.GetAttribute("value", string.Empty);
+        var lines = TextAreaLinesOf(measuringCanvas, field, text, region.Bounds.Width);
+        var viewHeight = (region.Bounds.Height * _unitsPerPoint)
+            - field.ActualBorderTopWidth - field.ActualPaddingTop - field.ActualBorderBottomWidth - field.ActualPaddingBottom;
+        var largest = Math.Max((lines.Count * field.ActualFont.Height) - viewHeight, 0);
+        var before = Math.Clamp(ScrollOf(field), 0, largest);
+        var after = Math.Clamp(before + (points * _unitsPerPoint), 0, largest);
+        if (Math.Abs(after - before) < 0.001)
+            return UpdateResult.NotApplied("The text area cannot scroll further that way.");
+
+        _container.TextAreaScroll[field.HtmlTag!.SourceOrdinal] = after;
+        _container.FormEdit.FollowCaret = false;
+        return Changed([field]);
+    }
+
     // A text area's value broken into lines for the width of its content; the width is the control's, in points, as a region reports it.
     private IReadOnlyList<TextAreaLine> TextAreaLinesOf(Canvas measuringCanvas, CssBox field, string text, double regionWidthPoints)
     {
@@ -382,7 +424,7 @@ public sealed partial class HtmlDocument
             session.Ordinal = ordinal;
             session.Start = session.End = text.Length;
             session.CompositionStart = session.CompositionEnd = -1;
-            session.ScrollTop = 0;
+            session.FollowCaret = true;
         }
 
         session.Start = Math.Clamp(session.Start, 0, text.Length);

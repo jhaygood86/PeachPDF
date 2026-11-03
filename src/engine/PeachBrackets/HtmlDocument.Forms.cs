@@ -5,6 +5,8 @@ using PeachBrackets.Updates;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using PeachBrackets.Html.Paint.Content;
 using System.Threading.Tasks;
 using PeachDrawing.Core;
 
@@ -188,6 +190,50 @@ public sealed partial class HtmlDocument
         return SetValue(element, Math.Clamp(value, min, max).ToString(CultureInfo.InvariantCulture));
     }
 
+    /// <summary>
+    /// What a file input asks of a file picker: whether it takes several files and which kinds, for a host that opens one.
+    /// </summary>
+    /// <param name="element">the file input</param>
+    /// <returns>the request, or null for anything that is not a file input</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public FileInputInfo? GetFileInputInfo(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        _ = Pages;
+        if (ControlOf(element) is not { } control || TypeOf(control) != "file")
+            return null;
+
+        return new FileInputInfo(control.HtmlTag!.HasAttribute("multiple"), control.GetAttribute("accept", string.Empty));
+    }
+
+    /// <summary>
+    /// Records the files a host's picker returned for a file input, so the control shows their names (or how many there are) and
+    /// <see cref="GetFormState"/> reports them. Only the names are kept: the document does not read or hold the files. Not applied to a control that is not a
+    /// file input or is disabled, or when several names are given to one that does not take <c>multiple</c>.
+    /// </summary>
+    /// <param name="element">the file input</param>
+    /// <param name="names">the names of the chosen files; empty to clear</param>
+    /// <returns>whether it was applied and the regions that changed</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public UpdateResult SetFileNames(DocumentElement element, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(names);
+        _ = Pages;
+        if (ControlOf(element) is not { } control || TypeOf(control) != "file")
+            return UpdateResult.NotApplied("The element is not a file input.");
+        if (control.HtmlTag!.HasAttribute("disabled"))
+            return UpdateResult.NotApplied("The control is disabled.");
+        if (names.Count > 1 && !control.HtmlTag.HasAttribute("multiple"))
+            return UpdateResult.NotApplied("The file input takes one file.");
+
+        var chosen = names.Select(n => n.Replace('\n', ' ').Trim()).Where(n => n.Length > 0).ToList();
+        SetControlAttribute(control, ScreenFormControlPainter.ChosenFilesAttribute, chosen.Count == 0 ? null : string.Join('\n', chosen));
+        return Changed([control]);
+    }
+
     /// <summary>The options of a drop-down, in document order, for a host that lets the user choose one (see <see cref="SetValue"/>).</summary>
     /// <param name="element">the drop-down</param>
     /// <returns>its options; empty for anything that is not a drop-down</returns>
@@ -368,6 +414,9 @@ public sealed partial class HtmlDocument
                     value = child.HtmlTag.TryGetAttribute("value") ?? OptionText(child);
             }
         }
+
+        if (type == "file")
+            value = control.GetAttribute(ScreenFormControlPainter.ChosenFilesAttribute, string.Empty).Replace("\n", ", ", StringComparison.Ordinal);
 
         return new FormControlState(type, tag.TryGetAttribute("name"), value, tag.HasAttribute("checked"), tag.HasAttribute("disabled"));
     }

@@ -33,6 +33,11 @@ public sealed class DocumentElement
 /// <param name="Bounds">the area to repaint</param>
 public readonly record struct DirtyRegion(int PageIndex, Rect Bounds);
 
+/// <summary>What a file input asks of a file picker (<see cref="HtmlDocument.GetFileInputInfo"/>).</summary>
+/// <param name="Multiple">whether more than one file may be chosen (the <c>multiple</c> attribute)</param>
+/// <param name="Accept">the <c>accept</c> attribute: a comma-separated list of extensions (<c>.png</c>) and media types (<c>image/*</c>), or empty for any file</param>
+public readonly record struct FileInputInfo(bool Multiple, string Accept);
+
 /// <summary>One option of a drop-down (<see cref="HtmlDocument.GetSelectOptions"/>).</summary>
 /// <param name="Value">what choosing it sets the control to: its <c>value</c>, or its text</param>
 /// <param name="Label">the text to show</param>
