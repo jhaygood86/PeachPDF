@@ -52,6 +52,8 @@ namespace PeachBrackets.Css
                 PropertyNames.TextDecorationColor, PropertyNames.TextDecorationSkipInk,
                 PropertyNames.FontFeatureSettings, PropertyNames.FontKerning,
                 PropertyNames.WritingMode, PropertyNames.TextOrientation,
+                PropertyNames.MaskImage, PropertyNames.MaskMode, PropertyNames.MaskRepeat, PropertyNames.MaskPosition,
+                PropertyNames.MaskSize, PropertyNames.MaskOrigin, PropertyNames.MaskClip, PropertyNames.MaskComposite,
             };
 
             foreach (var name in prefixed)

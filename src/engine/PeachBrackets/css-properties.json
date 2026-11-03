@@ -2132,6 +2132,83 @@
       }
     },
     {
+      "name": "mask-image",
+      "comment": "CSS Masking 1 section 6.1: <mask-reference># (none | <image> | <mask-source>). Parses like background-image into the image list the mask painter walks; an SVG <mask> reference (url(#id)) is not a raster image and is not supported on HTML boxes.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.MultipleImageSourceConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.MultipleImageSourceConverter.Convert" },
+      "html": {
+        "propertyPath": "MaskImages",
+        "csharpDataType": "IReadOnlyList<CssImage?>?",
+        "area": "BackgroundArea",
+        "customSetter": "{box}.MaskImages = {parser}.ParseImages({value});",
+        "hasGetter": false,
+        "snapshot": false
+      }
+    },
+    {
+      "name": "mask-mode",
+      "comment": "CSS Masking 1 section 6.2: <masking-mode># = alpha | luminance | match-source. match-source resolves to alpha for an <image> layer.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.MaskModeConverter.FromList()"},
+      "initialValue": "match-source",
+      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.MaskModes" },
+      "html": { "propertyPath": "MaskMode", "csharpDataType": "string", "area": "BackgroundArea" }
+    },
+    {
+      "name": "mask-repeat",
+      "comment": "Same <repeat-style># grammar as background-repeat.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundRepeatsConverter.FromList()"},
+      "initialValue": "repeat",
+      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BackgroundRepeats", "maxPerSegment": 2, "aliasKeywords": ["repeat-x", "repeat-y"] },
+      "html": { "propertyPath": "MaskRepeat", "csharpDataType": "string", "area": "BackgroundArea" }
+    },
+    {
+      "name": "mask-position",
+      "comment": "Same <position># grammar as background-position.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PointConverter.FromList()"},
+      "initialValue": "0% 0%",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundPositionProperty.ValueGrammar.Convert" },
+      "html": { "propertyPath": "MaskPosition", "csharpDataType": "string", "area": "BackgroundArea" }
+    },
+    {
+      "name": "mask-size",
+      "comment": "Same <bg-size># grammar as background-size.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BackgroundSizeConverter.FromList()"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.BackgroundSizeProperty.ValueGrammar.Convert" },
+      "html": { "propertyPath": "MaskSize", "csharpDataType": "string", "area": "BackgroundArea" }
+    },
+    {
+      "name": "mask-origin",
+      "comment": "<coord-box># - only the three CSS box keywords are meaningful on an HTML box.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BoxModelConverter.FromList()"},
+      "initialValue": "border-box",
+      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BoxModels" },
+      "html": { "propertyPath": "MaskOrigin", "csharpDataType": "string", "area": "BackgroundArea" }
+    },
+    {
+      "name": "mask-clip",
+      "comment": "Parsed; the mask painting area is always the border box.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.MaskClipConverter.FromList()"},
+      "initialValue": "border-box",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "mask-composite",
+      "comment": "Parsed; layers always composite with add.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.MaskCompositeConverter.FromList()"},
+      "initialValue": "add",
+      "cssDataType": "unsupported"
+    },
+    {
       "name": "display",
       "inherited": false,
       "cssom": {"converter": "Converters.DisplayModeConverter"},

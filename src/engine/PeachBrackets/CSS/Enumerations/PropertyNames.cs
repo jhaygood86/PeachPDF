@@ -230,6 +230,14 @@
         public static readonly string MarkerMid = "marker-mid";
         public static readonly string MarkerStart = "marker-start";
         public static readonly string Mask = "mask";
+        public static readonly string MaskImage = "mask-image";
+        public static readonly string MaskMode = "mask-mode";
+        public static readonly string MaskRepeat = "mask-repeat";
+        public static readonly string MaskPosition = "mask-position";
+        public static readonly string MaskSize = "mask-size";
+        public static readonly string MaskOrigin = "mask-origin";
+        public static readonly string MaskClip = "mask-clip";
+        public static readonly string MaskComposite = "mask-composite";
         public static readonly string R = "r";
         public static readonly string Cx = "cx";
         public static readonly string Cy = "cy";
