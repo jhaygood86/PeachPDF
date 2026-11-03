@@ -1700,6 +1700,12 @@ namespace PeachBrackets.Html.Dom
         /// and 10.6.4; CSS Positioned Layout 3 section 3.5.2). Held only while <c>CssLayoutEngine.LayoutAbsolutelyPositioned</c>
         /// lays the box out, as the line it describes can still be moved afterwards.
         /// </summary>
+        /// <summary>
+        /// The margin-edge the right side of this absolutely positioned box sits at, for a box whose static position is measured
+        /// from the right edge (a <c>direction: rtl</c> parent, CSS 2.1 section 10.3.7). Applied once the box's width is known.
+        /// </summary>
+        internal double? StaticRightEdge { get => _rare?.StaticRightEdge; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.StaticRightEdge = value; } }
+
         internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
 
         /// <summary>
@@ -7656,10 +7662,12 @@ namespace PeachBrackets.Html.Dom
 
                     // With both offsets on an axis `auto` the box sits at its static position, where it would be in flow (CSS 2.1 sections 10.3.7
                     // and 10.6.4): the parent's content edge across, and below the previous in-flow sibling down.
+                    child.StaticRightEdge = null;
                     if (StaticPositionIn(child) is { } staticPosition)
                     {
                         if (staticPosition.Left is { } staticLeft) left = staticLeft + child.ActualMarginLeft;
                         if (staticPosition.Top is { } staticTop) top = staticTop + child.ActualMarginTop;
+                        child.StaticRightEdge = staticPosition.RightEdge;
                     }
 
                     child.Location = new PaintPoint(left, top);
@@ -7743,27 +7751,31 @@ namespace PeachBrackets.Html.Dom
         /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
         /// content has its position on a line, which <see cref="InlineStaticPosition"/> carries.
         /// </summary>
-        private (double? Left, double? Top)? StaticPositionIn(CssBox child)
+        private (double? Left, double? Top, double? RightEdge)? StaticPositionIn(CssBox child)
         {
             if (!ReferenceEquals(child.ParentBox, this)) return null;
 
             // Among inline content the flow has already recorded where the box's place is on its line.
             if (child.InlineStaticPosition is { } onLine)
             {
-                double? inlineLeft = child.Left.Value.Value is null && child.Right.Value.Value is null ? onLine.X : null;
+                var acrossIsStatic = child.Left.Value.Value is null && child.Right.Value.Value is null;
+                double? inlineLeft = acrossIsStatic && Direction.Value != DirectionMode.Rtl ? onLine.X : null;
+                double? inlineRight = acrossIsStatic && Direction.Value == DirectionMode.Rtl ? onLine.X : null;
                 double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
 
-                return inlineLeft is null && inlineTop is null ? null : (inlineLeft, inlineTop);
+                return inlineLeft is null && inlineRight is null && inlineTop is null ? null : (inlineLeft, inlineTop, inlineRight);
             }
 
-            if (Direction.Value == DirectionMode.Rtl) return null;
+            var rtl = Direction.Value == DirectionMode.Rtl;
 
             foreach (var sibling in Boxes)
             {
                 if (!ReferenceEquals(sibling, child) && !sibling.IsOutOfFlow && !sibling.IsExcludedFromFlow && sibling.IsInline) return null;
             }
 
-            double? left = child.Left.Value.Value is null && child.Right.Value.Value is null ? ClientLeft : null;
+            var acrossStatic = child.Left.Value.Value is null && child.Right.Value.Value is null;
+            double? left = acrossStatic && !rtl ? ClientLeft : null;
+            double? rightEdge = acrossStatic && rtl ? ClientRight : null;
             double? top = null;
             if (child.Top.Value.Value is null && child.Bottom.Value.Value is null)
             {
@@ -7771,7 +7783,7 @@ namespace PeachBrackets.Html.Dom
                 top = previous is null ? ClientTop : previous.StaticBottom + previous.ActualMarginBottom;
             }
 
-            return left is null && top is null ? null : (left, top);
+            return left is null && top is null && rightEdge is null ? null : (left, top, rightEdge);
         }
 
         private CssBox? PreviousInFlowSibling(CssBox child) =>
@@ -7973,6 +7985,13 @@ namespace PeachBrackets.Html.Dom
 
             if (Position.Value is PositionMode.Absolute)
             {
+                // Both offsets auto in a direction: rtl parent: the box's right margin edge is its static position.
+                if (StaticRightEdge is { } staticRightEdge)
+                {
+                    OffsetLeft(staticRightEdge - ActualMarginRight - ActualRight);
+                    StaticRightEdge = null;
+                }
+
                 if (Left.Value.IsKeyword && Right.Value.IsValue)
                 {
                     var nearestPositionedAncestor = DomUtils.GetNearestPositionedAncestor(this);
