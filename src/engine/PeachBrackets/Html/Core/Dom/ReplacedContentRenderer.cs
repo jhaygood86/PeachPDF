@@ -33,7 +33,7 @@ namespace PeachBrackets.Html.Dom
             else if (image is not null)
             {
                 // The size of the upright picture (image-orientation), not of the stored raster.
-                (naturalWidth, naturalHeight) = ImageOrientationResolver.OrientedSize(box, image);
+                (naturalWidth, naturalHeight) = ImageResolutionResolver.NaturalSize(box, image);
             }
 
             // Intrinsic pixels -> layout points, to match contentBox.

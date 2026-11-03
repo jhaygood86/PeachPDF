@@ -278,7 +278,7 @@ internal sealed class PeachImageSource : ImageSource
             IccProfile = iccProfile,
         };
 
-        return new CmykRasterImageSource(name, info.Width, info.Height, passthrough);
+        return new CmykRasterImageSource(name, info.Width, info.Height, passthrough) { ResolutionDpiX = decoded.Metadata.HorizontalDpi, ResolutionDpiY = decoded.Metadata.VerticalDpi };
     }
 
     /// <summary>
@@ -306,7 +306,7 @@ internal sealed class PeachImageSource : ImageSource
             IccProfile = iccProfile,
         };
 
-        return new CmykRasterImageSource(name, info.Width, info.Height, raster);
+        return new CmykRasterImageSource(name, info.Width, info.Height, raster) { ResolutionDpiX = decoded.Metadata.HorizontalDpi, ResolutionDpiY = decoded.Metadata.VerticalDpi };
     }
 
     /// <summary>
@@ -357,6 +357,38 @@ internal sealed class PeachImageSource : ImageSource
     /// (or a malformed/inconsistent file <see cref="PngPassthrough.TryRead"/> itself rejects) falls
     /// through to the ordinary decode path, same as before this feature existed.
     /// </summary>
+    /// <summary>
+    /// Sets the density a PNG records in its <c>pHYs</c> chunk (pixels per metre, unit 1) on a pass-through source, which is never
+    /// decoded to an <see cref="Image"/> that would carry it. The chunk comes before the image data, so only the head of the file is read.
+    /// </summary>
+    private static PngPassthroughImageSource WithPngDensity(PngPassthroughImageSource source, byte[] bytes)
+    {
+        var data = bytes.AsSpan();
+        var pos = 8;
+        while (pos + 12 <= data.Length)
+        {
+            var length = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data[pos..]);
+            var type = data.Slice(pos + 4, 4);
+            if (type.SequenceEqual("IDAT"u8)) break;
+            if (type.SequenceEqual("pHYs"u8) && length == 9 && pos + 8 + 9 <= data.Length)
+            {
+                var x = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data[(pos + 8)..]);
+                var y = System.Buffers.Binary.BinaryPrimitives.ReadUInt32BigEndian(data[(pos + 12)..]);
+                if (data[pos + 16] == 1 && x > 0 && y > 0)
+                {
+                    source.ResolutionDpiX = x * 0.0254;
+                    source.ResolutionDpiY = y * 0.0254;
+                }
+
+                break;
+            }
+
+            pos += 12 + (int)Math.Min(length, int.MaxValue - 12);
+        }
+
+        return source;
+    }
+
     private static IImageSource DecodePng(string name, byte[] bytes, int quality)
     {
         if (PngPassthrough.TryRead(new MemoryStream(bytes), out var pngInfo))
@@ -381,13 +413,13 @@ internal sealed class PeachImageSource : ImageSource
                     IccProfile = GetUsablePngIccProfile(colorSpace, pngInfo.IccProfileData),
                 };
 
-                return new PngPassthroughImageSource(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+                return WithPngDensity(new PngPassthroughImageSource(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough), bytes);
             }
 
             if (PngAlphaSplit.TrySplit(in pngInfo, out var alphaSplit))
             {
                 var passthrough = BuildAlphaSplitPassthroughData(pngInfo, alphaSplit);
-                return new PngPassthroughImageSource(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough);
+                return WithPngDensity(new PngPassthroughImageSource(name, bytes, quality, pngInfo.Width, pngInfo.Height, passthrough), bytes);
             }
         }
 

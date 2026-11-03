@@ -249,6 +249,15 @@ internal abstract class ImageSource
         int ExifOrientation => 1;
 
         /// <summary>
+        /// The horizontal and vertical pixel density the file records, in pixels per inch, or null when it records none (or the
+        /// format has no field for it). Read by <c>image-resolution</c>; never changes the embedded bytes.
+        /// </summary>
+        double? ResolutionDpiX => null;
+
+        /// <inheritdoc cref="ResolutionDpiX"/>
+        double? ResolutionDpiY => null;
+
+        /// <summary>
         /// Non-null when this source should be embedded via byte-for-byte JPEG pass-through instead
         /// of the normal lossy-re-encode (<see cref="SaveAsJpeg"/>) or bitmap (<see cref="SaveAsPdfBitmap"/>)
         /// paths: always non-null when <see cref="IsCmyk"/> and the source is a CMYK/YCCK JPEG, with

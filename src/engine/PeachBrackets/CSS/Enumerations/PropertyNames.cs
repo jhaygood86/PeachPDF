@@ -387,6 +387,7 @@
         public static readonly string ObjectFit = "object-fit";
         public static readonly string ImageRendering = "image-rendering";
         public static readonly string ImageOrientation = "image-orientation";
+        public static readonly string ImageResolution = "image-resolution";
         public static readonly string ObjectPosition = "object-position";
         public static readonly string Size = "size";
         public static readonly string Bleed = "bleed";

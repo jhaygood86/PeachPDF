@@ -27,6 +27,8 @@ internal sealed class PngPassthroughImageSource : IImageSource, IRgbaPixelProvid
     public bool Transparent => false;
     public bool IsCmyk => false;
     public int ExifOrientation { get; set; } = 1;
+    public double? ResolutionDpiX { get; set; }
+    public double? ResolutionDpiY { get; set; }
     public bool IsGrayscale => false;
     public JpegPassthroughData? JpegPassthrough => null;
     public CmykRasterData? CmykRaster => null;

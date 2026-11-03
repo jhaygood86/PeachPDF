@@ -163,6 +163,12 @@ internal class PdfRasterImage : IDisposable
     /// <summary>The Exif Orientation (1 to 8, 1 = upright) stored in the file; see <see cref="IImageSource.ExifOrientation"/>. 1 for a form or any non-raster image.</summary>
     internal int ExifOrientation => _source?.ExifOrientation ?? 1;
 
+    /// <summary>The horizontal density in pixels per inch the file records; see <see cref="IImageSource.ResolutionDpiX"/>. Null for a form or when none is recorded.</summary>
+    internal double? ResolutionDpiX => _source?.ResolutionDpiX;
+
+    /// <summary>The vertical density in pixels per inch the file records; see <see cref="IImageSource.ResolutionDpiY"/>.</summary>
+    internal double? ResolutionDpiY => _source?.ResolutionDpiY;
+
     /// <summary>
     /// Non-null when this image should be embedded via byte-for-byte JPEG pass-through - see
     /// <see cref="IImageSource.JpegPassthrough"/>.

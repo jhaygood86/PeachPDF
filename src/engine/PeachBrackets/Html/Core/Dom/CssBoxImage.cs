@@ -170,7 +170,7 @@ namespace PeachBrackets.Html.Dom
                 double? orientedWidth = null, orientedHeight = null;
                 if (_imageWord.Image is { } raster)
                 {
-                    var (w, h) = ImageOrientationResolver.OrientedSize(this, raster);
+                    var (w, h) = ImageResolutionResolver.NaturalSize(this, raster);
                     orientedWidth = w / _srcsetDensity;
                     orientedHeight = h / _srcsetDensity;
                 }

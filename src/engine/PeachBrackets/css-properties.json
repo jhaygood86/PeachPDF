@@ -2072,6 +2072,19 @@
       }
     },
     {
+      "name": "image-resolution",
+      "comment": "CSS Images 4 section 6.1. Inherited. [ from-image || <resolution> ] && snap?: the density a raster's pixels are taken to have when its natural size is worked out (1dppx initially, so an image is 96 dpi by default). Stored as the declaration text and read at use with the same ImageResolution.TryParse grammar the CSS-OM converter validates with (no second parser).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ImageResolutionConverter"},
+      "initialValue": "1dppx",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ImageResolutionConverter.Convert" },
+      "html": {
+        "propertyPath": "ImageResolution",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
       "name": "object-position",
       "comment": "Unlike background-position, object-position is a single <position> (no comma list, no FromList()), so cssDataType 'cssom-grammar' calls the already-public Converters.PointConverter.Convert directly - the same converter ObjectPositionProperty's own real grammar uses - instead of the full cssom round trip.",
       "inherited": false,

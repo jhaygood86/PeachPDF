@@ -44,6 +44,12 @@ namespace PeachDrawing.PDF
         /// <summary>The Exif Orientation (1 to 8, 1 = upright) of the underlying raster, which its decoded pixels do not apply.</summary>
         public override int ExifOrientation => _image.ExifOrientation;
 
+        /// <inheritdoc />
+        public override double? ResolutionDpiX => _image.ResolutionDpiX;
+
+        /// <inheritdoc />
+        public override double? ResolutionDpiY => _image.ResolutionDpiY;
+
         /// <summary>
         /// This image's natural size. A raster <see cref="PdfRasterImage"/> reports its pixel count, which the
         /// caller converts; an <see cref="PdfForm"/> — a vector Form XObject, as

@@ -61,7 +61,7 @@ namespace PeachBrackets.Html.Dom
             ArgumentNullException.ThrowIfNull(imageWord);
             if (imageWord.Image is { } image)
             {
-                var (width, height) = ImageOrientationResolver.OrientedSize(imageWord.OwnerBox, image);
+                var (width, height) = ImageResolutionResolver.NaturalSize(imageWord.OwnerBox, image);
                 MeasureIntrinsicSize(imageWord, width, height);
             }
             else

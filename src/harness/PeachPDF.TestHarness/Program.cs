@@ -935,6 +935,54 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// image-resolution (CSS Images 4 §6.1): the same 120x120 raster recorded at 300 dpi, sized by its own density, by an explicit resolution and snapped.
+string MakeDensityPngDataUri()
+{
+    const int size = 120;
+    var pixels = new byte[size * size * 4];
+    for (var y = 0; y < size; y++)
+    {
+        for (var x = 0; x < size; x++)
+        {
+            var edge = x < 4 || y < 4 || x >= size - 4 || y >= size - 4;
+            var i = (y * size + x) * 4;
+            pixels[i] = (byte)(edge ? 20 : 240 - (y * 2));
+            pixels[i + 1] = (byte)(edge ? 20 : 120 + (x / 2));
+            pixels[i + 2] = (byte)(edge ? 20 : 60);
+            pixels[i + 3] = 255;
+        }
+    }
+
+    using var image = PeachImage.Image.Create(size, size, PeachImage.PixelFormat.Rgba32);
+    pixels.CopyTo(image.GetPixelSpan());
+    image.Metadata.HorizontalResolution = 300 / 0.0254;
+    image.Metadata.VerticalResolution = 300 / 0.0254;
+    using var ms = new MemoryStream();
+    image.Save(ms, "png");
+    return "data:image/png;base64," + Convert.ToBase64String(ms.ToArray());
+}
+var densityPng = MakeDensityPngDataUri();
+string DensityBox(string label, string style) =>
+    "<div class='cell'><div class='label'>" + label + "</div><img src='" + densityPng + "' style='" + style + "'></div>";
+var imageResolutionHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
+    "body { font: 9pt Arial; margin: 16pt } h1 { font-size: 15pt; margin: 0 0 8pt } p { margin: 0 0 10pt; color: #555 }" +
+    ".cell { display: inline-block; vertical-align: top; margin: 0 14pt 14pt 0 } .label { font: 7.5pt 'Courier New', monospace; color: #444; margin-bottom: 3pt }" +
+    "img { outline: 1px dashed #c00 }</style></head><body>" +
+    "<h1>image-resolution</h1><p>One 120 &times; 120 pixel image that records 300 dpi. Its natural size is 90pt at the default 96 dpi.</p>" +
+    DensityBox("(default) 96 dpi", "") +
+    DensityBox("from-image (300 dpi)", "image-resolution: from-image") +
+    DensityBox("150dpi", "image-resolution: 150dpi") +
+    DensityBox("2dppx", "image-resolution: 2dppx") +
+    DensityBox("300dpi snap", "image-resolution: 300dpi snap") +
+    DensityBox("from-image + explicit width", "image-resolution: from-image; width: 60pt") +
+    "<div style='margin-top:10pt;height:60pt;width:230pt;border:1px solid #999;background:url(" + densityPng + ") no-repeat 8pt 8pt;image-resolution:from-image'></div>" +
+    "<div class='label'>background-image with from-image</div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("image_resolution", "Images", "Image Resolution",
+    "image-resolution sizes a raster by its own density (from-image), an explicit resolution or a snapped one: the same 300 dpi image at 96 dpi, from-image, 150dpi, 2dppx, snapped, and as a background.",
+    imageResolutionHtml, pdfConfig);
+
 // @page bleed and marks (css-page-3 §12-13): the sheet grows around the trimmed page, the page's background runs into the bleed
 // area, crop and cross marks are drawn outside it, and the PDF carries /TrimBox and /BleedBox for the printer.
 var printHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
