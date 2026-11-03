@@ -88,4 +88,33 @@ public class MaskImagePaintTests
         Assert.InRange(p.R, 110, 145);
         Assert.True(p.B > 240);
     }
+
+    [Fact]
+    public async Task OnlyNoneLayers_LeaveTheElementUnmasked()
+    {
+        var canvas = await PaintAsync("mask-image: none, none");
+
+        Assert.True(At(canvas, 0.9).R < 20);
+    }
+
+    [Theory]
+    [InlineData("padding-box")]
+    [InlineData("content-box")]
+    public async Task MaskOrigin_PositionsTheMaskInsideTheBorderAndPadding(string origin)
+    {
+        // A 10pt border and 10pt padding: the origin box is smaller than the border box, and a no-repeat mask fills only it.
+        var canvas = await PaintAsync(
+            $"box-sizing: border-box; border: 10pt solid #00f; padding: 10pt; mask-image: linear-gradient(#000, #000); mask-origin: {origin}; mask-repeat: no-repeat");
+
+        // The border box corner is outside the origin box, so the mask does not reach it.
+        Assert.True(TestDocument.Pixel(canvas, 12, 12).R > 225, "outside the mask");
+    }
+
+    [Fact]
+    public async Task LuminanceIsReadFromTheFirstImageLayer()
+    {
+        var canvas = await PaintAsync("mask-image: none, linear-gradient(to right, #fff, #000); mask-mode: alpha, luminance");
+
+        Assert.True(At(canvas, 0.97).R > 225);
+    }
 }
