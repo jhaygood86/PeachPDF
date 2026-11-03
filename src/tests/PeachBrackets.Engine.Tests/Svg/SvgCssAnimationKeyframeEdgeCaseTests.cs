@@ -35,6 +35,56 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(expected, await RadiusAsync(from, "20px", progress), 2);
 
         [Theory]
+        [InlineData("calc(-5px)", 0)]            // at the first keyframe the radius is the clamped value, not its absolute value
+        [InlineData("calc(10px - 20px)", 0)]
+        [InlineData("min(-5px, 3px)", 0)]
+        public async Task ANegativeFunctionAtAKeyframe_ClampsToZeroWhereItIsUsed(string from, double progress) =>
+            Assert.Equal(0, await RadiusAsync(from, "20px", progress), 2);
+
+        [Theory]
+        [InlineData("rx", "<rect class=\"t\" width=\"40\" height=\"30\" rx=\"4\"/>")]
+        [InlineData("ry", "<ellipse class=\"t\" cx=\"50\" cy=\"50\" rx=\"9\" ry=\"7\"/>")]
+        [InlineData("height", "<rect class=\"t\" width=\"40\" height=\"30\"/>")]
+        [InlineData("font-size", "<text class=\"t\" x=\"5\" y=\"60\">Ab</text>")]
+        public async Task ANegativeFunctionAtTheFirstKeyframe_ClampsToZeroForEveryLengthThatTakesNoNegative(string property, string body)
+        {
+            // Chrome: 0 for each.
+            var document = await SvgCssAnimationTests.BuildAsync($"@keyframes k {{ from {{ {property}: calc(-5px) }} to {{ {property}: 20px }} }} .t {{ animation: k 1s linear }}", body, 0);
+
+            Assert.Equal(0, document.Children[0] switch
+            {
+                SvgRectElement r when property == "rx" => r.Rx,
+                SvgRectElement r => r.Height,
+                SvgEllipseElement e => e.Ry,
+                SvgTextElement t => t.Font!.Size,
+                _ => double.NaN,
+            }, 2);
+        }
+
+        [Fact]
+        public async Task ANegativeFunctionOfAProperty_ThatTakesNegativeNumbers_IsNotClamped()
+        {
+            // Chrome: x is -5 at the first keyframe, so the clamp is for the lengths that take none and not for every one.
+            var document = await SvgCssAnimationTests.BuildAsync("@keyframes k { from { x: calc(-5px) } to { x: 20px } } .t { animation: k 1s linear }",
+                "<rect class=\"t\" x=\"3\" width=\"40\" height=\"30\"/>", 0);
+
+            Assert.Equal(-5, Assert.IsType<SvgRectElement>(document.Children[0]).X, 2);
+        }
+
+        [Theory]
+        [InlineData("width")]
+        [InlineData("stroke-width")]
+        public async Task ANegativeFunctionAtTheLastKeyframe_ClampsToZeroForOtherLengths(string property)
+        {
+            // Chrome: the value at the end is calc(-5px), which computes to 0 for a property that takes no negative length.
+            var document = await SvgCssAnimationTests.BuildAsync($"@keyframes k {{ to {{ {property}: calc(-5px) }} }} .t {{ animation: k 1s linear forwards }}",
+                "<rect class=\"t\" width=\"20\" height=\"12\" stroke=\"black\" stroke-width=\"4\"/>", 1);
+
+            var element = document.Children[0];
+            Assert.Equal(0, property == "width" ? Assert.IsType<SvgRectElement>(element).Width : element.StrokeWidth, 2);
+        }
+
+        [Theory]
         [InlineData("-5px")]
         [InlineData("-.5px")]
         [InlineData("-1e1px")]

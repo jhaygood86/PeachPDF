@@ -15678,6 +15678,14 @@ var fontRelativeUnitsHtml =
     "<div style=\"font-size: 16pt; font-family: 'STIX'\">" +
     "<math><mi>a</mi><mspace width=\"4ch\" style=\"background:#fcc\"/><mi>b</mi><mspace width=\"2em\"/><mi>c</mi></math>" +
     " <span style=\"font: 7pt Arial\">mspace width=\"4ch\" then \"2em\" - measured from the math font</span></div>" +
+    "<h2>An inline SVG starts from the font of the page around it</h2>" +
+    "<div style=\"font: 12px Arial\">" +
+    "<svg width=\"420\" height=\"70\" viewBox=\"0 0 420 70\" style=\"border: 1px solid #ccc\">" +
+    "<text x=\"6\" y=\"18\">no font-size: the 12px of the div</text>" +
+    "<text x=\"6\" y=\"46\" font-size=\"2em\">2em: 24px</text>" +
+    "<text x=\"190\" y=\"46\" font-size=\"2rem\">2rem</text>" +
+    "<circle cx=\"385\" cy=\"34\" r=\"1.5em\" fill=\"#fc9\" stroke=\"#c60\"/>" +
+    "</svg></div>" +
     "</body></html>";
 
 await SaveShowcaseAsync("font_relative_units", "Typography & Text", "Font-relative units: ex, ch, cap, ic, lh",
