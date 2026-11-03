@@ -276,6 +276,8 @@ namespace PeachBrackets.Html.Parse
 
             CorrectAnonymousTables(root);
 
+            HoistNestedColumnSpanners(root);
+
             CorrectForeignObjectContent(root);
 
             // Last, deliberately: a float:footnote box must first ride through every correction pass
@@ -4288,6 +4290,129 @@ namespace PeachBrackets.Html.Parse
                 CorrectAbsolutelyPositionedInlineElements(childBox);
             }
         }
+
+        /// <summary>
+        /// Gives a <c>column-span: all</c> box that is not a direct child of its multi-column container the one position
+        /// the columns engine recognizes, by splitting the block boxes between the two around it
+        /// (<see href="https://www.w3.org/TR/css-multicol-1/#column-span">css-multicol-1 §3</see>: the content before the spanner
+        /// and the content after it each flow in columns of their own). The ancestors become a "before" piece, which keeps the
+        /// box's top decoration, and an "after" piece, which keeps its bottom decoration, a slice of the box as
+        /// <c>box-decoration-break: slice</c> draws it.
+        /// </summary>
+        /// <remarks>
+        /// Only a spanner reached through plain in-flow block boxes counts: a float, an inline, a table, a flex or grid box,
+        /// a list item, a box with a non-visible <c>overflow</c> or another multi-column container between it and its
+        /// container makes it a box with no effect, which is what the specification says of a spanner outside the container's
+        /// own block flow.
+        /// </remarks>
+        private static void HoistNestedColumnSpanners(CssBox box)
+        {
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return;
+
+            if (box.EstablishesMultiColumnContext && box.ParentBox is not null)
+            {
+                // Each split moves later siblings into a new piece, so the next spanner is looked for from the top again.
+                for (var guard = 0; guard < 10_000 && FindNestedColumnSpanner(box, box) is { } spanner; guard++)
+                {
+                    SplitAroundColumnSpanner(box, spanner);
+                }
+            }
+
+            foreach (var child in box.Boxes.ToArray())
+            {
+                HoistNestedColumnSpanners(child);
+            }
+        }
+
+        private static CssBox? FindNestedColumnSpanner(CssBox container, CssBox ancestor)
+        {
+            foreach (var child in ancestor.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None || child.IsInline || child.IsOutOfFlow) continue;
+
+                if (!ReferenceEquals(ancestor, container) && child.ColumnSpan.Value == ColumnSpanMode.All)
+                {
+                    return child;
+                }
+
+                if (CanBeSplitAroundSpanner(child) && FindNestedColumnSpanner(container, child) is { } found)
+                {
+                    return found;
+                }
+            }
+
+            return null;
+        }
+
+        private static bool CanBeSplitAroundSpanner(CssBox box) =>
+            box.DerivedStyle.ActualDisplay == Keywords.Block
+            && !box.EstablishesMultiColumnContext
+            && !DomUtils.EstablishesIndependentFormattingContext(box)
+            && box is not (CssBoxImage or CssBoxSvg or CssBoxMath);
+
+        private static void SplitAroundColumnSpanner(CssBox container, CssBox spanner)
+        {
+            var current = spanner;
+            CssBox? afterPiece = null;
+            CssBox? top = null;
+
+            for (var ancestor = spanner.ParentBox!; ; ancestor = ancestor.ParentBox!)
+            {
+                var index = ancestor.Boxes.IndexOf(current);
+                var followers = ancestor.Boxes.Skip(index + 1).ToList();
+
+                if (followers.Count > 0)
+                {
+                    var siblings = ancestor.ParentBox!.Boxes;
+                    var next = siblings.IndexOf(ancestor) + 1;
+                    afterPiece = CssBox.CreateBox(ancestor.ParentBox!, ancestor.HtmlTag, next < siblings.Count ? siblings[next] : null);
+                    afterPiece.InheritStyle(ancestor, true);
+
+                    foreach (var follower in followers)
+                    {
+                        follower.ParentBox = afterPiece;
+                    }
+
+                    // A slice: the top edge belongs to the piece before the spanner, the bottom edge to the one after.
+                    ancestor.PaddingBottom = "0";
+                    ancestor.BorderBottomWidth = "0";
+                    ancestor.MarginBottom = ZeroMargin;
+                    afterPiece.PaddingTop = "0";
+                    afterPiece.BorderTopWidth = "0";
+                    afterPiece.MarginTop = ZeroMargin;
+                }
+                else
+                {
+                    afterPiece = null;
+                }
+
+                if (ReferenceEquals(ancestor.ParentBox, container))
+                {
+                    top = ancestor;
+                    break;
+                }
+
+                current = ancestor;
+            }
+
+            var afterTop = afterPiece;
+            spanner.ParentBox = container;
+
+            // Between the two pieces; at the end when nothing followed the spanner.
+            if (afterTop is not null) spanner.SetBeforeBox(afterTop);
+
+            // A piece left holding nothing but its own decoration is dropped, bottom-up.
+            for (var piece = top; piece is not null && piece.Boxes.Count == 0 && !ReferenceEquals(piece, container);)
+            {
+                var parent = piece.ParentBox;
+                piece.ParentBox = null;
+                piece = parent is not null && !ReferenceEquals(parent, container) ? parent : null;
+            }
+        }
+
+        private static readonly CssProperty<CssKeywordOrValue<AutoKeyword, LengthOrCalc>> ZeroMargin =
+            CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
+                "0", Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
 
         /// <summary>
         /// Corrects the missing elements in tables per https://www.w3.org/TR/CSS2/tables.html#anonymous-boxes

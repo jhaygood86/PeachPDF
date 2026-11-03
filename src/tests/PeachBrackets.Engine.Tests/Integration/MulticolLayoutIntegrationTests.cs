@@ -615,6 +615,81 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ColumnSpanAll_OnANestedDescendant_SpansTheContainerAndSplitsTheRunsAroundIt()
+        {
+            // The spanner is a child of #wrap, not of the container: #wrap is split into the part before it and the part
+            // after it, each balanced in columns of its own (css-multicol-1 section 3).
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div id='wrap'>
+                        <div class='pre' style='height:20px'></div>
+                        <div class='pre' style='height:20px'></div>
+                        <div id='span' style='column-span:all; height:15px'></div>
+                        <div class='post' style='height:20px'></div>
+                        <div class='post' style='height:20px'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+            var pre = FindAllByClass(root, "pre");
+            var post = FindAllByClass(root, "post");
+
+            Assert.Equal(mc.ClientLeft, span.Location.X, 1);
+            Assert.Equal(mc.ActualRight, span.ActualRight, 1);
+            Assert.Contains(pre, i => i.Location.X > mc.ClientLeft + 50);
+            Assert.Contains(post, i => i.Location.X > mc.ClientLeft + 50);
+            Assert.All(pre, i => Assert.True(i.ActualBottom <= span.Location.Y + 0.5));
+            Assert.All(post, i => Assert.True(i.Location.Y >= span.ActualBottom - 0.5));
+            AssertNoOverlaps([.. pre, span, .. post]);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_OnADeeplyNestedDescendant_KeepsTheDecorationOfEachSlicedAncestorOnItsOuterEdge()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div id='outer' style='border-top:4px solid black; border-bottom:6px solid black; padding:3px 0'>
+                        <div class='pre' style='height:20px'></div>
+                        <div style='margin:0'>
+                            <div id='span' style='column-span:all; height:15px'></div>
+                            <div class='post' style='height:20px'></div>
+                        </div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var span = FindById(root, "span")!;
+            var pre = FindAllByClass(root, "pre")[0];
+            var post = FindAllByClass(root, "post")[0];
+
+            // The top border and padding stay above the content before the spanner, the bottom ones below the content after it.
+            Assert.True(pre.Location.Y > 3, $"the top border/padding is above the first content, at {pre.Location.Y}");
+            Assert.True(post.Location.Y >= span.ActualBottom - 0.5);
+            var wrappers = PeachBrackets.Engine.Tests.Integration.MulticolLayoutIntegrationTests.AllBoxes(root).Where(b => b.HtmlTag?.TryGetAttribute("id", "") == "outer").ToList();
+            Assert.Equal(2, wrappers.Count);
+            Assert.True(wrappers[0].ActualBorderBottomWidth == 0 && wrappers[1].ActualBorderTopWidth == 0);
+            Assert.True(wrappers[0].ActualBorderTopWidth > 0 && wrappers[1].ActualBorderBottomWidth > 0);
+        }
+
+        [Fact]
+        public async Task ColumnSpanAll_BehindABoxThatIsNotInTheContainersBlockFlow_HasNoEffect()
+        {
+            var html = Wrap(@"
+                <div id='mc' style='columns:2; column-gap:0; width:200px'>
+                    <div style='overflow:hidden'>
+                        <div class='pre' style='height:20px'></div>
+                        <div id='span' style='column-span:all; height:15px'></div>
+                        <div class='post' style='height:20px'></div>
+                    </div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html, pageHeight: 1000);
+            var mc = FindById(root, "mc")!;
+            var span = FindById(root, "span")!;
+
+            Assert.True(span.ActualRight < mc.ActualRight - 20, "an overflow:hidden box is a formatting context of its own, so the spanner stays in its column");
+        }
+
+        [Fact]
         public async Task ColumnSpanAll_EachRunBalancesIndependently()
         {
             // 4 equal items before the span, 4 equal items after - column-fill: balance (the default)
@@ -1039,6 +1114,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             }
             return null;
         }
+
+        internal static IEnumerable<CssBox> AllBoxes(CssBox box) => new[] { box }.Concat(box.Boxes.SelectMany(AllBoxes));
 
         private static List<CssBox> FindAllByClass(CssBox box, string className)
         {
