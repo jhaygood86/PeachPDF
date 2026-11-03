@@ -244,6 +244,24 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(100, FindById(root, "down").ActualNumericWeight);
         }
 
+        [Theory]
+        [InlineData("<b id=\"el\">AB</b>", 700)]
+        [InlineData("<b><b id=\"el\">AB</b></b>", 900)]
+        [InlineData("<span id=\"el\" style=\"font-weight: bolder\">AB</span>", 700)]
+        [InlineData("<b><span id=\"el\" style=\"font-weight: lighter\">AB</span></b>", 400)]
+        [InlineData("<b><span style=\"font-weight: lighter\"><i id=\"el\">AB</i></span></b>", 400)]
+        public async Task ABolderOrLighterWeight_IsResolvedOnceAndInheritedAsANumber(string markup, double expected)
+        {
+            var root = await BuildBoxTree(Document("", $"<p>{markup}</p>"));
+
+            var el = FindById(root, "el");
+
+            Assert.Equal(expected, el.ActualNumericWeight);
+            Assert.True(el.FontWeight.Value.IsValue);
+            Assert.NotEmpty(el.Boxes);
+            Assert.All(el.Boxes, text => Assert.Equal(expected, text.ActualNumericWeight));
+        }
+
         [Fact]
         public async Task AFractionalWeight_SetsTheWeightAxisOfAVariableFontToIt()
         {

@@ -32,17 +32,17 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task FontWeight_Bolder_StoresTheKeyword_CaseInsensitively()
+        public async Task FontWeight_Bolder_IsParsedCaseInsensitively_AndStoredAsItsComputedNumber()
         {
             var box = await GetFontWeightBoxAsync("Bolder");
-            Assert.True(box.FontWeight.Value is { IsKeyword: true, Keyword: FontWeightKeyword.Bolder });
+            Assert.True(box.FontWeight.Value is { IsValue: true, Value: 700 });
         }
 
         [Fact]
-        public async Task FontWeight_Lighter_StoresTheKeyword_CaseInsensitively()
+        public async Task FontWeight_Lighter_IsParsedCaseInsensitively_AndStoredAsItsComputedNumber()
         {
             var box = await GetFontWeightBoxAsync("lighter");
-            Assert.True(box.FontWeight.Value is { IsKeyword: true, Keyword: FontWeightKeyword.Lighter });
+            Assert.True(box.FontWeight.Value is { IsValue: true, Value: 100 });
         }
 
         private static async Task<PeachBrackets.Html.Dom.CssBox> GetFontWeightBoxAsync(string authored)
