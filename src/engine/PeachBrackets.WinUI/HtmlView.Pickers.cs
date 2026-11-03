@@ -85,7 +85,9 @@ public sealed partial class HtmlView
             AfterControlChange(document, document.SetFileNames(element, names));
     }
 
-    // The system's file picker, which needs the window the view is in.
+    // The system's file picker, which needs the window the view is in; it opens a modal dialog, so a test cannot drive it (the window tests replace it with
+    // FilePicker).
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(Justification = "Opens the system's modal file picker.")]
     private async Task<string[]> ShowFilePickerAsync(FileInputInfo info)
     {
         if (XamlRoot?.ContentIslandEnvironment?.AppWindowId is not { } windowId)

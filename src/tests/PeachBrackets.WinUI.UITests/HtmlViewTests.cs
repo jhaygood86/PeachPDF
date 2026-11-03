@@ -910,6 +910,8 @@ public class HtmlViewTests
             var reportedText = reported.Length == 1 ? reported[0].GetText(-1) : string.Empty;
             var reportedStart = reported.Length == 1 ? reported[0].CompareEndpoints(TextPatternRangeEndpoint.Start, secondDup, TextPatternRangeEndpoint.Start) : 99;
 
+            // A range that runs across blocks is not one the pattern can select, and selecting it does nothing.
+            all.Select();
             view.Document.Selection.SelectAll();
             var multiBlock = text.GetSelection().Length;
             return (none, selectedInDocument, reportedText, reportedStart, multiBlock);
