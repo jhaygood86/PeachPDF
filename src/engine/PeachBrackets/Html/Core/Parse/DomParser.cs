@@ -1498,6 +1498,8 @@ namespace PeachBrackets.Html.Parse
             // Correct current color
             CssUtils.ApplyCurrentColor(box, valueParser);
 
+            ResolveRelativeFontWeight(valueParser, box);
+
             if (verifyingInheritedOnly)
             {
                 if (!StylesEquivalent(sharedStyle, box))
@@ -1561,6 +1563,22 @@ namespace PeachBrackets.Html.Parse
             {
                 CascadeApplyStyles(valueParser, childBox, cssData, media, containerSizes, childShells, childSiblings);
             }
+        }
+
+        /// <summary>
+        /// CSS Fonts 4 §2.2.1: the computed value of <c>font-weight: bolder|lighter</c> is the number it
+        /// resolves to against the parent's computed weight, and that number is what descendants inherit.
+        /// Resolving it here, once, on the box that declared it, keeps a text box (or any descendant)
+        /// from inheriting the keyword and stepping it a second time.
+        /// </summary>
+        private static void ResolveRelativeFontWeight(CssValueParser valueParser, CssBox box)
+        {
+            var weight = box.FontWeight.Value;
+            if (weight.Keyword is not (FontWeightKeyword.Bolder or FontWeightKeyword.Lighter)) return;
+
+            var parentWeight = box.ParentBox?.ActualNumericWeight ?? 400;
+            var resolved = FontWeightResolver.Resolve(weight, parentWeight);
+            CssUtils.SetPropertyValue(valueParser, box, PropertyNames.FontWeight, resolved.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
 
         /// <summary>
