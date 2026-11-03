@@ -787,6 +787,32 @@
       }
     },
     {
+      "name": "shape-outside",
+      "comment": "css-shapes-1 §2.1. Stored as the declaration text and read at use by FloatShapeOutline, which resolves it with the same CssClipPathResolver clip-path uses (one basic-shape grammar, BasicShapeGrammar). none, or a circle()/ellipse()/inset()/polygon() and/or a shape-box; an <image> value (alpha-threshold shapes) is not supported and is dropped at parse time.",
+      "inherited": false,
+      "cssom": {"converter": "new ShapeOutsideValueConverter()"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ShapeOutsideValueConverter.Validate", "acceptsNoneLiteral": true },
+      "html": {
+        "propertyPath": "ShapeOutside",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "shape-margin",
+      "comment": "css-shapes-1 §2.2. A <length-percentage>, stored as its declaration text; the percentage basis is the float's containing block width, resolved by FloatShapeOutline.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthOrPercentConverter"},
+      "initialValue": "0",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.LengthOrPercentConverter.Convert" },
+      "html": {
+        "propertyPath": "ShapeMargin",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
       "name": "clip",
       "comment": "Legacy CSS 2.1 clipping (https://www.w3.org/TR/CSS21/visufx.html#clipping), superseded by clip-path above but kept for compatibility. String-stored, like clip-path - CssClipRectResolver re-tokenizes the raw declared text itself. cssDataType 'cssom-grammar' calls Converters.ShapeConverter.Convert directly (the same converter ClipProperty's own real grammar uses, already .OrAuto()-composed so the 'auto' initial value needs no acceptsNoneLiteral-style special case) instead of the full cssom round trip. ShapeConverter's own rect()-grammar duplication vs CssClipRectResolver's hand-rolled walk is a separate, pre-existing 'one parser' gap, not introduced here.",
       "inherited": false,

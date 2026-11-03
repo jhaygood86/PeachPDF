@@ -45,7 +45,7 @@ namespace PeachBrackets.Html.Fragmentation
         // where the box cannot hold back a break past it (CappedScrollContainer.MustStayWhole): otherwise
         // the box breaks under its cap and lays what lies past the cap out unbroken.
         private static bool HasConstrainedLogicalHeight(CssBox box) =>
-            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+            box.WritingMode.Value.IsVertical()
                 ? CssValueParser.IsValidLength(box.Width) || CssValueParser.IsValidLength(box.MaxWidth)
                 : HasDefiniteAuthoredHeight(box)
                     || (CssValueParser.IsValidLength(box.MaxHeight)
@@ -234,7 +234,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// </para>
         /// </remarks>
         internal static bool IsUnresumableOrthogonalFlow(CssBox box) =>
-            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+            box.WritingMode.Value.IsVertical()
             && box.PlacesItselfAsBlockBox
             && !RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay)
             && (DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext);
@@ -267,7 +267,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// lifts the remaining excluded-feature combinations.
         /// </remarks>
         internal static bool IsUnresumableVerticalTable(CssBox box) =>
-            box.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr
+            box.WritingMode.Value.IsVertical()
             && box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
             && HasColumnPaginationExcludedFeature(box);
 

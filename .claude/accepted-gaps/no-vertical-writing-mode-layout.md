@@ -411,7 +411,7 @@ text-layout pipeline (`SvgRenderer.LayoutGlyphs`/`PaintGlyphs`) — no `WritingM
 resolved once from the `<text>` root (threaded through `SvgTreeBuilder`'s existing `InheritedPaint`
 carrier, the same mechanism `direction` already uses) and decides which axis the pen advances along — X
 for `horizontal-tb`, Y for `vertical-rl`/`vertical-lr` (`sideways-rl`/`sideways-lr` and SVG 1.1's legacy
-`tb`/`tb-rl` keywords fall back to `horizontal-tb`, matching the HTML pipeline's own scope).
+`tb`/`tb-rl` keywords fall back to `horizontal-tb`: the HTML pipeline handles the two `sideways-*` values, SVG text does not).
 `text-orientation` is genuinely per-glyph, unlike `writing-mode` — a `<tspan>` can override it — and
 `mixed` classifies each glyph by the same shared `VerticalOrientationTable.IsEffectivelyUpright` the HTML
 pipeline uses (extracted out of `CssBox` into the shared table itself so the two pipelines can never
@@ -573,8 +573,7 @@ would double-apply the same shift.
   bookkeeping `CssLineBox.UpdateRectangle` needs to gate leading/trailing inset correctly, so a
   bordered/padded `<span>` inside vertical text paints with the wrong decoration box. For the same
   reason, issue #1163's fix closing a wrapped inline's outline into a complete ring on every line is
-  scoped to `horizontal-tb` (and `sideways-rl`/`sideways-lr`, whose line boxes are laid out the same
-  way) only — a `vertical-rl`/`vertical-lr` wrapped inline's outline keeps its pre-#1163 open-edge
+  scoped to `horizontal-tb` only — a `vertical-rl`/`vertical-lr` wrapped inline's outline keeps its pre-#1163 open-edge
   geometry until this gap closes, since closing only the outline while the inline axis itself still
   has no reserved inset would produce a ring that disagrees with the box's own (not yet correct)
   extent.
@@ -590,8 +589,11 @@ would double-apply the same shift.
   value, producing a rotation mismatch. Per CSS Writing Modes, `writing-mode` has no defined effect on a
   non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
   than a behavior authors should rely on either way.
-- **`sideways-rl`/`sideways-lr`** ([#766](https://github.com/jhaygood86/PeachPDF/issues/766)) still render
-  as `horizontal-tb` throughout (`WritingModeFrame.IsVertical` is true only for `vertical-rl`/`vertical-lr`).
+- **`sideways-rl`/`sideways-lr` in SVG `<text>`** (https://github.com/jhaygood86/PeachPDF/issues/2161) still behave as `horizontal-tb` (the SVG pipeline has its own writing-mode
+  check, `SvgRenderer.IsVerticalWritingMode`); in HTML they are vertical modes (`WritingMode.IsVertical()`) with
+  always-sideways glyphs, and `sideways-lr` reads bottom to top via the frame's `InlineStartIsBottom` and a counter-clockwise
+  glyph rotation (`FragmentPainter.SidewaysRotationFor`). Inside a column the words of different font sizes are aligned
+  by their line-over edge rather than a shared baseline, which was already so for `vertical-rl`/`vertical-lr`.
 - **Table's remaining gap, narrowed: real per-column pagination combined with `rowspan`/`colspan`/
   `<caption>`/`<thead>`-`<tfoot>`/collapsed borders** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)
   stays open for exactly this, tracked in its own right as

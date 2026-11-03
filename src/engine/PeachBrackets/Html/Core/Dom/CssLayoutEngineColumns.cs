@@ -62,7 +62,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static bool HasSeveralColumnsAt(CssBox columnsBox, double width)
         {
-            if (columnsBox.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr) return false;
+            if (columnsBox.WritingMode.Value.IsVertical()) return false;
 
             var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
                 ? CssValueParser.ParseLength(columnGapLength, width, columnsBox)
@@ -186,7 +186,7 @@ namespace PeachBrackets.Html.Dom
             // whole; column-count/column-width are inert here for now and this container falls back to
             // the same single-column block-flow path columnCount <= 1 already takes, which already
             // supports real pagination via the ordinary block-flow machinery. Tracked as #764.
-            var isVertical = columnsBox.WritingMode.Value is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            var isVertical = columnsBox.WritingMode.Value.IsVertical();
 
             var (columnCount, columnWidth) = isVertical
                 ? (1, containerWidth)

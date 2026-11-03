@@ -725,7 +725,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static double ContainingBlockInlineSize(CssBox block)
         {
-            if (block.WritingMode.Value is not (PeachBrackets.Css.WritingMode.VerticalRl or PeachBrackets.Css.WritingMode.VerticalLr))
+            if (!block.WritingMode.Value.IsVertical())
                 return block.AvailableWidth;
 
             var height = CssLayoutEngine.ResolveDefiniteHeightValue(block) ?? block.ActualBoxSizingHeight;
