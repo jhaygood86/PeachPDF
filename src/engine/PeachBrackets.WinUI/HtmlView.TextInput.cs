@@ -46,6 +46,10 @@ public sealed partial class HtmlView
         if (state.Type == "textarea" && HandleTextAreaKey(document, state, key, control, shift))
             return true;
 
+        // Enter in a one-line field submits its form, when a browser would.
+        if (key == VirtualKey.Enter && !control && document.FocusedNode?.ElementId is { } fieldId && document.GetElement(fieldId) is { } field && SubmitFromField(field))
+            return true;
+
         var move = key switch
         {
             VirtualKey.Left => control ? EditMove.WordLeft : EditMove.Left,

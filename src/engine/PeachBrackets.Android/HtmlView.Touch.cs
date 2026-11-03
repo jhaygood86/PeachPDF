@@ -234,7 +234,7 @@ public sealed partial class HtmlView
             return false;
 
         var document = _document!;
-        if (FocusTextFieldAt(page, x, y) || ActivateControlAt(page, x, y) || OpenPickerAt(page, x, y) || SubmitFormAt(page, x, y))
+        if (FocusTextFieldAt(page, x, y) || ActivateControlAt(page, x, y) || OpenPickerAt(page, x, y) || ResetFormAt(page, x, y) || SubmitFormAt(page, x, y))
             return true;
 
         var link = document.Annotations.Links.LastOrDefault(l => l.PageIndex == page && l.Bounds.Contains(x, y));

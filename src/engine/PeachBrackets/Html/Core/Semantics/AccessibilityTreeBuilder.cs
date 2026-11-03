@@ -293,7 +293,10 @@ namespace PeachBrackets.Html.Semantics
             var font = box.ActualFont;
             node.FontFamily = font.Typeface?.FamilyName;
             node.FontSize = font.Size;
-            node.FontWeight = (int)Math.Clamp(Math.Round(box.ActualNumericWeight), 1, 1000);
+            // The weight of an anonymous text box is stepped again from its parent's when the keyword is relative (bolder inside <b> comes out as 900), so the
+            // element's own is used.
+            var weighted = box.HtmlTag is null && box.ParentBox is { } element ? element : box;
+            node.FontWeight = (int)Math.Clamp(Math.Round(weighted.ActualNumericWeight), 1, 1000);
             node.IsItalic = font.Typeface?.IsItalic == true || ((int)font.SyntheticStyle & 2) != 0;
             // A decoration set on an element is drawn on the text inside it, so it is looked for on the way up.
             for (var decorated = box; decorated is not null; decorated = decorated.ParentBox)

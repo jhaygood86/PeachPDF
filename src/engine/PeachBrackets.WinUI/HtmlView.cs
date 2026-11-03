@@ -162,11 +162,33 @@ public sealed partial class HtmlView : UserControl
     /// <summary>Raised when a submit button of a form is clicked or invoked, with the form as it would be submitted. The view sends nothing itself.</summary>
     public event EventHandler<HtmlFormSubmittingEventArgs>? FormSubmitting;
 
-    // Raises FormSubmitting for the form a button belongs to; false when the element is not a submit button in a form.
-    internal bool SubmitForm(PeachBrackets.Updates.DocumentElement submitter)
+    /// <summary>
+    /// Raised instead of <see cref="FormSubmitting"/> when a submit was tried and a control's value does not satisfy its constraints (<c>required</c>,
+    /// <c>pattern</c>, <c>min</c>... unless the form has <c>novalidate</c>). The first such control has been given the focus.
+    /// </summary>
+    public event EventHandler<HtmlFormInvalidEventArgs>? FormInvalid;
+
+    // Submits the form a button belongs to (at a point, for an image button); false when the element is not a submit button in a form.
+    internal bool SubmitForm(PeachBrackets.Updates.DocumentElement submitter, int page = -1, double x = 0, double y = 0) =>
+        _document is { } document
+        && Submit(document, submitter, page >= 0 ? document.CreateFormSubmission(submitter, page, x, y) : document.CreateFormSubmission(submitter));
+
+    // Submits the form a field belongs to, as Enter in the field does; false when Enter does not submit it.
+    internal bool SubmitFromField(PeachBrackets.Updates.DocumentElement field) =>
+        _document is { } document && Submit(document, field, document.CreateImplicitSubmission(field));
+
+    // Raises FormSubmitting - or, when a value is not valid, gives the first such control the focus and raises FormInvalid.
+    private bool Submit(PeachBrackets.HtmlDocument document, PeachBrackets.Updates.DocumentElement trigger, PeachBrackets.Updates.FormSubmission? submission)
     {
-        if (_document?.CreateFormSubmission(submitter) is not { } submission)
+        if (submission is null)
             return false;
+
+        if (document.GetValidationProblems(trigger) is { Count: > 0 } problems)
+        {
+            QueueFocus(() => FocusElementAsync(document, problems[0].Element));
+            FormInvalid?.Invoke(this, new HtmlFormInvalidEventArgs(problems));
+            return true;
+        }
 
         FormSubmitting?.Invoke(this, new HtmlFormSubmittingEventArgs(submission));
         return true;

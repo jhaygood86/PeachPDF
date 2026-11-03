@@ -17,6 +17,15 @@ public sealed class HtmlFormSubmittingEventArgs : EventArgs
     public PeachBrackets.Updates.FormSubmission Submission { get; }
 }
 
+/// <summary>The form controls whose values do not satisfy their constraints when a submit was tried (<see cref="HtmlView.FormInvalid"/>).</summary>
+public sealed class HtmlFormInvalidEventArgs : EventArgs
+{
+    internal HtmlFormInvalidEventArgs(IReadOnlyList<PeachBrackets.Updates.ValidationProblem> problems) => Problems = problems;
+
+    /// <summary>What is wrong, in document order, at most one for each control; the first control has been given the focus.</summary>
+    public IReadOnlyList<PeachBrackets.Updates.ValidationProblem> Problems { get; }
+}
+
 /// <summary>What a click on a link is about to do.</summary>
 public sealed class HtmlLinkClickedEventArgs : EventArgs
 {

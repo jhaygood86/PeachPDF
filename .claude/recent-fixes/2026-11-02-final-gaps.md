@@ -18,5 +18,4 @@
   Both hosts read the file bytes when a picker returns and raise `FormSubmitting` when a submit button is clicked/tapped (WinUI also on Enter/Space and UI
   Automation Invoke of a button). Traps: a `<button>` is not a `CssBoxFormField`, so the submit code reads tags, not box kinds; `\n` in a Python
   one-liner passed through a shell heredoc turned into a real line break, so scripts that touch C# string escapes are written to files.
-- **Not done:** implicit submission by Enter in a text field, `reset` buttons, constraint validation before a submit, image-button coordinates
-  (`name.x`/`name.y`), and the formatting-element reconstruction mentioned above.
+- **Not done:** at the time, implicit submission, reset buttons, validation, image-button coordinates and formatting reconstruction; see [the submit-complete note](2026-11-02-submit-complete.md).

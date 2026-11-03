@@ -323,7 +323,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     public void Invoke() => _view.DispatcherQueue.TryEnqueue(() =>
     {
         if (_node.Role == AccessibilityRole.Button)
-            _view.SubmitForm(_node);
+            _view.InvokeButton(_node);
         else
             _view.ActivateLink(_node);
     });

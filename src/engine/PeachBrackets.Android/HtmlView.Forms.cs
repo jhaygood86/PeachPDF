@@ -48,7 +48,44 @@ public sealed partial class HtmlView
 
     // A tap on a submit button raises FormSubmitting.
     private bool SubmitFormAt(int page, double x, double y) =>
-        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element);
+        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element, page, x, y);
+
+    // A tap on a reset button puts the controls of its form back as the source has them.
+    private bool ResetFormAt(int page, double x, double y)
+    {
+        if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element || !document.IsResetButton(element))
+            return false;
+
+        QueueFocus(() => ResetFormAsync(document, element));
+        return true;
+    }
+
+    private async Task ResetFormAsync(HtmlDocument document, DocumentElement element)
+    {
+        if (_context is not { } context || !ReferenceEquals(document, _document))
+            return;
+
+        using var surface = SKSurface.Create(new SKImageInfo(1, 1));
+        using var measuring = new SkiaComposer(context, surface, 1, 1);
+        var result = await document.ResetFormAsync(element, measuring.Canvas);
+        if (ReferenceEquals(document, _document))
+            AfterControlChange(document, result);
+    }
+
+    // Gives a control the focus, as the first one that is not valid gets it.
+    private async Task FocusElementAsync(HtmlDocument document, DocumentElement element)
+    {
+        if (_context is not { } context || !ReferenceEquals(document, _document))
+            return;
+
+        UpdateResult result;
+        using (var surface = SKSurface.Create(new SKImageInfo(1, 1)))
+        using (var measuring = new SkiaComposer(context, surface, 1, 1))
+            result = await document.SetFocusAsync(element, true, measuring.Canvas);
+
+        if (ReferenceEquals(document, _document))
+            AfterFocusChange(document, result, document.FocusedNode?.Id);
+    }
 
     // Scrolls the text area under a point by an amount in points; false when the point is not over one or it cannot move that way.
     private bool ScrollTextAreaAt(int page, double x, double y, double points)

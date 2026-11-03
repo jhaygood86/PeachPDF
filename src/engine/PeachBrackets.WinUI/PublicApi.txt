@@ -1,3 +1,5 @@
+PeachBrackets.WinUI.HtmlFormInvalidEventArgs : sealed class
+  property IReadOnlyList<ValidationProblem> Problems { get; }
 PeachBrackets.WinUI.HtmlFormSubmittingEventArgs : sealed class
   property FormSubmission Submission { get; }
 PeachBrackets.WinUI.HtmlLinkClickedEventArgs : sealed class

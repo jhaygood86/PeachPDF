@@ -435,6 +435,7 @@ PeachBrackets.GenericFontKeyword : struct
 PeachBrackets.HtmlDocument : sealed class
   method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
   method AccessibilityTree GetAccessibilityTree()
+  method Boolean IsResetButton(DocumentElement element)
   method Boolean RemoveHighlight(String name)
   method DocumentCursor GetCursorAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElement(String elementId)
@@ -445,10 +446,13 @@ PeachBrackets.HtmlDocument : sealed class
   method FormControlState? GetFormState(DocumentElement element)
   method FormEditState? GetEditState()
   method FormSubmission CreateFormSubmission(DocumentElement submitter)
+  method FormSubmission CreateFormSubmission(DocumentElement submitter, Int32 pageIndex, Double x, Double y)
+  method FormSubmission CreateImplicitSubmission(DocumentElement field)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<SelectOption> GetSelectOptions(DocumentElement element)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
   method IReadOnlyList<TextRun> GetTextRuns(Int32 pageIndex)
+  method IReadOnlyList<ValidationProblem> GetValidationProblems(DocumentElement submitter)
   method Int32? GetEditIndexAt(Canvas measuringCanvas, Int32 pageIndex, Double x)
   method Int32? GetEditIndexAt(Canvas measuringCanvas, Int32 pageIndex, Double x, Double y)
   method Int32? GetEditIndexByLine(Canvas measuringCanvas, Int32 index, Int32 lines)
@@ -469,6 +473,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
   method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
   method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
+  method Task<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
   method Task<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
   method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method Task<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
@@ -861,6 +866,25 @@ PeachBrackets.Updates.UpdateResult : struct
   property Boolean Applied { get; init; }
   property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
   property String Reason { get; init; }
+PeachBrackets.Updates.ValidationKind : enum Int32
+  PatternMismatch = 2
+  RangeOverflow = 6
+  RangeUnderflow = 5
+  StepMismatch = 7
+  TooLong = 4
+  TooShort = 3
+  TypeMismatch = 1
+  ValueMissing = 0
+PeachBrackets.Updates.ValidationProblem : struct
+  ctor(DocumentElement Element, ValidationKind Kind, String Message)
+  method Void Deconstruct(out DocumentElement Element, out ValidationKind Kind, out String Message)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ValidationProblem other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property DocumentElement Element { get; init; }
+  property String Message { get; init; }
+  property ValidationKind Kind { get; init; }
 PeachBrackets.UserPreferences : sealed class
   ctor()
   method UserPreferences <Clone>$()

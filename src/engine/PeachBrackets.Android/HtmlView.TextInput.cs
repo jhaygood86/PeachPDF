@@ -165,6 +165,10 @@ public sealed partial class HtmlView
         if (state.Type == "textarea" && HandleTextAreaKey(document, state, keyCode, control, shift))
             return true;
 
+        // Enter in a one-line field submits its form, when a browser would.
+        if (keyCode is Keycode.Enter or Keycode.NumpadEnter && !control && FocusedFieldElement() is { } enterField && SubmitFromField(enterField))
+            return true;
+
         var move = keyCode switch
         {
             Keycode.DpadLeft => control ? EditMove.WordLeft : EditMove.Left,
@@ -420,6 +424,10 @@ public sealed partial class HtmlView
         return true;
     }
 
+    // The element of the text field that has the focus.
+    private DocumentElement? FocusedFieldElement() =>
+        _document is { } document && document.FocusedNode?.ElementId is { } id ? document.GetElement(id) : null;
+
     private void CopyFieldSelection(FormEditState state)
     {
         var from = Math.Min(state.SelectionStart, state.SelectionEnd);
@@ -606,8 +614,10 @@ public sealed partial class HtmlView
 
         public override bool PerformEditorAction(ImeAction actionCode)
         {
-            // The action key of a one-line field leaves it, as Enter on a form field does elsewhere.
-            view.StepFocus(true);
+            // The action key of a one-line field submits its form when Enter would; otherwise it leaves the field, as Enter on a form field does elsewhere.
+            if (!(view.FocusedFieldElement() is { } field && view.SubmitFromField(field)))
+                view.StepFocus(true);
+
             return true;
         }
 

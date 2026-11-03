@@ -128,4 +128,21 @@ public class RangeAndSelectTests
         var table = tree.Nodes.First(n => n.ElementId == "t");
         Assert.Equal((4, 2), (table.RowCount, table.ColumnCount));
     }
+
+    [Fact]
+    public async Task FormattingStillOpenWhenAnEndIsImpliedIsOpenedAgainInTheNextElement()
+    {
+        var document = await LoadAsync("<ul id=l><li>one <b>bold<li>two<li>three</ul><p>para <i>italic<p>next</p>");
+        var tree = document.GetAccessibilityTree();
+
+        var items = tree.Nodes.First(n => n.ElementId == "l").Children.Where(c => c.Role == PeachBrackets.Accessibility.AccessibilityRole.ListItem).ToList();
+
+        Assert.Equal(3, items.Count);
+        // "two" and "three" carry the bold that was left open in the first item.
+        Assert.Equal(700, items[1].DescendantsAndSelf().First(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Text).FontWeight);
+        Assert.Equal(700, items[2].DescendantsAndSelf().First(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Text).FontWeight);
+        Assert.Equal(400, items[0].DescendantsAndSelf().First(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Text).FontWeight);
+        Assert.Equal(2, tree.Nodes.Count(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Paragraph));
+        Assert.Contains(tree.Nodes.Last(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Paragraph).DescendantsAndSelf(), n => n.IsItalic);
+    }
 }

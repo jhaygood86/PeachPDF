@@ -19,7 +19,7 @@ public sealed record ChosenFile(string Name, string ContentType, byte[] Content)
 public readonly record struct FormEntry(string Name, string? Value, ChosenFile? File);
 
 /// <summary>
-/// A form as it is submitted: where to, how, and the name and value of each control that takes part (<see cref="HtmlDocument.CreateFormSubmission"/>). The
+/// A form as it is submitted: where to, how, and the name and value of each control that takes part (<see cref="HtmlDocument.CreateFormSubmission(DocumentElement)"/>). The
 /// document does not send it; a host or application does, with the body <see cref="Serialize"/> makes or, for <c>get</c>, the address <see cref="GetUri"/> makes.
 /// </summary>
 public sealed class FormSubmission

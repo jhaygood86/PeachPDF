@@ -22,7 +22,47 @@ public sealed partial class HtmlView
 
     // A click on a submit button raises FormSubmitting.
     internal bool SubmitFormAt(int page, double x, double y) =>
-        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element);
+        _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element, page, x, y);
+
+    // A click on a reset button puts the controls of its form back as the source has them.
+    internal bool ResetFormAt(int page, double x, double y) =>
+        _document is { } document && document.GetElementAt(page, x, y) is { } element && ResetForm(element);
+
+    internal bool ResetForm(PeachBrackets.Updates.DocumentElement element)
+    {
+        if (_document is not { } document || !document.IsResetButton(element))
+            return false;
+
+        QueueFocus(() => ResetFormAsync(document, element));
+        return true;
+    }
+
+    private async Task ResetFormAsync(PeachBrackets.HtmlDocument document, PeachBrackets.Updates.DocumentElement element)
+    {
+        if (_context is null || !ReferenceEquals(document, _document))
+            return;
+
+        using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
+        var result = await document.ResetFormAsync(element, measuring.Canvas);
+        if (ReferenceEquals(document, _document))
+            AfterControlChange(document, result);
+    }
+
+    // Gives a control the focus, as the first one that is not valid gets it.
+    private async Task FocusElementAsync(PeachBrackets.HtmlDocument document, PeachBrackets.Updates.DocumentElement element)
+    {
+        if (_context is null || !ReferenceEquals(document, _document))
+            return;
+
+        using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
+        var result = await document.SetFocusAsync(element, true, measuring.Canvas);
+        if (ReferenceEquals(document, _document))
+            AfterFocusChange(document, result, document.FocusedNode?.Id);
+    }
+
+    /// <summary>Does what a click on a button does - resets its form or submits it - for a screen reader or the keyboard.</summary>
+    internal bool InvokeButton(AccessibilityNode node) =>
+        _document is { } document && node.ElementId is { } id && document.GetElement(id) is { } element && (ResetForm(element) || SubmitForm(element));
 
     /// <summary>Submits the form a button belongs to, for a screen reader or the keyboard.</summary>
     internal bool SubmitForm(AccessibilityNode node) =>
@@ -74,6 +114,6 @@ public sealed partial class HtmlView
             return false;
 
         var node = _focusTargetId is { } id ? document.GetAccessibilityTree().FindById(id) : document.FocusedNode;
-        return node is not null && ((HtmlViewLogic.IsToggleControl(node.Role) && ActivateControl(node)) || (node.Role == AccessibilityRole.Button && SubmitForm(node)));
+        return node is not null && ((HtmlViewLogic.IsToggleControl(node.Role) && ActivateControl(node)) || (node.Role == AccessibilityRole.Button && InvokeButton(node)));
     }
 }
