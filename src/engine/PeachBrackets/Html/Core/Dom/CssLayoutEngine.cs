@@ -567,6 +567,11 @@ namespace PeachBrackets.Html.Dom
                 var box = setAside.Box;
                 var emptyInline = EmptyInlineContainingBlockFor(setAside);
 
+                // Its static position is its place on the final line: the inline position the walk passed it at, carried
+                // through alignment and bidi reordering, and the line's top. CssBox.StaticPositionIn reads it for a
+                // box whose offsets on an axis are both auto.
+                box.InlineStaticPosition = (PlaceOnFinalLine(setAside), FinalLineEdgesOf(setAside.Line, setAside.Y).Top);
+
                 // The box is left to run as passes of its own: LayoutBlockChild resumes the record its break leaves,
                 // which is what detaching here was written to avoid depending on, and unbroken the box's last line
                 // crossed the page foot and was clipped away. That holds inside a column as well: the box's containing
@@ -583,6 +588,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     if (detach) box.HtmlContainer?.RestoreFragmentainer(previous);
                     if (emptyInline is not null) emptyInline.EmptyInlineContainingBlock = null;
+                    box.InlineStaticPosition = null;
                 }
             }
         }
