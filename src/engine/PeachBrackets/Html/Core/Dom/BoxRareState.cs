@@ -85,6 +85,7 @@ namespace PeachBrackets.Html.Dom
         internal string? SectionBeginId;
         internal string? SectionEndId;
         internal Rect? EmptyInlineContainingBlock;
+        internal (double X, double Y)? InlineStaticPosition;
         internal bool _isForcedBreak;
         internal bool FootnotePolicyForcedBreakBefore;
         internal bool _adjoinsForcedBreakPoint;

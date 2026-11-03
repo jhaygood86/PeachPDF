@@ -1694,6 +1694,14 @@ namespace PeachBrackets.Html.Dom
         /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
         /// <see cref="DomUtils.InlineContainingBlockOf"/>).
         /// </summary>
+        /// <summary>
+        /// Where this absolutely positioned box would have sat had it been in flow, when it was written among inline
+        /// content: the inline position of its place on the final line and the line's top (CSS 2.1 sections 10.3.7
+        /// and 10.6.4; CSS Positioned Layout 3 section 3.5.2). Held only while <c>CssLayoutEngine.LayoutAbsolutelyPositioned</c>
+        /// lays the box out, as the line it describes can still be moved afterwards.
+        /// </summary>
+        internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
@@ -7649,11 +7657,22 @@ namespace PeachBrackets.Html.Dom
         /// The margin-edge position <paramref name="child"/>, an absolutely positioned box, would have had were it <c>position: static</c>, on each axis
         /// where both of its offsets are <c>auto</c> (null for an axis it has one set on). Only for a box in block flow: the parent's content edge
         /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
-        /// content has its position on a line, which this does not know.
+        /// content has its position on a line, which <see cref="InlineStaticPosition"/> carries.
         /// </summary>
         private (double? Left, double? Top)? StaticPositionIn(CssBox child)
         {
-            if (!ReferenceEquals(child.ParentBox, this) || Direction.Value == DirectionMode.Rtl) return null;
+            if (!ReferenceEquals(child.ParentBox, this)) return null;
+
+            // Among inline content the flow has already recorded where the box's place is on its line.
+            if (child.InlineStaticPosition is { } onLine)
+            {
+                double? inlineLeft = child.Left.Value.Value is null && child.Right.Value.Value is null ? onLine.X : null;
+                double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
+
+                return inlineLeft is null && inlineTop is null ? null : (inlineLeft, inlineTop);
+            }
+
+            if (Direction.Value == DirectionMode.Rtl) return null;
 
             foreach (var sibling in Boxes)
             {
