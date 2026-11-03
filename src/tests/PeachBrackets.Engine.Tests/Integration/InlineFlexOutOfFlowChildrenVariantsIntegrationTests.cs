@@ -154,8 +154,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             var cls = kind == "after" ? (withChild ? "q with" : "q") : "";
 
             return LayoutHarness.Wrap(PseudoStyle
-                + $"<p style='margin:0'>Line one <span id='c' class='{cls}' style='display:inline-flex;vertical-align:{align};position:relative;width:40px;height:40px;background:#cde'>"
-                + child + "</span> end</p><p id='n' style='margin:0'>NEXTBLOCK</p>");
+                + $"<div style='margin:0'>Line one <span id='c' class='{cls}' style='display:inline-flex;vertical-align:{align};position:relative;width:40px;height:40px;background:#cde'>"
+                + child + "</span> end</div><p id='n' style='margin:0'>NEXTBLOCK</p>");
         }
 
         public static TheoryData<string, string> AlignmentsAndKinds()

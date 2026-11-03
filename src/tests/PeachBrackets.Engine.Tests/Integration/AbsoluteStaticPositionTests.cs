@@ -1,5 +1,6 @@
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -8,7 +9,7 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// <summary>
     /// An absolutely positioned box whose offsets on an axis are both <c>auto</c> sits at its static position on that axis, where it would have been
     /// in flow (CSS 2.1 sections 10.3.7 and 10.6.4, CSS Positioned Layout 3 section 3.5): below the previous in-flow sibling and at the parent's content
-    /// edge, not at the corner of its containing block. This covers a box in block flow.
+    /// edge, not at the corner of its containing block. This covers a box in block flow and one among inline content, which sits at its place on the line.
     /// </summary>
     public class AbsoluteStaticPositionTests
     {
@@ -66,13 +67,63 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(c.Location.Y + 3, a.Location.Y, 0.5);
         }
 
-        [Fact]
-        public async Task AmongInlineContent_IsLeftToTheInlineFlow()
+        private static (double Left, double Right, double Top) WordOf(CssBox root, string text)
         {
-            // Not handled here: the static position is on a line. The box stays where it was placed before.
-            var (c, _, a) = await Layout("<div id='c'>text<div id='a'>x</div></div>");
+            var word = LayoutHarness.Descendants(root).SelectMany(b => b.Words).First(w => w.Text?.Trim() == text);
+            return (word.Left, word.Right, LayoutHarness.LineTopOf(root, word));
+        }
 
-            Assert.Equal(c.Location.X, a.Location.X, 0.5);
+        [Fact]
+        public async Task AmongInlineContent_SitsRightAfterThePrecedingWordOnItsLine()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{margin-left:100pt;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style>"
+                + "<div id='c'>aaa<span id='a'></span>bbb</div>"));
+            var a = LayoutHarness.FindById(root, "a")!;
+            var aaa = WordOf(root, "aaa");
+
+            Assert.Equal(aaa.Right, a.Location.X, 0.5);
+            Assert.Equal(aaa.Top, a.Location.Y, 0.5);
+            Assert.True(a.Location.X > LayoutHarness.FindById(root, "c")!.ClientLeft + 5, "not at the containing block's corner");
+        }
+
+        [Fact]
+        public async Task AmongInlineContent_FollowsTheLineWhenTextAlignMovesIt()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{width:300pt;text-align:right;line-height:20pt} #a{position:absolute;width:4pt;height:4pt}</style>"
+                + "<div id='c'>aaa<span id='a'></span>bbb</div>"));
+            var a = LayoutHarness.FindById(root, "a")!;
+
+            Assert.Equal(WordOf(root, "aaa").Right, a.Location.X, 0.5);
+            Assert.True(a.Location.X > 200, $"a right-aligned line puts the place near the right edge, was {a.Location.X}");
+        }
+
+        [Fact]
+        public async Task AmongInlineContent_OnALaterLine_SitsOnThatLine()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{width:60pt;line-height:20pt;font-size:12pt} #a{position:absolute;width:4pt;height:4pt}</style>"
+                + "<div id='c'>aaaaa bbbbb ccccc<span id='a'></span> ddddd</div>"));
+            var a = LayoutHarness.FindById(root, "a")!;
+            var ccccc = WordOf(root, "ccccc");
+
+            Assert.Equal(ccccc.Right, a.Location.X, 0.5);
+            Assert.Equal(ccccc.Top, a.Location.Y, 0.5);
+            Assert.True(ccccc.Top > LayoutHarness.FindById(root, "c")!.ClientTop + 15, "the word is below the first line");
+        }
+
+        [Fact]
+        public async Task AmongInlineContent_AnOffsetOnOneAxisKeepsThatOffset()
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<style>body{margin:0} #c{position:relative;margin-left:100pt;line-height:20pt} #a{position:absolute;top:30pt;width:4pt;height:4pt}</style>"
+                + "<div id='c'>aaa<span id='a'></span>bbb</div>"));
+            var c = LayoutHarness.FindById(root, "c")!;
+            var a = LayoutHarness.FindById(root, "a")!;
+
+            Assert.Equal(WordOf(root, "aaa").Right, a.Location.X, 0.5);
+            Assert.Equal(c.Location.Y + 30, a.Location.Y, 0.5);
         }
     }
 }

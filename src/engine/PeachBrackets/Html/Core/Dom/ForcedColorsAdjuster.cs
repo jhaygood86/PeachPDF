@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 
@@ -67,6 +68,41 @@ namespace PeachBrackets.Html.Dom
                 return resolved;
 
             return palette.CanvasText;
+        }
+
+        /// <summary>
+        /// Recolors an inline SVG's <c>fill</c> and <c>stroke</c> (CSS Color Adjust 1 §3.1): a visible solid paint, gradient or pattern becomes
+        /// <c>CanvasText</c>; <c>none</c> and context paint are left alone. Does nothing outside forced colors mode.
+        /// </summary>
+        public static void RecolorSvg(CssBox owner, PeachBrackets.Svg.SvgDocument document)
+        {
+            if (Palette(owner, isTextColor: false) is not { } palette)
+                return;
+
+            PeachBrackets.Svg.SvgPaint Adjust(PeachBrackets.Svg.SvgPaint paint) => paint.Kind switch
+            {
+                PeachBrackets.Svg.SvgPaintKind.Solid when paint.PaintColor.A == 0 => paint,
+                PeachBrackets.Svg.SvgPaintKind.Solid or PeachBrackets.Svg.SvgPaintKind.GradientRef or PeachBrackets.Svg.SvgPaintKind.PatternRef
+                    => PeachBrackets.Svg.SvgPaint.Solid(palette.CanvasText),
+                _ => paint,
+            };
+
+            void Walk(IEnumerable<PeachBrackets.Svg.SvgElement> elements)
+            {
+                foreach (var element in elements)
+                {
+                    element.Fill = Adjust(element.Fill);
+                    element.Stroke = Adjust(element.Stroke);
+                    switch (element)
+                    {
+                        case PeachBrackets.Svg.SvgGroupElement group: Walk(group.Children); break;
+                        case PeachBrackets.Svg.SvgNestedSvgElement nested: Walk(nested.Children); break;
+                        case PeachBrackets.Svg.SvgSymbolElement symbol: Walk(symbol.Children); break;
+                    }
+                }
+            }
+
+            Walk(document.Children);
         }
 
         /// <summary>Whether box shadows, text shadows and gradient backgrounds are dropped for <paramref name="owner"/>.</summary>

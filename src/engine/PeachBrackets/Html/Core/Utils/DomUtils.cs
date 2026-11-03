@@ -127,7 +127,7 @@ namespace PeachBrackets.Html.Utils
         /// when no matching ancestor exists at all: a closing tag with no corresponding open element
         /// (e.g. a stray <c>&lt;/p&gt;</c> for a <c>&lt;p&gt;</c> already auto-closed by a nested
         /// <c>&lt;table&gt;</c>, per CSS2.1/HTML4's "table closes p" rule) is a parse error that must be
-        /// ignored - see <see cref="Parse.HtmlParser.CloseElement"/>, whose caller falls back to leaving
+        /// ignored - see the end tag handling in <c>HtmlParser</c>, which falls back to leaving
         /// the current box unchanged rather than corrupting the tree by jumping to <paramref name="root"/>.
         /// </summary>
         /// <param name="root"></param>
@@ -519,7 +519,7 @@ namespace PeachBrackets.Html.Utils
         private static void CollectSvgLinks(SvgDocument document, Rect viewportRect, CssBox owner, List<(Rect Rect, string Href, CssBox Owner)> sink)
         {
             var found = new List<(Rect Rect, string Href)>();
-            SvgRenderer.CollectLinks(document, viewportRect, found);
+            SvgRenderer.CollectLinks(document, viewportRect, found, owner.PointerEvents.Value);
 
             foreach (var (rect, href) in found)
                 sink.Add((rect, href, owner));

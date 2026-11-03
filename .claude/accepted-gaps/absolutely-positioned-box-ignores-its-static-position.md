@@ -1,26 +1,13 @@
-# An absolutely positioned box with `auto` offsets ignores its static position among inline content and under `direction: rtl` (#2069)
+# An absolutely positioned box with `auto` offsets ignores its static position under `direction: rtl`
 
-The block-flow, left-to-right case is done (`CssBox.StaticPositionIn`, #1303). What follows is what is left, tracked by
-[#2069](https://github.com/jhaygood86/PeachPDF/issues/2069); the text below is the original description, still accurate for those two shapes.
+The block-flow (#1303) and inline-content (#2069) cases for a left-to-right parent are done: `CssBox.StaticPositionIn` reads the box's
+place on its final line (`CssBox.InlineStaticPosition`, set by `CssLayoutEngine.LayoutAbsolutelyPositioned` from `PlaceOnFinalLine`)
+or, in block flow, the previous sibling's edge.
 
-**Gap:** with `top`/`left` (or `right`/`bottom`) left `auto`, an absolutely positioned box sits at its
-containing block's padding corner. CSS 2.1 §10.3.7/§10.6.4 place it at its static position, where it
-would have been in flow. This holds in block flow and inline flow alike:
-`aaa<span style="position:absolute">x</span>bbb` puts `x` at the containing block's corner, not after
-`aaa`.
+**Gap:** with `left`/`right` both `auto` in a `direction: rtl` parent, CSS 2.1 section 10.3.7 measures the static position from the
+right edge (the box's right margin edge sits at the static position). `StaticPositionIn` returns null for such a parent in block
+flow, so the box keeps the containing block's padding corner; among inline content the place's left edge is used rather than the
+right one. Resolving it needs the box's shrink-to-fit width, which is not known when the static position is read.
 
-**Where:** `CssBox.CommitBlockChildOffset`'s absolute branch resolves offsets through
-`ResolveOffsetOrZero`, so `auto` contributes 0. No static position is recorded anywhere.
-
-One approximation leans on this: in a `middle`/`bottom`-aligned table cell,
-`CssLayoutEngine.ApplyCellVerticalAlignment` moves a box whose offsets on the alignment axis are both
-`auto` along with the aligned content, since its static position is in that content. That covers a
-direct child of the cell and, through `MoveStaticallyPlacedDescendants`, one nested in an inline whose
-containing block is outside the cell (the subtree translation skips such a box, `EscapesTranslationOf`).
-Implementing the static position should make that move exact rather than remove it.
-
-**Why out of scope:** it predates #1299 and is unchanged by it. #1299 made the inline case reachable
-without a split, and the static position is now available cheaply there: `FlowBox`'s cursor when it sets
-the box aside into `CssLineBoxCoordinates.AbsolutelyPositioned`. But the block-flow half needs its
-own recording in `ResolveBlockChildOffset`, and both halves need `direction`-aware §10.3.7 logic.
-That is a feature of its own, not part of the split fix.
+**Why out of scope:** the rtl case needs the used width before positioning, a change to the absolute-offset resolution order, and is
+rare in practice.

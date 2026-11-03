@@ -21,9 +21,9 @@ namespace PeachBrackets.Html.Utils
     /// each box converts its own children's logical geometry straight to true physical coordinates, once,
     /// with nothing accumulated to reverse.
     /// <para>
-    /// For <see cref="WritingMode.HorizontalTb"/> - and the <c>sideways-rl</c>/<c>sideways-lr</c> fallback,
-    /// which this frame treats identically - conversion is a pure translation by the box's own content-box
-    /// origin. <c>direction</c> is deliberately NOT consulted for the horizontal case: horizontal RTL is
+    /// For <see cref="WritingMode.HorizontalTb"/> conversion is a pure translation by the box's own content-box
+    /// origin. <c>sideways-rl</c> converts like <c>vertical-rl</c> and <c>sideways-lr</c> like <c>vertical-lr</c> with
+    /// its inline-start edge at the bottom (the glyphs, not the geometry, are what differ). <c>direction</c> is deliberately NOT consulted for the horizontal case: horizontal RTL is
     /// already handled directly inside <see cref="Dom.CssLayoutEngine"/>'s own cursor arithmetic (which
     /// stays untouched), not through this abstraction.
     /// </para>
@@ -63,7 +63,7 @@ namespace PeachBrackets.Html.Utils
         public static WritingModeFrame ForContentBox(double clientLeft, double clientTop, double clientRight,
             double clientBottom, WritingMode writingMode, DirectionMode direction)
         {
-            var isVertical = writingMode is WritingMode.VerticalRl or WritingMode.VerticalLr;
+            var isVertical = writingMode.IsVertical();
 
             return new WritingModeFrame(
                 clientLeft, clientTop, clientRight, clientBottom,
@@ -74,8 +74,8 @@ namespace PeachBrackets.Html.Utils
         }
 
         /// <summary>
-        /// <see langword="false"/> for <see cref="WritingMode.HorizontalTb"/> and the <c>sideways-*</c>
-        /// fallback - every conversion below is then a pure translation, with no axis swap.
+        /// <see langword="false"/> for <see cref="WritingMode.HorizontalTb"/> - every conversion below is then a pure
+        /// translation, with no axis swap.
         /// </summary>
         public bool IsVertical { get; }
 

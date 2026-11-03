@@ -122,29 +122,6 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
         }
 
-        [Fact]
-        public async Task SidewaysWritingMode_FallsBackToPlainBorderBoxRectangle()
-        {
-            // writing-mode: sideways-rl/-lr is a different, genuinely out-of-scope value (see
-            // IsHorizontalWritingMode's own remarks) - unlike vertical-rl/-lr (issue #1123, see the
-            // VerticalRl_*/VerticalLr_* tests below), it still falls back exactly like an outline-less
-            // font does: BuildTextClipPath never even calls GetTextOutline for it.
-            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
-                "<h1 id='box' style='margin:0;font-size:40pt;writing-mode:sideways-rl;" +
-                "background-color:red;background-clip:text;color:transparent;'>Hi</h1>"));
-
-            var box = LayoutHarness.FindById(root, "box");
-            Assert.NotNull(box);
-
-            var recording = new RecordingGraphics(new HtmlRenderContext());
-
-            FragmentPaintHarness.PaintBox(container, box!, recording);
-
-            Assert.Empty(recording.GetTextOutlineCalls);
-            Assert.Empty(recording.DrawnPaths);
-            Assert.Single(recording.Log, op => op.Kind == PaintOpKind.FillRect);
-        }
-
         /// <summary>
         /// A stand-in outline whose points sit far from the word's own physical footprint (near the
         /// coordinate origin) - so a test can tell whether <see cref="FragmentPainter.SidewaysRotation"/>
@@ -293,6 +270,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Theory]
         [InlineData("vertical-rl")]
         [InlineData("vertical-lr")]
+        [InlineData("sideways-rl")]
+        [InlineData("sideways-lr")]
         public async Task RotatedRun_BuildsOneWholeWordOutline_TransformedIntoItsPhysicalFootprint(string writingMode)
         {
             // The mixed (default) text-orientation classifies Latin letters as rotated, not upright.

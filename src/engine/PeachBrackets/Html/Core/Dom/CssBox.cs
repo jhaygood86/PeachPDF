@@ -1214,7 +1214,7 @@ namespace PeachBrackets.Html.Dom
             double? widthPt = rawWidthPt;
             double? heightPt = isSizeContainer ? rawHeightPt : null;
 
-            var isVertical = container.WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr;
+            var isVertical = container.WritingMode.Value.IsVertical();
             double? inlineSizePt = isVertical ? rawHeightPt : rawWidthPt;
             double? blockSizePt = isSizeContainer ? (isVertical ? rawWidthPt : rawHeightPt) : null;
 
@@ -1306,7 +1306,7 @@ namespace PeachBrackets.Html.Dom
             double? width = size.Width is > 0 and < double.MaxValue - 1 ? size.Width : null;
             double? height = size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
 
-            var rootIsVertical = container.RootWritingMode is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr;
+            var rootIsVertical = container.RootWritingMode.IsVertical();
             double? inlineSizePt = rootIsVertical ? height : width;
             double? blockSizePt = rootIsVertical ? width : height;
 
@@ -1694,6 +1694,14 @@ namespace PeachBrackets.Html.Dom
         /// (<c>CssLayoutEngine.EmptyInlineContainingBlockFor</c>, read by
         /// <see cref="DomUtils.InlineContainingBlockOf"/>).
         /// </summary>
+        /// <summary>
+        /// Where this absolutely positioned box would have sat had it been in flow, when it was written among inline
+        /// content: the inline position of its place on the final line and the line's top (CSS 2.1 sections 10.3.7
+        /// and 10.6.4; CSS Positioned Layout 3 section 3.5.2). Held only while <c>CssLayoutEngine.LayoutAbsolutelyPositioned</c>
+        /// lays the box out, as the line it describes can still be moved afterwards.
+        /// </summary>
+        internal (double X, double Y)? InlineStaticPosition { get => _rare is null ? default((double X, double Y)?) : _rare.InlineStaticPosition; set { if (_rare is null) { if (EqualityComparer<(double X, double Y)?>.Default.Equals(value, default((double X, double Y)?))) return; _rare = new BoxRareState(); } _rare.InlineStaticPosition = value; } }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
@@ -2464,9 +2472,17 @@ namespace PeachBrackets.Html.Dom
         /// instead (read directly off <see cref="TextOrientation"/> at paint time, not per fragment), and a
         /// <c>horizontal-tb</c> box has no vertical orientation to classify in the first place.
         /// </summary>
+        /// <summary>
+        /// The <c>text-orientation</c> glyphs are actually laid out and painted with: the declared value, except under
+        /// <c>sideways-rl</c>/<c>sideways-lr</c>, whose glyphs are always sideways (CSS Writing Modes 4 section 5.1) whatever
+        /// <c>text-orientation</c> says.
+        /// </summary>
+        internal TextOrientationEnum EffectiveTextOrientation =>
+            WritingMode.Value is WritingModeEnum.SidewaysRl or WritingModeEnum.SidewaysLr ? TextOrientationEnum.Sideways : TextOrientation.Value;
+
         private bool IsVerticalMixedOrientation() =>
-            WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr
-            && TextOrientation.Value == TextOrientationEnum.Mixed;
+            WritingMode.Value.IsVertical()
+            && EffectiveTextOrientation == TextOrientationEnum.Mixed;
 
         /// <summary>
         /// Whether <paramref name="text"/> contains codepoints of more than one effective orientation
@@ -4648,7 +4664,7 @@ namespace PeachBrackets.Html.Dom
                     // box's epilogue - which judges a complete table - waits for the pass that completes it.
                     if (PendingBreakToken is not null) return;
                 }
-                else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && DomUtils.ContainsInlinesOnly(this))
+                else if (WritingMode.Value.IsVertical() && DomUtils.ContainsInlinesOnly(this))
                 {
                     // A vertical-writing-mode box holding only inline content gets real vertical line
                     // flow instead of ordinary horizontal FlowBox - see
@@ -4746,7 +4762,7 @@ namespace PeachBrackets.Html.Dom
 
                             if (PendingBreakToken is not null) return;
                         }
-                        else if (WritingMode.Value is WritingModeEnum.VerticalRl or WritingModeEnum.VerticalLr && Boxes.Count > 0)
+                        else if (WritingMode.Value.IsVertical() && Boxes.Count > 0)
                         {
                             // A vertical-writing-mode box with block-level children (issue #760) - the box-level
                             // counterpart of CreateVerticalLineBoxes's own word-level column stacking above. Each
@@ -5736,7 +5752,7 @@ namespace PeachBrackets.Html.Dom
             // size internally regardless of writing-mode).
             if (child.Words.Count == 0
                 && !CssValueParser.IsValidLength(child.Width)
-                && child.WritingMode.Value is not (Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr)
+                && !child.WritingMode.Value.IsVertical()
                 && child.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.TableCell
                     or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid))
             {
@@ -5932,7 +5948,7 @@ namespace PeachBrackets.Html.Dom
         private bool IsBlockAxisMarginCollapseThrough(double resolvedBlockExtent, int depth = 0)
         {
             if (depth > 500) return false;
-            if (WritingMode.Value is not (Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr)) return false;
+            if (!WritingMode.Value.IsVertical()) return false;
             if (HasDifferentWritingModeFromParent) return false;
             if (Overflow.Value != PeachBrackets.Css.Overflow.Visible) return false;
             if (Words.Count > 0) return false;
@@ -6689,7 +6705,7 @@ namespace PeachBrackets.Html.Dom
             // own inline size entirely internally, unlike a cell whose own natural width/height genuinely
             // depends on writing-mode.
             var isVerticalTableCell = DerivedStyle.ActualDisplay == Keywords.TableCell
-                && WritingMode.Value is Css.WritingMode.VerticalRl or Css.WritingMode.VerticalLr;
+                && WritingMode.Value.IsVertical();
 
             if (isVerticalTableCell || (DerivedStyle.ActualDisplay != Keywords.TableCell && DerivedStyle.ActualDisplay != Keywords.Table && DerivedStyle.ActualDisplay != Keywords.Flex && DerivedStyle.ActualDisplay != Keywords.InlineFlex && DerivedStyle.ActualDisplay != Keywords.Grid && DerivedStyle.ActualDisplay != Keywords.InlineGrid))
             {
@@ -7653,11 +7669,22 @@ namespace PeachBrackets.Html.Dom
         /// The margin-edge position <paramref name="child"/>, an absolutely positioned box, would have had were it <c>position: static</c>, on each axis
         /// where both of its offsets are <c>auto</c> (null for an axis it has one set on). Only for a box in block flow: the parent's content edge
         /// across (left-to-right flow) and the previous in-flow sibling's margin edge down, or the parent's content top for the first. A box among inline
-        /// content has its position on a line, which this does not know.
+        /// content has its position on a line, which <see cref="InlineStaticPosition"/> carries.
         /// </summary>
         private (double? Left, double? Top)? StaticPositionIn(CssBox child)
         {
-            if (!ReferenceEquals(child.ParentBox, this) || Direction.Value == DirectionMode.Rtl) return null;
+            if (!ReferenceEquals(child.ParentBox, this)) return null;
+
+            // Among inline content the flow has already recorded where the box's place is on its line.
+            if (child.InlineStaticPosition is { } onLine)
+            {
+                double? inlineLeft = child.Left.Value.Value is null && child.Right.Value.Value is null ? onLine.X : null;
+                double? inlineTop = child.Top.Value.Value is null && child.Bottom.Value.Value is null ? onLine.Y : null;
+
+                return inlineLeft is null && inlineTop is null ? null : (inlineLeft, inlineTop);
+            }
+
+            if (Direction.Value == DirectionMode.Rtl) return null;
 
             foreach (var sibling in Boxes)
             {

@@ -168,7 +168,12 @@ namespace PeachBrackets.Svg
         /// once per page). Callers should gather link rectangles from this method's output instead of
         /// hooking into paint at all.
         /// </summary>
-        public static void CollectLinks(SvgDocument document, Rect viewportRect, List<(Rect Rect, string Href)> sink)
+        /// <param name="document">the document whose <c>&lt;a&gt;</c> elements are collected</param>
+        /// <param name="viewportRect">where the document is drawn</param>
+        /// <param name="sink">receives each link's rectangle and target</param>
+        /// <param name="hostPointerEvents">the <c>pointer-events</c> of the box the document is drawn in, which its elements inherit</param>
+        public static void CollectLinks(SvgDocument document, Rect viewportRect, List<(Rect Rect, string Href)> sink,
+            PointerEvents hostPointerEvents = PointerEvents.Auto)
         {
             if (viewportRect.Width <= 0 || viewportRect.Height <= 0)
                 return;
@@ -183,31 +188,72 @@ namespace PeachBrackets.Svg
             var viewBoxY = document.ViewBox?.Y ?? 0;
             var matrix = ComputeViewportTransform(viewportRect, viewBoxX, viewBoxY, viewBoxWidth, viewBoxHeight, document.PreserveAspectRatio);
 
+            hostPointerEvents = document.PointerEvents ?? hostPointerEvents;
+
             foreach (var element in document.Children)
-                CollectLinksFromElement(element, matrix, sink);
+                CollectLinksFromElement(element, matrix, sink, hostPointerEvents);
         }
 
-        private static void CollectLinksFromElement(SvgElement element, Matrix3x2 ambientMatrix, List<(Rect Rect, string Href)> sink)
+        private static void CollectLinksFromElement(SvgElement element, Matrix3x2 ambientMatrix, List<(Rect Rect, string Href)> sink, PointerEvents inheritedPointerEvents)
         {
             var matrix = element.Transform is { } t ? MultiplyMatrix(t, ambientMatrix) : ambientMatrix;
+            var pointerEvents = element.PointerEvents ?? inheritedPointerEvents;
 
-            if (element is SvgAnchorElement { Href: { Length: > 0 } href } && SvgGeometryBounds.GetBoundingBox(element) is { } localBounds)
+            // A link nothing inside it can be clicked through is not written: pointer-events: none on the <a> and what it holds, as on a decorative
+            // overlay the author does not want swallowing clicks (SVG 1.1 section 16.4). The rectangle is still the whole <a>'s bounds.
+            if (element is SvgAnchorElement { Href: { Length: > 0 } href } && SvgGeometryBounds.GetBoundingBox(element) is { } localBounds
+                && CanReceivePointerEvents(element, pointerEvents))
                 sink.Add((TransformBoundingBox(localBounds, matrix), href));
 
             switch (element)
             {
                 case SvgGroupElement group:
                     foreach (var child in group.Children)
-                        CollectLinksFromElement(child, matrix, sink);
+                        CollectLinksFromElement(child, matrix, sink, pointerEvents);
                     break;
 
                 case SvgUseElement { Target: { } target } use:
                     var useMatrix = use.X != 0 || use.Y != 0
                         ? MultiplyMatrix(new Matrix3x2(1, 0, 0, 1, (float)use.X, (float)use.Y), matrix)
                         : matrix;
-                    CollectLinksFromElement(target, useMatrix, sink);
+                    CollectLinksFromElement(target, useMatrix, sink, pointerEvents);
                     break;
             }
+        }
+
+        /// <summary>
+        /// Whether a pointer can hit <paramref name="element"/> or anything inside it: some shape (or text) under it takes pointer events,
+        /// which for the SVG keywords depends on its visibility and on whether it has a fill or a stroke (SVG 1.1 section 16.4).
+        /// </summary>
+        private static bool CanReceivePointerEvents(SvgElement element, PointerEvents inherited)
+        {
+            var pointerEvents = element.PointerEvents ?? inherited;
+
+            switch (element)
+            {
+                case SvgGroupElement group:
+                    foreach (var child in group.Children)
+                    {
+                        if (CanReceivePointerEvents(child, pointerEvents)) return true;
+                    }
+
+                    // An empty <a> has no shape to hit, which is no reason to drop the link it always had.
+                    return group.Children.Count == 0 && pointerEvents != PointerEvents.None;
+
+                case SvgUseElement { Target: { } target }:
+                    return CanReceivePointerEvents(target, pointerEvents);
+            }
+
+            var painted = element.Fill.Kind != SvgPaintKind.None || element.Stroke.Kind != SvgPaintKind.None;
+
+            return pointerEvents switch
+            {
+                PointerEvents.None => false,
+                PointerEvents.Auto or PointerEvents.VisiblePainted => element.Visible && painted,
+                PointerEvents.VisibleFill or PointerEvents.VisibleStroke or PointerEvents.Visible => element.Visible,
+                PointerEvents.Painted => painted,
+                _ => true,
+            };
         }
 
         /// <summary>Composes two matrices for row-vector point transformation: applies <paramref name="first"/>, then <paramref name="second"/> (i.e. <c>p' = p * first * second</c>).</summary>
