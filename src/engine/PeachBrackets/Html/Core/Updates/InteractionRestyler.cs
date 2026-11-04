@@ -73,6 +73,21 @@ namespace PeachBrackets.Html.Updates
         public static Outcome TryApply(HtmlContainerInt container, InteractionState before, InteractionState after, HashSet<int> changed,
             IReadOnlyList<FragmentainerFragment> fragmentainers)
         {
+            try
+            {
+                return Restyle(container, before, after, changed, fragmentainers);
+            }
+            catch (Exception e) when (e is not OutOfMemoryException)
+            {
+                // Whatever the tree is now is discarded by the reload the caller falls back to.
+                container.Interaction = after;
+                return Fail("The restyle failed: " + e.GetType().Name + ": " + e.Message);
+            }
+        }
+
+        private static Outcome Restyle(HtmlContainerInt container, InteractionState before, InteractionState after, HashSet<int> changed,
+            IReadOnlyList<FragmentainerFragment> fragmentainers)
+        {
             if (container.Root is not { } root || container.CssData is not { } cssData)
                 return Fail("The document has no cascade to repeat.");
 
@@ -150,46 +165,39 @@ namespace PeachBrackets.Html.Updates
             foreach (var box in boxes)
                 oldStyles[box] = (box.ComputedStyle, PaintExtent.Of(box));
 
-            try
+            foreach (var box in roots)
+                DomParser.RecascadeForState(container, box);
+
+            var extents = new Dictionary<CssBox, ExtentChange>();
+            var stackingChanged = false;
+            foreach (var box in boxes)
             {
-                foreach (var box in roots)
-                    DomParser.RecascadeForState(container, box);
+                var (oldStyle, oldExtent) = oldStyles[box];
+                if (ReferenceEquals(oldStyle, box.ComputedStyle))
+                    continue;
 
-                var extents = new Dictionary<CssBox, ExtentChange>();
-                var stackingChanged = false;
-                foreach (var box in boxes)
-                {
-                    var (oldStyle, oldExtent) = oldStyles[box];
-                    if (ReferenceEquals(oldStyle, box.ComputedStyle))
-                        continue;
+                var verdict = Classify(box, oldStyle, out var names, out var transformFlip);
+                if (verdict is not null)
+                    return Fail(verdict);
 
-                    var verdict = Classify(box, oldStyle, out var names, out var transformFlip);
-                    if (verdict is not null)
-                        return Fail(verdict);
+                if (names.Count == 0)
+                    continue;
 
-                    if (names.Count == 0)
-                        continue;
+                if (transformFlip && HasOutOfFlowDescendant(box))
+                    return Fail("A transform or filter appears or goes under a box with positioned descendants, which it makes their containing block.");
 
-                    if (transformFlip && HasOutOfFlowDescendant(box))
-                        return Fail("A transform or filter appears or goes under a box with positioned descendants, which it makes their containing block.");
+                InvalidatePaintCaches(box);
+                var newExtent = PaintExtent.Of(box);
+                extents[box] = new ExtentChange(oldExtent.Bleed, newExtent.Bleed, oldExtent.HasTransform, newExtent.HasTransform, oldExtent.Matrix, newExtent.Matrix);
 
-                    InvalidatePaintCaches(box);
-                    var newExtent = PaintExtent.Of(box);
-                    extents[box] = new ExtentChange(oldExtent.Bleed, newExtent.Bleed, oldExtent.HasTransform, newExtent.HasTransform, oldExtent.Matrix, newExtent.Matrix);
-
-                    if (names.Contains("opacity") || names.Contains("transform") || names.Contains("filter") || names.Contains("mix-blend-mode"))
-                        stackingChanged = true;
-                }
-
-                if (stackingChanged)
-                    container.RefreshStackingHoistCandidates();
-
-                return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
+                if (names.Contains("opacity") || names.Contains("transform") || names.Contains("filter") || names.Contains("mix-blend-mode"))
+                    stackingChanged = true;
             }
-            catch (Exception e) when (e is not OutOfMemoryException)
-            {
-                return Fail("The restyle failed: " + e.GetType().Name + ": " + e.Message);
-            }
+
+            if (stackingChanged)
+                container.RefreshStackingHoistCandidates();
+
+            return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
         }
 
         private static void CollectStateful(CssBox box, List<CssBox> into)

@@ -1314,6 +1314,7 @@ public sealed partial class HtmlDocument : IDisposable
         if (_options.IncrementalRestyle && !FullRestyleForced && _restyleOrdinals.Count == 0 && _container.FragmentTree is { } tree)
         {
             var outcome = InteractionRestyler.TryApply(_container, previous, next, changed, tree.Fragmentainers);
+            LastRestyleFallbackReason = outcome.Reason;
             if (outcome.Applied)
             {
                 // Nothing was loaded again: whatever form change was waiting for a restyle has its answer, as it has after a reload.
@@ -1324,7 +1325,6 @@ public sealed partial class HtmlDocument : IDisposable
                 return new UpdateResult(true, null, outcome.DirtyRegions) { Incremental = true };
             }
 
-            LastRestyleFallbackReason = outcome.Reason;
         }
 
         return await RestyleAsync(changed, measuringCanvas);
