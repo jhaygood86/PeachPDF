@@ -410,7 +410,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task Document_ListsTheImagesThatFailedToLoad()
         {
-            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' src='{Small}' srcset='{Missing} 2x'>");
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' src='{Small}' srcset='{Missing} 2x'>", dpr: 2);
             using var d0 = document;
             using var c0 = canvas;
 
