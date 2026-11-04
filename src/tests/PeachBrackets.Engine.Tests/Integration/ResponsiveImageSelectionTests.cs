@@ -204,6 +204,23 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(expected, chosen);
         }
 
+        private sealed class NoAvifContext : PeachPDF.Rendering.HtmlRenderContext
+        {
+            public override bool SupportsImageType(string mimeType) => !mimeType.Contains("avif", StringComparison.OrdinalIgnoreCase) && base.SupportsImageType(mimeType);
+        }
+
+        [Fact]
+        public async Task Picture_TypeTheHostCannotDecode_FallsThroughToTheNextSource()
+        {
+            var html = LayoutHarness.Wrap($"<picture><source type='image/avif' srcset='{Large}'><source type='image/png' srcset='{Mid}'><img id='i' src='{Small}'></picture>");
+
+            var (withAvif, _) = await LayoutHarness.LayoutAsync(html);
+            var (withoutAvif, _) = await LayoutHarness.LayoutAsync(html, createRenderContext: () => new NoAvifContext());
+
+            Assert.Equal("large", Name(((CssBoxImage)LayoutHarness.FindById(withAvif, "i")!).ImageSource));
+            Assert.Equal("mid", Name(((CssBoxImage)LayoutHarness.FindById(withoutAvif, "i")!).ImageSource));
+        }
+
         private static async Task<string> ChooseThroughDocumentAsync(string body, HtmlDocumentOptions options)
         {
             var renderContext = new PeachPDF.Rendering.HtmlRenderContext();

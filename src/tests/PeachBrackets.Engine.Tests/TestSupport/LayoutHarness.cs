@@ -53,9 +53,11 @@ namespace PeachBrackets.Engine.Tests.TestSupport
             Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
             Func<HtmlRenderContext, Task>? configureRenderContext = null,
-            Action<HtmlContainerInt>? configureContainer = null)
+            Action<HtmlContainerInt>? configureContainer = null,
+            Func<HtmlRenderContext>? createRenderContext = null)
         {
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = createRenderContext?.Invoke() ?? new HtmlRenderContext();
+            renderContext.PixelsPerPoint = pixelsPerPoint;
             if (configureRenderContext is not null)
             {
                 await configureRenderContext(renderContext);

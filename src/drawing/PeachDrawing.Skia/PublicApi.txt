@@ -138,6 +138,7 @@ PeachDrawing.Skia.SkiaRenderContext : class
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()
+  method virtual Boolean SupportsImageType(String mimeType)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
   property Boolean FallbackToPeachImage { get; set; }

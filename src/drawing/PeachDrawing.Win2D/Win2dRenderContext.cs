@@ -340,6 +340,21 @@ public class Win2dRenderContext : RenderContext, IDisposable
         return PaintColor.FromArgb(c.A, c.R, c.G, c.B);
     }
 
+    /// <summary>
+    /// What Windows' own codecs read (PNG, JPEG, GIF, BMP, TIFF, ICO), when <see cref="ImageCodec"/> is <see cref="Win2dImageCodec.Native"/> and
+    /// <see cref="FallbackToPeachImage"/> is off; PeachImage's formats otherwise.
+    /// </summary>
+    public override bool SupportsImageType(string mimeType) =>
+        _imageCodec == Win2dImageCodec.Native && !FallbackToPeachImage
+            ? mimeType is not null && s_wicTypes.Contains(mimeType.Trim())
+            : base.SupportsImageType(mimeType);
+
+    private static readonly HashSet<string> s_wicTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/bmp", "image/x-ms-bmp", "image/tiff",
+        "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml"
+    };
+
     /// <inheritdoc />
     protected override Core.Image ImageFromStreamInt(Stream memoryStream) =>
         DecodeImage(Win2dImage.ReadAll(memoryStream)) ?? throw new InvalidDataException("The stream is not a recognised image format.");

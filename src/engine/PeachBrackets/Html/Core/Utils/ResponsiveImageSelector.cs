@@ -20,7 +20,7 @@ namespace PeachBrackets.Html.Utils
     {
         internal readonly record struct Candidate(string Url, double Density, double? Width);
 
-        private static readonly HashSet<string> _supportedTypes = new(StringComparer.OrdinalIgnoreCase)
+        private static readonly HashSet<string> DefaultTypes = new(StringComparer.OrdinalIgnoreCase)
         {
             "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
             "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
@@ -120,7 +120,8 @@ namespace PeachBrackets.Html.Utils
         }
 
         private static bool TypeSupported(string type, CssBox box) =>
-            string.IsNullOrWhiteSpace(type) || _supportedTypes.Contains(type.Trim());
+            string.IsNullOrWhiteSpace(type)
+            || (box.HtmlContainer?.RenderContext is { } context ? context.SupportsImageType(type) : DefaultTypes.Contains(type.Trim()));
 
         private static bool MediaMatches(string? media, CssBox box)
         {

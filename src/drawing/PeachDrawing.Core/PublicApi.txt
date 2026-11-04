@@ -806,6 +806,7 @@ PeachDrawing.Core.RenderContext : abstract class
   method Void AddFontFamilyMapping(String fromFamily, String toFamily)
   method Void ClearFontCache()
   method abstract String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
+  method virtual Boolean SupportsImageType(String mimeType)
   method virtual ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host)
   method virtual ValueTask<RNetworkResponse> GetResourceStream(RUri uri)
   property Boolean RasterAntiAliasing { get; set; }
