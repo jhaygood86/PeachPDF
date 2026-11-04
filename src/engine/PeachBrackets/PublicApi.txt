@@ -441,6 +441,7 @@ PeachBrackets.GenericFontKeyword : struct
   property String Keyword { get; init; }
 PeachBrackets.HostResourceLoader : static class
   method static ValueTask<RNetworkResponse> LoadAsync(RUri uri, Boolean allowNetwork = False, Boolean allowLocalFiles = True)
+  property static TimeSpan CacheLifetime { get; set; }
 PeachBrackets.HtmlDocument : sealed class
   method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
   method AccessibilityTree GetAccessibilityTree()

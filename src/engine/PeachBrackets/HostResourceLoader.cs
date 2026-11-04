@@ -62,12 +62,34 @@ public static class HostResourceLoader
 
     // What was fetched lately, so a document that is styled again (a hover or focus change loads the page's style sheets and fonts anew) does not
     // go back to the network for every one of them. Held in memory only, for a few minutes, and only what the server did not say to keep out of a cache.
-    private static readonly TimeSpan CacheLifetime = TimeSpan.FromMinutes(5);
+    private static TimeSpan _cacheLifetime = TimeSpan.FromMinutes(5);
     private const int MaxCachedBytes = 8 * 1024 * 1024;
     private const long CacheBudget = 64L * 1024 * 1024;
     private static readonly object CacheGate = new();
     private static readonly Dictionary<string, CachedResponse> Cache = [];
     private static long _cachedBytes;
+
+    /// <summary>
+    /// How long a fetched web response is kept for the next request of the same address (five minutes by default; <see cref="TimeSpan.Zero"/> keeps
+    /// nothing). A response of more than 8 MB, one the server marked <c>no-store</c> or <c>private</c>, and one with no declared length is never kept.
+    /// </summary>
+    public static TimeSpan CacheLifetime
+    {
+        get => _cacheLifetime;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfLessThan(value, TimeSpan.Zero);
+            lock (CacheGate)
+            {
+                _cacheLifetime = value;
+                if (value == TimeSpan.Zero)
+                {
+                    Cache.Clear();
+                    _cachedBytes = 0;
+                }
+            }
+        }
+    }
 
     private sealed record CachedResponse(byte[] Content, Dictionary<string, string[]> Headers, DateTime Expires);
 
@@ -99,31 +121,21 @@ public static class HostResourceLoader
             if (Cache.Remove(address, out var old))
                 _cachedBytes -= old.Content.LongLength;
 
+            // Over budget: start again rather than keep an ordering of what was used.
             if (_cachedBytes + content.LongLength > CacheBudget)
             {
-                // Over budget: drop what has expired, then everything, rather than keep an ordering of what was used.
-                var now = DateTime.UtcNow;
-                foreach (var key in Cache.Where(entry => entry.Value.Expires <= now).Select(entry => entry.Key).ToList())
-                {
-                    _cachedBytes -= Cache[key].Content.LongLength;
-                    Cache.Remove(key);
-                }
-
-                if (_cachedBytes + content.LongLength > CacheBudget)
-                {
-                    Cache.Clear();
-                    _cachedBytes = 0;
-                }
+                Cache.Clear();
+                _cachedBytes = 0;
             }
 
-            Cache[address] = new CachedResponse(content, headers, DateTime.UtcNow + CacheLifetime);
+            Cache[address] = new CachedResponse(content, headers, DateTime.UtcNow + _cacheLifetime);
             _cachedBytes += content.LongLength;
         }
     }
 
     private static async ValueTask<RNetworkResponse?> FetchAsync(RUri uri)
     {
-        if (TryGetCached(uri.AbsoluteUri, out var cached))
+        if (_cacheLifetime > TimeSpan.Zero && TryGetCached(uri.AbsoluteUri, out var cached))
             return cached;
 
         try
@@ -137,17 +149,12 @@ public static class HostResourceLoader
                 headers[header.Key] = [.. header.Value];
 
             var cacheControl = response.Headers.CacheControl;
-            var cacheable = cacheControl is null || (!cacheControl.NoStore && !cacheControl.Private);
-            if (cacheable && (response.Content.Headers.ContentLength ?? 0) <= MaxCachedBytes)
+            var cacheable = _cacheLifetime > TimeSpan.Zero && (cacheControl is null || (!cacheControl.NoStore && !cacheControl.Private));
+            if (cacheable && response.Content.Headers.ContentLength is { } length && length <= MaxCachedBytes)
             {
                 var content = await response.Content.ReadAsByteArrayAsync();
-                if (content.Length <= MaxCachedBytes)
-                {
-                    Remember(uri.AbsoluteUri, content, headers);
-                    return new RNetworkResponse(new MemoryStream(content, writable: false), new Dictionary<string, string[]>(headers));
-                }
-
-                return new RNetworkResponse(new MemoryStream(content, writable: false), headers);
+                Remember(uri.AbsoluteUri, content, headers);
+                return new RNetworkResponse(new MemoryStream(content, writable: false), new Dictionary<string, string[]>(headers));
             }
 
             return new RNetworkResponse(await response.Content.ReadAsStreamAsync(), headers);
