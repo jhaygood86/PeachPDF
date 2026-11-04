@@ -11212,12 +11212,15 @@ var srcsetPictureHtml =
     ".lbl { margin-top: 6px; font-family: monospace; } img { width: 96px; height: 96px; }" +
     "</style></head><body>" +
     "<h2>srcset, sizes and &lt;picture&gt;</h2>" +
-    "<p class=\"note\">A PDF has a fixed page, so the highest-density candidate that applies is chosen.</p>" +
+    "<p class=\"note\">A PDF has a fixed page, so the highest-density candidate that applies is chosen. " +
+    "A screen document chooses the smallest candidate that is sharp enough for its device pixel ratio and zoom instead.</p>" +
     "<div class=\"row\">" +
     SrcsetCell("src only", $"<img src=\"{srcsetLow}\">") +
     SrcsetCell("srcset 1x, 2x", $"<img src=\"{srcsetLow}\" srcset=\"{srcsetLow} 1x, {srcsetHigh} 2x\">") +
     SrcsetCell("srcset 64w, sizes", $"<img sizes=\"96px\" srcset=\"{srcsetLow} 8w, {srcsetHigh} 192w\">") +
     SrcsetCell("picture, media match", $"<picture><source media=\"(min-width: 100px)\" srcset=\"{srcsetHigh}\"><img src=\"{srcsetLow}\"></picture>") +
+    SrcsetCell("srcset 1x, 2x, 3x", $"<img src=\"{srcsetLow}\" srcset=\"{srcsetLow} 1x, {srcsetLow} 2x, {srcsetHigh} 3x\">") +
+    SrcsetCell("picture, type fallback", $"<picture><source type=\"image/x-unknown\" srcset=\"{srcsetLow}\"><source type=\"image/svg+xml\" srcset=\"{srcsetHigh}\"><img src=\"{srcsetLow}\"></picture>") +
     SrcsetCell("picture, no match", $"<picture><source media=\"(min-width: 99999px)\" srcset=\"{srcsetHigh}\"><img src=\"{srcsetLow}\"></picture>") +
     "</div></body></html>";
 
