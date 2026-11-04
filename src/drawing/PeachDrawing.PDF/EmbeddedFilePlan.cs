@@ -230,9 +230,6 @@ namespace PeachDrawing.PDF
         public bool TryGetSpecification(string fileName, out PdfFileSpecification specification)
             => _specifications.TryGetValue(fileName, out specification!);
 
-        /// <summary>Whether the plan embeds a file called <paramref name="fileName"/> (ordinal).</summary>
-        public bool Contains(string fileName) => Files.Any(file => string.Equals(file.FileName, fileName, StringComparison.Ordinal));
-
         /// <summary>"/F" is the legacy, plain-ASCII file name; anything else in the name is written only to "/UF".</summary>
         private static string AsciiFileName(string fileName)
         {
