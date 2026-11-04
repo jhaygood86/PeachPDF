@@ -125,6 +125,14 @@ A text area takes the Enter key (a line break; its keyboard offers no action but
 - Zoom re-renders at the new scale, which is slow on very large pages.
 - Form controls can be focused with Tab, but nothing can be typed into them.
 
+## Images, style sheets and fonts
+
+A document's images, style sheets and fonts load from `data:` URIs and from files; web addresses only when the host sets `AllowNetworkAccess` (off by default), before the next load.
+
+## The demo
+
+`src/examples/PeachBrackets.Android.Example` is a showcase browser: every showcase of the PDF test harness and the screen-only ones (see the [WinUI demo](peachbrackets-winui.md#the-demo)) in an `HtmlView`, with a panel of the knobs the view has: the width and height of the box it sits in, `PageBackground`, the input devices and the theme (Android 12 and later). The view lays its document out as one continuous surface and tells it where it is scrolled and zoomed, so fixed and sticky boxes follow the finger. The build runs the harness with `--html-only` and packs the documents into the APK as assets.
+
 ## Trying it, on an emulator
 
 `src/examples/PeachBrackets.Android.Example` is a small app with an `HtmlView` full screen. It logs (tag `PEACH_SMOKE`) what the document

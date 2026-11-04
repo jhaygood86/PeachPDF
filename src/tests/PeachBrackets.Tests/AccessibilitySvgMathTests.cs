@@ -6,7 +6,7 @@ public class AccessibilitySvgMathTests
 {
     private static async Task<AccessibilityTree> TreeAsync(string body)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body), new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return document.GetAccessibilityTree();
     }
 

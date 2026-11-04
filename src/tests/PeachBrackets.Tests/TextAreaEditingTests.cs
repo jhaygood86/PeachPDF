@@ -8,7 +8,7 @@ public class TextAreaEditingTests
 
     private static async Task<(RasterRenderContext Context, HtmlDocument Document, RasterCanvas Measuring)> LoadAsync(string body)
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
         var measuring = context.CreateCanvas(1, 1);
         await document.SetFocusAsync(document.GetElement("t"), focusVisible: true, measuring);
         return (context, document, measuring);
@@ -135,7 +135,7 @@ public class TextAreaEditingTests
     [Fact]
     public async Task AnUnfocusedTextAreaDrawsNoCaretOrHighlight()
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<textarea id=t>HHHH</textarea>", Head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<textarea id=t>HHHH</textarea>", Head), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
 
         var canvas = await TestDocument.PaintAsync(context, document);
 
@@ -175,7 +175,7 @@ public class TextAreaEditingTests
     {
         var lf = ((char)10).ToString();
         var body = "<textarea id=t style='height:56pt'>" + string.Join(lf, "HHHH", "", "", "", "", "HHHH") + "</textarea><input id=i>";
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
         var dark = ((byte R, byte G, byte B, byte A) p) => p.R < 100 && p.G < 100 && p.B < 100;
         var element = document.GetElement("t")!;
         using var measuring = context.CreateCanvas(1, 1);

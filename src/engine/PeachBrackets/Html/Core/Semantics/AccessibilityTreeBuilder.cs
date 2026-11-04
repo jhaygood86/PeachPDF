@@ -92,11 +92,15 @@ namespace PeachBrackets.Html.Semantics
 
         private void WalkFragments(BoxFragment fragment, int page, TextRunCollector.Frame frame, double ppp)
         {
-            Add(fragment.Box, page, fragment.Rect, frame, ppp);
+            // Where it is drawn: the viewport may have moved a fixed or stuck box.
+            var (dx, dy) = _container.View.DisplacementOf(fragment.Box);
+            Rect Shifted(Rect rect) => dx == 0 && dy == 0 ? rect : new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
+
+            Add(fragment.Box, page, Shifted(fragment.Rect), frame, ppp);
             foreach (var word in fragment.Words)
             {
                 if (word.Word.OwnerBox is { } owner && (word.Word.Text is { Length: > 0 }))
-                    Add(owner, page, word.Rect, frame, ppp);
+                    Add(owner, page, Shifted(word.Rect), frame, ppp);
             }
 
             foreach (var child in fragment.Children)

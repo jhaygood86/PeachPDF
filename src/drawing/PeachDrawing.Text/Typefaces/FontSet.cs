@@ -35,10 +35,41 @@ namespace PeachDrawing.Text
         private static readonly Lazy<IReadOnlyList<string>> InstalledNames = new(() =>
             FontResolver.SystemFamilyDisplayNames.Where(name => !string.IsNullOrEmpty(name)).ToArray());
 
+        // One lock for the set: the resolver and its caches are plain dictionaries that a lookup also writes to, so a set shared by several render
+        // contexts - on different threads, when a host adds its fonts from a worker - has to be entered one thread at a time.
+        private readonly object _gate = new();
+        private readonly Dictionary<string, string> _added = new(StringComparer.Ordinal);
+        private readonly List<string> _addedFamilies = [];
+        private int _version;
+
         /// <summary>Creates a set that sees the installed fonts and nothing else yet.</summary>
         public FontSet()
         {
             Resolver = new FontResolver();
+        }
+
+        /// <summary>The lock every use of <see cref="Resolver"/> is made under.</summary>
+        internal object Gate => _gate;
+
+        /// <summary>
+        /// A number that changes whenever a font is added to the set. A render context that shares the set with others reads it to learn that a family has
+        /// appeared since it last looked.
+        /// </summary>
+        public int Version => System.Threading.Volatile.Read(ref _version);
+
+        /// <summary>
+        /// The families that fonts have been added to, not the installed ones, in the order they first appeared. A snapshot: families added later are not
+        /// in it, and <see cref="Version"/> says when to take another.
+        /// </summary>
+        public IReadOnlyList<string> AddedFamilyNames
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return _addedFamilies.ToArray();
+                }
+            }
         }
 
         /// <summary>The engine's resolver behind this set.</summary>
@@ -69,16 +100,35 @@ namespace PeachDrawing.Text
         {
             try
             {
-                byte[] fontBytes = FontFormatConverter.ToOpenType(data.ToArray());
+                byte[] input = data.ToArray();
+
+                // The same font added again - as every document that declares the same @font-face does - is already parsed and registered: this
+                // answers with its family and does not read it a second time.
+                var identity = IdentityOf(input, options);
+                lock (_gate)
+                {
+                    if (_added.TryGetValue(identity, out var known) && Resolver.TryGetFamilyName(known, out var knownName))
+                        return new TypefaceFamily(this, knownName);
+                }
+
+                byte[] fontBytes = FontFormatConverter.ToOpenType(input);
 
                 using var stream = new MemoryStream(fontBytes);
                 var familyName = options?.FamilyName ?? TtfFontDescription.LoadDescription(stream).FontFamilyInvariantCulture;
 
                 stream.Seek(0, SeekOrigin.Begin);
-                Resolver.AddFont(stream, familyName, DeclaredFaceOf(options), options?.UnicodeRanges);
+                lock (_gate)
+                {
+                    Resolver.AddFont(stream, familyName, DeclaredFaceOf(options), options?.UnicodeRanges);
 
-                Resolver.TryGetFamilyName(familyName, out var registered);
-                return new TypefaceFamily(this, registered);
+                    Resolver.TryGetFamilyName(familyName, out var registered);
+                    _added[identity] = registered;
+                    if (!_addedFamilies.Contains(registered, StringComparer.OrdinalIgnoreCase))
+                        _addedFamilies.Add(registered);
+
+                    System.Threading.Interlocked.Increment(ref _version);
+                    return new TypefaceFamily(this, registered);
+                }
             }
             catch (Exception ex) when (ex is not OutOfMemoryException)
             {
@@ -119,10 +169,13 @@ namespace PeachDrawing.Text
         {
             ArgumentNullException.ThrowIfNull(name);
 
-            if (Resolver.TryGetFamilyName(name, out var registered))
+            lock (_gate)
             {
-                family = new TypefaceFamily(this, registered);
-                return true;
+                if (Resolver.TryGetFamilyName(name, out var registered))
+                {
+                    family = new TypefaceFamily(this, registered);
+                    return true;
+                }
             }
 
             family = null!;
@@ -148,15 +201,18 @@ namespace PeachDrawing.Text
         /// <returns><see langword="false"/> when no family covers the character.</returns>
         public bool TryFindCoveringFamily(Rune rune, EmojiPresentation presentation, out TypefaceFamily family)
         {
-            var key = Resolver.FindFamilyCoveringCodepoint(rune, presentation);
-            if (key is null || !Resolver.TryGetFamilyName(key, out var name))
+            lock (_gate)
             {
-                family = null!;
-                return false;
-            }
+                var key = Resolver.FindFamilyCoveringCodepoint(rune, presentation);
+                if (key is null || !Resolver.TryGetFamilyName(key, out var name))
+                {
+                    family = null!;
+                    return false;
+                }
 
-            family = new TypefaceFamily(this, name);
-            return true;
+                family = new TypefaceFamily(this, name);
+                return true;
+            }
         }
 
         /// <summary>
@@ -167,7 +223,10 @@ namespace PeachDrawing.Text
         public bool HasExplicitRanges(string familyName)
         {
             ArgumentNullException.ThrowIfNull(familyName);
-            return Resolver.HasExplicitRanges(familyName);
+            lock (_gate)
+            {
+                return Resolver.HasExplicitRanges(familyName);
+            }
         }
 
         /// <summary>
@@ -198,12 +257,15 @@ namespace PeachDrawing.Text
                 throw new ArgumentException("A query with a character to cover has no last resort; use TypefaceFamily.TryMatch.", nameof(query));
             }
 
-            if (!Resolver.HasFamilies)
+            lock (_gate)
             {
-                throw new InvalidOperationException("No fonts are installed on this device, and none has been added to the font set.");
-            }
+                if (!Resolver.HasFamilies)
+                {
+                    throw new InvalidOperationException("No fonts are installed on this device, and none has been added to the font set.");
+                }
 
-            return MatchCore(familyName, query);
+                return MatchCore(familyName, query);
+            }
         }
 
         /// <summary>
@@ -223,10 +285,13 @@ namespace PeachDrawing.Text
         {
             ArgumentNullException.ThrowIfNull(fontName);
 
-            if (Resolver.HasFont(fontName))
+            lock (_gate)
             {
-                data = Resolver.GetFont(fontName);
-                return true;
+                if (Resolver.HasFont(fontName))
+                {
+                    data = Resolver.GetFont(fontName);
+                    return true;
+                }
             }
 
             data = ReadOnlyMemory<byte>.Empty;
@@ -249,7 +314,13 @@ namespace PeachDrawing.Text
         /// <returns>The family name, or <see langword="null"/> when the platform's answer is not available.</returns>
         public string? ResolveGeneric(GenericFamily generic, Func<string, bool>? isAvailable = null)
         {
-            isAvailable ??= name => Resolver.TryGetFamilyName(name, out _);
+            isAvailable ??= name =>
+            {
+                lock (_gate)
+                {
+                    return Resolver.TryGetFamilyName(name, out _);
+                }
+            };
 
             var isAndroid = OperatingSystem.IsAndroid();
             // Android is Linux-kernel-based and may also report as Linux; it has its own table and no fontconfig.
@@ -287,6 +358,25 @@ namespace PeachDrawing.Text
             };
         }
 
+        /// <summary>What makes two additions the same: the font's bytes and everything the caller said about it.</summary>
+        private static string IdentityOf(byte[] bytes, AddOptions? options)
+        {
+            var sb = new System.Text.StringBuilder();
+            sb.Append(Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(bytes)));
+            if (options is not null)
+            {
+                sb.Append('|').Append(options.FamilyName).Append('|').Append(options.Weight).Append('|').Append(options.IsItalic).Append('|').Append(options.Width)
+                  .Append('|').Append(options.WeightRange).Append('|').Append(options.WidthRange).Append('|').Append(options.ObliqueRange);
+                if (options.UnicodeRanges is { } ranges)
+                {
+                    foreach (var range in ranges)
+                        sb.Append('|').Append(range);
+                }
+            }
+
+            return sb.ToString();
+        }
+
         /// <summary>What an <see cref="AddOptions"/> declares about a face; a range takes the place of the single value it extends.</summary>
         private static FontResolver.DeclaredFace DeclaredFaceOf(AddOptions? options)
         {
@@ -321,7 +411,12 @@ namespace PeachDrawing.Text
             options.Codepoint = query.MustCover;
             options.ObliqueAngle = query.ObliqueAngle;
 
-            var face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
+            LoadedTypeface face;
+            lock (_gate)
+            {
+                face = LoadedTypeface.GetOrCreateFrom(familyName, options, Resolver);
+            }
+
             var typeface = face.Public;
             var synthesis = face.StyleSimulations;
             if (typeface.IsVariable)

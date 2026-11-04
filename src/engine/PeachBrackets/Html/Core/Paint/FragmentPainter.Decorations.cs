@@ -147,7 +147,7 @@ namespace PeachBrackets.Html.Paint
             // page box - PageClipOverride is set per-slot by PdfGenerator.AddPdfPages (the same override
             // FragmentPainter's own PushClip and PdfGenerator.HandleLinks already prefer over PageBoxRect)
             // and reflects a `@page :first`/named/margin-overridden page's own area; issue #146.
-            var viewportRect = box.HtmlContainer!.PageClipOverride ?? box.HtmlContainer!.PageBoxRect;
+            var viewportRect = box.HtmlContainer!.ContinuousViewportRect ?? box.HtmlContainer!.PageClipOverride ?? box.HtmlContainer!.PageBoxRect;
 
             // A `text` clip layer's shape (issue #1117) is the union of every laid-out glyph outline
             // reachable from `fragment`'s subtree - built lazily, at most once per call, and shared by

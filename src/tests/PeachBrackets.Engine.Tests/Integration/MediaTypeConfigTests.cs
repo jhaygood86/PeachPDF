@@ -59,7 +59,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var renderContext = new HtmlRenderContext();
             var container = new HtmlContainerInt(renderContext)
             {
-                Media = media,
+                MediaType = media == "screen" ? PeachBrackets.MediaType.Screen : PeachBrackets.MediaType.Print,
                 IgnoreAuthorStyleSheets = ignoreAuthorStyles,
             };
             await container.SetHtml(html, null);

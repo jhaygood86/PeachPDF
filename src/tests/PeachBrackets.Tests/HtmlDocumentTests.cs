@@ -104,7 +104,7 @@ public class HtmlDocumentTests
         using var printCanvas = await TestDocument.PaintAsync(printContext, print);
         Assert.Equal((255, 0, 0, 255), TestDocument.Pixel(printCanvas, 30, 30));
 
-        var (screenContext, screen) = await TestDocument.LoadAsync(TestDocument.Wrap("<div></div>", head), new HtmlDocumentOptions { Media = "screen" });
+        var (screenContext, screen) = await TestDocument.LoadAsync(TestDocument.Wrap("<div></div>", head), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         using var screenCanvas = await TestDocument.PaintAsync(screenContext, screen);
         Assert.Equal((0, 255, 0, 255), TestDocument.Pixel(screenCanvas, 30, 30));
     }
@@ -238,10 +238,10 @@ public class HtmlDocumentTests
         Assert.Throws<InvalidOperationException>(() => document.Pages);
         Assert.Throws<InvalidOperationException>(() => document.Annotations);
         using var canvas = context.CreateCanvas(10, 10);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => document.PaintPageAsync(0, canvas));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => document.PaintPageAsync(0, canvas).AsTask());
 
         await document.LayoutAsync(canvas);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => document.LayoutAsync(canvas));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => document.LayoutAsync(canvas).AsTask());
     }
 
     [Fact]
@@ -250,8 +250,8 @@ public class HtmlDocumentTests
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<p>x</p>"));
         using var canvas = context.CreateCanvas(10, 10);
 
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => document.PaintPageAsync(-1, canvas));
-        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => document.PaintPageAsync(1, canvas));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => document.PaintPageAsync(-1, canvas).AsTask());
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => document.PaintPageAsync(1, canvas).AsTask());
     }
 
     [Fact]
@@ -270,8 +270,8 @@ public class HtmlDocumentTests
     {
         var context = await TestDocument.NewContextAsync();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => HtmlDocument.LoadAsync(null!, context));
-        await Assert.ThrowsAsync<ArgumentNullException>(() => HtmlDocument.LoadAsync("<p>x</p>", null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => HtmlDocument.LoadAsync(null!, context).AsTask());
+        await Assert.ThrowsAsync<ArgumentNullException>(() => HtmlDocument.LoadAsync("<p>x</p>", null!).AsTask());
         Assert.Throws<ArgumentOutOfRangeException>(() => new HtmlDocumentOptions { AnimationProgress = 1.5 });
         Assert.Throws<ArgumentOutOfRangeException>(() => new HtmlDocumentOptions { AnimationProgress = double.NaN });
         Assert.Null(new HtmlDocumentOptions().AnimationProgress);

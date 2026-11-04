@@ -252,7 +252,7 @@ namespace PeachDrawing.Core
         /// <param name="data">the font file</param>
         /// <param name="descriptors">the weight, width and style the font is declared for</param>
         /// <returns><see langword="true"/> when the font was added</returns>
-        public Task<bool> AddFontFromBytes(string fontFamilyName, ReadOnlyMemory<byte> data, FontFaceDescriptors descriptors = default) =>
+        public ValueTask<bool> AddFontFromBytes(string fontFamilyName, ReadOnlyMemory<byte> data, FontFaceDescriptors descriptors = default) =>
             AddFontFromStream(fontFamilyName, new MemoryStream(data.ToArray()), null, descriptors);
 
         /// <param name="fontFamilyName">the font family name declared by the <c>@font-face</c> rule</param>
@@ -268,7 +268,7 @@ namespace PeachDrawing.Core
         /// </param>
         /// <param name="descriptors">the <c>@font-face</c> rule's own <c>font-weight</c>, <c>font-style</c> and <c>font-stretch</c> descriptors, resolved to the ranges the face covers - authoritative over what the file itself declares; an unset member means the file's own value (a variable font then covers the range of its axes)</param>
         /// <param name="unicodeRanges">the <c>@font-face</c> rule's own <c>unicode-range</c> descriptor, parsed to codepoint ranges - restricts which characters this face is used for; null means no restriction</param>
-        public async Task<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        public async ValueTask<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             RUri resolvedUri;
 
@@ -307,7 +307,7 @@ namespace PeachDrawing.Core
         /// <param name="descriptors">the <c>@font-face</c> rule's own <c>font-weight</c>/<c>font-style</c>/<c>font-stretch</c> descriptors, resolved to the ranges the face covers</param>
         /// <param name="unicodeRanges">the <c>@font-face</c> rule's own <c>unicode-range</c> descriptor; null means no restriction</param>
         /// <returns>true if the face was found and registered, false if no locally-installed face by that name exists</returns>
-        public async Task<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        public async ValueTask<bool> AddLocalFontFamily(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
             return await AddLocalFont(fontFamilyName, localFontFaceName, descriptors, unicodeRanges);
         }
@@ -424,7 +424,7 @@ namespace PeachDrawing.Core
         /// </summary>
         /// <param name="uri">Uri to load</param>
         /// <returns>The stream of the contents</returns>
-        public virtual Task<RNetworkResponse?> GetResourceStream(RUri uri) => Task.FromResult<RNetworkResponse?>(null);
+        public virtual ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => default;
 
         #region Private/Protected methods
 
@@ -561,10 +561,10 @@ namespace PeachDrawing.Core
         protected abstract bool FamilyHasExplicitUnicodeRangesInt(string family);
 
         /// <returns>true if the format was recognized and a load was actually attempted, false if the declared format is one this adapter can't handle (so a caller trying a multi-source <c>@font-face src</c> fallback list knows to move on to the next candidate)</returns>
-        protected abstract Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null);
+        protected abstract ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null);
 
         /// <returns>true if a locally-installed face by <paramref name="localFontFaceName"/> was found and registered, false otherwise</returns>
-        protected abstract Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null);
+        protected abstract ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null);
 
         #endregion
     }

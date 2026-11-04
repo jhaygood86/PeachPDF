@@ -24,7 +24,7 @@ namespace PeachBrackets.Css
     /// </summary>
     internal static class CssStreamLoader
     {
-        public static async Task<ReadOnlyMemory<char>> LoadAsync(Stream stream, Encoding? encoding,
+        public static async ValueTask<ReadOnlyMemory<char>> LoadAsync(Stream stream, Encoding? encoding,
             CancellationToken cancellationToken)
         {
             var reader = PipeReader.Create(stream);
@@ -39,7 +39,7 @@ namespace PeachBrackets.Css
             }
         }
 
-        private static async Task<ReadOnlyMemory<char>> LoadCoreAsync(PipeReader reader, Encoding? explicitEncoding,
+        private static async ValueTask<ReadOnlyMemory<char>> LoadCoreAsync(PipeReader reader, Encoding? explicitEncoding,
             CancellationToken cancellationToken)
         {
             var sb = Pool.NewStringBuilder();

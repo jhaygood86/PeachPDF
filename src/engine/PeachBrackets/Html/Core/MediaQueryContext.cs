@@ -55,7 +55,8 @@ namespace PeachBrackets.Html
         {
             var size = container.PageSize;
             double? width = size.Width > 0 ? size.Width : null;
-            double? height = size.Height > 0 ? size.Height : null;
+            // A screen document's height is that of its viewport, which the host may not know; the band it is laid out against is not a height.
+            double? height = container.Continuous ? container.ViewportHeight : size.Height > 0 ? size.Height : null;
             var pixelsPerPoint = container.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
             return new MediaQueryContext(

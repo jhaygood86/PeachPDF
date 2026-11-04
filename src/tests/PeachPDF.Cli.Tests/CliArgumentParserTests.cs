@@ -160,7 +160,7 @@ public class CliArgumentParserTests
         var options = ArgumentParser.Parse([
             "--pdf-title", "T", "--pdf-author", "A", "--pdf-subject", "S",
             "--pdf-keywords", "K", "--pdf-creator", "C", "--pdf-lang", "en-US",
-            "--tagged-pdf", "--snap-box-decorations-to-css-pixels", "--snap-border-widths-to-css-pixels", "--interactive-pdf-forms", "--no-compress", "--media", "screen", "--no-author-style",
+            "--tagged-pdf", "--snap-box-decorations-to-css-pixels", "--snap-border-widths-to-css-pixels", "--interactive-pdf-forms", "--no-compress", "--no-author-style",
             "doc.html",
         ]);
 
@@ -176,7 +176,6 @@ public class CliArgumentParserTests
         Assert.True(options.SnapBorderWidthsToCssPixels);
         Assert.True(options.InteractivePdfForms);
         Assert.True(options.NoCompress);
-        Assert.Equal("screen", options.Media);
         Assert.True(options.NoAuthorStyle);
     }
 

@@ -36,10 +36,8 @@ namespace PeachPDF.Tests.TestSupport
         // need a replaced element (img/svg) to actually resolve an Image can use one; every other
         // scheme still resolves to null, preserving the existing "no real network access" behavior
         // other tests rely on.
-        public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
-            Task.FromResult(uri.Scheme == "data"
-                ? new RNetworkResponse(new MemoryStream([0]), null)
-                : null);
+        public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) =>
+            new ValueTask<RNetworkResponse?>(uri.Scheme == "data" ? new RNetworkResponse(new MemoryStream([0]), null) : null);
 
         protected override PaintColor GetColorInt(string colorName) => PaintColor.Black;
 
@@ -61,9 +59,9 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
-        protected override Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new ValueTask<bool>(false);
 
-        protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => Task.FromResult(false);
+        protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new ValueTask<bool>(false);
     }
 
     /// <summary>A fixed-size image, independent of any real pixel decoding - see ImageFromStreamInt's

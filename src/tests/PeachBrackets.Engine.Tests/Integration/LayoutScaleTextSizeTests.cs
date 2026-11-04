@@ -14,7 +14,7 @@ public class LayoutScaleTextSizeTests
     private static async Task<(double TextWidth, double BoxWidth)> MeasureAsync(string body, double pixelsPerPoint)
     {
         var context = new PdfRenderContext { PixelsPerPoint = pixelsPerPoint };
-        var options = new HtmlDocumentOptions { PageWidthPoints = 480, PageHeightPoints = 100000, Media = "screen", RecordTextRuns = true };
+        var options = new HtmlDocumentOptions { PageWidthPoints = 480, PageHeightPoints = 100000, MediaType = MediaType.Screen, RecordTextRuns = true };
         options.SetMargins(0);
         using var document = await HtmlDocument.LoadAsync($"<!doctype html><body style=\"margin:0\">{body}</body>", context, options);
         await document.LayoutAsync(PdfCanvas.CreateMeasuring(context, new PeachDrawing.Core.Size(1, 1)));

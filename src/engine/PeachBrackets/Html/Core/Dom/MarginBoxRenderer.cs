@@ -29,7 +29,7 @@ namespace PeachBrackets.Html.Dom
         /// <c>font-size</c>/<c>font-weight</c>/<c>font-style</c> — per CSS Paged Media, margin boxes
         /// inherit these from their page context.
         /// </summary>
-        public static async Task Render(
+        public static async ValueTask Render(
             Canvas canvas,
             Size pageSize,
             double marginLeft,
@@ -396,7 +396,7 @@ namespace PeachBrackets.Html.Dom
         /// Loaded images are cached by their raw declaration text across the whole document render,
         /// since the same margin-box rule (and so the same image) repeats identically on every page.
         /// </summary>
-        internal static async Task<CssImage?> ResolveContentImage(
+        internal static async ValueTask<CssImage?> ResolveContentImage(
             string contentValue,
             RenderContext renderContext,
             HtmlContainerInt htmlContainer,
@@ -447,7 +447,7 @@ namespace PeachBrackets.Html.Dom
         /// box's own background uses (see that class's own remarks). Border paints through
         /// <see cref="PaintBorder"/>, which mitres the four edges at the corners like an ordinary box's.
         /// </summary>
-        internal static async Task PaintBackgroundAndBorder(
+        internal static async ValueTask PaintBackgroundAndBorder(
             Canvas canvas, Rect outerRect, Size pageSize, MarginStyleRule rule, StyleDeclaration? pageStyle,
             double remPt, double containingBlockWidthPt, double containingBlockHeightPt,
             RenderContext renderContext, HtmlContainerInt htmlContainer,

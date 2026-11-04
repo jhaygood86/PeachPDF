@@ -75,7 +75,8 @@ Pen pen = context.GetPen(PaintColor.Black);
   whose stops mix `device-cmyk()` colors with RGB-authored ones throws `NotSupportedException`: a PDF
   shading's color space is one value for the whole object, so there is no single component count that fits
   a mixed-space stop list, and there is no defined RGB↔CMYK conversion in this project to paper over it.
-- **Resource loading.** `BaseUri` and `GetResourceStream` are both `virtual` with an inert `null` default:
+- **Resource loading.** `BaseUri` and `GetResourceStream` are both `virtual` with an inert `null` default (`GetResourceStream` returns a `ValueTask`, so
+  an implementation that answers from memory completes without suspending, which is what a document laid out with `HtmlDocumentOptions.SynchronousOnly` requires):
   resource loading is entirely optional for a `RenderContext` that doesn't need it (one driving a
   standalone drawing surface with no document/network concept at all). A concrete implementation overrides
   both to resolve `@font-face` URLs against a real document.

@@ -84,7 +84,7 @@ namespace PeachBrackets.Html.Dom
             {
                 await new CssLayoutEngineGrid(gridBox).Layout(g, resume);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (gridBox.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Failed grid layout", ex);

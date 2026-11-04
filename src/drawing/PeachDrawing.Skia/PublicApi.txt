@@ -132,9 +132,10 @@ PeachDrawing.Skia.SkiaLinkOptions : sealed class
   property ISet<String> AllowedSchemes { get; init; }
   property ISkiaLinkLauncher Launcher { get; init; }
 PeachDrawing.Skia.SkiaRenderContext : class
-  ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = PeachImage, ISkiaTextShaper textShaper = null)
-  method Task AddFont(Stream stream, String fontFamilyName)
-  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = PeachImage, ISkiaTextShaper textShaper = null, FontSet fontSet = null)
+  method ValueTask AddFont(Stream stream, String fontFamilyName)
+  method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method Void SyncFonts()
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
   property Boolean FallbackToPeachImage { get; set; }

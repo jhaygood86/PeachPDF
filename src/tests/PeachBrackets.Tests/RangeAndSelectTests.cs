@@ -6,7 +6,7 @@ public class RangeAndSelectTests
 
     private static async Task<HtmlDocument> LoadAsync(string body)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Head), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
         return document;
     }
 

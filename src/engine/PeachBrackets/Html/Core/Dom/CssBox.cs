@@ -683,6 +683,8 @@ namespace PeachBrackets.Html.Dom
         /// sibling, and measured the two as competing lines (issue #1033).
         /// </para>
         /// </summary>
+        /// <summary>The anonymous block around everything in a <c>details</c> element but its first <c>summary</c>: the box the HTML Standard calls the details content slot (<c>::details-content</c>), whose contents are not rendered while the element is closed.</summary>
+        internal bool IsDetailsContent { get => _rare is null ? default(bool) : _rare.IsDetailsContent; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsDetailsContent = value; } }
         internal bool IsInlineRunWrapper { get => _rare is null ? default(bool) : _rare.IsInlineRunWrapper; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsInlineRunWrapper = value; } }
         /// <summary>A table cell that a <see cref="CssSpacingBox"/> stands in for in each later row it spans, so the fragment walk reaches it more than once.</summary>
         internal bool IsRowSpanningCell { get => _rare is null ? default(bool) : _rare.IsRowSpanningCell; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.IsRowSpanningCell = value; } }
@@ -1304,7 +1306,9 @@ namespace PeachBrackets.Html.Dom
             // Same double.MaxValue sentinel guard HasRealPageGrid/UseVariableInlineMeasure already use for an
             // unpaginated/measurement pass with no real page geometry yet.
             double? width = size.Width is > 0 and < double.MaxValue - 1 ? size.Width : null;
-            double? height = size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
+            double? height = container.Continuous
+                ? container.ViewportHeight
+                : size.Height is > 0 and < double.MaxValue - 1 ? size.Height : null;
 
             var rootIsVertical = container.RootWritingMode.IsVertical();
             double? inlineSizePt = rootIsVertical ? height : width;
@@ -3817,7 +3821,7 @@ namespace PeachBrackets.Html.Dom
                     await child.PerformLayoutImp(g, this, framePlacesChild);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (child.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
@@ -3874,7 +3878,7 @@ namespace PeachBrackets.Html.Dom
             {
                 await child.PerformLayoutImp(g, this, framePlacesChild);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 throw container.RenderError(HtmlRenderErrorType.Layout, "Exception in box layout", ex);
             }
@@ -4551,7 +4555,7 @@ namespace PeachBrackets.Html.Dom
             // merely equals the active one, so a same-named element relocated by a layout engine still
             // has a registration entry the tail can re-sync; that registration is redundant for name
             // resolution but harmless (it resolves to the same name).
-            var pageNameChanged = HtmlContainer is not null && UsedPageName != HtmlContainer.ActivePageName;
+            var pageNameChanged = HtmlContainer is { Continuous: false } && UsedPageName != HtmlContainer.ActivePageName;
             _shouldRegisterPage = HtmlContainer is not null && (hasExplicitPageName || pageNameChanged);
 
             // css-break-3 §3.1 combination and propagation. A break-before on a container's first in-flow
@@ -8018,6 +8022,26 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            // A fixed box's containing block is the viewport (the first page's content area in paged media), so `right`/`bottom` measure from that area's far
+            // edges the way an absolute box's measure from its ancestor's padding box (CSS Positioned Layout 3 section 3.1.5). Placement only read
+            // `left`/`top`, so a badge pinned to the bottom-right corner sat in the top-left one.
+            if (Position.Value is PositionMode.Fixed && HtmlContainer is { } fixedContainer)
+            {
+                var area = fixedContainer.PageGeometry.GetPage(0);
+                if (Left.Value.IsKeyword && Right.Value.IsValue)
+                {
+                    var right = CssValueParser.ParseLength(Right.Value.Value!.Value, area.BandWidth, this);
+                    OffsetLeft((fixedContainer.MarginLeft + area.BandWidth - right - ActualMarginRight) - ActualRight);
+                }
+
+                // A viewport of unknown height (a continuous document the host did not size) has no bottom edge to measure from.
+                if (Top.Value.IsKeyword && Bottom.Value.IsValue && fixedContainer.FirstPageBandHeight is { } areaHeight)
+                {
+                    var bottom = CssValueParser.ParseLength(Bottom.Value.Value!.Value, areaHeight, this);
+                    OffsetTop((fixedContainer.MarginTop + areaHeight - bottom - ActualMarginBottom) - ActualBottom);
+                }
+            }
+
             // CSS 2.1 §10.6.4's auto block-axis margins. Deliberately outside the `Absolute` branch above:
             // a fixed box is laid out by the same absolute-positioning model (§9.6.1) and obeys the same
             // equation, it just resolves against the page area instead of an ancestor's padding box.
@@ -8119,6 +8143,18 @@ namespace PeachBrackets.Html.Dom
                 }
             }
         }
+
+        /// <summary>The <c>top</c> inset as a length against <paramref name="hundredPercent"/>, or null when it is <c>auto</c>.</summary>
+        internal double? TopInset(double hundredPercent) => Top.Value.IsValue ? CssValueParser.ParseLength(Top.Value.Value!.Value, hundredPercent, this) : null;
+
+        /// <summary>The <c>right</c> inset as a length against <paramref name="hundredPercent"/>, or null when it is <c>auto</c>.</summary>
+        internal double? RightInset(double hundredPercent) => Right.Value.IsValue ? CssValueParser.ParseLength(Right.Value.Value!.Value, hundredPercent, this) : null;
+
+        /// <summary>The <c>bottom</c> inset as a length against <paramref name="hundredPercent"/>, or null when it is <c>auto</c>.</summary>
+        internal double? BottomInset(double hundredPercent) => Bottom.Value.IsValue ? CssValueParser.ParseLength(Bottom.Value.Value!.Value, hundredPercent, this) : null;
+
+        /// <summary>The <c>left</c> inset as a length against <paramref name="hundredPercent"/>, or null when it is <c>auto</c>.</summary>
+        internal double? LeftInset(double hundredPercent) => Left.Value.IsValue ? CssValueParser.ParseLength(Left.Value.Value!.Value, hundredPercent, this) : null;
 
         /// <summary>
         /// Resolves the used block-start auto margin for an absolute or fixed box
@@ -9200,6 +9236,20 @@ namespace PeachBrackets.Html.Dom
                     if (item.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
                     item.GetMinMaxWidth(g, out var itemMin, out var itemMax);
+                    // GetMinMaxWidth leaves the box's own declared width out (it measures a box's content), but a flex item's width IS its flex base size,
+                    // so a row counts it: an empty item such as a CSS chevron (`width: 7px`) is 7px of the row, not 0. Left out, the row measured
+                    // narrower than its items need and shrank the chevron to its border.
+                    if (CssValueParser.IsValidLength(item.Width) && !item.Width.EndsWith('%'))
+                    {
+                        var declared = CssValueParser.ParseLength(item.Width, 0, item) + item.ActualBoxSizeIncludedWidth;
+                        if (CssValueParser.IsValidLength(item.MaxWidth))
+                            declared = Math.Min(declared, CssValueParser.ParseLength(item.MaxWidth, 0, item) + item.ActualBoxSizeIncludedWidth);
+                        if (item.MinWidth != "0" && CssValueParser.IsValidLength(item.MinWidth))
+                            declared = Math.Max(declared, CssValueParser.ParseLength(item.MinWidth, 0, item) + item.ActualBoxSizeIncludedWidth);
+                        itemMin = Math.Max(itemMin, declared);
+                        itemMax = Math.Max(itemMax, declared);
+                    }
+
                     var itemMargins = item.ActualMarginLeft + item.ActualMarginRight;
                     rowMax += itemMax + itemMargins;
                     // A wrapping row can put every item on its own line, so its min-content is the

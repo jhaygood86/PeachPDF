@@ -30,7 +30,7 @@ public class UserPreferencesTests
 
     private static async Task<IReadOnlyDictionary<string, CursorShape>> CursorsAsync(UserPreferences? preferences)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Preferences = preferences, Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Preferences = preferences, MediaType = MediaType.Screen });
         var result = new Dictionary<string, CursorShape>();
         foreach (var id in new[] { "motion", "contrast", "forced", "inverted", "transparency", "data", "boolean" })
         {
@@ -94,7 +94,7 @@ public class UserPreferencesTests
 
     private static async Task<(double Height, double NextTop)> MeasureAsync(TextSpacingOverrides? spacing)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(SpacingBody, SpacingStyles), new HtmlDocumentOptions { TextSpacing = spacing, Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(SpacingBody, SpacingStyles), new HtmlDocumentOptions { TextSpacing = spacing, MediaType = MediaType.Screen });
         var p = document.GetElementBounds("p")!.Value;
         var q = document.GetElementBounds("q")!.Value;
         return (p.Height, q.Y);

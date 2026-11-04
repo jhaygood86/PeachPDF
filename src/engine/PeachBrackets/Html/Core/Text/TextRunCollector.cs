@@ -39,7 +39,7 @@ namespace PeachBrackets.Html.TextGeometry
 
                 var groups = new List<LineGroup>();
                 var groupOf = new Dictionary<object, LineGroup>(ReferenceEqualityComparer.Instance);
-                Walk(fragmentainers[pageIndex].Root, groups, groupOf);
+                Walk(container, fragmentainers[pageIndex].Root, groups, groupOf);
 
                 foreach (var group in groups)
                     BuildRuns(container, group, pageIndex, frame, blockIds, linkCache, ref lineIds, runs);
@@ -64,8 +64,11 @@ namespace PeachBrackets.Html.TextGeometry
             public List<CssRect> Order { get; } = [];
         }
 
-        private static void Walk(BoxFragment fragment, List<LineGroup> groups, Dictionary<object, LineGroup> groupOf)
+        private static void Walk(HtmlContainerInt container, BoxFragment fragment, List<LineGroup> groups, Dictionary<object, LineGroup> groupOf)
         {
+            // Where the viewport has put a fixed or sticky box, which is where its text is drawn and has to be hit.
+            var (dx, dy) = container.View.DisplacementOf(fragment.Box);
+
             foreach (var textFragment in fragment.Words)
             {
                 var word = textFragment.Word;
@@ -80,12 +83,16 @@ namespace PeachBrackets.Html.TextGeometry
                     groups.Add(group);
                 }
 
-                if (group.Entries.TryAdd(word, (textFragment.Rect, fragment.Box)))
+                var rect = textFragment.Rect;
+                if (dx != 0 || dy != 0)
+                    rect = new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
+
+                if (group.Entries.TryAdd(word, (rect, fragment.Box)))
                     group.Order.Add(word);
             }
 
             foreach (var child in fragment.Children)
-                Walk(child, groups, groupOf);
+                Walk(container, child, groups, groupOf);
         }
 
         /// <summary>Whether <paramref name="word"/> is text a reader of the page sees: not a break, an image, a leader, or text that is not drawn.</summary>

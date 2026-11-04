@@ -19,7 +19,7 @@ public class InteractionStateTests
     private static async Task<(RasterRenderContext Context, HtmlDocument Document, Canvas Measuring)> LoadAsync(
         string body, string head, HtmlDocumentOptions? options = null)
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), options ?? new HtmlDocumentOptions { Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), options ?? new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return (context, document, context.CreateCanvas(1, 1));
     }
 
@@ -164,7 +164,7 @@ public class InteractionStateTests
         var (_, document, measuring) = await LoadAsync(
             "<p id=p>Select these words</p><div id=a style='height:40px'></div>",
             "<style>#a:hover { background: rgb(255,0,0) }</style>",
-            new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true, Media = "screen" });
+            new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true, MediaType = MediaType.Screen });
         var run = document.TextRuns[0];
         var range = new TextRange(new TextPosition(0, 0), new TextPosition(0, 6));
         document.SetSelectedRanges([range]);
@@ -182,7 +182,7 @@ public class InteractionStateTests
         var (_, document, measuring) = await LoadAsync(
             "<p id=p>Hello</p><div id=a style='height:40px'></div>",
             "<style>#a:hover { background: rgb(255,0,0) }</style>",
-            new HtmlDocumentOptions { RecordTextRuns = true, EnableIncrementalUpdates = true, Media = "screen" });
+            new HtmlDocumentOptions { RecordTextRuns = true, EnableIncrementalUpdates = true, MediaType = MediaType.Screen });
         Assert.True((await document.InsertTextAsync(new TextPosition(0, 5), "!", measuring)).Applied);
         var (x, y) = Center(document, "a");
 
@@ -198,7 +198,7 @@ public class InteractionStateTests
         var (context, document, measuring) = await LoadAsync(
             "<p id=p style='font-size:30px'>Select these words</p><div id=a style='height:40px'></div>",
             "<style>#a:hover { background: rgb(255,0,0) }</style>",
-            new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true, Media = "screen" });
+            new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true, MediaType = MediaType.Screen });
         var run = document.TextRuns[0];
         Assert.True(document.Selection.SelectWordAt(0, run.Bounds.X + 5, run.Bounds.Y + (run.Bounds.Height / 2)));
         var selected = document.Selection.GetText();

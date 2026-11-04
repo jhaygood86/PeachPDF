@@ -7,7 +7,7 @@ public class AccessibilityFocusTests
 {
     private static async Task<(RasterRenderContext Context, HtmlDocument Document, PeachDrawing.Core.Canvas Measuring)> LoadAsync(string body, string head = "")
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), new HtmlDocumentOptions { Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return (context, document, context.CreateCanvas(1, 1));
     }
 

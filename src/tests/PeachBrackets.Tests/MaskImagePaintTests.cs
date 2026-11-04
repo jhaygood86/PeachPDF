@@ -10,7 +10,7 @@ public class MaskImagePaintTests
     private static async Task<RasterCanvas> PaintAsync(string style)
     {
         var (context, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap($"<div style='{style}'></div>", Styles), new HtmlDocumentOptions { Media = "screen" });
+            TestDocument.Wrap($"<div style='{style}'></div>", Styles), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return await TestDocument.PaintAsync(context, document);
     }
 

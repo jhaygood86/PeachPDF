@@ -4,15 +4,22 @@ using PeachBrackets.WinUI;
 
 namespace PeachBrackets.WinUI.Example;
 
-// A window with an HtmlView. `--smoke <file>` loads the page, checks what the view and the document report, writes the result to <file> and exits,
-// which is how the control is exercised without anyone looking at it.
+// The demo: every showcase in an HtmlView with a panel of the knobs a host has. `--smoke <file>` loads one built-in page and checks what the view and
+// the document report; `--smoke-all <file>` loads every showcase and checks the ones that have something to prove. Both write the result to <file> and
+// exit, which is how the control is exercised without anyone looking at it.
 public static class Program
 {
     [STAThread]
     public static void Main(string[] args)
     {
         WinRT.ComWrappersSupport.InitializeComWrappers();
-        Application.Start(_ => new ExampleApp(args));
+        // What a generated Main does: without it an await in the UI thread's code resumes on a pool thread, and a page that needs the network cannot finish.
+        Application.Start(callback =>
+        {
+            System.Threading.SynchronizationContext.SetSynchronizationContext(new Microsoft.UI.Dispatching.DispatcherQueueSynchronizationContext(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread()));
+            _ = callback;
+            new ExampleApp(args);
+        });
     }
 }
 
@@ -41,16 +48,45 @@ public sealed class ExampleApp : Application
     private readonly string[] _args;
     private Window? _window;
 
-    public ExampleApp(string[] args) => _args = args;
+    public ExampleApp(string[] args)
+    {
+        _args = args;
+
+        // Said where it can be read: an exception in a XAML handler otherwise ends the process with a stowed exception and no message.
+        UnhandledException += (_, e) => System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "demo-error.txt"), e.Exception + Environment.NewLine + e.Message);
+    }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        var view = new HtmlView { Html = Page };
-        _window = new Window { Title = "PeachBrackets.WinUI", Content = view };
-        _window.Activate();
+        var smokeAll = Array.IndexOf(_args, "--smoke-all");
+        if (smokeAll >= 0 && smokeAll + 1 < _args.Length)
+        {
+            _window = new Window { Title = "PeachBrackets.WinUI smoke" };
+            _window.Activate();
+            Smoke.RunAll(_window, _args[smokeAll + 1], this);
+            return;
+        }
 
         var smoke = Array.IndexOf(_args, "--smoke");
         if (smoke >= 0 && smoke + 1 < _args.Length)
+        {
+            var view = new HtmlView { Html = Page };
+            _window = new Window { Title = "PeachBrackets.WinUI", Content = view };
+            _window.Activate();
             Smoke.Run(view, _args[smoke + 1], this);
+            return;
+        }
+
+        // A fault while the window is made is written beside the program: a XAML failure otherwise ends the process with a stowed exception and no message.
+        try
+        {
+            _window = new DemoWindow();
+            _window.Activate();
+        }
+        catch (Exception e)
+        {
+            System.IO.File.WriteAllText(System.IO.Path.Combine(AppContext.BaseDirectory, "demo-error.txt"), e.ToString());
+            throw;
+        }
     }
 }

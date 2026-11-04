@@ -10,18 +10,45 @@ PeachBrackets.WinUI.HtmlLoadFailedEventArgs : sealed class
   property Exception Exception { get; }
 PeachBrackets.WinUI.HtmlView : sealed class
   ctor()
+  field static DependencyProperty AllowNetworkAccessProperty
+  field static DependencyProperty ContentHeightProperty
+  field static DependencyProperty DocumentBaseUriProperty
+  field static DependencyProperty DocumentMarginProperty
   field static DependencyProperty HtmlProperty
+  field static DependencyProperty IsLayoutSynchronousProperty
+  field static DependencyProperty IsZoomEnabledProperty
+  field static DependencyProperty ScrollModeProperty
+  field static DependencyProperty SelectionColorProperty
   field static DependencyProperty SourceProperty
+  field static DependencyProperty UserStyleSheetProperty
   method Boolean ScrollToElement(String elementId)
   method Void ApplyUpdate(UpdateResult result)
   method Void CopySelection()
   method Void SelectAll()
   property AccessibilityNode FocusedNode { get; }
+  property Boolean AllowNetworkAccess { get; set; }
+  property Boolean IsLayoutSynchronous { get; set; }
+  property Boolean IsZoomEnabled { get; set; }
   property Color PageBackground { get; set; }
+  property Color SelectionColor { get; set; }
+  property Double ContentHeight { get; }
+  property Double DocumentMargin { get; set; }
+  property FontSet FontSet { get; set; }
   property HtmlDocument Document { get; }
+  property HtmlViewScrollMode ScrollMode { get; set; }
   property InputCapabilities Input { get; set; }
   property String Html { get; set; }
   property String SelectedText { get; }
+  property String UserStyleSheet { get; set; }
+  property Uri DocumentBaseUri { get; set; }
   property Uri Source { get; set; }
   property Win2dTextRendering TextRendering { get; set; }
 PeachBrackets.WinUI.HtmlViewAutomationPeer : sealed class
+PeachBrackets.WinUI.HtmlViewFonts : static class
+  method static TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
+  method static TypefaceFamily AddFile(String path, AddOptions options = null)
+  method static TypefaceFamily AddStream(Stream stream, AddOptions options = null)
+  property static FontSet Shared { get; }
+PeachBrackets.WinUI.HtmlViewScrollMode : enum Int32
+  Auto = 0
+  Disabled = 1

@@ -380,7 +380,7 @@ namespace PeachBrackets.Svg
 
             try
             {
-                var response = await container.RenderContext.GetResourceStream(uri);
+                var response = await AsyncGuard.Require(container.RenderContext.GetResourceStream(uri), container.SynchronousOnly, "load the SVG image", uri.AbsoluteUri);
                 if (response?.ResourceStream is not { } stream)
                     return null;
 
@@ -403,7 +403,7 @@ namespace PeachBrackets.Svg
                 var nested = isSvg ? await PrefetchNestedSvgAsync(bytes, container, uri, depth) : null;
                 return new SvgImageResource(bytes, isSvg, nested);
             }
-            catch (Exception)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 // A transport failure (DNS/connection/TLS/timeout thrown by a user-supplied network
                 // loader) or a malformed Content-Type header must not abort the whole render: this

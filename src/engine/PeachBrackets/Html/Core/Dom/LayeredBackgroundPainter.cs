@@ -78,7 +78,7 @@ namespace PeachBrackets.Html.Dom
         /// <c>PdfGenerator</c>. Caller-owned and disposed by the caller once the whole document is
         /// painted.
         /// </param>
-        internal static async Task PaintAsync(
+        internal static async ValueTask PaintAsync(
             Canvas g,
             StyleDeclaration? style,
             RenderContext renderContext,

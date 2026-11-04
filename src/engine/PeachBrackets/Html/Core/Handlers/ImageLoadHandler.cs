@@ -122,7 +122,7 @@ namespace PeachBrackets.Html.Handlers
                     ImageLoadComplete();
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 // Runs before the throw, and so does run - the render is about to abort, but this
                 // handler's own completion state is left consistent for anything already awaiting it.
@@ -266,7 +266,7 @@ namespace PeachBrackets.Html.Handlers
                 return;
             }
 
-            var networkResponse = await _htmlContainer.RenderContext.GetResourceStream(source);
+            var networkResponse = await AsyncGuard.Require(_htmlContainer.RenderContext.GetResourceStream(source), _htmlContainer.SynchronousOnly, "load the image", source.AbsoluteUri);
 
             if (networkResponse?.ResourceStream is not null)
             {

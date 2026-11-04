@@ -23,7 +23,7 @@ public class FormStateTests
 
     private static async Task<HtmlDocument> LoadAsync()
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, "<style>@page { margin: 0 } input, select { display: block }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, "<style>@page { margin: 0 } input, select { display: block }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return document;
     }
 

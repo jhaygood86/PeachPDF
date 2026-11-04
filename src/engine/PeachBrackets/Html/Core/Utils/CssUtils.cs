@@ -89,10 +89,35 @@ namespace PeachBrackets.Html.Utils
         /// <param name="value">the value to set</param>
         public static void SetPropertyValue(CssValueParser valueParser, CssBox cssBox, string propName, string value)
         {
+            // Screen media has no pages, so the values that name a page area do not exist there. No browser implements them, and an unknown value
+            // drops the declaration, leaving the box as it would have been without it.
+            if (cssBox.HtmlContainer is { Continuous: true } && IsPagedMediaOnlyValue(propName, value))
+                return;
+
             // Stamp after the set so a logical/physical conflict on one edge can later be settled by which
             // was declared last (CssBox.ResolveLogicalProperties). Cheap for the 99% of properties it ignores.
             if (CssPropertyRegistry.TrySet(valueParser, cssBox, propName, value))
                 cssBox.NoteDeclarationOrder(propName);
+        }
+
+        // float: footnote / top / bottom / top-bottom / snap / inside / outside, and position: running() (css-gcpm-3, css-page-floats-3) only mean
+        // something against a page or a page margin box.
+        private static bool IsPagedMediaOnlyValue(string propName, string value)
+        {
+            if (propName.Equals("float", StringComparison.OrdinalIgnoreCase))
+            {
+                var keyword = value.Trim();
+                return keyword.StartsWith("footnote", StringComparison.OrdinalIgnoreCase)
+                    || keyword.Equals("top", StringComparison.OrdinalIgnoreCase)
+                    || keyword.Equals("bottom", StringComparison.OrdinalIgnoreCase)
+                    || keyword.StartsWith("top-bottom", StringComparison.OrdinalIgnoreCase)
+                    || keyword.StartsWith("snap", StringComparison.OrdinalIgnoreCase)
+                    || keyword.Equals("inside", StringComparison.OrdinalIgnoreCase)
+                    || keyword.Equals("outside", StringComparison.OrdinalIgnoreCase);
+            }
+
+            return propName.Equals("position", StringComparison.OrdinalIgnoreCase)
+                && value.TrimStart().StartsWith("running", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

@@ -34,8 +34,7 @@ namespace PeachBrackets.Android;
 public sealed partial class HtmlView : FrameLayout
 {
     private const double PixelsPerPoint = 96.0 / 72.0;
-    private const double PageGap = 8;
-    private const double ContinuousPageHeightPoints = 14000;
+    private double _loadedViewportDp = -1;
     private const double MinZoom = 0.5;
     private const double MaxZoom = 4;
 
@@ -89,6 +88,12 @@ public sealed partial class HtmlView : FrameLayout
                 _ = ReloadAsync();
         }
     }
+
+    /// <summary>
+    /// Whether the document may load images, style sheets and fonts from <c>http</c> and <c>https</c> addresses. Off by default, so a document cannot make
+    /// the application call out; <c>data:</c> URIs and files are always read. Takes effect on the next load.
+    /// </summary>
+    public bool AllowNetworkAccess { get; set; }
 
     /// <summary>The colour behind the page.</summary>
     public SKColor PageBackground { get; set; } = SKColors.White;
@@ -213,7 +218,7 @@ public sealed partial class HtmlView : FrameLayout
     {
         base.OnAttachedToWindow();
         _attached = true;
-        _context ??= new SkiaRenderContext { PixelsPerPoint = PixelsPerPoint };
+        _context ??= new HtmlViewRenderContext(() => AllowNetworkAccess) { PixelsPerPoint = PixelsPerPoint };
         _ = ReloadAsync();
     }
 
@@ -237,7 +242,8 @@ public sealed partial class HtmlView : FrameLayout
     protected override void OnSizeChanged(int w, int h, int oldw, int oldh)
     {
         base.OnSizeChanged(w, h, oldw, oldh);
-        if (_attached && Math.Abs(w - (_loadedWidth * _density)) > 1)
+        // The view's height is the viewport `vh` resolves against, so it reflows the document as well as the width.
+        if (_attached && (Math.Abs(w - (_loadedWidth * _density)) > 1 || (_loadedViewportDp > 0 && Math.Abs(h - (_loadedViewportDp * _density)) > 1)))
             QueueReflow();
     }
 
@@ -287,6 +293,7 @@ public sealed partial class HtmlView : FrameLayout
             _loadedWidth = widthDp;
             document.Selection.SelectionChanged += (_, _) => _surface.Invalidate();
             UpdateMetrics();
+            UpdateViewport();
             RefreshAccessibility(document);
             ScrollTo(_scrollX, _scrollY);
             _surface.Invalidate();
@@ -300,9 +307,9 @@ public sealed partial class HtmlView : FrameLayout
 
     private HtmlDocumentOptions BuildOptions(double widthDp) => new()
     {
-        Media = "screen",
+        MediaType = MediaType.Screen,
         PageWidthPoints = widthDp / PixelsPerPoint,
-        PageHeightPoints = ContinuousPageHeightPoints,
+        ViewportHeightPoints = PinViewport() is { } viewportDp ? viewportDp / PixelsPerPoint : null,
         MarginTopPoints = 0,
         MarginRightPoints = 0,
         MarginBottomPoints = 0,
@@ -357,24 +364,41 @@ public sealed partial class HtmlView : FrameLayout
 
     private static readonly HashSet<SkiaRenderContext> s_fontsLoadedInto = [];
 
-    // The pages stack one under another with a small gap; the content is as big as all of them.
+    // The height `vh` and a percentage root height resolve against, pinned when a document is loaded so it never follows the content.
+    private double? PinViewport()
+    {
+        _loadedViewportDp = Height > 1 && _density > 0 ? Height / _density : -1;
+        return _loadedViewportDp > 0 ? _loadedViewportDp : null;
+    }
+
+    // A screen document is one surface, so there is a single "page" at the top and no gap around it.
     private void UpdateMetrics()
     {
         var pages = _document?.Pages ?? [];
         _pageTops = new double[pages.Count];
         _pageHeights = new double[pages.Count];
-        var top = PageGap / 2;
+        var top = 0d;
         var width = 0d;
         for (var i = 0; i < pages.Count; i++)
         {
             _pageTops[i] = top;
             _pageHeights[i] = pages[i].HeightPoints * PixelsPerPoint;
-            top += _pageHeights[i] + PageGap;
+            top += _pageHeights[i];
             width = Math.Max(width, pages[i].WidthPoints * PixelsPerPoint);
         }
 
         _contentWidth = width;
         _contentHeight = top;
+    }
+
+    // Tells the document which part of it is showing, so a fixed box stays where it was put in the view and a sticky one follows the top of it.
+    private void UpdateViewport()
+    {
+        if (_document is not { } document || Width <= 0 || Height <= 0)
+            return;
+
+        var perPoint = Scale * PixelsPerPoint;
+        document.SetViewport(new PeachDrawing.Core.Rect(_scrollX / perPoint, _scrollY / perPoint, Width / perPoint, Height / perPoint));
     }
 
     private void ScrollTo(double x, double y)
@@ -386,6 +410,7 @@ public sealed partial class HtmlView : FrameLayout
 
         _scrollX = newX;
         _scrollY = newY;
+        UpdateViewport();
         _surface.Invalidate();
         SendAccessibilityEvent(EventTypes.ViewScrolled);
         ScrollChanged?.Invoke(this, EventArgs.Empty);

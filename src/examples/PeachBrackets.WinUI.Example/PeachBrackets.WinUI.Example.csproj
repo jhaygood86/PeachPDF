@@ -13,10 +13,31 @@
 		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 		<IsPackable>false</IsPackable>
 		<EnableMsixTooling>true</EnableMsixTooling>
+		<ShowcaseExportDir>$(MSBuildProjectDirectory)\obj\showcases\</ShowcaseExportDir>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" />
 		<PackageReference Include="Microsoft.Graphics.Win2D" />
 	</ItemGroup>
+
+	<!--
+	  The documents of the demo, copied beside the program: the screen-only showcases shared with the Android demo, and the showcases of the PDF
+	  harness as HTML only (the harness option html-only), so the demo keeps no copy of them. The harness is run once into obj/showcases, and again
+	  when its Program.cs changes. Set SkipShowcaseExport=true to build without the harness showcases.
+	-->
+	<Target Name="ExportHarnessShowcases" Condition="'$(SkipShowcaseExport)' != 'true'"
+	        Inputs="..\..\harness\PeachPDF.TestHarness\Program.cs" Outputs="$(ShowcaseExportDir)showcases.json">
+		<Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\..\harness\PeachPDF.TestHarness\PeachPDF.TestHarness.csproj&quot; -f net8.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('\'))&quot;" />
+	</Target>
+	<Target Name="CopyDemoDocuments" AfterTargets="Build" DependsOnTargets="ExportHarnessShowcases">
+		<ItemGroup>
+			<DemoScreenFile Include="..\ScreenShowcases\**\*" />
+			<DemoHarnessFile Include="$(ShowcaseExportDir)**\*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(DemoScreenFile)" DestinationFolder="$(OutDir)screen" SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(DemoHarnessFile)" DestinationFolder="$(OutDir)showcases" SkipUnchangedFiles="true" />
+		<!-- A font for the "register a font once" knob. -->
+		<Copy SourceFiles="..\..\..\assets\fonts\SourceSans3-Regular.ttf" DestinationFolder="$(OutDir)fonts" SkipUnchangedFiles="true" />
+	</Target>
 </Project>

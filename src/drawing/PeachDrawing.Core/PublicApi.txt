@@ -797,15 +797,15 @@ PeachDrawing.Core.RenderContext : abstract class
   method PaintColor GetColor(String colorName)
   method Pen GetPen(Brush brush)
   method Pen GetPen(PaintColor color)
-  method Task<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, RUri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
-  method Task<Boolean> AddFontFromBytes(String fontFamilyName, ReadOnlyMemory<Byte> data, FontFaceDescriptors descriptors = null)
-  method Task<Boolean> AddLocalFontFamily(String fontFamilyName, String localFontFaceName, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method ValueTask<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, RUri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method ValueTask<Boolean> AddFontFromBytes(String fontFamilyName, ReadOnlyMemory<Byte> data, FontFaceDescriptors descriptors = null)
+  method ValueTask<Boolean> AddLocalFontFamily(String fontFamilyName, String localFontFaceName, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void AddFontFamily(FontFamily fontFamily)
   method Void AddFontFamilyMapping(String fromFamily, String toFamily)
   method Void ClearFontCache()
   method abstract String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host)
-  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual ValueTask<RNetworkResponse> GetResourceStream(RUri uri)
   property Boolean RasterAntiAliasing { get; set; }
   property Boolean TextStemDarkening { get; set; }
   property Double LayoutUnitsPerPoint { get; }

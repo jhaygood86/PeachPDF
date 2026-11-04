@@ -31,7 +31,8 @@ namespace PeachDrawing.Win2D;
 /// </remarks>
 public class Win2dRenderContext : RenderContext, IDisposable
 {
-    private readonly FontSet _fontSet = new();
+    private readonly FontSet _fontSet;
+    private int _syncedFontVersion = -1;
     private readonly object _gate = new();
     private bool _deviceIsOurs;
     private readonly Win2dTextEngine _textEngine;
@@ -45,13 +46,19 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <param name="device">a device to use and not dispose, or <see langword="null"/> to let the context make (and own) one when it needs it</param>
     /// <param name="textEngine">which engine shapes and draws text</param>
     /// <param name="imageCodec">which decoder turns an encoded image into pixels</param>
-    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage)
-        : this(device, textEngine, imageCodec, false)
+    /// <param name="fontSet">
+    /// the set of fonts the PeachDrawing text engine resolves families from, or <see langword="null"/> for one of this context's own. Give several contexts
+    /// one set and a font added to it is read once, however many documents use it; call <see cref="SyncFonts"/> to make a context see fonts added since it
+    /// was made. Ignored by the DirectWrite engine, which keeps its own faces per context.
+    /// </param>
+    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage, FontSet? fontSet = null)
+        : this(device, textEngine, imageCodec, false, fontSet)
     {
     }
 
-    private Win2dRenderContext(CanvasDevice? device, Win2dTextEngine textEngine, Win2dImageCodec imageCodec, bool softwareDevice)
+    private Win2dRenderContext(CanvasDevice? device, Win2dTextEngine textEngine, Win2dImageCodec imageCodec, bool softwareDevice, FontSet? fontSet = null)
     {
+        _fontSet = fontSet ?? new FontSet();
         _textEngine = textEngine;
         _imageCodec = imageCodec;
         _softwareDevice = softwareDevice;
@@ -61,6 +68,8 @@ public class Win2dRenderContext : RenderContext, IDisposable
         var names = textEngine == Win2dTextEngine.DirectWrite ? DirectWriteFonts.InstalledFamilyNames : FontSet.InstalledFamilyNames;
         foreach (var familyName in names)
             AddFontFamily(new Win2dFontFamily(familyName));
+
+        SyncFonts();
     }
 
     /// <summary>
@@ -71,6 +80,22 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <param name="imageCodec">which decoder turns an encoded image into pixels</param>
     public static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage) =>
         new(null, textEngine, imageCodec, true);
+
+    /// <summary>
+    /// Registers with this context the font families that were added to its <see cref="FontSet"/> since it last looked. A context that was given a
+    /// set shared with others has to be told when one of them added a font; one with a set of its own sees its own additions at once and never needs this.
+    /// </summary>
+    public void SyncFonts()
+    {
+        var version = _fontSet.Version;
+        if (version == _syncedFontVersion)
+            return;
+
+        foreach (var familyName in _fontSet.AddedFamilyNames)
+            AddFontFamily(new Win2dFontFamily(familyName));
+
+        _syncedFontVersion = version;
+    }
 
     /// <summary>Which text engine this context's fonts use.</summary>
     public Win2dTextEngine TextEngine => _textEngine;
@@ -237,17 +262,21 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Adds a font from <paramref name="stream"/> under <paramref name="fontFamilyName"/> (or the family the file names).</summary>
     /// <param name="stream">the font file</param>
     /// <param name="fontFamilyName">the family to register it under, or <see langword="null"/> for the one the file names</param>
-    public async Task AddFont(Stream stream, string? fontFamilyName) => await AddFont(stream, fontFamilyName, default);
+    public async ValueTask AddFont(Stream stream, string? fontFamilyName) => await AddFont(stream, fontFamilyName, default);
 
     /// <summary>Adds a font from <paramref name="stream"/> with the weight, width and style it is declared for.</summary>
     /// <param name="stream">the font file</param>
     /// <param name="fontFamilyName">the family to register it under, or <see langword="null"/> for the one the file names</param>
     /// <param name="descriptors">the weight, width and style the font is declared for</param>
     /// <param name="unicodeRanges">the characters the font is restricted to, or <see langword="null"/> for no restriction</param>
-    public async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    public async ValueTask AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
+        // In memory or on a local disk the copy does not need to wait, which lets a document that must not wait (SynchronousOnly) register the font.
+        if (stream is MemoryStream or FileStream)
+            stream.CopyTo(memoryStream);
+        else
+            await stream.CopyToAsync(memoryStream);
         AddFont(memoryStream.ToArray(), fontFamilyName, descriptors, unicodeRanges);
     }
 
@@ -404,7 +433,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
     protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
     /// <inheritdoc />
-    protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override async ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         // A missing format() hint is valid CSS and must still be attempted; only formats declared as unsupported are skipped.
         if (format is null or "truetype" or "woff" or "woff2" or "opentype")
@@ -417,12 +446,12 @@ public class Win2dRenderContext : RenderContext, IDisposable
     }
 
     /// <inheritdoc />
-    protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         if (!_fontSet.TryGetFontData(localFontFaceName, out var data))
-            return Task.FromResult(false);
+            return new ValueTask<bool>(false);
 
         AddFont(data.ToArray(), fontFamilyName, descriptors, unicodeRanges);
-        return Task.FromResult(true);
+        return new ValueTask<bool>(true);
     }
 }

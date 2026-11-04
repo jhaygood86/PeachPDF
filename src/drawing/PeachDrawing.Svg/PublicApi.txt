@@ -75,8 +75,8 @@ PeachDrawing.Svg.SvgConicGradientMode : enum Int32
   Wedges = 0
 PeachDrawing.Svg.SvgRenderContext : class
   ctor()
-  method Task AddFont(Stream stream, String fontFamilyName)
-  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method ValueTask AddFont(Stream stream, String fontFamilyName)
+  method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }

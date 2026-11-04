@@ -39,10 +39,20 @@ public sealed class HtmlDocumentOptions
     }
 
     /// <summary>
-    /// The media type the style sheets are evaluated for, as <c>@media</c> sees it. <c>print</c> by default, since a paginated document is a
-    /// print medium.
+    /// The medium the document is laid out for: <see cref="PeachBrackets.MediaType.Print"/> (the default) breaks it into pages and applies
+    /// <c>@media print</c>; <see cref="PeachBrackets.MediaType.Screen"/> lays it out as one continuous surface, with no pages, and applies
+    /// <c>@media screen</c>.
     /// </summary>
-    public string Media { get; set; } = "print";
+    public MediaType MediaType { get; set; } = MediaType.Print;
+
+    /// <summary>
+    /// The height of the viewport the document is shown in, in points, or <see langword="null"/> (the default) when it is not known. Only
+    /// <see cref="MediaType.Screen"/> uses it: it is what <c>vh</c> and the other viewport-height units, <c>height: 100%</c> on the root and the
+    /// <c>height</c>/<c>aspect-ratio</c>/<c>orientation</c> media features resolve against, and the least height of the surface, so a short
+    /// document still fills a viewport. The host pins it - a value that follows the content would never settle for <c>100vh</c> content. When
+    /// it is <see langword="null"/>, viewport-height units and a percentage root height behave as <c>auto</c>.
+    /// </summary>
+    public double? ViewportHeightPoints { get; set; }
 
     /// <summary>
     /// The pointing devices the <c>hover</c>, <c>any-hover</c>, <c>pointer</c> and <c>any-pointer</c> media features report. <see langword="null"/>
@@ -159,6 +169,16 @@ public sealed class HtmlDocumentOptions
     /// then <c>::selection</c> rules are ignored as they always were. Needs <see cref="RecordTextRuns"/>.
     /// </summary>
     public bool EnableSelectionStyling { get; set; }
+
+    /// <summary>
+    /// Says that loading and laying out this document needs nothing asynchronous: its images, style sheets and fonts are inline, already registered
+    /// on the render context, or answered without waiting. The document can then be loaded, laid out and painted with the synchronous
+    /// <see cref="HtmlDocument.Load"/>, <see cref="HtmlDocument.Layout"/> and <see cref="HtmlDocument.PaintPage"/>, which a host that cannot
+    /// wait (a control measuring itself during layout) needs. If the document then tries to do something that would really suspend - fetch an image or
+    /// style sheet over the network or from disk, load a web font - it throws <see cref="InvalidOperationException"/> naming the resource instead of
+    /// blocking. Off by default.
+    /// </summary>
+    public bool SynchronousOnly { get; set; }
 
     /// <summary>
     /// Whether <see cref="HtmlDocument.SetStyle"/> can restyle elements of the laid-out document in place, reporting the regions to repaint

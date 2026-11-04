@@ -9,7 +9,7 @@ public class FormValidationAndResetTests
     private static async Task<(RasterRenderContext Context, HtmlDocument Document)> LoadAsync(string body)
     {
         var (context, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap(body, "<style>@page { margin: 0 } input, button, select, textarea { display: block; margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+            TestDocument.Wrap(body, "<style>@page { margin: 0 } input, button, select, textarea { display: block; margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
         return (context, document);
     }
 

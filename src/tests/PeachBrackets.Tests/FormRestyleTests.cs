@@ -10,7 +10,7 @@ public class FormRestyleTests
     private static async Task<(RasterRenderContext Context, HtmlDocument Document, RasterCanvas Measuring)> LoadAsync(string rule = Rule)
     {
         var (context, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap(Page, "<style>@page { margin: 0 } label { display: block; width: 30pt; height: 10pt } " + rule + "</style>"), new HtmlDocumentOptions { Media = "screen" });
+            TestDocument.Wrap(Page, "<style>@page { margin: 0 } label { display: block; width: 30pt; height: 10pt } " + rule + "</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return (context, document, context.CreateCanvas(1, 1));
     }
 
@@ -116,6 +116,6 @@ public class FormRestyleTests
     {
         var (_, document, _) = await LoadAsync();
 
-        await Assert.ThrowsAsync<ArgumentNullException>(() => document.RestyleFormAsync(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => document.RestyleFormAsync(null!).AsTask());
     }
 }

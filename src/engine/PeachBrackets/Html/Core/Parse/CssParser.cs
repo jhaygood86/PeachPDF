@@ -68,7 +68,7 @@ namespace PeachBrackets.Html.Parse
         /// <param name="stylesheet">raw css stylesheet to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the CSS data with parsed CSS objects (never null)</returns>
-        public async Task<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault)
+        public async ValueTask<CssData> ParseStyleSheet(string stylesheet, bool combineWithDefault)
         {
             // Clone the adapter's shared, cached default (user-agent) CssData before merging so that
             // adding the caller's rules here - or later via the declarative stylesheet's AddStyleSheet - never
@@ -89,7 +89,7 @@ namespace PeachBrackets.Html.Parse
         /// <c>StylesheetParser.Parse</c>'s own remarks for why
         /// <see cref="ReadOnlyMemory{T}"/>, not <see cref="ReadOnlySpan{T}"/>, is what makes this possible.
         /// </summary>
-        public async Task<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
+        public async ValueTask<CssData> ParseStyleSheet(ReadOnlyMemory<char> stylesheet, bool combineWithDefault)
         {
             var cssData = combineWithDefault ? (await DefaultCssDataCache.GetAsync(_renderContext)).Clone() : new CssData(_renderContext);
 
@@ -127,7 +127,7 @@ namespace PeachBrackets.Html.Parse
         /// its own location rather than the document's base. Null for inline &lt;style&gt; content or
         /// caller-supplied CSS text, which resolve against the document base as before.
         /// </param>
-        public async Task ParseStyleSheet(CssData cssData, string stylesheet, RUri? baseUri = null)
+        public async ValueTask ParseStyleSheet(CssData cssData, string stylesheet, RUri? baseUri = null)
         {
             if (!string.IsNullOrEmpty(stylesheet))
             {
@@ -136,7 +136,7 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(CssData, string, RUri?)"/>.</summary>
-        public async Task ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, RUri? baseUri = null)
+        public async ValueTask ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, RUri? baseUri = null)
         {
             if (!stylesheet.IsEmpty)
             {
@@ -172,7 +172,7 @@ namespace PeachBrackets.Html.Parse
         /// <see cref="MemoryExtensions.AsMemory(string?)"/> (itself a zero-copy view over the same string),
         /// so this is a strict widening: every existing <see cref="string"/>-based call site is unaffected.
         /// </summary>
-        private async Task ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
+        private async ValueTask ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
         {
             var stylesheet = ParseStyleSheet(stylesheetText);
             stylesheet.BaseUri = baseUri;

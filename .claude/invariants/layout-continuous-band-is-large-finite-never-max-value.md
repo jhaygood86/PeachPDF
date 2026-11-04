@@ -1,0 +1,5 @@
+# A continuous document's fragmentation band is a large finite number, never `double.MaxValue`
+
+`HtmlContainerInt.ContinuousBandPoints` (1,000,000pt) is the page height a `MediaType.Screen` document is laid out against, so nothing can overflow it and break. It must stay **finite and below `double.MaxValue - 1`**: `HasRealPageGrid` reads `PageSize.Height >= double.MaxValue - 1` as "no page grid" and then silently turns off the column, flex, grid, table-repeat and float fragmentation logic that a multi-column container on a screen still needs. The symptom is a screen document whose multicol or flex layout is quietly different from the paged one, with no error.
+
+The band is only a bound. The single fragmentainer is re-finished at its real height (`SettleContinuousSurface`): `max(content, ViewportHeight)`. Anything that reads the sheet height after layout (the painter, `DocumentPage`, the fixed-box region) gets that, and anything that reads `PageSize.Height` during layout gets the band, so a new reader of `PageSize.Height` for a percentage or viewport basis must go through `FirstPageBandHeight` / `GetViewportUnitBasis`, which know the difference.

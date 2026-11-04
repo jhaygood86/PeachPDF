@@ -34,7 +34,7 @@ namespace PeachBrackets.Html.Animation
         /// is left unapplied: every <c>currentcolor</c> the animation mixes then stands for the colour the box really has.</param>
         /// <param name="importantCustomProperties">The custom properties an <c>!important</c> declaration sets; like <c>color</c> they outrank the
         /// animation origin, so a keyframe that names one is left unapplied.</param>
-        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, Dictionary<string, string> pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot, bool colorIsImportant, HashSet<string>? importantCustomProperties = null)
+        public static void Apply(CssValueParser valueParser, CssBox box, double fraction, PendingVarMap pendingVarProperties, IReadOnlyDictionary<string, string?>? uaSnapshot, bool colorIsImportant, HashSet<string>? importantCustomProperties = null)
         {
             // Nearly every box names no animation; settle that before allocating anything.
             if (box.HtmlContainer?.Keyframes is not { Count: > 0 } keyframes) return;

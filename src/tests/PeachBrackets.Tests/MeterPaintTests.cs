@@ -8,7 +8,7 @@ public class MeterPaintTests
 
     private static async Task<RasterCanvas> PaintAsync(string body)
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles), new HtmlDocumentOptions { Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles), new HtmlDocumentOptions { MediaType = MediaType.Screen, ViewportHeightPoints = 200 });
         return await TestDocument.PaintAsync(context, document);
     }
 
@@ -77,7 +77,7 @@ public class MeterPaintTests
     public async Task ABarTakesTheSizeOfTenEmsByOneEmUnlessItIsStyled()
     {
         var (_, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap("<p style='font-size:10pt'><progress id=p value=1></progress></p>", "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+            TestDocument.Wrap("<p style='font-size:10pt'><progress id=p value=1></progress></p>", "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen, ViewportHeightPoints = 200 });
 
         var bounds = document.GetElementBounds("p")!.Value;
         Assert.Equal(100, bounds.Width, 1);

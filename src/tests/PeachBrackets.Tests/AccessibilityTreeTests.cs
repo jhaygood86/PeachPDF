@@ -6,7 +6,7 @@ public class AccessibilityTreeTests
 {
     private static async Task<(HtmlDocument Document, AccessibilityTree Tree)> LoadAsync(string body, string head = "", HtmlDocumentOptions? options = null)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), options ?? new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), options ?? new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return (document, document.GetAccessibilityTree());
     }
 
@@ -232,7 +232,7 @@ public class AccessibilityTreeTests
     public async Task ARepeatingTableHeaderIsInTheTreeOnceWhateverNumberOfPagesItIsOn()
     {
         var rows = string.Concat(Enumerable.Range(0, 220).Select(i => $"<tr><td>row {i}</td></tr>"));
-        var (document, tree) = await LoadAsync($"<table><thead><tr><th>Repeated head</th></tr></thead><tbody>{rows}</tbody></table>");
+        var (document, tree) = await LoadAsync($"<table><thead><tr><th>Repeated head</th></tr></thead><tbody>{rows}</tbody></table>", options: new HtmlDocumentOptions());
 
         Assert.True(document.Pages.Count > 1);
         var header = Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.ColumnHeader);
@@ -362,7 +362,7 @@ public class AccessibilityTreeTests
     [Fact]
     public async Task LanguageIsInheritedFromTheNearestLangAttribute()
     {
-        var (_, tree) = await LoadAsync("<p>one</p><div lang='fr'><p>deux</p><p lang='de'>drei</p></div>", options: new HtmlDocumentOptions { DefaultLanguage = "en", Media = "screen" });
+        var (_, tree) = await LoadAsync("<p>one</p><div lang='fr'><p>deux</p><p lang='de'>drei</p></div>", options: new HtmlDocumentOptions { DefaultLanguage = "en", MediaType = MediaType.Screen });
 
         var paragraphs = tree.Nodes.Where(n => n.Role == AccessibilityRole.Paragraph).ToArray();
         Assert.Equal(["en", "fr", "de"], paragraphs.Select(p => p.Language).ToArray());
@@ -412,7 +412,7 @@ public class AccessibilityTreeTests
     public async Task ABlockThatCrossesAPageBreakIsOnBothPages()
     {
         var long_ = string.Join(' ', Enumerable.Repeat("word", 2000));
-        var (document, tree) = await LoadAsync($"<p>{long_}</p>");
+        var (document, tree) = await LoadAsync($"<p>{long_}</p>", options: new HtmlDocumentOptions());
 
         Assert.True(document.Pages.Count > 1);
         var paragraph = Only(tree, AccessibilityRole.Paragraph);
@@ -423,7 +423,7 @@ public class AccessibilityTreeTests
     [Fact]
     public async Task TheRootIsNamedByTheDocumentTitle()
     {
-        var (_, document) = await TestDocument.LoadAsync("<html lang='en'><head><title>My page</title></head><body><p>x</p></body></html>", new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync("<html lang='en'><head><title>My page</title></head><body><p>x</p></body></html>", new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var tree = document.GetAccessibilityTree();
 
         Assert.Equal("My page", tree.Root.Name);

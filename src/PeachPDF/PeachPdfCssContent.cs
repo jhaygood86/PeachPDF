@@ -29,7 +29,7 @@ namespace PeachPDF
         /// document context here), the same limitation as <see cref="PdfGenerator.ParseStyleSheet(string, bool)"/>.
         /// </remarks>
         /// <param name="stylesheet">the stylesheet source to parse and add</param>
-        public Task AddStyleSheet(string stylesheet) => StyleSheet.AddAsync(stylesheet);
+        public Task AddStyleSheet(string stylesheet) => StyleSheet.AddAsync(stylesheet).AsTask();
 
         /// <summary>
         /// Genuinely zero-copy counterpart of <see cref="AddStyleSheet(string)"/> - see
@@ -38,6 +38,6 @@ namespace PeachPDF
         /// this method's own <see langword="await"/>), is what makes this possible.
         /// </summary>
         /// <param name="stylesheet">the stylesheet source to parse and add</param>
-        public Task AddStyleSheet(ReadOnlyMemory<char> stylesheet) => StyleSheet.AddAsync(stylesheet);
+        public Task AddStyleSheet(ReadOnlyMemory<char> stylesheet) => StyleSheet.AddAsync(stylesheet).AsTask();
     }
 }

@@ -301,7 +301,7 @@ public sealed class DocumentNode : IEquatable<DocumentNode>
         var wrapper = AppendBlock();
         wrapper.SetStyle("display", "block");
 
-        var (fragmentRoot, shells) = BuildFragmentAsync(html, styleSheet).GetAwaiter().GetResult();
+        var (fragmentRoot, shells) = BuildFragmentAsync(html, styleSheet).AsTask().GetAwaiter().GetResult();
         Context.Properties.DisplayContentsShells.AddRange(shells);
 
         // Must run before slot processing: a slot's replacement content is built afterwards, and those boxes must NOT be flagged - only the
@@ -322,7 +322,7 @@ public sealed class DocumentNode : IEquatable<DocumentNode>
         return wrapper;
     }
 
-    private async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> BuildFragmentAsync(string html, StyleSheet? styleSheet)
+    private async ValueTask<(CssBox Root, List<CssBox> DisplayContentsShells)> BuildFragmentAsync(string html, StyleSheet? styleSheet)
     {
         var renderContext = Context.RenderContext;
 

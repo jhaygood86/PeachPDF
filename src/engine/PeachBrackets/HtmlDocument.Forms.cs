@@ -299,7 +299,7 @@ public sealed partial class HtmlDocument
     /// <returns>whether it was applied and the regions to repaint</returns>
     /// <exception cref="ArgumentNullException">an argument is null</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task<UpdateResult> SetOpenAsync(DocumentElement element, bool open, Canvas measuringCanvas)
+    public async ValueTask<UpdateResult> SetOpenAsync(DocumentElement element, bool open, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(measuringCanvas);
@@ -372,7 +372,7 @@ public sealed partial class HtmlDocument
     /// <returns>whether it was applied and the regions to repaint</returns>
     /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
+    public async ValueTask<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         ThrowIfDisposed();

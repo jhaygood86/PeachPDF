@@ -117,7 +117,6 @@ internal static class ArgumentParser
                 case "style": AddStyle(_options, RequireValue(name, inlineValue)); break;
                 case "no-default-style": _options.NoDefaultStyle = true; break;
                 case "no-author-style": _options.NoAuthorStyle = true; break;
-                case "media": _options.Media = RequireValue(name, inlineValue) ?? _options.Media; break;
                 case "animation-progress": SetAnimationProgress(_options, RequireValue(name, inlineValue)); break;
                 case "page-size": ParsePageSize(_options, RequireValue(name, inlineValue)); break;
                 case "page-margin": ParsePageMargin(_options, RequireValue(name, inlineValue)); break;

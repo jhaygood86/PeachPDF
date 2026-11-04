@@ -17,11 +17,11 @@ public class FormEditingTests
     private static async Task<(RasterRenderContext Context, HtmlDocument Document, RasterCanvas Measuring)> LoadAsync(string body = Body, string head = "")
     {
         var (context, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap(body, "<style>@page { margin: 0 } input { display: block; margin: 0 }</style>" + head), new HtmlDocumentOptions { Media = "screen", PaintFormControls = true });
+            TestDocument.Wrap(body, "<style>@page { margin: 0 } input { display: block; margin: 0 }</style>" + head), new HtmlDocumentOptions { MediaType = MediaType.Screen, PaintFormControls = true });
         return (context, document, context.CreateCanvas(1, 1));
     }
 
-    private static Task Focus(HtmlDocument document, RasterCanvas measuring, string id) =>
+    private static ValueTask<PeachBrackets.Updates.UpdateResult> Focus(HtmlDocument document, RasterCanvas measuring, string id) =>
         document.SetFocusAsync(document.GetElement(id), focusVisible: true, measuring);
 
     [Fact]
