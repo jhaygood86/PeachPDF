@@ -106,11 +106,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// The spanning cell's fragments, one entry per fragmentainer it appears in.
         /// </summary>
         /// <remarks>
-        /// Grouped by fragmentainer rather than listed, because a <c>rowspan</c> cell is reached by the
-        /// emitter once per <c>CssSpacingBox</c> standing in for it as well as through its own row, so the
-        /// same rectangle can be yielded more than once. That duplication is older than this change and is
-        /// recorded as an accepted limitation; what matters here is which fragmentainers hold the cell and
-        /// what each one's rectangle is, and those agree across the copies.
+        /// Grouped by fragmentainer rather than listed: a <c>rowspan</c> cell is reached by the emitter
+        /// through its own row and through every <c>CssSpacingBox</c> standing in for it, and although the
+        /// walk now drops a copy that would draw what an earlier one already shows (#1834, pinned by
+        /// <see cref="TableRowspanCellPaintedOnceTests"/>), what matters here is which fragmentainers hold
+        /// the cell and what each one's rectangle is.
         /// </remarks>
         private static List<(int Slot, BoxFragment Fragment)> SpanFragments(HtmlContainerInt container) =>
         [
