@@ -598,6 +598,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
   property Boolean SynchronousOnly { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
+  property Double DevicePixelRatio { get; set; }
   property Double FontScale { get; set; }
   property Double MarginBottomPoints { get; set; }
   property Double MarginLeftPoints { get; set; }

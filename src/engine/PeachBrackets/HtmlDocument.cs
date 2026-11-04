@@ -101,6 +101,7 @@ public sealed partial class HtmlDocument : IDisposable
                 ? viewportHeight * unitsPerPoint
                 : null;
             container.PreferredColorScheme = options.ColorScheme;
+            container.DevicePixelRatio = options.DevicePixelRatio;
             container.Input = options.Input ?? InputCapabilities.None;
             container.Preferences = options.Preferences ?? UserPreferences.Default;
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;

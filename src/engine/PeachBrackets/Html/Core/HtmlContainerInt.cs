@@ -1294,6 +1294,18 @@ namespace PeachBrackets.Html
         /// </summary>
         internal ColorSchemePreference PreferredColorScheme { get; set; } = ColorSchemePreference.Light;
 
+        /// <summary>
+        /// Device pixels per CSS pixel the host paints at (<see cref="PeachBrackets.HtmlDocumentOptions.DevicePixelRatio"/>); always a positive,
+        /// finite number. Held here rather than on a box so a restyle or container-query rebuild chooses images with the same inputs.
+        /// </summary>
+        internal double DevicePixelRatio
+        {
+            get => _devicePixelRatio;
+            set => _devicePixelRatio = double.IsFinite(value) && value > 0 ? value : 1;
+        }
+
+        private double _devicePixelRatio = 1;
+
         /// <summary>Whether the document was asked to need nothing asynchronous; see <see cref="PeachBrackets.HtmlDocumentOptions.SynchronousOnly"/>.</summary>
         internal bool SynchronousOnly { get; set; }
 

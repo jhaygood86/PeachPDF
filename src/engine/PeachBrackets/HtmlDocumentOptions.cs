@@ -90,6 +90,14 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public bool PaintFormControls { get; set; }
 
+    /// <summary>
+    /// How many device pixels the host paints for one CSS pixel (1 by default): 2 on a display with twice the density, 1.5 at 150% display scaling.
+    /// The <c>resolution</c>, <c>device-pixel-ratio</c> and <c>-webkit-device-pixel-ratio</c> media features report it (a <c>&lt;source media&gt;</c>
+    /// condition and the <c>srcset</c> choice see it too), and a <see cref="MediaType.Screen"/> document uses it to pick the <c>srcset</c> image
+    /// that is just sharp enough (see <see cref="ImageSelection"/>). A value that is not a positive finite number is treated as 1.
+    /// </summary>
+    public double DevicePixelRatio { get; set; } = 1;
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 

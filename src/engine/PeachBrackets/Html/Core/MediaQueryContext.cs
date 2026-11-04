@@ -15,7 +15,7 @@ namespace PeachBrackets.Html
     /// <param name="ViewportWidthPt">The page-box width in points, or <c>null</c> when unknown (then
     /// width/height/orientation/aspect-ratio features match permissively).</param>
     /// <param name="ViewportHeightPt">The page-box height in points, or <c>null</c> when unknown.</param>
-    /// <param name="ResolutionDpi">The output resolution in dots-per-inch, for <c>resolution</c> queries.</param>
+    /// <param name="ResolutionDpi">The output resolution in dots-per-inch, for <c>resolution</c> queries: 96 times the device pixel ratio.</param>
     /// <param name="PreferredColorScheme">What <c>prefers-color-scheme</c> reports.</param>
     /// <param name="Input">The pointing devices <c>hover</c>, <c>pointer</c> and their <c>any-</c> forms report; none by default.</param>
     /// <param name="Preferences">The reader's settings the <c>prefers-*</c>, <c>forced-colors</c> and <c>inverted-colors</c> features report; those of a static document when null.</param>
@@ -63,7 +63,7 @@ namespace PeachBrackets.Html
                 string.IsNullOrEmpty(media) ? "all" : media!,
                 width,
                 height,
-                96d,
+                96d * container.DevicePixelRatio,
                 container.PreferredColorScheme,
                 pixelsPerPoint,
                 container.Input,
