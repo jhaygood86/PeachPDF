@@ -78,7 +78,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="options">the page size, margins and style environment, or null for the defaults of <see cref="HtmlDocumentOptions"/></param>
     /// <returns>the loaded document</returns>
     /// <exception cref="ArgumentNullException"><paramref name="html"/> or <paramref name="renderContext"/> is null</exception>
-    public static async Task<HtmlDocument> LoadAsync(string html, RenderContext renderContext, HtmlDocumentOptions? options = null)
+    public static async ValueTask<HtmlDocument> LoadAsync(string html, RenderContext renderContext, HtmlDocumentOptions? options = null)
     {
         ArgumentNullException.ThrowIfNull(html);
         ArgumentNullException.ThrowIfNull(renderContext);
@@ -96,7 +96,10 @@ public sealed partial class HtmlDocument : IDisposable
             container.MarginBottom = options.MarginBottomPoints * unitsPerPoint;
             container.MarginLeft = options.MarginLeftPoints * unitsPerPoint;
 
-            container.Media = string.IsNullOrEmpty(options.Media) ? "print" : options.Media;
+            container.MediaType = options.MediaType;
+            container.ViewportHeight = options.MediaType == MediaType.Screen && options.ViewportHeightPoints is > 0 and var viewportHeight
+                ? viewportHeight * unitsPerPoint
+                : null;
             container.PreferredColorScheme = options.ColorScheme;
             container.Input = options.Input ?? InputCapabilities.None;
             container.Preferences = options.Preferences ?? UserPreferences.Default;
@@ -115,7 +118,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.DefaultLanguage = string.IsNullOrEmpty(options.DefaultLanguage) ? null : options.DefaultLanguage;
 
             // Parse-time @page relative units resolve against the page size as it stands during parsing, so the physical sheet goes in first.
-            var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
+            var sheet = SheetOf(options);
             container.PageSize = Utils.ToPixels(sheet, unitsPerPoint);
 
             var userCss = options.TextSpacing is { } spacing ? options.UserStyleSheet + "\n" + spacing.ToCss() : options.UserStyleSheet;
@@ -149,6 +152,23 @@ public sealed partial class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// Parses <paramref name="html"/> and cascades its style sheets without waiting for anything: the synchronous form of <see cref="LoadAsync"/>, for a
+    /// host that cannot wait. <see cref="HtmlDocumentOptions.SynchronousOnly"/> must be set.
+    /// </summary>
+    /// <param name="html">the HTML source</param>
+    /// <param name="renderContext">the fonts, images and resource loading the document uses</param>
+    /// <param name="options">the page size, margins and style environment, with <see cref="HtmlDocumentOptions.SynchronousOnly"/> set</param>
+    /// <returns>the loaded document</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="html"/>, <paramref name="renderContext"/> or <paramref name="options"/> is null</exception>
+    /// <exception cref="InvalidOperationException"><see cref="HtmlDocumentOptions.SynchronousOnly"/> is not set, or the document tried to do something asynchronous</exception>
+    public static HtmlDocument Load(string html, RenderContext renderContext, HtmlDocumentOptions options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        RequireSynchronousOption(options.SynchronousOnly);
+        return CompleteSynchronously(LoadAsync(html, renderContext, options));
+    }
+
+        /// <summary>
     /// Makes a document from a page built in code instead of parsed from HTML, ready to be laid out.
     /// </summary>
     /// <param name="page">the page, made by <see cref="DocumentBuildContext.CreatePage"/> and filled with nodes</param>
@@ -156,7 +176,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="styleSheet">rules applied to the tree, including an <c>@page</c> rule for geometry the page did not set itself, or null for none</param>
     /// <returns>the document</returns>
     /// <exception cref="ArgumentNullException"><paramref name="page"/> is null</exception>
-    public static async Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions? options = null, StyleSheet? styleSheet = null)
+    public static async ValueTask<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions? options = null, StyleSheet? styleSheet = null)
     {
         ArgumentNullException.ThrowIfNull(page);
 
@@ -244,6 +264,21 @@ public sealed partial class HtmlDocument : IDisposable
     public Size ContentArea => Utils.ToPoints(_container.PageSize, _unitsPerPoint);
 
     /// <summary>
+    /// How far down a page's content reaches, in points from the top of the page's content area: where the lowest box on that page ends, margin
+    /// included. Unlike <see cref="ContentExtent"/>, which fills the page, this is the height a viewer that sizes itself to the document needs - the
+    /// document's height as a web page reports it. For a document that runs over several pages, the last page's is how much of it is used.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page</param>
+    /// <returns>the height in points</returns>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public double GetContentHeight(int pageIndex)
+    {
+        ThrowIfNotAPage(pageIndex);
+        return _container.PageContentHeight(pageIndex) / _unitsPerPoint;
+    }
+
+    /// <summary>
     /// The extent the laid-out content actually occupies, in points. Wider than <see cref="ContentArea"/> when something does not fit across,
     /// which is how a consumer that wants to shrink the content to fit finds out by how much.
     /// </summary>
@@ -280,7 +315,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <returns>a task that completes when the pages are known</returns>
     /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
     /// <exception cref="InvalidOperationException">the document was already laid out</exception>
-    public async Task LayoutAsync(Canvas measuringCanvas)
+    public async ValueTask LayoutAsync(Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         ThrowIfDisposed();
@@ -290,9 +325,62 @@ public sealed partial class HtmlDocument : IDisposable
         await LayOutAsync(measuringCanvas);
     }
 
+    /// <summary>
+    /// Breaks the document into pages without waiting for anything: the synchronous form of <see cref="LayoutAsync"/>. The document must have been
+    /// loaded with <see cref="HtmlDocumentOptions.SynchronousOnly"/>.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text; nothing is drawn on it</param>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document was already laid out, was not loaded with <see cref="HtmlDocumentOptions.SynchronousOnly"/>, or tried to do something asynchronous</exception>
+    public void Layout(Canvas measuringCanvas)
+    {
+        RequireSynchronousDocument();
+        CompleteSynchronously(LayoutAsync(measuringCanvas));
+    }
+
+    /// <summary>
+    /// Paints one page onto <paramref name="canvas"/> without waiting for anything: the synchronous form of <see cref="PaintPageAsync"/>.
+    /// </summary>
+    /// <param name="pageIndex">the zero-based index of the page, from 0 to <c>Pages.Count - 1</c></param>
+    /// <param name="canvas">the canvas to draw on</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out, was not loaded with <see cref="HtmlDocumentOptions.SynchronousOnly"/>, or tried to do something asynchronous</exception>
+    /// <param name="layer">which part to draw; see <see cref="PaintPageAsync"/></param>
+    public void PaintPage(int pageIndex, Canvas canvas, DocumentPaintLayer layer = DocumentPaintLayer.All)
+    {
+        RequireSynchronousDocument();
+        CompleteSynchronously(PaintPageAsync(pageIndex, canvas, layer));
+    }
+
+    private void RequireSynchronousDocument() => RequireSynchronousOption(_container.SynchronousOnly);
+
+    private static void RequireSynchronousOption(bool synchronousOnly)
+    {
+        if (!synchronousOnly)
+            throw new InvalidOperationException("Set HtmlDocumentOptions.SynchronousOnly before loading the document to use the synchronous Load, Layout and PaintPage.");
+    }
+
+    // The operation was started by a document that guarantees it has nothing to wait for, so it has finished by now; if something outside the guarded
+    // places did suspend, say so instead of blocking the caller on work that may need the caller's own thread to finish.
+    private static void CompleteSynchronously(ValueTask task)
+    {
+        if (!task.IsCompleted)
+            throw new InvalidOperationException("The document did something asynchronous although HtmlDocumentOptions.SynchronousOnly was set.");
+
+        task.GetAwaiter().GetResult();
+    }
+
+    private static T CompleteSynchronously<T>(ValueTask<T> task)
+    {
+        if (!task.IsCompleted)
+            throw new InvalidOperationException("The document did something asynchronous although HtmlDocumentOptions.SynchronousOnly was set.");
+
+        return task.GetAwaiter().GetResult();
+    }
+
     // The layout itself, which an edit of the text runs again over the same tree.
     // With a changed box, the layout is picked up from the pass before the one that placed it when it can be (the slot it resumed in).
-    private async Task<int?> LayOutAsync(Canvas measuringCanvas, CssBox? changed = null)
+    private async ValueTask<int?> LayOutAsync(Canvas measuringCanvas, CssBox? changed = null)
     {
         var pageSize = Utils.ToPoints(_container.PageSize, _unitsPerPoint);
         _container.MaxSize = Utils.ToPixels(new Size(pageSize.Width, 0), _unitsPerPoint);
@@ -314,7 +402,82 @@ public sealed partial class HtmlDocument : IDisposable
                 return new DocumentPage(index, fragmentainer.Geometry.SheetWidthPt, fragmentainer.Geometry.SheetHeightPt, extras.BleedPt, extras.OutsidePt);
             })
             .ToArray();
+
+        // A new layout puts fixed and sticky boxes back at the top; they are moved to where the host is showing the document.
+        if (_viewport is not null)
+            ApplyViewport();
+
         return resumedSlot;
+    }
+
+    private Rect? _viewport;
+
+    /// <summary>
+    /// The part of a <see cref="MediaType.Screen"/> document the host is showing, in points from the top-left of the surface: its origin is how far the
+    /// document is scrolled. It is what a <c>position: fixed</c> box stays fixed to, a <c>position: sticky</c> box sticks within, and a
+    /// <c>background-attachment: fixed</c> image is positioned against. Starts at the top of the document, as tall as
+    /// <see cref="HtmlDocumentOptions.ViewportHeightPoints"/>; a paged document has no viewport that moves.
+    /// </summary>
+    public Rect Viewport => _viewport ?? new Rect(0, 0, ContentArea.Width, _options?.ViewportHeightPoints ?? 0);
+
+    /// <summary>
+    /// Tells a <see cref="MediaType.Screen"/> document where the host is showing it, so fixed and sticky boxes and fixed background images are
+    /// where that puts them when it is next painted and queried (text, links, form controls, accessibility bounds).
+    /// </summary>
+    /// <param name="viewport">the visible part of the surface, in points from its top-left</param>
+    /// <returns>the regions that look different now and have to be painted again; empty for a paged document or when nothing moved</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public IReadOnlyList<DirtyRegion> SetViewport(Rect viewport)
+    {
+        _ = Pages;
+        _viewport = viewport;
+        return ApplyViewport();
+    }
+
+    /// <summary>
+    /// Whether the laid-out <see cref="MediaType.Screen"/> document has a <c>background-attachment: fixed</c> image. That image sits under its box's
+    /// content and over the backgrounds behind it, so it cannot be drawn as a separate layer the way <see cref="DocumentPaintLayer.ViewportAttached"/>
+    /// boxes are: a host that scrolls a painted surface natively would show it moving with the content until it is painted again. Such a host paints
+    /// the visible part of the page afresh on every scroll step instead. Always <see langword="false"/> for a paged document.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public bool HasViewportBackgrounds
+    {
+        get
+        {
+            _ = Pages;
+            return _container.View.HasFixedBackground(_container);
+        }
+    }
+
+    private IReadOnlyList<DirtyRegion> ApplyViewport()
+    {
+        if (!_container.Continuous || _container.FragmentTree is not { Fragmentainers.Count: > 0 } tree)
+            return [];
+
+        // A continuous document has no page box, so a fragment's layout position is its position on the surface scaled to layout units.
+        var ppp = _unitsPerPoint;
+        var visible = Viewport;
+        var layoutViewport = new Rect(visible.X * ppp, visible.Y * ppp, visible.Width * ppp, visible.Height * ppp);
+        var dirty = _container.View.Apply(_container, layoutViewport);
+
+        if (dirty.Count == 0)
+            return [];
+
+        // What was recorded for the old places is stale.
+        _textRuns = null;
+        _annotations = null;
+
+        const double bleed = 24; // a shadow, an outline or a descendant that overflows the box
+        var regions = new List<DirtyRegion>(dirty.Count);
+        foreach (var rect in dirty)
+        {
+            var x = rect.X / ppp;
+            var y = rect.Y / ppp;
+            regions.Add(new DirtyRegion(0, new Rect(x - bleed, y - bleed, (rect.Width / ppp) + (2 * bleed), (rect.Height / ppp) + (2 * bleed))));
+        }
+
+        return regions;
     }
 
     /// <summary>The pages of the laid-out document, in order.</summary>
@@ -336,23 +499,46 @@ public sealed partial class HtmlDocument : IDisposable
     /// <returns>a task that completes when the page is drawn</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task PaintPageAsync(int pageIndex, Canvas canvas)
+    /// <param name="layer">which part to draw: everything (the default), or one of the two layers a host that scrolls natively draws separately</param>
+    public async ValueTask PaintPageAsync(int pageIndex, Canvas canvas, DocumentPaintLayer layer = DocumentPaintLayer.All)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         var pages = Pages;
         if ((uint)pageIndex >= (uint)pages.Count)
             throw new ArgumentOutOfRangeException(nameof(pageIndex), pageIndex, $"The document has {pages.Count} page(s).");
 
-        var fragmentainer = _painter!.Fragmentainers[pageIndex];
-        await _painter.PaintPageAsync(
-            fragmentainer,
-            pageIndex + 1,
-            () => new CanvasLease(canvas),
-            (x, y) =>
-            {
-                canvas.PushTransform(Matrix3x2.CreateTranslation((float)(x * _unitsPerPoint), (float)(y * _unitsPerPoint)));
-                return new TransformScope(canvas);
-            });
+        // A restyle that is still loading the source again has dropped the fragments the cached pages describe (a host that keeps handling input
+        // while it awaits one can ask for a paint in between); there is nothing to draw until the new layout is in, and the result of the restyle
+        // names the regions to paint again.
+        if (_painter is not { } painter || (uint)pageIndex >= (uint)painter.Fragmentainers.Count)
+            return;
+
+        var fragmentainer = painter.Fragmentainers[pageIndex];
+        if (layer == DocumentPaintLayer.ViewportAttached)
+        {
+            if (_container.Continuous)
+                _painter.PaintAttached(fragmentainer, () => new CanvasLease(canvas));
+
+            return;
+        }
+
+        _container.View.Layer = layer;
+        try
+        {
+            await _painter.PaintPageAsync(
+                fragmentainer,
+                pageIndex + 1,
+                () => new CanvasLease(canvas),
+                (x, y) =>
+                {
+                    canvas.PushTransform(Matrix3x2.CreateTranslation((float)(x * _unitsPerPoint), (float)(y * _unitsPerPoint)));
+                    return new TransformScope(canvas);
+                });
+        }
+        finally
+        {
+            _container.View.Layer = DocumentPaintLayer.All;
+        }
     }
 
     /// <summary>
@@ -413,6 +599,9 @@ public sealed partial class HtmlDocument : IDisposable
     {
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        // A page whose fragments are not there (the layout is being replaced) has nothing at the point.
+        if ((uint)pageIndex >= (uint)fragmentainers.Count)
+            return new DocumentCursor(CursorShape.Default, []);
         return CursorQueries.At(_container, fragmentainers[pageIndex], x, y);
     }
 
@@ -431,6 +620,9 @@ public sealed partial class HtmlDocument : IDisposable
     {
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        // A page whose fragments are not there (the layout is being replaced) has nothing at the point.
+        if ((uint)pageIndex >= (uint)fragmentainers.Count)
+            return new DocumentInteraction(false, TouchActions.All, true);
         return CursorQueries.InteractionAt(_container, fragmentainers[pageIndex], x, y);
     }
 
@@ -449,6 +641,9 @@ public sealed partial class HtmlDocument : IDisposable
         ArgumentNullException.ThrowIfNull(canvas);
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
+        if ((uint)pageIndex >= (uint)fragmentainers.Count)
+            return;
+
         var units = _unitsPerPoint;
         foreach (var (bounds, cursor) in CursorQueries.Regions(_container, fragmentainers[pageIndex]))
             canvas.AddCursor(new Rect(bounds.X * units, bounds.Y * units, bounds.Width * units, bounds.Height * units), cursor.Shape, cursor.Images.Count == 0 ? null : cursor.Images);
@@ -969,12 +1164,12 @@ public sealed partial class HtmlDocument : IDisposable
     /// <returns>whether the state was applied and the regions to repaint</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public Task<UpdateResult> SetPointerStateAsync(int pageIndex, double x, double y, bool pressed, Canvas measuringCanvas)
+    public ValueTask<UpdateResult> SetPointerStateAsync(int pageIndex, double x, double y, bool pressed, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
-        var chain = StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? ChainOf(box) : [];
+        var chain = (uint)pageIndex < (uint)fragmentainers.Count && StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? ChainOf(box) : [];
         return ApplyStateAsync(chain, pressed, _focused, _focusVisible, measuringCanvas);
     }
 
@@ -982,7 +1177,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="measuringCanvas">a canvas to measure text on</param>
     /// <returns>whether the state was applied and the regions to repaint</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
+    public ValueTask<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         _ = Pages;
@@ -998,7 +1193,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="measuringCanvas">a canvas to measure text on</param>
     /// <returns>whether the state was applied and the regions to repaint</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public Task<UpdateResult> SetFocusAsync(DocumentElement? element, bool focusVisible, Canvas measuringCanvas)
+    public ValueTask<UpdateResult> SetFocusAsync(DocumentElement? element, bool focusVisible, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         _ = Pages;
@@ -1023,7 +1218,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="measuringCanvas">a canvas to measure text on</param>
     /// <returns>whether the state was applied and the regions to repaint</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public Task<UpdateResult> FocusAsync(AccessibilityNode node, bool focusVisible, Canvas measuringCanvas)
+    public ValueTask<UpdateResult> FocusAsync(AccessibilityNode node, bool focusVisible, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(node);
         ArgumentNullException.ThrowIfNull(measuringCanvas);
@@ -1032,7 +1227,7 @@ public sealed partial class HtmlDocument : IDisposable
             || !int.TryParse(node.Id.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var ordinal)
             || FindByOrdinal(_container.Root, ordinal) is not { } box)
         {
-            return Task.FromResult(UpdateResult.NotApplied("The node is not an element that can take the focus."));
+            return ValueTask.FromResult(UpdateResult.NotApplied("The node is not an element that can take the focus."));
         }
 
         return SetFocusAsync(new DocumentElement(box), focusVisible, measuringCanvas);
@@ -1046,7 +1241,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="measuringCanvas">a canvas to measure text on</param>
     /// <returns>where the focus is now</returns>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task<FocusMoveResult> MoveFocusAsync(bool forward, Canvas measuringCanvas)
+    public async ValueTask<FocusMoveResult> MoveFocusAsync(bool forward, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         var tree = GetAccessibilityTree();
@@ -1073,7 +1268,7 @@ public sealed partial class HtmlDocument : IDisposable
         return chain;
     }
 
-    private async Task<UpdateResult> ApplyStateAsync(HashSet<int> pointerChain, bool pressed, int focused, bool focusVisible, Canvas measuringCanvas)
+    private async ValueTask<UpdateResult> ApplyStateAsync(HashSet<int> pointerChain, bool pressed, int focused, bool focusVisible, Canvas measuringCanvas)
     {
         ThrowIfDisposed();
         var focusWithin = new HashSet<int>();
@@ -1119,7 +1314,7 @@ public sealed partial class HtmlDocument : IDisposable
 
     // Loads the source again with the document's current state and reports what to repaint: every page from the first whose geometry moved, or
     // else the regions of the elements that changed.
-    private async Task<UpdateResult> RestyleAsync(HashSet<int> changed, Canvas measuringCanvas)
+    private async ValueTask<UpdateResult> RestyleAsync(HashSet<int> changed, Canvas measuringCanvas)
     {
         // Whatever form changes were waiting for a restyle are in this one.
         _restyleOrdinals.Clear();
@@ -1165,7 +1360,12 @@ public sealed partial class HtmlDocument : IDisposable
         return new UpdateResult(true, null, regions);
     }
 
-    private async Task ReloadAsync(Canvas measuringCanvas)
+    // A paged document is as tall as the configured page. A screen document has no pages: it is laid out against a band nothing can
+    // overflow, and given its real height when layout has finished.
+    private static Size SheetOf(HtmlDocumentOptions options) =>
+        new(options.PageWidthPoints, options.MediaType == MediaType.Screen ? HtmlContainerInt.ContinuousBandPoints : options.PageHeightPoints);
+
+    private async ValueTask ReloadAsync(Canvas measuringCanvas)
     {
         var options = _options!;
         var units = _unitsPerPoint;
@@ -1175,7 +1375,7 @@ public sealed partial class HtmlDocument : IDisposable
         _container.MarginRight = options.MarginRightPoints * units;
         _container.MarginBottom = options.MarginBottomPoints * units;
         _container.MarginLeft = options.MarginLeftPoints * units;
-        var sheet = new Size(options.PageWidthPoints, options.PageHeightPoints);
+        var sheet = SheetOf(options);
         _container.PageSize = Utils.ToPixels(sheet, units);
         _container.CssPageSize = null;
 
@@ -1276,7 +1476,7 @@ public sealed partial class HtmlDocument : IDisposable
     {
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
-        return StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? new DocumentElement(box) : null;
+        return (uint)pageIndex < (uint)fragmentainers.Count && StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? new DocumentElement(box) : null;
     }
 
     /// <summary>
@@ -1320,7 +1520,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <returns>whether it was applied, the page count before and after, and what to repaint</returns>
     /// <exception cref="ArgumentNullException">an argument is null</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out, or <see cref="HtmlDocumentOptions.RecordTextRuns"/> or <see cref="HtmlDocumentOptions.EnableIncrementalUpdates"/> was not set</exception>
-    public Task<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, string text, Canvas measuringCanvas)
+    public ValueTask<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, string text, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(text);
         return EditAsync(measuringCanvas, () =>
@@ -1342,14 +1542,14 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="text">the text</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> InsertTextAsync(TextPosition at, string text, Canvas measuringCanvas) => ReplaceTextAsync(at, at, text, measuringCanvas);
+    public ValueTask<TextEditResult> InsertTextAsync(TextPosition at, string text, Canvas measuringCanvas) => ReplaceTextAsync(at, at, text, measuringCanvas);
 
     /// <summary>Deletes the text between two positions: <see cref="ReplaceTextAsync"/> with no new text.</summary>
     /// <param name="from">where the deleted text starts</param>
     /// <param name="to">where it ends, not included</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas) => ReplaceTextAsync(from, to, string.Empty, measuringCanvas);
+    public ValueTask<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas) => ReplaceTextAsync(from, to, string.Empty, measuringCanvas);
 
     /// <summary>
     /// Appends text to an element's own text - into its last text, or as a new text when it has none - so an element with no text, which
@@ -1360,7 +1560,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="text">the text</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> InsertTextAsync(DocumentElement element, string text, Canvas measuringCanvas)
+    public ValueTask<TextEditResult> InsertTextAsync(DocumentElement element, string text, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(element);
         ArgumentNullException.ThrowIfNull(text);
@@ -1381,7 +1581,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="at">where to split</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
+    public ValueTask<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
     {
         CssBox? created = null;
         return EditAsync(measuringCanvas, () =>
@@ -1405,7 +1605,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="at">a position in the first of the two paragraphs</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas) =>
+    public ValueTask<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas) =>
         EditAsync(measuringCanvas, () =>
         {
             var (point, reason) = TextEditor.ToSource(TextRuns, at, isRangeStart: true);
@@ -1431,7 +1631,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="attributes">its attributes, such as <c>href</c> for <c>a</c>; null for none</param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/></returns>
-    public Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, string tagName, IReadOnlyDictionary<string, string>? attributes, Canvas measuringCanvas)
+    public ValueTask<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, string tagName, IReadOnlyDictionary<string, string>? attributes, Canvas measuringCanvas)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(tagName);
         CssBox? created = null;
@@ -1460,7 +1660,7 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="element">the element, from <see cref="GetElement"/>, <see cref="GetElementAt(int, double, double)"/> or <see cref="TextEditResult.Block"/></param>
     /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text</param>
     /// <returns>see <see cref="ReplaceTextAsync"/>; the caret is the start of what was inside the element</returns>
-    public Task<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
+    public ValueTask<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(element);
         return EditAsync(measuringCanvas, () =>
@@ -1470,7 +1670,7 @@ public sealed partial class HtmlDocument : IDisposable
         });
     }
 
-    private async Task<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change, Func<CssBox?>? createdBlock = null)
+    private async ValueTask<TextEditResult> EditAsync(Canvas measuringCanvas, Func<(TextEditor.SourcePoint? Caret, string? Reason)> change, Func<CssBox?>? createdBlock = null)
     {
         ArgumentNullException.ThrowIfNull(measuringCanvas);
         var before = TextRuns;
@@ -1566,7 +1766,8 @@ public sealed partial class HtmlDocument : IDisposable
     /// <returns>a task that completes when the region is drawn</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="pageIndex"/> is not a page of the document</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task PaintPageRegionAsync(int pageIndex, Canvas canvas, Rect region)
+    /// <param name="layer">which part to draw; see <see cref="PaintPageAsync"/></param>
+    public async ValueTask PaintPageRegionAsync(int pageIndex, Canvas canvas, Rect region, DocumentPaintLayer layer = DocumentPaintLayer.All)
     {
         ArgumentNullException.ThrowIfNull(canvas);
         ThrowIfNotAPage(pageIndex);
@@ -1574,7 +1775,7 @@ public sealed partial class HtmlDocument : IDisposable
         canvas.PushClip(new Rect(region.X * _unitsPerPoint, region.Y * _unitsPerPoint, region.Width * _unitsPerPoint, region.Height * _unitsPerPoint));
         try
         {
-            await PaintPageAsync(pageIndex, canvas);
+            await PaintPageAsync(pageIndex, canvas, layer);
         }
         finally
         {
@@ -1587,6 +1788,7 @@ public sealed partial class HtmlDocument : IDisposable
         _incrementalUpdates = options.EnableIncrementalUpdates;
         _recordTextRuns = options.RecordTextRuns;
         _selectionStyling = options.EnableSelectionStyling;
+        _container.SynchronousOnly = options.SynchronousOnly;
         _container.SelectionBackground = options.SelectionBackground;
         _container.SelectionForeground = options.SelectionForeground;
     }
@@ -1615,6 +1817,40 @@ public sealed partial class HtmlDocument : IDisposable
         ArgumentNullException.ThrowIfNull(elementId);
         var rect = _container.GetElementRectangle(elementId);
         return rect.HasValue ? Utils.ToPoints(rect.Value, _unitsPerPoint) : null;
+    }
+
+    /// <summary>
+    /// How far down the surface a host that scrolls it should go to show the element with the given <c>id</c> - the target of an in-page link: where the
+    /// element starts, less its <c>scroll-margin-top</c> and the <c>scroll-padding-top</c> of the root element, so a bar stuck to the top of the viewport does
+    /// not cover it. Never negative. The same place whether or not the viewport has moved the element.
+    /// </summary>
+    /// <param name="elementId">the element's <c>id</c></param>
+    /// <returns>the distance from the top of the surface, in points, or null if there is no such element</returns>
+    public double? GetScrollOffset(string elementId)
+    {
+        ArgumentNullException.ThrowIfNull(elementId);
+        if (_container.Root is not { } root || DomUtils.GetBoxById(root, elementId.ToLower()) is not { } box)
+            return null;
+
+        var bounds = GetElementBounds(elementId);
+        if (bounds is null)
+            return null;
+
+        // Where the element is in the flow: GetElementBounds says where it is drawn, which is somewhere else for a stuck or fixed box.
+        var top = bounds.Value.Y - (_container.View.DisplacementOf(box).Dy / _unitsPerPoint);
+        var margin = CssValueParser.ParseLength(box.ScrollMarginTop ?? "0", 0, box) / _unitsPerPoint;
+
+        var padding = 0d;
+        for (var element = root; element is not null; element = element.Boxes.Count > 0 ? element.Boxes[0] : null)
+        {
+            if (element.HtmlTag is { } tag && string.Equals(tag.Name, "html", StringComparison.OrdinalIgnoreCase))
+            {
+                padding = CssValueParser.ParseLength(element.ScrollPaddingTop ?? "0", 0, element) / _unitsPerPoint;
+                break;
+            }
+        }
+
+        return Math.Max(0, top - margin - padding);
     }
 
     /// <summary>Releases the document's cached images and layout state.</summary>

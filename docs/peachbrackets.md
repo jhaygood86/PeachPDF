@@ -72,8 +72,30 @@ foreach (var page in document.Pages)
    defines: the `@page` box's background, the document canvas background, the page border, the content, footnote areas, and the margin
    boxes. Pages can be painted in any order, any number of times.
 
-`Pages` lists the laid-out pages: each has its `Index` and the size of its sheet in points. A page's size can differ from its neighbours'
+`Pages` lists the laid-out pages: each has its `Index` and the size of its sheet in points. `GetContentHeight(pageIndex)` says how far down a
+page's content reaches, in points from the top of its content area, which is what a viewer that sizes itself to the document needs (the sheet
+itself is as tall as the page, whatever the content). A page's size can differ from its neighbours'
 when `@page` rules say so, which is why you read it per page rather than assuming one size.
+
+### Synchronous layout
+
+A host that cannot wait - a control that has to know its size while the application is laying itself out - can say that a document needs
+nothing asynchronous and use the synchronous forms of the three steps:
+
+```csharp
+var options = new HtmlDocumentOptions { SynchronousOnly = true, MediaType = MediaType.Screen };
+using var document = HtmlDocument.Load(html, context, options);
+document.Layout(measuringCanvas);
+document.PaintPage(0, canvas);
+```
+
+Nothing is awaited and nothing blocks. `SynchronousOnly` is a promise about the document: its images, style sheets and fonts are inline (`data:`
+URIs), already registered on the render context, or come from a render context that answers at once (`RenderContext.GetResourceStream` returns
+a `ValueTask` that has already completed). If the document then tries to do something that would really suspend - fetch an image, a style sheet
+(including an `@import`) or a web font whose `RenderContext` has not answered yet - the call throws `InvalidOperationException` naming the
+resource, instead of waiting for it. Without `SynchronousOnly` the synchronous forms throw, and the `Async` ones are the only choice.
+
+The asynchronous methods return `ValueTask`, so they too finish synchronously, without allocating, when there is nothing to wait for.
 
 ### Units
 
@@ -88,13 +110,15 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 |---|---|
 | `PageWidthPoints`, `PageHeightPoints` | The sheet. A4 (595 x 842) by default. A `@page { size }` rule in the document overrides it. |
 | `MarginTopPoints`, `MarginRightPoints`, `MarginBottomPoints`, `MarginLeftPoints`, `SetMargins(points)` | The page margins, 20 points each by default. `@page { margin }` overrides them. |
-| `Media` | The media type `@media` queries see. `print` by default. |
+| `MediaType` | The medium: `Print` (the default) breaks the document into pages and applies `@media print`; `Screen` lays it out as one continuous surface and applies `@media screen`. See [Screen and print media](#screen-and-print-media). |
+| `ViewportHeightPoints` | For `Screen`: the height `vh`, a percentage root height and the `height`/`orientation` media features resolve against, and the least height of the surface. Null (the default) when the host does not know it. |
 | `ColorScheme` | What `prefers-color-scheme` reports: `Light` (the default) or `Dark`. |
 | `Preferences` | The reader's settings that `prefers-reduced-motion`, `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency` and `prefers-reduced-data` report (`UserPreferences`). The default is a static document's: reduced motion on, everything else off, so a document reports what it always did. A window or phone reads them from the system (Windows high contrast, Android's text-contrast and remove-animations settings). |
 | `FontScale` | A multiplier for the root font size (1, the default, leaves it alone), for a reader who sets a text size on their system. Text sized in `em`, `rem`, a percentage or a keyword follows; text in `px` or `pt` does not. Added to `UserStyleSheet`, so ignored when `StyleSheet` is set. |
 | `PaintFormControls` | Draw form controls with their look for a host that shows the page: a check box's check mark and a radio button's dot (in `accent-color`), a text field's value or placeholder, a button's label (`Submit` and `Reset` by default), a drop-down's chosen option and arrow, and a range's track and thumb. Everything is drawn from the control's own CSS, so borders, backgrounds, padding, fonts and colours apply. Off by default, which keeps a control the plain box it is in a PDF; it takes precedence over `CollectFormFields` for how a control is drawn, so a host can collect the fields and still show them. |
 | `TextSpacing` | Spacing applied over the document's own for a reader who needs more room around text: line height, paragraph spacing, letter spacing and word spacing as multiples of the font size. `TextSpacingOverrides.Wcag` is what WCAG 2.2 success criterion 1.4.12 asks a page to survive. Added to `UserStyleSheet` as `!important` rules, so it is ignored when `StyleSheet` is set. |
 | `UserStyleSheet` | CSS applied after the built-in defaults and before the document's own style sheets. |
+| `SynchronousOnly` | The document needs nothing asynchronous; see [Synchronous layout](#synchronous-layout). |
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
@@ -105,6 +129,43 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
+
+## Screen and print media
+
+`MediaType` says which kind of medium the document is for, and it decides two things at once: which `@media` rules match, and whether the document has pages.
+
+- **`Print`** is paged. The page size, `@page` rules, margin boxes, page breaks, footnotes and page floats all apply, and `Pages` has as many entries as the content needs.
+- **`Screen`** has no pages. The document is one surface as wide as `PageWidthPoints` less the margins and as tall as its content (at least `ViewportHeightPoints`), `Pages` has exactly one entry, and nothing cuts a very tall document.
+
+What does not apply on a screen, as in a browser: `@page` (size, margins, borders, named pages, `:first`/`:left`/`:right`) and page margin boxes, page breaks (`break-*: page|left|right|recto|verso`, `page-break-*`), running elements (`position: running()`), `string-set`/`bookmark-*` output, and the css-gcpm footnote and css-page-floats values (`float: footnote|top|bottom|top-bottom|snap`), whose declarations are dropped so the box stays in the flow. Multi-column containers still break into columns, including `break-before: column` and `break-inside: avoid` inside them. `counter(pages)` is 1.
+
+The media features describe the widget: `width` and `height` are the viewport, `orientation` is `portrait` when the height is at least the width, `scan` is `progressive` and `display-mode` is `browser`.
+
+### The viewport, fixed and sticky boxes
+
+`vh`, `vi`/`vb` and a percentage `height` on the root resolve against `ViewportHeightPoints`, which the host pins: a value that followed the content would never settle for `100vh` content. With none set, viewport-height units behave as `auto`. The root is not stretched to the viewport, but the canvas background fills it.
+
+`position: fixed`, `position: sticky` and `background-attachment: fixed` depend on which part of the surface is showing. Tell the document with `SetViewport`:
+
+```csharp
+// The host scrolled: this part of the surface (points from its top-left) is showing now.
+foreach (var region in document.SetViewport(new Rect(0, scrollY, widthPoints, heightPoints)))
+    Invalidate(region);   // repaint what moved: where fixed and sticky boxes were and are
+```
+
+A fixed box stays where its offsets put it in the viewport, a sticky box slides with the top (or bottom, left, right) of it until its containing block ends, and a fixed background image is positioned against it. Text runs, links, form controls and accessibility bounds follow, so a click lands on what is drawn. `Viewport` is the last rectangle given, and a document that is laid out again keeps it.
+
+A host that scrolls a surface natively (a scroller moved by the compositor) cannot keep a fixed or stuck box still by repainting it after the scroll: it would move with the content first and snap back a frame later. Paint such a document in two layers instead, the content on the scrolled surface and the boxes the viewport holds in place on a layer over it that does not scroll:
+
+```csharp
+await document.PaintPageAsync(0, scrolledCanvas, DocumentPaintLayer.Content);          // everything except fixed and stuck boxes
+// overlay canvas: the viewport, with the surface translated so the viewport's top-left is at (0, 0)
+await document.PaintPageAsync(0, overlayCanvas, DocumentPaintLayer.ViewportAttached);  // only fixed and stuck boxes
+```
+
+`Content` and `ViewportAttached` together draw exactly what `All` (the default) does. A fixed box is always in the attached layer; a sticky box is in it while the viewport holds it away from its place, and in the content layer (scrolling with it) before and after. A sticky table cell or row is held inside its table. A `Print` document has no viewport that moves: `SetViewport` returns nothing.
+
+A `background-attachment: fixed` image is different: it sits under its box's content and over the backgrounds behind it, so it is part of the content layer and cannot be kept still in the attached one. `HtmlDocument.HasViewportBackgrounds` reports whether the document has one; a host that scrolls a painted surface natively should then paint the visible part of the page itself on every scroll step (`PaintPageRegionAsync`) instead, or the image moves with the content until the next paint puts it back.
 
 ## What the pages hold besides pixels
 

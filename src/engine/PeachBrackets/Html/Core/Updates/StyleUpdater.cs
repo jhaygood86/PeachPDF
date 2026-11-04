@@ -93,7 +93,7 @@ namespace PeachBrackets.Html.Updates
                 var geometry = fragmentainers[page].Geometry;
                 var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
                 var rects = new List<Rect>();
-                Walk(fragmentainers[page].Root, box => ReferenceEquals(box, element), inside: false, frame, rects);
+                Walk(container, fragmentainers[page].Root, box => ReferenceEquals(box, element), inside: false, frame, rects);
                 foreach (var rect in Merge(rects))
                     regions.Add(new DirtyRegion(page, rect));
             }
@@ -116,7 +116,7 @@ namespace PeachBrackets.Html.Updates
                 var geometry = fragmentainers[page].Geometry;
                 var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
                 var rects = new List<Rect>();
-                Walk(fragmentainers[page].Root, box => box.HtmlTag is { } tag && ordinals.Contains(tag.SourceOrdinal), inside: false, frame, rects);
+                Walk(container, fragmentainers[page].Root, box => box.HtmlTag is { } tag && ordinals.Contains(tag.SourceOrdinal), inside: false, frame, rects);
                 foreach (var rect in Merge(rects))
                     regions.Add(new DirtyRegion(page, new Rect(rect.X - reach, rect.Y - reach, rect.Width + (reach * 2), rect.Height + (reach * 2))));
             }
@@ -156,24 +156,27 @@ namespace PeachBrackets.Html.Updates
             return null;
         }
 
-        private static void Walk(BoxFragment fragment, Func<CssBox, bool> isTarget, bool inside, TextRunCollector.Frame frame, List<Rect> rects)
+        private static void Walk(HtmlContainerInt container, BoxFragment fragment, Func<CssBox, bool> isTarget, bool inside, TextRunCollector.Frame frame, List<Rect> rects)
         {
             inside |= isTarget(fragment.Box);
             if (inside)
             {
+                // Where it is drawn: the viewport may have moved a fixed or stuck box.
+                var shift = container.View.DisplacementOf(fragment.Box);
+
                 // The decoration of each line it occupies, and its words (which can overhang the line's rectangle).
                 foreach (var line in fragment.Lines)
-                    rects.Add(ToPoints(line.Rect, frame));
+                    rects.Add(ToPoints(Shifted(line.Rect, shift), frame));
 
                 foreach (var word in fragment.Words)
-                    rects.Add(ToPoints(word.Rect, frame));
+                    rects.Add(ToPoints(Shifted(word.Rect, shift), frame));
 
                 if (fragment.Lines.Count == 0 && fragment.Words.Count == 0)
-                    rects.Add(ToPoints(fragment.Rect, frame));
+                    rects.Add(ToPoints(Shifted(fragment.Rect, shift), frame));
             }
 
             foreach (var child in fragment.Children)
-                Walk(child, isTarget, inside, frame, rects);
+                Walk(container, child, isTarget, inside, frame, rects);
         }
 
         private static Rect ToPoints(Rect layout, TextRunCollector.Frame frame) =>
@@ -214,20 +217,31 @@ namespace PeachBrackets.Html.Updates
         {
             var geometry = fragmentainer.Geometry;
             var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, container.RenderContext.LayoutUnitsPerPoint);
-            return Find(fragmentainer.Root, x, y, frame);
+            return Find(container, fragmentainer.Root, x, y, frame);
         }
 
-        private static CssBox? Find(BoxFragment fragment, double x, double y, TextRunCollector.Frame frame)
+        private static CssBox? Find(HtmlContainerInt container, BoxFragment fragment, double x, double y, TextRunCollector.Frame frame)
         {
             // The deepest match wins, and among siblings the one painted last (on top).
-            for (var i = fragment.Children.Count - 1; i >= 0; i--)
+            // The boxes the viewport holds in place are drawn above everything else, so they are tried before the content that follows them in the
+            // source; each group last to first, as painted.
+            for (var pass = container.View.HasAttached ? 0 : 1; pass < 2; pass++)
             {
-                if (Find(fragment.Children[i], x, y, frame) is { } found)
-                    return found;
+                for (var i = fragment.Children.Count - 1; i >= 0; i--)
+                {
+                    if (pass == 0 && !container.View.IsAttached(fragment.Children[i].Box))
+                        continue;
+
+                    if (pass == 1 && container.View.HasAttached && container.View.IsAttached(fragment.Children[i].Box))
+                        continue;
+
+                    if (Find(container, fragment.Children[i], x, y, frame) is { } found)
+                        return found;
+                }
             }
 
             // pointer-events: none lets the point through to whatever is beneath (its children, tried above, still receive it).
-            if (fragment.Box.PointerEvents.Value == Css.PointerEvents.None || fragment.Box.IsInert || !Covers(fragment, x, y, frame))
+            if (fragment.Box.PointerEvents.Value == Css.PointerEvents.None || fragment.Box.IsInert || !Covers(fragment, container.View.DisplacementOf(fragment.Box), x, y, frame))
                 return null;
 
             var box = fragment.Box;
@@ -237,11 +251,11 @@ namespace PeachBrackets.Html.Updates
             return box.HtmlTag is null ? null : box;
         }
 
-        private static bool Covers(BoxFragment fragment, double x, double y, TextRunCollector.Frame frame)
+        private static bool Covers(BoxFragment fragment, (double Dx, double Dy) shift, double x, double y, TextRunCollector.Frame frame)
         {
             foreach (var word in fragment.Words)
             {
-                if (Contains(word.Rect, x, y, frame))
+                if (Contains(Shifted(word.Rect, shift), x, y, frame))
                     return true;
             }
 
@@ -249,15 +263,19 @@ namespace PeachBrackets.Html.Updates
             {
                 foreach (var line in fragment.Lines)
                 {
-                    if (Contains(line.Rect, x, y, frame))
+                    if (Contains(Shifted(line.Rect, shift), x, y, frame))
                         return true;
                 }
 
                 return false;
             }
 
-            return Contains(fragment.Rect, x, y, frame);
+            return Contains(Shifted(fragment.Rect, shift), x, y, frame);
         }
+
+        // Where the viewport has put a fixed or stuck box, which is where it is drawn and where the pointer finds it.
+        private static Rect Shifted(Rect rect, (double Dx, double Dy) shift) =>
+            shift == default ? rect : new Rect(rect.X + shift.Dx, rect.Y + shift.Dy, rect.Width, rect.Height);
 
         private static bool Contains(Rect layout, double x, double y, TextRunCollector.Frame frame)
         {

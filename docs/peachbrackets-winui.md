@@ -12,6 +12,11 @@ dotnet add package PeachBrackets.WinUI
 It targets `net10.0-windows10.0.19041.0` (and `net11.0-windows10.0.19041.0` when built with the .NET 11 SDK) and uses the Windows App SDK.
 The application supplies the Win2D native binary by building for a platform (`x64`, `ARM64`).
 
+The package depends on only the parts of the Windows App SDK it compiles against (`Microsoft.WindowsAppSDK.WinUI`, `.Foundation`,
+`.InteractiveExperiences` and `.Base`), not the all-in-one `Microsoft.WindowsAppSDK` package, which also brings the AI, ML, Search and Widgets
+components (over 100 MB of ONNX Runtime and DirectML). The application decides how it gets the Windows App SDK runtime: reference
+`Microsoft.WindowsAppSDK` itself for the whole thing, or `Microsoft.WindowsAppSDK.Runtime` (and `.DWrite` if it uses it) for a lean package.
+
 > **Status: pre-1.0.** The public surface is `HtmlView`, `HtmlLinkClickedEventArgs` and `HtmlLoadFailedEventArgs`; `PublicApi.txt` beside the
 > project is the reviewed snapshot.
 
@@ -43,8 +48,80 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | `Document` | The loaded `HtmlDocument` (replaced whenever the view reloads), for anything the control does not wrap: find, element bounds, annotations. |
 | `SelectedText`, `CopySelection()`, `SelectAll()` | Selection and the clipboard. Ctrl+C and Ctrl+A work when the control has focus. |
 | `ScrollToElement(id)` | Scrolls an element to the top. |
+| `ScrollMode` | `Auto` (the default) makes the view a viewer that scrolls and zooms itself; `Disabled` makes it a block in other layout, as tall as its document. See [Using the view in a list](#using-the-view-in-a-list). |
+| `ContentHeight`, `ContentHeightChanged` | The height of the laid-out document in device-independent pixels, and the event raised when it changes. |
+| `IsLayoutSynchronous` | Says the document needs nothing asynchronous, so it is loaded and laid out in the same call that needs its size. |
+| `IsZoomEnabled` | Whether Ctrl+wheel and pinch zoom the document (only a view that scrolls itself zooms). |
+| `SelectionColor` | The colour behind selected text. |
+| `UserStyleSheet`, `DocumentMargin` | A style sheet applied before the document's own, and the space left around the document (none by default). |
+| `FontSet` | The fonts the view resolves families from; the shared [`HtmlViewFonts`](#fonts) set unless you give it another. |
 | `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. |
 | `LinkClicked` | Raised before a link is followed; set `Cancel` to handle it yourself. |
+
+## Images, style sheets and fonts
+
+A document's images, style sheets and fonts load from `data:` URIs and from files. Web addresses are not fetched unless the host sets `AllowNetworkAccess` (off by default, so a document cannot make the application call out); changing it loads the document again. `IsLayoutSynchronous` still refuses anything that would have to be fetched. The loader is `PeachBrackets.HostResourceLoader`, which a host of its own (a `RenderContext` that answers `GetResourceStream`, or `RasterRenderContext.ResourceLoader`) can use too.
+
+## One surface, not pages
+
+The view lays its document out as `MediaType.Screen`: one surface as wide as the view, with no pages, no gap between pages and nothing cut at a page height, however tall the document is. In `Auto` mode the view tells the document where it is scrolled (`HtmlDocument.SetViewport`), so `position: fixed`, `position: sticky` and `background-attachment: fixed` follow the scroll, and it draws fixed and stuck boxes on a layer over the scroller (`DocumentPaintLayer.ViewportAttached`) so they never move with the content on the way to their place; the viewport height is the height of the view, and a change of it lays the document out again. A document with a `background-attachment: fixed` image is painted differently: the view draws the visible part of the page itself, on the non-scrolling layer, on every scroll step, and the scrolled canvas only provides the extent, so the picture never moves with the content. An auto-height view (`ScrollMode = Disabled`) has no scroller of its own: it takes the finite height its host offered when it was first measured as the viewport for `vh`, and none when it was offered an unbounded one.
+
+## Using the view in a list
+
+A chat message, a comment or a card is a small HTML document that sits in a list of others. Set `ScrollMode` to `Disabled` and the view stops
+being a viewer and becomes a block:
+
+```csharp
+var view = new HtmlView
+{
+    ScrollMode = HtmlViewScrollMode.Disabled,   // as tall as the document; no scroller of its own
+    IsLayoutSynchronous = true,                 // the document needs nothing asynchronous
+    PageBackground = Colors.Transparent,
+    Html = messageHtml,
+};
+```
+
+- **Height follows the content.** The view measures to the document's height at the width it is given, so a list sizes the row without
+  any code of yours. `ContentHeight` is the same number as a property, and `ContentHeightChanged` is raised when it changes. When the width
+  changes the document is laid out again at once, in the same layout pass, and the height is the new one.
+- **The document starts at the top-left corner.** There is no gutter, no inset and no gap between pages; the only space around the document is
+  `DocumentMargin`, which is none unless you set it.
+- **The wheel, touch panning and zoom are left alone.** The view has no scroller of its own, so a wheel turn over a row, or a finger that starts on
+  one, scrolls the list. Pinch and Ctrl+wheel zoom are for a view that scrolls itself.
+- **Everything else still works**: selection and copy, links (`LinkClicked`), the cursor, hover and the other interaction styles, and
+  accessibility. A link to a place in the document asks the list to bring that place into view.
+
+### Knowing the height without waiting
+
+Loading and laying out a document is asynchronous in general, because a document may fetch images and style sheets. A document whose pieces are
+inline (`data:` URIs), already registered ([fonts](#fonts)) or otherwise answered without waiting needs none of that, and `IsLayoutSynchronous`
+says so. The view then loads and lays the document out inside the call that needs its size, so the height of a row is exact the first time
+it is measured and a virtualized list does not jump when a row settles.
+
+If the document then tries to do something that would have to wait (fetch an image over the network, load a web font by URL), loading fails
+with an `InvalidOperationException` that names the resource, delivered through `DocumentFailed`; nothing blocks. The same switch exists on
+[`HtmlDocumentOptions.SynchronousOnly`](peachbrackets.md#synchronous-layout) for code that drives the engine directly. Even without it the
+view finishes inside the first measure whenever everything the document needs is already available; the switch is what makes that a guarantee.
+
+### Recycling
+
+A virtualized list reuses views, setting `Html` again on one it took from the pool. Setting `Html` (or `Source`) to a different value
+discards the previous document at once, so a recycled row never shows the old content, and loads the new one the next time the view is measured
+(immediately, when `IsLayoutSynchronous` is on). Setting it to the value it already has does nothing. A change of width, theme, `SelectionColor`,
+`UserStyleSheet` or `DocumentMargin` loads the document again, and keeps showing the old one until the new one is ready.
+
+### Fonts
+
+A font added to `HtmlViewFonts` is parsed once and shared by every view and every document:
+
+```csharp
+HtmlViewFonts.AddFile(@"C:/app/fonts/Inter-Regular.ttf", new AddOptions { FamilyName = "Inter" });
+```
+
+Add the application's fonts at start-up and refer to them by family name from the HTML. A list of a hundred rows pays for each font once, and a
+font added later is seen by a view the next time it loads a document. Adding the same font again with the same description does nothing. A view
+that should keep its fonts apart takes a `FontSet` of its own (`HtmlView.FontSet`, set before it loads). An `@font-face` rule that names a file
+still works; the font is added to the same set. Views that use the DirectWrite text engine keep their own faces.
 
 ## What it does with the document's interaction styles
 
@@ -104,6 +181,16 @@ A text area takes Enter (a line break), Up and Down (by line, keeping the column
 - A `url()` cursor image uses its first frame, and an SVG image is not used (the keyword's pointer is shown instead).
 - Find in the page is available through `Document` (`FindText`) but has no built-in user interface.
 
+## The demo
+
+`src/examples/PeachBrackets.WinUI.Example` is a showcase browser: every showcase of the PDF test harness and a set of screen-only ones (a page far taller than any page, viewport units, sticky headers, a fixed toolbar, a fixed background, responsive media queries, light and dark, hover and cursors, pointer media features, in-page links, form controls, selection, columns on a long page, chat messages) in an `HtmlView`, with a panel of the knobs a host has: the width and height of the box the widget sits in (fixed or as tall as its content, and a list mode that shows the document in each of 100 recycled rows), `ScrollMode`, `IsZoomEnabled`, `IsLayoutSynchronous`, `DocumentMargin`, `PageBackground`, `SelectionColor`, the theme, the input devices, `TextRendering`, `UserStyleSheet` and the shared font set. Every change applies live. Build and run it from `src`:
+
+```bash
+dotnet build examples/PeachBrackets.WinUI.Example/PeachBrackets.WinUI.Example.csproj -p:Platform=x64
+```
+
+The build runs the test harness once with `--html-only` to write the showcases as HTML (no PDFs) and copies them beside the program; `-p:SkipShowcaseExport=true` builds without them. `--smoke-all <file>` loads every showcase and checks that each is one surface and that the sticky and fixed ones follow the viewport.
+
 ## Trying it
 
 `src/examples/PeachBrackets.WinUI.Example` is a small app with an `HtmlView`. Started with `--smoke <file>` it loads a page, checks what the
@@ -113,4 +200,6 @@ control is exercised without anyone looking at it.
 The control is also tested in a real window: `src/tests/PeachBrackets.WinUI.UITests` runs one WinUI application on its own thread for the whole test
 run, puts an `HtmlView` in its window and checks what it loads, lays out and reports to UI Automation (control types, heading levels, link
 invocation, bounding rectangles). Run it with `dotnet test --project tests/PeachBrackets.WinUI.UITests/PeachBrackets.WinUI.UITests.csproj` on a
-Windows machine with a desktop session.
+Windows machine with a desktop session. `HtmlViewListTests` there puts a hundred views of mixed heights in a virtualized `ItemsRepeater` inside a
+`ScrollViewer`, scrolls it down and back up in large steps, and checks that every row is as tall as its document, shows its own content, has been
+painted when it is in view, and supports selection and links, that views are reused, and that a row has no scroller of its own.

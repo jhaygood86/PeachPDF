@@ -82,12 +82,20 @@ var benchmarkIterations = 10;
 // canvas does with real documents; the docs site links it from the showcase card. --svg-text writes selectable <text> with
 // embedded subset fonts instead of glyph outlines.
 var svgMode = false;
+
+// --html-only: write each showcase's HTML source and the manifest, and render nothing. The WinUI and Android demo apps show the same
+// showcases on screen, so they take their HTML from here instead of keeping a copy.
+var htmlOnlyMode = false;
 var svgTextMode = PeachDrawing.Svg.SvgTextMode.Outlines;
 for (var i = 0; i < args.Length; i++)
 {
     if (args[i] == "--benchmark")
     {
         benchmarkMode = true;
+    }
+    else if (args[i] == "--html-only")
+    {
+        htmlOnlyMode = true;
     }
     else if (args[i] == "--svg")
     {
@@ -141,7 +149,6 @@ static PdfGenerateConfig ClonePdfAConfig(PdfGenerateConfig source, DateTimeOffse
     ScaleToPageSize = source.ScaleToPageSize,
     ShrinkToFit = source.ShrinkToFit,
     MinContentWidth = source.MinContentWidth,
-    Media = source.Media,
     PreferredColorScheme = source.PreferredColorScheme,
     IgnoreAuthorStyleSheets = source.IgnoreAuthorStyleSheets,
     SnapBoxDecorationsToCssPixels = source.SnapBoxDecorationsToCssPixels,
@@ -195,6 +202,12 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
 {
     RequirePlainTextMetadata(slug, category, cardTitle, cardDescription);
 
+    if (htmlOnlyMode)
+    {
+        SaveHtmlOnly(slug, category, cardTitle, cardDescription, sourceHtml);
+        return;
+    }
+
     if (benchmarkMode)
     {
         await BenchmarkShowcaseAsync(slug, sourceHtml, renderConfig);
@@ -225,6 +238,13 @@ async Task SaveShowcaseAsync(string slug, string category, string cardTitle, str
             Console.WriteLine($"PDF/A SWEEP GENERATION FAILED for {slug}: {ex.GetType().Name}: {ex.Message}");
         }
     }
+}
+
+void SaveHtmlOnly(string slug, string category, string cardTitle, string cardDescription, string sourceHtml)
+{
+    File.WriteAllText(Path.Combine(outputDir, $"{slug}.html"), sourceHtml);
+    showcaseManifest.Add(new ShowcaseEntry(slug, category, cardTitle, cardDescription, string.Empty, $"{slug}.html"));
+    Console.WriteLine($"Saved {slug}.html");
 }
 
 // The SVG counterpart of a showcase (--svg): the same HTML and config rendered onto an SvgCanvas, one file per page. Returns the first
@@ -262,7 +282,8 @@ async Task SaveDeclarativeShowcaseAsync(string slug, string category, string car
     // --benchmark measures HTML-parsing showcases only (BenchmarkShowcaseAsync times GeneratePdf
     // specifically) - a declarative showcase has no comparable "parse this HTML" cost to measure, so it
     // simply doesn't run in that mode rather than writing files a benchmark pass isn't meant to produce.
-    if (benchmarkMode) return;
+    // A declarative showcase is a listing of the C# that builds it, with nothing to show on a screen.
+    if (benchmarkMode || htmlOnlyMode) return;
 
     var showcaseDocument = await build(generator);
     using var pdfStream = new MemoryStream();
@@ -299,6 +320,12 @@ async Task SaveStatesShowcaseAsync(string slug, string category, string cardTitl
         foreach (var (label, config) in states.Skip(1))
             await generator.AddPdfPages(document, Labelled(sourceHtml, label), configFor(config));
         return document;
+    }
+
+    if (htmlOnlyMode)
+    {
+        SaveHtmlOnly(slug, category, cardTitle, cardDescription, sourceHtml);
+        return;
     }
 
     // --benchmark times one render of the HTML; the extra pages only repeat it under another setting.

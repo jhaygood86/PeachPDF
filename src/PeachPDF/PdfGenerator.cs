@@ -664,7 +664,6 @@ namespace PeachPDF
                 MarginRightPoints = config.MarginRight,
                 MarginBottomPoints = config.MarginBottom,
                 MarginLeftPoints = config.MarginLeft,
-                Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media,
                 ColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
                 IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets,
                 SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,

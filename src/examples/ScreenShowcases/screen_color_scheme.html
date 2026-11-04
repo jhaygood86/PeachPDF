@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Light and dark</title>
+<style>body{margin:0;font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#222}h1,h2{margin:0}</style>
+</head>
+<body>
+<style>:root{color-scheme:light dark;--bg:#fff;--fg:#1f2937;--card:#f3f4f6;--accent:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#0f172a;--fg:#e5e7eb;--card:#1e293b;--accent:#60a5fa}}
+body{background:var(--bg);color:var(--fg);padding:24px}.card{background:var(--card);padding:16px;border-radius:8px;margin:12px 0}a{color:var(--accent)}</style>
+<h1>Theme aware</h1><div class="card"><p>This card uses custom properties that change with <code>prefers-color-scheme</code>.</p><p><a href="#x">A link in the accent colour</a></p></div>
+</body></html>

@@ -24,7 +24,7 @@ namespace PeachBrackets.Engine.Tests.CSS
             return bytes;
         }
 
-        private static Task<System.ReadOnlyMemory<char>> LoadAsync(Stream stream, Encoding? encoding = null) =>
+        private static ValueTask<System.ReadOnlyMemory<char>> LoadAsync(Stream stream, Encoding? encoding = null) =>
             CssStreamLoader.LoadAsync(stream, encoding, CancellationToken.None);
 
         [Fact]

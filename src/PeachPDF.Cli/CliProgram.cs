@@ -72,7 +72,6 @@ internal static class CliProgram
 
         CSS:
           -s, --style=FILE           Apply a user style sheet (repeatable, last wins).
-              --media=MEDIA          CSS media type to render (default: print).
               --animation-progress=P Render CSS animations as one frame: start, end, or a
                                      number from 0 to 1 (a point in each animation's own
                                      run). Default: animations are not applied.

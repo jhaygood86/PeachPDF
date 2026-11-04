@@ -81,6 +81,79 @@ namespace PeachBrackets.Engine.Tests.Integration
             }
         }
 
+        [Theory]
+        [InlineData("<div class='mark' style='width:12pt;height:12pt'></div> Support by Peach State Technologies")]
+        [InlineData("<img class='mark' width='16' height='16' style='display:block'> Support by Peach State Technologies")]
+        [InlineData("Support by Peach State Technologies <div class='mark' style='width:12pt;height:12pt'></div>")]
+        public async Task AFlexItemThatIsBareText_IsAsTallAsItsLines_NotAsItsLongestWordsStacked(string content)
+        {
+            // The text is one line, so the item (and the row) is one line tall; a height taken from the text laid out one word per line would be five.
+            var html = Wrap("<div class='row' style='display:flex;align-items:center;gap:4pt;margin:0'>" + content + "</div>");
+            var (root, _) = await BuildAndLayout(html);
+            var row = FindAllByClass(root, "row")[0];
+            var text = row.Boxes.First(b => b.HtmlTag is null && b.Words.Count > 1);
+
+            Assert.Single(text.LineBoxes);
+            Assert.True(text.Size.Height < 20, $"text item height {text.Size.Height}");
+            Assert.True(row.Size.Height < 20, $"row height {row.Size.Height}");
+        }
+
+        [Theory]
+        [InlineData("display:block", "width:100%;max-width:870pt", 0, 595)]
+        [InlineData("display:flex", "width:100%;max-width:870pt", 0, 595)]
+        [InlineData("display:block", "width:100%;max-width:300pt", 147.5, 300)]
+        [InlineData("display:flex", "width:100%;max-width:300pt", 147.5, 300)]
+        [InlineData("display:flex", "width:300pt", 147.5, 300)]
+        [InlineData("display:grid", "width:100%;max-width:300pt", 147.5, 300)]
+        public async Task AutoMarginsCenterAContainerByItsUsedWidth_WhateverItsDisplay(string display, string width, double expectedX, double expectedWidth)
+        {
+            // A site header's wrapper: `width: 100%; max-width: ...; margin: 0 auto` on a flex container. Its used width is known from its style, so the
+            // free space the auto margins share is too; reading the width off a box that has not been sized yet gave 0 and pushed it right by half the page.
+            var (root, _) = await BuildAndLayout(Wrap($"<style>body{{margin:0}}</style><div class='wrap' style='{display};{width};margin:0 auto'>x</div>"));
+            var wrap = FindAllByClass(root, "wrap")[0];
+
+            Assert.Equal(expectedX, wrap.Location.X, 0.5);
+            Assert.Equal(expectedWidth, wrap.Size.Width, 0.5);
+        }
+
+        [Theory]
+        [InlineData("display:inline-flex;align-items:center;gap:.5em;padding:.55em 1.3em;white-space:nowrap")]
+        [InlineData("display:inline-block;padding:.55em 1.3em;white-space:nowrap")]
+        [InlineData("display:inline-grid;padding:.55em 1.3em;white-space:nowrap")]
+        public async Task AFlexItemWhoseContentIsAnAtomicInline_IsAsWideAsThatInline(string buttonStyle)
+        {
+            // A nav item (`<li><a class=btn>Connect With Us</a></li>`) in a flex row: the item has no words of its own, only the button box, so
+            // measuring the words on its line found nothing and the item collapsed to 0, leaving the button to overlap its neighbour.
+            var html = Wrap($"<style>body{{margin:0;font-size:12pt}}.list{{display:flex;gap:4.5pt;list-style:none;margin:0;padding:0}}.btn{{{buttonStyle}}}</style>"
+                + "<ul class='list'><li class='it'>Contact</li><li class='it'><a class='btn'>Connect With Us</a></li></ul>");
+            var (root, _) = await BuildAndLayout(html);
+            var items = FindAllByClass(root, "it");
+            var button = FindAllByClass(root, "btn")[0];
+
+            Assert.True(items[1].Size.Width >= button.Size.Width - 0.5, $"item {items[1].Size.Width} narrower than its button {button.Size.Width}");
+            Assert.True(items[1].Location.X >= items[0].Location.X + items[0].Size.Width, "the second item starts after the first ends");
+        }
+
+        [Theory]
+        [InlineData("width:7pt;height:7pt", "direct")]
+        [InlineData("box-sizing:border-box;width:7pt;height:7pt;border-right:2pt solid;border-bottom:2pt solid", "direct")]
+        [InlineData("width:7pt;height:7pt", "list")]
+        [InlineData("box-sizing:border-box;width:7pt;height:7pt;border-right:2pt solid;border-bottom:2pt solid", "list")]
+        public async Task AnEmptyFlexItemWithADeclaredWidth_KeepsItInsideAFlexContainerThatIsItselfAnItem(string caretCss, string where)
+        {
+            // A nav link with a CSS chevron: `<a class=link>Services <span class=caret></span></a>` where the link is a flex container and the
+            // caret an empty box with a width. The link is itself sized from its content, which left the caret's declared width out, so the link came out
+            // too narrow and shrank the caret to its border (a chevron drew as a slash).
+            var css = "body{margin:0;font-size:12pt}.list{display:flex;list-style:none;margin:0;padding:0}.lk{display:flex;align-items:center;gap:4.5pt;padding:7.5pt 12pt}.c{" + caretCss + "}";
+            var link = "<a class='lk'>Services <span class='c'></span></a>";
+            var body = where == "list" ? $"<ul class='list'><li>{link}</li></ul>" : $"<div class='list'>{link}</div>";
+            var (root, _) = await BuildAndLayout(Wrap("<style>" + css + "</style>" + body));
+            var caret = FindAllByClass(root, "c")[0];
+
+            Assert.Equal(7, caret.Size.Width, 0.5);
+            Assert.Equal(7, caret.Size.Height, 0.5);
+        }
+
         // ─── Column layout ───────────────────────────────────────────────────────
 
         [Fact]

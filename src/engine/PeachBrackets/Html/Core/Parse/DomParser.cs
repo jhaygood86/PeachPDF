@@ -118,7 +118,7 @@ namespace PeachBrackets.Html.Parse
         /// pass (<see cref="HtmlContainerInt.PerformLayout"/>) - every <c>@container</c> condition then
         /// evaluates false, the correct bootstrap. <c>null</c> for every caller that isn't that loop.</param>
         /// <returns>the root of the generated tree</returns>
-        public async Task<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData, ContainerQuerySizes? containerSizes = null)
+        public async ValueTask<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData, ContainerQuerySizes? containerSizes = null)
         {
             CssBox.ClearCounter();
             var root = HtmlParser.ParseDocument(html, document: true);
@@ -164,12 +164,18 @@ namespace PeachBrackets.Html.Parse
 
             var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
-            await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext);
+            await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext, htmlContainer.SynchronousOnly);
 
-            CascadeApplyPageStyles(htmlContainer, root, cssData);
-            htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
-                .OfType<PageRule>()
-                .ToList();
+            // Screen media has no pages: @page (size, margins, borders, named pages, margin boxes) only describes a page box, which a
+            // continuous surface does not have, and browsers ignore it there. The container keeps no page rules, so every page
+            // lookup falls back to the geometry the host configured.
+            if (!htmlContainer.Continuous)
+            {
+                CascadeApplyPageStyles(htmlContainer, root, cssData);
+                htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
+                    .OfType<PageRule>()
+                    .ToList();
+            }
 
             // Collect @property registrations before the cascade runs — InheritStyle (step 2) and var()
             // resolution both consult the registry. (Shared with the standalone-SVG loader via BuildRegistry.)
@@ -224,7 +230,7 @@ namespace PeachBrackets.Html.Parse
             // it, can see only the synthetic wrapper's default font. Reading the html box's font any earlier
             // would memoize the default on it (DerivedStyle.ActualFont caches on first read), which is why
             // this is a second resolve rather than a moved one.
-            if (htmlBox is not null)
+            if (htmlBox is not null && !htmlContainer.Continuous)
             {
                 var rootFontPt = htmlBox.GetEmHeight();
                 if (htmlContainer.PageLengthContext is not { } captured || Math.Abs(captured.RemPt - rootFontPt) > 0.001)
@@ -253,6 +259,8 @@ namespace PeachBrackets.Html.Parse
             FlattenDisplayContents(htmlContainer.DisplayContentsShells, cssValueParser);
 
             CorrectTextBoxes(root);
+
+            WrapDetailsContents(root);
 
             CorrectReplacedElementBoxes(root);
 
@@ -312,6 +320,7 @@ namespace PeachBrackets.Html.Parse
             {
                 if (child.HtmlTag?.Name == "foreignObject" && box.IsWithinForeignContent)
                 {
+                    WrapDetailsContents(child);
                     CorrectReplacedElementBoxes(child);
                     CorrectLineBreaksBlocks(child);
                     CorrectInlineBoxesParent(child);
@@ -372,7 +381,7 @@ namespace PeachBrackets.Html.Parse
 
                 if (authorNormal.Count > 0 || authorImportant.Count > 0)
                 {
-                    var pendingVarProperties = new Dictionary<string, string>();
+                    var pendingVarProperties = new PendingVarMap();
 
                     var needsRevert = RulesUseRevertKeyword(authorNormal) || RulesUseRevertKeyword(authorImportant);
                     var priorSnapshot = needsRevert ? CssUtils.SnapshotProperties(box) : null;
@@ -547,7 +556,7 @@ namespace PeachBrackets.Html.Parse
         /// tree walk can find any more and the caller has to hand on to the container that will own the
         /// document (<see cref="HtmlContainerInt.DisplayContentsShells"/>).
         /// </returns>
-        internal async Task<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext renderContext, CssData cssData)
+        internal async ValueTask<(CssBox Root, List<CssBox> DisplayContentsShells)> GenerateFragmentCssTree(string html, RenderContext renderContext, CssData cssData)
         {
             var root = HtmlParser.ParseDocument(html);
             var cssValueParser = new CssValueParser(renderContext);
@@ -575,6 +584,7 @@ namespace PeachBrackets.Html.Parse
             // as-authored tree exactly as GenerateCssTree's own is, just without a bidi pass before it.
             FlattenDisplayContents(displayContentsShells, cssValueParser);
 
+            WrapDetailsContents(root);
             CorrectTextBoxes(root);
             CorrectReplacedElementBoxes(root);
             CorrectLineBreaksBlocks(root);
@@ -596,7 +606,7 @@ namespace PeachBrackets.Html.Parse
         /// <see cref="HtmlContainerInt.SetDeclarativeRoot"/> to register fonts from a document-level stylesheet
         /// attached to a declarative document (<c>Layout.IDocumentBuilder.Stylesheet</c>).
         /// </summary>
-        internal static async Task CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext)
+        internal static async ValueTask CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext, bool synchronousOnly = false)
         {
             foreach (var stylesheet in cssData.Stylesheets)
             {
@@ -627,12 +637,12 @@ namespace PeachBrackets.Html.Parse
 
                         if (fontFaceDefinition.Local is not null)
                         {
-                            isLoaded = await renderContext.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges);
+                            isLoaded = await AsyncGuard.Require(renderContext.AddLocalFontFamily(fontFamilyName, fontFaceDefinition.Local, descriptors, unicodeRanges), synchronousOnly, "load the local font", fontFaceDefinition.Local);
                         }
 
                         if (!isLoaded && fontFaceDefinition.Url is not null)
                         {
-                            isLoaded = await renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges);
+                            isLoaded = await AsyncGuard.Require(renderContext.AddFontFamilyFromUrl(fontFamilyName, fontFaceDefinition.Url, fontFaceDefinition.Format, stylesheet.BaseUri, descriptors, unicodeRanges), synchronousOnly, "load the web font", fontFaceDefinition.Url);
                         }
 
                         if (isLoaded) break;
@@ -656,7 +666,7 @@ namespace PeachBrackets.Html.Parse
         /// </param>
         /// <param name="cssData">the style data to fill with found styles</param>
         /// <param name="cssDataChanged">check if the css data has been modified by the handled html not to change the base css data</param>
-        private async Task<(CssData cssData, bool cssDataChanged)> CascadeParseStyles(CssBox box, HtmlContainerInt? htmlContainer, CssData cssData, bool cssDataChanged)
+        private async ValueTask<(CssData cssData, bool cssDataChanged)> CascadeParseStyles(CssBox box, HtmlContainerInt? htmlContainer, CssData cssData, bool cssDataChanged)
         {
             if (box.HtmlTag != null)
             {
@@ -1337,7 +1347,7 @@ namespace PeachBrackets.Html.Parse
             // Regular property declarations whose value contains var(...) are deferred here and resolved
             // once, after the whole cascade (all phases below) has finished, so var() sees this box's
             // FINAL custom property values regardless of which phase declared them.
-            var pendingVarProperties = new Dictionary<string, string>();
+            var pendingVarProperties = new PendingVarMap();
 
             // Matched rules are already sorted by CssData (specificity ascending, then true source
             // order) - materialize each origin once so both the normal and important passes below
@@ -1870,7 +1880,7 @@ namespace PeachBrackets.Html.Parse
             // defaulted to baseline while box didn't.
             shadowBox.VerticalAlign = box.VerticalAlign;
 
-            var pendingVarProperties = new Dictionary<string, string>();
+            var pendingVarProperties = new PendingVarMap();
             AssignCssBlocks(valueParser, shadowBox, firstLineUaRules, importantPass: false, null, null, null, null, pendingVarProperties);
             AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: false, null, null, null, null, pendingVarProperties);
             AssignCssBlocks(valueParser, shadowBox, firstLineAuthorRules, importantPass: true, null, null, null, null, pendingVarProperties);
@@ -1903,7 +1913,7 @@ namespace PeachBrackets.Html.Parse
             // A run of text and an anonymous box are not elements: nothing matches them, they only inherit.
             if (box.HtmlTag is not null || box.IsPseudoElement)
             {
-                var pendingVarProperties = new Dictionary<string, string>();
+                var pendingVarProperties = new PendingVarMap();
                 var uaRules = cssData.GetUserAgentStyleRules(media, box, containerSizes);
                 var (authorNormal, authorImportant) = cssData.GetAuthorStyleRulesForCascade(media, box, containerSizes);
 
@@ -2050,7 +2060,7 @@ namespace PeachBrackets.Html.Parse
             // stays the element's unless a rule changes it). The style's ParentBox is the element, which is what the painter compares against.
             shadowBox.InheritStyle(element);
 
-            var pendingVarProperties = new Dictionary<string, string>();
+            var pendingVarProperties = new PendingVarMap();
             AssignCssBlocks(valueParser, shadowBox, uaRules, importantPass: false, null, null, null, null, pendingVarProperties);
             AssignCssBlocks(valueParser, shadowBox, authorRules, importantPass: false, null, null, null, null, pendingVarProperties);
             AssignCssBlocks(valueParser, shadowBox, authorRules, importantPass: true, null, null, null, null, pendingVarProperties);
@@ -2514,7 +2524,7 @@ namespace PeachBrackets.Html.Parse
             IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
-            Dictionary<string, string> pendingVarProperties,
+            PendingVarMap pendingVarProperties,
             IReadOnlySet<string>? skipPropertyNames = null)
         {
             foreach (var rule in rules)
@@ -2540,7 +2550,7 @@ namespace PeachBrackets.Html.Parse
             IReadOnlyDictionary<string, string?>? revertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             bool captureLayerBands,
-            Dictionary<string, string> pendingVarProperties,
+            PendingVarMap pendingVarProperties,
             IReadOnlySet<string>? skipPropertyNames = null)
         {
             var revertLayerTarget = revertTarget;
@@ -2580,7 +2590,7 @@ namespace PeachBrackets.Html.Parse
             CssBox box,
             IReadOnlyList<CssData.LayeredStyleRule> authorImportant,
             IStyleRule? inlineRule,
-            Dictionary<string, string> pendingVarProperties,
+            PendingVarMap pendingVarProperties,
             HashSet<string> importantCustomProperties)
         {
             var colorIsImportant = false;
@@ -2594,7 +2604,7 @@ namespace PeachBrackets.Html.Parse
             return colorIsImportant;
         }
 
-        private static bool PreApplyImportantDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, Dictionary<string, string> pendingVarProperties, HashSet<string> importantCustomProperties)
+        private static bool PreApplyImportantDeclarations(CssValueParser valueParser, CssBox box, IStyleRule rule, PendingVarMap pendingVarProperties, HashSet<string> importantCustomProperties)
         {
             var colorIsImportant = false;
 
@@ -2636,7 +2646,7 @@ namespace PeachBrackets.Html.Parse
                 {
                     // A plain value supersedes an earlier deferred var() one for the same property, as in the cascade proper; left in
                     // place, the animation would settle it over this value.
-                    pendingVarProperties.Remove(prop.Name);
+                    pendingVarProperties.NotePlain(prop.Name);
                     CssUtils.SetPropertyValue(valueParser, box, prop.Name, value);
                 }
 
@@ -2737,7 +2747,7 @@ namespace PeachBrackets.Html.Parse
             IReadOnlyDictionary<string, string?>? revertLayerTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertTarget,
             IReadOnlyDictionary<string, string>? customPropertyRevertLayerTarget,
-            Dictionary<string, string> pendingVarProperties,
+            PendingVarMap pendingVarProperties,
             IReadOnlySet<string>? skipPropertyNames = null)
         {
             foreach (var prop in stylesheetRule.Style)
@@ -2757,7 +2767,7 @@ namespace PeachBrackets.Html.Parse
                 // background-image holds parsed layers, not text, so it has no string getter for the generic inherit below to read: copy the parent's layers.
                 if (prop.Value == Keywords.Inherit && box.ParentBox != null && prop.Name.Equals("background-image", StringComparison.OrdinalIgnoreCase))
                 {
-                    pendingVarProperties.Remove(prop.Name);
+                    pendingVarProperties.NotePlain(prop.Name);
                     box.BackgroundImages = box.ParentBox.BackgroundImages?.Select(image => image?.CopyForInheritance()).ToList();
                     continue;
                 }
@@ -2798,7 +2808,7 @@ namespace PeachBrackets.Html.Parse
                 }
 
                 // A later plain value supersedes an earlier deferred var() value for the same property.
-                pendingVarProperties.Remove(prop.Name);
+                pendingVarProperties.NotePlain(prop.Name);
 
                 // Typed fast-path: a non-global-keyword value carries its Layer A parse as a CssProperty<T>
                 // (e.g. grid-template-* -> GridTemplate); apply it straight to the box without re-parsing. A
@@ -2898,7 +2908,7 @@ namespace PeachBrackets.Html.Parse
         /// <param name="only">When given, resolves just the entries whose property name it accepts and removes them
         /// from <paramref name="pendingVarProperties"/>; the animation step uses this to settle the properties it is
         /// about to animate, so their underlying value is real and nothing resolves over the animated value later.</param>
-        internal static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, Dictionary<string, string> pendingVarProperties, Func<string, bool>? only = null)
+        internal static void ResolveDeferredVarProperties(CssValueParser valueParser, CssBox box, PendingVarMap pendingVarProperties, Func<string, bool>? only = null)
         {
             if (pendingVarProperties.Count == 0) return;
 
@@ -2911,17 +2921,19 @@ namespace PeachBrackets.Html.Parse
                 ? new CssVarResolver.VarContext(registered, valueParser)
                 : null;
 
-            IEnumerable<KeyValuePair<string, string>> entries = only is null
-                ? pendingVarProperties
-                : pendingVarProperties.Where(entry => only(entry.Key)).ToList();
+            // In the order the declarations were written, so a later one wins as it does in the cascade.
+            var entries = (only is null ? pendingVarProperties.ToList() : pendingVarProperties.Where(entry => only(entry.Key)).ToList())
+                .OrderBy(entry => pendingVarProperties.OrderOf(entry.Key))
+                .ToList();
 
             foreach (var (name, rawValue) in entries)
             {
+                var position = pendingVarProperties.OrderOf(name);
                 var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic, context);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 
                 if (finalValue is not null)
-                    ApplyResolvedPropertyValue(valueParser, box, name, finalValue);
+                    ApplyResolvedPropertyValue(valueParser, box, name, finalValue, pendingVarProperties, position);
 
                 if (only is not null)
                     pendingVarProperties.Remove(name);
@@ -2938,7 +2950,7 @@ namespace PeachBrackets.Html.Parse
         /// because they can't be split into per-longhand slices until their var() references are resolved,
         /// which has only just happened here.
         /// </summary>
-        private static void ApplyResolvedPropertyValue(CssValueParser valueParser, CssBox box, string name, string value)
+        private static void ApplyResolvedPropertyValue(CssValueParser valueParser, CssBox box, string name, string value, PendingVarMap pending, int position)
         {
             // Re-parse through the real Layer A converter for every var()-resolved declaration, not just
             // shorthands, so calc()-family (and any other) expressions are validated and canonicalized the
@@ -2952,6 +2964,10 @@ namespace PeachBrackets.Html.Parse
 
                 foreach (var longhand in longhands)
                 {
+                    // A longhand written after the shorthand wins over what the shorthand sets (or resets) it to.
+                    if (pending.IsSetPlainAfter(longhand.Name, position))
+                        continue;
+
                     // A sub-property the shorthand text didn't mention must still reset to its CSS-spec
                     // initial value (e.g. a prior "font-style: italic" must not survive a later
                     // "font: bold var(--sz) Arial") - matching what the non-var() shorthand path
@@ -3706,7 +3722,7 @@ namespace PeachBrackets.Html.Parse
                         childBox.DerivedStyle.ActualDisplay == Keywords.InlineBlock);
                 }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (box.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.HtmlParsing, "Failed in block inside inline box correction", ex);
@@ -3866,6 +3882,39 @@ namespace PeachBrackets.Html.Parse
                 if (splitBox.HtmlTag is { Name: "br" } && (leftbox != null || leftBlock.Boxes.Count > 1))
                     splitBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.Inline, DisplayMode.Inline);
             }
+        }
+
+        /// <summary>
+        /// Gives every <c>details</c> element the box the HTML Standard's rendering section gives it: a block around everything after its first
+        /// <c>summary</c> (the second slot of its shadow tree, <c>::details-content</c>), which does not render its contents while the element is closed.
+        /// The contents of a closed one are made <c>display: none</c> here, after the cascade, rather than by a style rule: the Standard hides them with
+        /// <c>content-visibility: hidden</c> on that box, so no <c>display</c> value an author gives the content can show it (a panel written <c>display: flex</c>
+        /// is as hidden as one left alone). A second <c>summary</c> is content, as in the Standard, and is hidden with the rest.
+        /// </summary>
+        private static void WrapDetailsContents(CssBox box)
+        {
+            if (box is CssBoxSvg or CssBoxMath) return;
+
+            if (box.HtmlTag is { } tag && tag.Name.Equals("details", StringComparison.OrdinalIgnoreCase) && !box.Boxes.Any(b => b.IsDetailsContent))
+            {
+                var summary = box.Boxes.FirstOrDefault(b => b.HtmlTag is { } t && t.Name.Equals("summary", StringComparison.OrdinalIgnoreCase));
+                var content = box.Boxes.Where(b => !ReferenceEquals(b, summary)).ToList();
+                if (content.Count > 0)
+                {
+                    var slot = CssBox.CreateBlock(box);
+                    slot.IsDetailsContent = true;
+                    var closed = !tag.HasAttribute("open");
+                    foreach (var child in content)
+                    {
+                        child.ParentBox = slot;
+                        if (closed)
+                            child.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+                    }
+                }
+            }
+
+            foreach (var child in box.Boxes.ToList())
+                WrapDetailsContents(child);
         }
 
         /// <summary>

@@ -39,7 +39,7 @@ namespace PeachDrawing.Text
         {
             FontSet.ValidateQuery(query);
 
-            if (query.MustCover is not null && _set.Resolver.ResolveFace(Name, new FaceRequest(query.Weight, query.IsItalic, query.WidthPercent ?? WidthClasses.ToPercent(query.Width), query.MustCover, query.ObliqueAngle)) is null)
+            if (query.MustCover is not null && ResolveFaceLocked(query) is null)
             {
                 match = default;
                 return false;
@@ -47,6 +47,14 @@ namespace PeachDrawing.Text
 
             match = _set.MatchCore(Name, query);
             return true;
+        }
+
+        private object? ResolveFaceLocked(in TypefaceQuery query)
+        {
+            lock (_set.Gate)
+            {
+                return _set.Resolver.ResolveFace(Name, new FaceRequest(query.Weight, query.IsItalic, query.WidthPercent ?? WidthClasses.ToPercent(query.Width), query.MustCover, query.ObliqueAngle));
+            }
         }
     }
 }

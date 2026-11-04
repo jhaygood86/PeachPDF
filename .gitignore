@@ -452,6 +452,9 @@ FodyWeavers.xsd
 # The demo app's host page is source, despite the global *.html ignore above
 !/src/examples/PeachPDF.Demo.BlazorWasm/wwwroot/index.html
 
+# The screen-only showcases of the demo apps are source (the demos and their UI tests read them), despite the global *.html ignore above
+!/src/examples/ScreenShowcases/*.html
+
 # Jekyll layouts and the landing page are source, despite the global *.html ignore above
 !/docs/_layouts/*.html
 !/docs/index.html

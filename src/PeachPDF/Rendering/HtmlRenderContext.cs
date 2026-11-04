@@ -92,7 +92,7 @@ namespace PeachPDF.Rendering
         public override RUri? BaseUri =>
             NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? InternalFileLoader.BaseUri : null);
 
-        public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override async ValueTask<RNetworkResponse?> GetResourceStream(RUri uri)
         {
             // BaseUri is normally never null, so every reference resolves to an absolute URI and loaders have
             // only ever been handed those - RUri.Scheme throws on a relative URI, and neither

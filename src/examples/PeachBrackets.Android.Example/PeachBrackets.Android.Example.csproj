@@ -15,9 +15,33 @@
 		<AndroidPackageFormat>apk</AndroidPackageFormat>
 		<RuntimeIdentifiers>android-x64;android-arm64</RuntimeIdentifiers>
 		<RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">android-x64</RuntimeIdentifier>
+		<ShowcaseExportDir>$(MSBuildProjectDirectory)\obj\showcases\</ShowcaseExportDir>
+		<DemoAssetsDir>$(MSBuildProjectDirectory)\Assets\demo\</DemoAssetsDir>
 	</PropertyGroup>
 	<ItemGroup>
 		<ProjectReference Include="..\..\engine\PeachBrackets.Android\PeachBrackets.Android.csproj" />
 		<PackageReference Include="SkiaSharp.NativeAssets.Android" />
 	</ItemGroup>
+
+	<!--
+	  The documents of the demo, packed into the APK as assets: the screen-only showcases shared with the Windows demo, and the showcases of the PDF
+	  harness as HTML only (the harness option html-only), so the demo keeps no copy of them. They are staged into Assets/demo (not in source control)
+	  before the build collects the assets. Set SkipShowcaseExport=true to build without the harness showcases.
+	-->
+	<Target Name="ExportHarnessShowcases" Condition="'$(SkipShowcaseExport)' != 'true'"
+	        Inputs="..\..\harness\PeachPDF.TestHarness\Program.cs" Outputs="$(ShowcaseExportDir)showcases.json">
+		<Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\..\harness\PeachPDF.TestHarness\PeachPDF.TestHarness.csproj&quot; -f net8.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('\'))&quot;" />
+	</Target>
+	<Target Name="StageDemoAssets" BeforeTargets="BeforeBuild" DependsOnTargets="ExportHarnessShowcases">
+		<ItemGroup>
+			<DemoScreenFile Include="..\ScreenShowcases\**\*" />
+			<DemoHarnessFile Include="$(ShowcaseExportDir)**\*" />
+		</ItemGroup>
+		<Copy SourceFiles="@(DemoScreenFile)" DestinationFolder="$(DemoAssetsDir)screen" SkipUnchangedFiles="true" />
+		<Copy SourceFiles="@(DemoHarnessFile)" DestinationFolder="$(DemoAssetsDir)showcases" SkipUnchangedFiles="true" />
+		<ItemGroup>
+			<AndroidAsset Remove="Assets\demo\**" />
+			<AndroidAsset Include="Assets\demo\**\*" />
+		</ItemGroup>
+	</Target>
 </Project>

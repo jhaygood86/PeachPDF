@@ -69,7 +69,7 @@ peachpdf invoice.html --pdfa=3a --pdf-lang=en --pdf-creation-date=2026-09-21 --f
 ## Supported options
 
 The default page size is **US Letter** (a document's own `@page { size: … }` still overrides it), and
-the default media type is **print**.
+documents are always laid out as **print** media.
 
 ### General
 
@@ -97,7 +97,6 @@ the default media type is **print**.
 | Option | Description |
 |---|---|
 | `-s`, `--style=FILE` | Apply a user style sheet. Repeatable; later sheets win. |
-| `--media=MEDIA` | CSS media type to render as (default `print`). |
 | `--no-default-style` | Ignore the default (user-agent) style sheet. |
 | `--no-author-style` | Ignore the document's own `<style>`/`<link>` style sheets. |
 | `--page-size=SIZE` | Page size: a keyword (`A4`, `letter`, …), one or two lengths (`"210mm 297mm"`), optionally with `portrait`/`landscape`. |

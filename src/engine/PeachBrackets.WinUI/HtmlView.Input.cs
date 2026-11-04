@@ -86,7 +86,9 @@ public sealed partial class HtmlView
         var document = _document!;
         _pressed = true;
         _pressPoint = point.Position;
-        _canvas.CapturePointer(e.Pointer);
+        // A finger that starts on an auto-height view may be starting to scroll the list the view is in: the list must keep seeing it.
+        if (_scrollMode != HtmlViewScrollMode.Disabled || e.Pointer.PointerDeviceType != PointerDeviceType.Touch)
+            _canvas.CapturePointer(e.Pointer);
 
         if (e.Pointer.PointerDeviceType == PointerDeviceType.Touch)
         {
@@ -232,11 +234,14 @@ public sealed partial class HtmlView
     // A touch that starts on an element with `touch-action` lets the view pan and zoom only as far as the document allows.
     private void ApplyTouchPolicy(DocumentInteraction interaction)
     {
+        if (_scrollMode == HtmlViewScrollMode.Disabled)
+            return;
+
         _touchPolicyActive = true;
         var actions = interaction.TouchActions;
-        _scroller.HorizontalScrollMode = (actions & (TouchActions.PanLeft | TouchActions.PanRight)) != 0 ? ScrollMode.Enabled : ScrollMode.Disabled;
-        _scroller.VerticalScrollMode = (actions & (TouchActions.PanUp | TouchActions.PanDown)) != 0 ? ScrollMode.Enabled : ScrollMode.Disabled;
-        _scroller.ZoomMode = actions.HasFlag(TouchActions.PinchZoom) ? ZoomMode.Enabled : ZoomMode.Disabled;
+        _scroller.HorizontalScrollMode = (actions & (TouchActions.PanLeft | TouchActions.PanRight)) != 0 ? Microsoft.UI.Xaml.Controls.ScrollMode.Enabled : Microsoft.UI.Xaml.Controls.ScrollMode.Disabled;
+        _scroller.VerticalScrollMode = (actions & (TouchActions.PanUp | TouchActions.PanDown)) != 0 ? Microsoft.UI.Xaml.Controls.ScrollMode.Enabled : Microsoft.UI.Xaml.Controls.ScrollMode.Disabled;
+        _scroller.ZoomMode = actions.HasFlag(TouchActions.PinchZoom) && _zoomEnabled ? ZoomMode.Enabled : ZoomMode.Disabled;
     }
 
     private void RestoreTouchPolicy()
@@ -245,12 +250,12 @@ public sealed partial class HtmlView
             return;
 
         _touchPolicyActive = false;
-        _scroller.HorizontalScrollMode = ScrollMode.Auto;
-        _scroller.VerticalScrollMode = ScrollMode.Auto;
-        _scroller.ZoomMode = ZoomMode.Enabled;
+        _scroller.HorizontalScrollMode = Microsoft.UI.Xaml.Controls.ScrollMode.Auto;
+        _scroller.VerticalScrollMode = Microsoft.UI.Xaml.Controls.ScrollMode.Auto;
+        _scroller.ZoomMode = _zoomEnabled ? ZoomMode.Enabled : ZoomMode.Disabled;
     }
 
-    private void FollowLinkAt(int page, double x, double y)
+    internal void FollowLinkAt(int page, double x, double y)
     {
         var document = _document;
         if (document is null)
@@ -271,9 +276,14 @@ public sealed partial class HtmlView
             if (HtmlViewLogic.IsLaunchable(uri))
                 _ = Launcher.LaunchUriAsync(new Uri(uri));
         }
+        else if (link.Anchor is { } anchor && document.GetScrollOffset(anchor) is { } offset && _pageTops.Length > 0)
+        {
+            // Where the target starts less the room it asks for above it (scroll-margin-top, scroll-padding-top), so a bar stuck to the top does not cover it.
+            ScrollToY(_pageTops[0] + (offset * PixelsPerPoint), animate: false);
+        }
         else if (link.Destination is { } destination && (uint)destination.PageIndex < (uint)_pageTops.Length)
         {
-            _scroller.ChangeView(null, (_pageTops[destination.PageIndex] + (destination.Top * PixelsPerPoint)) * _scroller.ZoomFactor, null);
+            ScrollToY(_pageTops[destination.PageIndex] + (destination.Top * PixelsPerPoint), animate: false);
         }
     }
 

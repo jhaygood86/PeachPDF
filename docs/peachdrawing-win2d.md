@@ -111,6 +111,12 @@ kind, so a font is never measured by one engine and drawn by the other.
 
 Fonts a document brings (`@font-face`, `AddFont`) work in both modes; DirectWrite loads them from a temporary file the context deletes.
 
+**Sharing fonts between contexts.** Every context has a `FontSet` of its own unless you give it one: `new Win2dRenderContext(fontSet: shared)`. Contexts that
+share a set share the fonts added to it, and a font that is added to the set is read once, however many documents and contexts use it; adding the same
+font again with the same description is a no-op. The set may be used from several threads. A context registers the families the set holds when it is made;
+call `SyncFonts()` to make it see families added since (a view does so before each load). The DirectWrite engine keeps its own faces per context and
+ignores the shared set. `AddFont` returns a `ValueTask`, so awaiting it from a `MemoryStream` or a file does not suspend.
+
 ### DirectWrite mode is not feature complete
 
 DirectWrite mode is a convenience for text that should look like the rest of Windows, not a second full text engine. Choose

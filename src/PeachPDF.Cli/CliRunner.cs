@@ -110,7 +110,6 @@ internal static class CliRunner
             SnapBoxDecorationsToCssPixels = options.SnapBoxDecorationsToCssPixels,
             SnapBorderWidthsToCssPixels = options.SnapBorderWidthsToCssPixels,
             EnableInteractivePdfForms = options.InteractivePdfForms,
-            Media = options.Media ?? "print",
             IgnoreAuthorStyleSheets = options.NoAuthorStyle,
             // Set on the config rather than on the loader, so it holds for every input kind - including
             // MHTML, which is rendered through a bare MimeKitNetworkLoader that never saw this option.

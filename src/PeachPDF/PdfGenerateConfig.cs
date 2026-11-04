@@ -68,13 +68,6 @@ namespace PeachPDF
         public double MinContentWidth { get; set; }
 
         /// <summary>
-        /// The CSS media type the cascade matches <c>@media</c> rules against. Defaults to
-        /// <c>"print"</c> (the appropriate media for paged output). Set to another value (e.g.
-        /// <c>"screen"</c>) to render as that media type instead.
-        /// </summary>
-        public string Media { get; set; } = "print";
-
-        /// <summary>
         /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries.
         /// Defaults to <see cref="PdfColorScheme.Light"/>; set to <see cref="PdfColorScheme.Dark"/>
         /// to render the document's dark-mode styles.

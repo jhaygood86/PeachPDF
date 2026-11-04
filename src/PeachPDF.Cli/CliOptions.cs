@@ -71,7 +71,6 @@ internal sealed class CliOptions
     public List<string> StyleSheets { get; } = [];
     public bool NoDefaultStyle { get; set; }
     public bool NoAuthorStyle { get; set; }
-    public string? Media { get; set; }
 
     /// <summary>Where in its run every CSS animation is sampled, 0 to 1 (<c>--animation-progress</c>); null leaves animations unapplied.</summary>
     public double? AnimationProgress { get; set; }

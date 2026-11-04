@@ -6,7 +6,7 @@ public class AccessibilityTreeDiffTests
 {
     private static async Task<AccessibilityTree> TreeAsync(string body)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return document.GetAccessibilityTree();
     }
 
@@ -23,7 +23,7 @@ public class AccessibilityTreeDiffTests
     [Fact]
     public async Task AChangedStateNamesTheStateThatChanged()
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<input id=a type=checkbox aria-label=agree>", "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<input id=a type=checkbox aria-label=agree>", "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var before = document.GetAccessibilityTree();
         document.SetChecked(document.GetElement("a")!, true);
 

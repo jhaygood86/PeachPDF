@@ -62,6 +62,8 @@ PeachDrawing.Text.FontSet : sealed class
   method TypefaceFamily AddFile(String path, AddOptions options = null)
   method TypefaceFamily AddStream(Stream stream, AddOptions options = null)
   method TypefaceMatch MatchOrFallback(String familyName, in TypefaceQuery query)
+  property IReadOnlyList<String> AddedFamilyNames { get; }
+  property Int32 Version { get; }
   property static IReadOnlyList<String> InstalledFamilyNames { get; }
 PeachDrawing.Text.GenericFamily : enum Int32
   Cursive = 3

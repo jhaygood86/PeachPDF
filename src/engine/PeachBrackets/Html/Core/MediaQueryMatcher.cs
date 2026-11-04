@@ -114,6 +114,15 @@ namespace PeachBrackets.Html
                 case "grid":
                     return CompareCountOrBoolean(feature, 0);
 
+                // A display is scanned progressively and shown in a browser-like window (Media Queries 4 §5.2, Media Queries 5 display-mode); a
+                // paged medium reports neither, so those queries stay false for it.
+                case "scan":
+                    return string.Equals(context.MediaType, "screen", StringComparison.OrdinalIgnoreCase)
+                        && MatchesKeyword(feature, "progressive", booleanContextResult: true);
+                case "display-mode":
+                    return string.Equals(context.MediaType, "screen", StringComparison.OrdinalIgnoreCase)
+                        && MatchesKeyword(feature, "browser", booleanContextResult: true);
+
                 case "prefers-color-scheme":
                     var scheme = context.PreferredColorScheme == ColorSchemePreference.Dark ? "dark" : "light";
                     return !feature.HasValue

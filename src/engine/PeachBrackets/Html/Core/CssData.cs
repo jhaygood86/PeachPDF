@@ -624,7 +624,7 @@ namespace PeachBrackets.Html
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RenderContext renderContext, string stylesheet, bool combineWithDefault = true)
+        public static async ValueTask<CssData> Parse(RenderContext renderContext, string stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(renderContext, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);
@@ -639,7 +639,7 @@ namespace PeachBrackets.Html
         /// <param name="stylesheet">the stylesheet source to parse</param>
         /// <param name="combineWithDefault">true - combine the parsed css data with default css data, false - return only the parsed css data</param>
         /// <returns>the parsed css data</returns>
-        public static async Task<CssData> Parse(RenderContext renderContext, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
+        public static async ValueTask<CssData> Parse(RenderContext renderContext, ReadOnlyMemory<char> stylesheet, bool combineWithDefault = true)
         {
             var parser = new CssParser(renderContext, null);
             return await parser.ParseStyleSheet(stylesheet, combineWithDefault);

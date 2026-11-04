@@ -31,7 +31,7 @@ namespace PeachBrackets.Engine.Tests.CSS
             }
         }
 
-        public static Task<Stylesheet> ToCssStylesheetAsync(this Stream content)
+        public static ValueTask<Stylesheet> ToCssStylesheetAsync(this Stream content)
         {
             var parser = new StylesheetParser();
             return parser.ParseAsync(content);

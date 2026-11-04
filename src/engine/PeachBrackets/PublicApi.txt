@@ -358,10 +358,10 @@ PeachBrackets.Building.PageGeometryOverrides : enum Int32
   None = 0
   Size = 1
 PeachBrackets.Building.StyleSheet : sealed class
-  method Task AddAsync(ReadOnlyMemory<Char> css)
-  method Task AddAsync(String css)
-  method static Task<StyleSheet> ParseAsync(RenderContext renderContext, ReadOnlyMemory<Char> css, Boolean combineWithDefault = True)
-  method static Task<StyleSheet> ParseAsync(RenderContext renderContext, String css, Boolean combineWithDefault = True)
+  method ValueTask AddAsync(ReadOnlyMemory<Char> css)
+  method ValueTask AddAsync(String css)
+  method static ValueTask<StyleSheet> ParseAsync(RenderContext renderContext, ReadOnlyMemory<Char> css, Boolean combineWithDefault = True)
+  method static ValueTask<StyleSheet> ParseAsync(RenderContext renderContext, String css, Boolean combineWithDefault = True)
 PeachBrackets.Building.SvgImage : sealed class
   method static SvgImage Parse(Byte[] svgBytes, RenderContext renderContext)
   method static SvgImage Parse(String svgMarkup, RenderContext renderContext)
@@ -421,6 +421,10 @@ PeachBrackets.DocumentPage : struct
   property Double MarksPoints { get; init; }
   property Double WidthPoints { get; init; }
   property Int32 Index { get; init; }
+PeachBrackets.DocumentPaintLayer : enum Int32
+  All = 0
+  Content = 1
+  ViewportAttached = 2
 PeachBrackets.FontDefaults : static class
   method static IReadOnlyList<AxisSetting> ToAxisSettings(String encoded, Double sizeInPixels)
   property static Double DefaultSizePoints { get; }
@@ -435,6 +439,8 @@ PeachBrackets.GenericFontKeyword : struct
   method virtual String ToString()
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
+PeachBrackets.HostResourceLoader : static class
+  method static ValueTask<RNetworkResponse> LoadAsync(RUri uri, Boolean allowNetwork = False, Boolean allowLocalFiles = True)
 PeachBrackets.HtmlDocument : sealed class
   method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
   method AccessibilityTree GetAccessibilityTree()
@@ -445,12 +451,15 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
+  method Double GetContentHeight(Int32 pageIndex)
+  method Double? GetScrollOffset(String elementId)
   method FileInputInfo? GetFileInputInfo(DocumentElement element)
   method FormControlState? GetFormState(DocumentElement element)
   method FormEditState? GetEditState()
   method FormSubmission CreateFormSubmission(DocumentElement submitter)
   method FormSubmission CreateFormSubmission(DocumentElement submitter, Int32 pageIndex, Double x, Double y)
   method FormSubmission CreateImplicitSubmission(DocumentElement field)
+  method IReadOnlyList<DirtyRegion> SetViewport(Rect viewport)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<SelectOption> GetSelectOptions(DocumentElement element)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
@@ -462,25 +471,6 @@ PeachBrackets.HtmlDocument : sealed class
   method PaintColor? GetCaretColor(TextPosition position)
   method Rect? GetElementBounds(String elementId)
   method String GetText(TextPosition from, TextPosition to)
-  method Task LayoutAsync(Canvas measuringCanvas)
-  method Task PaintPageAsync(Int32 pageIndex, Canvas canvas)
-  method Task PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region)
-  method Task<FocusMoveResult> MoveFocusAsync(Boolean forward, Canvas measuringCanvas)
-  method Task<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
-  method Task<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
-  method Task<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
-  method Task<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas)
-  method Task<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, String text, Canvas measuringCanvas)
-  method Task<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
-  method Task<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
-  method Task<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
-  method Task<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
-  method Task<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
-  method Task<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
-  method Task<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
-  method Task<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
-  method Task<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
-  method Task<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method TextEditPlace? GetEditPlace(Canvas measuringCanvas, Int32 index = -1)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
   method TextPosition? HitTest(Int32 pageIndex, Double x, Double y)
@@ -501,17 +491,40 @@ PeachBrackets.HtmlDocument : sealed class
   method UpdateResult SetRangeAtPoint(DocumentElement element, Int32 pageIndex, Double x)
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method UpdateResult SetValue(DocumentElement element, String value)
+  method ValueTask LayoutAsync(Canvas measuringCanvas)
+  method ValueTask PaintPageAsync(Int32 pageIndex, Canvas canvas, DocumentPaintLayer layer = All)
+  method ValueTask PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region, DocumentPaintLayer layer = All)
+  method ValueTask<FocusMoveResult> MoveFocusAsync(Boolean forward, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> JoinWithNextParagraphAsync(TextPosition at, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> ReplaceTextAsync(TextPosition from, TextPosition to, String text, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
+  method ValueTask<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
+  method ValueTask<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
+  method ValueTask<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
   method Void ClearHighlights()
+  method Void Layout(Canvas measuringCanvas)
   method Void PaintAccessibility(Int32 pageIndex, Canvas canvas)
   method Void PaintCursors(Int32 pageIndex, Canvas canvas)
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
+  method Void PaintPage(Int32 pageIndex, Canvas canvas, DocumentPaintLayer layer = All)
   method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)
   method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
-  method static Task<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
-  method static Task<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
+  method static HtmlDocument Load(String html, RenderContext renderContext, HtmlDocumentOptions options)
+  method static ValueTask<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
+  method static ValueTask<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property AccessibilityNode FocusedNode { get; }
+  property Boolean HasViewportBackgrounds { get; }
   property Boolean NeedsRestyle { get; }
   property DocumentAnnotations Annotations { get; }
   property DocumentSelection Selection { get; }
@@ -522,6 +535,7 @@ PeachBrackets.HtmlDocument : sealed class
   property IReadOnlyList<TextRange> SelectedRanges { get; }
   property IReadOnlyList<TextRun> TextRuns { get; }
   property IStructureTagSink StructureTagSink { get; set; }
+  property Rect Viewport { get; }
   property Size ContentArea { get; }
   property Size ContentExtent { get; }
   property String Language { get; }
@@ -550,6 +564,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean RecordTextRuns { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
+  property Boolean SynchronousOnly { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
   property Double FontScale { get; set; }
   property Double MarginBottomPoints { get; set; }
@@ -559,13 +574,14 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageHeightPoints { get; set; }
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
+  property Double? ViewportHeightPoints { get; set; }
   property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
+  property MediaType MediaType { get; set; }
   property PaintColor SelectionBackground { get; set; }
   property PaintColor? SelectionForeground { get; set; }
   property String DefaultLanguage { get; set; }
-  property String Media { get; set; }
   property String UserStyleSheet { get; set; }
   property StyleSheet StyleSheet { get; set; }
   property TextSpacingOverrides TextSpacing { get; set; }
@@ -585,6 +601,9 @@ PeachBrackets.InputCapabilities : sealed class
   property static InputCapabilities Mouse { get; }
   property static InputCapabilities None { get; }
   property static InputCapabilities Touch { get; }
+PeachBrackets.MediaType : enum Int32
+  Print = 0
+  Screen = 1
 PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2

@@ -132,9 +132,10 @@ PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   property ILinkLauncher Launcher { get; init; }
   property ISet<String> AllowedSchemes { get; init; }
 PeachDrawing.Win2D.Win2dRenderContext : class
-  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage)
-  method Task AddFont(Stream stream, String fontFamilyName)
-  method Task AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage, FontSet fontSet = null)
+  method ValueTask AddFont(Stream stream, String fontFamilyName)
+  method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method Void SyncFonts()
   method static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()

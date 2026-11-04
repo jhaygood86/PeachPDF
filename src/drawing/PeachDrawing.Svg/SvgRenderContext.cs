@@ -51,7 +51,7 @@ public class SvgRenderContext : RenderContext
     /// <param name="stream">the font file; it is read to the end, and not closed</param>
     /// <param name="fontFamilyName">the family name to register it under, or <see langword="null"/> to take the name from the font file</param>
     /// <returns>a task that completes when the font has been added</returns>
-    public async Task AddFont(Stream stream, string? fontFamilyName) => await AddFont(stream, fontFamilyName, default);
+    public async ValueTask AddFont(Stream stream, string? fontFamilyName) => await AddFont(stream, fontFamilyName, default);
 
     /// <summary>
     /// Adds a font like <see cref="AddFont(Stream, string?)"/>, restricting which weights, widths and styles it is matched for and which
@@ -62,10 +62,14 @@ public class SvgRenderContext : RenderContext
     /// <param name="descriptors">the weight, width, slant and style ranges the font is declared for</param>
     /// <param name="unicodeRanges">the characters the font supplies, or <see langword="null"/> for all it has</param>
     /// <returns>a task that completes when the font has been added</returns>
-    public async Task AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    public async ValueTask AddFont(Stream stream, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
+        // In memory or on a local disk the copy does not need to wait, which lets a document that must not wait (SynchronousOnly) register the font.
+        if (stream is MemoryStream or FileStream)
+            stream.CopyTo(memoryStream);
+        else
+            await stream.CopyToAsync(memoryStream);
         AddFont(memoryStream.ToArray(), fontFamilyName, descriptors, unicodeRanges);
     }
 
@@ -201,7 +205,7 @@ public class SvgRenderContext : RenderContext
     protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
     /// <inheritdoc/>
-    protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override async ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         // A missing format() hint is valid CSS and must still be attempted; only formats declared as unsupported are skipped.
         if (format is null or "truetype" or "woff" or "woff2" or "opentype")
@@ -214,12 +218,12 @@ public class SvgRenderContext : RenderContext
     }
 
     /// <inheritdoc/>
-    protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         if (!_fontSet.TryGetFontData(localFontFaceName, out var data))
-            return Task.FromResult(false);
+            return new ValueTask<bool>(false);
 
         AddFont(data, fontFamilyName, descriptors, unicodeRanges);
-        return Task.FromResult(true);
+        return new ValueTask<bool>(true);
     }
 }

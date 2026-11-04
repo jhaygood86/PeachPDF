@@ -19,7 +19,7 @@ public class FormStateSelectorTests
 
     private static async Task<(RasterCanvas Canvas, HtmlDocument Document)> PaintAsync(string body)
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles), new HtmlDocumentOptions { Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return (await TestDocument.PaintAsync(context, document), document);
     }
 

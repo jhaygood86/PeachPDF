@@ -32,7 +32,7 @@ public sealed class StyleSheet
     /// <param name="css">the CSS text</param>
     /// <param name="combineWithDefault">whether the built-in defaults (the user-agent style sheet) are included, so the rules layer over them</param>
     /// <returns>the parsed style sheet</returns>
-    public static async Task<StyleSheet> ParseAsync(RenderContext renderContext, string css, bool combineWithDefault = true)
+    public static async ValueTask<StyleSheet> ParseAsync(RenderContext renderContext, string css, bool combineWithDefault = true)
     {
         ArgumentNullException.ThrowIfNull(renderContext);
         ArgumentNullException.ThrowIfNull(css);
@@ -41,7 +41,7 @@ public sealed class StyleSheet
     }
 
     /// <inheritdoc cref="ParseAsync(RenderContext, string, bool)"/>
-    public static async Task<StyleSheet> ParseAsync(RenderContext renderContext, ReadOnlyMemory<char> css, bool combineWithDefault = true)
+    public static async ValueTask<StyleSheet> ParseAsync(RenderContext renderContext, ReadOnlyMemory<char> css, bool combineWithDefault = true)
     {
         ArgumentNullException.ThrowIfNull(renderContext);
 
@@ -53,7 +53,7 @@ public sealed class StyleSheet
     /// </summary>
     /// <param name="css">the CSS text; empty text adds nothing</param>
     /// <returns>a task that completes when the rules are added</returns>
-    public async Task AddAsync(string css)
+    public async ValueTask AddAsync(string css)
     {
         if (string.IsNullOrEmpty(css))
             return;
@@ -66,7 +66,7 @@ public sealed class StyleSheet
     }
 
     /// <inheritdoc cref="AddAsync(string)"/>
-    public async Task AddAsync(ReadOnlyMemory<char> css)
+    public async ValueTask AddAsync(ReadOnlyMemory<char> css)
     {
         if (css.IsEmpty)
             return;

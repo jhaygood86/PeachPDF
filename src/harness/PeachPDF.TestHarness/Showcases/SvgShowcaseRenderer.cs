@@ -40,7 +40,6 @@ internal static class SvgShowcaseRenderer
             MarginRightPoints = config.MarginRight,
             MarginBottomPoints = config.MarginBottom,
             MarginLeftPoints = config.MarginLeft,
-            Media = string.IsNullOrEmpty(config.Media) ? "print" : config.Media,
             ColorScheme = config.PreferredColorScheme == PdfColorScheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
             IgnoreAuthorStyleSheets = config.IgnoreAuthorStyleSheets,
             SnapBoxDecorationsToCssPixels = config.SnapBoxDecorationsToCssPixels,
@@ -167,7 +166,7 @@ internal sealed class ShowcaseSvgRenderContext : SvgRenderContext
 
     public override RUri? BaseUri => NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? FileLoader.BaseUri : null);
 
-    public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+    public override async ValueTask<RNetworkResponse?> GetResourceStream(RUri uri)
     {
         if (!uri.IsAbsoluteUri)
             return null;

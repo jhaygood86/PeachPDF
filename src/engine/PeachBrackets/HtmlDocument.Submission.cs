@@ -303,7 +303,7 @@ public sealed partial class HtmlDocument
     /// <returns>whether it was applied (not for an element in no form) and the regions to repaint</returns>
     /// <exception cref="ArgumentNullException">an argument is null</exception>
     /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
-    public async Task<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
+    public async ValueTask<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
     {
         ArgumentNullException.ThrowIfNull(control);
         ArgumentNullException.ThrowIfNull(measuringCanvas);

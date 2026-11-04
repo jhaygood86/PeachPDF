@@ -1247,11 +1247,45 @@ namespace PeachBrackets.Html
         internal string? DefaultLanguage { get; set; }
 
         /// <summary>
-        /// The CSS media type the cascade matches <c>@media</c> rules against (see
-        /// <c>PdfGenerateConfig.Media</c>). Defaults to <c>"print"</c>; set by
-        /// <c>PdfGenerator.SetContent</c> before the DOM/CSS tree is generated.
+        /// The medium the document is laid out for (<see cref="HtmlDocumentOptions.MediaType"/>). It is the one source of truth for both what the
+        /// cascade matches <c>@media</c> rules against (<see cref="Media"/>) and whether the document is paged or one continuous surface
+        /// (<see cref="Continuous"/>). Set before the DOM/CSS tree is generated.
         /// </summary>
-        internal string Media { get; set; } = "print";
+        internal MediaType MediaType { get; set; } = MediaType.Print;
+
+        /// <summary>The CSS media type name the cascade matches <c>@media</c> rules against, taken from <see cref="MediaType"/>.</summary>
+        internal string Media => MediaType == MediaType.Screen ? "screen" : "print";
+
+        /// <summary>
+        /// Whether the document is one continuous surface rather than pages: screen media has no pages, so there is no page grid to
+        /// break against, no <c>@page</c> geometry and no page margin boxes.
+        /// </summary>
+        internal bool Continuous => MediaType == MediaType.Screen;
+
+        /// <summary>Where a continuous document's viewport is, and how far that displaces the fixed and sticky boxes from where layout put them.</summary>
+        internal ViewportState View { get; } = new();
+
+        /// <summary>
+        /// The viewport of a continuous document in the space its boxes are laid out in, which a <c>background-attachment: fixed</c> image is positioned
+        /// against; null for a paged document and for one whose host has not said where the viewport is.
+        /// </summary>
+        internal Rect? ContinuousViewportRect =>
+            Continuous && View.Viewport is { Width: > 0, Height: > 0 } viewport
+                ? viewport
+                : null;
+
+        /// <summary>
+        /// The height of the viewport the document is shown in, in layout units, or <see langword="null"/> when the host did not say
+        /// (<see cref="HtmlDocumentOptions.ViewportHeightPoints"/>). Only a continuous document has one.
+        /// </summary>
+        internal double? ViewportHeight { get; set; }
+
+        /// <summary>
+        /// The height the initial containing block (and a fixed box's) percentage heights resolve against: the first page's content band for
+        /// paged media; for a continuous document the viewport height, or <see langword="null"/> when the host did not say (then a percentage
+        /// height behaves as <c>auto</c>).
+        /// </summary>
+        internal double? FirstPageBandHeight => Continuous ? ViewportHeight : PageGeometry.GetPage(0).BandHeight;
 
         /// <summary>
         /// The color scheme reported to <c>@media (prefers-color-scheme: ...)</c> queries (see
@@ -1259,6 +1293,9 @@ namespace PeachBrackets.Html
         /// <see cref="ColorSchemePreference.Light"/>; set by <c>PdfGenerator.SetContent</c>.
         /// </summary>
         internal ColorSchemePreference PreferredColorScheme { get; set; } = ColorSchemePreference.Light;
+
+        /// <summary>Whether the document was asked to need nothing asynchronous; see <see cref="PeachBrackets.HtmlDocumentOptions.SynchronousOnly"/>.</summary>
+        internal bool SynchronousOnly { get; set; }
 
         /// <summary>The pointing devices <c>hover</c>/<c>pointer</c> media features report; none unless the host says otherwise.</summary>
         internal InputCapabilities Input { get; set; } = InputCapabilities.None;
@@ -1356,7 +1393,7 @@ namespace PeachBrackets.Html
         internal bool FormStatePseudoClassesInUse { get; set; }
 
         /// <summary>Parses and cascades the same source again, now that <see cref="Interaction"/> has changed.</summary>
-        internal async Task ReparseAsync()
+        internal async ValueTask ReparseAsync()
         {
             if (_lastHtmlSource is null)
                 return;
@@ -1373,7 +1410,7 @@ namespace PeachBrackets.Html
         /// from the previous layout pass - see <see cref="DomParser.GenerateCssTree"/>. <c>null</c> for
         /// every caller except <see cref="PerformLayout"/>'s own container-query convergence loop, which
         /// re-invokes this method between passes via <see cref="_lastHtmlSource"/>/<see cref="_lastBaseCssData"/>.</param>
-        public async Task SetHtml(string htmlSource, CssData? baseCssData = null, ContainerQuerySizes? containerSizes = null)
+        public async ValueTask SetHtml(string htmlSource, CssData? baseCssData = null, ContainerQuerySizes? containerSizes = null)
         {
             _lastHtmlSource = htmlSource;
             _lastBaseCssData = baseCssData;
@@ -1547,7 +1584,7 @@ namespace PeachBrackets.Html
 
             if (stylesheet is not null)
             {
-                await DomParser.CascadeApplyStyleFonts(CssData, RenderContext);
+                await DomParser.CascadeApplyStyleFonts(CssData, RenderContext, SynchronousOnly);
 
                 var cssValueParser = new CssValueParser(RenderContext);
                 RegisteredProperties = RegisteredProperty.BuildRegistry(CssData, cssValueParser);
@@ -1657,7 +1694,11 @@ namespace PeachBrackets.Html
             if (box is null) return null;
 
             box = DomUtils.ResolveGeometryBox(box);
-            return CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+            var rect = CommonUtils.GetFirstValueOrDefault(box.Rectangles, box.Bounds);
+
+            // Where it is drawn: the viewport may have moved a fixed or stuck box.
+            var (dx, dy) = View.DisplacementOf(box);
+            return dx == 0 && dy == 0 ? rect : new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
         }
 
         /// <summary>
@@ -2143,6 +2184,41 @@ namespace PeachBrackets.Html
             return false;
         }
 
+        /// <summary>
+        /// How far down a page's content reaches, in layout units from the top of the page's content area: the lowest margin edge of any box fragment on
+        /// that page, not counting the initial containing block, which fills the page whatever the content is. Read off the fragment tree, so it is the
+        /// geometry the page is painted from.
+        /// </summary>
+        internal double PageContentHeight(int pageIndex)
+        {
+            if (FragmentTree is not { } tree || (uint)pageIndex >= (uint)tree.Fragmentainers.Count)
+                return 0;
+
+            return ContentBottomOf(tree.Fragmentainers[pageIndex]);
+        }
+
+        private double ContentBottomOf(FragmentainerFragment fragmentainer)
+        {
+            var bottom = 0d;
+            foreach (var child in fragmentainer.Root.Children)
+                bottom = Math.Max(bottom, FragmentBottom(child));
+
+            // The fragments are placed on the sheet; the content area starts below the page's margin, border and padding.
+            return Math.Max(0, bottom - (fragmentainer.Geometry.ContentTopPt * RenderContext.LayoutUnitsPerPoint));
+        }
+
+        private static double FragmentBottom(BoxFragment fragment)
+        {
+            if (fragment.IsFixed)
+                return 0;
+
+            var bottom = fragment.Rect.Bottom + (fragment.IsLastFragment ? Math.Max(0, fragment.Box.ActualMarginBottom) : 0);
+            foreach (var child in fragment.Children)
+                bottom = Math.Max(bottom, FragmentBottom(child));
+
+            return bottom;
+        }
+
         // The largest bottom of any box in the flow, from the document's top: what the boxes' epilogues accumulate into ActualSize.
         private double FlowBottom(CssBox box)
         {
@@ -2193,6 +2269,39 @@ namespace PeachBrackets.Html
             // Pure bookkeeping (the footnote convergence loop above already produced final geometry) - see
             // AttachFootnoteAreas's own remarks for why this runs here, alongside LayoutMarginBoxes.
             FragmentTree = AttachFootnoteAreas(treeWithMarginBoxes);
+            if (Continuous)
+                FragmentTree = SettleContinuousSurface(FragmentTree);
+        }
+
+        /// <summary>
+        /// The height, in points, of the fragmentation band a continuous document is laid out against. Screen media has no pages, so nothing may
+        /// ever overflow it and break; it is deliberately a large <em>finite</em> number, not <see cref="double.MaxValue"/>, because
+        /// <see cref="HasRealPageGrid"/> reads the sentinel as "no page grid" and silently turns off the column, flex and float
+        /// fragmentation logic. The surface's real height is set from the content once layout has finished
+        /// (<see cref="SettleContinuousSurface"/>).
+        /// </summary>
+        internal const double ContinuousBandPoints = 1_000_000;
+
+        /// <summary>
+        /// Gives the one fragmentainer of a continuous document its real height: as tall as its content, and at least as tall as the viewport
+        /// the host reported, so a short document still fills it. The fragmentation band was only a bound nothing could reach.
+        /// </summary>
+        private FragmentTree SettleContinuousSurface(FragmentTree tree)
+        {
+            if (tree.Fragmentainers.Count == 0)
+                return tree;
+
+            var first = tree.Fragmentainers[0];
+            var ppp = RenderContext.LayoutUnitsPerPoint;
+            var geometry = first.Geometry;
+            var bottomChromePt = geometry.SheetHeightPt - geometry.ContentTopPt - (geometry.BandHeight / ppp);
+            var contentPt = ContentBottomOf(first) / ppp;
+            var viewportPt = ViewportHeight is { } viewport ? (viewport / ppp) - geometry.ContentTopPt - bottomChromePt : 0;
+            var bandPt = Math.Max(0, Math.Max(contentPt, viewportPt));
+
+            var settled = geometry with { BandHeight = bandPt * ppp, SheetHeightPt = geometry.ContentTopPt + bandPt + bottomChromePt };
+            var rect = first.Rect;
+            return new FragmentTree([first with { Geometry = settled, Rect = new Rect(rect.X, rect.Y, rect.Width, settled.BandHeight) }]);
         }
 
         /// <summary>
@@ -5469,6 +5578,16 @@ namespace PeachBrackets.Html
         /// relocation uses. Same sentinel caveat as <see cref="PageIndexOf"/>.
         /// </summary>
         internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
+
+        /// <summary>Paints only the boxes the viewport of a continuous document holds in place, where they are on the surface.</summary>
+        /// <param name="g">the device to use</param>
+        /// <param name="fragmentainer">the page to paint</param>
+        public void PerformPaintAttached(Canvas g, FragmentainerFragment fragmentainer)
+        {
+            ArgumentNullException.ThrowIfNull(g);
+            ArgumentNullException.ThrowIfNull(fragmentainer);
+            new FragmentPainter(this).PaintAttached(g, fragmentainer);
+        }
 
         /// <summary>
         /// Paints one fragmentainer — one page. Everything painted comes from

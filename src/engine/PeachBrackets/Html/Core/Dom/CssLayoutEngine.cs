@@ -2423,6 +2423,29 @@ namespace PeachBrackets.Html.Dom
                 return containingWidth - (usedContentWidth + box.ActualBoxSizeIncludedWidth);
             }
 
+            // A flex or grid container (or any box that is not a plain block) has not been sized when its offset is asked for: the offset is decided
+            // before the box resolves its own inline size (see CssBox's placement of a block child), so ActualBoxSizingWidth is still 0 and the
+            // whole containing block would be split between the two margins. A width that is a length is worked out from the style instead,
+            // clamped by max-width then min-width as the auto-width branch above does.
+            if (box.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.Grid && CssValueParser.IsValidLength(box.Width))
+            {
+                var definiteContentWidth = CssValueParser.ParseLength(box.Width, containingWidth, box);
+
+                if (CssValueParser.IsValidLength(box.MaxWidth))
+                {
+                    definiteContentWidth = Math.Min(definiteContentWidth,
+                        CssValueParser.ParseLength(box.MaxWidth, containingWidth, box));
+                }
+
+                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                {
+                    definiteContentWidth = Math.Max(definiteContentWidth,
+                        CssValueParser.ParseLength(box.MinWidth, containingWidth, box));
+                }
+
+                return containingWidth - (definiteContentWidth + box.ActualBoxSizeIncludedWidth);
+            }
+
             // Definite width: split the genuine free space, accounting for the box's own
             // border/padding (ActualBoxSizingWidth is the used border-box width, already min/max-clamped).
             return containingWidth - box.ActualBoxSizingWidth;
@@ -2749,14 +2772,18 @@ namespace PeachBrackets.Html.Dom
                 var fit = Math.Max(await GetFitContentWidth(g, box, width), await GetMinContentWidth(g, box));
                 width = fit - box.ActualBoxSizeIncludedWidth;
             }
-            else if (box is { Width: Keywords.Auto, Position.Value: not PositionMode.Absolute })
+            else if (box is { Width: Keywords.Auto, Position.Value: not (PositionMode.Absolute or PositionMode.Fixed) })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
             }
 
-            if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute })
+            // A fixed box is laid out by the same absolute positioning model (CSS 2.1 section 10.3.7), against the viewport: auto width shrinks to fit, or
+            // fills the space between `left` and `right` when both are set.
+            if (box is { Width: Keywords.Auto, Position.Value: PositionMode.Absolute or PositionMode.Fixed })
             {
-                var absCbWidth = AbsolutePaddingBoxWidth(box) ?? PercentageBase(box).Size.Width;
+                var absCbWidth = box.Position.Value is PositionMode.Fixed && box.HtmlContainer is { } fixedContainer
+                    ? fixedContainer.PageContentRightOf(blockTop ?? box.Location.Y) - fixedContainer.MarginLeft
+                    : AbsolutePaddingBoxWidth(box) ?? PercentageBase(box).Size.Width;
                 if (box.Left.Value.IsValue && box.Right.Value.IsValue)
                 {
                     // CSS 2.1 §10.3.7: an absolutely-positioned box with auto width but both `left` and
@@ -2894,12 +2921,15 @@ namespace PeachBrackets.Html.Dom
                 // rule overrides margins - issue #201's vertical dimension) rather than the base
                 // configured size directly, so a `:first`-overridden first page's own band is what a
                 // root-relative percentage resolves against - still always page 1, never a later page.
-                height = Math.Max(height, box.HtmlContainer.PageGeometry.GetPage(0).BandHeight);
+                height = Math.Max(height, box.HtmlContainer.FirstPageBandHeight ?? 0);
             }
 
             if (box.Words.Count > 0)
             {
-                height = Math.Max(height, box.Words.Sum(w => w.Height));
+                // A box that holds its words itself (the anonymous box around a flex item's loose text, once it is blockified) is at least as tall as its
+                // tallest word. Not the sum of them: words share a line, and the lines' own height is already in ActualBoxSizingHeight, so a sum took five
+                // words on one line for five lines and left the item (and its row) that tall.
+                height = Math.Max(height, box.Words.Max(w => w.Height));
             }
 
             // CSS 2.1 §10.1: percentages on an absolutely-positioned box resolve against its containing
@@ -2925,7 +2955,7 @@ namespace PeachBrackets.Html.Dom
                 || box.Position.Value is PositionMode.Absolute
                 || IsHeightDefinite(heightCb);
             var heightBasis = isFixedToPage
-                ? box.HtmlContainer!.PageGeometry.GetPage(0).BandHeight
+                ? box.HtmlContainer!.FirstPageBandHeight ?? 0
                 : AbsolutePaddingBoxHeight(box) ?? ResolveDefiniteHeightValue(heightCb) ?? heightCb.Size.Height;
 
             // CSS 2.1 §10.6.3: a definite (non-auto) `height` is the used height regardless of
@@ -3175,7 +3205,7 @@ namespace PeachBrackets.Html.Dom
             // See IsHeightDefinite's own remarks on why this terminates unconditionally, not only when
             // HtmlContainer is set.
             if (box == box.ContainingBlock)
-                return box.HtmlContainer is not null ? box.HtmlContainer.PageGeometry.GetPage(0).BandHeight : null;
+                return box.HtmlContainer?.FirstPageBandHeight;
 
             // The percentage basis for box's own Height/MinHeight/MaxHeight alike — computed at most once
             // per property (not per read) since none of them can change within this call. A fixed box
@@ -3189,7 +3219,7 @@ namespace PeachBrackets.Html.Dom
             double? PercentageHeightBasis() => box.Position.Value switch
             {
                 PositionMode.Fixed when box.HtmlContainer is not null
-                    => box.HtmlContainer.PageGeometry.GetPage(0).BandHeight,
+                    => box.HtmlContainer.FirstPageBandHeight,
                 PositionMode.Absolute => null,
                 _ => ResolveDefiniteHeightValue(PercentageBase(box)),
             };

@@ -19,7 +19,7 @@ public class PaintAccessibilityTests
     [Fact]
     public async Task APageWithEveryKindOfStateCanBePaintedOntoACanvasThatIgnoresIt_AndTheRightPageIsChecked()
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body), new HtmlDocumentOptions { Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         using var canvas = context.CreateCanvas(300, 400);
 
         document.PaintAccessibility(0, canvas);

@@ -85,7 +85,7 @@ public class SvgRenderContextTests
     {
         public List<string> Added { get; } = [];
 
-        public Task<bool> AddFace(string family, Stream stream, string? format) => AddFontFromStream(family, stream, format);
+        public ValueTask<bool> AddFace(string family, Stream stream, string? format) => AddFontFromStream(family, stream, format);
 
         protected override void OnFontFamilyAdded(string familyName) => Added.Add(familyName);
     }

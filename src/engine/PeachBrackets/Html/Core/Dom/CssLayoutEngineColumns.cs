@@ -78,7 +78,7 @@ namespace PeachBrackets.Html.Dom
             {
                 await Layout(g, columnsBox, resume);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (columnsBox.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Failed multi-column layout", ex);

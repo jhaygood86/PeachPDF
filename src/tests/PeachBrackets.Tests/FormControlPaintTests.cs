@@ -10,7 +10,7 @@ public class FormControlPaintTests
     private static async Task<RasterCanvas> PaintAsync(string body, bool paintControls)
     {
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles),
-            new HtmlDocumentOptions { PaintFormControls = paintControls, Media = "screen" });
+            new HtmlDocumentOptions { PaintFormControls = paintControls, MediaType = MediaType.Screen });
         return await TestDocument.PaintAsync(context, document);
     }
 
@@ -104,7 +104,7 @@ public class FormControlPaintTests
     {
         const string body = "<input value='HHHH' style='left:10pt;top:10pt;width:150pt;height:30pt;font-size:20pt;color:rgb(0,0,0)'>";
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, Styles),
-            new HtmlDocumentOptions { PaintFormControls = true, CollectFormFields = true, Media = "screen" });
+            new HtmlDocumentOptions { PaintFormControls = true, CollectFormFields = true, MediaType = MediaType.Screen });
         var canvas = await TestDocument.PaintAsync(context, document);
 
         Assert.True(InkCount(canvas, 14, 14, 140, 22, IsDark) > 40, "the value is drawn although the field is also collected");

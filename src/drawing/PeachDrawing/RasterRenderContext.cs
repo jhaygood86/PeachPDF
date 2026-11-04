@@ -57,11 +57,24 @@ public sealed class RasterRenderContext : RenderContext
     /// <inheritdoc/>
     public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable) => "screen";
 
+    /// <summary>
+    /// Answers a document's requests for what it refers to (an image, a style sheet, a font) by address, or <see langword="null"/> (the default) to
+    /// load nothing: a surface has no resource loading of its own.
+    /// </summary>
+    public Func<RUri, ValueTask<RNetworkResponse?>>? ResourceLoader { get; set; }
+
+    /// <inheritdoc/>
+    public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => ResourceLoader is { } loader ? loader(uri) : default;
+
     /// <summary>Registers a font directly under <paramref name="fontFamilyName"/>, bypassing CSS <c>@font-face</c> entirely.</summary>
-    public async Task AddFont(Stream stream, string? fontFamilyName)
+    public async ValueTask AddFont(Stream stream, string? fontFamilyName)
     {
         using var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream);
+        // In memory or on a local disk the copy does not need to wait, which lets a document that must not wait (SynchronousOnly) register the font.
+        if (stream is MemoryStream or FileStream)
+            stream.CopyTo(memoryStream);
+        else
+            await stream.CopyToAsync(memoryStream);
         AddFontData(memoryStream.ToArray(), fontFamilyName, default, null);
     }
 
@@ -143,12 +156,16 @@ public sealed class RasterRenderContext : RenderContext
     protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => _fontSet.HasExplicitRanges(family);
 
     /// <inheritdoc/>
-    protected override async Task<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override async ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         if (format is null or "truetype" or "woff" or "woff2" or "opentype")
         {
             using var memoryStream = new MemoryStream();
-            await stream.CopyToAsync(memoryStream);
+            // In memory or on a local disk the copy does not need to wait, which lets a document that must not wait (SynchronousOnly) register the font.
+            if (stream is MemoryStream or FileStream)
+                stream.CopyTo(memoryStream);
+            else
+                await stream.CopyToAsync(memoryStream);
             AddFontData(memoryStream.ToArray(), fontFamilyName, descriptors, unicodeRanges);
             return true;
         }
@@ -157,13 +174,13 @@ public sealed class RasterRenderContext : RenderContext
     }
 
     /// <inheritdoc/>
-    protected override Task<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+    protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
     {
         if (!_fontSet.TryGetFontData(localFontFaceName, out var data))
-            return Task.FromResult(false);
+            return new ValueTask<bool>(false);
 
         AddFontData(data, fontFamilyName, descriptors, unicodeRanges);
-        return Task.FromResult(true);
+        return new ValueTask<bool>(true);
     }
 
     private void AddFontData(ReadOnlyMemory<byte> data, string? fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval>? unicodeRanges)

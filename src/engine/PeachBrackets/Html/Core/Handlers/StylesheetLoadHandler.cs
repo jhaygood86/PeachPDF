@@ -48,7 +48,7 @@ namespace PeachBrackets.Html.Handlers
         /// through <see cref="HtmlContainerInt.RenderError"/>; this method never returns null
         /// content, even though both callers are written as if it could.
         /// </returns>
-        public static async Task<(string? Content, RUri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, RUri? importingBaseUri = null)
+        public static async ValueTask<(string? Content, RUri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, RUri? importingBaseUri = null)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace PeachBrackets.Html.Handlers
                     return (string.Empty, null);
                 }
 
-                var networkResponse = await htmlContainer.RenderContext.GetResourceStream(uri);
+                var networkResponse = await AsyncGuard.Require(htmlContainer.RenderContext.GetResourceStream(uri), htmlContainer.SynchronousOnly, "load the stylesheet", uri.AbsoluteUri);
 
                 Stream? stream = null;
 
@@ -88,7 +88,7 @@ namespace PeachBrackets.Html.Handlers
                 using var sr = new StreamReader(stream);
                 return (await sr.ReadToEndAsync(), uri);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 // A `return (null, null)` used to sit after this call, back when the throw was hidden
                 // inside a method named ReportError - so the "both null on failure" half of this

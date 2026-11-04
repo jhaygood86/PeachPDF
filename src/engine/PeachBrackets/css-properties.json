@@ -5083,6 +5083,32 @@
       }
     },
     {
+      "name": "scroll-margin-top",
+      "comment": "css-scroll-snap-1 section 3.1 (also what a browser uses to place an in-page link's target): the room a host leaves above the element when it scrolls it into view, so a bar stuck to the top of the viewport does not cover it. Read by HtmlDocument.GetScrollOffset.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollMarginTop",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-padding-top",
+      "comment": "css-scroll-snap-1 section 3.2: the room a scroll container keeps clear at its top edge when something is scrolled into view; only the root element's value is read (the document is the only scroller), by HtmlDocument.GetScrollOffset.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollPaddingTop",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "touch-action",
       "comment": "Stored as written; CssBox.EffectiveTouchActions reads it, intersecting the ancestors.",
       "inherited": false,

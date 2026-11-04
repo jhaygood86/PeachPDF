@@ -95,7 +95,7 @@ namespace PeachBrackets.Html.Dom
             {
                 await new CssLayoutEngineFlex(flexBox).Layout(g, resume);
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (flexBox.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Layout, "Failed flex layout", ex);
@@ -698,7 +698,11 @@ namespace PeachBrackets.Html.Dom
                     // Block items fill the container on layout, so naturalMain = container width.
                     // For inline-only boxes the actual content width is the sum of word widths per line.
                     double maxContent;
-                    if (DomUtils.ContainsInlinesOnly(box) && box.LineBoxes.Count > 0)
+                    // The line's words are the whole of its width only when nothing on it is an atomic inline box (an inline-flex or inline-grid button,
+                    // say): such a box is on the line as a box, not as words, so an item holding only one measured 0 here, and a nav item
+                    // `<li><a class=btn>Connect With Us</a></li>` collapsed and let its button overlap the item before it. Those items are measured
+                    // from their content, as a block child is below.
+                    if (DomUtils.ContainsInlinesOnly(box) && box.LineBoxes.Count > 0 && !box.Boxes.Any(IsAtomicInlineBox))
                     {
                         // Trailing white space at the end of a line does not contribute to
                         // max-content (css-text-3 §4.1.2 -- it hangs). Counted, an item measures wider
@@ -2915,6 +2919,9 @@ namespace PeachBrackets.Html.Dom
         /// <see cref="CssBox.GetMinMaxSumWords"/> already backs the same space out of ITS total,
         /// which is why the two measurements disagreed by exactly one word space.
         /// </summary>
+        private static bool IsAtomicInlineBox(CssBox box) =>
+            box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable;
+
         private static double LineContentWidth(CssLineBox line)
         {
             var width = 0d;

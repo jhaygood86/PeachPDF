@@ -76,6 +76,11 @@ namespace PeachBrackets.Html.Annotations
                     var leftPt = geometry.ContentLeftPt + (rectangle.Left * ppp - container.MarginLeft) / ppp;
                     var bounds = new Rect(leftPt, topPt, rectangle.Width, rectangle.Height);
 
+                    // A link in a fixed or sticky box is where the viewport has put the box.
+                    var (viewDx, viewDy) = container.View.DisplacementOf(link.SourceBox);
+                    if (viewDx != 0 || viewDy != 0)
+                        bounds = new Rect(bounds.X + (viewDx / ppp), bounds.Y + (viewDy / ppp), bounds.Width, bounds.Height);
+
                     // A link over an element a transform moved goes where it was drawn (css-transforms-1 "Transform Rendering"), which
                     // only the painter knows: the bounding box of the drawn shape, and the shape itself when it is not that box.
                     PaintPoint[]? quad = null;
@@ -87,6 +92,14 @@ namespace PeachBrackets.Html.Annotations
                         // Not on the page at all (moved off it, or wholly behind the viewer): nothing drawn there to click.
                         if (!AnnotationPlacement.TryPlaceLink(placement, local, frame, geometry.SheetWidthPt, geometry.SheetHeightPt, out bounds, out quad))
                             continue;
+
+                        // The placement is where a transform put the box on the page; the viewport's displacement of a fixed or stuck box comes on top.
+                        if (viewDx != 0 || viewDy != 0)
+                        {
+                            bounds = new Rect(bounds.X + (viewDx / ppp), bounds.Y + (viewDy / ppp), bounds.Width, bounds.Height);
+                            if (quad is not null)
+                                quad = quad.Select(point => new PaintPoint(point.X + (viewDx / ppp), point.Y + (viewDy / ppp))).ToArray();
+                        }
                     }
 
                     if (isAnchor)
@@ -154,6 +167,11 @@ namespace PeachBrackets.Html.Annotations
                 var appearance = new FormFieldAppearance(box, ppp);
                 var bounds = new Rect(leftPt, topPt, widthPt, heightPt);
                 System.Numerics.Matrix3x2? transform = null;
+
+                // A control in a fixed or sticky box is where the viewport has put the box.
+                var (viewDx, viewDy) = container.View.DisplacementOf(box);
+                if (viewDx != 0 || viewDy != 0)
+                    bounds = new Rect(bounds.X + (viewDx / ppp), bounds.Y + (viewDy / ppp), bounds.Width, bounds.Height);
 
                 // A control a transform moved sits where it was drawn: the bounds are those of the drawn shape, and the appearance (still
                 // built upright, at the control's own size) is carried onto it by the map's linear part.

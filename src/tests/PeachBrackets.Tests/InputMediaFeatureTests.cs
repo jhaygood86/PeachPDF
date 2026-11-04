@@ -24,7 +24,7 @@ public class InputMediaFeatureTests
 
     private static async Task<IReadOnlyDictionary<string, CursorShape>> CursorsAsync(InputCapabilities? input)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Input = input, Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Input = input, MediaType = MediaType.Screen });
         var result = new Dictionary<string, CursorShape>();
         foreach (var id in new[] { "a", "b", "c", "d", "e" })
         {
@@ -98,7 +98,7 @@ public class InputMediaFeatureTests
     {
         var (_, document) = await TestDocument.LoadAsync(
             TestDocument.Wrap("<div id=a style='height:20px'></div>", "<style>@media " + query + " { #a { cursor: help } }</style>"),
-            new HtmlDocumentOptions { Input = InputCapabilities.Mouse, Media = "screen" });
+            new HtmlDocumentOptions { Input = InputCapabilities.Mouse, MediaType = MediaType.Screen });
         var bounds = document.GetElementBounds("a")!.Value;
 
         Assert.Equal(expected, document.GetCursorAt(0, bounds.X + 5, bounds.Y + 5).Shape == CursorShape.Help);

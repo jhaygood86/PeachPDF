@@ -259,6 +259,11 @@ public sealed partial class HtmlView
                 context.StartActivity(intent);
             }
         }
+        else if (link.Anchor is { } anchor && _document?.GetScrollOffset(anchor) is { } offset && _pageTops.Length > 0)
+        {
+            // Where the target starts less the room it asks for above it (scroll-margin-top, scroll-padding-top), so a bar stuck to the top does not cover it.
+            ScrollTo(_scrollX, (_pageTops[0] + (offset * PixelsPerPoint)) * Scale);
+        }
         else if (link.Destination is { } destination && (uint)destination.PageIndex < (uint)_pageTops.Length)
         {
             ScrollTo(_scrollX, (_pageTops[destination.PageIndex] + (destination.Top * PixelsPerPoint)) * Scale);
@@ -311,6 +316,7 @@ public sealed partial class HtmlView
         _scrollY = ViewportMath.ClampScroll(_scrollY, _contentHeight * newScale, Height);
         _surface.Invalidate();
         ZoomChanged?.Invoke(this, EventArgs.Empty);
+        UpdateViewport();
         ScrollChanged?.Invoke(this, EventArgs.Empty);
     }
 

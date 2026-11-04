@@ -6,7 +6,7 @@ public class AccessibilityRangeTests
 {
     private static async Task<AccessibilityNode> NodeAsync(string body, AccessibilityRole role)
     {
-        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return document.GetAccessibilityTree().Nodes.First(n => n.Role == role);
     }
 
@@ -75,7 +75,7 @@ public class AccessibilityRangeTests
     {
         var (_, document) = await TestDocument.LoadAsync(
             TestDocument.Wrap("<p id=a style='font-size:20pt;font-weight:bold;font-style:italic;color:rgb(255,0,0);background:rgb(0,0,255)'>styled</p><p id=b>plain</p>",
-                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var tree = document.GetAccessibilityTree();
 
         var styled = tree.Nodes.First(n => n.ElementId == "a");
@@ -99,7 +99,7 @@ public class AccessibilityRangeTests
     {
         var (_, document) = await TestDocument.LoadAsync(
             TestDocument.Wrap("<p id=u style='text-decoration:underline'>under <span id=s>inside</span></p><p id=l style='text-decoration:underline line-through'>both</p><p id=n>none</p>",
-                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+                "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var nodes = document.GetAccessibilityTree().Nodes;
 
         var under = nodes.First(n => n.ElementId == "u");

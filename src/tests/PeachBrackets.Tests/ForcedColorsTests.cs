@@ -19,7 +19,7 @@ public class ForcedColorsTests
 
     private static async Task<RasterCanvasProbe> PaintAsync(UserPreferences? preferences)
     {
-        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Preferences = preferences, Media = "screen" });
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Body, Styles), new HtmlDocumentOptions { Preferences = preferences, MediaType = MediaType.Screen });
         return new RasterCanvasProbe(await TestDocument.PaintAsync(context, document));
     }
 
@@ -65,14 +65,14 @@ public class ForcedColorsTests
         const string body = "<div style='position:absolute;left:0;top:0;width:100pt;height:50pt;background:linear-gradient(rgb(255,0,0),rgb(255,0,0))'></div>";
         var wrapped = TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>");
 
-        var (plainContext, plainDocument) = await TestDocument.LoadAsync(wrapped, new HtmlDocumentOptions { Media = "screen" });
+        var (plainContext, plainDocument) = await TestDocument.LoadAsync(wrapped, new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var plain = await TestDocument.PaintAsync(plainContext, plainDocument);
         Assert.Equal((255, 0, 0), Rgb(TestDocument.Pixel(plain, 50, 25)));
 
         var (context, document) = await TestDocument.LoadAsync(wrapped, new HtmlDocumentOptions
         {
             Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = SystemColorPalette.Dark },
-            Media = "screen",
+            MediaType = MediaType.Screen,
         });
         var forced = await TestDocument.PaintAsync(context, document);
         Assert.Equal((255, 255, 255), Rgb(TestDocument.Pixel(forced, 50, 25)));
@@ -86,7 +86,7 @@ public class ForcedColorsTests
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions
         {
             Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = palette },
-            Media = "screen",
+            MediaType = MediaType.Screen,
         });
         var page = await TestDocument.PaintAsync(context, document);
         Assert.Equal(Rgb(palette.CanvasText), Rgb(TestDocument.Pixel(page, 30, 20)));
@@ -109,7 +109,7 @@ public class ForcedColorsTests
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 } html{background:black}</style>"), new HtmlDocumentOptions
         {
             Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = palette },
-            Media = "screen",
+            MediaType = MediaType.Screen,
         });
         var canvas = await TestDocument.PaintAsync(context, document);
 
@@ -122,7 +122,7 @@ public class ForcedColorsTests
     {
         var (context, document) = await TestDocument.LoadAsync(
             TestDocument.Wrap("<div style='position:absolute;left:10px;top:10px;width:50px;height:50px;background:CanvasText'></div>"),
-            new HtmlDocumentOptions { Media = "screen" });
+            new HtmlDocumentOptions { MediaType = MediaType.Screen });
         var canvas = await TestDocument.PaintAsync(context, document);
 
         Assert.Equal((0, 0, 0), Rgb(TestDocument.Pixel(canvas, 30, 30)));
@@ -135,7 +135,7 @@ public class ForcedColorsTests
 
         async Task<(double Em, double Px)> HeightsAsync(double scale)
         {
-            var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body), new HtmlDocumentOptions { FontScale = scale, Media = "screen" });
+            var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body), new HtmlDocumentOptions { FontScale = scale, MediaType = MediaType.Screen });
             return (document.GetElementBounds("em")!.Value.Height, document.GetElementBounds("px")!.Value.Height);
         }
 
@@ -158,7 +158,7 @@ public class ForcedColorsTests
         var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, "<style>@page { margin: 0 }</style>"), new HtmlDocumentOptions
         {
             Preferences = new UserPreferences { ForcedColors = true, ForcedPalette = palette },
-            Media = "screen",
+            MediaType = MediaType.Screen,
         });
         var canvas = await TestDocument.PaintAsync(context, document);
 

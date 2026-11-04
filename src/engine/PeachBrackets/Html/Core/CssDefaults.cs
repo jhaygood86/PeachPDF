@@ -41,6 +41,7 @@ namespace PeachBrackets.Html
             section, search,
             ol, p, ul, center,
             dir, menu, pre,
+            details, summary,
             hr               { display: block }
             foreignObject    { display: block }
             li              { display: list-item }
@@ -320,10 +321,9 @@ namespace PeachBrackets.Html
                so it is not painted. */
             progress, meter { display: inline-block; width: 10em; height: 1em; vertical-align: -0.2em; box-sizing: border-box; }
 
-            /* A details element that is not open shows only its summary; everything else in it is hidden until it is opened. A second summary child is
-               shown too: telling it from the first takes a sibling combinator, and one in the default sheet turns off the cascade's sibling style
-               sharing for the whole document. */
-            details:not([open]) > :not(summary) { display: none }
+            /* A details element that is not open shows only its first summary. The rest of it is hidden by the content box DomParser puts around it
+               (WrapDetailsContents), not by a rule here: the HTML Standard hides it with content-visibility: hidden, which an author's display cannot undo, and a
+               rule on the children would lose to an author rule such as .panel { display: flex }. */
         """;
 
         /// <summary>

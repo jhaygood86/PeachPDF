@@ -7,7 +7,7 @@ public class TextAreaControlTests
     private static async Task<HtmlDocument> LoadAsync(string body)
     {
         var (_, document) = await TestDocument.LoadAsync(
-            TestDocument.Wrap(body, "<style>@page { margin: 0 } textarea { display: block; margin: 0 }</style>"), new HtmlDocumentOptions { Media = "screen" });
+            TestDocument.Wrap(body, "<style>@page { margin: 0 } textarea { display: block; margin: 0 }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
         return document;
     }
 
@@ -63,7 +63,7 @@ public class TextAreaControlTests
     {
         var (context, document) = await TestDocument.LoadAsync(
             TestDocument.Wrap(body, "<style>@page { margin: 0 } textarea { position: absolute; margin: 0; left: 10pt; top: 10pt; width: 200pt; height: 80pt; font-size: 20pt; color: rgb(0,0,0) }</style>"),
-            new HtmlDocumentOptions { PaintFormControls = true, Media = "screen" });
+            new HtmlDocumentOptions { PaintFormControls = true, MediaType = MediaType.Screen });
         return await TestDocument.PaintAsync(context, document);
     }
 

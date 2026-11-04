@@ -134,6 +134,19 @@ namespace PeachBrackets.Html.Paint
         /// box's own geometry inside the page's margins was silently discarded on every page. See issue
         /// #880.
         /// </remarks>
+        /// <summary>
+        /// Paints only the boxes a continuous document's viewport holds in place (<see cref="DocumentPaintLayer.ViewportAttached"/>), each with everything
+        /// under it, where they are on the surface. There is no page clip: the layer they are drawn on is the viewport.
+        /// </summary>
+        internal void PaintAttached(Canvas g, FragmentainerFragment fragmentainer)
+        {
+            _pageRoot = fragmentainer.Root;
+            _slot = fragmentainer.SlotIndex;
+            _recordsPlacements = true;
+            foreach (var fragment in container.View.AttachedRoots)
+                PaintFragment(g, fragment);
+        }
+
         internal void Paint(Canvas g, FragmentainerFragment fragmentainer)
         {
             var pageClip = container.PageClipOverride ?? container.PageBoxRect;
@@ -411,6 +424,11 @@ namespace PeachBrackets.Html.Paint
             if (_contextMembers is not null && _contextMembers.Contains(fragment))
                 return;
 
+            // A box the viewport holds in place is drawn by its own layer: the scrolled surface leaves it out, so it is never drawn into content
+            // that moves before the box can be put back.
+            if (container.View.Layer == DocumentPaintLayer.Content && container.View.IsAttached(box))
+                return;
+
             try
             {
                 if (box.DerivedStyle.ActualDisplay == Keywords.None || box.Visibility.Value != Visibility.Visible) return;
@@ -424,6 +442,16 @@ namespace PeachBrackets.Html.Paint
                 if (box.Position.Value == PositionMode.Fixed)
                 {
                     g.SuspendClipping();
+                }
+
+                // A fixed or stuck box of a continuous document is drawn where the viewport has put it: a translation in front of everything the box does.
+                // It is not entered in the placement map: that is written once per box and read much later, and the displacement changes with every scroll, so
+                // what is written over the box (links, form widgets) adds the viewport's displacement itself.
+                var viewShifted = false;
+                if (!container.View.IsEmpty && container.View.TryGetOwn(box, out var viewShift))
+                {
+                    g.PushTransform(Matrix3x2.CreateTranslation((float)viewShift.Dx, (float)viewShift.Dy));
+                    viewShifted = true;
                 }
 
                 // A fragment only exists where its box has something in this fragmentainer, so the
@@ -500,6 +528,9 @@ namespace PeachBrackets.Html.Paint
                     }
                 }
 
+                if (viewShifted)
+                    g.PopTransform();
+
                 // Restore clips
                 if (box.Position.Value == PositionMode.Fixed)
                 {
@@ -514,7 +545,7 @@ namespace PeachBrackets.Html.Paint
                 // rather than folding it into a generic HtmlRenderException the way the catch below would.
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not SynchronousOnlyViolationException)
             {
                 if (box.HtmlContainer is { } container)
                     throw container.RenderError(HtmlRenderErrorType.Paint, "Exception in box paint", ex);

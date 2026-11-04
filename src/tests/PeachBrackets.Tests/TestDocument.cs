@@ -23,6 +23,11 @@ internal static class TestDocument
         string html, HtmlDocumentOptions? options = null, bool layout = true)
     {
         var context = await NewContextAsync();
+
+        // A screen document has no pages, so an @page rule does nothing to it; the tests that ask for no margin by @page do it here instead.
+        if (options is { MediaType: MediaType.Screen } && html.Contains("@page { margin: 0 }", StringComparison.Ordinal))
+            options.SetMargins(0);
+
         var document = await HtmlDocument.LoadAsync(html, context, options);
 
         if (layout)

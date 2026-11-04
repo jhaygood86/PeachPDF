@@ -287,7 +287,7 @@ public class TextEditTests
         var options = new HtmlDocumentOptions { RecordTextRuns = true };
         var (_, document, canvas) = await LoadAsync("<p>Hello</p>", Head, options);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => document.InsertTextAsync(new TextPosition(0, 1), "X", canvas));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => document.InsertTextAsync(new TextPosition(0, 1), "X", canvas).AsTask());
     }
     [Fact]
     public async Task SplittingAParagraphInTheMiddleOfAWord_LaysOutLikeTwoParagraphs()

@@ -66,11 +66,18 @@ namespace PeachBrackets.Html.Pages
         /// <summary>The pages layout produced, in order: one per fragmentainer.</summary>
         public IReadOnlyList<FragmentainerFragment> Fragmentainers => _container.FragmentTree?.Fragmentainers ?? [];
 
+        /// <summary>Paints only the boxes the viewport of a continuous document holds in place; <paramref name="lease"/> supplies the canvas.</summary>
+        public void PaintAttached(FragmentainerFragment fragmentainer, Func<CanvasLease> lease)
+        {
+            using var attachedCanvas = lease();
+            _container.PerformPaintAttached(attachedCanvas, fragmentainer);
+        }
+
         /// <summary>
         /// Paints one page. <paramref name="lease"/> supplies a canvas for each stage; <paramref name="shift"/> moves everything painted
         /// afterwards by (x, y) points until the returned scope is disposed (<see langword="null"/> when there is nothing to undo).
         /// </summary>
-        public async Task PaintPageAsync(
+        public async ValueTask PaintPageAsync(
             FragmentainerFragment fragmentainer, int pageNumber, Func<CanvasLease> lease, Func<double, double, IDisposable?> shift)
         {
             _lease = lease;
@@ -468,7 +475,7 @@ namespace PeachBrackets.Html.Pages
         /// happens to have resolved yet, which is not what "paints unconditionally" is supposed to mean.
         /// </para>
         /// </remarks>
-        private static async Task PaintElementMarginBoxes(
+        private static async ValueTask PaintElementMarginBoxes(
             CanvasLease lease, RenderContext renderContext, HtmlContainerInt htmlContainer, IReadOnlyList<MarginBoxFragment> marginBoxes,
             Size pageSize, double marginLeft, double marginTop, double marginRight, double marginBottom,
             IReadOnlyList<MarginStyleRule> margins, StyleDeclaration? pageStyle,
@@ -483,7 +490,7 @@ namespace PeachBrackets.Html.Pages
                 ? new HashSet<string>(marginBoxes.Select(m => m.BoxName), StringComparer.OrdinalIgnoreCase)
                 : [];
 
-            async Task PaintRuleOwnBackgroundAndBorder(string boxName, MarginStyleRule rule)
+            async ValueTask PaintRuleOwnBackgroundAndBorder(string boxName, MarginStyleRule rule)
             {
                 var outerRect = MarginBoxRenderer.GetMarginBoxRect(boxName, pageSize,
                     marginLeft, marginTop, marginRight, marginBottom, margins, pageStyle, remPt);

@@ -87,6 +87,8 @@ namespace PeachBrackets.Html.Fragmentation
         /// </summary>
         internal static BreakMode? ForcedBreakBeforeAt(CssBox box, FragmentationContext context)
         {
+            if (IsInertPageContext(box, context)) return null;
+
             var value = Forced(box.BreakBefore.Value, context);
 
             for (var child = FirstInFlowChild(box);
@@ -105,6 +107,8 @@ namespace PeachBrackets.Html.Fragmentation
         /// </summary>
         internal static BreakMode? ForcedBreakAfterAt(CssBox box, FragmentationContext context)
         {
+            if (IsInertPageContext(box, context)) return null;
+
             var value = Forced(box.BreakAfter.Value, context);
 
             for (var child = LastInFlowChild(box);
@@ -141,6 +145,11 @@ namespace PeachBrackets.Html.Fragmentation
 
             return outer ?? inner;
         }
+
+        // Screen media has no pages: a break value about the page only has an effect in a paginated context (css-break-3 §3.1). Column
+        // breaks, which a multi-column container still establishes, are asked in the Column context and are not affected.
+        private static bool IsInertPageContext(CssBox box, FragmentationContext context) =>
+            context is FragmentationContext.Page && box.HtmlContainer is { Continuous: true };
 
         private static BreakMode? Forced(BreakMode value, FragmentationContext context) =>
             BreakValues.IsForcedBreak(value, context) ? value : null;

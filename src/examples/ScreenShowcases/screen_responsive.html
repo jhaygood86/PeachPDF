@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Responsive media queries</title>
+<style>body{margin:0;font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#222}h1,h2{margin:0}</style>
+</head>
+<body>
+<style>.cols{display:flex;flex-wrap:wrap;gap:8px;padding:12px}.card{flex:1 1 200px;padding:16px;background:#e8eefc;border-radius:8px}
+.tag{padding:12px;color:#fff;margin:12px}.tag.w{background:#dc2626}.tag.o{background:#7c3aed}.tag.h{background:#059669}
+.w:before{content:"narrow (under 600px)"}.o:before{content:"portrait"}.h:before{content:"short (under 500px tall)"}
+@media (min-width:600px){.w:before{content:"wide (600px or more)"}.w{background:#16a34a}}
+@media (orientation:landscape){.o:before{content:"landscape"}.o{background:#ea580c}}
+@media (min-height:500px){.h:before{content:"tall (500px or more)"}.h{background:#0284c7}}</style>
+<div class="tag w"></div><div class="tag o"></div><div class="tag h"></div>
+<div class="cols"><div class="card">One</div><div class="card">Two</div><div class="card">Three</div><div class="card">Four</div></div>
+</body></html>

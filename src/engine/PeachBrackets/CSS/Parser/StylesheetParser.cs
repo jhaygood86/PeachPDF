@@ -58,25 +58,25 @@ namespace PeachBrackets.Css
             return Parse(source);
         }
 
-        public Task<Stylesheet> ParseAsync(string content)
+        public ValueTask<Stylesheet> ParseAsync(string content)
         {
             return ParseAsync(content, CancellationToken.None);
         }
 
-        public Task<Stylesheet> ParseAsync(string content, CancellationToken cancelToken)
+        public ValueTask<Stylesheet> ParseAsync(string content, CancellationToken cancelToken)
         {
             // A string source is already fully decoded text - nothing to await, but this overload stays
             // Task-returning (rather than synchronous) to keep the existing async-call-site contract.
             var source = new TextSource(content);
-            return Task.FromResult(Parse(source));
+            return ValueTask.FromResult(Parse(source));
         }
 
-        public Task<Stylesheet> ParseAsync(Stream content)
+        public ValueTask<Stylesheet> ParseAsync(Stream content)
         {
             return ParseAsync(content, CancellationToken.None);
         }
 
-        public async Task<Stylesheet> ParseAsync(Stream content, CancellationToken cancelToken)
+        public async ValueTask<Stylesheet> ParseAsync(Stream content, CancellationToken cancelToken)
         {
             var data = await CssStreamLoader.LoadAsync(content, null, cancelToken).ConfigureAwait(false);
             var source = new TextSource(data);

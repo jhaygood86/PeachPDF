@@ -91,9 +91,9 @@ public sealed partial class HtmlView
             return default;
 
         var (pageIndex, bounds) = node.Bounds[0];
-        var zoom = _scroller.ZoomFactor;
-        var x = (bounds.X * PixelsPerPoint * zoom) - _scroller.HorizontalOffset;
-        var y = ((_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * zoom) - _scroller.VerticalOffset;
+        var zoom = ViewZoom;
+        var x = (bounds.X * PixelsPerPoint * zoom) - ViewHorizontalOffset;
+        var y = ((_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * zoom) - ViewVerticalOffset;
         return new Rect(viewOnScreen.X + x, viewOnScreen.Y + y, bounds.Width * PixelsPerPoint * zoom, bounds.Height * PixelsPerPoint * zoom);
     }
 
@@ -101,6 +101,10 @@ public sealed partial class HtmlView
     internal bool IsOffscreen(AccessibilityNode node)
     {
         var rect = NodeBounds(node, new Rect(0, 0, 0, 0));
+        // An auto-height view shows all of itself; whether the list it is in shows it is for the list to say.
+        if (_scrollMode == HtmlViewScrollMode.Disabled)
+            return false;
+
         return rect.Bottom < 0 || rect.Top > _scroller.ViewportHeight || rect.Right < 0 || rect.Left > _scroller.ViewportWidth;
     }
 
@@ -128,8 +132,7 @@ public sealed partial class HtmlView
             return;
 
         var (pageIndex, bounds) = node.Bounds[0];
-        var y = (_pageTops[pageIndex] + (bounds.Y * PixelsPerPoint)) * _scroller.ZoomFactor;
-        _scroller.ChangeView(null, Math.Max(0, y - 40), null);
+        ScrollToY(Math.Max(0, _pageTops[pageIndex] + (bounds.Y * PixelsPerPoint) - 40 / ViewZoom));
     }
 }
 
