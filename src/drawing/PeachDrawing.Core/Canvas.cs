@@ -441,6 +441,14 @@ namespace PeachDrawing.Core
         public virtual bool PrefersRasterGroups => false;
 
         /// <summary>
+        /// Whether <see cref="BeginLayer"/> applies <see cref="LayerEffect"/>s (blur, shadow, colour matrix) natively, on the graphics
+        /// hardware, rather than by rendering the layer into a CPU bitmap first. A caller that can express a blur either way - a blurred
+        /// shadow, say - draws it as a layer with an effect when this is true, since that avoids a bitmap round trip per draw. False unless a
+        /// subclass overrides it.
+        /// </summary>
+        public virtual bool HasNativeLayerEffects => false;
+
+        /// <summary>
         /// Whether the document being written forbids transparency (PDF/A-1, PDF/X-1a/X-3) and was asked to flatten it instead of
         /// rejecting it (<c>PdfGenerateConfig.TransparencyPolicy</c>). The painter then renders what needs transparency as an
         /// opaque bitmap.

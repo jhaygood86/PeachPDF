@@ -157,6 +157,11 @@ public sealed partial class Win2dCanvas
         // The wedges are painted inside the shape's outline.
         using var clip = _session.CreateLayer(1f, region);
 
+        // One pixel shader paints the whole gradient when it has few enough stops for it; otherwise (or where the effect cannot be made)
+        // it is drawn as wedges.
+        if (conic.Stops.Count <= Win2dConicShader.MaxStops && TryFillConicShader(conic))
+            return;
+
         // The wedges meet at the centre and along each shared edge; anti-aliased, every one of those seams would show as a faint line, so the
         // wedges are drawn aliased (the clip above still gives the shape's own edge its smoothing).
         var smoothing = _session.Antialiasing;
@@ -168,6 +173,31 @@ public sealed partial class Win2dCanvas
         finally
         {
             _session.Antialiasing = smoothing;
+        }
+    }
+
+    private bool TryFillConicShader(ConicGradientBrush conic)
+    {
+        try
+        {
+            // The effect is evaluated in its own (local) space and then placed by the session's transform, like any image drawn.
+            // Its position is in the pixels of a target at the session's resolution.
+            var center = new Vector2((float)conic.Center.X, (float)conic.Center.Y) * (_session.Dpi / 96f);
+            using var effect = Win2dConicShader.Create(conic, center);
+
+            // The wedges stop at the gradient's outer radius (each reaches out far enough that the polygon holds that circle); the shader
+            // fills everything it is given, so it is cut to the same disc.
+            var radius = (float)(conic.OuterRadius / Math.Cos(2 * Math.PI / ConicWedges));
+            using var disc = CanvasGeometry.CreateCircle(_session, (float)conic.Center.X, (float)conic.Center.Y, radius);
+            using var cut = _session.CreateLayer(1f, disc);
+            FlushText();
+            _session.DrawImage(effect);
+            return true;
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or ArgumentException or InvalidOperationException)
+        {
+            // No pixel shader on this device: the wedges do the same job.
+            return false;
         }
     }
 

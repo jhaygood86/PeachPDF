@@ -57,6 +57,7 @@ PeachDrawing.Skia.SkiaCanvas : sealed class
   method virtual Void PushClipExclude(Rect rect)
   method virtual Void PushTransform(Matrix3x2 matrix)
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
@@ -91,6 +92,7 @@ PeachDrawing.Skia.SkiaCursorArea : sealed class
   property IReadOnlyList<CursorImage> Images { get; init; }
   property Rect Bounds { get; init; }
 PeachDrawing.Skia.SkiaImageCodec : enum Int32
+  Auto = 2
   Native = 1
   PeachImage = 0
 PeachDrawing.Skia.SkiaImageFormat : enum Int32
@@ -132,7 +134,7 @@ PeachDrawing.Skia.SkiaLinkOptions : sealed class
   property ISet<String> AllowedSchemes { get; init; }
   property ISkiaLinkLauncher Launcher { get; init; }
 PeachDrawing.Skia.SkiaRenderContext : class
-  ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = PeachImage, ISkiaTextShaper textShaper = null, FontSet fontSet = null)
+  ctor(SkiaTextEngine textEngine = PeachDrawing, SkiaImageCodec imageCodec = Auto, ISkiaTextShaper textShaper = null, FontSet fontSet = null)
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()

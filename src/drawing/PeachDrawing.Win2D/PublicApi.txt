@@ -53,6 +53,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual Void PushClipExclude(Rect rect)
   method virtual Void PushTransform(Matrix3x2 matrix)
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)
+  property Boolean HasNativeLayerEffects { get; }
   property Boolean IsOffscreenTile { get; }
   property Double PixelsPerPoint { get; }
   property Matrix3x2 CurrentTransform { get; }
@@ -90,6 +91,7 @@ PeachDrawing.Win2D.Win2dCursorArea : sealed class
 PeachDrawing.Win2D.Win2dDeviceLostException : sealed class
   ctor(Exception inner)
 PeachDrawing.Win2D.Win2dImageCodec : enum Int32
+  Auto = 2
   Native = 1
   PeachImage = 0
 PeachDrawing.Win2D.Win2dImageFormat : enum Int32
@@ -133,11 +135,11 @@ PeachDrawing.Win2D.Win2dLinkOptions : sealed class
   property ILinkLauncher Launcher { get; init; }
   property ISet<String> AllowedSchemes { get; init; }
 PeachDrawing.Win2D.Win2dRenderContext : class
-  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage, FontSet fontSet = null)
+  ctor(CanvasDevice device = null, Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = Auto, FontSet fontSet = null)
   method ValueTask AddFont(Stream stream, String fontFamilyName)
   method ValueTask AddFont(Stream stream, String fontFamilyName, FontFaceDescriptors descriptors, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void SyncFonts()
-  method static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = PeachImage)
+  method static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = PeachDrawing, Win2dImageCodec imageCodec = Auto)
   method virtual String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Void Dispose()
   property Boolean FallbackToPeachImage { get; set; }

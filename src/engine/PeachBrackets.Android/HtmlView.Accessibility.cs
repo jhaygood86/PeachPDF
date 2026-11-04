@@ -378,7 +378,7 @@ public sealed partial class HtmlView
                 case Action.AccessibilityFocus:
                     view._accessibilityFocus = virtualViewId;
                     view.RevealNode(node);
-                    view._surface.Invalidate();
+                    view.InvalidateContent();
                     view.SendNodeEvent(virtualViewId, EventTypes.ViewAccessibilityFocused);
                     return true;
                 case Action.ClearAccessibilityFocus:

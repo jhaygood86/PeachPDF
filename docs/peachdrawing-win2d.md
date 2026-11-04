@@ -66,14 +66,15 @@ composer's bitmap is `width x PixelsPerPoint` DIPs wide at `Win2dComposerOptions
 | `DrawRectangle`, `DrawPath`, `DrawPolygon` (brush) | `FillRectangle` / `FillGeometry` (a `CanvasGeometry` built from the path's curves for the one call) |
 | `DrawLine`, `DrawRectangle`, `DrawPath` (pen) | `DrawLine` / `DrawRectangle` / `DrawGeometry` with a `CanvasStrokeStyle` (caps, joins, miter limit, dashes in stroke widths) |
 | Solid, linear and radial brushes | `CanvasSolidColorBrush`, `CanvasLinearGradientBrush`, `CanvasRadialGradientBrush` (clamp or wrap) |
-| Conic gradient, hatch brush | Aliased wedges inside a clip layer; a hatch is a tile made for the call |
+| Conic gradient | A pixel shader (`Shaders/ConicGradient.hlsl`) over the shape's clip, for up to 16 stops; more than that, or a device without pixel shaders, draws aliased wedges |
+| Hatch brush | A tile made for the call |
 | `TileBrush` | `CanvasImageBrush` (wrap) over the tile's bitmap or command list |
 | `PushClip` (rectangle, path), `PushClipExclude` | `CreateLayer` with the rectangle or geometry; `PopClip` disposes the layer |
 | `PushTransform` / `PopTransform` | `CanvasDrawingSession.Transform` |
 | `PushBlendMode` | `CanvasBlend` where Win2D has the rule (add, minimum); see [limitations](#limitations) |
 | `PushAntiAlias` | `CanvasAntialiasing` |
 | `DrawImage` (with source rectangle, sampling) | `DrawImage` of a `CanvasBitmap` made from the decoded pixels, per device |
-| `BeginLayer` | A `CanvasCommandList`, composited with opacity, colour matrix, blur and drop shadow effects when the layer is finished |
+| `BeginLayer` | A `CanvasCommandList`, composited with opacity, colour matrix, blur and drop shadow effects when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects (a blur holds its layer's edge pixels only when `BlurEffect.ClampEdges` is set) instead of through a CPU bitmap |
 | `CreateTile` | A `CanvasCommandList` (vector, resolution independent) |
 | `DrawImageWithOpacity` / `WithColorMatrix` / `Masked` / `AlphaMasked` / `BlendedOver` | `OpacityEffect`, `ColorMatrixEffect`, `LuminanceToAlphaEffect` + `AlphaMaskEffect`, `BlendEffect` |
 | `BeginRasterSurface` / `DrawRaster` | The shared raster fallback, drawn back as a bitmap |
@@ -143,7 +144,12 @@ DirectWrite mode is a convenience for text that should look like the rest of Win
 
 `Win2dRenderContext(device, textEngine, Win2dImageCodec)` chooses what turns an encoded image into pixels:
 
-- **`Win2dImageCodec.PeachImage`** (default): the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
+- **`Win2dImageCodec.Auto`** (default): an image Windows has a codec for is kept as its encoded bytes and decoded by the Windows Imaging
+  Component straight into the bitmap of each device it is drawn on, so no managed copy of its pixels is made (the pixels are decoded only if
+  something asks for them, through the image's `GetPixels`). Anything Windows cannot decode is decoded by PeachImage, as is an image that
+  carries an orientation in its metadata, because loading into a bitmap applies that orientation and the canvas applies it itself. The pixels
+  can differ slightly from PeachImage's (JPEG decoders round differently; colour-managed and CMYK files may convert differently).
+- **`Win2dImageCodec.PeachImage`**: the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
   every other canvas.
 - **`Win2dImageCodec.Native`**: the Windows Imaging Component (`BitmapDecoder`), which can read what the codecs installed on the machine can,
   including formats PeachImage does not know. An image Windows cannot decode is handed to PeachImage unless
@@ -221,7 +227,7 @@ device was lost throws `Win2dDeviceLostException`; draw it again.
 
 - **Blend modes.** A drawing session blends only by add and minimum, so `Plus` and `Darken` are exact and the other `PaintBlendMode`s
   (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honoured on this canvas.
-- **Gradients.** A conic gradient is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
+- **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
   with unequal x and y deviations uses their mean.
 - **DirectWrite text** is not feature complete; see the [table above](#directwrite-mode-is-not-feature-complete).
 - **Windows only.** Win2D is a Windows App SDK component, so the package builds, tests and packs on Windows only. The other packages still

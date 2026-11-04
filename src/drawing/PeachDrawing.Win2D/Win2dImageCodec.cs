@@ -12,4 +12,11 @@ public enum Win2dImageCodec
     /// handed to PeachImage instead unless <see cref="Win2dRenderContext.FallbackToPeachImage"/> is switched off.
     /// </summary>
     Native,
+
+    /// <summary>
+    /// The default. An image Windows has a codec for is kept as its encoded bytes and decoded by Windows straight into the bitmap of each device
+    /// it is drawn on, so no managed copy of its pixels is made unless something asks for them (<c>GetPixels</c>); any other image is decoded by
+    /// PeachImage. Pixels can differ from PeachImage's where Windows converts differently (some colour-managed or CMYK files).
+    /// </summary>
+    Auto = 2,
 }

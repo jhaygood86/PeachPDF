@@ -20,6 +20,7 @@ PeachBrackets.Android.HtmlTouchStartedEventArgs : sealed class
   property TouchActions Allowed { get; set; }
 PeachBrackets.Android.HtmlView : sealed class
   ctor(Context context)
+  ctor(Context context, Boolean useGpu)
   ctor(Context context, IAttributeSet attributes)
   event EventHandler DocumentLoaded
   event EventHandler FocusChanged

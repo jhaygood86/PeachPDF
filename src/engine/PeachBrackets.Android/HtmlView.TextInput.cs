@@ -142,7 +142,7 @@ public sealed partial class HtmlView
             RefreshAccessibility(document);
 
         if (result.Applied)
-            _surface.Invalidate();
+            InvalidateContent();
 
         if (state is { } s && InputMethod() is { } manager)
             manager.UpdateSelection(this, s.SelectionStart, s.SelectionEnd, s.CompositionStart, s.CompositionEnd);
@@ -494,7 +494,7 @@ public sealed partial class HtmlView
             {
                 _caretShown = !_caretShown;
                 if (document.SetCaretVisible(_caretShown).Applied)
-                    _surface.Invalidate();
+                    InvalidateContent();
 
                 _handler.PostDelayed(_blinkTick!, CaretBlinkMilliseconds);
             }
@@ -517,7 +517,7 @@ public sealed partial class HtmlView
 
         _caretShown = true;
         if (document.SetCaretVisible(true).Applied)
-            _surface.Invalidate();
+            InvalidateContent();
 
         StartBlink();
     }

@@ -314,7 +314,7 @@ public sealed partial class HtmlView
         _scrollY = ViewportMath.ScrollAfterZoom(_scrollY, oldScale, newScale, focusY);
         _scrollX = ViewportMath.ClampScroll(_scrollX, _contentWidth * newScale, Width);
         _scrollY = ViewportMath.ClampScroll(_scrollY, _contentHeight * newScale, Height);
-        _surface.Invalidate();
+        RequestPaint();
         ZoomChanged?.Invoke(this, EventArgs.Empty);
         UpdateViewport();
         ScrollChanged?.Invoke(this, EventArgs.Empty);
@@ -423,7 +423,7 @@ public sealed partial class HtmlView
                 if (result.Applied && ReferenceEquals(document, _document) && result.DirtyRegions.Count > 0)
                 {
                     UpdateMetrics();
-                    _surface.Invalidate();
+                    InvalidateContent();
                 }
             }
         }

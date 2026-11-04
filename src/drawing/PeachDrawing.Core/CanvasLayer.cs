@@ -34,6 +34,13 @@ namespace PeachDrawing.Core
     /// <param name="SigmaY">the vertical standard deviation</param>
     public sealed record BlurEffect(double SigmaX, double SigmaY) : LayerEffect
     {
+        /// <summary>
+        /// Whether the pixels at the edge of the layer's content are held out past it, so the blur does not fade toward the edge. False
+        /// (the default) lets the blur spread past the content into transparency, which is what a blurred shape wants; true is for a layer
+        /// whose content fills its bounds and continues beyond them, such as the backdrop behind a panel.
+        /// </summary>
+        public bool ClampEdges { get; init; }
+
         /// <summary>A blur with the same standard deviation in both directions.</summary>
         /// <param name="sigma">the standard deviation</param>
         public BlurEffect(double sigma) : this(sigma, sigma)

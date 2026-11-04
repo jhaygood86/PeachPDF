@@ -28,7 +28,7 @@ integration points, and nothing else - no `SKPaint`, `SKImage` or `SKTypeface` i
 | `SkiaTextEngine` (`PeachDrawing`, `Native`) | Which engine shapes and draws text | Ours; each value names the engine |
 | `PeachTextShaper` | The ready-made `ISkiaTextShaper` over the `PeachDrawing.Text` engine | Ours; named for the engine it wraps, not the Skia type it serves |
 | `ISkiaTextShaper`, `SkiaShapedRun` | The seam a host fills to shape native-font text (e.g. over HarfBuzz, which the package does not depend on) | Ours; plain arrays, no SkiaSharp.HarfBuzz type in the signature |
-| `SkiaImageCodec` (`PeachImage`, `Native`) | Which decoder turns an encoded image into pixels (`Win2dImageCodec` is the same switch) | Ours; each value names the decoder |
+| `SkiaImageCodec` (`Auto`, `PeachImage`, `Native`) | Which decoder turns an encoded image into pixels (`Win2dImageCodec` is the same switch) | Ours; each value names the decoder |
 | `SkiaLinkMap`, `SkiaLink`, `SkiaLinkOptions`, `SkiaLinkActivatingEventArgs`, `ISkiaLinkLauncher` | The links a page recorded, finding the one under a point (`HitTest`, `HitTestDevice` for the host canvas's own pixels), and opening it through a launcher the host supplies | Ours; `TryActivateAsync`/`TryGetDestination` name what they do; `LinkActivating`/`Cancel` follow the .NET event idiom; there is no default launcher on purpose |
 
 Everything else in the assembly is `internal` (`SkiaImage`, `SkiaTileImage`, `SkiaGraphicsPath`, `SkiaFont`, `NativeSkiaFont`,

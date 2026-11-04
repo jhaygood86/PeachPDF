@@ -42,6 +42,9 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
 
     public override int ExifOrientation { get; }
 
+    /// <summary>Whether the pixels are held as managed memory (false for an image Skia decodes itself).</summary>
+    internal bool HasManagedPixels => _premultipliedRgba is not null;
+
     public override PixelBuffer? GetPixels()
     {
         lock (_gate)
@@ -168,6 +171,22 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
 
         var image = SKImage.FromPixelCopy(info, bitmap.GetPixelSpan(), info.RowBytes);
         return image is null ? null : new SkiaImage(info.Width, info.Height, null, image, counts, (int)codec.EncodedOrigin);
+    }
+
+    /// <summary>
+    /// An image Skia can decode, kept as its encoded bytes: Skia decodes it on first use (into the texture, on a GPU surface), and may discard
+    /// and redo the decode as memory is wanted. <see langword="null"/> when Skia has no codec for the data, or the image has an orientation stored
+    /// with it: Skia leaves that for the caller to apply, and PeachImage's decode does the same, so such an image is left to it.
+    /// </summary>
+    public static SkiaImage? TryCreateLazy(byte[] source, SkiaResourceCounts counts)
+    {
+        using var data = SKData.CreateCopy(source);
+        using var codec = SKCodec.Create(data);
+        if (codec is null || codec.EncodedOrigin != SKEncodedOrigin.TopLeft)
+            return null;
+
+        var image = SKImage.FromEncodedData(data);
+        return image is null ? null : new SkiaImage(image.Width, image.Height, null, image, counts);
     }
 
     public static SkiaImage FromPixels(PixelBuffer pixels, SkiaResourceCounts counts) =>

@@ -38,7 +38,8 @@ public sealed partial class HtmlView : FrameLayout
     private const double MinZoom = 0.5;
     private const double MaxZoom = 4;
 
-    private readonly SKCanvasView _surface;
+    private readonly View _surface;
+    private readonly SKGLSurfaceView? _glSurface;
     private readonly Handler _handler = new(Looper.MainLooper!);
     private SkiaRenderContext? _context;
     private HtmlDocument? _document;
@@ -56,12 +57,35 @@ public sealed partial class HtmlView : FrameLayout
     private bool _attached;
     private System.Action? _reflow;
 
+    /// <summary>Creates a view with nothing in it, drawn on the graphics hardware.</summary>
+    /// <param name="context">the context the view lives in</param>
+    public HtmlView(Context context) : this(context, useGpu: true)
+    {
+    }
+
     /// <summary>Creates a view with nothing in it.</summary>
     /// <param name="context">the context the view lives in</param>
-    public HtmlView(Context context) : base(context)
+    /// <param name="useGpu">
+    /// whether the page is drawn on the graphics hardware (an OpenGL surface, with the painted page kept as textures while it scrolls and
+    /// zooms) or on the CPU, which suits a device or emulator without a working GL driver
+    /// </param>
+    public HtmlView(Context context, bool useGpu) : base(context)
     {
-        _surface = new SKCanvasView(context) { IgnorePixelScaling = false }; // full resolution: the surface is in device pixels, not dp
-        _surface.PaintSurface += OnPaintSurface;
+        if (useGpu)
+        {
+            // Full resolution: the surface is in device pixels, not dp.
+            _glSurface = new SKGLSurfaceView(context);
+            _glSurface.RenderMode = global::Android.Opengl.Rendermode.WhenDirty; // drawn when asked to, not continuously
+            _glSurface.PaintSurface += OnPaintGlSurface;
+            _surface = _glSurface;
+        }
+        else
+        {
+            var cpu = new SKCanvasView(context) { IgnorePixelScaling = false };
+            cpu.PaintSurface += OnPaintSurface;
+            _surface = cpu;
+        }
+
         AddView(_surface, new LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
         _density = context.Resources?.DisplayMetrics?.Density ?? 1;
         Focusable = true;
@@ -72,7 +96,7 @@ public sealed partial class HtmlView : FrameLayout
     /// <summary>Creates a view from a layout file.</summary>
     /// <param name="context">the context the view lives in</param>
     /// <param name="attributes">the attributes set in the layout</param>
-    public HtmlView(Context context, IAttributeSet attributes) : this(context)
+    public HtmlView(Context context, IAttributeSet attributes) : this(context, useGpu: true)
     {
         _ = attributes;
     }
@@ -231,6 +255,7 @@ public sealed partial class HtmlView : FrameLayout
         if (_reflow is not null)
             _handler.RemoveCallbacks(_reflow);
 
+        ResetTiles();
         _document?.Dispose();
         _document = null;
         _context?.Dispose();
@@ -291,12 +316,12 @@ public sealed partial class HtmlView : FrameLayout
             _document?.Dispose();
             _document = document;
             _loadedWidth = widthDp;
-            document.Selection.SelectionChanged += (_, _) => _surface.Invalidate();
+            document.Selection.SelectionChanged += (_, _) => InvalidateContent();
             UpdateMetrics();
             UpdateViewport();
             RefreshAccessibility(document);
             ScrollTo(_scrollX, _scrollY);
-            _surface.Invalidate();
+            InvalidateContent();
             DocumentLoaded?.Invoke(this, EventArgs.Empty);
         }
         catch (Exception exception) when (version == _loadVersion)
@@ -411,51 +436,9 @@ public sealed partial class HtmlView : FrameLayout
         _scrollX = newX;
         _scrollY = newY;
         UpdateViewport();
-        _surface.Invalidate();
+        RequestPaint();
         SendAccessibilityEvent(EventTypes.ViewScrolled);
         ScrollChanged?.Invoke(this, EventArgs.Empty);
-    }
-
-    private void OnPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
-    {
-        var canvas = e.Surface.Canvas;
-        canvas.Clear(PageBackground);
-        var document = _document;
-        var context = _context;
-        if (document is null || context is null)
-            return;
-
-        var scale = (float)Scale;
-        var visibleTop = _scrollY / Scale;
-        var visibleBottom = (_scrollY + e.Info.Height) / Scale;
-        var visibleLeft = _scrollX / Scale;
-        var visibleRight = (_scrollX + e.Info.Width) / Scale;
-
-        for (var page = 0; page < _pageTops.Length; page++)
-        {
-            var top = _pageTops[page];
-            if (top + _pageHeights[page] < visibleTop || top > visibleBottom)
-                continue;
-
-            var size = document.Pages[page];
-            canvas.Save();
-            canvas.Translate((float)-_scrollX, (float)-_scrollY);
-            canvas.Scale(scale);
-            canvas.Translate(0, (float)top);
-
-            // Only the part of the page in view, in points from the top-left of the sheet.
-            var region = new PeachDrawing.Core.Rect(
-                Math.Max(0, visibleLeft) / PixelsPerPoint, Math.Max(0, visibleTop - top) / PixelsPerPoint,
-                (visibleRight - visibleLeft) / PixelsPerPoint, (visibleBottom - Math.Max(visibleTop, top)) / PixelsPerPoint);
-
-            using (var target = SkiaCanvas.FromCanvas(context, canvas, new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint)))
-            {
-                // Painting finishes without waiting for anything (what it draws was resolved during layout), so the task is already complete.
-                document.PaintPageRegionAsync(page, target, region).GetAwaiter().GetResult();
-            }
-
-            canvas.Restore();
-        }
     }
 }
 

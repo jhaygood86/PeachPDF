@@ -61,6 +61,11 @@ namespace PeachBrackets.Html.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return false;
 
+            // A canvas that applies layer effects on the graphics hardware takes the filter list as effects of a layer, which saves
+            // rendering the subtree into a CPU bitmap, filtering it there and uploading it again.
+            if (g.HasNativeLayerEffects && PaintRasterizedNative(g, fragment, filter, bounds))
+                return true;
+
             using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
@@ -97,6 +102,43 @@ namespace PeachBrackets.Html.Paint
                     g.DrawRaster(scope.Surface);
                     g.PopBlendMode();
                 }
+            }
+
+            PaintSelectableText(g, fragment);
+            return true;
+        }
+
+        /// <summary>
+        /// <see cref="PaintRasterized"/> for a canvas whose layers take effects natively: the subtree is painted into a layer carrying
+        /// the element's filter list, its own opacity and its <c>mix-blend-mode</c>.
+        /// </summary>
+        /// <returns>false, having painted nothing, when the canvas turns the layer down.</returns>
+        private bool PaintRasterizedNative(Canvas g, BoxFragment fragment, FilterEffectResolver.Resolved filter, Rect bounds)
+        {
+            var box = fragment.Box;            var options = new LayerOptions(
+                Opacity: box.ActualOpacity,
+                BlendMode: ToRBlendMode(box.ActualMixBlendMode),
+                Bounds: bounds,
+                Effects: RasterFilterChain.ToLayerEffects(filter.Functions, box));
+
+            var layer = g.BeginLayer(options);
+            if (layer is null)
+                return false;
+
+            // The layer's effects paint this box's drop-shadow() from the real alpha shape; the decoration painter's border-box
+            // approximation must not add a second one.
+            _dropShadowsInRaster.Add(box);
+            var wasSuppressed = _taggingSuppressed;
+            _taggingSuppressed = true;
+            try
+            {
+                PaintTagged(layer.Canvas, fragment);
+            }
+            finally
+            {
+                _taggingSuppressed = wasSuppressed;
+                _dropShadowsInRaster.Remove(box);
+                layer.Dispose();
             }
 
             PaintSelectableText(g, fragment);
