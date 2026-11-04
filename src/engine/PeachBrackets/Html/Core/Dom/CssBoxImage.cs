@@ -18,8 +18,10 @@ using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Svg;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -97,6 +99,39 @@ namespace PeachBrackets.Html.Dom
             return (_selection.Chosen.Url, _selection.Chosen.Density);
         }
 
+        /// <summary>The most next-best srcset candidates tried after the chosen one cannot be loaded, before the <c>src</c>.</summary>
+        private const int MaxFallbackCandidates = 3;
+
+        /// <summary>
+        /// Loads the selected source; when it cannot be loaded (a missing file, a refused request, bytes no decoder reads) tries the next-best
+        /// candidates, up to <see cref="MaxFallbackCandidates"/>, then the <c>src</c>, and records each failure on the container.
+        /// </summary>
+        private async ValueTask LoadSelectedSourceAsync(ImageLoadHandler handler)
+        {
+            SelectSource();
+            var selection = _selection!;
+            var srcAttribute = GetAttribute("src")?.Trim();
+            ResponsiveImageSelector.Choice? src = string.IsNullOrEmpty(srcAttribute) ? null : new ResponsiveImageSelector.Choice(srcAttribute, 1, 1);
+            var tries = new List<ResponsiveImageSelector.Choice> { selection.Chosen };
+            tries.AddRange(selection.Alternates.Where(c => c.Url != selection.Chosen.Url).Take(MaxFallbackCandidates));
+            if (src is { } srcChoice && tries.TrueForAll(c => c.Url != srcChoice.Url)) tries.Add(srcChoice);
+
+            for (var i = 0; i < tries.Count; i++)
+            {
+                var choice = tries[i];
+                _srcsetDensity = choice.Density;
+                await handler.LoadImage(choice.Url);
+
+                if (handler.Image is not null || handler.SvgDocument is not null || string.IsNullOrEmpty(choice.Url))
+                {
+                    _selection = new ResponsiveImageSelector.Selection(choice, selection.Alternates);
+                    return;
+                }
+
+                HtmlContainer!.ImageLoadFailures.Add(new ImageLoadFailure(choice.Url, i + 1 < tries.Count ? tries[i + 1].Url : null));
+            }
+        }
+
         /// <summary>
         /// The phantom word carrying this box's replaced content, whose own rectangle positions the
         /// image within the box. Read by <c>ImageFragmentPainter</c>.
@@ -150,9 +185,7 @@ namespace PeachBrackets.Html.Dom
                     }
                     else
                     {
-                        var (url, density) = SelectSource();
-                        _srcsetDensity = density;
-                        await _imageLoadHandler.LoadImage(url);
+                        await LoadSelectedSourceAsync(_imageLoadHandler);
                     }
 
                     OnLoadImageComplete();

@@ -563,6 +563,7 @@ PeachBrackets.HtmlDocument : sealed class
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
+  property IReadOnlyList<ImageLoadFailure> ImageLoadFailures { get; }
   property IReadOnlyList<String> HighlightNames { get; }
   property IReadOnlyList<TextRange> SelectedRanges { get; }
   property IReadOnlyList<TextRun> TextRuns { get; }
@@ -620,6 +621,16 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property StyleSheet StyleSheet { get; set; }
   property TextSpacingOverrides TextSpacing { get; set; }
   property UserPreferences Preferences { get; set; }
+PeachBrackets.ImageLoadFailure : sealed class
+  ctor(String Url, String FallbackUrl)
+  method ImageLoadFailure <Clone>$()
+  method Void Deconstruct(out String Url, out String FallbackUrl)
+  method virtual Boolean Equals(ImageLoadFailure other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property String FallbackUrl { get; init; }
+  property String Url { get; init; }
 PeachBrackets.ImageSelectionOptions : sealed class
   ctor()
   method ImageSelectionOptions <Clone>$()

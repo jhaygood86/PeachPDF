@@ -3,6 +3,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachPDF.Tests.TestSupport;
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -202,6 +203,58 @@ namespace PeachBrackets.Engine.Tests.Integration
             var chosen = await ChooseThroughDocumentAsync($"<img id='i' srcset='{Small} 1x, {Large} 3x'>", new HtmlDocumentOptions { MediaType = media });
 
             Assert.Equal(expected, chosen);
+        }
+
+        private const string Missing = "file:///peachpdf-nonexistent-dir/missing.png";
+
+        [Fact]
+        public async Task FailedCandidate_TriesTheNextBestInRankOrder()
+        {
+            // At 3x the missing 3x image is the best; the 2x one is the next best, then 1x.
+            var (chosen, width) = await ChooseAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Missing} 3x'>", Screen(3));
+
+            Assert.Equal("mid", chosen);
+            Assert.Equal(75, width, 3);
+        }
+
+        [Fact]
+        public async Task FailedCandidates_FallBackToSrcAfterTheRanked()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap($"<img id='i' src='{Small}' srcset='{Missing} 2x, file:///peachpdf-nonexistent-dir/other.png 3x'>"), configureContainer: Screen(3));
+
+            var img = (CssBoxImage)LayoutHarness.FindById(root, "i")!;
+            Assert.Equal("small", Name(img.ImageSource));
+            Assert.Equal(
+                [new ImageLoadFailure("file:///peachpdf-nonexistent-dir/other.png", Missing), new ImageLoadFailure(Missing, Small)],
+                container.ImageLoadFailures);
+        }
+
+        [Fact]
+        public async Task FailedCandidate_NothingLeft_IsRecordedWithoutAFallback()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<img id='i' srcset='{Missing} 2x'>"), configureContainer: Screen());
+
+            Assert.Null(((CssBoxImage)LayoutHarness.FindById(root, "i")!).Image);
+            Assert.Equal([new ImageLoadFailure(Missing, null)], container.ImageLoadFailures);
+        }
+
+        [Fact]
+        public async Task FailedFallbacks_AreBoundedToThreeBeforeSrc()
+        {
+            var urls = string.Join(", ", Enumerable.Range(1, 6).Select(n => $"file:///peachpdf-nonexistent-dir/{n}.png {n}x"));
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<img id='i' src='{Small}' srcset='{urls}'>"), configureContainer: Screen(6));
+
+            // The chosen one, three more, and then src loads.
+            Assert.Equal(4, container.ImageLoadFailures.Count);
+        }
+
+        [Fact]
+        public async Task SuccessfulLoad_RecordsNoFailure()
+        {
+            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>"), configureContainer: Screen(2));
+
+            Assert.Empty(container.ImageLoadFailures);
         }
 
         private sealed class NoAvifContext : PeachPDF.Rendering.HtmlRenderContext

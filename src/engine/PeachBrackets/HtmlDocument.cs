@@ -50,6 +50,12 @@ public sealed partial class HtmlDocument : IDisposable
 
     /// <summary>The laid-out document the public surface wraps; reached by the test projects that assert on the box tree itself.</summary>
     internal HtmlContainerInt Container => _container;
+
+    /// <summary>
+    /// The images of a <c>srcset</c> or <c>&lt;picture&gt;</c> that could not be loaded, in the order they failed. The document then tries the
+    /// next-best candidate (up to three), then the <c>src</c>, so a failure listed here is not necessarily a blank image.
+    /// </summary>
+    public IReadOnlyList<ImageLoadFailure> ImageLoadFailures => _container.ImageLoadFailures;
     private readonly RenderContext _renderContext;
     private readonly double _unitsPerPoint;
     private PagePainter? _painter;

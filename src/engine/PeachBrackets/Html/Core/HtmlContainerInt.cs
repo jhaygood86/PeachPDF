@@ -1306,6 +1306,9 @@ namespace PeachBrackets.Html
 
         private double _devicePixelRatio = 1;
 
+        /// <summary>The images of a <c>srcset</c> that could not be loaded, in the order they failed.</summary>
+        internal List<ImageLoadFailure> ImageLoadFailures { get; } = [];
+
         /// <summary>How a <c>srcset</c> image is chosen; paged output takes the highest density unless the host says otherwise.</summary>
         internal ImageSelectionOptions ImageSelection { get; set; } = ImageSelectionOptions.HighestDensityPolicy;
 

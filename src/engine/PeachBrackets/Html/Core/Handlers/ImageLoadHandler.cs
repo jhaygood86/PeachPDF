@@ -270,6 +270,9 @@ namespace PeachBrackets.Html.Handlers
 
             if (networkResponse?.ResourceStream is not null)
             {
+                // A previous attempt (a fallback after a failed load) that left nothing usable has nothing to keep its stream open for.
+                if (Image is null && SvgDocument is null) ReleaseObjects();
+
                 _imageStream = networkResponse.ResourceStream;
 
                 var contentTypeHintsSvg = networkResponse.ResponseHeaders?.TryGetValue("Content-Type", out var contentTypeValues) == true
