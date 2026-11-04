@@ -608,6 +608,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }
+  property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
@@ -619,6 +620,20 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property StyleSheet StyleSheet { get; set; }
   property TextSpacingOverrides TextSpacing { get; set; }
   property UserPreferences Preferences { get; set; }
+PeachBrackets.ImageSelectionOptions : sealed class
+  ctor()
+  method ImageSelectionOptions <Clone>$()
+  method virtual Boolean Equals(ImageSelectionOptions other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean UpgradeOnZoom { get; init; }
+  property Double Tolerance { get; init; }
+  property ImageSelectionPolicy Policy { get; init; }
+  property Int64? MaxDecodePixels { get; init; }
+PeachBrackets.ImageSelectionPolicy : enum Int32
+  BestForTarget = 1
+  HighestDensity = 0
 PeachBrackets.InputCapabilities : sealed class
   ctor(PointerTypes PrimaryPointer, Boolean PrimaryCanHover, PointerTypes AnyPointers, Boolean AnyCanHover)
   method InputCapabilities <Clone>$()

@@ -86,12 +86,16 @@ namespace PeachBrackets.Html.Dom
         public string ImageSource => SelectSource().Url;
 
         private double _srcsetDensity = 1;
-        private (string Url, double Density)? _selectedSource;
+        private ResponsiveImageSelector.Selection? _selection;
 
         /// <summary>
         /// The src/srcset/&lt;picture&gt; selection, made once per box (see <see cref="ResponsiveImageSelector"/>).
         /// </summary>
-        private (string Url, double Density) SelectSource() => _selectedSource ??= ResponsiveImageSelector.Select(this);
+        private (string Url, double Density) SelectSource()
+        {
+            _selection ??= ResponsiveImageSelector.Select(this);
+            return (_selection.Chosen.Url, _selection.Chosen.Density);
+        }
 
         /// <summary>
         /// The phantom word carrying this box's replaced content, whose own rectangle positions the

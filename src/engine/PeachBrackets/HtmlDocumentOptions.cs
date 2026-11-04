@@ -98,6 +98,13 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public double DevicePixelRatio { get; set; } = 1;
 
+    /// <summary>
+    /// How the image of a <c>srcset</c> or <c>&lt;picture&gt;</c> is chosen, or <see langword="null"/> (the default) for the policy of the medium:
+    /// <see cref="ImageSelectionPolicy.HighestDensity"/> for <see cref="MediaType.Print"/>, <see cref="ImageSelectionPolicy.BestForTarget"/> for
+    /// <see cref="MediaType.Screen"/>.
+    /// </summary>
+    public ImageSelectionOptions? ImageSelection { get; set; }
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 

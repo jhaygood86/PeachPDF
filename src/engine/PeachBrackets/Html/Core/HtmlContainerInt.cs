@@ -1306,6 +1306,15 @@ namespace PeachBrackets.Html
 
         private double _devicePixelRatio = 1;
 
+        /// <summary>How a <c>srcset</c> image is chosen; paged output takes the highest density unless the host says otherwise.</summary>
+        internal ImageSelectionOptions ImageSelection { get; set; } = ImageSelectionOptions.HighestDensityPolicy;
+
+        /// <summary>
+        /// The largest zoom the host has shown the document at (<c>HtmlDocument.SetRenderScale</c>), 1 until it says; part of the target
+        /// density images are chosen for. It only grows, so a restyle or rebuild after zooming back out keeps the sharper images.
+        /// </summary>
+        internal double RenderScale { get; set; } = 1;
+
         /// <summary>Whether the document was asked to need nothing asynchronous; see <see cref="PeachBrackets.HtmlDocumentOptions.SynchronousOnly"/>.</summary>
         internal bool SynchronousOnly { get; set; }
 

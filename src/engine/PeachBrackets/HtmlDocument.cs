@@ -102,6 +102,8 @@ public sealed partial class HtmlDocument : IDisposable
                 : null;
             container.PreferredColorScheme = options.ColorScheme;
             container.DevicePixelRatio = options.DevicePixelRatio;
+            container.ImageSelection = options.ImageSelection
+                ?? (options.MediaType == MediaType.Screen ? ImageSelectionOptions.ScreenDefault : ImageSelectionOptions.HighestDensityPolicy);
             container.Input = options.Input ?? InputCapabilities.None;
             container.Preferences = options.Preferences ?? UserPreferences.Default;
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;
