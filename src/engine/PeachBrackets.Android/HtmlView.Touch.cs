@@ -421,7 +421,7 @@ public sealed partial class HtmlView
                     result = await document.ClearPointerStateAsync(measuring.Canvas);
                 }
 
-                Android.Util.Log.Debug("PEACH_RESTYLE",
+                global::Android.Util.Log.Debug("PEACH_RESTYLE",
                     $"pointer state: {System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms, applied={result.Applied}, regions={result.DirtyRegions.Count}");
 
                 if (result.Applied && ReferenceEquals(document, _document) && result.DirtyRegions.Count > 0)
