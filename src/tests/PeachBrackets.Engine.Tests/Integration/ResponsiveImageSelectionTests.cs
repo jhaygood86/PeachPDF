@@ -336,8 +336,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task SetRenderScale_ThenUpgrade_LoadsADenserImageWithoutReparsingOrResizing()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<p id='p'>x</p><img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
             var image = ImageOf(document);
             var element = document.GetElement("p");
             var widthBefore = image.ReplacedWord.Width;
@@ -355,12 +355,64 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Same(element!.Box, document.GetElement("p")!.Box);
         }
 
+        private static string CacheKey(HtmlDocument document, string uri) =>
+            PeachBrackets.Html.Utils.CommonUtils.ResolveAgainstDocumentBase(document.Container, uri)!.AbsoluteUri;
+
+        [Fact]
+        public async Task Upgrade_ForgetsTheImageNothingShowsAnyMore()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>");
+            using var d0 = document;
+            using var c0 = canvas;
+            Assert.True(document.Container.TryGetResolvedImageResource(CacheKey(document, Small), out _));
+
+            document.SetRenderScale(2);
+            await document.UpgradeImagesAsync();
+
+            Assert.False(document.Container.TryGetResolvedImageResource(CacheKey(document, Small), out _));
+            Assert.True(document.Container.TryGetResolvedImageResource(CacheKey(document, Mid), out _));
+            Assert.NotNull(ImageOf(document).Image);
+        }
+
+        [Fact]
+        public async Task Upgrade_KeepsAnImageAnotherBoxStillShows()
+        {
+            var (document, canvas) = await ScreenDocumentAsync(
+                $"<img id='i' srcset='{Small} 1x, {Mid} 2x'><img id='other' src='{Small}'>");
+            using var d0 = document;
+            using var c0 = canvas;
+
+            document.SetRenderScale(2);
+            await document.UpgradeImagesAsync();
+
+            Assert.True(document.Container.TryGetResolvedImageResource(CacheKey(document, Small), out _));
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+            Assert.NotNull(((CssBoxImage)LayoutHarness.FindById(document.Container.Root!, "other")!).Image);
+        }
+
+        [Fact]
+        public async Task ScreenDocument_LoadsFewerPixelsThanHighestDensity()
+        {
+            var body = string.Concat(Enumerable.Range(0, 20).Select(n => $"<img srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>"));
+
+            long PixelsLoaded(HtmlContainerInt container) => container.Root!.Boxes.SelectMany(Flatten).OfType<CssBoxImage>().Sum(i => (long)(i.Image!.Width * i.Image.Height));
+
+            var (_, screen) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), configureContainer: Screen(1));
+            var (_, print) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body));
+
+            Assert.Equal(20L * 100 * 50, PixelsLoaded(screen));
+            Assert.Equal(20L * 400 * 200, PixelsLoaded(print));
+        }
+
+        private static System.Collections.Generic.IEnumerable<CssBox> Flatten(CssBox box) =>
+            new[] { box }.Concat(box.Boxes.SelectMany(Flatten));
+
         [Fact]
         public async Task UpgradeImages_WithoutAChangeOfScale_ReturnsNoRegions()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
 
             var result = await document.UpgradeImagesAsync();
 
@@ -372,8 +424,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task Zoom_NeverDowngrades()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
 
             document.SetRenderScale(4);
             await document.UpgradeImagesAsync();
@@ -390,8 +442,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task Zoom_CountsWithTheDevicePixelRatio()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>", dpr: 2);
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
             Assert.Equal("mid", Name(ImageOf(document).ImageSource));
 
             document.SetRenderScale(2);
@@ -404,8 +456,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task SetRenderScale_CanReportANewDevicePixelRatio()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
 
             document.SetRenderScale(1, devicePixelRatio: 2);
             await document.UpgradeImagesAsync();
@@ -454,8 +506,8 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task SetRenderScale_RejectsANonPositiveZoomOrRatio(double bad)
         {
             var (document, canvas) = await ScreenDocumentAsync("<p>x</p>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
 
             Assert.Throws<ArgumentOutOfRangeException>(() => document.SetRenderScale(bad));
             Assert.Throws<ArgumentOutOfRangeException>(() => document.SetRenderScale(1, bad));
@@ -467,8 +519,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             // A size container makes layout rebuild the box tree from the source; the rebuilt image must choose with the same inputs.
             var (document, canvas) = await ScreenDocumentAsync(
                 $"<div style='container-type:size;width:300px;height:100px'><img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'></div>");
-            using var _ = document;
-            using var __ = canvas;
+            using var d0 = document;
+            using var c0 = canvas;
             Assert.True(document.Container.HasSizeContainers);
             Assert.Equal("small", Name(ImageOf(document).ImageSource));
 

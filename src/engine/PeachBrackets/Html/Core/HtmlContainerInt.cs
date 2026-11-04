@@ -1151,6 +1151,34 @@ namespace PeachBrackets.Html
         }
 
         /// <summary>
+        /// Forgets a resolved image once no <c>&lt;img&gt;</c> shows it any more (a denser candidate replaced it), so the decoded bitmap can be reclaimed
+        /// instead of staying for the life of the document. It is dropped from the cache and not disposed, because a <c>background-image</c> or
+        /// <c>&lt;object&gt;</c> that named the same source may still hold it; the garbage collector frees it with the last of those.
+        /// </summary>
+        /// <param name="absoluteUri">the resolved source URI the image was cached under</param>
+        /// <param name="except">the box that is giving it up</param>
+        /// <returns>whether it was dropped: false when another <c>&lt;img&gt;</c> still shows it</returns>
+        internal bool TryEvictImage(string absoluteUri, CssBoxImage except)
+        {
+            if (Root is null) return false;
+
+            var pending = new Stack<CssBox>();
+            pending.Push(Root);
+
+            while (pending.Count > 0)
+            {
+                var box = pending.Pop();
+                if (box is CssBoxImage image && !ReferenceEquals(image, except) && image.ShowsSource(absoluteUri))
+                    return false;
+
+                foreach (var child in box.Boxes)
+                    pending.Push(child);
+            }
+
+            return _resolvedImageResources.Remove(absoluteUri);
+        }
+
+        /// <summary>
         /// The document's root (<c>&lt;html&gt;</c>) element's own resolved <c>writing-mode</c>, defaulting
         /// to the CSS initial <see cref="WritingMode.HorizontalTb"/> when there is no document yet. Set
         /// once per document parse (<c>DomParser.GenerateCssTree</c>, alongside <see cref="DocumentLanguage"/>)

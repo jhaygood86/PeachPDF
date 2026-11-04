@@ -136,8 +136,15 @@ namespace PeachBrackets.Html.Dom
                 return false;
             }
 
-            // The retired handler owns the stream a cached image still reads from, so it lives until the box does.
-            (_retiredHandlers ??= []).Add(_imageLoadHandler);
+            // Nothing else shows the image it replaces: let it go. Otherwise the retired handler owns the stream a cached image another box got by
+            // a cache hit still reads from, so it lives until this box does.
+            var retired = _imageLoadHandler;
+            var previous = AbsoluteSource(current.Url);
+            if (previous is not null && HtmlContainer!.TryEvictImage(previous, this))
+                retired.Dispose();
+            else
+                (_retiredHandlers ??= []).Add(retired);
+
             _imageLoadHandler = handler;
             _imageWord.Image = handler.Image;
             _srcsetDensity = next.Chosen.Density;
@@ -146,6 +153,13 @@ namespace PeachBrackets.Html.Dom
         }
 
         private List<ImageLoadHandler>? _retiredHandlers;
+
+        private string? AbsoluteSource(string url) =>
+            HtmlContainer is { } container && !string.IsNullOrEmpty(url) ? CommonUtils.ResolveAgainstDocumentBase(container, url)?.AbsoluteUri : null;
+
+        /// <summary>Whether this box currently shows the image resolved to <paramref name="absoluteUri"/>.</summary>
+        internal bool ShowsSource(string absoluteUri) =>
+            _selection is { } selection && _imageWord.Image is not null && AbsoluteSource(selection.Chosen.Url) == absoluteUri;
 
         /// <summary>The most next-best srcset candidates tried after the chosen one cannot be loaded, before the <c>src</c>.</summary>
         private const int MaxFallbackCandidates = 3;
