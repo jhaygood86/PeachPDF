@@ -2,7 +2,7 @@
 
 `PeachBrackets.Android` is a [.NET for Android](https://learn.microsoft.com/en-us/dotnet/android/) (not MAUI) `HtmlView` that shows an HTML
 document laid out by [PeachBrackets](peachbrackets.md) as one scrolling, zoomable surface. It paints with
-[PeachDrawing.Skia](peachdrawing-skia.md) into an `SKCanvasView`, and it does the integration an application would otherwise write itself:
+[PeachDrawing.Skia](peachdrawing-skia.md) onto the graphics hardware (an OpenGL surface, `SKGLSurfaceView`) or, if asked, the CPU, and it does the integration an application would otherwise write itself:
 it lays the document out for the view's width, paints only what is in view, turns touch into scrolling, fling and zoom, follows the
 [pointer and touch behavior the document asks for](html-css-support.md#pointer-interaction), opens links, and handles selection and copy.
 
@@ -117,12 +117,28 @@ service a text field is editable and takes the set-text, set-selection and paste
 
 A text area takes the Enter key (a line break; its keyboard offers no action button), Up and Down (by line, keeping the column) and Home and End (to the ends of the line), and its pasted line breaks are kept. A long press on a text field selects the word under the finger and shows the field's menu (Cut, Copy, Paste, Select all) beside the caret; moving the finger on extends the selection from the start of that word. A touch that begins on a range control sets it and dragging moves the thumb. A tap on a drop-down opens its options as a menu, and on a date or time field a dialog (a date-and-time field asks for the date and then the time); a colour field opens a dialog of three sliders over a swatch, and a file field the system's document picker (limited to the kinds its `accept` names, several files if `multiple`), whose result returns through the activity: the application calls `HandleActivityResult` from its `OnActivityResult` and the view uses the results for `FilePickerRequestCode`. The files' contents are read and held by the document for a submission. Tapping a submit button of a form raises `FormSubmitting` with the form as it would be sent (`Submission.Serialize()` makes the body); the view sends nothing itself. Enter, and the keyboard's action key, in a one-line field submits its form as a browser does (through the default button, or when it is the only such field), a form is checked first - when a value is not valid the first such control gets the focus and `FormInvalid` is raised with the problems instead of `FormSubmitting` - an image button sends where it was tapped, and tapping a reset button puts the form's controls back. A mouse wheel over a text area that has more lines than show scrolls it. An application that changes the document itself calls `ApplyUpdate` with the result so the view repaints and an accessibility service hears what a live region now says.
 
+## Drawing on the graphics hardware
+
+`new HtmlView(context)` draws on an OpenGL surface; `new HtmlView(context, useGpu: false)` draws on the CPU (an `SKCanvasView`), which suits a
+device or emulator without a working GL driver. On the hardware:
+
+- **The page is kept as textures while it scrolls.** The part of the page that does not move with the scroll (the document's content layer) is
+  painted into 1024 by 1024 pixel tiles at the current zoom and kept as GPU textures, up to 16 of them (about 64 MB). A scroll step draws the
+  tiles it holds, and only a tile it does not hold is painted; a frame that found every tile it needed paints one tile just past the edge the scroll
+  is heading for, so the frame that reaches it finds it there. What is attached to the viewport (a fixed or stuck box) is painted over the tiles on
+  every frame. A change of what the page shows (a pointer state, a selection, a focus ring, a caret, a form value) paints the tiles again, and so
+  does a change of zoom, which is a different grid.
+- **A page whose background is attached to the viewport** (`background-attachment: fixed`) changes under every scroll step, so it is painted
+  straight, on the hardware but without tiles.
+- **Shadows, filters and `backdrop-filter`** are layers with effects that Skia composes itself, and an image Skia can decode is decoded into the
+  texture it uploads (see [Images](peachdrawing-skia.md#images)).
+
 ## Limits of this version
 
 - Form controls are painted but not interactive.
 - Selection has no drag handles; a drag after the long press extends it.
 - A custom `url()` cursor is shown as its keyword.
-- Zoom re-renders at the new scale, which is slow on very large pages.
+- Zoom re-renders at the new scale (the tiles are painted again at it), which is slow on very large pages.
 - Form controls can be focused with Tab, but nothing can be typed into them.
 
 ## Images, style sheets and fonts
@@ -142,6 +158,7 @@ says at a few points and every touch event, so the view can be driven from `adb`
 dotnet build src/examples/PeachBrackets.Android.Example -c Debug      # with an SDK that has the android workload
 adb install -r src/examples/PeachBrackets.Android.Example/bin/Debug/net10.0-android/net.peachpdf.brackets.example-Signed.apk
 adb shell am start -n net.peachpdf.brackets.example/crc64992d5e0e71762578.MainActivity
+adb shell am start -n net.peachpdf.brackets.example/crc64992d5e0e71762578.MainActivity --ez cpu true   # the same on the CPU, to compare
 adb shell input swipe 540 1700 540 900 300        # a scroll
 adb shell input swipe 330 504 330 504 900         # a long press: selects the word under the finger
 adb shell input tap 660 505                       # a tap: on the link, raises LinkTapped

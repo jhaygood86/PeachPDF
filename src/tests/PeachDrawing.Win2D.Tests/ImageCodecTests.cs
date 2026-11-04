@@ -20,11 +20,11 @@ public class ImageCodecTests
     }
 
     [Fact]
-    public void PeachImage_is_the_default_codec_and_fallback_defaults_on()
+    public void Auto_is_the_default_codec_and_fallback_defaults_on()
     {
         using var context = Win2dRenderContext.CreateSoftware();
 
-        Assert.Equal(Win2dImageCodec.PeachImage, context.ImageCodec);
+        Assert.Equal(Win2dImageCodec.Auto, context.ImageCodec);
         Assert.True(context.FallbackToPeachImage);
     }
 

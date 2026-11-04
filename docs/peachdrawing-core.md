@@ -264,7 +264,10 @@ using (var shadow = canvas.BeginLayer(new LayerOptions(Bounds: bounds, Effects: 
 layer (a measure-only pass) or, for a layer with effects, cannot apply them - draw straight onto the canvas then. The
 default implementation builds a layer from `CreateTile` and the `DrawImage…` methods, so every `Canvas` gets one; a
 canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEffects` (the `PeachDrawing`
-package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`).
+package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`). A canvas whose layers apply their effects itself, on the
+graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas` and `SkiaCanvas` do), and a caller that can express a blurred
+shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
+`BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
 ## Links and destinations
 
@@ -371,7 +374,7 @@ worked example. A few things worth knowing before you start:
   methods at all.
 - **The pipeline hooks are public, virtual and optional.** `BeginRasterSurface`/`DrawRaster` (a pixel surface,
   handed out as a `RasterRegion`, for effects vector content cannot express), `PrefersRasterGroups`,
-  `FlattensTransparency`, `TransformScale`/`CurrentTransform`, `TileCacheOwner`, `InvisibleText` and
+  `HasNativeLayerEffects`, `FlattensTransparency`, `TransformScale`/`CurrentTransform`, `TileCacheOwner`, `InvisibleText` and
   `RenderContext`'s raster settings (`RasterizationDpi`, `TextHinting`, `MaxRasterPixels`, ...) all default to
   "not supported", so a `Canvas` that ignores them still works; overriding them is how a backend takes part in
   the same effects pipeline PeachPDF drives. `RenderContext.CreateSvgGlyphPainter` is the seam a backend with an

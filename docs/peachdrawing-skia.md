@@ -71,7 +71,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 | `PushBlendMode` | `SKPaint.BlendMode` on every draw: all sixteen blend modes, including the non-separable ones |
 | `PushAntiAlias` | `SKPaint.IsAntialias` and the clip's anti-aliasing |
 | `DrawImage` (with source rectangle, sampling) | `DrawImage` with `SKSamplingOptions` (nearest, linear with mipmaps, or Mitchell cubic) |
-| `BeginLayer` | `SaveLayer` with a paint: opacity, blend mode and colour matrix, and `SKImageFilter` blur and drop shadow, applied to the group when the layer is finished |
+| `BeginLayer` | `SaveLayer` with a paint: opacity, blend mode and colour matrix, and `SKImageFilter` blur (blurred into transparency at the layer's edge, or clamped with `BlurEffect.ClampEdges`) and drop shadow, applied to the group when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects instead of through a CPU bitmap |
 | `CreateTile` | An `SKPictureRecorder`: vector, resolution independent, replayed by the GPU |
 | `DrawImageWithOpacity` / `WithColorMatrix` | A paint with alpha or an `SKColorFilter` (a picture is drawn as one group) |
 | `DrawImageMasked` / `AlphaMasked` / `BlendedOver` | An isolated `SaveLayer`: the content, then the mask drawn with `DstIn` (luminance filter for a luminosity mask) or `DstOut`; or the two tiles blended with each other inside it |
@@ -155,7 +155,13 @@ Native mode is a convenience for text that should look like the rest of the plat
 
 `SkiaImageCodec` chooses what turns an encoded image into pixels:
 
-- **`SkiaImageCodec.PeachImage`** (default): the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
+- **`SkiaImageCodec.Auto`** (default): an image Skia has a codec for is kept as its encoded bytes and decoded by Skia on first use, on a GPU
+  surface straight into the texture it uploads (once per `GpuContext`), so no managed copy of the pixels is made; Skia may also discard the
+  decoded pixels and redo the decode when memory is wanted. Anything Skia cannot decode is decoded by PeachImage, as is an image that carries
+  an orientation in its metadata (the canvas applies the orientation itself). The pixels can differ slightly from PeachImage's (JPEG decoders
+  round differently; Skia's codecs keep a colour profile that PeachImage ignores), and an image whose data is damaged past its header draws
+  nothing instead of failing to load.
+- **`SkiaImageCodec.PeachImage`**: the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
   every other canvas.
 - **`SkiaImageCodec.Native`**: Skia's codecs (`SKCodec`), which the platform may accelerate. An image Skia cannot decode is handed to PeachImage
   unless `SkiaRenderContext.FallbackToPeachImage` is switched off. The orientation stored with the image is reported as the other decoder

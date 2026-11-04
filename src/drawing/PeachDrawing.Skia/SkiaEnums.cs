@@ -29,6 +29,14 @@ public enum SkiaImageCodec
     /// format Skia cannot decode is handed to PeachImage instead unless <see cref="SkiaRenderContext.FallbackToPeachImage"/> is switched off.
     /// </summary>
     Native,
+
+    /// <summary>
+    /// The default. An image Skia has a codec for is kept as its encoded bytes and decoded by Skia on first use, on a GPU surface straight into
+    /// the texture it uploads (the pixels are not kept as managed memory); any other image, and any image with an orientation stored in its
+    /// metadata, is decoded by PeachImage. Pixels can differ slightly from PeachImage's (JPEG decoders round differently; Skia's codecs keep a
+    /// colour profile that PeachImage ignores), and an image whose data is damaged past its header draws nothing instead of failing to load.
+    /// </summary>
+    Auto = 2,
 }
 
 /// <summary>The file format <see cref="SkiaComposer.Save"/> writes.</summary>

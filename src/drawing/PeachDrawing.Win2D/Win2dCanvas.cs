@@ -116,6 +116,9 @@ public sealed partial class Win2dCanvas : Canvas
     public override bool IsOffscreenTile => _isTile;
 
     /// <inheritdoc />
+    public override bool HasNativeLayerEffects => true;
+
+    /// <inheritdoc />
     public override Matrix3x2 CurrentTransform => _ctm;
 
     /// <inheritdoc />

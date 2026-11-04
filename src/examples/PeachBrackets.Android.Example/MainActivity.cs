@@ -38,7 +38,8 @@ public sealed class MainActivity : Activity
         LoadCatalog("demo/screen", "screen-showcases.json");
         LoadCatalog("demo/showcases", "showcases.json");
 
-        _view = new HtmlView(this);
+        // adb shell am start ... --ez cpu true  draws on the CPU instead of the graphics hardware, to compare the two.
+        _view = new HtmlView(this, useGpu: !(Intent?.GetBooleanExtra("cpu", false) ?? false));
         _host = new FrameLayout(this);
         _host.AddView(_view, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MatchParent, ViewGroup.LayoutParams.MatchParent));
         _host.SetBackgroundColor(global::Android.Graphics.Color.Argb(255, 200, 210, 230));

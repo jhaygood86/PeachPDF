@@ -108,7 +108,9 @@ public sealed partial class SkiaCanvas
             switch (effect)
             {
                 case BlurEffect blur:
-                    filter = SKImageFilter.CreateBlur((float)blur.SigmaX, (float)blur.SigmaY, filter);
+                    // Edges are blurred into transparency unless the layer asks for them held (a backdrop that continues past its bounds).
+                    filter = SKImageFilter.CreateBlur((float)blur.SigmaX, (float)blur.SigmaY,
+                        blur.ClampEdges ? SKShaderTileMode.Clamp : SKShaderTileMode.Decal, filter);
                     break;
 
                 case DropShadowEffect shadow:

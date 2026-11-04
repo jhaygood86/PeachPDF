@@ -110,6 +110,9 @@ public sealed partial class SkiaCanvas : Canvas
     public override bool IsOffscreenTile => _isOffscreen;
 
     /// <inheritdoc />
+    public override bool HasNativeLayerEffects => true;
+
+    /// <inheritdoc />
     public override Matrix3x2 CurrentTransform => _ctm;
 
     /// <inheritdoc />

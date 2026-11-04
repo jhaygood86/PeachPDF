@@ -46,6 +46,8 @@
 	<ItemGroup>
 		<EmbeddedResource Include="Shaders\LcdBlend.bin" LogicalName="PeachDrawing.Win2D.LcdBlend.bin" />
 		<None Include="Shaders\LcdBlend.hlsl" />
+		<EmbeddedResource Include="Shaders\ConicGradient.bin" LogicalName="PeachDrawing.Win2D.ConicGradient.bin" />
+		<None Include="Shaders\ConicGradient.hlsl" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />

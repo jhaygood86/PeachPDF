@@ -8,6 +8,7 @@ PeachDrawing.Core.BlurEffect : sealed class
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()
   method virtual String ToString()
+  property Boolean ClampEdges { get; init; }
   property Double SigmaX { get; init; }
   property Double SigmaY { get; init; }
 PeachDrawing.Core.BoxAlignment : enum Int32
@@ -82,6 +83,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Void PopAntiAlias()
   method virtual Void PushAntiAlias(Boolean enabled)
   property Boolean FlattensTransparency { get; }
+  property Boolean HasNativeLayerEffects { get; }
   property Boolean InvisibleText { get; set; }
   property Boolean IsOffscreenTile { get; }
   property Boolean PrefersRasterGroups { get; }

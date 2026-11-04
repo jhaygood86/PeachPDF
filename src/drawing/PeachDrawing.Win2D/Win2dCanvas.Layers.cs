@@ -156,7 +156,7 @@ public sealed partial class Win2dCanvas
         {
             case BlurEffect blur:
                 // Win2D blurs with one standard deviation; an unequal pair is blurred by their mean.
-                return Track(made, new GaussianBlurEffect { Source = image, BlurAmount = (float)((blur.SigmaX + blur.SigmaY) / 2), BorderMode = EffectBorderMode.Soft });
+                return Track(made, new GaussianBlurEffect { Source = image, BlurAmount = (float)((blur.SigmaX + blur.SigmaY) / 2), BorderMode = blur.ClampEdges ? EffectBorderMode.Hard : EffectBorderMode.Soft });
 
             case DropShadowEffect shadow:
                 var shade = Track(made, new ShadowEffect

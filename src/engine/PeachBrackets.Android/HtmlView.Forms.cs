@@ -97,7 +97,7 @@ public sealed partial class HtmlView
         using var measuring = new SkiaComposer(context, surface, 1, 1);
         var result = document.ScrollTextArea(element, points, measuring.Canvas);
         if (result.Applied)
-            _surface.Invalidate();
+            InvalidateContent();
 
         return result.Applied;
     }
@@ -109,7 +109,7 @@ public sealed partial class HtmlView
 
         // The tree is built again after a change, so the nodes an accessibility service holds are replaced.
         RefreshAccessibility(document);
-        _surface.Invalidate();
+        InvalidateContent();
 
         // A rule that reads the control's state (input:checked + label) has to be matched again.
         if (document.NeedsRestyle)

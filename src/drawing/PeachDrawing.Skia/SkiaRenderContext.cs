@@ -44,7 +44,7 @@ public class SkiaRenderContext : RenderContext, IDisposable
     /// one set and a font added to it is read once, however many documents use it; call <see cref="SyncFonts"/> to make a context see fonts added since it
     /// was made. Ignored by the native engine, which keeps its own faces per context.
     /// </param>
-    public SkiaRenderContext(SkiaTextEngine textEngine = SkiaTextEngine.PeachDrawing, SkiaImageCodec imageCodec = SkiaImageCodec.PeachImage, ISkiaTextShaper? textShaper = null, FontSet? fontSet = null)
+    public SkiaRenderContext(SkiaTextEngine textEngine = SkiaTextEngine.PeachDrawing, SkiaImageCodec imageCodec = SkiaImageCodec.Auto, ISkiaTextShaper? textShaper = null, FontSet? fontSet = null)
     {
         _fontSet = fontSet ?? new FontSet();
         _textEngine = textEngine;
@@ -87,7 +87,8 @@ public class SkiaRenderContext : RenderContext, IDisposable
 
     /// <summary>
     /// Whether an image Skia's codecs cannot decode is handed to PeachImage instead, when <see cref="ImageCodec"/> is
-    /// <see cref="SkiaImageCodec.Native"/>. With it off, such an image fails to load. It has no effect with <see cref="SkiaImageCodec.PeachImage"/>.
+    /// <see cref="SkiaImageCodec.Native"/>. With it off, such an image fails to load. It has no effect with <see cref="SkiaImageCodec.PeachImage"/>
+    /// or <see cref="SkiaImageCodec.Auto"/>, which always hand such an image to PeachImage.
     /// </summary>
     public bool FallbackToPeachImage { get; set; } = true;
 
@@ -200,7 +201,14 @@ public class SkiaRenderContext : RenderContext, IDisposable
 
     internal SkiaImage? DecodeImage(byte[] bytes)
     {
-        if (_imageCodec == SkiaImageCodec.Native)
+        if (_imageCodec == SkiaImageCodec.Auto)
+        {
+            // Skia decodes on first use, into the texture on a GPU surface, when it has a codec; anything else is PeachImage's.
+            var lazy = SkiaImage.TryCreateLazy(bytes, Counts);
+            if (lazy is not null)
+                return lazy;
+        }
+        else if (_imageCodec == SkiaImageCodec.Native)
         {
             var native = SkiaImage.TryDecodeNative(bytes, Counts);
             if (native is not null || !FallbackToPeachImage)

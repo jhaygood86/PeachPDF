@@ -76,6 +76,57 @@ namespace PeachBrackets.Html.Paint
         }
 
         /// <summary>
+        /// The same list as <see cref="Apply"/> runs, as the <see cref="LayerEffect"/>s a canvas that applies them natively
+        /// (<see cref="Canvas.HasNativeLayerEffects"/>) takes, in authored order. Each colour function is its own effect: they
+        /// clamp one after another, as <see cref="Apply"/>'s single pass does. The element's own opacity is not here; it is the
+        /// layer's.
+        /// </summary>
+        public static List<LayerEffect> ToLayerEffects(IReadOnlyList<FilterGrammar.FilterFunction> functions, CssBox box, bool clampEdges = false)
+        {
+            var effects = new List<LayerEffect>(functions.Count);
+            foreach (var function in functions)
+            {
+                switch (function.Name)
+                {
+                    case "blur":
+                        if (FilterEffectResolver.IsZeroLength(function))
+                            break;
+
+                        var sigma = Math.Max(0, CssValueParser.ParseLength(function.Arguments[0], 0, box));
+                        effects.Add(new BlurEffect(sigma) { ClampEdges = clampEdges });
+                        break;
+
+                    case "opacity":
+                        effects.Add(new ColorMatrixEffect(FilterEffectResolver.OpacityMatrix(FilterEffectResolver.Amount(function))));
+                        break;
+
+                    case "drop-shadow":
+                        var colorText = function.Arguments[3];
+                        var color = string.IsNullOrEmpty(colorText) || colorText.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
+                            ? box.ActualColor
+                            : box.HtmlContainer!.CssParser.ParseColor(colorText);
+                        if (color.A == 0)
+                            break;
+
+                        var shadowSigma = Math.Max(0, CssValueParser.ParseLength(function.Arguments[2], 0, box));
+                        effects.Add(new DropShadowEffect(
+                            CssValueParser.ParseLength(function.Arguments[0], 0, box),
+                            CssValueParser.ParseLength(function.Arguments[1], 0, box),
+                            shadowSigma, shadowSigma, color));
+                        break;
+
+                    default:
+                        if (FilterEffectResolver.TryGetMatrix(function) is { } matrix)
+                            effects.Add(new ColorMatrixEffect(matrix));
+
+                        break;
+                }
+            }
+
+            return effects;
+        }
+
+        /// <summary>
         /// <c>drop-shadow(x y std-deviation color)</c> (Filter Effects 1 §8.3): "Values are interpreted as for box-shadow
         /// but with the optional 3rd length value being the standard deviation instead of blur radius", so unlike
         /// <c>box-shadow</c> the blur value is the standard deviation itself.

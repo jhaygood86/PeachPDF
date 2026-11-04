@@ -3,7 +3,8 @@
   <!--
     The tests of the Win2D backend: what a Win2dCanvas draws for each Canvas call (read back from a software-rendered offscreen
     target and asserted on its pixels), the resource lifecycle (every layer, tile and command list released), links, text in both
-    engines, and the public-API/internals-grant snapshot tests. Windows-only, because Win2D is. It never references PeachPDF.
+    engines, a few HTML pages painted through the PeachBrackets public API, and the public-API/internals-grant snapshot tests. Windows-only,
+    because Win2D is. It never references PeachPDF.
   -->
   <PropertyGroup>
     <TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
@@ -27,6 +28,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\drawing\PeachDrawing.Win2D\PeachDrawing.Win2D.csproj" />
+    <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
   </ItemGroup>
 
   <ItemGroup>

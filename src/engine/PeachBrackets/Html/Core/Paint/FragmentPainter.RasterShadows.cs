@@ -32,6 +32,9 @@ namespace PeachBrackets.Html.Paint
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
+            if (g.HasNativeLayerEffects && TryPaintBlurredOutsetShadowNative(g, box, borderBox, shadowRect, shadowRadii, blur, color, bounds))
+                return true;
+
             using var scope = g.BeginRasterSurface(bounds);
             if (scope is null)
                 return false;
@@ -64,6 +67,68 @@ namespace PeachBrackets.Html.Paint
             }
 
             g.DrawRaster(scope.Surface);
+            return true;
+        }
+
+        /// <summary>
+        /// The same shadow as <see cref="TryPaintBlurredOutsetShadow"/> for a canvas that blurs a layer on the graphics hardware
+        /// (<see cref="Canvas.HasNativeLayerEffects"/>): the shadow shape is drawn into a blurred layer, under a clip that leaves out the
+        /// element's own border box, so no bitmap is read back, blurred on the CPU and uploaded again.
+        /// </summary>
+        /// <returns>false, having painted nothing, when the canvas turns the layer down.</returns>
+        private static bool TryPaintBlurredOutsetShadowNative(Canvas g, CssBox box, Rect borderBox, Rect shadowRect,
+            BorderRadii shadowRadii, double blur, PaintColor color, Rect bounds)
+        {
+            var ppp = g.PixelsPerPoint;
+            // The area to paint in with a hole where the border box is (even-odd), so the shadow lands only outside the border edge (§7.1.1).
+            using var clip = g.GetGraphicsPath();
+            clip.Start(bounds.Left / ppp, bounds.Top / ppp);
+            clip.LineTo(bounds.Right / ppp, bounds.Top / ppp);
+            clip.LineTo(bounds.Right / ppp, bounds.Bottom / ppp);
+            clip.LineTo(bounds.Left / ppp, bounds.Bottom / ppp);
+            clip.CloseFigure();
+
+            if (box.IsRounded)
+            {
+                using var hole = BuildLayerRoundRect(g, borderBox, ShadowCornerRadii(box, borderBox, spread: 0), 0);
+                clip.AddPath(hole);
+            }
+            else
+            {
+                clip.AddMove(borderBox.Left / ppp, borderBox.Top / ppp);
+                clip.LineTo(borderBox.Right / ppp, borderBox.Top / ppp);
+                clip.LineTo(borderBox.Right / ppp, borderBox.Bottom / ppp);
+                clip.LineTo(borderBox.Left / ppp, borderBox.Bottom / ppp);
+                clip.CloseFigure();
+            }
+
+            clip.FillMode = FillMode.EvenOdd;
+
+            g.PushClip(clip);
+            try
+            {
+                // The blur radius is twice the standard deviation (CSS Backgrounds 3 §7.2).
+                using var layer = g.BeginLayer(new LayerOptions(Bounds: bounds, Effects: [new BlurEffect(blur / 2)]));
+                if (layer is null)
+                    return false;
+
+                var rg = layer.Canvas;
+                using var brush = rg.GetSolidBrush(color);
+                if (shadowRadii.IsRounded)
+                {
+                    using var path = BuildLayerRoundRect(rg, shadowRect, shadowRadii, 0);
+                    rg.DrawPath(brush, path);
+                }
+                else
+                {
+                    rg.DrawRectangle(brush, shadowRect.X, shadowRect.Y, shadowRect.Width, shadowRect.Height);
+                }
+            }
+            finally
+            {
+                g.PopClip();
+            }
+
             return true;
         }
 

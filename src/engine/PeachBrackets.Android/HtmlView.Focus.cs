@@ -133,7 +133,7 @@ public sealed partial class HtmlView
         {
             UpdateMetrics();
             RefreshAccessibility(document);
-            _surface.Invalidate();
+            InvalidateContent();
         }
 
         UpdateEditing();

@@ -51,7 +51,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// one set and a font added to it is read once, however many documents use it; call <see cref="SyncFonts"/> to make a context see fonts added since it
     /// was made. Ignored by the DirectWrite engine, which keeps its own faces per context.
     /// </param>
-    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage, FontSet? fontSet = null)
+    public Win2dRenderContext(CanvasDevice? device = null, Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.Auto, FontSet? fontSet = null)
         : this(device, textEngine, imageCodec, false, fontSet)
     {
     }
@@ -78,7 +78,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// </summary>
     /// <param name="textEngine">which engine shapes and draws text</param>
     /// <param name="imageCodec">which decoder turns an encoded image into pixels</param>
-    public static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.PeachImage) =>
+    public static Win2dRenderContext CreateSoftware(Win2dTextEngine textEngine = Win2dTextEngine.PeachDrawing, Win2dImageCodec imageCodec = Win2dImageCodec.Auto) =>
         new(null, textEngine, imageCodec, true);
 
     /// <summary>
@@ -152,7 +152,8 @@ public class Win2dRenderContext : RenderContext, IDisposable
 
     /// <summary>
     /// Whether an image Windows has no codec for is handed to PeachImage instead, when <see cref="ImageCodec"/> is
-    /// <see cref="Win2dImageCodec.Native"/>. With it off, such an image fails to load. It has no effect with <see cref="Win2dImageCodec.PeachImage"/>.
+    /// <see cref="Win2dImageCodec.Native"/>. With it off, such an image fails to load. It has no effect with <see cref="Win2dImageCodec.PeachImage"/>
+    /// or <see cref="Win2dImageCodec.Auto"/>, which always hand such an image to PeachImage.
     /// </summary>
     public bool FallbackToPeachImage { get; set; } = true;
 
@@ -346,7 +347,14 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Decodes with the codec this context is set to use, falling back to PeachImage where allowed.</summary>
     internal Win2dImage? DecodeImage(byte[] bytes)
     {
-        if (_imageCodec == Win2dImageCodec.Native)
+        if (_imageCodec == Win2dImageCodec.Auto)
+        {
+            // Windows decodes straight into the device's bitmap when it has a codec; anything else is PeachImage's.
+            var resident = Win2dImage.TryCreateGpuResident(bytes);
+            if (resident is not null)
+                return resident;
+        }
+        else if (_imageCodec == Win2dImageCodec.Native)
         {
             var native = Win2dImage.TryDecodeNative(bytes);
             if (native is not null || !FallbackToPeachImage)

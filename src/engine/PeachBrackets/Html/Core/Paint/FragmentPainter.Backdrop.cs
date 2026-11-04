@@ -73,11 +73,14 @@ namespace PeachBrackets.Html.Paint
                     applied.Add(function);
             }
 
+            if (g.HasNativeLayerEffects && PaintBackdropFilterNative(g, fragment, applied, borderBox, region, rootBox, rootFragment))
+                return;
+
             using var scope = g.BeginRasterSurface(region);
             if (scope is null)
                 return;
 
-            if (!RepaintBackdrop(scope.Graphics, scope.Surface, fragment, rootBox, rootFragment, stopBeforeContent: false))
+            if (!RepaintBackdrop(scope.Graphics, scope.Surface, region, fragment, rootBox, rootFragment, stopBeforeContent: false))
             {
                 // The element was never reached (it is not in this root's paint order); nothing sensible to filter.
                 return;
@@ -113,17 +116,82 @@ namespace PeachBrackets.Html.Paint
         }
 
         /// <summary>
+        /// <see cref="PaintBackdropFilter"/> for a canvas whose layers take effects natively: the backdrop is repainted into a layer that
+        /// carries the filter list, so it is painted, filtered and composited without a bitmap round trip. The layer is clipped to the border
+        /// box, and a blur holds the layer's edge pixels rather than fading them (<see cref="BlurEffect.ClampEdges"/>), which stands in for
+        /// the mirrored padding the bitmap path uses.
+        /// </summary>
+        /// <returns>false, having painted nothing, when the canvas turns the layer down.</returns>
+        private bool PaintBackdropFilterNative(Canvas g, BoxFragment fragment, IReadOnlyList<FilterGrammar.FilterFunction> applied,
+            Rect borderBox, Rect region, CssBox? rootBox, BoxFragment rootFragment)
+        {
+            var box = fragment.Box;            var builder = box.HtmlContainer?.StructureTagBuilder;
+            GraphicsPath? shape = null;
+            var pushedShape = false;
+            g.PushClip(borderBox);
+            try
+            {
+                if (box.IsRounded)
+                {
+                    var radii = box.ComputeRadii(borderBox);
+                    shape = RenderUtils.GetRoundRect(g, borderBox, radii.TLX, radii.TLY, radii.TRX, radii.TRY, radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    g.PushClip(shape);
+                    pushedShape = true;
+                }
+
+                var layer = g.BeginLayer(new LayerOptions(Bounds: region, Effects: RasterFilterChain.ToLayerEffects(applied, box, clampEdges: true)));
+                if (layer is null)
+                    return false;
+
+                // Unlike the bitmap path, a repaint that never reaches the element (it is not in this root's paint order) cannot be thrown
+                // away once it is begun; the element is inside its own backdrop root by construction, so this is not expected.
+                using (_taggingSuppressed ? null : builder?.OpenArtifact(g))
+                {
+                    try
+                    {
+                        RepaintBackdrop(layer.Canvas, null, region, fragment, rootBox, rootFragment, stopBeforeContent: false);
+                    }
+                    finally
+                    {
+                        layer.Dispose();
+                    }
+                }
+
+                return true;
+            }
+            finally
+            {
+                if (pushedShape)
+                    g.PopClip();
+
+                g.PopClip();
+                shape?.Dispose();
+            }
+        }
+
+        /// <summary>
         /// Repaints into <paramref name="graphics"/> (whose bitmap is <paramref name="surface"/>) what was painted before
         /// <paramref name="fragment"/> inside <paramref name="rootBox"/>'s isolation group - the page over white paper when there is none.
         /// The repaint stops where the fragment begins, or, for <paramref name="stopBeforeContent"/>, after its own background and borders
         /// but before its content (a replaced element's content is what asked for its backdrop). False when the fragment was never reached.
         /// </summary>
-        private bool RepaintBackdrop(Canvas graphics, RasterSurface surface, BoxFragment fragment, CssBox? rootBox, BoxFragment rootFragment, bool stopBeforeContent)
+        private bool RepaintBackdrop(Canvas graphics, RasterSurface? surface, Rect paperRegion, BoxFragment fragment, CssBox? rootBox, BoxFragment rootFragment, bool stopBeforeContent)
         {
             // The page is paper: opaque white behind everything the document paints. A nested backdrop root starts transparent instead.
+            // Without a bitmap (a layer on a canvas that takes effects natively) the paper is drawn over the region instead.
             if (rootBox is null)
             {
-                FilterOps.Fill(surface, PaintColor.FromArgb(255, 255, 255, 255), 1.0);
+                var white = PaintColor.FromArgb(255, 255, 255, 255);
+                if (surface is not null)
+                {
+                    FilterOps.Fill(surface, white, 1.0);
+                }
+                else
+                {
+                    using var paper = graphics.GetSolidBrush(white);
+                    graphics.DrawRectangle(paper, paperRegion.X, paperRegion.Y, paperRegion.Width, paperRegion.Height);
+                }
+
                 if (container.CanvasBackgroundBox is { } canvas)
                     PaintCanvasBackground(graphics, canvas, container.PageBoxRect);
             }
@@ -186,7 +254,7 @@ namespace PeachBrackets.Html.Paint
             }
 
             var rootFragment = rootBox is null ? _pageRoot : FindFragment(_pageRoot, rootBox);
-            return rootFragment is not null && RepaintBackdrop(g, raster.Surface, svgFragment, rootBox, rootFragment, stopBeforeContent: true);
+            return rootFragment is not null && RepaintBackdrop(g, raster.Surface, Rect.Empty, svgFragment, rootBox, rootFragment, stopBeforeContent: true);
         }
 
         /// <summary>

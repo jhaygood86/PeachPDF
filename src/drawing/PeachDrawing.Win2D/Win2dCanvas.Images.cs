@@ -246,9 +246,22 @@ public sealed partial class Win2dCanvas
         Guard();
         ArgumentNullException.ThrowIfNull(surface);
 
-        // The pixels are premultiplied RGBA, which is what the bitmap is told they are; it lives for this one draw.
-        using var bitmap = CanvasBitmap.CreateFromBytes(_session, surface.Pixels.ToArray(), surface.Width, surface.Height,
-            DirectXPixelFormat.R8G8B8A8UIntNormalized, 96f, CanvasAlphaMode.Premultiplied);
-        DrawSource(bitmap, surface.Width, surface.Height, surface.LayoutRect, null, CanvasImageInterpolation.Linear);
+        // The pixels are premultiplied RGBA, which is what the bitmap is told they are; it lives for this one draw. The copy goes through a
+        // pooled array instead of a fresh allocation (a full-page raster is megabytes, so a fresh array each draw lands on the large object
+        // heap). The bitmap itself is deliberately not reused: a command list a layer or tile records keeps a reference to it, so
+        // overwriting its pixels for the next draw would change what was already recorded.
+        var pixels = surface.Pixels;
+        var rented = System.Buffers.ArrayPool<byte>.Shared.Rent(pixels.Length);
+        try
+        {
+            pixels.CopyTo(rented);
+            using var bitmap = CanvasBitmap.CreateFromBytes(_session, System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeBufferExtensions.AsBuffer(rented, 0, pixels.Length), surface.Width, surface.Height,
+                DirectXPixelFormat.R8G8B8A8UIntNormalized, 96f, CanvasAlphaMode.Premultiplied);
+            DrawSource(bitmap, surface.Width, surface.Height, surface.LayoutRect, null, CanvasImageInterpolation.Linear);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(rented);
+        }
     }
 }
