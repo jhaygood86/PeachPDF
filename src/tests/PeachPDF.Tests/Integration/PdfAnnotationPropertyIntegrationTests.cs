@@ -276,9 +276,9 @@ namespace PeachPDF.Tests.Integration
         [Fact]
         public async Task Annotation_OnAnElementThatBreaksAcrossPages_GetsOneMarkPerPage()
         {
-            var lines = string.Concat(Enumerable.Repeat("<p>filler line</p>", 70));
+            // One line per <br> at a fixed line-height, so the span is about 3000pt tall whatever font the platform falls back to.
             var document = await Make(
-                lines + "<p><span style=\"-peachpdf-pdf-annotation-type: highlight\">" + string.Concat(Enumerable.Repeat("marked words ", 400)) + "</span></p>",
+                "<div style=\"line-height:20pt\"><span style=\"-peachpdf-pdf-annotation-type: highlight\">" + string.Concat(Enumerable.Repeat("marked<br>", 150)) + "</span></div>",
                 Config(attach: false));
 
             var pagesWithMarks = Enumerable.Range(0, document.Inspect().Pages.Count).Count(page => document.PageAnnotations(page).Any(a => a.Name("/Subtype") == "/Highlight"));
