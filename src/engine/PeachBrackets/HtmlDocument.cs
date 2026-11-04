@@ -1337,7 +1337,7 @@ public sealed partial class HtmlDocument : IDisposable
     internal string? LastRestyleFallbackReason { get; private set; }
 
     /// <summary>When set, a restyle applied in place is checked against loading the document again: the computed style of every box and the page geometry must be the same.</summary>
-    internal static bool VerifyIncrementalRestyle { get; set; }
+    internal bool VerifyIncrementalRestyle { get; set; }
 
     private async ValueTask VerifyAgainstFullRestyleAsync(Canvas measuringCanvas)
     {

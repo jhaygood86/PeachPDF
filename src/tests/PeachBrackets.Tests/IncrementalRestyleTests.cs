@@ -1,3 +1,4 @@
+using PeachBrackets.Updates;
 using PeachDrawing;
 using PeachDrawing.Core;
 
@@ -164,5 +165,81 @@ public class IncrementalRestyleTests
         Assert.True(left.Incremental);
         Assert.Equal(layoutBefore, document.GetElementBounds("b"));
         Assert.Single(result.DirtyRegions);
+    }
+
+    private static async Task<(HtmlDocument Document, Canvas Measuring, UpdateResult Result)> HoverAsync(string head, string body, string id)
+    {
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap(body, head), new HtmlDocumentOptions { MediaType = MediaType.Screen });
+        var measuring = context.CreateCanvas(1, 1);
+        var (x, y) = Center(document, id);
+        return (document, measuring, await document.SetPointerStateAsync(0, x, y, false, measuring));
+    }
+
+    [Theory]
+    [InlineData("body:hover { background-color: rgb(1,2,3) }", "<div id=a>x</div>")]
+    [InlineData("#a:hover { filter: blur(2px) } #a { height: 20px }", "<div id=a><div style=\"position:absolute\">abs</div></div>")]
+    [InlineData("#a:hover::first-line { color: red }", "<p id=a>x</p>")]
+    [InlineData("#a:hover::after { content: 'x' }", "<div id=a>x</div>")]
+    [InlineData("#a:hover { visibility: hidden }", "<div id=a>x</div>")]
+    [InlineData("#a:hover { background-image: linear-gradient(red, blue) }", "<div id=a>x</div>")]
+    public async Task AChangeThatCouldMoveOrCreateSomething_LoadsTheDocumentAgain(string rule, string body)
+    {
+        var (_, _, result) = await HoverAsync("<style>" + rule + "</style>", body, "a");
+
+        Assert.True(result.Applied);
+        Assert.False(result.Incremental);
+    }
+
+    [Fact]
+    public async Task CustomPropertiesTailwindWritesForAColor_AreRestyledInPlace()
+    {
+        const string head = "<style>#a { height: 20px; background-color: rgb(0 0 0 / var(--tw-bg-opacity, 0)) } #a:hover { --tw-bg-opacity: 1; background-color: rgb(239 68 68 / var(--tw-bg-opacity)) }</style>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a></div>", head), new HtmlDocumentOptions { MediaType = MediaType.Screen });
+        var (referenceContext, reference) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a></div>", head), new HtmlDocumentOptions { MediaType = MediaType.Screen, IncrementalRestyle = false });
+        var (x, y) = Center(document, "a");
+
+        var result = await document.SetPointerStateAsync(0, x, y, false, context.CreateCanvas(1, 1));
+        await reference.SetPointerStateAsync(0, x, y, false, referenceContext.CreateCanvas(1, 1));
+
+        Assert.True(result.Incremental);
+        Assert.Equal(await PixelsAsync(referenceContext, reference), await PixelsAsync(context, document));
+    }
+
+    [Fact]
+    public async Task APageWithoutAnyStateRule_ReportsNothingToRepaint()
+    {
+        var (_, _, result) = await HoverAsync("", "<div id=a>x</div>", "a");
+
+        Assert.True(result.Applied);
+        Assert.Empty(result.DirtyRegions);
+        Assert.False(result.Incremental);
+    }
+
+    [Fact]
+    public async Task ARestyleInPlace_WidensTheRepaintByTheShadowItAddsAndTheTransformItApplies()
+    {
+        var (_, _, shadow) = await HoverAsync("<style>#a { margin: 40px; height: 20px } #a:hover { box-shadow: 0 0 30px rgb(0,0,0) }</style>", "<div id=a>x</div>", "a");
+        var (document, _, plain) = await HoverAsync("<style>#a { margin: 40px; height: 20px } #a:hover { color: red }</style>", "<div id=a>x</div>", "a");
+
+        Assert.True(shadow.Incremental);
+        Assert.True(plain.Incremental);
+        Assert.True(Assert.Single(shadow.DirtyRegions).Bounds.Width > Assert.Single(plain.DirtyRegions).Bounds.Width + 30);
+        _ = document;
+    }
+
+    [Fact]
+    public async Task AFocusChange_IsRestyledInPlace()
+    {
+        var (context, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap("<input id=f><div id=z>after</div>", "<style>#f:focus { outline: 2px solid rgb(0,128,0) }</style>"), new HtmlDocumentOptions { MediaType = MediaType.Screen });
+        var measuring = context.CreateCanvas(1, 1);
+        var before = document.GetElementBounds("z");
+
+        var focused = await document.SetFocusAsync(document.GetElement("f"), true, measuring);
+        var left = await document.SetFocusAsync(null, false, measuring);
+
+        Assert.True(focused.Incremental);
+        Assert.True(left.Incremental);
+        Assert.Equal(before, document.GetElementBounds("z"));
     }
 }

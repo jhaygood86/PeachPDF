@@ -32,6 +32,19 @@ namespace PeachBrackets.Html.Updates
             "-webkit-text-stroke-color",
         };
 
+        // Every property the registry can read back: those with an initial value (the cascade resets all of them) and those the revert snapshots read.
+        private static readonly string[] AllPropertyNames =
+            CssPropertyRegistry.InitialValues.Keys.Union(CssPropertyRegistry.SnapshotPropertyNames, StringComparer.OrdinalIgnoreCase).ToArray();
+
+        private static Dictionary<string, string?> ReadAll(CssBox box)
+        {
+            var values = new Dictionary<string, string?>(AllPropertyNames.Length, StringComparer.OrdinalIgnoreCase);
+            foreach (var name in AllPropertyNames)
+                values[name] = CssUtils.GetPropertyValue(box, name);
+
+            return values;
+        }
+
         // Past this many boxes under the ones to restyle, loading the document again is not far behind.
         private const int MaxBoxes = 6000;
 
@@ -87,6 +100,11 @@ namespace PeachBrackets.Html.Updates
                         origin = parent;
 
                     var own = origin.HtmlTag is { SourceOrdinal: >= 0 } tag && changed.Contains(tag.SourceOrdinal);
+
+                    // Rules on a box's own state match it differently only when its own state changed.
+                    if (!own && !box.HasRelationalStatefulCandidates)
+                        continue;
+
                     switch (cssData.CompareStatefulMatches(media, box, sizes, container, before, after, own))
                     {
                         case 1:
@@ -219,19 +237,25 @@ namespace PeachBrackets.Html.Updates
             if (AreasEqual(old, current))
                 return null;
 
+            // Properties the registry cannot read back (layered backgrounds, say) would pass the comparison of names below unseen. So the areas
+            // that hold anything but paint must be equal, and in the ones that hold paint beside other things only the fields of the paint-only
+            // properties may differ.
+            if (!LayoutAreasEqual(old, current))
+                return $"A style area that holds more than paint changed on <{box.HtmlTag?.Name ?? "box"}>.";
+
             // The old style, read back the way the new one is.
             Dictionary<string, string?> oldValues;
             box.AdoptComputedStyle(old);
             try
             {
-                oldValues = CssUtils.SnapshotProperties(box);
+                oldValues = ReadAll(box);
             }
             finally
             {
                 box.AdoptComputedStyle(current);
             }
 
-            var newValues = CssUtils.SnapshotProperties(box);
+            var newValues = ReadAll(box);
             foreach (var (name, value) in newValues)
             {
                 if (oldValues.TryGetValue(name, out var previous) && string.Equals(previous, value, StringComparison.Ordinal))
@@ -254,6 +278,31 @@ namespace PeachBrackets.Html.Updates
         }
 
         private static bool IsNone(string? value) => string.IsNullOrEmpty(value) || value.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+        private static bool LayoutAreasEqual(ComputedStyle a, ComputedStyle b) =>
+            a.GeneratedContent.Equals(b.GeneratedContent) && a.BoxModel.Equals(b.BoxModel) && a.Break.Equals(b.Break) && a.Pagination.Equals(b.Pagination)
+            && a.DisplayPositioning.Equals(b.DisplayPositioning) && a.Table.Equals(b.Table) && a.Font.Equals(b.Font) && a.List.Equals(b.List)
+            && a.Flex.Equals(b.Flex) && a.Grid.Equals(b.Grid) && a.MultiColumn.Equals(b.MultiColumn with { ColumnRuleColor = a.MultiColumn.ColumnRuleColor })
+            && a.Background.Equals(b.Background with { BackgroundColor = a.Background.BackgroundColor })
+            && a.Border.Equals(b.Border with
+            {
+                BorderTopColor = a.Border.BorderTopColor,
+                BorderRightColor = a.Border.BorderRightColor,
+                BorderBottomColor = a.Border.BorderBottomColor,
+                BorderLeftColor = a.Border.BorderLeftColor,
+                BoxShadow = a.Border.BoxShadow,
+                OutlineColor = a.Border.OutlineColor,
+                OutlineStyle = a.Border.OutlineStyle,
+                OutlineWidth = a.Border.OutlineWidth,
+                OutlineOffset = a.Border.OutlineOffset,
+            })
+            && a.VisualEffects.Equals(b.VisualEffects with
+            {
+                Opacity = a.VisualEffects.Opacity,
+                Transform = a.VisualEffects.Transform,
+                Filter = a.VisualEffects.Filter,
+                MixBlendMode = a.VisualEffects.MixBlendMode,
+            });
 
         private static bool AreasEqual(ComputedStyle a, ComputedStyle b) =>
             a.Border.Equals(b.Border) && a.VisualEffects.Equals(b.VisualEffects) && a.GeneratedContent.Equals(b.GeneratedContent)

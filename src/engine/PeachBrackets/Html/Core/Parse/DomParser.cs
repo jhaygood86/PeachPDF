@@ -1202,6 +1202,8 @@ namespace PeachBrackets.Html.Parse
             /// <summary>Whether a rule that reads the interaction state is among the candidates of siblings like it (see <see cref="CssBox.HasStatefulCandidates"/>).</summary>
             internal bool Stateful { get; set; }
 
+            internal bool StatefulRelational { get; set; }
+
             /// <summary>The style the first of them ended up with, once it has one worth sharing.</summary>
             internal ComputedStyle? Style { get; set; }
         }
@@ -1270,7 +1272,7 @@ namespace PeachBrackets.Html.Parse
                     sibling = siblings.Add(elementTag, box.GetType(), box.ComputedStyle, cssData.CanShareStyleAmongSiblings(box));
 
                     // The siblings that adopt its style see the same candidate rules, so they have the same stateful ones.
-                    if (sibling is not null) sibling.Stateful = box.HasStatefulCandidates;
+                    if (sibling is not null) (sibling.Stateful, sibling.StatefulRelational) = (box.HasStatefulCandidates, box.HasRelationalStatefulCandidates);
                 }
                 else if (sibling.Style is { } siblingStyle)
                 {
@@ -1282,7 +1284,7 @@ namespace PeachBrackets.Html.Parse
                     else
                     {
                         box.AdoptComputedStyle(siblingStyle);
-                        if (sibling.Stateful) box.HasStatefulCandidates = true;
+                        box.CopyStatefulCandidatesFrom(sibling.Stateful, sibling.StatefulRelational);
                         goto styleSettled;
                     }
                 }

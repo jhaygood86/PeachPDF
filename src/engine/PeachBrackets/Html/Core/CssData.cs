@@ -905,7 +905,7 @@ namespace PeachBrackets.Html
                 if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return;
                 // A rule that reads the interaction state could match this box under another state: the incremental restyle looks at these boxes
                 // when the state changes (see StatefulRulesOf).
-                if (indexed.Sharing.UsesInteractionState && node is CssBox statefulCandidate) statefulCandidate.HasStatefulCandidates = true;
+                if (indexed.Sharing.UsesInteractionState && node is CssBox statefulCandidate) statefulCandidate.NoteStatefulCandidate(indexed.Sharing.StateOnSubjectOnly);
                 // @container is HTML-only (no query-container concept for SVG) - an SVG node (never a
                 // CssBox) permissively skips the check the same way a rule with no @container nesting
                 // does, since ContainerQueryMatcher.Matches needs a CssBox to walk ParentBox from.
@@ -1022,7 +1022,7 @@ namespace PeachBrackets.Html
             if (indexed.EnclosingContainers is not null) return false;
 
             var sharing = indexed.Sharing;
-            if (sharing.UsesInteractionState) box.HasStatefulCandidates = true;
+            if (sharing.UsesInteractionState) box.NoteStatefulCandidate(sharing.StateOnSubjectOnly);
             if (!sharing.Stable) return false;
 
             // A document whose interaction state is live (a host tracking the pointer and focus) has one hovered element among identical siblings.
