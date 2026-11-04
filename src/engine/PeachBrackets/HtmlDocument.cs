@@ -1489,6 +1489,51 @@ public sealed partial class HtmlDocument : IDisposable
     }
 
     /// <summary>
+    /// Tells a <see cref="MediaType.Screen"/> document how large the host shows it, so the images of a <c>srcset</c> are chosen for it: a document zoomed
+    /// to 2 wants images twice as dense as at 1. Nothing is loaded or repainted by this call; <see cref="UpgradeImagesAsync"/> does that. The scale only
+    /// grows - zooming back out keeps the sharper images - and has no effect when <see cref="ImageSelectionOptions.UpgradeOnZoom"/> is off or the
+    /// document's <see cref="HtmlDocumentOptions.ImageSelection"/> is <see cref="ImageSelectionPolicy.HighestDensity"/>.
+    /// </summary>
+    /// <param name="zoom">the factor the host scales the document by on top of its device pixel ratio, 1 for none</param>
+    /// <param name="devicePixelRatio">the device pixel ratio the document is now shown at when it changed (the window moved to another display), or null to leave it</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="zoom"/> or <paramref name="devicePixelRatio"/> is not a positive finite number</exception>
+    public void SetRenderScale(double zoom, double? devicePixelRatio = null)
+    {
+        if (!double.IsFinite(zoom) || zoom <= 0)
+            throw new ArgumentOutOfRangeException(nameof(zoom), zoom, "The zoom must be a positive number.");
+        if (devicePixelRatio is { } ratio && (!double.IsFinite(ratio) || ratio <= 0))
+            throw new ArgumentOutOfRangeException(nameof(devicePixelRatio), devicePixelRatio, "The device pixel ratio must be a positive number.");
+
+        _container.RenderScale = Math.Max(_container.RenderScale, zoom);
+        if (devicePixelRatio is { } value)
+            _container.DevicePixelRatio = value;
+    }
+
+    /// <summary>
+    /// Chooses the images of a <c>srcset</c> or <c>&lt;picture&gt;</c> again for the device pixel ratio and render scale set since
+    /// (<see cref="SetRenderScale"/>) and loads the sharper ones, without parsing or laying the document out again: the boxes keep their size and
+    /// every <see cref="DocumentElement"/> stays valid. It never goes to a less dense image. Repaint the regions it returns
+    /// (<see cref="PaintPageRegionAsync"/>).
+    /// </summary>
+    /// <returns>the parts of the pages whose images changed; empty when none did, as it always is for a document that takes the highest density</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async ValueTask<UpdateResult> UpgradeImagesAsync()
+    {
+        _ = Pages;
+        var changed = await _container.ReselectImagesAsync();
+        if (changed.Count == 0)
+            return new UpdateResult(true, null, []);
+
+        var ordinals = new HashSet<int>();
+        foreach (var image in changed)
+        {
+            if (image.HtmlTag is { } tag) ordinals.Add(tag.SourceOrdinal);
+        }
+
+        return new UpdateResult(true, null, StyleUpdater.DirtyRegionsFor(_container, ordinals, _container.FragmentTree?.Fragmentainers ?? []));
+    }
+
+    /// <summary>
     /// Changes one CSS property of an element of the laid-out document, in place, and reports what has to be repainted - no layout pass runs, and
     /// the document is not loaded again. Applied for the properties that only change how something is painted: <c>color</c> (which the
     /// element's descendants that inherited it follow), <c>background-color</c>, <c>text-decoration-line</c>, <c>-style</c> and <c>-color</c>, and

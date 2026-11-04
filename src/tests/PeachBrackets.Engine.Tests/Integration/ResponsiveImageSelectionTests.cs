@@ -320,6 +320,167 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Empty(container.ImageLoadFailures);
         }
 
+        private static async Task<(HtmlDocument Document, PeachDrawing.Core.Canvas Canvas)> ScreenDocumentAsync(string body, double dpr = 1)
+        {
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
+            var document = await HtmlDocument.LoadAsync(
+                LayoutHarness.Wrap(body), renderContext, new HtmlDocumentOptions { MediaType = MediaType.Screen, DevicePixelRatio = dpr });
+            var canvas = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new PeachDrawing.Core.Size(595, 842));
+            await document.LayoutAsync(canvas);
+            return (document, canvas);
+        }
+
+        private static CssBoxImage ImageOf(HtmlDocument document) => (CssBoxImage)LayoutHarness.FindById(document.Container.Root!, "i")!;
+
+        [Fact]
+        public async Task SetRenderScale_ThenUpgrade_LoadsADenserImageWithoutReparsingOrResizing()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<p id='p'>x</p><img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
+            using var _ = document;
+            using var __ = canvas;
+            var image = ImageOf(document);
+            var element = document.GetElement("p");
+            var widthBefore = image.ReplacedWord.Width;
+            Assert.Equal("small", Name(image.ImageSource));
+
+            document.SetRenderScale(2);
+            var result = await document.UpgradeImagesAsync();
+
+            Assert.True(result.Applied);
+            Assert.NotEmpty(result.DirtyRegions);
+            Assert.Same(image, ImageOf(document));
+            Assert.Equal(widthBefore, image.ReplacedWord.Width, 3);
+            Assert.Equal(200, image.Image!.Width * 1.0, 3);
+            Assert.NotNull(element);
+            Assert.Same(element!.Box, document.GetElement("p")!.Box);
+        }
+
+        [Fact]
+        public async Task UpgradeImages_WithoutAChangeOfScale_ReturnsNoRegions()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>");
+            using var _ = document;
+            using var __ = canvas;
+
+            var result = await document.UpgradeImagesAsync();
+
+            Assert.True(result.Applied);
+            Assert.Empty(result.DirtyRegions);
+        }
+
+        [Fact]
+        public async Task Zoom_NeverDowngrades()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
+            using var _ = document;
+            using var __ = canvas;
+
+            document.SetRenderScale(4);
+            await document.UpgradeImagesAsync();
+            Assert.Equal("large", Name(ImageOf(document).ImageSource));
+
+            document.SetRenderScale(1);
+            var result = await document.UpgradeImagesAsync();
+
+            Assert.Equal("large", Name(ImageOf(document).ImageSource));
+            Assert.Empty(result.DirtyRegions);
+        }
+
+        [Fact]
+        public async Task Zoom_CountsWithTheDevicePixelRatio()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>", dpr: 2);
+            using var _ = document;
+            using var __ = canvas;
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+
+            document.SetRenderScale(2);
+            await document.UpgradeImagesAsync();
+
+            Assert.Equal("large", Name(ImageOf(document).ImageSource));
+        }
+
+        [Fact]
+        public async Task SetRenderScale_CanReportANewDevicePixelRatio()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'>");
+            using var _ = document;
+            using var __ = canvas;
+
+            document.SetRenderScale(1, devicePixelRatio: 2);
+            await document.UpgradeImagesAsync();
+
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+        }
+
+        [Fact]
+        public async Task UpgradeOnZoomOff_IgnoresTheZoom()
+        {
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
+            using var document = await HtmlDocument.LoadAsync(
+                LayoutHarness.Wrap($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>"), renderContext,
+                new HtmlDocumentOptions { MediaType = MediaType.Screen, ImageSelection = new ImageSelectionOptions { UpgradeOnZoom = false } });
+            using var canvas = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new PeachDrawing.Core.Size(595, 842));
+            await document.LayoutAsync(canvas);
+
+            document.SetRenderScale(3);
+            var result = await document.UpgradeImagesAsync();
+
+            Assert.Equal("small", Name(ImageOf(document).ImageSource));
+            Assert.Empty(result.DirtyRegions);
+        }
+
+        [Fact]
+        public async Task HighestDensityDocument_UpgradeChangesNothing()
+        {
+            var renderContext = new PeachPDF.Rendering.HtmlRenderContext();
+            using var document = await HtmlDocument.LoadAsync(
+                LayoutHarness.Wrap($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>"), renderContext, new HtmlDocumentOptions());
+            using var canvas = PeachDrawing.PDF.PdfCanvas.CreateMeasuring(renderContext, new PeachDrawing.Core.Size(595, 842));
+            await document.LayoutAsync(canvas);
+
+            document.SetRenderScale(3);
+            var result = await document.UpgradeImagesAsync();
+
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+            Assert.Empty(result.DirtyRegions);
+        }
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(-1)]
+        [InlineData(double.NaN)]
+        [InlineData(double.PositiveInfinity)]
+        public async Task SetRenderScale_RejectsANonPositiveZoomOrRatio(double bad)
+        {
+            var (document, canvas) = await ScreenDocumentAsync("<p>x</p>");
+            using var _ = document;
+            using var __ = canvas;
+
+            Assert.Throws<ArgumentOutOfRangeException>(() => document.SetRenderScale(bad));
+            Assert.Throws<ArgumentOutOfRangeException>(() => document.SetRenderScale(1, bad));
+        }
+
+        [Fact]
+        public async Task ContainerQueryRebuild_KeepsTheUpgradedChoice()
+        {
+            // A size container makes layout rebuild the box tree from the source; the rebuilt image must choose with the same inputs.
+            var (document, canvas) = await ScreenDocumentAsync(
+                $"<div style='container-type:size;width:300px;height:100px'><img id='i' srcset='{Small} 1x, {Mid} 2x, {Large} 4x'></div>");
+            using var _ = document;
+            using var __ = canvas;
+            Assert.True(document.Container.HasSizeContainers);
+            Assert.Equal("small", Name(ImageOf(document).ImageSource));
+
+            document.SetRenderScale(2);
+            await document.UpgradeImagesAsync();
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+
+            await document.Container.PerformLayout(canvas);
+
+            Assert.Equal("mid", Name(ImageOf(document).ImageSource));
+        }
+
         private sealed class NoAvifContext : PeachPDF.Rendering.HtmlRenderContext
         {
             public override bool SupportsImageType(string mimeType) => !mimeType.Contains("avif", StringComparison.OrdinalIgnoreCase) && base.SupportsImageType(mimeType);

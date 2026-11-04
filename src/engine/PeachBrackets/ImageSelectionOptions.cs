@@ -34,7 +34,7 @@ public sealed record ImageSelectionOptions
     public long? MaxDecodePixels { get; init; }
 
     /// <summary>
-    /// Whether <c>HtmlDocument.SetRenderScale</c> counts when choosing: with <see langword="true"/> (the default) a zoomed-in document loads
+    /// Whether <see cref="HtmlDocument.SetRenderScale"/> counts when choosing: with <see langword="true"/> (the default) a zoomed-in document loads
     /// denser images, with <see langword="false"/> zoom does not change which image is chosen.
     /// </summary>
     public bool UpgradeOnZoom { get; init; } = true;
