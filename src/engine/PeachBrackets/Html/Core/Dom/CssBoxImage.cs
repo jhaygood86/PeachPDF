@@ -99,6 +99,54 @@ namespace PeachBrackets.Html.Dom
             return (_selection.Chosen.Url, _selection.Chosen.Density);
         }
 
+        /// <summary>
+        /// Chooses the image again for the width the box was laid out at, and swaps the bitmap in when that is a sharper candidate than the
+        /// one loaded. It never goes to a less dense candidate, and never changes the box: the density the natural size is divided by stays
+        /// that of the <c>sizes</c> slot, so the bitmap changes and the size it is drawn at does not.
+        /// </summary>
+        /// <returns>whether the bitmap changed</returns>
+        internal async ValueTask<bool> ReselectAsync()
+        {
+            if (_imageLoadHandler is null || _selection is null || _contentInjectedDirectly || _svgDocument is not null || Content != Keywords.Normal)
+                return false;
+
+            var unitsPerCssPx = Length.PointsPerPx * (HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+            var usedWidth = _imageWord.Width / unitsPerCssPx;
+            if (usedWidth is not > 0) return false;
+
+            var next = ResponsiveImageSelector.Select(this, usedWidth);
+            var current = _selection.Chosen;
+            if (next.Chosen.Url == current.Url) return false;
+
+            // Compare against what the loaded candidate is worth at this width, which is not what it was worth when it was chosen.
+            double? currentNow = null;
+            foreach (var alternate in next.Alternates)
+            {
+                if (alternate.Url == current.Url) currentNow = alternate.EffectiveDensity;
+            }
+
+            if (currentNow is { } worth && next.Chosen.EffectiveDensity <= worth) return false;
+
+            var handler = new ImageLoadHandler(HtmlContainer!);
+            await handler.LoadImage(next.Chosen.Url);
+
+            if (handler.Image is null || handler.SvgDocument is not null)
+            {
+                handler.Dispose();
+                return false;
+            }
+
+            // The retired handler owns the stream a cached image still reads from, so it lives until the box does.
+            (_retiredHandlers ??= []).Add(_imageLoadHandler);
+            _imageLoadHandler = handler;
+            _imageWord.Image = handler.Image;
+            _srcsetDensity = next.Chosen.Density;
+            _selection = next;
+            return true;
+        }
+
+        private List<ImageLoadHandler>? _retiredHandlers;
+
         /// <summary>The most next-best srcset candidates tried after the chosen one cannot be loaded, before the <c>src</c>.</summary>
         private const int MaxFallbackCandidates = 3;
 
@@ -222,6 +270,11 @@ namespace PeachBrackets.Html.Dom
         public override void Dispose()
         {
             _imageLoadHandler?.Dispose();
+            if (_retiredHandlers is not null)
+            {
+                foreach (var retired in _retiredHandlers) retired.Dispose();
+            }
+
             base.Dispose();
         }
 

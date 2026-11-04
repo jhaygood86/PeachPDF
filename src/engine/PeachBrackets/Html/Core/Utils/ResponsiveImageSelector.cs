@@ -289,6 +289,15 @@ namespace PeachBrackets.Html.Utils
                     if (length.Length == 0) continue;
                     if (condition.Length > 0 && !MediaMatches(condition, box)) continue;
 
+                    if (length.Equals("auto", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // sizes="auto" is the width the image is laid out at, and only counts on a lazy image (HTML Standard, "sizes"
+                        // attribute). Layout has not run yet, so a definite width of its own is all there is; the next entry or 100vw
+                        // stands in, and the refinement after layout chooses the bitmap against the real width.
+                        if (IsLazy(box) && DefiniteWidth(box) is { } definite && definite > 0) return definite / unitsPerCssPx;
+                        continue;
+                    }
+
                     try
                     {
                         var units = CssValueParser.ParseLength(length, basis, box);
@@ -302,6 +311,24 @@ namespace PeachBrackets.Html.Utils
             }
 
             return basis > 0 ? basis / unitsPerCssPx : null;
+        }
+
+        private static bool IsLazy(CssBox box) => string.Equals(box.GetAttribute("loading")?.Trim(), "lazy", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The image's own absolute <c>width</c>, in layout units, or null when it is <c>auto</c>, a percentage or unparsable.</summary>
+        private static double? DefiniteWidth(CssBox box)
+        {
+            var length = new CssLength(box.Width);
+            if (length.HasError || length.IsPercentage || length.Number <= 0) return null;
+
+            try
+            {
+                return CssValueParser.ParseLength(box.Width, 0, box);
+            }
+            catch (Exception ex) when (ex is FormatException or ArgumentException)
+            {
+                return null;
+            }
         }
 
         private static List<string> SplitTopLevel(string value)

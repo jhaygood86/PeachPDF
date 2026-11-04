@@ -205,6 +205,69 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(expected, chosen);
         }
 
+        [Fact]
+        public async Task AfterLayout_AWiderUsedWidthThanTheSlotUpgradesTheBitmapOnly()
+        {
+            // sizes says 100px, the stylesheet makes the image 400 CSS px wide: 100w is 0.25x there, so only the 400w one is sharp enough.
+            var (chosen, width) = await ChooseAsync(
+                $"<img id='i' style='width:400px' sizes='100px' srcset='{Small} 100w, {Mid} 200w, {Large} 400w'>", Screen(1));
+
+            Assert.Equal("large", chosen);
+            Assert.Equal(300, width, 3);
+        }
+
+        [Fact]
+        public async Task AfterLayout_ANarrowerUsedWidthNeverDowngrades()
+        {
+            var (chosen, width) = await ChooseAsync(
+                $"<img id='i' style='width:100px' sizes='400px' srcset='{Small} 100w, {Mid} 200w, {Large} 400w'>", Screen(1));
+
+            Assert.Equal("large", chosen);
+            Assert.Equal(75, width, 3);
+        }
+
+        [Fact]
+        public async Task AfterLayout_TheHighestDensityPolicyChangesNothing()
+        {
+            var options = new ImageSelectionOptions { Policy = ImageSelectionPolicy.HighestDensity };
+            var (chosen, _) = await ChooseAsync(
+                $"<img id='i' style='width:400px' sizes='100px' srcset='{Small} 100w, {Large} 400w'>", Screen(1, options));
+
+            Assert.Equal("large", chosen);
+        }
+
+        [Fact]
+        public async Task SizesAuto_OnALazyImage_UsesItsDefiniteWidth()
+        {
+            // 200 CSS px wide: the 200w candidate is exactly 1x.
+            var (chosen, width) = await ChooseAsync(
+                $"<img id='i' loading='lazy' style='width:200px' sizes='auto' srcset='{Small} 100w, {Mid} 200w, {Large} 400w'>", Screen(1));
+
+            Assert.Equal("mid", chosen);
+            Assert.Equal(150, width, 3);
+        }
+
+        [Fact]
+        public async Task SizesAuto_OnAnImageThatIsNotLazy_IsIgnored()
+        {
+            // Not lazy, so "auto" does not count and the slot is the 740 CSS px page width: nothing is sharp enough, the largest wins.
+            var (chosen, _) = await ChooseAsync(
+                $"<img id='i' style='width:200px' sizes='auto' srcset='{Small} 100w, {Mid} 200w, {Large} 400w'>", Screen(1));
+
+            Assert.Equal("large", chosen);
+        }
+
+        [Fact]
+        public async Task SizesAuto_WithoutADefiniteWidth_UsesTheNextEntryThenTheRefinement()
+        {
+            // The slot is 100px (the next entry), the real width 400px: the refinement after layout upgrades the bitmap, once.
+            var (chosen, width) = await ChooseAsync(
+                $"<div style='width:400px'><img id='i' loading='lazy' style='width:100%' sizes='auto, 100px' srcset='{Small} 100w, {Mid} 200w, {Large} 400w'></div>", Screen(1));
+
+            Assert.Equal("large", chosen);
+            Assert.Equal(300, width, 3);
+        }
+
         private const string Missing = "file:///peachpdf-nonexistent-dir/missing.png";
 
         [Fact]

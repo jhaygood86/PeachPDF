@@ -1821,6 +1821,47 @@ namespace PeachBrackets.Html
         {
             ArgumentNullException.ThrowIfNull(g);
 
+            await PerformLayoutConvergedAsync(g);
+
+            // Once the sizes are final, so that a width descriptor is judged against the width the image really got. Geometry is untouched
+            // by it, so there is no second layout to wait for: this runs at most once per layout.
+            await ReselectImagesAsync();
+        }
+
+        /// <summary>
+        /// Chooses the image of every <c>srcset</c> image again, for the widths the document has been laid out at and the current device pixel
+        /// ratio and render scale, and swaps in the sharper bitmap where there is one. Only a <see cref="ImageSelectionPolicy.BestForTarget"/>
+        /// document does anything (the highest density is already the sharpest). It changes bitmaps, never boxes.
+        /// </summary>
+        /// <returns>the image boxes whose bitmap changed</returns>
+        internal async ValueTask<List<CssBoxImage>> ReselectImagesAsync()
+        {
+            var changed = new List<CssBoxImage>();
+            if (Root is null || ImageSelection.Policy != ImageSelectionPolicy.BestForTarget) return changed;
+
+            var pending = new Stack<CssBox>();
+            pending.Push(Root);
+
+            while (pending.Count > 0)
+            {
+                var box = pending.Pop();
+
+                if (box is CssBoxImage image && await image.ReselectAsync())
+                {
+                    changed.Add(image);
+                }
+
+                foreach (var child in box.Boxes)
+                {
+                    pending.Push(child);
+                }
+            }
+
+            return changed;
+        }
+
+        private async ValueTask PerformLayoutConvergedAsync(Canvas g)
+        {
             await PerformLayoutOnePass(g);
 
             if (!HasSizeContainers) return;
