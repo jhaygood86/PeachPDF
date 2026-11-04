@@ -107,7 +107,10 @@ public class HtmlViewListTests
                         problems.Add($"row {index}: no document");
                     // Only what shows is painted: the list also realizes rows just outside the viewport.
                     var top = view.TransformToVisual(scroller).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
-                    if (top < scroller.ViewportHeight && top + view.ActualHeight > 0 && view.PaintedRegionCount == 0)
+                    // A sliver of a few pixels at the edge is not asked to paint (a virtual canvas invalidates what it can see), so a row counts as shown
+                    // once enough of it is in view to need painting.
+                    const double visibleEnough = 8;
+                    if (top < scroller.ViewportHeight - visibleEnough && top + view.ActualHeight > visibleEnough && view.PaintedRegionCount == 0)
                         shown.Add((index, view));
                     if (view.Document is not null)
                     {
