@@ -5219,6 +5219,14 @@ namespace PeachBrackets.Html
         internal Rect? PageClipOverride { get; set; }
 
         /// <summary>
+        /// While <c>HtmlDocument.PaintPageRegionAsync</c> paints a part of a page, that part in layout units, in the same sheet coordinates as
+        /// <see cref="PageClipOverride"/>. The painter narrows its page clip to it (a little over, for what overhangs: shadows, outlines), because a
+        /// canvas's tracked clip bound is the last rectangle pushed, not the intersection of those pushed: the region the caller pushed first would
+        /// otherwise be replaced by the page-wide clip and nothing outside the region would be skipped. Null when the whole page is painted.
+        /// </summary>
+        internal Rect? PaintRegion { get; set; }
+
+        /// <summary>
         /// Words this render DREW and then truncated with a clip - see <c>PeachPDF.ClipReport</c>.
         /// </summary>
         /// <remarks>

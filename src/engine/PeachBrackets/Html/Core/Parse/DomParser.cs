@@ -152,7 +152,22 @@ namespace PeachBrackets.Html.Parse
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
             var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
 
-            var selectors = cssData.EnumerateRulesRecursive().OfType<IStyleRule>().Select(rule => rule.SelectorText).ToList();
+            // Every selector in the sheets, the ones written inside another rule (`.card { &:hover { } }`) as well as the top-level ones.
+            var selectors = new List<string>();
+            void CollectSelectors(IEnumerable<IRule> rules)
+            {
+                foreach (var rule in rules)
+                {
+                    if (rule is not IStyleRule styleRule)
+                        continue;
+
+                    selectors.Add(styleRule.SelectorText);
+                    if (styleRule.NestedRules.Count > 0)
+                        CollectSelectors(cssData.FlattenRules(styleRule.NestedRules));
+                }
+            }
+
+            CollectSelectors(cssData.EnumerateRulesRecursive());
             htmlContainer.PointerPseudoClassesInUse = selectors.Any(text =>
                 text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase));
             htmlContainer.FocusPseudoClassesInUse = selectors.Any(text => text.Contains(":focus", StringComparison.OrdinalIgnoreCase));

@@ -13,6 +13,8 @@ internal sealed class Win2dResourceCounts
     private int _commandLists;
     private int _sessions;
     private int _nativeTargets;
+    private int _textBitmaps;
+    private int _lcdLayers;
 
     /// <summary>Clip layers (<c>CanvasActiveLayer</c>) pushed and not yet popped.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -28,6 +30,16 @@ internal sealed class Win2dResourceCounts
 
     /// <summary>Readers of a session's native target (with their staging bitmaps) made and not yet disposed.</summary>
     public int NativeTargets => Volatile.Read(ref _nativeTargets);
+
+    /// <summary>Bitmaps of text runs the context keeps for reuse (not counted in <see cref="Total"/>: they live as long as the context, not a canvas).</summary>
+    public int TextBitmaps => Volatile.Read(ref _textBitmaps);
+
+    /// <summary>Scratch render targets the GPU text blend uses (not counted in <see cref="Total"/>: they live as long as the context).</summary>
+    public int LcdLayers => Volatile.Read(ref _lcdLayers);
+
+    public void LcdLayer(int delta) => Interlocked.Add(ref _lcdLayers, delta);
+
+    public void TextBitmap(int delta) => Interlocked.Add(ref _textBitmaps, delta);
 
     public void NativeTarget(int delta) => Interlocked.Add(ref _nativeTargets, delta);
 

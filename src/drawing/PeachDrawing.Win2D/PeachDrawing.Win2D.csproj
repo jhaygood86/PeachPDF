@@ -44,6 +44,10 @@
 		<InternalsVisibleTo Include="PeachDrawing.Win2D.Tests" />
 	</ItemGroup>
 	<ItemGroup>
+		<EmbeddedResource Include="Shaders\LcdBlend.bin" LogicalName="PeachDrawing.Win2D.LcdBlend.bin" />
+		<None Include="Shaders\LcdBlend.hlsl" />
+	</ItemGroup>
+	<ItemGroup>
 		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />
 		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 		<None Include="README.md" Pack="true" PackagePath="\" />

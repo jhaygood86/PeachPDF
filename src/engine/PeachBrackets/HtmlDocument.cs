@@ -1772,13 +1772,16 @@ public sealed partial class HtmlDocument : IDisposable
         ArgumentNullException.ThrowIfNull(canvas);
         ThrowIfNotAPage(pageIndex);
 
-        canvas.PushClip(new Rect(region.X * _unitsPerPoint, region.Y * _unitsPerPoint, region.Width * _unitsPerPoint, region.Height * _unitsPerPoint));
+        var layoutRegion = new Rect(region.X * _unitsPerPoint, region.Y * _unitsPerPoint, region.Width * _unitsPerPoint, region.Height * _unitsPerPoint);
+        canvas.PushClip(layoutRegion);
+        _container.PaintRegion = layoutRegion;
         try
         {
             await PaintPageAsync(pageIndex, canvas, layer);
         }
         finally
         {
+            _container.PaintRegion = null;
             canvas.PopClip();
         }
     }

@@ -9,6 +9,8 @@ using PeachBrackets.Updates;
 using PeachDrawing.Core;
 using PeachDrawing.Win2D;
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
@@ -67,6 +69,8 @@ public sealed partial class HtmlView : UserControl
     private double _loadedWidth = -1;
     private bool _loaded;
     private bool _needsReload;
+    private bool _restyling;
+    private bool _paintDeferred;
 
     /// <summary>How many regions the view has painted, for a test to tell a row that was never painted from one that was.</summary>
     internal int PaintedRegionCount { get; private set; }
@@ -87,7 +91,13 @@ public sealed partial class HtmlView : UserControl
         _layers.Children.Add(_overlay);
         _host.Content = _layers;
         _scroller.ZoomMode = ZoomMode.Enabled;
-        _scroller.ViewChanged += (_, _) => UpdateViewport();
+        _scroller.ViewChanged += (_, _) =>
+        {
+            var started = Stopwatch.GetTimestamp();
+            var noted = 0.0;
+            UpdateViewport();
+            HtmlViewDiagnostics.Trace?.Invoke($"ViewChanged y={_scroller.VerticalOffset:F0} intermediate: NoteScrolling {noted:F1} ms, whole handler {HtmlViewDiagnostics.MillisecondsSince(started):F1} ms");
+        };
         _scroller.MinZoomFactor = 0.5f;
         _scroller.MaxZoomFactor = 4f;
         _scroller.HorizontalScrollBarVisibility = ScrollBarVisibility.Auto;
@@ -302,6 +312,8 @@ public sealed partial class HtmlView : UserControl
         _loaded = false;
         _loadVersion++;
         _reflowTimer?.Stop();
+        _regionTarget?.Dispose();
+        _regionTarget = null;
         ReleaseCursors();
         _document?.Dispose();
         _document = null;
@@ -487,10 +499,39 @@ public sealed partial class HtmlView : UserControl
             _scroller.HorizontalOffset / zoom / PixelsPerPoint, _scroller.VerticalOffset / zoom / PixelsPerPoint,
             _scroller.ViewportWidth / zoom / PixelsPerPoint, _scroller.ViewportHeight / zoom / PixelsPerPoint);
 
-        foreach (var region in document.SetViewport(viewport))
+        var moved = CoalesceRegions(document.SetViewport(viewport));
+        foreach (var region in moved)
             InvalidateRegion(region.PageIndex, region.Bounds);
 
-        _overlay.Invalidate();
+        // The layer over the scroller shows the fixed and stuck boxes (or, in viewport mode, the page itself): when none of them moved there is
+        // nothing new for it to draw, and a full-view redraw per scroll step is a cost for a page that has none.
+        if (_viewportMode || moved.Count > 0)
+            _overlay.Invalidate();
+    }
+
+    // A fixed box on the move names where it was and where it is, and their bleeds overlap: invalidating each separately makes the surface paint the
+    // overlap twice. Regions on one page that touch are joined into one (those that do not stay apart, so a bar at the top and a badge at the bottom
+    // are not joined into a region as tall as the view).
+    private static List<DirtyRegion> CoalesceRegions(IReadOnlyList<DirtyRegion> regions)
+    {
+        var merged = new List<DirtyRegion>(regions.Count);
+        foreach (var region in regions)
+        {
+            var current = region;
+            for (var i = merged.Count - 1; i >= 0; i--)
+            {
+                if (merged[i].PageIndex != current.PageIndex || !merged[i].Bounds.IntersectsWith(current.Bounds))
+                    continue;
+
+                var union = PeachDrawing.Core.Rect.Union(merged[i].Bounds, current.Bounds);
+                current = new DirtyRegion(current.PageIndex, union);
+                merged.RemoveAt(i);
+            }
+
+            merged.Add(current);
+        }
+
+        return merged;
     }
 
     // The layer over the scroller: the boxes the viewport holds in place, drawn where the viewport is, so they are already where they belong on the
@@ -609,6 +650,9 @@ public sealed partial class HtmlView : UserControl
             return;
         }
 
+        // A fixed or stuck box is drawn by the layer over the scroller, so a change to one shows only when that layer is drawn again.
+        _overlay.Invalidate();
+
         try
         {
             _canvas.Invalidate(new Windows.Foundation.Rect(
@@ -626,29 +670,116 @@ public sealed partial class HtmlView : UserControl
     {
         var document = _document;
         var context = _context;
-        PaintedRegionCount += args.InvalidatedRegions.Count();
-        foreach (var region in args.InvalidatedRegions)
+        var regions = args.InvalidatedRegions.ToList();
+        PaintedRegionCount += regions.Count;
+        var started = HtmlViewDiagnostics.Start();
+        try
         {
+            PaintRegions(sender, regions, document, context);
+        }
+        finally
+        {
+            HtmlViewDiagnostics.Stop(started, regions.Sum(r => r.Width * r.Height), regions.Count);
+            HtmlViewDiagnostics.Trace?.Invoke($"RegionsInvalidated: {regions.Count} regions {string.Join(" ", regions.Select(r => $"[{r.Left:F0},{r.Top:F0} {r.Width:F0}x{r.Height:F0}]"))} took {HtmlViewDiagnostics.MillisecondsSince(started):F1} ms");
+        }
+    }
+
+    private void PaintRegions(CanvasVirtualControl sender, List<Windows.Foundation.Rect> regions, HtmlDocument? document, Win2dRenderContext? context)
+    {
+        foreach (var region in regions)
+        {
+            if (_restyling && document is not null && !_viewportMode)
+            {
+                // The layout is being rebuilt, so there is nothing to paint yet. A drawing session must not even be opened on the region: the surface
+                // does not keep what a region showed once a session is opened on it, so opening one and drawing nothing blanks it. What is shown stays,
+                // and the region is painted again once the restyle has finished.
+                _paintDeferred = true;
+                continue;
+            }
+
             using var session = sender.CreateDrawingSession(region);
-            session.Clear(_viewportMode ? Microsoft.UI.Colors.Transparent : _pageBackground);
+
             if (document is null || context is null || _viewportMode)
+            {
+                session.Clear(_viewportMode ? Microsoft.UI.Colors.Transparent : _pageBackground);
+                continue;
+            }
+
+            if (_pageBackground.A != 255)
+            {
+                // A page with transparency has no opaque surface to blend text against on the GPU.
+                session.Clear(_pageBackground);
+                PaintPages(session, region, document, context, null, region.Left, region.Top, drawingIntoSurface: true);
+                continue;
+            }
+
+            // The region is painted into a render target of its own and then put on the surface: text is blended against the pixels already drawn
+            // by a pixel shader on the GPU, which needs a target it can read (the surface's session cannot be), and reading the pixels behind each
+            // word back from the GPU instead costs far more than a scroll can afford.
+            var target = RegionTarget(sender, region);
+            using (var offscreen = target.CreateDrawingSession())
+            {
+                offscreen.Clear(_pageBackground);
+                PaintPages(offscreen, region, document, context, target, region.Left, region.Top, drawingIntoSurface: false);
+            }
+
+            session.Blend = CanvasBlend.Copy;
+            session.DrawImage(target, (float)region.Left, (float)region.Top, new Windows.Foundation.Rect(0, 0, region.Width, region.Height));
+        }
+    }
+
+    // The part of each page that lies in a region, painted into a session whose origin is the region's top-left (or the surface's, when it is the surface's).
+    private void PaintPages(CanvasDrawingSession session, Windows.Foundation.Rect region, HtmlDocument document, Win2dRenderContext context, CanvasRenderTarget? target,
+        double originX, double originY, bool drawingIntoSurface)
+    {
+        var offsetX = drawingIntoSurface ? 0 : -originX;
+        var offsetY = drawingIntoSurface ? 0 : -originY;
+        for (var page = 0; page < _pageTops.Length; page++)
+        {
+            if (_pageTops[page] + _pageHeights[page] < region.Top || _pageTops[page] > region.Bottom)
                 continue;
 
-            for (var page = 0; page < _pageTops.Length; page++)
+            var size = document.Pages[page];
+            session.Transform = Matrix3x2.CreateTranslation((float)offsetX, (float)(offsetY + _pageTops[page]));
+            var bounds = new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint);
+            using (var canvas = target is null
+                ? Win2dCanvas.FromSession(context, session, bounds)
+                : Win2dCanvas.FromRenderTarget(context, target, session, bounds))
             {
-                if (_pageTops[page] + _pageHeights[page] < region.Top || _pageTops[page] > region.Bottom)
-                    continue;
-
-                var size = document.Pages[page];
-                session.Transform = Matrix3x2.CreateTranslation(0, (float)_pageTops[page]);
-                using (var canvas = Win2dCanvas.FromSession(context, session, new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint)))
+                // The target clips to the region on the GPU, but the painter culls against the canvas's own clip, which is the whole page:
+                // handing it the region (in points, from the page's top-left) lets it skip everything outside, which on a long page is nearly all of it.
+                var top = Math.Max(0, region.Top - _pageTops[page]) / PixelsPerPoint;
+                var bottom = Math.Min(_pageHeights[page], region.Bottom - _pageTops[page]) / PixelsPerPoint;
+                var left = Math.Max(0, region.Left) / PixelsPerPoint;
+                var right = region.Right / PixelsPerPoint;
+                var layer = _scrollMode == HtmlViewScrollMode.Disabled ? DocumentPaintLayer.All : DocumentPaintLayer.Content;
+                if (bottom > top && right > left)
                 {
                     // Painting finishes without waiting for anything (what it draws was resolved during layout), so the task is already complete.
-                    document.PaintPageAsync(page, canvas, _scrollMode == HtmlViewScrollMode.Disabled ? DocumentPaintLayer.All : DocumentPaintLayer.Content).GetAwaiter().GetResult();
+                    document.PaintPageRegionAsync(page, canvas, new PeachDrawing.Core.Rect(left, top, right - left, bottom - top), layer).AsTask().GetAwaiter().GetResult();
                 }
-
-                session.Transform = Matrix3x2.Identity;
             }
+
+            session.Transform = Matrix3x2.Identity;
         }
+    }
+
+    private CanvasRenderTarget? _regionTarget;
+
+    // A render target at least as big as the region, at the surface's resolution; kept for the next region and made again when the device changes.
+    private CanvasRenderTarget RegionTarget(CanvasVirtualControl sender, Windows.Foundation.Rect region)
+    {
+        var width = (float)Math.Ceiling(region.Width);
+        var height = (float)Math.Ceiling(region.Height);
+        if (_regionTarget is { } current && ReferenceEquals(current.Device, sender.Device) && current.Dpi == sender.Dpi
+            && current.SizeInPixels.Width >= width * sender.Dpi / 96 && current.SizeInPixels.Height >= height * sender.Dpi / 96)
+        {
+            return current;
+        }
+
+        _regionTarget?.Dispose();
+        _regionTarget = new CanvasRenderTarget(sender, Math.Max(width, 512), Math.Max(height, 512), sender.Dpi,
+            Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized, CanvasAlphaMode.Ignore);
+        return _regionTarget;
     }
 }

@@ -3,6 +3,7 @@ using Microsoft.Graphics.Canvas.Brushes;
 using Microsoft.Graphics.Canvas.Geometry;
 using PeachDrawing.Core;
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Numerics;
 
@@ -105,6 +106,9 @@ public sealed partial class Win2dCanvas : Canvas
     /// <summary>The links and named places painted so far; see <see cref="Win2dLinkMap"/>. It survives <see cref="Dispose"/>.</summary>
     public Win2dLinkMap Links { get; }
 
+    // The scale from the session's device-independent pixels to device pixels.
+    private double DpiScale => _session.Dpi / 96.0;
+
     /// <inheritdoc />
     public override double PixelsPerPoint => _ppp;
 
@@ -180,6 +184,7 @@ public sealed partial class Win2dCanvas : Canvas
     public override void PushClip(Rect rect)
     {
         Guard();
+        FlushText();
         Push(OpenKind.Clip, _session.CreateLayer(1f, new Windows.Foundation.Rect(rect.X, rect.Y, Math.Max(rect.Width, 0), Math.Max(rect.Height, 0))));
         _clipStack.Push(rect);
     }
@@ -188,6 +193,7 @@ public sealed partial class Win2dCanvas : Canvas
     public override void PushClip(GraphicsPath path)
     {
         Guard();
+        FlushText();
 
         // No simple bounding rectangle for an arbitrary path, so the tracked clip bound stays as it was (it is only used for culling).
         var geometry = BuildGeometry(path);
@@ -207,6 +213,7 @@ public sealed partial class Win2dCanvas : Canvas
     public override void PushClipExclude(Rect rect)
     {
         Guard();
+        FlushText();
 
         // Everything except the rectangle: a huge rectangle with the excluded one cut out of it.
         const float big = 1e7f;
@@ -228,6 +235,7 @@ public sealed partial class Win2dCanvas : Canvas
     /// <inheritdoc />
     public override void PopClip()
     {
+        FlushText();
         Pop(OpenKind.Clip);
         if (_clipStack.Count > 1)
             _clipStack.Pop();
@@ -250,13 +258,18 @@ public sealed partial class Win2dCanvas : Canvas
     public override void PushBlendMode(PaintBlendMode mode)
     {
         Guard();
+        FlushText();
         Push(OpenKind.Blend);
         _blend = mode;
         _session.Blend = SessionBlendFor(mode);
     }
 
     /// <inheritdoc />
-    public override void PopBlendMode() => Pop(OpenKind.Blend);
+    public override void PopBlendMode()
+    {
+        FlushText();
+        Pop(OpenKind.Blend);
+    }
 
     /// <summary>
     /// The blend a session can apply while it draws. A session blends only by a few simple rules (add, minimum); the other blend modes need the pixels already
@@ -344,8 +357,17 @@ public sealed partial class Win2dCanvas : Canvas
         if (_disposed)
             return;
 
-        _disposed = true;
         Exception? failure = null;
+        try
+        {
+            FlushText();
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+
+        _disposed = true;
         try
         {
             // Release in reverse, each under the state it was pushed with, so a clip layer ends before the transform beneath it changes. One
@@ -366,6 +388,8 @@ public sealed partial class Win2dCanvas : Canvas
         }
         finally
         {
+            _lcdEffect?.Dispose();
+            _lcdEffect = null;
             AbandonLayers();
             ReleaseConverted();
             ReleaseBitmapGlyphs();
@@ -426,6 +450,8 @@ public sealed partial class Win2dCanvas : Canvas
     public override void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
     {
         Guard();
+        var lineReach = Math.Max(pen.Width * _ppp, 1) * 2;
+        NoteDrawn(Math.Min(x1, x2) - lineReach, Math.Min(y1, y2) - lineReach, Math.Max(x1, x2) + lineReach, Math.Max(y1, y2) + lineReach);
         Stroke(pen,
             (brush, width, style) => _session.DrawLine((float)x1, (float)y1, (float)x2, (float)y2, brush, width, style),
             () =>
@@ -442,6 +468,8 @@ public sealed partial class Win2dCanvas : Canvas
     public override void DrawRectangle(Pen pen, double x, double y, double width, double height)
     {
         Guard();
+        var strokeReach = Math.Max(pen.Width * _ppp, 1) * 2;
+        NoteStrokeBands(x, y, x + width, y + height, strokeReach);
         Stroke(pen,
             (brush, w, style) => _session.DrawRectangle((float)x, (float)y, (float)width, (float)height, brush, w, style),
             () => CanvasGeometry.CreateRectangle(_session, (float)x, (float)y, (float)width, (float)height));
@@ -451,6 +479,8 @@ public sealed partial class Win2dCanvas : Canvas
     public override void DrawRectangle(Brush brush, double x, double y, double width, double height)
     {
         Guard();
+        NoteDrawn(x, y, x + width, y + height);
+
         Fill(brush,
             b => _session.FillRectangle((float)x, (float)y, (float)width, (float)height, b),
             () => CanvasGeometry.CreateRectangle(_session, (float)x, (float)y, (float)width, (float)height));
@@ -461,6 +491,8 @@ public sealed partial class Win2dCanvas : Canvas
     {
         Guard();
         using var geometry = BuildGeometry(path);
+        var closed = path.GetCurveContours().All(contour => contour.Closed);
+        NoteGeometry(geometry, Math.Max(pen.Width * _ppp, 1) * 2, closed);
         Stroke(pen, (brush, width, style) => _session.DrawGeometry(geometry, brush, width, style), () => BuildGeometry(path));
     }
 
@@ -469,6 +501,7 @@ public sealed partial class Win2dCanvas : Canvas
     {
         Guard();
         using var geometry = BuildGeometry(path);
+        NoteGeometry(geometry, 1);
         Fill(brush, b => _session.FillGeometry(geometry, b), () => BuildGeometry(path));
     }
 
@@ -479,12 +512,70 @@ public sealed partial class Win2dCanvas : Canvas
         if (points.Length < 3)
             return;
 
+        // A border side or a rule is a four-cornered polygon with horizontal and vertical edges: a rectangle, which needs no geometry to fill.
+        if (points.Length == 4 && TryAxisAlignedRectangle(points, out var rectangle))
+        {
+            DrawRectangle(brush, rectangle.X, rectangle.Y, rectangle.Width, rectangle.Height);
+            return;
+        }
+
         var vertices = new Vector2[points.Length];
         for (var i = 0; i < points.Length; i++)
             vertices[i] = new Vector2((float)points[i].X, (float)points[i].Y);
 
         using var geometry = CanvasGeometry.CreatePolygon(_session, vertices);
+        NoteGeometry(geometry, 1);
         Fill(brush, b => _session.FillGeometry(geometry, b), () => CanvasGeometry.CreatePolygon(_session, vertices));
+    }
+
+    // A closed outline touches the band along its edge, not what it encloses: a card with a border has plain background inside it.
+    private static bool TryAxisAlignedRectangle(PaintPoint[] p, out Rect rectangle)
+    {
+        rectangle = default;
+        var horizontalFirst = p[0].Y == p[1].Y && p[1].X == p[2].X && p[2].Y == p[3].Y && p[3].X == p[0].X;
+        var verticalFirst = p[0].X == p[1].X && p[1].Y == p[2].Y && p[2].X == p[3].X && p[3].Y == p[0].Y;
+        if (!horizontalFirst && !verticalFirst)
+            return false;
+
+        var left = Math.Min(Math.Min(p[0].X, p[1].X), Math.Min(p[2].X, p[3].X));
+        var right = Math.Max(Math.Max(p[0].X, p[1].X), Math.Max(p[2].X, p[3].X));
+        var top = Math.Min(Math.Min(p[0].Y, p[1].Y), Math.Min(p[2].Y, p[3].Y));
+        var bottom = Math.Max(Math.Max(p[0].Y, p[1].Y), Math.Max(p[2].Y, p[3].Y));
+        if (!(right > left) || !(bottom > top))
+            return false;
+
+        rectangle = new Rect(left, top, right - left, bottom - top);
+        return true;
+    }
+
+    // A shape's reach: its bounds, and a stroke's width or a blur more.
+    private void NoteStrokeBands(double left, double top, double right, double bottom, double reach)
+    {
+        if (right - left <= 4 * reach || bottom - top <= 4 * reach)
+        {
+            NoteDrawn(left - reach, top - reach, right + reach, bottom + reach);
+            return;
+        }
+
+        NoteDrawn(left - reach, top - reach, right + reach, top + reach);
+        NoteDrawn(left - reach, bottom - reach, right + reach, bottom + reach);
+        NoteDrawn(left - reach, top - reach, left + reach, bottom + reach);
+        NoteDrawn(right - reach, top - reach, right + reach, bottom + reach);
+    }
+
+    private void NoteGeometry(CanvasGeometry geometry, double reach, bool outlineOnly = false)
+    {
+        var bounds = geometry.ComputeBounds();
+        if (bounds.Width <= 0 && bounds.Height <= 0)
+        {
+            FlushText();
+            return;
+        }
+
+        if (outlineOnly)
+            NoteStrokeBands(bounds.Left, bounds.Top, bounds.Right, bounds.Bottom, reach);
+        else
+            NoteDrawn(bounds.Left - reach, bounds.Top - reach, bounds.Right + reach, bounds.Bottom + reach);
     }
 
     // ---- filling and stroking -----------------------------------------------------------------------------

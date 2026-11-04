@@ -1,6 +1,7 @@
 PeachDrawing.Win2D.ILinkLauncher : interface
   method abstract Task<Boolean> LaunchAsync(Uri uri)
 PeachDrawing.Win2D.Win2dCanvas : sealed class
+  method static Win2dCanvas FromRenderTarget(Win2dRenderContext context, CanvasRenderTarget target, CanvasDrawingSession session, Rect bounds, Win2dLinkOptions linkOptions = null)
   method static Win2dCanvas FromSession(Win2dRenderContext context, CanvasDrawingSession session, Rect bounds, Win2dLinkOptions linkOptions = null)
   method virtual CanvasLayer BeginLayer(LayerOptions options)
   method virtual GraphicsPath GetGraphicsPath()

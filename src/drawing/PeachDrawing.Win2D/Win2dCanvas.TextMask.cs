@@ -83,45 +83,80 @@ public sealed partial class Win2dCanvas
         if (requested == Win2dTextRendering.Auto && font.Size * _ppp * scaleY > AutoMaxPixelsPerEm)
             return false;
 
+        // Over a render target this canvas can sample, text is blended on the GPU: runs are queued and composited by a pixel shader against the pixels
+        // already drawn (see Win2dCanvas.GpuText.cs), so neither LCD nor grayscale text needs the pixels behind it read back.
+        var gpu = _lcdTarget is not null && _blend == PaintBlendMode.Normal && _session.Blend == CanvasBlend.SourceOver;
+
         // Whether this run is drawn with a coverage per stripe. Auto does it only on screen (a session the host owns), where the pixels
         // behind the text can be read and ClearType is what the user has chosen; asking for Lcd does it wherever the pixels can be read.
         var lcd = requested switch
         {
-            Win2dTextRendering.Lcd => CanReadBackdrop,
-            Win2dTextRendering.Auto => _backdrop is null && (_clearType ??= Win2dSystemText.ClearTypeEnabled) && CanReadBackdrop,
+            Win2dTextRendering.Lcd => gpu || CanReadBackdrop,
+            Win2dTextRendering.Auto => (_clearType ??= Win2dSystemText.ClearTypeEnabled) && (gpu || (_backdrop is null && CanReadBackdrop)),
             _ => false,
         };
 
         (int Left, int Top, int Right, int Bottom)? limit = null;
-        if (lcd && _backdrop is null && _native is { } native)
+        if (gpu)
+            limit = (0, 0, (int)_lcdTarget!.SizeInPixels.Width, (int)_lcdTarget.SizeInPixels.Height);
+        else if (lcd && _backdrop is null && _native is { } native)
             limit = ((int)Math.Floor(-_nativeOrigin.X), (int)Math.Floor(-_nativeOrigin.Y), (int)Math.Ceiling(native.Width - _nativeOrigin.X), (int)Math.Ceiling(native.Height - _nativeOrigin.Y));
         else if (_backdrop is { } page)
             limit = (0, 0, (int)page.SizeInPixels.Width, (int)page.SizeInPixels.Height);
 
-        // The part of a run outside what can be seen is never rasterized.
-        var mask = Win2dTextMask.Rasterize(_context, str, font, point, letterSpacing, _ppp, scaleX, scaleY,
-            transform.M31 * dpiScale, transform.M32 * dpiScale, palette, features, lcd ? 3 : 1, limit);
+        // Shaped, hinted and rasterized once for a run at this place on the pixel grid; drawn again (as a view does for the strip it scrolls into
+        // sight) it comes from the cache. The part of a run outside what can be seen is cut off.
+        var mask = _context.TextMasks.Get(_context, str, font, letterSpacing, _ppp, scaleX, scaleY,
+            (point.X * scaleX) + (transform.M31 * dpiScale), (point.Y * scaleY) + (transform.M32 * dpiScale), palette, features, lcd ? 3 : 1, limit,
+            out var maskKey, out var whole);
         if (mask is not { } run)
             return false;
 
         if (run.Width == 0)
             return true;
 
-        if (lcd && TryReadBackdrop(run, out var backdrop))
+        if (gpu)
         {
-            var bgr = _context.LcdBgrStripes || (requested == Win2dTextRendering.Auto && (_systemBgr ??= Win2dSystemText.BgrStripes));
-            var pixels = Win2dTextBlend.Lcd(run, color, backdrop, bgr);
-            DrawDevicePixels(pixels, run, DirectXPixelFormat.B8G8R8A8UIntNormalized, copy: true);
+            var bgr = lcd && (_context.LcdBgrStripes || (requested == Win2dTextRendering.Auto && (_systemBgr ??= Win2dSystemText.BgrStripes)));
+            QueueText(run, color, maskKey, whole, bgr);
             return true;
+        }
+
+        FlushText();
+        return DrawMask(run, color, lcd, requested);
+    }
+
+    private bool DrawMask(Win2dTextMask run, PaintColor color, bool lcd, Win2dTextRendering requested)
+    {
+        if (lcd)
+        {
+            var started = Win2dTextStatistics.Start();
+            var read = TryReadBackdrop(run, out var backdrop);
+            Win2dTextStatistics.Stop(Win2dTextStatistics.Stage.Readback, started);
+            if (read)
+            {
+                var bgr = _context.LcdBgrStripes || (requested == Win2dTextRendering.Auto && (_systemBgr ??= Win2dSystemText.BgrStripes));
+                started = Win2dTextStatistics.Start();
+                var pixels = Win2dTextBlend.Lcd(run, color, backdrop, bgr);
+                Win2dTextStatistics.Stop(Win2dTextStatistics.Stage.Blend, started);
+                started = Win2dTextStatistics.Start();
+                DrawDevicePixels(pixels, run, DirectXPixelFormat.B8G8R8A8UIntNormalized, copy: true);
+                Win2dTextStatistics.Stop(Win2dTextStatistics.Stage.Upload, started);
+                Win2dTextStatistics.Report(_context.TextMasks);
+                return true;
+            }
         }
 
         if (run.SubPixels != 1)
         {
-            // The mask was made for LCD text but the backdrop could not be read: fold its stripes into one sample per pixel.
+            // The mask was made for LCD text but the backdrop could not be read (or is not to be): fold its stripes into one sample per pixel.
             run = Collapse(run);
         }
 
+        var uploadStarted = Win2dTextStatistics.Start();
         DrawDevicePixels(Win2dTextBlend.Grayscale(run, color), run, DirectXPixelFormat.R8G8B8A8UIntNormalized, copy: false);
+        Win2dTextStatistics.Stop(Win2dTextStatistics.Stage.Upload, uploadStarted);
+        Win2dTextStatistics.Report(_context.TextMasks);
         return true;
     }
 

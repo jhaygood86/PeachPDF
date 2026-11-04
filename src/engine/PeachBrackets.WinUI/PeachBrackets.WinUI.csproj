@@ -44,6 +44,7 @@
 	<ItemGroup>
 		<InternalsVisibleTo Include="PeachBrackets.WinUI.Tests" />
 		<InternalsVisibleTo Include="PeachBrackets.WinUI.UITests" />
+		<InternalsVisibleTo Include="PeachBrackets.WinUI.Example" />
 	</ItemGroup>
 	<ItemGroup>
 		<None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" />

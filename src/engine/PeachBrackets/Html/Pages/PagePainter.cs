@@ -246,11 +246,26 @@ namespace PeachBrackets.Html.Pages
             // content band from the geometry table — pagination itself ran on the same variable
             // bands, so a margin-0 page's window reclaims the full sheet height without ever
             // exposing a neighboring slot's content.
-            _container.PageClipOverride = new Rect(
+            var contentClip = new Rect(
                 _container.MarginLeft,
                 _container.MarginTop,
                 (geom.SheetWidthPt - mL) * _renderContext.LayoutUnitsPerPoint,
                 geom.BandHeight);
+
+            // Painting only a part of the page (a region a host invalidated): the painter culls against this clip, so it is cut to the part, a little
+            // over for what overhangs it. Skipped when this page's content is shifted, since the region is in the sheet's own coordinates.
+            if (_container.PaintRegion is { } region && contentShift is null)
+            {
+                const double bleed = 48;
+                var left = Math.Max(contentClip.Left, region.Left - bleed);
+                var top = Math.Max(contentClip.Top, region.Top - bleed);
+                var right = Math.Min(contentClip.Right, region.Right + bleed);
+                var bottom = Math.Min(contentClip.Bottom, region.Bottom + bleed);
+                if (right > left && bottom > top)
+                    contentClip = new Rect(left, top, right - left, bottom - top);
+            }
+
+            _container.PageClipOverride = contentClip;
 
             using (var contentCanvas = Lease())
             {

@@ -131,6 +131,22 @@ public class Win2dRenderContext : RenderContext, IDisposable
 
     private PeachDrawing.RasterRenderContext? _maskContext;
 
+    /// <summary>The rasterized text runs this context has drawn, kept so a run drawn again is not rasterized again.</summary>
+    internal Win2dTextMaskCache TextMasks { get; } = new();
+
+    /// <summary>The coverage of single letters, which new words are made from.</summary>
+    internal Win2dGlyphMaskCache GlyphMasks { get; } = new();
+
+    private Win2dTextBitmapCache? _textBitmaps;
+
+    private Win2dLcdScratch? _lcdScratch;
+
+    /// <summary>The scratch render targets the GPU text blend draws its layers into, made on first use.</summary>
+    internal Win2dLcdScratch LcdScratch => _lcdScratch ??= new Win2dLcdScratch(Counts);
+
+    /// <summary>The bitmaps of text runs ready to draw, kept so a run drawn again costs one draw call.</summary>
+    internal Win2dTextBitmapCache TextBitmaps => _textBitmaps ??= new Win2dTextBitmapCache(Counts);
+
     /// <summary>Which decoder turns an encoded image into pixels.</summary>
     public Win2dImageCodec ImageCodec => _imageCodec;
 
@@ -211,6 +227,8 @@ public class Win2dRenderContext : RenderContext, IDisposable
             }
         }
 
+        _textBitmaps?.Clear();
+        _lcdScratch?.Clear();
         DeviceLost?.Invoke(this, EventArgs.Empty);
     }
 
@@ -249,6 +267,10 @@ public class Win2dRenderContext : RenderContext, IDisposable
         }
 
         directWrite?.Dispose();
+        _textBitmaps?.Clear();
+        _lcdScratch?.Clear();
+        TextMasks.Clear();
+        GlyphMasks.Clear();
         ownedDevice?.Dispose();
     }
 
