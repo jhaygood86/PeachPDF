@@ -43,6 +43,85 @@ public class HostResourceLoaderTests
         Assert.Null(await HostResourceLoader.LoadAsync(new RUri(new Uri("file:///x.png")), allowLocalFiles: false));
     }
 
+    // One request answered with a fixed response, on a port the operating system picks.
+    private static (string Address, Task Served, IDisposable Stop) Serve(string status, string contentType, string body)
+    {
+        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
+        listener.Start();
+        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
+        var served = Task.Run(async () =>
+        {
+            using var client = await listener.AcceptTcpClientAsync();
+            var stream = client.GetStream();
+            var buffer = new byte[4096];
+            _ = await stream.ReadAsync(buffer);
+            var payload = System.Text.Encoding.UTF8.GetBytes(body);
+            var head = $"HTTP/1.1 {status}\r\nContent-Type: {contentType}\r\nContent-Length: {payload.Length}\r\nConnection: close\r\n\r\n";
+            await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(head));
+            await stream.WriteAsync(payload);
+        });
+
+        return ($"http://127.0.0.1:{port}/x.css", served, new Stopper(listener));
+    }
+
+    private sealed class Stopper(System.Net.Sockets.TcpListener listener) : IDisposable
+    {
+        public void Dispose() => listener.Stop();
+    }
+
+    [Fact]
+    public async Task AWebAddress_IsFetchedWhenTheHostAllowsIt_WithItsContentType()
+    {
+        var (address, served, stop) = Serve("200 OK", "text/css", "p { color: red }");
+        using (stop)
+        {
+            var response = await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true);
+            await served;
+
+            Assert.NotNull(response?.ResourceStream);
+            Assert.Equal("text/css", response!.ResponseHeaders!["Content-Type"][0]);
+            Assert.Equal("p { color: red }", await new StreamReader(response.ResourceStream!).ReadToEndAsync(TestContext.Current.CancellationToken));
+        }
+    }
+
+    [Fact]
+    public async Task AWebAddressThatAnswersAnError_OrCannotBeReached_IsNotLoaded()
+    {
+        var (address, served, stop) = Serve("404 Not Found", "text/plain", "nothing here");
+        using (stop)
+        {
+            Assert.Null(await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true));
+            await served;
+        }
+
+        // Nothing listens there now.
+        Assert.Null(await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true));
+    }
+
+    [Fact]
+    public async Task ARelativeAddress_AndABrokenDataUri_AreNotLoaded()
+    {
+        Assert.Null(await HostResourceLoader.LoadAsync(new RUri("images/a.png", UriKind.Relative)));
+        Assert.Null(await HostResourceLoader.LoadAsync(new RUri("data:image/png;base64,@@@@")));
+    }
+
+    [Fact]
+    public async Task AFileThatCannotBeRead_IsNotLoaded()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "host-loader-locked-" + Guid.NewGuid().ToString("N") + ".txt");
+        await File.WriteAllTextAsync(path, "x", TestContext.Current.CancellationToken);
+        try
+        {
+            // Another handle that allows no sharing: opening it for reading fails with an IOException, which the loader answers as nothing.
+            using var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+            Assert.Null(await HostResourceLoader.LoadAsync(new RUri(new Uri(path))));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public async Task AnImageInADocument_IsDrawn()
     {

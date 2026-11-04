@@ -61,7 +61,7 @@ public class SkiaRenderContext : RenderContext, IDisposable
     }
 
     /// <summary>
-    /// Registers with this context the font families that were added to its <see cref="FontSet"/> since it last looked. A context that was given a
+    /// Registers with this context the font families that were added to its <c>FontSet</c> since it last looked. A context that was given a
     /// set shared with others has to be told when one of them added a font; one with a set of its own sees its own additions at once and never needs this.
     /// </summary>
     public void SyncFonts()
