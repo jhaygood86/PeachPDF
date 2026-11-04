@@ -110,7 +110,9 @@ public class HtmlViewListTests
                     // A sliver of a few pixels at the edge is not asked to paint (a virtual canvas invalidates what it can see), so a row counts as shown
                     // once enough of it is in view to need painting.
                     const double visibleEnough = 8;
-                    if (top < scroller.ViewportHeight - visibleEnough && top + view.ActualHeight > visibleEnough && view.PaintedRegionCount == 0)
+                    // The window can be shorter than the 600 DIP scroller (a hosted runner's is), and what is below its edge is not on screen to paint.
+                    var onScreen = Math.Min(scroller.ViewportHeight, window.Content.XamlRoot.Size.Height);
+                    if (top < onScreen - visibleEnough && top + view.ActualHeight > visibleEnough && view.PaintedRegionCount == 0)
                         shown.Add((index, view));
                     if (view.Document is not null)
                     {
