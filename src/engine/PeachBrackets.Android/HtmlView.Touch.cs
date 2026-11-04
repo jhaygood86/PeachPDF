@@ -407,6 +407,7 @@ public sealed partial class HtmlView
             while (_document is { } document && _context is { } context && (_pendingPointer is not null || _clearPending))
             {
                 PeachBrackets.Updates.UpdateResult result;
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 using var surface = SkiaSharp.SKSurface.Create(new SkiaSharp.SKImageInfo(1, 1));
                 using var measuring = new PeachDrawing.Skia.SkiaComposer(context, surface, 1, 1);
                 if (_pendingPointer is { } pointer)
@@ -419,6 +420,9 @@ public sealed partial class HtmlView
                     _clearPending = false;
                     result = await document.ClearPointerStateAsync(measuring.Canvas);
                 }
+
+                Android.Util.Log.Debug("PEACH_RESTYLE",
+                    $"pointer state: {System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms, applied={result.Applied}, regions={result.DirtyRegions.Count}");
 
                 if (result.Applied && ReferenceEquals(document, _document) && result.DirtyRegions.Count > 0)
                 {
