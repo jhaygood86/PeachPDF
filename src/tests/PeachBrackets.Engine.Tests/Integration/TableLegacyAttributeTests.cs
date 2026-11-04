@@ -129,6 +129,68 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(width >= 300 * 0.99, $"the table keeps its own width, was {width}");
         }
 
+        private static async Task<(double Left, double Width, double CellOffset)> PlacedWithCellAsync(string tableAttributes, string containerAttributes = "")
+        {
+            var (root, _) = await LayoutAsync(
+                $"<div id='c' {containerAttributes}><table id='t' {tableAttributes}><tr><td id='cell'>x</td></tr></table><div>after</div></div>",
+                "#c { width: 200pt }");
+            var table = LayoutHarness.FindById(root, "t")!;
+            var container = LayoutHarness.FindById(root, "c")!;
+            var cell = LayoutHarness.FindById(root, "cell")!;
+
+            return (table.Location.X - container.ClientLeft, table.ActualRight - table.Location.X, cell.Location.X - table.Location.X);
+        }
+
+        [Theory]
+        [InlineData("align='right' style='width: 300pt'")]
+        [InlineData("style='float: right; width: 300pt'")]
+        [InlineData("align='right' style='width: 150%'")]
+        public async Task RightFloatedTable_WiderThanItsContainer_KeepsItsCellsInsideItsBox(string attributes)
+        {
+            // Chrome: the table's end edge meets the container's, so it overflows at the start, and its cell sits one border-spacing
+            // (2px) inside its box. The cells used to stay at the page's left edge while the box moved out to the left.
+            var (left, width, cellOffset) = await PlacedWithCellAsync(attributes);
+
+            Assert.Equal(300, width, 0);
+            Assert.Equal(-(width - 200), left, 2);
+            Assert.Equal(2 * Px, cellOffset, 2);
+        }
+
+        [Theory]
+        [InlineData("align='center' style='width: 300pt'")]
+        [InlineData("style='margin-left: auto; margin-right: auto; width: 300pt'")]
+        [InlineData("style='margin-left: auto; width: 300pt'")]
+        [InlineData("style='margin-left: 0; margin-right: auto; width: 300pt'")]
+        public async Task AutoMarginTable_WiderThanAnRtlContainer_OverflowsTowardTheStartEdge(string attributes)
+        {
+            // CSS 2.1 §10.3.3: the auto margin is 0 and margin-left is the ignored one in an rtl container, so the table's right
+            // edge meets the container's and it overflows at the left, as the box and its cell do in Chrome.
+            var (left, width, cellOffset) = await PlacedWithCellAsync(attributes, "dir='rtl'");
+
+            Assert.Equal(300, width, 0);
+            Assert.Equal(-(width - 200), left, 2);
+            Assert.Equal(2 * Px, cellOffset, 2);
+        }
+
+        [Fact]
+        public async Task AutoMarginTable_ExactlyAsWideAsAnRtlContainer_FillsIt()
+        {
+            var (left, width, cellOffset) = await PlacedWithCellAsync("align='center' style='width: 200pt'", "dir='rtl'");
+
+            Assert.Equal(200, width, 0);
+            Assert.Equal(0, left, 2);
+            Assert.Equal(2 * Px, cellOffset, 2);
+        }
+
+        [Fact]
+        public async Task AutoMarginTable_NarrowerThanAnRtlContainer_StillCenters()
+        {
+            var (left, width, _) = await PlacedWithCellAsync("align='center' style='width: 100pt'", "dir='rtl'");
+
+            Assert.Equal(100, width, 1);
+            Assert.Equal(50, left, 2);
+        }
+
         [Theory]
         [InlineData("left", "Left")]
         [InlineData("right", "Right")]
