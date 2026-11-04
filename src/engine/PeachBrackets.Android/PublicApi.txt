@@ -53,6 +53,7 @@ PeachBrackets.Android.HtmlView : sealed class
   method virtual Void OnSizeChanged(Int32 w, Int32 h, Int32 oldw, Int32 oldh)
   property AccessibilityNode FocusedNode { get; }
   property AccessibilityNodeProvider AccessibilityNodeProvider { get; }
+  property Boolean AllowNetworkAccess { get; set; }
   property Double Zoom { get; }
   property HtmlDocument Document { get; }
   property InputCapabilities Input { get; set; }
