@@ -13,7 +13,7 @@ param([Parameter(Mandatory)][string]$Exe)
 
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes
 $ae = [System.Windows.Automation.AutomationElement]
-$process = Start-Process -FilePath $Exe -PassThru
+$process = Start-Process -FilePath $Exe -ArgumentList '--sample' -PassThru
 $failures = @()
 try {
     $byProcess = [System.Windows.Automation.PropertyCondition]::new($ae::ProcessIdProperty, $process.Id)

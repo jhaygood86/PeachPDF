@@ -77,6 +77,14 @@ public sealed class ExampleApp : Application
             return;
         }
 
+        // `--sample`: the built-in page alone in a plain window, which is what the accessibility check reads through UI Automation.
+        if (Array.IndexOf(_args, "--sample") >= 0)
+        {
+            _window = new Window { Title = "PeachBrackets.WinUI", Content = new HtmlView { Html = Page } };
+            _window.Activate();
+            return;
+        }
+
         // A fault while the window is made is written beside the program: a XAML failure otherwise ends the process with a stowed exception and no message.
         try
         {
