@@ -339,6 +339,19 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter PdfFormFieldAutoFontSizeConverter = Toggle(Keywords.Auto, Keywords.None);
         public static readonly IValueConverter PdfFormFieldCombConverter = PositiveIntegerConverter.OrNone();
         public static readonly IValueConverter PdfFormFieldDoNotScrollConverter = Toggle(Keywords.Auto, Keywords.None);
+        public static readonly IValueConverter PdfAnnotationTypeConverter = Map.PdfAnnotationTypes.ToConverter();
+        public static readonly IValueConverter PdfAnnotationTextConverter = StringConverter.OrNone();
+        public static readonly IValueConverter PdfAnnotationIconConverter = Map.PdfAnnotationIcons.ToConverter();
+        public static readonly IValueConverter PdfAnnotationDateConverter = StringConverter.OrAuto();
+        /// <summary><c>auto | [ left | right | top | bottom | center | page-left | page-right | page-top | page-bottom | &lt;length-percentage&gt; ]{1,4}</c>.</summary>
+        public static readonly IValueConverter PdfAnnotationPositionConverter =
+            Map.PdfAnnotationPositions.ToConverter().Or(LengthOrPercentConverter).Many(1, 4).OrAuto();
+        /// <summary><c>none | duplicates | key(&lt;string&gt;)</c>.</summary>
+        public static readonly IValueConverter PdfAnnotationMergeConverter = Construct(() =>
+            Map.PdfAnnotationMerges.ToConverter().Or(new FunctionValueConverter("key", WithArgs(StringConverter))));
+        /// <summary><c>none | path(&lt;string&gt;)</c>: SVG path data in CSS px from the element's top-left corner.</summary>
+        public static readonly IValueConverter PdfAnnotationPathConverter = Construct(() =>
+            new FunctionValueConverter(FunctionNames.Path, WithArgs(StringConverter)).OrNone());
         public static readonly IValueConverter PrincePdfFormFieldSettingsConverter = new PrincePdfFormFieldSettingsShorthandConverter();
         public static readonly IValueConverter BookmarkLevelConverter = PositiveIntegerConverter.OrNone();
         public static readonly IValueConverter BookmarkStateConverter = Map.BookmarkStates.ToConverter();
@@ -638,6 +651,8 @@ namespace PeachBrackets.Css
             .Or(RgbLenientConverter.Or(RgbaLenientConverter))
             .Or(HslLenientConverter.Or(HslaLenientConverter))
             .Or(HwbLenientConverter);
+        // Declared after ColorConverter: static fields initialise in textual order.
+        public static readonly IValueConverter PdfAnnotationColorConverter = ColorConverter.OrAuto();
 
         public static readonly IValueConverter CurrentColorConverter = ColorConverter.WithCurrentColor();
         public static readonly IValueConverter InvertedColorConverter = CurrentColorConverter.Or(Keywords.Invert);

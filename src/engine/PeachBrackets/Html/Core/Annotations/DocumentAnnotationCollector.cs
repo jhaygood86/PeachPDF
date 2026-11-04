@@ -120,7 +120,8 @@ namespace PeachBrackets.Html.Annotations
             var bookmarks = CollectBookmarks(container, ppp, fragmentainers, slotToPage, maxMappedSlot, bookmarkBoxes);
             var formFields = CollectFormFields(container, ppp, fragmentainers, slotToPage, accessibilityTree);
 
-            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields };
+            var annotations = AnnotationPropertyCollector.Collect(container, ppp, fragmentainers, slotToPage);
+            return new DocumentAnnotations { Links = links, Bookmarks = bookmarks, FormFields = formFields, Annotations = annotations };
         }
 
         /// <summary>

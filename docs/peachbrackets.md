@@ -221,6 +221,7 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   either a `Uri` or an `Anchor` with the `Destination` (`PagePosition`: page index and distance from the top) it leads to.
 - **`Bookmarks`** - the outline: each `Bookmark` has a `Level`, a `Title`, whether it starts open, and a `Uri` or `Destination`. Headings
   produce them by default; `bookmark-level`, `bookmark-label` and `bookmark-target` change that.
+- **`Annotations`** - the annotations authors asked for with `-peachpdf-pdf-annotation-type`: each `PageAnnotation` has its `PageIndex`, `Kind` (`PageAnnotationKind`: a note, a text mark, an attached-file icon, a shape, free text, a stamp, ink), `Bounds`, the `Quads` of a text mark, the `Strokes` of ink, an optional `PopupBounds`, and its icon name, colour, title, contents, author, attachment name and dates. Always collected.
 - **`FormFields`** - with `CollectFormFields` on, each `PageFormField` has its `PageIndex`, `Bounds`, a `Classification` (`FormFieldKind`,
   name, value, checked state, options, and the `readonly`/`required`/`maxlength`/`placeholder` attributes), and a `FormFieldAppearance` that
   paints each state of the control onto a canvas of your choosing, so an interactive field can look like the rest of the page.

@@ -240,6 +240,31 @@ rest of your page. Radio buttons that share a `Name` are one field. A text field
 
 `composer.CreateAnnotationBuilder(context)` returns a `PdfAnnotationBuilder` for the annotations that are not links or form fields. `AddAnnotation(page, definition)` places a `PdfAnnotationDefinition`: its `Subtype` (`Highlight`, `Text`, `Square`, `Stamp`, `Ink`, ...), `Bounds`, `Contents`, `Title`, colours, `Opacity`, `BorderWidth`, the `QuadPoints` of a text markup, the `InkStrokes` of a drawing, and a `PaintAppearance` that draws how it looks.
 
+### Annotation appearances, file attachments and popups
+
+Every annotation should carry an appearance stream (PDF/A requires one), and `PdfAnnotationAppearance` draws the standard ones so you need no drawing code: `Icon(icon, size, color)` for a note's or attached file's `PdfAnnotationIcon` (`Note`, `Comment`, `Key`, `Help`, `NewParagraph`, `Paragraph`, `Insert`, `Paperclip`, `PushPin`, `Graph`, `Tag`; `IconName` gives the PDF `/Name`), `Markup(subtype, quadPoints, bounds, color)` for a highlight, underline, squiggly or strike-out, `Outline` for a square or circle, `Line`, `Ink`, `FreeText` and `Stamp`. Each returns the callback for `PdfAnnotationDefinition.PaintAppearance`, which draws in points from the annotation's top-left corner (leave `PixelsPerPoint` at 1).
+
+A `FileAttachment` annotation names an embedded file instead of carrying one: add the file to `PdfComposerOptions.EmbeddedFiles` (a PDF/A-3 level or none), then set `PdfAnnotationDefinition.EmbeddedFileName`. The annotation's `/FS` is the file specification already written for that file, so the data is stored once. `composer.EmbeddedFileNames` lists what the document embeds; a name that is not one of them, or a `FileAttachment` with no name, throws `ArgumentException`.
+
+```csharp
+var options = new PdfComposerOptions { Conformance = PdfAConformance.PdfA3B, CreationDate = DateTimeOffset.UtcNow };
+options.EmbeddedFiles.Add(new PdfEmbeddedFile { FileName = "data.csv", MimeType = "text/csv", Data = File.ReadAllBytes("data.csv") });
+
+using var composer = new PdfComposer(context, options);
+var page = composer.AddPage(595, 842);
+composer.CreateAnnotationBuilder(context).AddAnnotation(page, new PdfAnnotationDefinition
+{
+    Subtype = "FileAttachment",
+    Bounds = new Rect(72, 72, 16, 16),
+    ContentSize = new Size(16, 16),
+    EmbeddedFileName = "data.csv",
+    IconName = PdfAnnotationAppearance.IconName(PdfAnnotationIcon.Paperclip),
+    PaintAppearance = PdfAnnotationAppearance.Icon(PdfAnnotationIcon.Paperclip, new Size(16, 16)),
+});
+```
+
+`CreatedAt` and `ModifiedAt` write `/CreationDate` and `/M`. `PopupBounds` writes a linked `Popup` annotation that decides where the window showing `Contents` opens (and `PopupOpen` whether it starts open), only when the annotation has `Contents` or a `Title`. A `FreeText` annotation also gets the default appearance string the PDF requires.
+
 ## Drawing a page of an existing PDF
 
 `PdfPageSource` opens an existing PDF and paints its pages onto any `Canvas` - a `PdfCanvas` to stamp a page over or under a document you are writing, a raster canvas to render it:

@@ -755,6 +755,20 @@ Each file shows up in a viewer's attachments panel and is indexed twice: in the 
 | `Description` | An optional human-readable description. |
 | `ModificationDate` | The file's last-modification date. Defaults to the document's creation date, so the output stays deterministic (and to the current time when the document has no creation date either). |
 
+To put a clickable icon on the page that opens one of these files, name it from the element the icon belongs to. The annotation points at the file already embedded above, so the file is stored once, and the icon carries its own appearance, so it works in PDF/A-3 too:
+
+```html
+<p>
+  Q3 sales by region
+  <span style="-peachpdf-pdf-annotation-type: file-attachment;
+               -peachpdf-pdf-annotation-attachment: 'q3-sales.csv';
+               -peachpdf-pdf-annotation-icon: push-pin;
+               display: inline-block; width: 14pt; height: 14pt"></span>
+</p>
+```
+
+See [PDF Annotations](html-css-support.md#pdf-annotations-support) for the icons, the other kinds of annotation (notes, highlights, shapes, stamps, ink) and how to position them.
+
 Attachments are only allowed with a PDF/A-3 level (`PdfA3B`, `PdfA3U` or `PdfA3A`) or with no PDF/A level at all, where they are ordinary PDF attachments. PDF/A-1 forbids embedded files entirely and PDF/A-2 allows only PDF/A files, so requesting an attachment under one of those levels throws an `InvalidOperationException`. Embedded streams are Flate-compressed unless `CompressContentStreams` is turned off.
 
 ### Linearized ("fast web view") output

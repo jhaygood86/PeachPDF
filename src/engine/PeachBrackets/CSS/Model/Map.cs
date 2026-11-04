@@ -212,6 +212,58 @@ namespace PeachBrackets.Css
                 {Keywords.Reference, PdfTagType.Reference},
                 {Keywords.Link, PdfTagType.Link}
             }.Freeze();
+        public static readonly KeywordMap<PdfAnnotationTypeKeyword> PdfAnnotationTypes =
+            new KeywordMap<PdfAnnotationTypeKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, PdfAnnotationTypeKeyword.None},
+                {"text", PdfAnnotationTypeKeyword.Text},
+                {"highlight", PdfAnnotationTypeKeyword.Highlight},
+                {Keywords.Underline, PdfAnnotationTypeKeyword.Underline},
+                {Keywords.Wavy, PdfAnnotationTypeKeyword.Wavy},
+                {Keywords.LineThrough, PdfAnnotationTypeKeyword.LineThrough},
+                {"file-attachment", PdfAnnotationTypeKeyword.FileAttachment},
+                {"free-text", PdfAnnotationTypeKeyword.FreeText},
+                {"stamp", PdfAnnotationTypeKeyword.Stamp},
+                {Keywords.Square, PdfAnnotationTypeKeyword.Square},
+                {Keywords.Circle, PdfAnnotationTypeKeyword.Circle},
+                {Keywords.Line, PdfAnnotationTypeKeyword.Line},
+                {"ink", PdfAnnotationTypeKeyword.Ink}
+            }.Freeze();
+        public static readonly KeywordMap<PdfAnnotationIconKeyword> PdfAnnotationIcons =
+            new KeywordMap<PdfAnnotationIconKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, PdfAnnotationIconKeyword.Auto},
+                {"note", PdfAnnotationIconKeyword.Note},
+                {"comment", PdfAnnotationIconKeyword.Comment},
+                {"key", PdfAnnotationIconKeyword.Key},
+                {Keywords.Help, PdfAnnotationIconKeyword.Help},
+                {"new-paragraph", PdfAnnotationIconKeyword.NewParagraph},
+                {"paragraph", PdfAnnotationIconKeyword.Paragraph},
+                {"insert", PdfAnnotationIconKeyword.Insert},
+                {"paperclip", PdfAnnotationIconKeyword.Paperclip},
+                {"push-pin", PdfAnnotationIconKeyword.PushPin},
+                {"graph", PdfAnnotationIconKeyword.Graph},
+                {"tag", PdfAnnotationIconKeyword.Tag}
+            }.Freeze();
+        public static readonly KeywordMap<PdfAnnotationPositionKeyword> PdfAnnotationPositions =
+            new KeywordMap<PdfAnnotationPositionKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"left", PdfAnnotationPositionKeyword.Left},
+                {"right", PdfAnnotationPositionKeyword.Right},
+                {"top", PdfAnnotationPositionKeyword.Top},
+                {"bottom", PdfAnnotationPositionKeyword.Bottom},
+                {"center", PdfAnnotationPositionKeyword.Center},
+                {"page-left", PdfAnnotationPositionKeyword.PageLeft},
+                {"page-right", PdfAnnotationPositionKeyword.PageRight},
+                {"page-top", PdfAnnotationPositionKeyword.PageTop},
+                {"page-bottom", PdfAnnotationPositionKeyword.PageBottom}
+            }.Freeze();
+        public static readonly KeywordMap<PdfAnnotationMergeKeyword> PdfAnnotationMerges =
+            new KeywordMap<PdfAnnotationMergeKeyword>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, PdfAnnotationMergeKeyword.None},
+                {"duplicates", PdfAnnotationMergeKeyword.Duplicates}
+            }.Freeze();
         public static readonly KeywordMap<PdfFormFieldKeyword> PdfFormFieldKinds =
             new KeywordMap<PdfFormFieldKeyword>(StringComparer.OrdinalIgnoreCase)
             {

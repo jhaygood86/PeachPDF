@@ -79,6 +79,27 @@ namespace PeachDrawing.PDF
         /// <summary>The two ends of a line annotation, in points from the page's top-left corner with y down; empty for any other kind.</summary>
         public IReadOnlyList<PaintPoint> LineEnds { get; init; } = [];
 
+        /// <summary>
+        /// For a <c>FileAttachment</c> annotation, the <see cref="PdfEmbeddedFile.FileName"/> of a file the document embeds
+        /// (<see cref="PdfComposerOptions.EmbeddedFiles"/>): the annotation points at that file, so it is not stored twice. Matched exactly.
+        /// </summary>
+        public string? EmbeddedFileName { get; init; }
+
+        /// <summary>When the annotation was made, or <see langword="null"/> to leave it out.</summary>
+        public DateTimeOffset? CreatedAt { get; init; }
+
+        /// <summary>When the annotation was last changed, or <see langword="null"/> for the time it was written.</summary>
+        public DateTimeOffset? ModifiedAt { get; init; }
+
+        /// <summary>
+        /// Where the window that shows <see cref="Contents"/> opens, in points from the page's top-left corner with y down, or
+        /// <see langword="null"/> to let the reader choose. Written as a linked <c>Popup</c> annotation, and only when there is text to show.
+        /// </summary>
+        public Rect? PopupBounds { get; init; }
+
+        /// <summary>Whether the popup window starts open.</summary>
+        public bool PopupOpen { get; init; }
+
         /// <summary>Whether the annotation cannot be edited.</summary>
         public bool ReadOnly { get; init; }
 
@@ -166,7 +187,44 @@ namespace PeachDrawing.PDF
                 engine.Elements.SetObject(PdfAnnotation.Keys.AP, ap);
             }
 
+            // A free-text annotation must carry a default appearance string (ISO 32000-1 Table 174); the drawn appearance is what a reader shows.
+            if (string.Equals(annotation.Subtype.TrimStart('/'), "FreeText", StringComparison.Ordinal))
+                engine.SetAsciiString("/DA", "/Helv 9 Tf 0 g");
+
+            if (annotation.CreatedAt is { } created)
+                engine.SetDate("/CreationDate", created);
+            if (annotation.ModifiedAt is { } modified)
+                engine.SetDate(PdfAnnotation.Keys.M, modified);
+
+            if (annotation.EmbeddedFileName is { } embeddedName)
+            {
+                if (_document.Options.EmbeddingPlan is not EmbeddedFilePlan plan || !plan.TryGetSpecification(embeddedName, out var specification))
+                {
+                    throw new ArgumentException(
+                        $"PdfAnnotationDefinition.EmbeddedFileName '{embeddedName}' is not a file the document embeds. Add a PdfEmbeddedFile with that " +
+                        "FileName to PdfComposerOptions.EmbeddedFiles first.", nameof(annotation));
+                }
+
+                engine.SetReference("/FS", specification);
+            }
+            else if (string.Equals(annotation.Subtype.TrimStart('/'), "FileAttachment", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("A FileAttachment annotation needs PdfAnnotationDefinition.EmbeddedFileName.", nameof(annotation));
+            }
+
             page.Page.Annotations.Add(engine);
+
+            if (annotation.PopupBounds is { } popup && (!string.IsNullOrEmpty(annotation.Contents) || !string.IsNullOrEmpty(annotation.Title)))
+            {
+                var popupEngine = new PdfGenericAnnotation(_document, "Popup")
+                {
+                    Rectangle = new PdfRectangle(new Rect(popup.X, height - (popup.Y + popup.Height), popup.Width, popup.Height)),
+                };
+                popupEngine.SetBoolean("/Open", annotation.PopupOpen);
+                page.Page.Annotations.Add(popupEngine);
+                popupEngine.SetReference("/Parent", engine);
+                engine.SetReference("/Popup", popupEngine);
+            }
         }
 
         private static IEnumerable<double> Components(PaintColor color)

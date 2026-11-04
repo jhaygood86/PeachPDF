@@ -2356,6 +2356,127 @@ input.confirmation-code { -peachpdf-pdf-form-field-comb: 6; }
 
 ---
 
+## PDF Annotations Support
+
+Eleven properties turn an element into a real PDF annotation: a sticky note, a highlight or underline over its text, an outlined shape, a box of free text, a rubber stamp, freehand ink, or a clickable icon that opens a file embedded in the document. They are PeachPDF's own extension (no W3C specification), modelled on the annotation properties of other CSS-to-PDF engines, and a reader shows what they make with its own annotation tools: notes open their text on click, an attached-file icon opens the file, the viewer's comment list shows them all.
+
+Nothing happens until `-peachpdf-pdf-annotation-type` names a kind; no document that does not use it gets an annotation. Every annotation carries an appearance stream, so the output is valid at any PDF/A level that allows annotations at all; an attached-file icon additionally needs a PDF/A-3 level (or no PDF/A), since that is where embedded files are allowed.
+
+### `-peachpdf-pdf-annotation-type`
+
+| | |
+|---|---|
+| Initial value | `none` |
+| Applies to | all elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+.note   { -peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-contents: "Check these figures"; }
+mark    { -peachpdf-pdf-annotation-type: highlight; }
+```
+
+| Value | Annotation | Drawn over |
+|---|---|---|
+| `none` | — | — |
+| `text` | A sticky note: an icon that opens [`-contents`](#text-properties-of-an-annotation) | An icon at the element's top-left corner |
+| `highlight`, `underline`, `wavy`, `line-through` | A text mark (PDF `Highlight`, `Underline`, `Squiggly`, `StrikeOut`) | Each line of the element's text |
+| `file-attachment` | An icon that opens an embedded file, named by [`-attachment`](#-peachpdf-pdf-annotation-attachment) | An icon at the element's top-left corner |
+| `square`, `circle` | The outline of a rectangle, or of the ellipse inside it | The element's box |
+| `line` | A straight line from the box's top-left to its bottom-right corner | The element's box |
+| `free-text` | A box of text (the element's `-contents`) on a pale background with a thin border | The element's box |
+| `stamp` | A rubber stamp reading the element's `-contents` (or `-title`), in capitals, inside a double border; `Draft` if it has neither | The element's box |
+| `ink` | Freehand strokes from [`-path`](#-peachpdf-pdf-annotation-path) | The strokes themselves |
+
+A mark, shape, free-text box, stamp or `line` needs an element with some area (an empty element draws nothing); an icon does not.
+
+**Icon size and place.** An icon is 16pt square and sits at the element's top-left corner. If the element's own box is between 8pt and 48pt on both sides — an `inline-block` you sized like an icon — the icon fills that box instead. An empty `<span></span>` has no width and takes up no room, so the icon (12pt) is drawn where the span stands and covers what follows it; give the span `display: inline-block` and a width and height to reserve space for it.
+
+### `-peachpdf-pdf-annotation-attachment`
+
+| | |
+|---|---|
+| Initial value | `none` |
+| Applies to | all elements |
+| Inherited | No |
+| Percentages | N/A |
+
+A `<string>`: the `FileName` of one of the files in [`PdfGenerateConfig.Attachments`](usage-examples.md#embedding-files-pdfa-3-attachments). The annotation points at that one embedded file, so the file is stored once however many icons refer to it, and it still appears in the viewer's attachments panel.
+
+```html
+<p>
+  Q3 sales by region
+  <span style="-peachpdf-pdf-annotation-type: file-attachment;
+               -peachpdf-pdf-annotation-attachment: 'q3-sales.csv';
+               display: inline-block; width: 14pt; height: 14pt"></span>
+</p>
+```
+
+An annotation that names no file, or a file the document does not embed (or is generated with a PDF/A level that forbids embedded files), is left out.
+
+### Text properties of an annotation
+
+| Property | Value | PDF entry | Notes |
+|---|---|---|---|
+| `-peachpdf-pdf-annotation-title` | `none` \| `<string>` | `/Subj` | The annotation's subject |
+| `-peachpdf-pdf-annotation-contents` | `none` \| `<string>` | `/Contents` | The text a note opens; the text of free text and stamps |
+| `-peachpdf-pdf-annotation-author` | `none` \| `<string>` | `/T` | Who made it; a viewer shows it as the author |
+| `-peachpdf-pdf-annotation-createdate` | `auto` \| `<string>` | `/CreationDate` | An ISO 8601 date such as `'2026-03-04T05:06:07Z'` |
+| `-peachpdf-pdf-annotation-modifydate` | `auto` \| `<string>` | `/M` | As above; the time of writing when unset |
+
+All are non-inherited and apply to all elements.
+
+### `-peachpdf-pdf-annotation-icon`
+
+`auto` | `note` | `comment` | `key` | `help` | `new-paragraph` | `paragraph` | `insert` | `paperclip` | `push-pin` | `graph` | `tag` (initial value `auto`)
+
+The icon of a `text` or `file-attachment` annotation. A note takes the first seven (default `note`), an attached file the last four (default `paperclip`); a name from the other set falls back to the default. The icons are drawn as vectors in the annotation's appearance stream, so they look the same in every viewer.
+
+### `-peachpdf-pdf-annotation-color`
+
+`auto` | `<color>` (initial value `auto`)
+
+The colour of the annotation: an icon's fill, a mark's colour, a shape's outline, ink, the border and text of free text and stamps. `auto` picks the kind's own: yellow for notes and highlights, green for underlines, red for strike-outs, shapes, ink and stamps, black text for free text.
+
+### `-peachpdf-pdf-annotation-position`
+
+`auto` | `[ left | right | top | bottom | center | page-left | page-right | page-top | page-bottom | <length-percentage> ]{1,4}` (initial value `auto`)
+
+Where the annotation's visible icon, or its popup window, goes.
+
+- For an icon annotation (`text`, `file-attachment`), it places the icon. By default the icon is at the element's top-left corner. `left`, `right`, `top`, `bottom` and `center` put it against that edge of the element's box; the `page-*` keywords put it against that edge of the page; a length (or percentage of the box's width or height) offsets it, the first horizontally and the second vertically.
+- For every other kind, it places the popup window a reader opens to show `-contents` or `-title` (written as a linked `Popup` annotation, and only when there is text to show), with the same keywords. The mark or shape itself always stays on the element.
+
+```css
+.margin-note { -peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-position: page-right 4pt; }
+mark         { -peachpdf-pdf-annotation-type: highlight; -peachpdf-pdf-annotation-contents: "Up 12%"; -peachpdf-pdf-annotation-position: page-right; }
+```
+
+### `-peachpdf-pdf-annotation-merge`
+
+`none` | `duplicates` | `key(<string>)` (initial value `none`)
+
+By default every element produces its annotation, once per page it appears on. `duplicates` keeps only the first of the annotations with identical kind, text, colour and attachment; `key("id")` keeps only the first annotation of all the elements that give the same key. Use it for something that repeats (a table header on every page) or that should be a single annotation however many elements mention it.
+
+### `-peachpdf-pdf-annotation-path`
+
+`none` | `path(<string>)` (initial value `none`)
+
+The strokes of an `ink` annotation, as [SVG path data](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d) in CSS pixels from the element's top-left corner. Each subpath is one stroke; curves are sampled and an arc is drawn as the straight line to its end. An `ink` annotation without a path is left out.
+
+```css
+.signature { -peachpdf-pdf-annotation-type: ink; -peachpdf-pdf-annotation-color: #1a73e8;
+             -peachpdf-pdf-annotation-path: path("M 4 40 C 20 -10 40 90 60 20 S 90 50 104 8"); }
+```
+
+### Limits
+
+- An annotation is placed from the element's rectangles on each page, with a CSS transform and a fixed or sticky position followed. A box that continues onto another page gets one annotation per page.
+- A mark's appearance is drawn over the text rather than blended with it, so a highlight is a translucent fill the text shows through.
+- Annotations inside page margin boxes are not produced.
+
+---
+
 ## PDF Bookmarks (Outline) Support
 
 PeachPDF automatically generates a PDF outline (the navigable bookmark sidebar most PDF readers show) from a document's headings, per [CSS Generated Content Module Level 3's bookmark properties](https://www.w3.org/TR/css-content-3/#bookmarks). This needs no configuration: `h1`–`h6` get a bookmark by default, and a document with no headings simply produces no outline at all.

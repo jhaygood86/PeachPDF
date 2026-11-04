@@ -1260,6 +1260,302 @@
       }
     },
     {
+      "name": "-peachpdf-pdf-annotation-type",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | text | highlight | underline | wavy | line-through | file-attachment | free-text | stamp | square | circle | line | ink. Makes the element a PDF annotation of that kind (PDF/A: every kind paints an appearance stream). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationTypeConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTypeConverter", "className": "PdfAnnotationTypeProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTypeConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationType",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-attachment",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | <string>: the FileName of a PdfGenerateConfig.Attachments entry a file-attachment annotation points at (the same embedded file, not a copy). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationTextConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PdfAnnotationAttachmentProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationAttachment",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-title",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | <string>: the annotation subject (/Subj). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationTextConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PdfAnnotationTitleProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationTitle",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-contents",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | <string>: the annotation text (/Contents). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationTextConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PdfAnnotationContentsProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationContents",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-author",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | <string>: who made the annotation (/T). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationTextConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PdfAnnotationAuthorProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationAuthor",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-icon",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). auto | note | comment | key | help | new-paragraph | paragraph | insert | paperclip | push-pin | graph | tag: the icon of a text or file-attachment annotation. String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationIconConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationIconConverter", "className": "PdfAnnotationIconProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationIconConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationIcon",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-color",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). auto | <color>: the annotation colour (auto picks the kind default). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationColorConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationColorConverter", "className": "PdfAnnotationColorProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationColorConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationColor",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-position",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). auto | [ left | right | top | bottom | center | page-left | page-right | page-top | page-bottom | <length-percentage> ]{1,4}: where the icon (or, for other kinds, the popup window) sits. String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationPositionConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationPositionConverter", "className": "PdfAnnotationPositionProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationPositionConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationPosition",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-createdate",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). auto | <string>: ISO 8601 creation date (/CreationDate). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationDateConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationDateConverter", "className": "PdfAnnotationCreateDateProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationDateConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationCreateDate",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-modifydate",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). auto | <string>: ISO 8601 modification date (/M). String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationDateConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationDateConverter", "className": "PdfAnnotationModifyDateProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationDateConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationModifyDate",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-merge",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | duplicates | key(<string>): collapse the fragments of one split element (or all elements with the same key) into a single annotation. String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationMergeConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationMergeConverter", "className": "PdfAnnotationMergeProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationMergeConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationMerge",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-peachpdf-pdf-annotation-path",
+      "comment": "PeachPDF PDF-output extension, modelled on Prince's -prince-pdf-annotation-* family (no W3C spec). none | path(<string>): SVG path data in CSS px from the element top-left corner, the strokes of an ink annotation. String-stored like -peachpdf-pdf-form-field: the annotation collector re-parses the raw text. cssDataType 'cssom-grammar' calls Converters.PdfAnnotationPathConverter.Convert directly.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationPathConverter", "className": "PdfAnnotationPathProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationPathConverter.Convert" },
+      "html": {
+        "propertyPath": "PdfAnnotationPath",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-type",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-type spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-type. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTypeConverter", "className": "PrincePdfAnnotationTypeProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTypeConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-type",
+      "html": {
+        "propertyPath": "PdfAnnotationType",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-title",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-title spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-title. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PrincePdfAnnotationTitleProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-title",
+      "html": {
+        "propertyPath": "PdfAnnotationTitle",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-contents",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-contents spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-contents. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PrincePdfAnnotationContentsProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-contents",
+      "html": {
+        "propertyPath": "PdfAnnotationContents",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-author",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-author spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-author. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationTextConverter", "className": "PrincePdfAnnotationAuthorProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationTextConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-author",
+      "html": {
+        "propertyPath": "PdfAnnotationAuthor",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-icon",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-icon spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-icon. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationIconConverter", "className": "PrincePdfAnnotationIconProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationIconConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-icon",
+      "html": {
+        "propertyPath": "PdfAnnotationIcon",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-color",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-color spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-color. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationColorConverter", "className": "PrincePdfAnnotationColorProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationColorConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-color",
+      "html": {
+        "propertyPath": "PdfAnnotationColor",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-position",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-position spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-position. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationPositionConverter", "className": "PrincePdfAnnotationPositionProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationPositionConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-position",
+      "html": {
+        "propertyPath": "PdfAnnotationPosition",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-createdate",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-createdate spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-createdate. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationDateConverter", "className": "PrincePdfAnnotationCreateDateProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationDateConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-createdate",
+      "html": {
+        "propertyPath": "PdfAnnotationCreateDate",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-modifydate",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-modifydate spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-modifydate. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationDateConverter", "className": "PrincePdfAnnotationModifyDateProperty"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationDateConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-modifydate",
+      "html": {
+        "propertyPath": "PdfAnnotationModifyDate",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "-prince-pdf-annotation-merge",
+      "comment": "Hidden, undocumented compat alias for Prince's own -prince-pdf-annotation-merge spelling - identical grammar and behaviour to -peachpdf-pdf-annotation-merge. Not documented in docs/.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.PdfAnnotationMergeConverter", "className": "PrincePdfAnnotationMergeProperty"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.PdfAnnotationMergeConverter.Convert" },
+      "aliasOf": "-peachpdf-pdf-annotation-merge",
+      "html": {
+        "propertyPath": "PdfAnnotationMerge",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
       "name": "bookmark-level",
       "comment": "CSS Generated Content Module Level 3 §2 (https://www.w3.org/TR/css-content-3/#bookmark-level). String-stored, like -peachpdf-pdf-tag-type - BookmarkOutlineBuilder parses the raw none/<integer> string itself (mirroring StructureTagMapper.Classify's own re-parse of PdfTagType). cssDataType 'cssom-grammar' calls Converters.BookmarkLevelConverter.Convert directly (already .OrNone()-composed) instead of the full cssom round trip. h1-h6 default to 1-6 via CssDefaults.cs's UA stylesheet, everything else defaults to none (this property's own initial value), which is itself the zero-config \"no bookmarks\" state.",
       "inherited": false,
