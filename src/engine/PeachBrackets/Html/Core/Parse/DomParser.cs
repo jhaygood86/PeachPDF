@@ -239,10 +239,6 @@ namespace PeachBrackets.Html.Parse
                 }
             }
 
-            // Must run after the whole tree's cascade above, not from inside it - see
-            // ApplyTablePresentationalAttributesToCells's remarks / issue #636.
-            ApplyTablePresentationalAttributesToCells(root);
-
             EnsureListItemMarkers(cssValueParser, root, cssData, media, containerSizes);
 
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media, containerSizes);
@@ -576,7 +572,6 @@ namespace PeachBrackets.Html.Parse
             var displayContentsShells = new List<CssBox>();
             CascadeApplyStyles(cssValueParser, root, cssData, media, displayContentsShells: displayContentsShells);
 
-            ApplyTablePresentationalAttributesToCells(root);
             EnsureListItemMarkers(cssValueParser, root, cssData, media);
             ApplyFirstLetterPseudoElements(cssValueParser, root, cssData, media);
 
@@ -1421,6 +1416,7 @@ namespace PeachBrackets.Html.Parse
             if (box.HtmlTag != null)
             {
                 TranslateAttributes(box.HtmlTag, box, valueParser);
+                TranslateTableCellAttributes(box);
             }
 
             // 4. Author normal — applied in ascending layer-rank bands so revert-layer can roll back to
@@ -3057,8 +3053,8 @@ namespace PeachBrackets.Html.Parse
                     case HtmlConstants.Cellspacing:
                         box.BorderSpacing = TranslateLength(value);
                         break;
-                    // Cellpadding's per-cell cascade (ApplyTablePadding) is applied later, in
-                    // ApplyTablePresentationalAttributesToCells - see its remarks / issue #636.
+                    // A table's cellpadding and border reach its cells through TranslateTableCellAttributes,
+                    // from each cell's own cascade.
                     case HtmlConstants.Color:
                         box.Color = value.ToLower();
                         break;
@@ -3102,9 +3098,10 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
-        /// Translates the <c>align</c> attribute - an <c>img</c> maps it to float/vertical-align, any
-        /// other element maps it to text-align (or falls back to the same vertical-align keyword
-        /// mapping <c>valign</c> uses, for a horizontally-invalid value historically seen in the wild).
+        /// Translates the <c>align</c> attribute - an <c>img</c> maps it to float/vertical-align, an <c>hr</c> or a
+        /// <c>table</c> to the box's own placement, any other element maps it to text-align (or falls back to the
+        /// same vertical-align keyword mapping <c>valign</c> uses, for a horizontally-invalid value historically
+        /// seen in the wild).
         /// </summary>
         private static void TranslateAlign(HtmlTag tag, CssBox box, string value)
         {
@@ -3112,6 +3109,8 @@ namespace PeachBrackets.Html.Parse
                 TranslateImgAlign(box, value);
             else if (tag.Name.Equals(HtmlConstants.Hr, StringComparison.OrdinalIgnoreCase))
                 TranslateHrAlign(box, value);
+            else if (tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
+                TranslateTableAlign(box, value);
             else
                 TranslateGenericAlign(box, value);
         }
@@ -3141,6 +3140,39 @@ namespace PeachBrackets.Html.Parse
             else
                 return;
 
+            SetHorizontalMargins(box, left, right);
+        }
+
+        /// <summary>
+        /// Translates <c>&lt;table align&gt;</c>: the HTML Standard maps it to the table's own placement, never to
+        /// <c>text-align</c> - <c>left</c> and <c>right</c> are <c>float: left</c> and <c>float: right</c>, and
+        /// <c>center</c> is <c>margin-left: auto; margin-right: auto</c>. The match is on the exact value, ASCII
+        /// case-insensitively, with no trimming. The table's own <c>text-align</c> is reset to <c>start</c>, so the text of
+        /// its cells is not aligned by the attribute.
+        /// </summary>
+        /// <remarks>
+        /// The reset also stops a <c>text-align</c> the table would inherit from a <c>&lt;td align="center"&gt;</c> or a
+        /// <c>&lt;center&gt;</c> around it, which a browser never passes into a table (its legacy alignment is
+        /// <c>-webkit-center</c>, which a table does not inherit). Nothing here records whether an inherited
+        /// <c>text-align</c> came from such an attribute or from CSS, so a CSS <c>text-align: center</c> on the parent
+        /// is reset too, as it always was for a table with an <c>align</c> attribute.
+        /// </remarks>
+        private static void TranslateTableAlign(CssBox box, string value)
+        {
+            if (value.Equals(HtmlConstants.Left, StringComparison.OrdinalIgnoreCase))
+                box.Float = CssProperty<Floating>.FromValue(Keywords.Left, Floating.Left);
+            else if (value.Equals(HtmlConstants.Right, StringComparison.OrdinalIgnoreCase))
+                box.Float = CssProperty<Floating>.FromValue(Keywords.Right, Floating.Right);
+            else if (value.Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase))
+                SetHorizontalMargins(box, Keywords.Auto, Keywords.Auto);
+            else
+                return;
+
+            box.TextAlignAll = CssProperty<HorizontalAlignment>.FromCssText(Keywords.Start, Map.HorizontalAlignments, HorizontalAlignment.Start);
+        }
+
+        private static void SetHorizontalMargins(CssBox box, string left, string right)
+        {
             box.MarginLeft = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
                 left, Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
             box.MarginRight = CssKeywordOrValueParser.FromCssText<AutoKeyword, LengthOrCalc>(
@@ -3199,9 +3231,7 @@ namespace PeachBrackets.Html.Parse
         /// <summary>
         /// Translates the <c>border</c> attribute: sets the border width (and, unless "0", a solid
         /// style) on the element itself. For a <c>table</c>, the per-cell 1px solid border cascade
-        /// (<see cref="ApplyTableBorder"/>) is applied later, in <see cref="ApplyTablePresentationalAttributesToCells"/>
-        /// - not here, since it must run after the whole tree's cascade has finished (see that method's
-        /// remarks / issue #636).
+        /// (<see cref="TranslateTableCellAttributes"/>) is applied from each cell's own cascade, not here.
         /// </summary>
         private static void TranslateBorder(HtmlTag tag, CssBox box, string value)
         {
@@ -3361,94 +3391,45 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
-        /// Applies the deprecated presentational <c>border</c>/<c>cellpadding</c> table attributes' TD
-        /// cascade (<see cref="ApplyTableBorder"/>/<see cref="ApplyTablePadding"/>), for every
-        /// <c>table</c> in the tree, directly from the element's own attributes.
+        /// Translates the table-level <c>border</c> and <c>cellpadding</c> attributes onto a <c>td</c>/<c>th</c> box, the
+        /// way the HTML Standard maps them: as presentational hints of the cell, from the nearest ancestor <c>table</c>.
         /// </summary>
         /// <remarks>
-        /// This must run as its own pass, after <see cref="CascadeApplyStyles"/> has finished for the
-        /// *entire* tree - not from inside <see cref="TranslateAttributes"/>, which runs mid-cascade for
-        /// the table box itself, before a cell descendant's own <see cref="CascadeApplyStyles"/> call has
-        /// run. Setting a cell's property that early diverges its <c>ComputedStyle</c> away from the
-        /// shared <c>Default</c> singleton, which then makes that cell's own (still-pending)
-        /// <see cref="CascadeApplyStyles"/> call take its defaulting-loop's non-fast-path branch and
-        /// re-assert every property's initial value - silently clobbering the value just cascaded from
-        /// the table. Running this pass only after the whole tree's cascade has completed avoids that
-        /// entirely (issue #636). It runs before <see cref="CorrectAnonymousTables"/> so the tree still
-        /// has its as-authored shape, matching what <see cref="SetForAllCells"/>'s traversal expects.
+        /// Runs from the cell's own cascade, at the step where every other presentational hint is applied (after the UA
+        /// sheet, before the author rules), so any author declaration on the cell - a stylesheet rule or its own
+        /// <c>style</c> - beats the hint, as it does in a browser: <c>&lt;table cellpadding="0"&gt;</c> with
+        /// <c>&lt;td style="padding: 30px 25px"&gt;</c> keeps its 30px and 25px, which is what an HTML email relies on.
+        /// An earlier version wrote the hints from a pass after the whole cascade, which overwrote the author's value.
+        /// It could not run from the table's own cascade either (the cell's own, still-pending, cascade would reset
+        /// what was written - issue #636); from the cell's own cascade the defaulting step has already run.
+        /// A <c>th</c> counts as a cell, like a <c>td</c>.
         /// </remarks>
-        private static void ApplyTablePresentationalAttributesToCells(CssBox box)
+        private static void TranslateTableCellAttributes(CssBox cell)
         {
-            if (box.HtmlTag is { } tag && tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase))
-            {
-                var border = tag.TryGetAttribute(HtmlConstants.Border);
-                if (!string.IsNullOrEmpty(border) && border != "0")
-                {
-                    ApplyTableBorder(box, "1px");
-                }
+            if (cell.HtmlTag is not { } tag
+                || !(tag.Name.Equals(HtmlConstants.Td, StringComparison.OrdinalIgnoreCase)
+                    || tag.Name.Equals(HtmlConstants.Th, StringComparison.OrdinalIgnoreCase)))
+                return;
 
-                var cellpadding = tag.TryGetAttribute(HtmlConstants.Cellpadding);
-                if (!string.IsNullOrEmpty(cellpadding))
-                {
-                    ApplyTablePadding(box, cellpadding);
-                }
-            }
+            var table = cell.ParentBox;
+            while (table is not null
+                && !(table.HtmlTag is { } tableTag && tableTag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)))
+                table = table.ParentBox;
 
-            foreach (var childBox in box.Boxes)
-            {
-                ApplyTablePresentationalAttributesToCells(childBox);
-            }
-        }
+            if (table?.HtmlTag is not { } tableElement) return;
 
-        /// <summary>
-        /// Cascades to the TD's the border specified in the TABLE tag.
-        /// </summary>
-        /// <param name="table"></param>
-        /// <param name="border"></param>
-        private static void ApplyTableBorder(CssBox table, string border)
-        {
-            SetForAllCells(table, cell =>
+            var border = tableElement.TryGetAttribute(HtmlConstants.Border);
+            if (!string.IsNullOrEmpty(border) && border != "0")
             {
                 cell.BorderLeftStyle = cell.BorderTopStyle = cell.BorderRightStyle = cell.BorderBottomStyle = SolidBorderStyle;
-                cell.BorderLeftWidth = cell.BorderTopWidth = cell.BorderRightWidth = cell.BorderBottomWidth = border;
-            });
-        }
+                cell.BorderLeftWidth = cell.BorderTopWidth = cell.BorderRightWidth = cell.BorderBottomWidth = "1px";
+            }
 
-        /// <summary>
-        /// Cascades to the TD's the border specified in the TABLE tag.
-        /// </summary>
-        /// <param name="table"></param>
-        /// <param name="padding"></param>
-        private static void ApplyTablePadding(CssBox table, string padding)
-        {
-            var length = TranslateLength(padding);
-            SetForAllCells(table, cell => cell.PaddingLeft = cell.PaddingTop = cell.PaddingRight = cell.PaddingBottom = length);
-        }
-
-        /// <summary>
-        /// Execute action on all the "td" cells of the table.<br/>
-        /// Handle if there is "theader" or "tbody" exists.
-        /// </summary>
-        /// <param name="table">the table element</param>
-        /// <param name="action">the action to execute</param>
-        private static void SetForAllCells(CssBox table, Action<CssBox> action)
-        {
-            foreach (var l1 in table.Boxes)
+            var cellpadding = tableElement.TryGetAttribute(HtmlConstants.Cellpadding);
+            if (!string.IsNullOrEmpty(cellpadding))
             {
-                foreach (var l2 in l1.Boxes)
-                {
-                    if (l2.HtmlTag is { Name: "td" })
-                    {
-                        action(l2);
-                    }
-                    else
-                    {
-                        foreach (var l3 in l2.Boxes)
-                        {
-                            action(l3);
-                        }
-                    }
-                }
+                var length = TranslateLength(cellpadding);
+                cell.PaddingLeft = cell.PaddingTop = cell.PaddingRight = cell.PaddingBottom = length;
             }
         }
 
