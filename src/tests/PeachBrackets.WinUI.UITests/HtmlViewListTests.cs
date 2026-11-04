@@ -92,6 +92,7 @@ public class HtmlViewListTests
 
             var problems = new List<string>();
             var rowsChecked = 0;
+            var shown = new List<(int Index, HtmlView View)>();
 
             void CheckVisibleRows()
             {
@@ -107,7 +108,7 @@ public class HtmlViewListTests
                     // Only what shows is painted: the list also realizes rows just outside the viewport.
                     var top = view.TransformToVisual(scroller).TransformPoint(new Windows.Foundation.Point(0, 0)).Y;
                     if (top < scroller.ViewportHeight && top + view.ActualHeight > 0 && view.PaintedRegionCount == 0)
-                        problems.Add($"row {index}: shown but never painted");
+                        shown.Add((index, view));
                     if (view.Document is not null)
                     {
                         view.SelectAll();
@@ -117,12 +118,28 @@ public class HtmlViewListTests
                 }
             }
 
+            // Painting follows layout by a frame, which a loaded runner can take a while to deliver: a shown row gets a moment before it counts as unpainted.
+            async Task CheckPaintedAsync()
+            {
+                foreach (var (index, view) in shown)
+                {
+                    for (var wait = 0; wait < 60 && view.PaintedRegionCount == 0; wait++)
+                        await Task.Delay(50);
+
+                    if (view.PaintedRegionCount == 0)
+                        problems.Add($"row {index}: shown but never painted");
+                }
+
+                shown.Clear();
+            }
+
             // Down in big steps, then up again, as a fast flick does.
             for (var offset = 0.0; offset <= scroller.ScrollableHeight; offset += 700)
             {
                 scroller.ChangeView(null, offset, null, disableAnimation: true);
                 await SettleAsync(scroller);
                 CheckVisibleRows();
+                await CheckPaintedAsync();
             }
 
             for (var offset = scroller.ScrollableHeight; offset >= 0; offset -= 900)
@@ -130,6 +147,7 @@ public class HtmlViewListTests
                 scroller.ChangeView(null, offset, null, disableAnimation: true);
                 await SettleAsync(scroller);
                 CheckVisibleRows();
+                await CheckPaintedAsync();
             }
 
             return (Enumerable.Range(0, Count).Sum(HeightOf), scroller.ExtentHeight, rowsChecked, factory.Created, factory.Reused, problems);

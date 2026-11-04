@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Pointer media features</title>
+<style>body{margin:0;font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#222}h1,h2{margin:0}</style>
+</head>
+<body>
+<style>body{padding:24px}.row{padding:12px;margin:8px 0;background:#e5e7eb}
+.h:before{content:"hover: none"}@media (hover:hover){.h:before{content:"hover: hover"}.h{background:#bbf7d0}}
+.p:before{content:"pointer: none"}@media (pointer:fine){.p:before{content:"pointer: fine"}.p{background:#bbf7d0}}@media (pointer:coarse){.p:before{content:"pointer: coarse"}.p{background:#fde68a}}
+.a:before{content:"any-pointer: none"}@media (any-pointer:fine){.a:before{content:"any-pointer includes fine"}.a{background:#bbf7d0}}
+.c:before{content:"no coarse pointer"}@media (any-pointer:coarse){.c:before{content:"any-pointer includes coarse"}.c{background:#fde68a}}</style>
+<div class="row h"></div><div class="row p"></div><div class="row a"></div><div class="row c"></div>
+</body></html>

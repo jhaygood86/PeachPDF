@@ -10,7 +10,8 @@ package=net.peachpdf.brackets.example
 
 adb install -r "$apk"
 adb logcat -c
-adb shell monkey -p "$package" -c android.intent.category.LAUNCHER 1 >/dev/null
+# The sample page, not the showcase browser the launcher opens: the checks below read what the sample page says.
+adb shell am start -n "$package/$package.SampleActivity" >/dev/null
 
 # The page loads and lays out asynchronously, and a cold emulator is slow: give it up to three minutes.
 for _ in $(seq 1 180); do
