@@ -50,6 +50,12 @@ public sealed partial class HtmlDocument : IDisposable
 
     /// <summary>The laid-out document the public surface wraps; reached by the test projects that assert on the box tree itself.</summary>
     internal HtmlContainerInt Container => _container;
+
+    /// <summary>
+    /// The images of a <c>srcset</c> or <c>&lt;picture&gt;</c> that could not be loaded, in the order they failed. The document then tries the
+    /// next-best candidate (up to three), then the <c>src</c>, so a failure listed here is not necessarily a blank image.
+    /// </summary>
+    public IReadOnlyList<ImageLoadFailure> ImageLoadFailures => _container.ImageLoadFailures;
     private readonly RenderContext _renderContext;
     private readonly double _unitsPerPoint;
     private PagePainter? _painter;
@@ -101,6 +107,9 @@ public sealed partial class HtmlDocument : IDisposable
                 ? viewportHeight * unitsPerPoint
                 : null;
             container.PreferredColorScheme = options.ColorScheme;
+            container.DevicePixelRatio = options.DevicePixelRatio;
+            container.ImageSelection = options.ImageSelection
+                ?? (options.MediaType == MediaType.Screen ? ImageSelectionOptions.ScreenDefault : ImageSelectionOptions.HighestDensityPolicy);
             container.Input = options.Input ?? InputCapabilities.None;
             container.Preferences = options.Preferences ?? UserPreferences.Default;
             container.IgnoreAuthorStyleSheets = options.IgnoreAuthorStyleSheets;
@@ -1477,6 +1486,51 @@ public sealed partial class HtmlDocument : IDisposable
         ThrowIfNotAPage(pageIndex);
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
         return (uint)pageIndex < (uint)fragmentainers.Count && StyleUpdater.ElementAt(_container, fragmentainers[pageIndex], x, y) is { } box ? new DocumentElement(box) : null;
+    }
+
+    /// <summary>
+    /// Tells a <see cref="MediaType.Screen"/> document how large the host shows it, so the images of a <c>srcset</c> are chosen for it: a document zoomed
+    /// to 2 wants images twice as dense as at 1. Nothing is loaded or repainted by this call; <see cref="UpgradeImagesAsync"/> does that. The scale only
+    /// grows - zooming back out keeps the sharper images - and has no effect when <see cref="ImageSelectionOptions.UpgradeOnZoom"/> is off or the
+    /// document's <see cref="HtmlDocumentOptions.ImageSelection"/> is <see cref="ImageSelectionPolicy.HighestDensity"/>.
+    /// </summary>
+    /// <param name="zoom">the factor the host scales the document by on top of its device pixel ratio, 1 for none</param>
+    /// <param name="devicePixelRatio">the device pixel ratio the document is now shown at when it changed (the window moved to another display), or null to leave it</param>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="zoom"/> or <paramref name="devicePixelRatio"/> is not a positive finite number</exception>
+    public void SetRenderScale(double zoom, double? devicePixelRatio = null)
+    {
+        if (!double.IsFinite(zoom) || zoom <= 0)
+            throw new ArgumentOutOfRangeException(nameof(zoom), zoom, "The zoom must be a positive number.");
+        if (devicePixelRatio is { } ratio && (!double.IsFinite(ratio) || ratio <= 0))
+            throw new ArgumentOutOfRangeException(nameof(devicePixelRatio), devicePixelRatio, "The device pixel ratio must be a positive number.");
+
+        _container.RenderScale = Math.Max(_container.RenderScale, zoom);
+        if (devicePixelRatio is { } value)
+            _container.DevicePixelRatio = value;
+    }
+
+    /// <summary>
+    /// Chooses the images of a <c>srcset</c> or <c>&lt;picture&gt;</c> again for the device pixel ratio and render scale set since
+    /// (<see cref="SetRenderScale"/>) and loads the sharper ones, without parsing or laying the document out again: the boxes keep their size and
+    /// every <see cref="DocumentElement"/> stays valid. It never goes to a less dense image. Repaint the regions it returns
+    /// (<see cref="PaintPageRegionAsync"/>).
+    /// </summary>
+    /// <returns>the parts of the pages whose images changed; empty when none did, as it always is for a document that takes the highest density</returns>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public async ValueTask<UpdateResult> UpgradeImagesAsync()
+    {
+        _ = Pages;
+        var changed = await _container.ReselectImagesAsync();
+        if (changed.Count == 0)
+            return new UpdateResult(true, null, []);
+
+        var ordinals = new HashSet<int>();
+        foreach (var image in changed)
+        {
+            if (image.HtmlTag is { } tag) ordinals.Add(tag.SourceOrdinal);
+        }
+
+        return new UpdateResult(true, null, StyleUpdater.DirtyRegionsFor(_container, ordinals, _container.FragmentTree?.Fragmentainers ?? []));
     }
 
     /// <summary>

@@ -542,6 +542,7 @@ PeachBrackets.HtmlDocument : sealed class
   method ValueTask<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> UpgradeImagesAsync()
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
   method Void ClearHighlights()
   method Void Layout(Canvas measuringCanvas)
@@ -550,6 +551,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Void PaintLinks(Int32 pageIndex, Canvas canvas)
   method Void PaintPage(Int32 pageIndex, Canvas canvas, DocumentPaintLayer layer = All)
   method Void SetHighlight(String name, IEnumerable<TextRange> ranges, Int32 priority = 0)
+  method Void SetRenderScale(Double zoom, Double? devicePixelRatio = null)
   method Void SetSelectedRanges(IEnumerable<TextRange> ranges)
   method static HtmlDocument Load(String html, RenderContext renderContext, HtmlDocumentOptions options)
   method static ValueTask<HtmlDocument> CreateAsync(DeclarativePage page, HtmlDocumentOptions options = null, StyleSheet styleSheet = null)
@@ -563,6 +565,7 @@ PeachBrackets.HtmlDocument : sealed class
   property HtmlDocumentMetadata Metadata { get; }
   property IReadOnlyList<ClippedTextEntry> ClippedText { get; }
   property IReadOnlyList<DocumentPage> Pages { get; }
+  property IReadOnlyList<ImageLoadFailure> ImageLoadFailures { get; }
   property IReadOnlyList<String> HighlightNames { get; }
   property IReadOnlyList<TextRange> SelectedRanges { get; }
   property IReadOnlyList<TextRun> TextRuns { get; }
@@ -598,6 +601,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
   property Boolean SynchronousOnly { get; set; }
   property ColorSchemePreference ColorScheme { get; set; }
+  property Double DevicePixelRatio { get; set; }
   property Double FontScale { get; set; }
   property Double MarginBottomPoints { get; set; }
   property Double MarginLeftPoints { get; set; }
@@ -607,6 +611,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Double PageWidthPoints { get; set; }
   property Double? AnimationProgress { get; set; }
   property Double? ViewportHeightPoints { get; set; }
+  property ImageSelectionOptions ImageSelection { get; set; }
   property InputCapabilities Input { get; set; }
   property Int32 PageNumberOffset { get; set; }
   property Int32? TotalPagesOverride { get; set; }
@@ -618,6 +623,30 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property StyleSheet StyleSheet { get; set; }
   property TextSpacingOverrides TextSpacing { get; set; }
   property UserPreferences Preferences { get; set; }
+PeachBrackets.ImageLoadFailure : sealed class
+  ctor(String Url, String FallbackUrl)
+  method ImageLoadFailure <Clone>$()
+  method Void Deconstruct(out String Url, out String FallbackUrl)
+  method virtual Boolean Equals(ImageLoadFailure other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property String FallbackUrl { get; init; }
+  property String Url { get; init; }
+PeachBrackets.ImageSelectionOptions : sealed class
+  ctor()
+  method ImageSelectionOptions <Clone>$()
+  method virtual Boolean Equals(ImageSelectionOptions other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean UpgradeOnZoom { get; init; }
+  property Double Tolerance { get; init; }
+  property ImageSelectionPolicy Policy { get; init; }
+  property Int64? MaxDecodePixels { get; init; }
+PeachBrackets.ImageSelectionPolicy : enum Int32
+  BestForTarget = 1
+  HighestDensity = 0
 PeachBrackets.InputCapabilities : sealed class
   ctor(PointerTypes PrimaryPointer, Boolean PrimaryCanHover, PointerTypes AnyPointers, Boolean AnyCanHover)
   method InputCapabilities <Clone>$()

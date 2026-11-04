@@ -16,7 +16,7 @@ namespace PeachPDF.Rendering
     /// the syntax of <c>font-variation-settings</c>, SVG color glyphs, and the loading of the document's resources (images, style sheets,
     /// fonts) through the configured <see cref="RNetworkLoader"/>.
     /// </summary>
-    internal sealed class HtmlRenderContext : PdfRenderContext
+    internal class HtmlRenderContext : PdfRenderContext
     {
         /// <summary>
         /// Init: maps the font names HTML and CSS use onto the fonts installed.

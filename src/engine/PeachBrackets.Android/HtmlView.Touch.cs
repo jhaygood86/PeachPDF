@@ -315,6 +315,8 @@ public sealed partial class HtmlView
         _scrollX = ViewportMath.ClampScroll(_scrollX, _contentWidth * newScale, Width);
         _scrollY = ViewportMath.ClampScroll(_scrollY, _contentHeight * newScale, Height);
         RequestPaint();
+        if (!_scaling)
+            QueueImageUpgrade();
         ZoomChanged?.Invoke(this, EventArgs.Empty);
         UpdateViewport();
         ScrollChanged?.Invoke(this, EventArgs.Empty);
@@ -376,7 +378,11 @@ public sealed partial class HtmlView
             return true;
         }
 
-        public override void OnScaleEnd(ScaleGestureDetector detector) => view._scaling = false;
+        public override void OnScaleEnd(ScaleGestureDetector detector)
+        {
+            view._scaling = false;
+            view.QueueImageUpgrade();
+        }
     }
 
     // ---- the pointer state the document's :hover and :active rules read ----

@@ -215,6 +215,23 @@ namespace PeachDrawing.Core
             return new LinearGradientBrush(p1, p2, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad);
         }
 
+        private static readonly HashSet<string> _defaultImageTypes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
+            "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
+        };
+
+        /// <summary>
+        /// Whether this context can decode an image of the media type <paramref name="mimeType"/> (<c>image/avif</c>), which a document
+        /// asks to choose between the <c>&lt;source type&gt;</c> alternatives of a <c>&lt;picture&gt;</c>. The default is the formats
+        /// PeachImage reads (PNG, JPEG, GIF, WebP, AVIF, JPEG XL, BMP, TIFF, ICO) and SVG; a context that decodes with a platform codec
+        /// overrides it with what that codec reads. A type that is not an image type, or is unknown, is not supported.
+        /// </summary>
+        /// <param name="mimeType">the media type, without parameters</param>
+        /// <returns><see langword="true"/> when an image of that type can be decoded</returns>
+        public virtual bool SupportsImageType(string mimeType) =>
+            !string.IsNullOrWhiteSpace(mimeType) && _defaultImageTypes.Contains(mimeType.Trim());
+
         /// <summary>
         /// Create an <see cref="Image"/> object from the given stream.
         /// </summary>

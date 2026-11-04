@@ -631,6 +631,8 @@ namespace PeachPDF
                 SnapBorderWidthsToCssPixels = config.SnapBorderWidthsToCssPixels,
                 DefaultLanguage = config.DefaultLanguage,
                 CollectFormFields = config.EnableInteractivePdfForms,
+                // A PDF is read at print quality at any size, not at one display's density.
+                ImageSelection = new ImageSelectionOptions { Policy = ImageSelectionPolicy.HighestDensity },
                 PageNumberOffset = numbering?.Offset ?? 0,
                 TotalPagesOverride = numbering?.Total,
             };
@@ -671,6 +673,8 @@ namespace PeachPDF
                 AnimationProgress = config.AnimationProgress,
                 DefaultLanguage = string.IsNullOrEmpty(config.DefaultLanguage) ? null : config.DefaultLanguage,
                 CollectFormFields = config.EnableInteractivePdfForms,
+                // A PDF is read at print quality at any size, not at one display's density.
+                ImageSelection = new ImageSelectionOptions { Policy = ImageSelectionPolicy.HighestDensity },
             };
         }
 
