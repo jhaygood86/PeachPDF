@@ -72,6 +72,21 @@ public class SelectionStylingTests
     }
 
     [Fact]
+    public async Task ASelectionAcrossWords_HasNoSeamsInItsFill()
+    {
+        var (context, document) = await LoadAsync("<p>Hello brave new world</p>", "<style>body { font-size: 37.3pt } ::selection { background: rgb(255, 0, 0) }</style>");
+        var run = Assert.Single(document.TextRuns);
+
+        document.SetSelectedRanges([new TextRange(new TextPosition(0, 0), new TextPosition(0, run.Text.Length))]);
+        using var canvas = await TestDocument.PaintAsync(context, document);
+
+        var row = (int)(run.Baseline + (run.Descent * 0.5));
+        var (left, right, _) = BackgroundRow(run, run.CharacterOffsets[0], run.CharacterOffsets[run.Text.Length - 1]);
+        for (var x = left; x < right; x++)
+            Assert.True(IsRed(TestDocument.Pixel(canvas, x, row)), $"seam in the selection fill at x={x}");
+    }
+
+    [Fact]
     public async Task TheSelectionColour_ReplacesTheTextColourInsideTheSelectionOnly()
     {
         var (context, document) = await LoadAsync("<p>Hello world</p>");

@@ -81,6 +81,32 @@ namespace PeachBrackets.Html.Paint
             return height > 0 ? (rect.Y + (line.LineTop - word.Top), height) : (rect.Y, rect.Height);
         }
 
+        // Two rectangles that meet at a fractional device x leave a hairline seam (each edge is anti-aliased on its own), so the space before
+        // a word and the word's characters are filled as one rectangle when they touch.
+        private const double JoinTolerance = 0.01;
+
+        private static bool JoinsGap(SelectionModel.Part part) =>
+            part.HasCharacters && part.GapSelected && Math.Abs(part.GapHi - part.Lo) < JoinTolerance;
+
+        /// <summary>
+        /// The left and right edge of the fill over a word's characters (merged with the space before it when they touch). A fill that reaches the
+        /// word's end runs a little past it when opaque, into the space or word that follows, whose own fill and text are drawn after this one,
+        /// so a selection across words has no seam where two fills would meet.
+        /// </summary>
+        private static (double Left, double Right) HighlightSpanOf(SelectionModel.Part part, Rect rect, double ppp, bool opaque)
+        {
+            if (!part.HasCharacters) return (0, 0);
+
+            var left = rect.X + ((JoinsGap(part) ? part.GapLo : part.Lo) * ppp);
+            var right = rect.X + (part.Hi * ppp);
+            if (opaque && right >= rect.Right - (JoinTolerance * ppp))
+                right += SeamOverlap;
+
+            return (left, right);
+        }
+
+        private const double SeamOverlap = 0.5;
+
         /// <summary>
         /// Paints a word that is in one or more highlights: each highlight's background behind the text (and behind the space before the word, when
         /// that is covered too), lowest priority first, then the word, then any text decoration a highlight adds. Where a highlight changes the text
@@ -100,10 +126,12 @@ namespace PeachBrackets.Html.Paint
                     if (layer.Background is not { A: > 0 } fill) continue;
 
                     using var brush = g.GetSolidBrush(fill);
-                    if (layer.Part.HasCharacters)
-                        g.DrawRectangle(brush, rect.X + (layer.Part.Lo * ppp), top, (layer.Part.Hi - layer.Part.Lo) * ppp, height);
+                    var (left, right) = HighlightSpanOf(layer.Part, rect, ppp, fill.A == 255);
+                    if (right > left)
+                        g.DrawRectangle(brush, left, top, right - left, height);
 
-                    if (layer.Part.GapSelected)
+                    // The separator space before the word is a different span unless it joins the characters (merged above).
+                    if (layer.Part.GapSelected && !JoinsGap(layer.Part))
                         g.DrawRectangle(brush, rect.X + (layer.Part.GapLo * ppp), top, (layer.Part.GapHi - layer.Part.GapLo) * ppp, height);
                 }
             }
