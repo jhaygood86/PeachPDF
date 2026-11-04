@@ -100,8 +100,10 @@ public sealed partial class Win2dCanvas
         if (str.Length == 0 || InvisibleText)
             return;
 
+
         if (font is DirectWriteFont dw)
         {
+            FlushText();
             dw.Draw(this, str, color, point, letterSpacing, features);
             return;
         }
@@ -116,6 +118,8 @@ public sealed partial class Win2dCanvas
         var unitsPerEm = typeface.Metrics.UnitsPerEm;
         if (unitsPerEm == 0)
             return;
+
+        FlushText();
 
         // Where the PDF renderer puts the baseline: the run's top-left plus the cell ascent (here in layout units).
         var lineSpace = typeface.Metrics.LineSpacing * font.Size / unitsPerEm * _ppp;
@@ -138,6 +142,7 @@ public sealed partial class Win2dCanvas
         if (unitsPerEm == 0)
             return;
 
+        FlushText();
         var scale = font.Size / unitsPerEm * _ppp;
         using var run = new GlyphRun(this);
         foreach (var placement in glyphs)

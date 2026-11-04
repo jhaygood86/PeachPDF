@@ -78,13 +78,21 @@ namespace PeachBrackets.Html
         /// </summary>
         private sealed class RuleSharing
         {
-            internal static readonly RuleSharing Plain = new(stable: true, null);
+            internal static readonly RuleSharing Plain = new(stable: true, null, usesInteractionState: false);
 
-            private RuleSharing(bool stable, CompoundSelector[]? boxCreatingSubjects)
+            private RuleSharing(bool stable, CompoundSelector[]? boxCreatingSubjects, bool usesInteractionState)
             {
                 Stable = stable;
                 BoxCreatingSubjects = boxCreatingSubjects;
+                UsesInteractionState = usesInteractionState;
             }
+
+            /// <summary>
+            /// Whether its selector reads the document's interaction state (<c>:hover</c>, <c>:active</c>, <c>:focus</c>, <c>:focus-within</c>,
+            /// <c>:focus-visible</c>). Which element is hovered is a fact about one element, not about its tag and attributes, so while a
+            /// document has such state two otherwise identical siblings do not take the same style from such a rule.
+            /// </summary>
+            internal bool UsesInteractionState { get; }
 
             /// <summary>Whether its selector matches every sibling of the same tag and attributes alike (<see cref="SelectorSiblingStability"/>).</summary>
             internal bool Stable { get; }
@@ -99,7 +107,11 @@ namespace PeachBrackets.Html
                 var subjects = new List<CompoundSelector>();
                 SelectorSiblingStability.CollectBoxCreatingSubjects(selector, subjects);
 
-                return stable && subjects.Count == 0 ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null);
+                var text = selector.Text;
+                var stateful = text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase)
+                    || text.Contains(":focus", StringComparison.OrdinalIgnoreCase);
+
+                return stable && subjects.Count == 0 && !stateful ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null, stateful);
             }
         }
 
@@ -960,6 +972,9 @@ namespace PeachBrackets.Html
 
             var sharing = indexed.Sharing;
             if (!sharing.Stable) return false;
+
+            // A document whose interaction state is live (a host tracking the pointer and focus) has one hovered element among identical siblings.
+            if (sharing.UsesInteractionState && box.HtmlContainer?.Interaction is not null) return false;
 
             if (sharing.BoxCreatingSubjects is { } subjects)
             {

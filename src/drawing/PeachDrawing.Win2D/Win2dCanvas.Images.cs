@@ -64,6 +64,7 @@ public sealed partial class Win2dCanvas
         if (!(width > 0) || !(height > 0) || !(dest.Width > 0) || !(dest.Height > 0) || !(src.Width > 0) || !(src.Height > 0))
             return;
 
+        NoteDrawn(dest.X, dest.Y, dest.X + dest.Width, dest.Y + dest.Height);
         var saved = _session.Transform;
         try
         {
@@ -144,6 +145,7 @@ public sealed partial class Win2dCanvas
             return;
 
         // Both images are carried into the destination's place first, so the mask lines up with what it masks wherever each came from.
+        NoteDrawn(dest.X, dest.Y, dest.X + dest.Width, dest.Y + dest.Height);
         using var content = new Transform2DEffect { Source = Source(image), TransformMatrix = Placement(new Rect(0, 0, image.Width, image.Height), dest) };
         using var mask = new Transform2DEffect { Source = Source(maskImage), TransformMatrix = Placement(new Rect(0, 0, maskImage.Width, maskImage.Height), dest) };
 
@@ -180,6 +182,7 @@ public sealed partial class Win2dCanvas
             return;
         }
 
+        NoteDrawn(destRect.X, destRect.Y, destRect.X + destRect.Width, destRect.Y + destRect.Height);
         using var back = new Transform2DEffect { Source = Source(bottom), TransformMatrix = Placement(new Rect(0, 0, bottom.Width, bottom.Height), destRect) };
         using var front = new Transform2DEffect { Source = Source(top), TransformMatrix = Placement(new Rect(0, 0, top.Width, top.Height), destRect) };
         using var blended = new BlendEffect { Background = back, Foreground = front, Mode = BlendModeFor(blendMode) };

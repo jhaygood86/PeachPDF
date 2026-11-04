@@ -127,6 +127,40 @@ public class InteractionStateTests
     }
 
     [Fact]
+    public async Task OnlyTheHoveredOfSeveralIdenticalSiblingsTakesTheHoverStyle()
+    {
+        // Same parent, tag and attributes: the cascade would let them share one computed style were hover not a fact about one element.
+        var (context, document, measuring) = await LoadAsync(
+            "<ul id=u><li style='height:20px;background:rgb(0,0,255)'>a</li><li style='height:20px;background:rgb(0,0,255)'>b</li><li style='height:20px;background:rgb(0,0,255)'>c</li></ul>",
+            "<style>ul { margin: 0; padding: 0; list-style: none } li:hover { background: rgb(255,0,0) !important }</style>");
+        var list = document.GetElementBounds("u")!.Value;
+        var x = (int)(list.X + list.Width - 5);
+        var top = (int)list.Y;
+
+        var result = await document.SetPointerStateAsync(0, x, top + 22, false, measuring);
+
+        Assert.True(result.Applied);
+        using var after = await TestDocument.PaintAsync(context, document);
+        Assert.Equal(0, TestDocument.Pixel(after, x, top + 7).R);
+        Assert.Equal(255, TestDocument.Pixel(after, x, top + 22).R);
+        Assert.Equal(0, TestDocument.Pixel(after, x, top + 37).R);
+    }
+
+    [Fact]
+    public async Task AHoverRuleWrittenInsideAnotherRuleIsHonoured()
+    {
+        var (context, document, measuring) = await LoadAsync(
+            "<div id=a></div>",
+            "<style>#a { height: 40px; background: rgb(0,0,255); &:hover { background: rgb(255,0,0) } }</style>");
+        var (x, y) = Center(document, "a");
+
+        var result = await document.SetPointerStateAsync(0, x, y, false, measuring);
+
+        Assert.True(result.Applied);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "a")).R);
+    }
+
+    [Fact]
     public async Task PointerEventsNone_DoesNotTakeTheHover()
     {
         var (context, document, measuring) = await LoadAsync(

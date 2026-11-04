@@ -117,4 +117,74 @@ internal static class Win2dTextBlend
 
         return pixels;
     }
+
+    /// <summary>
+    /// The coverage of each colour channel for the GPU blend, as an R8G8B8A8 bitmap (alpha 255): the corrected, filtered alpha of the stripe that lands on
+    /// that channel in R, G and B (or the same value in all three for grayscale text). Together with the text colour this is all the blend needs.
+    /// </summary>
+    public static byte[] StripeAlphas(Win2dTextMask mask, PaintColor color, bool bgrStripes)
+    {
+        var width = mask.Width;
+        var pixels = new byte[width * mask.Height * 4];
+        if (mask.SubPixels == 1)
+        {
+            var gray = CorrectionTable(color);
+            for (var i = 0; i < mask.Samples.Length; i++)
+            {
+                var alpha = (byte)(gray[mask.Samples[i]] * color.A / 255);
+                var o = i * 4;
+                pixels[o] = pixels[o + 1] = pixels[o + 2] = alpha;
+                pixels[o + 3] = 255;
+            }
+
+            return pixels;
+        }
+
+        var table = CorrectionTable(color, lcd: true);
+        var fir = new[] { FirOuter, FirInner, 1 - 2 * FirOuter - 2 * FirInner, FirInner, FirOuter };
+        var rowLength = width * 3;
+        var samples = mask.Samples;
+        for (var y = 0; y < mask.Height; y++)
+        {
+            var row = y * rowLength;
+            for (var x = 0; x < width; x++)
+            {
+                var o = ((y * width) + x) * 4;
+                for (var stripe = 0; stripe < 3; stripe++)
+                {
+                    var center = (x * 3) + stripe - Shift;
+                    var sum = 0.0;
+                    for (var k = -2; k <= 2; k++)
+                    {
+                        var s = center + k;
+                        if ((uint)s < (uint)rowLength)
+                            sum += fir[k + 2] * samples[row + s];
+                    }
+
+                    // Left to right the stripes are red, green, blue (blue, green, red on a display built the other way).
+                    pixels[o + (bgrStripes ? 2 - stripe : stripe)] = (byte)(table[(int)Math.Min(Math.Round(sum), 255)] * color.A / 255);
+                }
+
+                pixels[o + 3] = 255;
+            }
+        }
+
+        return pixels;
+    }
+
+    /// <summary>The text colour times each channel's coverage, from <see cref="StripeAlphas"/>: what is added to the backdrop once it has been dimmed by the coverage.</summary>
+    public static byte[] InkTimesAlpha(byte[] alphas, PaintColor color)
+    {
+        var (r, g, b) = color.ToRgb();
+        var pixels = new byte[alphas.Length];
+        for (var i = 0; i < alphas.Length; i += 4)
+        {
+            pixels[i] = (byte)((r * alphas[i] + 127) / 255);
+            pixels[i + 1] = (byte)((g * alphas[i + 1] + 127) / 255);
+            pixels[i + 2] = (byte)((b * alphas[i + 2] + 127) / 255);
+            pixels[i + 3] = 255;
+        }
+
+        return pixels;
+    }
 }

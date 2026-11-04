@@ -315,15 +315,38 @@ public sealed partial class HtmlView
             {
                 UpdateResult result;
                 using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context!, 1, 1);
-                if (_pendingPointer is { } pointer)
+
+                // A restyle drops the old layout before the new one is in; a region painted in between would be cleared and left empty, so the
+                // painter leaves what is on the surface alone until the new layout is there (see OnRegionsInvalidated).
+                _restyling = true;
+                try
                 {
-                    _pendingPointer = null;
-                    result = await document.SetPointerStateAsync(pointer.Page, pointer.X, pointer.Y, pointer.Pressed, measuring.Canvas);
+                    if (_pendingPointer is { } pointer)
+                    {
+                        _pendingPointer = null;
+                        result = await document.SetPointerStateAsync(pointer.Page, pointer.X, pointer.Y, pointer.Pressed, measuring.Canvas);
+                    }
+                    else
+                    {
+                        _clearPending = false;
+                        result = await document.ClearPointerStateAsync(measuring.Canvas);
+                    }
                 }
-                else
+                finally
                 {
-                    _clearPending = false;
-                    result = await document.ClearPointerStateAsync(measuring.Canvas);
+                    _restyling = false;
+                }
+
+                if (_paintDeferred)
+                {
+                    // Something was asked for while the layout was away and went unpainted.
+                    _paintDeferred = false;
+                    if (ReferenceEquals(document, _document))
+                    {
+                        UpdateMetrics();
+                        _canvas.Invalidate();
+                        _overlay.Invalidate();
+                    }
                 }
 
                 if (!result.Applied || !ReferenceEquals(document, _document))

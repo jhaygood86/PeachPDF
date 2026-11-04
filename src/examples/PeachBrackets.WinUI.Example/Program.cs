@@ -67,6 +67,15 @@ public sealed class ExampleApp : Application
             return;
         }
 
+        var bench = Array.IndexOf(_args, "--scroll-bench");
+        if (bench >= 0 && bench + 1 < _args.Length)
+        {
+            _window = new Window { Title = "PeachBrackets.WinUI scroll bench" };
+            _window.Activate();
+            ScrollBench.Run(_window, _args[bench + 1], bench + 2 < _args.Length ? _args[bench + 2] : "screen_long_page", this);
+            return;
+        }
+
         var smoke = Array.IndexOf(_args, "--smoke");
         if (smoke >= 0 && smoke + 1 < _args.Length)
         {

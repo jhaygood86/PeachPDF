@@ -123,6 +123,7 @@ public sealed partial class Win2dCanvas
                     image = Track(made, new OpacityEffect { Source = image, Opacity = (float)Math.Clamp(options.Opacity, 0, 1) });
 
                 _session.Transform = placement;
+                FlushText();
                 if (options.BlendMode != PaintBlendMode.Normal)
                     _session.Blend = SessionBlendFor(options.BlendMode);
 
