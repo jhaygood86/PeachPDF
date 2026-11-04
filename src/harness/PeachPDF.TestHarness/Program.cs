@@ -7510,6 +7510,78 @@ await SaveShowcaseAsync("pdf_a3_attachments", "Standards & Accessibility", "PDF/
     "Embedded files in a PDF/A-3 document, added through PdfGenerateConfig.Attachments: a CSV holding the report's data and a text note, each with its own MIME type and AFRelationship, indexed in both /AF and /Names /EmbeddedFiles.",
     pdfA3AttachmentsHtml, pdfA3AttachmentsConfig);
 
+// --- PDF annotations showcase ---
+// The -peachpdf-pdf-annotation-* properties turn elements into real PDF annotations - sticky notes, text marks, shapes, free text,
+// stamps, ink and clickable attached-file icons - each with an appearance stream, so the page is PDF/A-3 and a reader shows the
+// icon without drawing anything of its own. Open the PDF in a viewer: the paperclip next to the table opens q3-sales.csv, the
+// notes show their text on click, and -peachpdf-pdf-annotation-position decides where a mark's popup window opens.
+
+const string PdfAnnotationsCss = """
+    <style>
+    @page { size: a4; margin: 15mm }
+    body { font: 10pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 16pt }
+    h2 { font-size: 12pt; margin: 14pt 0 4pt }
+    p { margin: 4pt 0 }
+    .icons span { display: inline-block; width: 22pt; height: 22pt; margin-right: 6pt }
+    .box { display: inline-block; width: 80pt; height: 36pt; margin: 4pt 8pt 4pt 0; vertical-align: top }
+    </style>
+    """;
+
+var pdfAnnotationsHtml = "<!DOCTYPE html><html lang=\"en-US\"><head><title>PDF Annotations</title>" + PdfAnnotationsCss + "</head><body>" +
+    "<h1>PDF annotations</h1>" +
+    "<h2>Attached file</h2>" +
+    "<p>Q3 sales by region <span style=\"display: inline-block; width: 14pt; height: 14pt; vertical-align: middle; -peachpdf-pdf-annotation-type: file-attachment; -peachpdf-pdf-annotation-attachment: 'q3-sales.csv'\"></span> " +
+    "(click the paperclip to open the CSV the table is built from).</p>" +
+    "<h2>Attached-file icons</h2>" +
+    "<p class=\"icons\">" +
+    "<span style=\"-peachpdf-pdf-annotation-type: file-attachment; -peachpdf-pdf-annotation-attachment: 'q3-sales.csv'; -peachpdf-pdf-annotation-icon: paperclip\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: file-attachment; -peachpdf-pdf-annotation-attachment: 'q3-sales.csv'; -peachpdf-pdf-annotation-icon: push-pin\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: file-attachment; -peachpdf-pdf-annotation-attachment: 'q3-sales.csv'; -peachpdf-pdf-annotation-icon: graph\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: file-attachment; -peachpdf-pdf-annotation-attachment: 'q3-sales.csv'; -peachpdf-pdf-annotation-icon: tag\"></span></p>" +
+    "<h2>Note icons</h2>" +
+    "<p class=\"icons\">" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: note; -peachpdf-pdf-annotation-contents: 'A note'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: comment; -peachpdf-pdf-annotation-contents: 'A comment'; -peachpdf-pdf-annotation-author: 'Ann'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: key; -peachpdf-pdf-annotation-contents: 'A key'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: help; -peachpdf-pdf-annotation-contents: 'Help'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: new-paragraph; -peachpdf-pdf-annotation-contents: 'New paragraph'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: paragraph; -peachpdf-pdf-annotation-contents: 'Paragraph'\"></span>" +
+    "<span style=\"-peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-icon: insert; -peachpdf-pdf-annotation-contents: 'Insert here'\"></span></p>" +
+    "<h2>Text marks</h2>" +
+    "<p style=\"width:300pt\">Revenue was <span style=\"-peachpdf-pdf-annotation-type: highlight; -peachpdf-pdf-annotation-contents: 'Up 12% on Q2'; -peachpdf-pdf-annotation-position: page-right\">highest in the East region this quarter</span>, " +
+    "<span style=\"-peachpdf-pdf-annotation-type: underline\">while the South underline</span> " +
+    "<span style=\"-peachpdf-pdf-annotation-type: wavy; -peachpdf-pdf-annotation-color: red\">needs a second look</span> and " +
+    "<span style=\"-peachpdf-pdf-annotation-type: line-through\">an obsolete figure</span> was removed.</p>" +
+    "<h2>Shapes, free text, stamp and ink</h2>" +
+    "<div>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: square; -peachpdf-pdf-annotation-color: #1a73e8\"></span>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: circle; -peachpdf-pdf-annotation-color: #188038\"></span>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: line\"></span>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: free-text; -peachpdf-pdf-annotation-contents: 'Check this'\"></span>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: stamp; -peachpdf-pdf-annotation-contents: 'Approved'; -peachpdf-pdf-annotation-color: #188038\"></span>" +
+    "<span class=\"box\" style=\"-peachpdf-pdf-annotation-type: ink; -peachpdf-pdf-annotation-color: #c5221f; -peachpdf-pdf-annotation-path: path('M 4 40 C 20 -10 40 90 60 20 S 90 50 104 8')\"></span>" +
+    "</div>" +
+    "</body></html>";
+
+var pdfAnnotationsConfig = new PdfGenerateConfig
+{
+    PageSize = PageSize.A4,
+    PdfAConformance = PdfAConformance.PdfA3B,
+    Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+};
+pdfAnnotationsConfig.Attachments.Add(new PdfAttachment
+{
+    FileName = "q3-sales.csv",
+    MimeType = "text/csv",
+    Relationship = PdfAttachmentRelationship.Data,
+    Description = "The numbers behind the report's table",
+    Data = Encoding.UTF8.GetBytes("Region,Units,Revenue\nNorth,1204,48160\nSouth,987,39480\nEast,1533,61320\nWest,1076,43040\n"),
+});
+await SaveShowcaseAsync("pdf_annotations", "Standards & Accessibility", "PDF Annotations",
+    "Elements become real PDF annotations with -peachpdf-pdf-annotation-*: a clickable paperclip that opens an already-embedded file, sticky notes, highlight/underline/wavy/strike-out marks, shapes, free text, a stamp and ink - all with appearance streams, in a PDF/A-3 file.",
+    pdfAnnotationsHtml, pdfAnnotationsConfig);
+
 // --- ZUGFeRD / Factur-X e-invoice showcases ---
 // Built with the declarative API, and with the invoice XML generated by the open-source ZUGFeRD-csharp
 // library. The C# shown on the site is Showcases/ZugferdInvoiceShowcase.cs itself - the very file compiled

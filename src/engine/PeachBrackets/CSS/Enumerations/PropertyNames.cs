@@ -291,6 +291,18 @@
         /// into PdfFormField/PdfFormFieldAutoFontSize/PdfFormFieldComb/PdfFormFieldDoNotScroll at parse
         /// time; not documented in docs/, PeachPDF's own docs only ever show the -peachpdf- spelling.</summary>
         public static readonly string PrincePdfFormFieldSettings = "-prince-pdf-form-field-settings";
+        public static readonly string PdfAnnotationType = "-peachpdf-pdf-annotation-type";
+        public static readonly string PdfAnnotationAttachment = "-peachpdf-pdf-annotation-attachment";
+        public static readonly string PdfAnnotationTitle = "-peachpdf-pdf-annotation-title";
+        public static readonly string PdfAnnotationContents = "-peachpdf-pdf-annotation-contents";
+        public static readonly string PdfAnnotationAuthor = "-peachpdf-pdf-annotation-author";
+        public static readonly string PdfAnnotationIcon = "-peachpdf-pdf-annotation-icon";
+        public static readonly string PdfAnnotationColor = "-peachpdf-pdf-annotation-color";
+        public static readonly string PdfAnnotationPosition = "-peachpdf-pdf-annotation-position";
+        public static readonly string PdfAnnotationCreatedate = "-peachpdf-pdf-annotation-createdate";
+        public static readonly string PdfAnnotationModifydate = "-peachpdf-pdf-annotation-modifydate";
+        public static readonly string PdfAnnotationMerge = "-peachpdf-pdf-annotation-merge";
+        public static readonly string PdfAnnotationPath = "-peachpdf-pdf-annotation-path";
         public static readonly string BookmarkLevel = "bookmark-level";
         public static readonly string BookmarkLabel = "bookmark-label";
         public static readonly string BookmarkState = "bookmark-state";

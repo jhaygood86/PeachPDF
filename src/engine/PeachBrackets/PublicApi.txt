@@ -226,6 +226,7 @@ PeachBrackets.Annotations.Bookmark : sealed class
 PeachBrackets.Annotations.DocumentAnnotations : sealed class
   ctor()
   property IReadOnlyList<Bookmark> Bookmarks { get; init; }
+  property IReadOnlyList<PageAnnotation> Annotations { get; init; }
   property IReadOnlyList<PageFormField> FormFields { get; init; }
   property IReadOnlyList<PageLink> Links { get; init; }
 PeachBrackets.Annotations.FormFieldAppearance : sealed class
@@ -272,6 +273,36 @@ PeachBrackets.Annotations.FormFieldOption : struct
   property Boolean Selected { get; }
   property String Label { get; }
   property String Value { get; }
+PeachBrackets.Annotations.PageAnnotation : sealed class
+  ctor()
+  property DateTimeOffset? CreatedAt { get; init; }
+  property DateTimeOffset? ModifiedAt { get; init; }
+  property IReadOnlyList<IReadOnlyList<PaintPoint>> Strokes { get; init; }
+  property IReadOnlyList<PaintPoint> Quads { get; init; }
+  property Int32 PageIndex { get; init; }
+  property PageAnnotationKind Kind { get; init; }
+  property PaintColor? Color { get; init; }
+  property Rect Bounds { get; init; }
+  property Rect? PopupBounds { get; init; }
+  property String AttachmentName { get; init; }
+  property String Author { get; init; }
+  property String Contents { get; init; }
+  property String Icon { get; init; }
+  property String Title { get; init; }
+  property StructureNode? Source { get; init; }
+PeachBrackets.Annotations.PageAnnotationKind : enum Int32
+  Circle = 9
+  FileAttachment = 5
+  FreeText = 6
+  Highlight = 1
+  Ink = 11
+  Line = 10
+  Note = 0
+  Square = 8
+  Squiggly = 3
+  Stamp = 7
+  StrikeOut = 4
+  Underline = 2
 PeachBrackets.Annotations.PageFormField : sealed class
   ctor()
   property FormFieldAppearance Appearance { get; init; }

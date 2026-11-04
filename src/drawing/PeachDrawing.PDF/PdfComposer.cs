@@ -121,6 +121,14 @@ namespace PeachDrawing.PDF
         }
 
         /// <summary>
+        /// The file names of the files the document embeds (<see cref="PdfComposerOptions.EmbeddedFiles"/>), which a
+        /// <c>FileAttachment</c> annotation (<see cref="PdfAnnotationDefinition.EmbeddedFileName"/>) may point at. Empty until the document is
+        /// configured, and when it embeds nothing.
+        /// </summary>
+        public IReadOnlyCollection<string> EmbeddedFileNames =>
+            _document.Options.EmbeddingPlan is EmbeddedFilePlan plan ? System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Select(plan.Files, file => file.FileName)) : [];
+
+        /// <summary>
         /// Starts adding interactive form fields to the document's pages.
         /// </summary>
         /// <param name="renderContext">the context whose fonts and images the fields' appearances are drawn with</param>

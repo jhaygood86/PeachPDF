@@ -121,6 +121,101 @@ namespace PeachBrackets.Annotations
         public string? AccessibleName { get; init; }
     }
 
+    /// <summary>The kind of a <see cref="PageAnnotation"/>, from an element's <c>-peachpdf-pdf-annotation-type</c>.</summary>
+    public enum PageAnnotationKind
+    {
+        /// <summary>A sticky note: an icon that opens its text.</summary>
+        Note,
+
+        /// <summary>A translucent fill over the text.</summary>
+        Highlight,
+
+        /// <summary>A line under the text.</summary>
+        Underline,
+
+        /// <summary>A wavy line under the text.</summary>
+        Squiggly,
+
+        /// <summary>A line through the text.</summary>
+        StrikeOut,
+
+        /// <summary>An icon that opens an attached file.</summary>
+        FileAttachment,
+
+        /// <summary>A box of text.</summary>
+        FreeText,
+
+        /// <summary>A rubber stamp.</summary>
+        Stamp,
+
+        /// <summary>The outline of a rectangle.</summary>
+        Square,
+
+        /// <summary>The outline of an ellipse.</summary>
+        Circle,
+
+        /// <summary>A straight line.</summary>
+        Line,
+
+        /// <summary>Freehand strokes.</summary>
+        Ink,
+    }
+
+    /// <summary>
+    /// An annotation an author asked for with the <c>-peachpdf-pdf-annotation-*</c> properties: a note, a text mark, a shape, an attached-file
+    /// icon. Geometry follows the convention of <see cref="PageLink"/>: points from the page's top-left corner, y down.
+    /// </summary>
+    public sealed class PageAnnotation
+    {
+        /// <summary>The zero-based index of the page the annotation is on.</summary>
+        public required int PageIndex { get; init; }
+
+        /// <summary>What kind of annotation it is.</summary>
+        public required PageAnnotationKind Kind { get; init; }
+
+        /// <summary>
+        /// Where the annotation sits: the icon's box for a note or an attached file, the covered box for anything else (the union of
+        /// <see cref="Quads"/> for a text mark).
+        /// </summary>
+        public required Rect Bounds { get; init; }
+
+        /// <summary>For a text mark, four points (top-left, top-right, bottom-left, bottom-right) per line of text it covers; empty otherwise.</summary>
+        public IReadOnlyList<PaintPoint> Quads { get; init; } = [];
+
+        /// <summary>For ink, each stroke as a run of points; empty otherwise.</summary>
+        public IReadOnlyList<IReadOnlyList<PaintPoint>> Strokes { get; init; } = [];
+
+        /// <summary>Where the window that shows <see cref="Contents"/> opens, when the author placed it with <c>-peachpdf-pdf-annotation-position</c>.</summary>
+        public Rect? PopupBounds { get; init; }
+
+        /// <summary>The icon's name (<c>paperclip</c>, <c>note</c>...) as the author spelled it, or null for the kind's default.</summary>
+        public string? Icon { get; init; }
+
+        /// <summary>The annotation's colour, or null for the kind's default.</summary>
+        public PaintColor? Color { get; init; }
+
+        /// <summary>The annotation's subject.</summary>
+        public string? Title { get; init; }
+
+        /// <summary>The annotation's text.</summary>
+        public string? Contents { get; init; }
+
+        /// <summary>Who made the annotation.</summary>
+        public string? Author { get; init; }
+
+        /// <summary>For an attached file, the file name the document embeds.</summary>
+        public string? AttachmentName { get; init; }
+
+        /// <summary>When the annotation was made.</summary>
+        public System.DateTimeOffset? CreatedAt { get; init; }
+
+        /// <summary>When the annotation was last changed.</summary>
+        public System.DateTimeOffset? ModifiedAt { get; init; }
+
+        /// <summary>The element the annotation was collected from.</summary>
+        public StructureNode? Source { get; init; }
+    }
+
     /// <summary>
     /// What a reader of a paged rendering can click or navigate: the hyperlinks of each page and the document's outline.
     /// </summary>
@@ -134,5 +229,8 @@ namespace PeachBrackets.Annotations
 
         /// <summary>The form controls that landed on a page, in document order; empty unless interactive forms were asked for.</summary>
         public required IReadOnlyList<PageFormField> FormFields { get; init; }
+
+        /// <summary>The annotations authors asked for with <c>-peachpdf-pdf-annotation-type</c>, in document order.</summary>
+        public IReadOnlyList<PageAnnotation> Annotations { get; init; } = [];
     }
 }

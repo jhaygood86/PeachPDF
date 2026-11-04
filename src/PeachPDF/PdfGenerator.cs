@@ -773,6 +773,13 @@ namespace PeachPDF
                 HandleFormFields(document.Composer, annotations, formFieldBuilder, pageBase);
             }
 
+            // The -peachpdf-pdf-annotation-* annotations (notes, text marks, shapes, attached-file icons). Unconditional, like the outline: a
+            // document that asks for none collects none and adds nothing.
+            if (annotations.Annotations.Count > 0)
+            {
+                HandleAnnotations(document.Composer, annotations, pageBase);
+            }
+
             // PDF outline (bookmarks) - CSS-default-driven (h1-h6 default to bookmark-level 1-6 via the
             // UA stylesheet, everything else defaults to none), so this is unconditional: a document
             // with no headings simply collects zero bookmarks above and adds no outline.
@@ -903,6 +910,22 @@ namespace PeachPDF
                     continue;
 
                 formFieldBuilder.AddField(composer.Pages[field.PageIndex + pageBase], field);
+            }
+        }
+
+        /// <summary>
+        /// Writes the collected <c>-peachpdf-pdf-annotation-*</c> annotations onto their pages. An attached-file annotation points at a file
+        /// the document already embeds (<see cref="PdfGenerateConfig.Attachments"/>), so the file is stored once.
+        /// </summary>
+        private void HandleAnnotations(PdfComposer composer, DocumentAnnotations annotations, int pageBase)
+        {
+            var builder = new AnnotationBuilder(composer.CreateAnnotationBuilder(_renderContext), _renderContext, composer.EmbeddedFileNames);
+            foreach (var annotation in annotations.Annotations)
+            {
+                if (annotation.PageIndex + pageBase >= composer.Pages.Count)
+                    continue;
+
+                builder.Add(composer.Pages[annotation.PageIndex + pageBase], annotation);
             }
         }
 
