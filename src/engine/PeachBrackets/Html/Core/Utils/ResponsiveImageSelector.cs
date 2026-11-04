@@ -13,8 +13,10 @@ namespace PeachBrackets.Html.Utils
     /// <summary>
     /// Picks the image an <c>&lt;img&gt;</c> loads from its <c>srcset</c>/<c>sizes</c> attributes and an
     /// enclosing <c>&lt;picture&gt;</c>'s <c>&lt;source&gt;</c> siblings (HTML Standard 4.8.4.3). A PDF has
-    /// a fixed page rather than a viewport the reader resizes, so among the candidates that apply the
-    /// highest pixel density wins (the best print quality) instead of the one closest to a device's DPR.
+    /// a fixed page rather than a viewport the reader resizes, so for paged output the highest pixel density
+    /// among the candidates that apply wins (the best print quality). A screen document ranks them for the
+    /// container's <see cref="ImageSelectionPolicy.BestForTarget"/> policy instead: the smallest candidate
+    /// that is sharp enough for its device pixel ratio and zoom.
     /// </summary>
     internal static class ResponsiveImageSelector
     {
