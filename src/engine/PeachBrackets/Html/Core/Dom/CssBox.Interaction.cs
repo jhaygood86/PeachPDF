@@ -7,6 +7,12 @@ namespace PeachBrackets.Html.Dom
     internal partial class CssBox
     {
         /// <summary>
+        /// Whether a rule that reads the interaction state (<c>:hover</c>, <c>:active</c>, <c>:focus</c> and the like) was among the candidates
+        /// the cascade offered this box, whether or not it matched: the boxes a change of that state can restyle (see <c>InteractionRestyler</c>).
+        /// </summary>
+        internal bool HasStatefulCandidates { get; set; }
+
+        /// <summary>
         /// What <c>user-select</c> comes to for this box (CSS Basic User Interface 4 section 6.2): a declared value is itself (<c>contain</c> is
         /// <c>text</c> for a reader that has no editing host), and <c>auto</c> is <c>none</c> or <c>all</c> when the parent's is, and <c>text</c>
         /// otherwise.

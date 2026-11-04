@@ -237,7 +237,7 @@ namespace PeachBrackets.Html.Paint
         /// How far the box's own <c>box-shadow</c> layers and <c>drop-shadow()</c> filters reach beyond it, so the
         /// bitmap is large enough to hold them (both are painted with the element's own content).
         /// </summary>
-        private static double ShadowBleed(CssBox box)
+        internal static double ShadowBleed(CssBox box)
         {
             double bleed = 0;
 
@@ -312,10 +312,10 @@ namespace PeachBrackets.Html.Paint
             }
         }
 
-        private static double OutlineBleed(CssBox box) =>
+        internal static double OutlineBleed(CssBox box) =>
             box.ActualOutlineWidth > 0 ? box.ActualOutlineWidth + Math.Max(0, box.ActualOutlineOffset) : 0;
 
-        private static double TextShadowBleed(CssBox box)
+        internal static double TextShadowBleed(CssBox box)
         {
             var value = box.TextShadow;
             if (string.IsNullOrEmpty(value) || value.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase))

@@ -980,6 +980,13 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool HasStackingHoistCandidates { get; private set; }
 
+        /// <summary>Works <see cref="HasStackingHoistCandidates"/> out again, after a restyle changed which boxes form a stacking context without laying out.</summary>
+        internal void RefreshStackingHoistCandidates()
+        {
+            if (Root is not null)
+                HasStackingHoistCandidates = ComputeFlowFlags(Root, includeStackingHoistCandidates: true).HasStackingHoistCandidates;
+        }
+
         public Size PageSize { get; set; }
 
         /// <summary>
