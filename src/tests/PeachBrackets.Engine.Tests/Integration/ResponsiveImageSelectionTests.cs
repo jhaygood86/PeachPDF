@@ -408,6 +408,16 @@ namespace PeachBrackets.Engine.Tests.Integration
             new[] { box }.Concat(box.Boxes.SelectMany(Flatten));
 
         [Fact]
+        public async Task Document_ListsTheImagesThatFailedToLoad()
+        {
+            var (document, canvas) = await ScreenDocumentAsync($"<img id='i' src='{Small}' srcset='{Missing} 2x'>");
+            using var d0 = document;
+            using var c0 = canvas;
+
+            Assert.Equal([new ImageLoadFailure(Missing, Small)], document.ImageLoadFailures);
+        }
+
+        [Fact]
         public async Task UpgradeImages_WithoutAChangeOfScale_ReturnsNoRegions()
         {
             var (document, canvas) = await ScreenDocumentAsync($"<img id='i' srcset='{Small} 1x, {Mid} 2x'>");

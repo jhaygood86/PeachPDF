@@ -1,5 +1,6 @@
 using Microsoft.UI.Xaml;
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
 
 namespace PeachBrackets.WinUI;
@@ -15,6 +16,7 @@ public sealed partial class HtmlView
 
     private double CurrentDevicePixelRatio() => ImageScale.DevicePixelRatio(XamlRoot?.RasterizationScale ?? 1);
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private void WatchDisplayScale()
     {
         StopWatchingDisplayScale();
@@ -25,6 +27,7 @@ public sealed partial class HtmlView
         _imagesChosenForScale = CurrentDevicePixelRatio();
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private void StopWatchingDisplayScale()
     {
         if (_watchedRoot is not null)
@@ -35,18 +38,21 @@ public sealed partial class HtmlView
     }
 
     // The window moved to a display with another scale (or its scale was changed): the images may need to be denser than they are.
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private void OnXamlRootChanged(XamlRoot sender, XamlRootChangedEventArgs args)
     {
         if (Math.Abs(CurrentDevicePixelRatio() - _imagesChosenForScale) > 0.01)
             StartImageTimer();
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private void QueueImageUpgrade()
     {
         if (_document is not null && ImageScale.NeedsUpgrade(_imagesChosenForZoom, _scroller.ZoomFactor))
             StartImageTimer();
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private void StartImageTimer()
     {
         if (_imageTimer is null)
@@ -61,6 +67,7 @@ public sealed partial class HtmlView
         _imageTimer.Start();
     }
 
+    [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the window-free decisions are ImageScale, tested on their own.")]
     private async Task UpgradeImagesAsync()
     {
         if (_document is not { } document)

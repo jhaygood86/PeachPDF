@@ -1,4 +1,4 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
@@ -21,12 +21,6 @@ namespace PeachBrackets.Html.Utils
     internal static class ResponsiveImageSelector
     {
         internal readonly record struct Candidate(string Url, double Density, double? Width);
-
-        private static readonly HashSet<string> DefaultTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
-            "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
-        };
 
         /// <summary>One chosen image: its URL, the density its natural size is divided by, and the density it has against the width it is used at.</summary>
         /// <param name="Url">the image URL as written</param>
@@ -123,7 +117,7 @@ namespace PeachBrackets.Html.Utils
 
         private static bool TypeSupported(string type, CssBox box) =>
             string.IsNullOrWhiteSpace(type)
-            || (box.HtmlContainer?.RenderContext is { } context ? context.SupportsImageType(type) : DefaultTypes.Contains(type.Trim()));
+            || (box.HtmlContainer?.RenderContext?.SupportsImageType(type) ?? true);
 
         private static bool MediaMatches(string? media, CssBox box)
         {
