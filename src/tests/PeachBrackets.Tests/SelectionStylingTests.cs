@@ -173,6 +173,36 @@ public class SelectionStylingTests
         Assert.Equal((255, 255, 255, 255), TestDocument.Pixel(cleared, (int)runBefore.CharacterOffsets[2], row));
     }
 
+    private const string GradientText = "<style>body { font-size: 40pt } h1 { margin: 0; color: transparent; background-image: linear-gradient(90deg, red, blue); background-clip: text }</style>";
+
+    private static bool IsDarkInk((byte R, byte G, byte B, byte A) pixel) => pixel.R < 60 && pixel.G < 60 && pixel.B < 60;
+
+    [Fact]
+    public async Task SelectedTransparentText_WithBackgroundClipText_StaysReadable()
+    {
+        var options = new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true };
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<h1>Revenue</h1>", GradientText), options);
+        var run = Assert.Single(document.TextRuns);
+
+        document.SetSelectedRanges([document.FindText("Revenue").Single()]);
+        using var canvas = await TestDocument.PaintAsync(context, document);
+
+        Assert.True(HasPixel(canvas, run, 0, 7, IsDarkInk), "the transparent glyphs vanish under the selection fill");
+    }
+
+    [Fact]
+    public async Task UnselectedTransparentText_WithBackgroundClipText_StillShowsTheGradient()
+    {
+        var options = new HtmlDocumentOptions { RecordTextRuns = true, EnableSelectionStyling = true };
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<h1>Revenue</h1>", GradientText), options);
+        var run = Assert.Single(document.TextRuns);
+
+        using var canvas = await TestDocument.PaintAsync(context, document);
+
+        Assert.False(HasPixel(canvas, run, 0, 7, IsDarkInk));
+        Assert.True(HasPixel(canvas, run, 0, 7, p => p.R > 150 && p.G < 80));
+    }
+
     private static bool HasPixel(RasterCanvas canvas, TextRun run, int fromChar, int toChar, Func<(byte R, byte G, byte B, byte A), bool> test)
     {
         var left = (int)Math.Min(run.CharacterOffsets[fromChar], run.CharacterOffsets[toChar]);

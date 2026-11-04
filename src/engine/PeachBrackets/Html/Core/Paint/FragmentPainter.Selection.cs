@@ -48,18 +48,35 @@ namespace PeachBrackets.Html.Paint
                 var style = DomParser.ResolveHighlightStyle(container, word.OwnerBox, layer.PseudoName);
                 if (style is null) continue;
 
-                (layers ??= []).Add(new HighlightPaint(part, style.ActualBackgroundColor, ForegroundOf(style), style));
+                (layers ??= []).Add(new HighlightPaint(part, style.ActualBackgroundColor,
+                    VisibleForeground(word, style.ActualBackgroundColor, ForegroundOf(style)), style));
             }
 
             if (container.SelectionModel is { } selection && selection.TryGet(word, out var selected))
             {
                 var style = DomParser.ResolveSelectionStyle(container, word.OwnerBox);
                 (layers ??= []).Add(style is null
-                    ? new HighlightPaint(selected, container.SelectionBackground, container.SelectionForeground, null)
-                    : new HighlightPaint(selected, style.ActualBackgroundColor, ForegroundOf(style), style));
+                    ? new HighlightPaint(selected, container.SelectionBackground,
+                        VisibleForeground(word, container.SelectionBackground, container.SelectionForeground), null)
+                    : new HighlightPaint(selected, style.ActualBackgroundColor,
+                        VisibleForeground(word, style.ActualBackgroundColor, ForegroundOf(style)), style));
             }
 
             return layers;
+        }
+
+        /// <summary>
+        /// Keeps selected text readable when the element's own colour is fully transparent - the <c>background-clip: text; color: transparent</c>
+        /// gradient-text idiom - and the highlight sets no colour of its own. The highlight's fill covers the clipped background the glyphs
+        /// normally show through, so transparent glyphs over it would vanish; black or white, whichever contrasts with the fill, is used instead.
+        /// </summary>
+        private static PaintColor? VisibleForeground(CssRect word, PaintColor? background, PaintColor? foreground)
+        {
+            if (foreground is not null || background is not { A: > 0 } fill) return foreground;
+            if ((word.FirstLineStyle ?? word.OwnerBox).ActualColor.A != 0) return null;
+
+            var luminance = (0.299 * fill.R) + (0.587 * fill.G) + (0.114 * fill.B);
+            return luminance > 140 ? PaintColor.FromArgb(255, 0, 0, 0) : PaintColor.FromArgb(255, 255, 255, 255);
         }
 
         // A colour the rules did not change is the text's own: the style was seeded from the element, so only a different one is an override.
