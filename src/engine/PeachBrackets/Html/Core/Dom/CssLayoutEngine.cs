@@ -2206,10 +2206,13 @@ namespace PeachBrackets.Html.Dom
             }
 
             // The table layout engine passes the resolved table width explicitly (only tables reach
-            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width. A table wider than its
+            // containing block is over-constrained, so its auto margins are 0 (CSS 2.1 §10.3.3), not a negative margin that
+            // pulls it out past the start edge: it starts at the edge and overflows at the end, as ResolveAutoHorizontalMargin
+            // does for a block.
             if (boxWidth is not null)
             {
-                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
+                return Math.Max(0, ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box, blockTop);
@@ -2242,10 +2245,13 @@ namespace PeachBrackets.Html.Dom
             }
 
             // The table layout engine passes the resolved table width explicitly (only tables reach
-            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width. A table wider than its
+            // containing block is over-constrained, so its auto margins are 0 (CSS 2.1 §10.3.3), not a negative margin that
+            // pulls it out past the start edge: it starts at the edge and overflows at the end, as ResolveAutoHorizontalMargin
+            // does for a block.
             if (boxWidth is not null)
             {
-                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
+                return Math.Max(0, ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box, blockTop);

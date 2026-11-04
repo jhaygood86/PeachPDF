@@ -781,7 +781,17 @@ namespace PeachBrackets.Html.Dom
             // Once per table, for the same reason the whole-table pre-checks below are: the offset is
             // derived from the containing block rather than from where the table currently is, so a
             // continuation adding it again would center an already-centered table a second time.
-            if (!_continuesAPreviousPass && _tableBox.MarginLeft.Value.IsKeyword)
+            if (!_continuesAPreviousPass && !_isVertical && _tableBox.IsFloated)
+            {
+                // A floated table is placed before this engine has run, when its used width is still unknown (a table
+                // skips the block width resolution that gives any other float its own), so a float to the right was
+                // anchored with no width to subtract and sat at the containing block's right edge, off the page. Place it
+                // again now that the columns have settled the width: the scan restarts from the containing block and
+                // finds the same blockers, this time with the width a left float needs to know whether it still fits.
+                _tableBox.ActualRight = _tableBox.Location.X + GetWidthSum();
+                CssLayoutEngine.FloatBox(_tableBox);
+            }
+            else if (!_continuesAPreviousPass && _tableBox.MarginLeft.Value.IsKeyword)
             {
                 _tableBox.Location = _tableBox.Location with
                 {

@@ -61,10 +61,72 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(expectedLeft, await TableLeftAsync(attribute), 2);
         }
 
-        [Fact]
-        public async Task Align_LosesToAnAuthorMargin()
+        [Theory]
+        [InlineData("table { margin: 0 }", 0)]
+        [InlineData("table { margin: 0 0 0 20pt }", 20)]
+        public async Task Align_LosesToAnAuthorMargin(string css, double expectedLeft)
         {
-            Assert.Equal(0, await TableLeftAsync("align='center'", "table { margin: 0 }"), 2);
+            // Guards the order of the hint and the author rule (the hint is applied first, so the rule overrides it); it cannot
+            // fail on a build that never centred a table at all.
+            Assert.Equal(expectedLeft, await TableLeftAsync("align='center'", css), 2);
+        }
+
+        private static async Task<(double Left, double Width, double SiblingLeft)> PlacedAsync(string tableAttributes, string css = "")
+        {
+            // The sibling after the table is what puts the table through the block flow's float placement.
+            var (root, _) = await LayoutAsync(
+                $"<div id='c'><table id='t' {tableAttributes}><tr><td>x</td></tr></table><div id='s'>after</div></div>",
+                $"#c {{ width: 200pt }} {css}");
+            var table = LayoutHarness.FindById(root, "t")!;
+            var container = LayoutHarness.FindById(root, "c")!;
+            var sibling = LayoutHarness.FindById(root, "s")!;
+
+            return (table.Location.X - container.ClientLeft, table.ActualRight - table.Location.X, sibling.Location.X - container.ClientLeft);
+        }
+
+        [Theory]
+        [InlineData("align='right' style='width: 100pt'")]
+        [InlineData("style='float: right; width: 100pt'")]
+        public async Task RightFloatedTable_FollowedByABlock_EndsAtTheContainersRightEdge(string attributes)
+        {
+            // The table's width is only known once its columns have settled, which is after the float is first placed: it used to be
+            // anchored with no width to subtract, at the right edge itself, so a visible table moved off the page.
+            var (left, width, siblingLeft) = await PlacedAsync(attributes);
+
+            Assert.Equal(100, width, 2);
+            Assert.Equal(100, left, 2);
+            Assert.Equal(0, siblingLeft, 2);
+        }
+
+        [Fact]
+        public async Task RightFloatedTable_AsWideAsItsContainer_StartsAtTheContainersLeftEdge()
+        {
+            var (left, width, _) = await PlacedAsync("align='right' style='width: 100%'");
+
+            Assert.Equal(200, width, 2);
+            Assert.Equal(0, left, 2);
+        }
+
+        [Fact]
+        public async Task LeftFloatedTable_FollowedByABlock_StartsAtTheContainersLeftEdge()
+        {
+            var (left, width, _) = await PlacedAsync("align='left' style='width: 100pt'");
+
+            Assert.Equal(100, width, 2);
+            Assert.Equal(0, left, 2);
+        }
+
+        [Theory]
+        [InlineData("align='center' style='width: 300pt'")]
+        [InlineData("style='margin-left: auto; margin-right: auto; width: 300pt'")]
+        public async Task CenteredTable_WiderThanItsContainer_StartsAtTheStartEdge(string attributes)
+        {
+            // CSS 2.1 §10.3.3: an over-constrained box's auto margins are 0, so the extra width overflows at the end. It used to be
+            // centred through a negative margin, which pulled the table out past the start edge.
+            var (left, width, _) = await PlacedAsync(attributes);
+
+            Assert.Equal(0, left, 2);
+            Assert.True(width >= 300 * 0.99, $"the table keeps its own width, was {width}");
         }
 
         [Theory]
@@ -234,6 +296,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var cell = await CellAsync("<table border='1'><thead><tr><th id='c'>x</th></tr></thead></table>");
 
             Assert.Equal(1 * Px, cell.ActualBorderTopWidth, 2);
+            // Not a Chrome measurement: a browser computes `inset` for a `border` attribute, this engine paints it `solid`.
             Assert.Equal(LineStyle.Solid.ToString(), cell.BorderLeftStyle.Value.ToString());
             Assert.Equal(LineStyle.Solid.ToString(), cell.BorderBottomStyle.Value.ToString());
         }
