@@ -150,6 +150,7 @@ namespace PeachBrackets.Html.Parse
             if (!htmlContainer.IgnoreAuthorStyleSheets)
             {
                 using (EngineTelemetry.Source.StartActivity("css.collect"))
+                    await PrefetchStylesheetsAsync(root, htmlContainer);
                     (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
             }
 
@@ -702,6 +703,43 @@ namespace PeachBrackets.Html.Parse
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Tells a render context that can fetch side by side (<see cref="IResourcePrefetcher"/>) which style sheets the document links, so they are all fetched at once:
+        /// <see cref="CascadeParseStyles"/> loads them one at a time, in document order, and each wait adds to the load. The parse still runs in order.
+        /// </summary>
+        private static async ValueTask PrefetchStylesheetsAsync(CssBox root, HtmlContainerInt htmlContainer)
+        {
+            if (htmlContainer.SynchronousOnly || htmlContainer.RenderContext is not IResourcePrefetcher prefetcher)
+                return;
+
+            var addresses = new List<RUri>();
+            CollectStylesheetAddresses(root, htmlContainer, addresses);
+            if (addresses.Count > 1)
+                await prefetcher.PrefetchAsync(addresses);
+        }
+
+        private static void CollectStylesheetAddresses(CssBox box, HtmlContainerInt htmlContainer, List<RUri> addresses)
+        {
+            if (box.HtmlTag is { } tag && tag.Name.Equals("link", StringComparison.OrdinalIgnoreCase)
+                && box.GetAttribute("rel", string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+                    .Any(token => token.Equals("stylesheet", StringComparison.OrdinalIgnoreCase))
+                && box.GetAttribute("href", string.Empty) is { Length: > 0 } href)
+            {
+                try
+                {
+                    if (CommonUtils.ResolveAgainstDocumentBase(htmlContainer, href) is { } address)
+                        addresses.Add(address);
+                }
+                catch (Exception e) when (e is UriFormatException or ArgumentException)
+                {
+                    // Not an address; loading the style sheet later reports what is wrong.
+                }
+            }
+
+            foreach (var child in box.Boxes)
+                CollectStylesheetAddresses(child, htmlContainer, addresses);
         }
 
         /// <summary>

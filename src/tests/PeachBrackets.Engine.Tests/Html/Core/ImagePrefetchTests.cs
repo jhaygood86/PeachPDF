@@ -68,6 +68,24 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         }
 
         [Fact]
+        public async Task TheLinkedStyleSheets_AreHandedOverTogether_InDocumentOrder()
+        {
+            var context = await LayOutAsync("<p>text</p>",
+                "<link rel='stylesheet' href='a.css'><link rel='preload' href='skip.css'><link rel='alternate stylesheet' href='/b.css'><link rel='icon' href='i.png'><link rel='stylesheet' href=''>");
+
+            var call = Assert.Single(context.Calls);
+            Assert.Equal(["https://example.test/dir/a.css", "https://example.test/b.css"], call.Select(a => a.AbsoluteUri).ToArray());
+        }
+
+        [Fact]
+        public async Task ASingleLinkedStyleSheet_IsNotWorthAHandOver()
+        {
+            var context = await LayOutAsync("<p>text</p>", "<link rel='stylesheet' href='only.css'>");
+
+            Assert.Empty(context.Calls);
+        }
+
+        [Fact]
         public async Task ASingleImage_IsNotWorthAHandOver()
         {
             var context = await LayOutAsync("<img src='only.png'>");
