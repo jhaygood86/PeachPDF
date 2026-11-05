@@ -50,7 +50,7 @@ namespace PeachBrackets.Html.Parse
             while (tokenizer.ReadNextToken(out var token))
             {
 #if DEBUG
-                Console.WriteLine($"parse token start : current box: {state.Current}; tag: {token}");
+                if (EngineTrace.Enabled) Console.WriteLine($"parse token start : current box: {state.Current}; tag: {token}");
 #endif
 
                 // Inside an inline <math> the markup goes into source elements, not boxes (see MathSourceElement), for as long as it
@@ -148,7 +148,7 @@ namespace PeachBrackets.Html.Parse
                 else if (!HtmlUtils.IsSingleTag(lowerName))
                 {
 #if DEBUG
-                    Console.WriteLine($"parse token, tag close: {tagName}. current box: {state.Current}");
+                    if (EngineTrace.Enabled) Console.WriteLine($"parse token, tag close: {tagName}. current box: {state.Current}");
 #endif
                     // Every unmatched end tag is a parse error the HTML5 tree construction algorithm simply ignores, leaving the
                     // insertion point where it is - NOT "close everything up to the document root", which would silently reparent
@@ -159,7 +159,7 @@ namespace PeachBrackets.Html.Parse
             else if (!string.IsNullOrEmpty(tagName))
             {
 #if DEBUG
-                Console.WriteLine($"parse token, tag open: {tagName}. current box: {state.Current}");
+                if (EngineTrace.Enabled) Console.WriteLine($"parse token, tag open: {tagName}. current box: {state.Current}");
 #endif
                 var lowerName = tagName.ToLowerInvariant();
                 var isSingle = HtmlUtils.IsSingleTag(lowerName) || token.IsEmptyElement;

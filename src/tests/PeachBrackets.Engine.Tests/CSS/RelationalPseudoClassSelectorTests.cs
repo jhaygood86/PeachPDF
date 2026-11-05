@@ -45,6 +45,47 @@ public class RelationalPseudoClassSelectorTests : CssConstructionFunctions
 
     // ── :is() / :matches() ────────────────────────────────────────────────────
 
+    // Selectors 4, "forgiving selector list": an argument of :is() or :where() that does not parse is dropped and the others stay.
+    [Theory]
+    [InlineData("p:is(.a, :nope-not-real) { background-color: #ff0000; }")]
+    [InlineData("p:is(:nope-not-real, .a) { background-color: #ff0000; }")]
+    [InlineData("p:is(.a, ) { background-color: #ff0000; }")]
+    [InlineData("p:is(, .a) { background-color: #ff0000; }")]
+    [InlineData("p:is(.a, :unknown(x)) { background-color: #ff0000; }")]
+    [InlineData("p:where(.a, :nope-not-real) { background-color: #ff0000; }")]
+    public async Task IsAndWhere_DropAnInvalidArgumentAndKeepTheOthers(string rule)
+    {
+        var html = Html(rule, "<div><p class='a'>1</p><p class='b'>2</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+
+        Assert.NotEqual("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("transparent", boxes[1].BackgroundColor);
+    }
+
+    [Fact]
+    public async Task IsWithOnlyInvalidArguments_MatchesNothingAndDoesNotInvalidateTheRule()
+    {
+        // The rule is valid (the list is just empty): other rules in the sheet are unaffected, and so is the next selector of the same rule.
+        var html = Html(
+            "p:is(:nope-not-real) { background-color: #ff0000; } .b, p:is(:nope-not-real) { color: rgb(0, 0, 255); }",
+            "<div><p class='a'>1</p><p class='b'>2</p></div>");
+        var boxes = await FindAllBoxesByTag(html, "p");
+
+        Assert.Equal("transparent", boxes[0].BackgroundColor);
+        Assert.Equal("rgb(0, 0, 255)", boxes[1].Color);
+    }
+
+    [Fact]
+    public async Task TheLegacyAnyFunctionsAreNotForgiving()
+    {
+        var html = Html(
+            "p:-webkit-any(.a, :nope-not-real) { background-color: #ff0000; }",
+            "<div><p class='a'>1</p></div>");
+        var box = await FindBoxByTag(html, "p");
+
+        Assert.Equal("transparent", box.BackgroundColor);
+    }
+
     [Fact]
     public async Task Is_MatchesEitherBranch()
     {

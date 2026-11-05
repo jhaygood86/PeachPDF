@@ -48,22 +48,24 @@ namespace PeachBrackets.Html.Utils
         /// <param name="fonts">See <see cref="PeachBrackets.Css.Length.ToPixels"/>'s parameter of the same name -
         /// scoped, for a <c>font-size</c>, to the PARENT's font for <c>ex</c>/<c>ch</c>/<c>cap</c>/<c>ic</c>/<c>lh</c>
         /// (CSS Values 4 §6.1.1). <c>null</c> takes each unit's spec fallback.</param>
+        /// <param name="screen">Whether the document is laid out for a screen, which sizes the absolute-size keywords the way browsers do
+        /// (see <see cref="DefaultFontResolver.Keyword"/>).</param>
         internal static double Resolve(string fontSizeValue, double parentSize, double remSize,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
             double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
-            IFontMetricSource? fonts = null)
+            IFontMetricSource? fonts = null, bool screen = false)
         {
             var fsize = fontSizeValue switch
             {
-                Keywords.Medium => DefaultFontResolver.FontSize,
-                Keywords.XxSmall => DefaultFontResolver.FontSize - 4,
-                Keywords.XSmall => DefaultFontResolver.FontSize - 3,
-                Keywords.Small => DefaultFontResolver.FontSize - 2,
-                Keywords.Large => DefaultFontResolver.FontSize + 2,
-                Keywords.XLarge => DefaultFontResolver.FontSize + 3,
-                Keywords.XxLarge => DefaultFontResolver.FontSize + 4,
+                Keywords.Medium => DefaultFontResolver.Keyword(0, screen),
+                Keywords.XxSmall => DefaultFontResolver.Keyword(-4, screen),
+                Keywords.XSmall => DefaultFontResolver.Keyword(-3, screen),
+                Keywords.Small => DefaultFontResolver.Keyword(-2, screen),
+                Keywords.Large => DefaultFontResolver.Keyword(2, screen),
+                Keywords.XLarge => DefaultFontResolver.Keyword(3, screen),
+                Keywords.XxLarge => DefaultFontResolver.Keyword(4, screen),
                 Keywords.Smaller => parentSize - 2,
                 Keywords.Larger => parentSize + 2,
                 _ => CssValueParser.ParseLength(fontSizeValue, parentSize, parentSize, remSize, null, true,
@@ -100,12 +102,13 @@ namespace PeachBrackets.Html.Utils
         /// <param name="viewportInlineSizePt">See the string overload's parameter of the same name.</param>
         /// <param name="viewportBlockSizePt">See the string overload's parameter of the same name.</param>
         /// <param name="fonts">See the string overload's parameter of the same name.</param>
+        /// <param name="screen">See the string overload's parameter of the same name.</param>
         internal static double Resolve(CssKeywordOrValue<FontSizeKeyword, LengthOrCalc> fontSize, double parentSize, double remSize,
             double? containerInlineSizePt = null, double? containerBlockSizePt = null,
             double? viewportWidthPt = null, double? viewportHeightPt = null,
             double? containerWidthPt = null, double? containerHeightPt = null,
             double? viewportInlineSizePt = null, double? viewportBlockSizePt = null,
-            IFontMetricSource? fonts = null)
+            IFontMetricSource? fonts = null, bool screen = false)
         {
             double fsize;
             if (fontSize.Value is { } value)
@@ -122,15 +125,15 @@ namespace PeachBrackets.Html.Utils
             {
                 fsize = fontSize.Keyword switch
                 {
-                    FontSizeKeyword.XxSmall => DefaultFontResolver.FontSize - 4,
-                    FontSizeKeyword.XSmall => DefaultFontResolver.FontSize - 3,
-                    FontSizeKeyword.Small => DefaultFontResolver.FontSize - 2,
-                    FontSizeKeyword.Large => DefaultFontResolver.FontSize + 2,
-                    FontSizeKeyword.XLarge => DefaultFontResolver.FontSize + 3,
-                    FontSizeKeyword.XxLarge => DefaultFontResolver.FontSize + 4,
+                    FontSizeKeyword.XxSmall => DefaultFontResolver.Keyword(-4, screen),
+                    FontSizeKeyword.XSmall => DefaultFontResolver.Keyword(-3, screen),
+                    FontSizeKeyword.Small => DefaultFontResolver.Keyword(-2, screen),
+                    FontSizeKeyword.Large => DefaultFontResolver.Keyword(2, screen),
+                    FontSizeKeyword.XLarge => DefaultFontResolver.Keyword(3, screen),
+                    FontSizeKeyword.XxLarge => DefaultFontResolver.Keyword(4, screen),
                     FontSizeKeyword.Smaller => parentSize - 2,
                     FontSizeKeyword.Larger => parentSize + 2,
-                    _ => DefaultFontResolver.FontSize // Medium, or unset (unreachable in practice - see CssKeywordOrValue's own doc comment)
+                    _ => DefaultFontResolver.Keyword(0, screen) // Medium, or unset (unreachable in practice - see CssKeywordOrValue's own doc comment)
                 };
             }
 

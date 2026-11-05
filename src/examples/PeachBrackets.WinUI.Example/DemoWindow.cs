@@ -35,6 +35,8 @@ internal sealed class DemoWindow : Window
     private FontSet? _privateFonts;
     private Showcase? _current;
     private string _html = string.Empty;
+    // The page of the web showcase as it was fetched, kept so a change of theme lays it out again with the other theme's classes without fetching it again.
+    private string? _webSource;
     private Slider? _widthSlider;
     private string _lastLink = string.Empty;
     private double _loadMilliseconds;
@@ -42,7 +44,29 @@ internal sealed class DemoWindow : Window
     public DemoWindow()
     {
         Title = "PeachBrackets.WinUI demo";
-        _view.DocumentLoaded += (_, _) => { _loadMilliseconds = _loadTimer.Elapsed.TotalMilliseconds; UpdateStatus(); };
+        PhaseTimings.Start();
+        _view.DocumentLoaded += (_, _) =>
+        {
+            _loadMilliseconds = _loadTimer.Elapsed.TotalMilliseconds;
+            if (Environment.GetEnvironmentVariable("PEACH_TIMINGS_FILE") is { Length: > 0 } report)
+                PhaseTimings.WriteReport(report);
+
+            UpdateStatus();
+
+            // `PEACH_SCROLL_Y=<dip>` scrolls the view there once the document has loaded, to look at a part of a long page.
+            if (double.TryParse(Environment.GetEnvironmentVariable("PEACH_SCROLL_Y"), System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var scrollY)
+                )
+            {
+                var wait = new DispatcherTimer { Interval = TimeSpan.FromSeconds(2) };
+                wait.Tick += (_, _) =>
+                {
+                    wait.Stop();
+                    if (FindScrollViewer(_view) is { } scroller)
+                        scroller.ChangeView(null, scrollY, null, disableAnimation: true);
+                };
+                wait.Start();
+            }
+        };
         _view.DocumentFailed += (_, e) => { _status.Text = "Failed to load: " + e.Exception.Message; };
         _view.ContentHeightChanged += (_, _) => UpdateStatus();
         // A link to a web address is only reported, so the demo does not open a browser; a link to a place in the document is left to the view, which scrolls to it.
@@ -75,11 +99,24 @@ internal sealed class DemoWindow : Window
         _root.Children.Add(right);
         _root.Children.Add(statusBar);
         Content = _root;
+        _root.ActualThemeChanged += (_, _) =>
+        {
+            if (_current is { IsWeb: true } web && _webSource is not null)
+                _ = ShowWebPageAsync(web);
+        };
 
         FillList();
         ApplySettings();
         // `--showcase <slug>` opens that showcase first (the demo can then be driven without finding it in the list).
         var args = Environment.GetCommandLineArgs();
+        // `--height <dip>` sets the height of the box the view sits in (the slider stops at 1000), to see more of a page at once.
+        if (Array.IndexOf(args, "--height") is var heightAt and >= 0 && heightAt + 1 < args.Length
+            && double.TryParse(args[heightAt + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var hostHeight))
+        {
+            _settings.HostHeight = hostHeight;
+            ApplySettings();
+        }
+
         var wanted = Array.IndexOf(args, "--showcase") is var at and >= 0 && at + 1 < args.Length ? _shown.FindIndex(s => s.Slug == args[at + 1]) : -1;
         if (_list.Items.Count > 0)
             _list.SelectedIndex = Math.Max(0, wanted);
@@ -87,6 +124,21 @@ internal sealed class DemoWindow : Window
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         timer.Tick += (_, _) => UpdateStatus();
         timer.Start();
+    }
+
+    private static Microsoft.UI.Xaml.Controls.ScrollViewer? FindScrollViewer(DependencyObject parent)
+    {
+        for (var i = 0; i < Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = Microsoft.UI.Xaml.Media.VisualTreeHelper.GetChild(parent, i);
+            if (child is Microsoft.UI.Xaml.Controls.ScrollViewer { ScrollableHeight: > 0 } viewer)
+                return viewer;
+
+            if (FindScrollViewer(child) is { } found)
+                return found;
+        }
+
+        return null;
     }
 
     // The list of showcases, with a search box over it.
@@ -296,6 +348,7 @@ internal sealed class DemoWindow : Window
     private void Show(Showcase showcase)
     {
         _current = showcase;
+        _webSource = null;
         _title.Text = showcase.Title;
         _description.Text = showcase.Description;
         if (!showcase.IsWeb)
@@ -312,21 +365,21 @@ internal sealed class DemoWindow : Window
         else
             _settings.HostWidth = 1200;
 
-        // A web page: fetch it off the UI thread, then come back to it; give the page a base address so what it refers to is found.
+        // A web page: fetch it off the UI thread, then come back to it. PageRewriter then gives it a base address (so what it refers to is found) and the
+        // classes its own startup script would have set on <html>, which the control does not run.
         _ = System.Threading.Tasks.Task.Run(async () =>
         {
-            string html;
+            string? page = null;
+            string? failure = null;
             try
             {
                 using var client = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(30) };
-                var page = await client.GetStringAsync(showcase.Path);
-                var head = page.IndexOf("<head", StringComparison.OrdinalIgnoreCase);
-                var close = head < 0 ? -1 : page.IndexOf('>', head);
-                html = close < 0 ? $"<base href=\"{showcase.Path}\">" + page : page.Insert(close + 1, $"<base href=\"{showcase.Path}\">");
+                client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", PeachBrackets.HostResourceLoader.UserAgent);
+                page = await client.GetStringAsync(showcase.Path);
             }
             catch (Exception exception)
             {
-                html = $"<p style='font:16px sans-serif;padding:16pt'>Could not fetch {showcase.Path}: {System.Net.WebUtility.HtmlEncode(exception.Message)}</p>";
+                failure = $"<p style='font:16px sans-serif;padding:16pt'>Could not fetch {showcase.Path}: {System.Net.WebUtility.HtmlEncode(exception.Message)}</p>";
             }
 
             DispatcherQueue.TryEnqueue(() =>
@@ -334,17 +387,52 @@ internal sealed class DemoWindow : Window
                 if (!ReferenceEquals(_current, showcase))
                     return;
 
-                _view.DocumentBaseUri = new Uri(showcase.Path);
-                _settings.AllowNetworkAccess = true;
-                ApplySettings();
-                _html = html;
-                ReloadDocument();
+                if (failure is not null)
+                {
+                    _view.DocumentBaseUri = null;
+                    _html = failure;
+                    ReloadDocument();
+                    return;
+                }
+
+                _webSource = page;
+                _ = ShowWebPageAsync(showcase);
             });
         });
     }
 
+    // Lays the fetched page of a web showcase out for the theme the demo shows now. The page is rewritten off the UI thread (it is parsed and written out
+    // again), and dropped if the showcase changed meanwhile.
+    private async System.Threading.Tasks.Task ShowWebPageAsync(Showcase showcase)
+    {
+        var source = _webSource;
+        if (source is null)
+            return;
+
+        var dark = _root.ActualTheme == ElementTheme.Dark;
+        string html;
+        try
+        {
+            html = await System.Threading.Tasks.Task.Run(() => PageRewriter.Rewrite(source, showcase.Path, WebPageTraits.RootClasses(showcase.Slug, dark)));
+        }
+        catch (Exception exception)
+        {
+            html = $"<p style='font:16px sans-serif;padding:16pt'>Could not prepare {showcase.Path}: {System.Net.WebUtility.HtmlEncode(exception.Message)}</p>";
+        }
+
+        if (!ReferenceEquals(_current, showcase) || !ReferenceEquals(_webSource, source))
+            return;
+
+        _view.DocumentBaseUri = new Uri(showcase.Path);
+        _settings.AllowNetworkAccess = true;
+        ApplySettings();
+        _html = html;
+        ReloadDocument();
+    }
+
     private void ReloadDocument()
     {
+        PhaseTimings.Reset();
         _loadTimer.Restart();
         _lastLink = string.Empty;
         if (_settings.ListMode)
@@ -413,6 +501,6 @@ internal sealed class DemoWindow : Window
         var pages = _view.Document?.Pages.Count.ToString() ?? "-";
         var scroll = _view.Document is null ? "-" : $"{_view.Document.Viewport.Y:0}";
         _status.Text = $"{_current?.Slug}   pages: {pages}   ContentHeight: {_view.ContentHeight:0} DIP   view: {_view.ActualWidth:0}x{_view.ActualHeight:0}   "
-            + $"viewport top: {scroll} pt   load: {_loadMilliseconds:0} ms" + (_lastLink.Length > 0 ? $"   link: {_lastLink}" : string.Empty);
+            + $"viewport top: {scroll} pt   load: {_loadMilliseconds:0} ms" + (PhaseTimings.Summary() is { Length: > 0 } phases ? $"   [{phases}]" : string.Empty) + (_lastLink.Length > 0 ? $"   link: {_lastLink}" : string.Empty);
     }
 }

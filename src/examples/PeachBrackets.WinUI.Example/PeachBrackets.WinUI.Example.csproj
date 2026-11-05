@@ -19,6 +19,8 @@
 		<ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" />
 		<PackageReference Include="Microsoft.Graphics.Win2D" />
+		<!-- Rewrites a fetched web page (its root classes and base address) before the control loads it; see PageRewriter. Demo only, not shipped. -->
+		<PackageReference Include="AngleSharp" />
 	</ItemGroup>
 
 	<!--

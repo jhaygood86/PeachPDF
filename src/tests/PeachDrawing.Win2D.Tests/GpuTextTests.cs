@@ -84,6 +84,48 @@ public class GpuTextTests
     }
 
     [Fact]
+    public async Task TextInsideAGeometryClip_IsDrawnOverTheClipsOwnFill_NotOverWhatWasInTheTargetBefore()
+    {
+        // A card with rounded corners clips with a geometry, which Direct2D draws into a layer until the clip is popped: the card's fill is not in the
+        // render target yet, so text blended against the target came out as a rectangle of the page behind the card.
+        using var context = await ContextAsync();
+        Action<Win2dCanvas, Font> Scene(bool clipped) => (canvas, font) =>
+        {
+            if (clipped)
+            {
+                using var path = canvas.GetGraphicsPath();
+                // Rounded corners, so the clip is a real geometry (a rectangle is made an axis-aligned clip, which has no layer).
+                const float r = 10;
+                const float w = (float)Width, h = (float)Height;
+                path.Start(r, 0);
+                path.LineTo(w - r, 0);
+                path.AddBezierTo(w, 0, w, 0, w, r);
+                path.LineTo(w, h - r);
+                path.AddBezierTo(w, h, w, h, w - r, h);
+                path.LineTo(r, h);
+                path.AddBezierTo(0, h, 0, h, 0, h - r);
+                path.LineTo(0, r);
+                path.AddBezierTo(0, 0, 0, 0, r, 0);
+                path.CloseFigure();
+                canvas.PushClip(path);
+            }
+
+            canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 200, 40, 40)), 0, 0, Width, Height);
+            canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(6, 6), new Core.Size(300, 20));
+            canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(6, 32), new Core.Size(300, 20));
+            if (clipped)
+                canvas.PopClip();
+        };
+
+        // The same picture with no clip is the reference: the clip changes nothing about what is seen, so the two agree (up to ClearType against grayscale
+        // fringes); the page behind the card showing through the words' rectangles is a large difference.
+        var expected = Render(context, gpu: true, Scene(clipped: false));
+        var actual = Render(context, gpu: true, Scene(clipped: true));
+
+        Assert.True(Compare(expected, actual).Mean < 4, "text in a geometry clip was drawn over the wrong backdrop");
+    }
+
+    [Fact]
     public async Task GpuLcdText_LooksLikeTheReadBackText()
     {
         using var context = await ContextAsync();

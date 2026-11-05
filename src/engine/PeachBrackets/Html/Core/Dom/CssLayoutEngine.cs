@@ -99,8 +99,8 @@ namespace PeachBrackets.Html.Dom
             var width = new CssLength(word.OwnerBox.Width);
             var height = new CssLength(word.OwnerBox.Height);
 
-            var hasImageTagWidth = TryResolveAbsolute(width, pixelsPerPoint, out var widthUnits);
-            var hasImageTagHeight = TryResolveAbsolute(height, pixelsPerPoint, out var heightUnits);
+            var hasImageTagWidth = TryResolveLength(width, word.OwnerBox, pixelsPerPoint, out var widthUnits);
+            var hasImageTagHeight = TryResolveLength(height, word.OwnerBox, pixelsPerPoint, out var heightUnits);
             var scaleImageHeight = false;
 
             // The element's natural (intrinsic) width/height ratio, if it has one, combined with any CSS
@@ -119,7 +119,7 @@ namespace PeachBrackets.Html.Dom
             }
             else if (width is { Number: > 0, IsPercentage: true })
             {
-                word.Width = width.Number * word.OwnerBox.ContainingBlock.Size.Width;
+                word.Width = width.Number * PercentageBasisWidth(word.OwnerBox);
                 scaleImageHeight = true;
             }
             else if (intrinsicWidth is > 0)
@@ -132,17 +132,20 @@ namespace PeachBrackets.Html.Dom
                 word.Width = hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
             }
 
+            // The limits the width is kept to; -1 when there is none (or a percentage whose containing block has no width to speak of yet).
+            double maxWidthVal = -1, minWidthVal = -1;
             var maxWidth = new CssLength(word.OwnerBox.MaxWidth);
             if (maxWidth.Number > 0)
             {
-                double maxWidthVal = -1;
-                if (TryResolveAbsolute(maxWidth, pixelsPerPoint, out var maxWidthUnits))
+                if (TryResolveLength(maxWidth, word.OwnerBox, pixelsPerPoint, out var maxWidthUnits))
                 {
                     maxWidthVal = maxWidthUnits;
                 }
-                else if (maxWidth.IsPercentage)
+                else if (maxWidth.IsPercentage && PercentageBasisWidth(word.OwnerBox) is > 0 and var maxBasis)
                 {
-                    maxWidthVal = maxWidth.Number * word.OwnerBox.ContainingBlock.Size.Width;
+                    // A percentage of a containing block that has no width yet is no limit at all (CSS Sizing 3: a percentage that cannot be resolved
+                    // is treated as none for max-width) rather than a limit of nothing, which would crush the picture.
+                    maxWidthVal = maxWidth.Number * maxBasis;
                 }
 
                 if (maxWidthVal > -1 && word.Width > maxWidthVal)
@@ -155,14 +158,13 @@ namespace PeachBrackets.Html.Dom
             var minWidth = new CssLength(word.OwnerBox.MinWidth);
             if (minWidth.Number > 0)
             {
-                double minWidthVal = -1;
-                if (TryResolveAbsolute(minWidth, pixelsPerPoint, out var minWidthUnits))
+                if (TryResolveLength(minWidth, word.OwnerBox, pixelsPerPoint, out var minWidthUnits))
                 {
                     minWidthVal = minWidthUnits;
                 }
                 else if (minWidth.IsPercentage)
                 {
-                    minWidthVal = minWidth.Number * word.OwnerBox.ContainingBlock.Size.Width;
+                    minWidthVal = minWidth.Number * PercentageBasisWidth(word.OwnerBox);
                 }
 
                 if (minWidthVal > -1 && word.Width < minWidthVal)
@@ -207,9 +209,13 @@ namespace PeachBrackets.Html.Dom
             if (maxHeight.Number > 0)
             {
                 double maxHeightVal = -1;
-                if (TryResolveAbsolute(maxHeight, pixelsPerPoint, out var maxHeightUnits))
+                if (TryResolveLength(maxHeight, word.OwnerBox, pixelsPerPoint, out var maxHeightUnits))
                 {
                     maxHeightVal = maxHeightUnits;
+                }
+                else if (maxHeight.IsPercentage && AbsolutePercentageBasisBox(word.OwnerBox) is { } maxHeightAncestor && IsHeightDefinite(maxHeightAncestor))
+                {
+                    maxHeightVal = maxHeight.Number * CssBox.AbsoluteContainingBlockHeight(maxHeightAncestor);
                 }
                 else if (maxHeight.IsPercentage && IsHeightDefinite(word.OwnerBox.ContainingBlock))
                 {
@@ -230,9 +236,13 @@ namespace PeachBrackets.Html.Dom
             if (minHeight.Number > 0)
             {
                 double minHeightVal = -1;
-                if (TryResolveAbsolute(minHeight, pixelsPerPoint, out var minHeightUnits))
+                if (TryResolveLength(minHeight, word.OwnerBox, pixelsPerPoint, out var minHeightUnits))
                 {
                     minHeightVal = minHeightUnits;
+                }
+                else if (minHeight.IsPercentage && AbsolutePercentageBasisBox(word.OwnerBox) is { } minHeightAncestor && IsHeightDefinite(minHeightAncestor))
+                {
+                    minHeightVal = minHeight.Number * CssBox.AbsoluteContainingBlockHeight(minHeightAncestor);
                 }
                 else if (minHeight.IsPercentage && IsHeightDefinite(word.OwnerBox.ContainingBlock))
                 {
@@ -249,10 +259,49 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            // The height limits above rescaled the width by the ratio, which can carry it past a width limit the earlier steps had already met (a
+            // picture raised to its minimum height widens past its maximum width; one lowered to its maximum height narrows past its minimum width).
+            // CSS 2.1 section 10.4's constraint violation table resolves both together: the width stays within [min-width, max-width], the height
+            // as the height limit left it, and a minimum beats a maximum.
+            if (effectiveRatio is > 0)
+            {
+                if (maxWidthVal > -1 && word.Width > maxWidthVal)
+                    word.Width = maxWidthVal;
+
+                if (minWidthVal > -1 && word.Width < minWidthVal)
+                    word.Width = minWidthVal;
+            }
+
             // A frame that is a block container of its own (a blockified flex or grid item) has the block
             // layout add its border and padding around the word, so the word stays the content height.
             if (word.OwnerBox is not CssBoxFrame { IsInline: false })
                 word.Height += word.OwnerBox.ActualBorderBottomWidth + word.OwnerBox.ActualBorderTopWidth + word.OwnerBox.ActualPaddingTop + word.OwnerBox.ActualPaddingBottom;
+        }
+
+        /// <summary>
+        /// The width a percentage width, <c>min-width</c> or <c>max-width</c> of a replaced element refers to: for an absolutely positioned one, its
+        /// containing block, the padding box of its nearest positioned ancestor (CSS 2.1 section 10.1; the same measure the box's <c>left</c>/<c>right</c> and
+        /// its auto-width fill use), and for any other the width of its parent block.
+        /// </summary>
+        private static double PercentageBasisWidth(CssBox box) =>
+            AbsolutePercentageBasisBox(box) is { } ancestor
+                ? CssBox.AbsoluteContainingBlockWidth(ancestor)
+                : box.ContainingBlock.Size.Width;
+
+        /// <summary>
+        /// The nearest positioned ancestor whose padding box a replaced element's percentages refer to, when the element is absolutely positioned:
+        /// itself (CSS 2.1 section 10.1), or, for an inline element such as an <c>&lt;img&gt;</c>, the synthetic absolutely positioned block the parser
+        /// wraps it in (<c>DomParser.CorrectAbsolutelyPositionedInlineElements</c>; the element inside is made static). That wrapper is only a
+        /// shrink-to-fit holder of the element, whose width follows the element's, so a percentage that referred to it would refer to the element
+        /// itself; what it stands for is the element's own containing block. Null for any other element, whose containing block is its parent block.
+        /// </summary>
+        private static CssBox? AbsolutePercentageBasisBox(CssBox box)
+        {
+            if (box.IsAbsolutelyPositioned)
+                return DomUtils.GetNearestPositionedAncestor(box);
+
+            var parent = box.ParentBox;
+            return parent is { HtmlTag: null, IsAbsolutelyPositioned: true } ? DomUtils.GetNearestPositionedAncestor(parent) : null;
         }
 
         /// <summary>
@@ -302,6 +351,28 @@ namespace PeachBrackets.Html.Dom
 
             layoutUnits = parsed.ToPixels(0, 0, 0) * pixelsPerPoint;
             return true;
+        }
+
+        /// <summary>
+        /// <see cref="TryResolveAbsolute"/> for every length a size can be written in: also the font-relative units (<c>em</c>, <c>rem</c>, <c>ex</c>, <c>ch</c>),
+        /// the viewport units and the container units, which need <paramref name="box"/> to say what they are of. A utility-class style sheet writes the size of an
+        /// icon as <c>1rem</c>, and a replaced element whose size is read only when it is in absolute units is drawn at its intrinsic size instead. A percentage is
+        /// not resolved here (it refers to a containing block the callers know), and neither is <c>auto</c> or a <c>calc()</c>.
+        /// </summary>
+        internal static bool TryResolveLength(CssLength length, CssBox box, double pixelsPerPoint, out double layoutUnits)
+        {
+            if (TryResolveAbsolute(length, pixelsPerPoint, out layoutUnits))
+                return true;
+
+            layoutUnits = 0;
+            if (length.HasError || length.IsPercentage || !(length.Number > 0))
+                return false;
+
+            if (!Length.TryParse(length.Length.Trim().ToLowerInvariant(), out var parsed) || parsed.IsAbsolute || parsed.Type == Length.Unit.Percent)
+                return false;
+
+            layoutUnits = Parse.CssValueParser.ParseLength(parsed, 0, box);
+            return layoutUnits > 0;
         }
 
         /// <summary>
@@ -5773,6 +5844,16 @@ namespace PeachBrackets.Html.Dom
                         case VerticalAlignment.Bottom:
                             line.BottomAlignedAtomicHeight = Math.Max(line.BottomAlignedAtomicHeight, atomicHeight);
                             break;
+                        case VerticalAlignment.Middle:
+                            // The margin box's midpoint is on the parent's baseline plus half its x-height (CSS 2.1 §10.8.1), which is how
+                            // ApplyVerticalAlignment places it: the line has to be sized for it where it ends up. Sized as if it sat on the baseline, an image
+                            // (Tailwind's preflight gives every one `vertical-align: middle`) was moved down by half its height after the line was closed and
+                            // spilled over what followed, e.g. a 56px logo in a line sized for 72px.
+                            var half = atomicHeight / 2;
+                            var xHalf = XHeightOf((word.OwnerBox.ParentBox ?? word.OwnerBox).ActualFont) / 2;
+                            baselineExtent = baselineExtent.Union(RaisedBy(
+                                new LineBoxExtent(half + xHalf, half - xHalf), CumulativeRaiseOf(word.OwnerBox, blockBox)));
+                            break;
                         default:
                             baselineExtent = baselineExtent.Union(RaisedBy(
                                 new LineBoxExtent(atomicHeight, 0), CumulativeRaiseOf(word.OwnerBox, blockBox)));
@@ -6548,7 +6629,6 @@ namespace PeachBrackets.Html.Dom
                         // there, not merely unanswerable), so this is simply skipped rather than falling
                         // back to a relocation - issue #333 retired the last caller of the pre-#321
                         // per-word CssRect.BreakPage mechanism that used to run here.
-                        if (word.Text is "w103_034" or "w103_033") { var chain = new System.Text.StringBuilder(); for (var a = blockBox; a is not null; a = a.ParentBox) chain.Append($"{a.HtmlTag?.Name}(x={a.Location.X:F0},cl={a.ClientLeft:F0}) "); Console.WriteLine($"DBG1525 word={word.Text} left={word.Left} top={word.Top} chain={chain}"); }
                         if (box is { IsFixed: false } && box.HtmlContainer?.SuppressWordPageBreaks != true
                             && coordinates.Fragmentainer is not null
                             // A line past a capped scroll container's cap is clipped away or overflows, and
@@ -9154,9 +9234,10 @@ namespace PeachBrackets.Html.Dom
                 case VerticalAlignment.Bottom:
                     return lineBottom - (alignsMarginBox ? styledBox.ActualMarginBottom : 0) - rect.Bottom;
                 case VerticalAlignment.Middle:
-                    // The box's vertical midpoint on the parent's baseline plus half the parent's x-height.
+                    // The box's vertical midpoint on the parent's baseline plus half the parent's x-height. A replaced element is aligned by its margin box,
+                    // whose midpoint is below the border box's by half the difference of its margins.
                     return (lineBox.BaselineY ?? flowTop) - XHeightOf((styledBox.ParentBox ?? styledBox).ActualFont) / 2
-                           - (rect.Top + rect.Height / 2);
+                           - (rect.Top + rect.Height / 2 + (alignsMarginBox ? (styledBox.ActualMarginBottom - styledBox.ActualMarginTop) / 2 : 0));
                 case VerticalAlignment.TextTop:
                 case VerticalAlignment.TextBottom:
                     // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not

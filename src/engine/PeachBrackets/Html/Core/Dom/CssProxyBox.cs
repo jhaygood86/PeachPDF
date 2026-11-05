@@ -102,8 +102,8 @@ namespace PeachBrackets.Html.Dom
             _awaitingRefill = false;
 
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={DerivedStyle.ActualDisplay}");
-            System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");
+            if (EngineTrace.Enabled) System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: START - Location={Location}, Display={DerivedStyle.ActualDisplay}");
+            if (EngineTrace.Enabled) System.Console.WriteLine($"  Source already laid out: Location={_sourceBox.Location}, ActualBottom={_sourceBox.ActualBottom}, ActualRight={_sourceBox.ActualRight}");
 #endif
 
             // The source box has already been laid out by the table layout engine
@@ -128,7 +128,7 @@ namespace PeachBrackets.Html.Dom
             }
 
 #if DEBUG
-            System.Console.WriteLine($"  After positioning: Source.Location={_sourceBox.Location}");
+            if (EngineTrace.Enabled) System.Console.WriteLine($"  After positioning: Source.Location={_sourceBox.Location}");
 #endif
 
             // Capture the layout snapshot
@@ -140,7 +140,7 @@ namespace PeachBrackets.Html.Dom
             Size = _sourceBox.Size;
 
 #if DEBUG
-            System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: END - Proxy: ActualBottom={ActualBottom}, ActualRight={ActualRight}, Size={Size}");
+            if (EngineTrace.Enabled) System.Console.WriteLine($"CssProxyBox.PerformLayoutImp: END - Proxy: ActualBottom={ActualBottom}, ActualRight={ActualRight}, Size={Size}");
 #endif
 
             await ValueTask.CompletedTask;

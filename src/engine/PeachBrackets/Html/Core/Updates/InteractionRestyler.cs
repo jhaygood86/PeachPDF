@@ -105,6 +105,12 @@ namespace PeachBrackets.Html.Updates
             var stateful = new List<CssBox>();
             CollectStateful(root, stateful);
 
+            // An inline SVG is a scene graph built once, with its elements' style resolved then and their boxes dropped, so a rule whose subject is an element
+            // inside it (`a:hover .icon`) cannot be restyled in place. When the state changed on or inside an element above such an SVG, leave it to a full load.
+            // html and body are always among them and say nothing: a rule on them reaches the SVG through the page's own boxes.
+            if (HasStatefulSvgUnderChanged(root, changed, false))
+                return Fail("The state changed above an inline SVG with elements that a rule reading it can style, which the fast path does not restyle.");
+
             var roots = new List<CssBox>();
             try
             {
@@ -197,6 +203,10 @@ namespace PeachBrackets.Html.Updates
             if (stackingChanged)
                 container.RefreshStackingHoistCandidates();
 
+            // The boxes were restyled in place, not rebuilt: what is kept per box for as long as the style is the same (an inline SVG's matched
+            // declarations, see CssBoxSvgSourceNode) is stale now.
+            container.StyleGeneration++;
+
             return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
         }
 
@@ -207,6 +217,27 @@ namespace PeachBrackets.Html.Updates
 
             foreach (var child in box.Boxes)
                 CollectStateful(child, into);
+        }
+
+        // Whether an inline SVG that a rule reading the state was a candidate for sits under an element whose state changed (other than html and body).
+        private static bool HasStatefulSvgUnderChanged(CssBox box, HashSet<int> changed, bool underChanged)
+        {
+            if (box.HtmlTag is { SourceOrdinal: >= 0 } tag && changed.Contains(tag.SourceOrdinal)
+                && !tag.Name.Equals("html", StringComparison.OrdinalIgnoreCase) && !tag.Name.Equals("body", StringComparison.OrdinalIgnoreCase))
+            {
+                underChanged = true;
+            }
+
+            if (box is CssBoxSvg)
+                return underChanged && box.HasSvgInnerStatefulCandidates;
+
+            foreach (var child in box.Boxes)
+            {
+                if (HasStatefulSvgUnderChanged(child, changed, underChanged))
+                    return true;
+            }
+
+            return false;
         }
 
         private static bool CollectSubtree(CssBox box, List<CssBox> into)

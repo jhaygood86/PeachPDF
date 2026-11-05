@@ -87,6 +87,10 @@ namespace PeachBrackets.Html.Dom
 
         public string ImageSource => SelectSource().Url;
 
+        /// <summary>The address layout will load this image from, or null when it loads none (injected content, an <c>http</c>-free <c>content</c> image).</summary>
+        internal string? PrefetchAddress =>
+            _contentInjectedDirectly || Content != Keywords.Normal || _imageLoadHandler != null || string.IsNullOrWhiteSpace(SelectSource().Url) ? null : SelectSource().Url;
+
         private double _srcsetDensity = 1;
         private ResponsiveImageSelector.Selection? _selection;
 

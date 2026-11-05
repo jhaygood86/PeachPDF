@@ -4,6 +4,7 @@ using PeachDrawing.Core;
 namespace PeachBrackets.Tests;
 
 /// <summary>A host that shows documents answers the document's requests for images with <see cref="HostResourceLoader"/>.</summary>
+[Collection("HostResourceLoader state")]
 public class HostResourceLoaderTests
 {
     private const string RedPng = "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP4z8AARwgWXg4ArpMP8aaUSCMAAAAASUVORK5CYII=";

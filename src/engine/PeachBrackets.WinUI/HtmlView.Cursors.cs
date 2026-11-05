@@ -142,6 +142,7 @@ public sealed partial class HtmlView
         }
 
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", HostResourceLoader.UserAgent);
         using var response = await client.GetAsync(address, HttpCompletionOption.ResponseHeadersRead);
         if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > MaxCursorBytes)
             return null;

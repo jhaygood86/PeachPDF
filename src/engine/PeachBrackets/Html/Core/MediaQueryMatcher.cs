@@ -2,6 +2,7 @@
 
 using System;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using PeachBrackets.Css;
 
 namespace PeachBrackets.Html
@@ -31,6 +32,28 @@ namespace PeachBrackets.Html
         internal static bool Matches(MediaList[]? enclosingMedia, MediaQueryContext context)
         {
             if (enclosingMedia is null) return true;
+
+            // The cascade asks this once per candidate rule per box, and the answer only changes with the context (the page size, the
+            // colour scheme, the input devices...), so it is remembered for the chain it was asked of and is worked out again only when the
+            // context is not the one it was worked out for. Keyed weakly by the chain (the rule index owns it), so it goes with its stylesheet.
+            if (Memo.TryGetValue(enclosingMedia, out var cached) && cached.Context.Equals(context))
+                return cached.Result;
+
+            var result = Evaluate(enclosingMedia, context);
+            Memo.AddOrUpdate(enclosingMedia, new CachedMatch(context, result));
+            return result;
+        }
+
+        private sealed class CachedMatch(MediaQueryContext context, bool result)
+        {
+            internal readonly MediaQueryContext Context = context;
+            internal readonly bool Result = result;
+        }
+
+        private static readonly ConditionalWeakTable<MediaList[], CachedMatch> Memo = new();
+
+        private static bool Evaluate(MediaList[] enclosingMedia, MediaQueryContext context)
+        {
 
             foreach (var mediaList in enclosingMedia)
             {

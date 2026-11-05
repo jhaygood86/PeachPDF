@@ -114,6 +114,64 @@ public class InteractionStateTests
     }
 
     [Fact]
+    public async Task AnInlineSvgWhoseFillFollowsAHoverRule_ChangesColourAndBackAgain()
+    {
+        // The matched declarations of an inline SVG are kept per element for as long as the style is the same; a hover restyle in place must not leave
+        // the stale ones behind (the page's selector reads :hover, so a stale match would keep the old fill).
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40'/></svg></a>",
+            "<style>a { display: block; width: 40px; height: 40px } svg { fill: rgb(0,0,255) } a:hover svg { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+        var first = await PixelAtAsync(context, document, "link");
+        Assert.True(first.B == 255, $"initial pixel {first} at {x},{y} bounds {document.GetElementBounds("link")}");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied);
+        var hovered = await PixelAtAsync(context, document, "link");
+        Assert.Equal(255, hovered.R);
+        Assert.Equal(0, hovered.B);
+
+        await document.ClearPointerStateAsync(measuring);
+        var left = await PixelAtAsync(context, document, "link");
+        Assert.Equal(0, left.R);
+        Assert.Equal(255, left.B);
+    }
+
+    [Fact]
+    public async Task AHoverRuleThatStylesAShapeInsideAnInlineSvg_ChangesItsFill()
+    {
+        // The rule's subject is an element inside the SVG, which is not a box the in-place restyle can change: the restyle has to notice that its match differs.
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><svg width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg></a>",
+            "<style>a { display: block; width: 40px; height: 40px } .fill { fill: rgb(0,0,255) } a:hover .fill { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+        var hovered = await PixelAtAsync(context, document, "link");
+        Assert.True(hovered.R == 255, $"applied={entered.Applied} reason={entered.Reason}");
+        Assert.Equal(0, hovered.B);
+
+        await document.ClearPointerStateAsync(measuring);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+    }
+
+    [Fact]
+    public async Task AnInlineSvgWhoseRulesDoNotChangeWithTheHover_DoesNotTakeTheFastPathAway()
+    {
+        var (_, document, measuring) = await LoadAsync(
+            "<div id=a style='height:40px'></div><svg width='40' height='40'><rect width='40' height='40' class='fill'/></svg>",
+            "<style>#a { background: rgb(0,0,255) } #a:hover { background: rgb(255,0,0) } .fill { fill: rgb(0,0,255) } .other:hover .fill { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "a");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied);
+        Assert.NotEmpty(entered.DirtyRegions);
+    }
+
+    [Fact]
     public async Task HoverReachesTheAncestorsOfTheElementUnderThePointer()
     {
         var (context, document, measuring) = await LoadAsync(

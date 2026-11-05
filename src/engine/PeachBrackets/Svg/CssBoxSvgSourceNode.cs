@@ -95,14 +95,42 @@ namespace PeachBrackets.Svg
         /// </summary>
         public string GetTextContent() => string.Concat(_box.Boxes.Select(b => b.Text ?? string.Empty));
 
-        public IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() =>
-            SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext);
-
-        public bool IsMatchedCssDeclarationImportant(string name)
+        // What the style sheets declare for an element is worked out by matching every rule against it, and the tree builder asks for it once for every
+        // property it reads of every element (dozens of times each, and a second time to learn whether the winner was !important), so on a page of inline
+        // icons that was most of the time laying it out. The answer is the same each time - it depends on the element, the rules, the media, the custom
+        // properties in scope and, for a document restyled in place, the style generation - so it is kept with the element until one of those differs.
+        private sealed class MatchedStyle(CssData? cssData, string media, CssVarResolver.VarContext? varContext, int generation,
+            IReadOnlyDictionary<string, string?>? declarations, HashSet<string>? important)
         {
-            SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext, out var important);
-            return important?.Contains(name) == true;
+            internal readonly CssData? CssData = cssData;
+            internal readonly string Media = media;
+            internal readonly CssVarResolver.VarContext? VarContext = varContext;
+            internal readonly int Generation = generation;
+            internal readonly IReadOnlyDictionary<string, string?>? Declarations = declarations;
+            internal readonly HashSet<string>? Important = important;
         }
+
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssBox, MatchedStyle> MatchedStyles = new();
+
+        private MatchedStyle Matched()
+        {
+            var generation = _box.HtmlContainer?.StyleGeneration ?? 0;
+            if (MatchedStyles.TryGetValue(_box, out var cached)
+                && ReferenceEquals(cached.CssData, _cssData) && ReferenceEquals(cached.VarContext, _varContext)
+                && cached.Generation == generation && string.Equals(cached.Media, _media, StringComparison.Ordinal))
+            {
+                return cached;
+            }
+
+            var declarations = SvgCssStyling.GetMatchedDeclarations(new SvgCssBoxDomNode(_box, _svgRoot), _cssData, _media, _varContext, out var important);
+            var fresh = new MatchedStyle(_cssData, _media, _varContext, generation, declarations, important);
+            MatchedStyles.AddOrUpdate(_box, fresh);
+            return fresh;
+        }
+
+        public IReadOnlyDictionary<string, string?>? GetMatchedCssDeclarations() => Matched().Declarations;
+
+        public bool IsMatchedCssDeclarationImportant(string name) => Matched().Important?.Contains(name) == true;
 
         public ISvgSourceNode? Parent =>
             _instance is { } instance && ReferenceEquals(_box, instance.Root) ? instance.Use

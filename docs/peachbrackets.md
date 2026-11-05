@@ -449,6 +449,43 @@ layout decides. `DeclarativePage.AddMarginBox` fills one of the page's margin bo
 your code fixed explicitly, so a style sheet's `@page` rule does not replace them. The result lays out and paints exactly like a loaded
 document.
 
+## Fetching resources side by side
+
+A document asks for its images and web fonts one at a time, as layout reaches them. A render context that implements `IResourcePrefetcher` is told
+their addresses first and can fetch them all at once; `HostResourceLoader.PrefetchAsync` does that (a few requests at a time) into the loader's response
+cache, so the requests that follow are answered from memory. `HtmlView` does this for you; a host with its own render context implements the interface
+the same way, or ignores it, and nothing changes.
+
+## Timing a load
+
+The load pipeline reports where its time goes as [`Activity`](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.activity) spans of
+an [`ActivitySource`](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.activitysource) named `PeachBrackets`. Nothing is recorded,
+and starting a span costs a null check, until something listens (an `ActivityListener`, OpenTelemetry, `dotnet-trace`):
+
+```csharp
+ActivitySource.AddActivityListener(new ActivityListener
+{
+    ShouldListenTo = source => source.Name == "PeachBrackets",
+    Sample = (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+    ActivityStopped = activity => Console.WriteLine($"{activity.OperationName}: {activity.Duration.TotalMilliseconds:0} ms"),
+});
+```
+
+| Span | Covers |
+|---|---|
+| `html.parse` | Parsing the HTML into the box tree. |
+| `css.collect` | Fetching and parsing the document's style sheets. |
+| `css.scan` | Looking through the selectors for the interaction states they use. |
+| `fonts` | Fetching and registering the web fonts. |
+| `css.cascade` | Matching the rules to every element and computing styles. |
+| `layout` | Laying the document out (images, which load while it is measured, are inside it). |
+| `resource.fetch` | One web request made by `HostResourceLoader`, tagged `url`, `cache` (`hit` or `miss`), `status` and `bytes`. |
+| `images.prefetch` | Fetching the document's images (and web fonts) side by side before layout, when the render context implements `IResourcePrefetcher`. |
+| `image.load` | One image, tagged `url`. |
+
+The spans nest (an image loads while the page is laid out, and a request is inside what asked for it), so their durations are not meant to add up to
+the load time; they say which phase the time is in.
+
 ## Font and URI helpers for a host
 
 A `RenderContext` that wants the HTML engine's font behaviour (the CSS generic families, `system-ui`, `font-variation-settings`) needs three

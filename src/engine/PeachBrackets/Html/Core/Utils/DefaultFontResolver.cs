@@ -19,6 +19,33 @@ namespace PeachBrackets.Html.Utils
         public const double FontSize = 11f;
 
         /// <summary>
+        /// The size of <c>font-size: medium</c> in points for the medium: 12 pt (16 CSS px, what every browser uses) on screen,
+        /// <see cref="FontSize"/> on paper, where the page, not a browser, sets the type.
+        /// </summary>
+        public static double Medium(bool screen) => screen ? ScreenMedium : FontSize;
+
+        /// <summary>Medium on screen: 16 px.</summary>
+        private const double ScreenMedium = 12;
+
+        /// <summary>
+        /// The size in points of an absolute-size keyword, given as its step from <c>medium</c> on paper (-4 <c>xx-small</c>, -3 <c>x-small</c>,
+        /// -2 <c>small</c>, 0 <c>medium</c>, 2 <c>large</c>, 3 <c>x-large</c>, 4 <c>xx-large</c>). Screen follows the scale browsers use (CSS Fonts 4
+        /// §2.5, "font-size-prop": 9, 10, 13, 16, 18, 24 and 32 px around a 16 px medium), which is not a fixed step.
+        /// </summary>
+        public static double Keyword(int paperStep, bool screen) => !screen
+            ? FontSize + paperStep
+            : paperStep switch
+            {
+                -4 => 6.75,
+                -3 => 7.5,
+                -2 => 9.75,
+                2 => 13.5,
+                3 => 18,
+                4 => 24,
+                _ => ScreenMedium,
+            };
+
+        /// <summary>
         /// Common metrically-compatible Arial substitutes shipped by mainstream Linux
         /// distributions, in preference order.
         /// </summary>

@@ -503,39 +503,23 @@ public sealed partial class HtmlView : UserControl
             _scroller.HorizontalOffset / zoom / PixelsPerPoint, _scroller.VerticalOffset / zoom / PixelsPerPoint,
             _scroller.ViewportWidth / zoom / PixelsPerPoint, _scroller.ViewportHeight / zoom / PixelsPerPoint);
 
-        var moved = CoalesceRegions(document.SetViewport(viewport));
-        foreach (var region in moved)
-            InvalidateRegion(region.PageIndex, region.Bounds);
+        var moved = document.SetViewport(viewport);
+
+        // A sticky box that began to stick or was released changed layer: the surface under the scroller has to be painted again where it was.
+        if (document.ViewportLayersChanged)
+        {
+            foreach (var region in moved)
+                InvalidateRegion(region.PageIndex, region.Bounds);
+        }
 
         // The layer over the scroller shows the fixed and stuck boxes (or, in viewport mode, the page itself): when none of them moved there is
         // nothing new for it to draw, and a full-view redraw per scroll step is a cost for a page that has none.
+        //
+        // The surface under the scroller is not painted again for a box that merely moves while it is held: it holds the content layer, which leaves out
+        // the boxes the viewport holds in place, so a stuck header moving changes nothing there. Painting it again is expensive, because the virtual control repaints whole
+        // tiles (a 1200 x 2016 area, about 24 ms) for any region invalidated, which made every scroll step of a page with a sticky header cost that.
         if (_viewportMode || moved.Count > 0)
             _overlay.Invalidate();
-    }
-
-    // A fixed box on the move names where it was and where it is, and their bleeds overlap: invalidating each separately makes the surface paint the
-    // overlap twice. Regions on one page that touch are joined into one (those that do not stay apart, so a bar at the top and a badge at the bottom
-    // are not joined into a region as tall as the view).
-    private static List<DirtyRegion> CoalesceRegions(IReadOnlyList<DirtyRegion> regions)
-    {
-        var merged = new List<DirtyRegion>(regions.Count);
-        foreach (var region in regions)
-        {
-            var current = region;
-            for (var i = merged.Count - 1; i >= 0; i--)
-            {
-                if (merged[i].PageIndex != current.PageIndex || !merged[i].Bounds.IntersectsWith(current.Bounds))
-                    continue;
-
-                var union = PeachDrawing.Core.Rect.Union(merged[i].Bounds, current.Bounds);
-                current = new DirtyRegion(current.PageIndex, union);
-                merged.RemoveAt(i);
-            }
-
-            merged.Add(current);
-        }
-
-        return merged;
     }
 
     // The layer over the scroller: the boxes the viewport holds in place, drawn where the viewport is, so they are already where they belong on the
@@ -576,6 +560,7 @@ public sealed partial class HtmlView : UserControl
             return await System.IO.File.ReadAllTextAsync(source.LocalPath);
 
         using var client = new System.Net.Http.HttpClient();
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", HostResourceLoader.UserAgent);
         return await client.GetStringAsync(source);
     }
 

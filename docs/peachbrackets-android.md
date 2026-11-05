@@ -143,7 +143,7 @@ device or emulator without a working GL driver. On the hardware:
 
 ## Images, style sheets and fonts
 
-A document's images, style sheets and fonts load from `data:` URIs and from files; web addresses only when the host sets `AllowNetworkAccess` (off by default), before the next load.
+A document's images, style sheets and fonts load from `data:` URIs and from files; web addresses only when the host sets `AllowNetworkAccess` (off by default; the requests carry `HostResourceLoader.UserAgent`, Chromium's string for Android with a `PeachBrackets/<version>` token after it), before the next load.
 
 ### Sharp images on dense screens and after a pinch
 

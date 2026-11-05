@@ -471,7 +471,9 @@ PeachBrackets.GenericFontKeyword : struct
   property GenericFamily Family { get; init; }
   property String Keyword { get; init; }
 PeachBrackets.HostResourceLoader : static class
+  method static ValueTask PrefetchAsync(IEnumerable<RUri> addresses, Boolean allowNetwork, Int32 concurrency = 8)
   method static ValueTask<RNetworkResponse> LoadAsync(RUri uri, Boolean allowNetwork = False, Boolean allowLocalFiles = True)
+  property static String UserAgent { get; set; }
   property static TimeSpan CacheLifetime { get; set; }
 PeachBrackets.HtmlDocument : sealed class
   method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
@@ -560,6 +562,7 @@ PeachBrackets.HtmlDocument : sealed class
   property AccessibilityNode FocusedNode { get; }
   property Boolean HasViewportBackgrounds { get; }
   property Boolean NeedsRestyle { get; }
+  property Boolean ViewportLayersChanged { get; }
   property DocumentAnnotations Annotations { get; }
   property DocumentSelection Selection { get; }
   property HtmlDocumentMetadata Metadata { get; }
@@ -624,6 +627,8 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property StyleSheet StyleSheet { get; set; }
   property TextSpacingOverrides TextSpacing { get; set; }
   property UserPreferences Preferences { get; set; }
+PeachBrackets.IResourcePrefetcher : interface
+  method abstract ValueTask PrefetchAsync(IReadOnlyList<RUri> addresses)
 PeachBrackets.ImageLoadFailure : sealed class
   ctor(String Url, String FallbackUrl)
   method ImageLoadFailure <Clone>$()

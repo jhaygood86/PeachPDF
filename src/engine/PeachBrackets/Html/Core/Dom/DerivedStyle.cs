@@ -1654,13 +1654,13 @@ namespace PeachBrackets.Html.Dom
                 if (Style.Font.FontSize.Value is { IsKeyword: false, IsValue: false })
                 {
                     Owner.FontSize = CssKeywordOrValueParser.FromCssText<FontSizeKeyword, LengthOrCalc>(
-                        DefaultFontResolver.FontSize.ToString(CultureInfo.InvariantCulture) + "pt",
+                        DefaultFontResolver.Medium(Owner.IsScreenMedia).ToString(CultureInfo.InvariantCulture) + "pt",
                         Map.FontSizeKeywords, CssValueParser.TryParseLengthOrCalc, FontSizeKeyword.Medium);
                 }
 
                 var st = GetActualFontStyleFlags();
 
-                double parentSize = DefaultFontResolver.FontSize;
+                double parentSize = DefaultFontResolver.Medium(Owner.IsScreenMedia);
                 double remSize;
 
                 var parentBox = Owner.ParentBox;
@@ -1674,7 +1674,7 @@ namespace PeachBrackets.Html.Dom
                 }
                 else
                 {
-                    remSize = DefaultFontResolver.FontSize;
+                    remSize = parentSize;
                 }
 
                 // For a box with text content this basis is unreachable in practice - word-splitting
@@ -1694,7 +1694,7 @@ namespace PeachBrackets.Html.Dom
                     : null;
                 var fsize = FontSizeResolver.Resolve(Style.Font.FontSize.Value, parentSize, remSize,
                     containerInlinePt, containerBlockPt, viewportWidthPt, viewportHeightPt,
-                    containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, sizeFonts);
+                    containerWidthPt, containerHeightPt, viewportInlinePt, viewportBlockPt, sizeFonts, Owner.IsScreenMedia);
 
                 _actualFont = Owner.GetCachedFont(Style.Font.FontFamily!, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings)
                               ?? Owner.GetCachedFont(DefaultFontResolver.DefaultFont, fsize, st, ActualNumericWeight, ActualStretch, ActualObliqueSkewSinus, ActualFontVariationSettings);

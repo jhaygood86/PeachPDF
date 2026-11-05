@@ -258,6 +258,8 @@ namespace PeachBrackets.Html.Handlers
         private async ValueTask SetImageFromUrl(RUri source)
         {
             var cacheKey = source.AbsoluteUri;
+            using var imageActivity = EngineTelemetry.Source.StartActivity("image.load");
+            imageActivity?.SetTag("url", cacheKey);
             if (_htmlContainer.TryGetResolvedImageResource(cacheKey, out var cached))
             {
                 Image = cached.Image;

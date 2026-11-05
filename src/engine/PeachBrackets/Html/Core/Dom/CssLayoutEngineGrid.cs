@@ -695,7 +695,9 @@ namespace PeachBrackets.Html.Dom
             // Map each item to (minorStart, minorSpan, majorStart, majorSpan). Line numbers (incl. negatives)
             // resolve against the explicit track count (fixedCount); spans are kept unclamped so the implicit
             // grid can grow to hold them.
-            var resolved = items.Select(box =>
+            // Items are placed in order-modified document order (CSS Grid 1 section 8, CSS Display 3 section 3.2): stably sorted by `order`, so a sidebar written first
+            // in the source but given `order: 2` is placed after the content that has `order: 1`. The result is put back in source order at the end.
+            var resolved = items.OrderBy(box => int.TryParse(box.Order, out var order) ? order : 0).Select(box =>
             {
                 var (colStart, colSpan) = ResolveAxis(box.GridColumnStart, box.GridColumnEnd, fixedCount, colLineNames);
                 var (rowStart, rowSpan) = ResolveAxis(box.GridRowStart, box.GridRowEnd, fixedCount, rowLineNames);

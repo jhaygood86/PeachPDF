@@ -86,6 +86,32 @@ public class ViewportTests
     }
 
     [Fact]
+    public async Task ABoxChangesLayer_OnlyWhenAStickyBoxBeginsToStickOrIsReleased()
+    {
+        // A host paints the content layer under its scroller and the attached layer over it: a box that moves while it is held changes only the
+        // attached one, but one that begins to stick (or is released) has to be painted again in the content layer where it was.
+        var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(Sticky), Screen());
+
+        document.SetViewport(new Rect(0, 0, 400, 300));
+        Assert.False(document.ViewportLayersChanged);
+
+        document.SetViewport(new Rect(0, 400, 400, 300));
+        Assert.True(document.ViewportLayersChanged);
+
+        document.SetViewport(new Rect(0, 410, 400, 300));
+        Assert.False(document.ViewportLayersChanged);
+
+        document.SetViewport(new Rect(0, 0, 400, 300));
+        Assert.True(document.ViewportLayersChanged);
+
+        var (_, fixedDocument) = await TestDocument.LoadAsync(TestDocument.Wrap(Fixed), Screen());
+        fixedDocument.SetViewport(new Rect(0, 0, 400, 300));
+        Assert.True(fixedDocument.ViewportLayersChanged); // a fixed box is attached from the first viewport on
+        fixedDocument.SetViewport(new Rect(0, 500, 400, 300));
+        Assert.False(fixedDocument.ViewportLayersChanged);
+    }
+
+    [Fact]
     public async Task AStickyBoxWithABottomInset_StaysAtTheBottomOfTheViewportUntilItsPlaceComes()
     {
         const string html = "<div style='height:1000pt'></div><div id=s style='position:sticky;bottom:0;height:30pt;background:red'></div><div style='height:500pt'></div>";

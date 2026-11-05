@@ -65,12 +65,16 @@ namespace PeachBrackets.Html
             return (dx, dy);
         }
 
+        /// <summary>Whether the last <see cref="Apply"/> moved a box between the content layer and the attached layer (a sticky box began to stick, or was released).</summary>
+        internal bool LayersChanged { get; private set; }
+
         /// <summary>
         /// Moves the viewport and works out the displacement of every fixed and sticky box. Returns the rectangles, in layout units, that look
         /// different now: where each displaced box was and where it is, and the whole of a box with a fixed background image.
         /// </summary>
         internal List<Rect> Apply(HtmlContainerInt container, Rect viewport)
         {
+            LayersChanged = false;
             var dirty = new List<Rect>();
             Viewport = viewport;
 
@@ -143,6 +147,9 @@ namespace PeachBrackets.Html
                     roots.Add(entry.Fragment);
             }
 
+            // A box that changed layer is in a different place in the content layer than a surface painted earlier has it: it has to be painted again where
+            // it was, or its old pixels stay (it began to stick) or it is missing (it was released).
+            LayersChanged = !_attached.SetEquals(attached);
             _attached = attached;
             _attachedRoots = roots;
             return dirty;

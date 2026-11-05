@@ -121,7 +121,10 @@ namespace PeachBrackets.Html.Parse
         public async ValueTask<(CssBox cssBox, CssData cssData, HtmlDocumentMetadata metadata)> GenerateCssTree(string html, HtmlContainerInt htmlContainer, CssData cssData, ContainerQuerySizes? containerSizes = null)
         {
             CssBox.ClearCounter();
-            var root = HtmlParser.ParseDocument(html, document: true);
+            CssBox root;
+            using (EngineTelemetry.Source.StartActivity("html.parse"))
+                root = HtmlParser.ParseDocument(html, document: true);
+
             NumberElements(root, new int[1]);
             SeedTextAreaValues(root);
             ApplyAttributeOverrides(root, htmlContainer.AttributeOverrides);
@@ -146,13 +149,15 @@ namespace PeachBrackets.Html.Parse
             // applied later in CascadeApplyStyles, not here).
             if (!htmlContainer.IgnoreAuthorStyleSheets)
             {
-                (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
+                using (EngineTelemetry.Source.StartActivity("css.collect"))
+                    (cssData, _) = await CascadeParseStyles(root, htmlContainer, cssData, cssDataChanged);
             }
 
             var mediaType = string.IsNullOrEmpty(htmlContainer.Media) ? "print" : htmlContainer.Media;
             var media = MediaQueryContext.FromContainer(htmlContainer, mediaType);
 
             // Every selector in the sheets, the ones written inside another rule (`.card { &:hover { } }`) as well as the top-level ones.
+            var scanActivity = EngineTelemetry.Source.StartActivity("css.scan");
             var selectors = new List<string>();
             void CollectSelectors(IEnumerable<IRule> rules)
             {
@@ -176,10 +181,12 @@ namespace PeachBrackets.Html.Parse
                 || text.Contains(":enabled", StringComparison.OrdinalIgnoreCase) || text.Contains(":required", StringComparison.OrdinalIgnoreCase)
                 || text.Contains(":optional", StringComparison.OrdinalIgnoreCase) || text.Contains(":read-only", StringComparison.OrdinalIgnoreCase)
                 || text.Contains(":read-write", StringComparison.OrdinalIgnoreCase));
+            scanActivity?.Dispose();
 
             var cssValueParser = new CssValueParser(htmlContainer.RenderContext);
 
-            await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext, htmlContainer.SynchronousOnly);
+            using (EngineTelemetry.Source.StartActivity("fonts"))
+                await CascadeApplyStyleFonts(cssData, htmlContainer.RenderContext, htmlContainer.SynchronousOnly);
 
             // Screen media has no pages: @page (size, margins, borders, named pages, margin boxes) only describes a page box, which a
             // continuous surface does not have, and browsers ignore it there. The container keeps no page rules, so every page
@@ -231,7 +238,8 @@ namespace PeachBrackets.Html.Parse
             // Cleared here rather than by Clear(), which returns early for a container that never had a
             // tree: the cascade below re-records every display: contents element it meets.
             htmlContainer.DisplayContentsShells.Clear();
-            CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes, htmlContainer.DisplayContentsShells);
+            using (EngineTelemetry.Source.StartActivity("css.cascade"))
+                CascadeApplyStyles(cssValueParser, root, cssData, media, containerSizes, htmlContainer.DisplayContentsShells);
 
             // vi/vb unit resolution (CssBox.GetViewportUnitBasis) needs the root element's own resolved
             // writing-mode (CSS Values and Units 4 §6.2) - read now, only once per document, reusing the
@@ -623,6 +631,36 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         internal static async ValueTask CascadeApplyStyleFonts(CssData cssData, RenderContext renderContext, bool synchronousOnly = false)
         {
+            // A render context that can fetch side by side (and keep what it fetched) is told the first web font of each face up front: the registration
+            // below awaits them one at a time, and a page can declare dozens.
+            if (!synchronousOnly && renderContext is IResourcePrefetcher prefetcher)
+            {
+                var addresses = new List<RUri>();
+                foreach (var stylesheet in cssData.Stylesheets)
+                {
+                    foreach (var fontRule in cssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
+                    {
+                        if (CssValueParser.GetFontFacePropertyValue(fontRule.Source).FirstOrDefault(c => c.Url is not null)?.Url is not { } url)
+                            continue;
+
+                        try
+                        {
+                            // The same resolution registering the face does; one that is still relative is not loaded at all, so it is not fetched ahead either.
+                            var address = stylesheet.BaseUri is not null ? new RUri(stylesheet.BaseUri, url) : new RUri(url, UriKind.RelativeOrAbsolute);
+                            if (address.IsAbsoluteUri)
+                                addresses.Add(address);
+                        }
+                        catch (UriFormatException)
+                        {
+                            // Not an address; registering the face reports what is wrong.
+                        }
+                    }
+                }
+
+                if (addresses.Count > 1)
+                    await prefetcher.PrefetchAsync(addresses);
+            }
+
             foreach (var stylesheet in cssData.Stylesheets)
             {
                 // Descend into @layer/@media/@supports/@container so an @font-face nested in a layer is
@@ -4371,6 +4409,16 @@ namespace PeachBrackets.Html.Parse
                 blockBox.TextAlignAll = box.TextAlignAll;
 
                 box.Position = CssProperty<PositionMode>.FromValue(Keywords.Static, PositionMode.Static);
+
+                // An absolutely positioned box is blockified (CSS 2.1 section 9.7): the element is not a piece of a line, so its own vertical-align
+                // (Tailwind's preflight gives every image `vertical-align: middle`) must not lift it off the top of the wrapper that stands for it.
+                if (box is CssBoxImage)
+                {
+                    box.Display = CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block);
+                    box.VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                        Keywords.Baseline, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Baseline, null));
+                }
+
                 box.ParentBox = blockBox;
             }
 
@@ -4552,7 +4600,7 @@ namespace PeachBrackets.Html.Parse
                 foreach (var childBox in box.Boxes)
                 {
 #if DEBUG
-                    Console.WriteLine($"dom: set child box {childBox.Id} of table-column parent {box.Id} to display: none");
+                    if (EngineTrace.Enabled) Console.WriteLine($"dom: set child box {childBox.Id} of table-column parent {box.Id} to display: none");
 #endif
 
                     childBox.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
@@ -4563,7 +4611,7 @@ namespace PeachBrackets.Html.Parse
             if (box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.TableColumnGroup && box.DerivedStyle.ActualDisplay is not Keywords.TableColumn)
             {
 #if DEBUG
-                Console.WriteLine($"dom: set child box {box.Id} to display:none if parent is table-column-group and child is not table-column");
+                if (EngineTrace.Enabled) Console.WriteLine($"dom: set child box {box.Id} to display:none if parent is table-column-group and child is not table-column");
 #endif
 
                 box.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
@@ -4581,7 +4629,7 @@ namespace PeachBrackets.Html.Parse
                 if (!DomUtils.IsProperTableChild(box))
                 {
 #if DEBUG
-                    Console.WriteLine($"dom: if box {box.Id} is not a proper table child and parent is a table, then generate table around element");
+                    if (EngineTrace.Enabled) Console.WriteLine($"dom: if box {box.Id} is not a proper table child and parent is a table, then generate table around element");
 #endif
 
                     var followingMatchingSiblings =
@@ -4607,7 +4655,7 @@ namespace PeachBrackets.Html.Parse
                 if (box.DerivedStyle.ActualDisplay is not Keywords.TableRow)
                 {
 #if DEBUG
-                    Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
+                    if (EngineTrace.Enabled) Console.WriteLine($"dom: if box {box.Id} is not a table row and parent is a table row group box, then generate table-row around element");
 #endif
 
                     var followingMatchingSiblings =
@@ -4630,7 +4678,7 @@ namespace PeachBrackets.Html.Parse
                 {
 
 #if DEBUG
-                    Console.WriteLine($"dom: if box {box.Id} is not a table cell and parent is a table row, then generate table-row around element and following  elements");
+                    if (EngineTrace.Enabled) Console.WriteLine($"dom: if box {box.Id} is not a table cell and parent is a table row, then generate table-row around element and following  elements");
 #endif
 
                     var followingMatchingSiblings =

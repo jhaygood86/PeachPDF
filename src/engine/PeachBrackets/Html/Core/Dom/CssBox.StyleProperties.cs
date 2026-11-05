@@ -725,6 +725,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal string ResolveFontSizeValueComputation(string value)
         {
+            var screen = IsScreenMedia;
             var trimmed = value.Trim();
             if (CssValueParser.IsCalcFunction(value))
             {
@@ -732,12 +733,12 @@ namespace PeachBrackets.Html.Dom
                 // text, every inheriting descendant would apply the calc() again against its own parent.
                 var calcParent = ParentBox;
                 var parentSizePt = calcParent is null
-                    ? DefaultFontResolver.FontSize
+                    ? DefaultFontResolver.Medium(screen)
                     : calcParent.GetEmHeight();
 
                 if (IsParentRelativeOnlyCalc(value))
                 {
-                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle, screen: screen);
                     return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
                 }
 
@@ -746,7 +747,7 @@ namespace PeachBrackets.Html.Dom
                 // that inherits the text has nothing left to measure against its own parent.
                 return ParentRelativeTerm().Replace(trimmed, match =>
                 {
-                    var points = FontSizeResolver.Resolve(match.Value, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle);
+                    var points = FontSizeResolver.Resolve(match.Value, parentSizePt, parentSizePt, fonts: calcParent?.DerivedStyle, screen: screen);
                     return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
                 });
             }
@@ -767,7 +768,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     var parentSizePt = parent.GetEmHeight();
 
-                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: parent.DerivedStyle);
+                    var points = FontSizeResolver.Resolve(trimmed, parentSizePt, parentSizePt, fonts: parent.DerivedStyle, screen: screen);
                     return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
                 }
             }

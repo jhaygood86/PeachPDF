@@ -1428,6 +1428,13 @@ namespace PeachBrackets.Html
         internal InteractionState? Interaction { get; set; }
 
         /// <summary>
+        /// Counts the times the computed styles of the boxes were changed in place (a restyle that keeps the box tree). What is worked out from a
+        /// box's style and remembered (the declarations an inline <c>&lt;svg&gt;</c> element's rules give it) is only good for the generation it was
+        /// worked out in, so a change that does not rebuild the boxes must raise this.
+        /// </summary>
+        internal int StyleGeneration { get; set; }
+
+        /// <summary>
         /// What a host changed on elements since the source was loaded (a control's state, a <c>details</c>' <c>open</c>), by the element's place in the
         /// source: the parse applies them to the tags before the cascade, so every selector and the layout see the document as it is now. Null for none.
         /// </summary>
@@ -1472,6 +1479,7 @@ namespace PeachBrackets.Html
         public async ValueTask SetHtml(string htmlSource, CssData? baseCssData = null, ContainerQuerySizes? containerSizes = null)
         {
             _lastHtmlSource = htmlSource;
+            _imagesPrefetched = false;
             _lastBaseCssData = baseCssData;
             PreviousPassContainerSizes = containerSizes;
 
@@ -1855,7 +1863,9 @@ namespace PeachBrackets.Html
         public async ValueTask PerformLayout(Canvas g)
         {
             ArgumentNullException.ThrowIfNull(g);
+            using var layoutActivity = EngineTelemetry.Source.StartActivity("layout");
 
+            await PrefetchImagesAsync();
             await PerformLayoutConvergedAsync(g);
 
             // Once the sizes are final, so that a width descriptor is judged against the width the image really got. Geometry is untouched
@@ -1914,6 +1924,50 @@ namespace PeachBrackets.Html
                 if (previous.SizesEqual(current)) break;
                 previous = current;
             }
+        }
+
+        // Whether the images of the current document have been asked for ahead of layout (reset when the document is set again).
+        private bool _imagesPrefetched;
+
+        /// <summary>
+        /// Lets a render context that can (<see cref="IResourcePrefetcher"/>) fetch the images the document will load while it is laid out all at once:
+        /// layout reaches them one at a time and waits on each, which on a page with dozens of pictures is most of its time.
+        /// </summary>
+        private async ValueTask PrefetchImagesAsync()
+        {
+            if (_imagesPrefetched || RenderContext is not IResourcePrefetcher prefetcher || Root is null)
+                return;
+
+            _imagesPrefetched = true;
+            var addresses = new List<RUri>();
+            CollectImageAddresses(Root, addresses);
+            if (addresses.Count < 2)
+                return;
+
+            using var activity = EngineTelemetry.Source.StartActivity("images.prefetch");
+            activity?.SetTag("count", addresses.Count);
+            await prefetcher.PrefetchAsync(addresses);
+        }
+
+        private void CollectImageAddresses(CssBox box, List<RUri> addresses)
+        {
+            if (box.DerivedStyle.ActualDisplay == Keywords.None)
+                return;
+
+            if (box is CssBoxImage image && image.PrefetchAddress is { } source)
+            {
+                try
+                {
+                    addresses.Add(DocumentBaseUri is { } baseUri ? new RUri(baseUri, source) : new RUri(source, UriKind.RelativeOrAbsolute));
+                }
+                catch (Exception e) when (e is UriFormatException or ArgumentException)
+                {
+                    // Not an address; loading it later reports what is wrong.
+                }
+            }
+
+            foreach (var child in box.Boxes)
+                CollectImageAddresses(child, addresses);
         }
 
         /// <summary>Builds the container-size-by-Id map <see cref="PerformLayout"/>'s convergence loop
