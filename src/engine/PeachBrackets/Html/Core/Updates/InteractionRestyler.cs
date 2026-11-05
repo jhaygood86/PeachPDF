@@ -197,6 +197,10 @@ namespace PeachBrackets.Html.Updates
             if (stackingChanged)
                 container.RefreshStackingHoistCandidates();
 
+            // The boxes were restyled in place, not rebuilt: what is kept per box for as long as the style is the same (an inline SVG's matched
+            // declarations, see CssBoxSvgSourceNode) is stale now.
+            container.StyleGeneration++;
+
             return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
         }
 
