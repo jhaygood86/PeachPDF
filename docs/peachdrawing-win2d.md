@@ -207,7 +207,7 @@ Every native Win2D object the backend creates has one owner and is released dete
 | `CanvasDevice` | The caller if passed to `Win2dRenderContext`; the context if it made one (`CreateSoftware`, or on first use) | `Win2dRenderContext.Dispose()`, only for a device it made |
 | Drawing session | The caller for `Win2dCanvas.FromSession` (borrowed); the composer for its bitmap | The caller; `Win2dComposer.Finish()`/`Dispose()` |
 | Offscreen bitmap | `Win2dComposer` | `Dispose()`, after closing the session |
-| A pushed clip (a Win2D layer) | The canvas that pushed it | `PopClip`, or `Win2dCanvas.Dispose()` for any still pushed |
+| A pushed clip (a Win2D layer, or a render target of its own for a path clip on a `FromRenderTarget` canvas) | The canvas that pushed it | `PopClip`, or `Win2dCanvas.Dispose()` for any still pushed |
 | Brushes, stroke styles, geometry, effects | The one draw call that needs them | The end of that call, even when it throws |
 | A tile (`CreateTile`) | The caller, through the canvas and image it returned | Disposing them; disposing the image also closes a tile canvas still open |
 | A layer (`BeginLayer`) | The `CanvasLayer` returned | Disposing it composites and releases; a canvas disposed first abandons it without compositing |
@@ -229,8 +229,10 @@ device was lost throws `Win2dDeviceLostException`; draw it again.
   (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honoured on this canvas.
 - **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
   with unequal x and y deviations uses their mean.
-- **Text inside a rounded or path clip** (`PushClip(GraphicsPath)`, `PushClipExclude`) is drawn as `Grayscale` even where `Auto` would use `Lcd`: Direct2D keeps what is
-  drawn inside such a clip in a layer until the clip is popped, so the pixels behind the text cannot be read or sampled. Rectangular clips are not affected.
+- **Text inside a rounded or path clip** (`PushClip(GraphicsPath)`, `PushClipExclude`) is `Lcd` only on a canvas made by `FromRenderTarget`, which blends text on the GPU: such a clip
+  draws into a render target of its own, copied from the target and composited back through the clip's shape when it is popped. On any other canvas (a host's session
+  from `FromSession`, a composer's bitmap) Direct2D keeps what is drawn inside such a clip in a layer until the clip is popped, so the pixels behind the text cannot be
+  read and the text is drawn as `Grayscale`. Rectangular clips are not affected.
 - **DirectWrite text** is not feature complete; see the [table above](#directwrite-mode-is-not-feature-complete).
 - **Windows only.** Win2D is a Windows App SDK component, so the package builds, tests and packs on Windows only. The other packages still
   build elsewhere, but a build of the whole solution (`PeachPDF.slnx`) needs Windows because it includes this project.

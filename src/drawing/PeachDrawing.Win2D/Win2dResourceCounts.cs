@@ -15,6 +15,7 @@ internal sealed class Win2dResourceCounts
     private int _nativeTargets;
     private int _textBitmaps;
     private int _lcdLayers;
+    private int _clipSurfaces;
 
     /// <summary>Clip layers (<c>CanvasActiveLayer</c>) pushed and not yet popped.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -37,6 +38,11 @@ internal sealed class Win2dResourceCounts
     /// <summary>Scratch render targets the GPU text blend uses (not counted in <see cref="Total"/>: they live as long as the context).</summary>
     public int LcdLayers => Volatile.Read(ref _lcdLayers);
 
+    /// <summary>Render targets geometry clips draw into (see <c>Win2dCanvas.BeginSurfaceClip</c>) and have not yet composited and released.</summary>
+    public int ClipSurfaces => Volatile.Read(ref _clipSurfaces);
+
+    public void ClipSurface(int delta) => Interlocked.Add(ref _clipSurfaces, delta);
+
     public void LcdLayer(int delta) => Interlocked.Add(ref _lcdLayers, delta);
 
     public void TextBitmap(int delta) => Interlocked.Add(ref _textBitmaps, delta);
@@ -52,5 +58,5 @@ internal sealed class Win2dResourceCounts
     public void Session(int delta) => Interlocked.Add(ref _sessions, delta);
 
     /// <summary>The sum of everything still alive.</summary>
-    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets;
+    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets + ClipSurfaces;
 }

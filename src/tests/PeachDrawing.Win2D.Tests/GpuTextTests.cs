@@ -125,6 +125,95 @@ public class GpuTextTests
         Assert.True(Compare(expected, actual).Mean < 4, "text in a geometry clip was drawn over the wrong backdrop");
     }
 
+    private static void RoundedCard(Win2dCanvas canvas)
+    {
+        using var path = canvas.GetGraphicsPath();
+        const float r = 10;
+        const float w = (float)Width - 20, h = (float)Height - 20;
+        path.Start(10 + r, 10);
+        path.LineTo(10 + w - r, 10);
+        path.AddBezierTo(10 + w, 10, 10 + w, 10, 10 + w, 10 + r);
+        path.LineTo(10 + w, 10 + h - r);
+        path.AddBezierTo(10 + w, 10 + h, 10 + w, 10 + h, 10 + w - r, 10 + h);
+        path.LineTo(10 + r, 10 + h);
+        path.AddBezierTo(10, 10 + h, 10, 10 + h, 10, 10 + h - r);
+        path.LineTo(10, 10 + r);
+        path.AddBezierTo(10, 10, 10, 10, 10 + r, 10);
+        path.CloseFigure();
+        canvas.PushClip(path);
+    }
+
+    [Fact]
+    public async Task TextInsideAGeometryClip_IsClearType_LikeTheSameTextWithNoClip()
+    {
+        using var context = await ContextAsync();
+        Action<Win2dCanvas, Font> Scene(bool clipped) => (canvas, font) =>
+        {
+            if (clipped)
+                RoundedCard(canvas);
+
+            canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 200, 40, 40)), 10, 10, Width - 20, Height - 20);
+            canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+            canvas.DrawString(Sample, font, PaintColor.Black, new PaintPoint(16, 40), new Core.Size(290, 20));
+            if (clipped)
+                canvas.PopClip();
+        };
+
+        var expected = Render(context, gpu: true, Scene(clipped: false));
+        var actual = Render(context, gpu: true, Scene(clipped: true));
+
+        // Both are ClearType over the same fill, so they agree closely; grayscale text would differ in every fringe pixel.
+        // The card's rounded corners differ from the square ones of the unclipped fill, so only the rows of text are compared.
+        const int stride = (int)Width * 4;
+        var rows = (14 * stride, 62 * stride);
+        var (mean, _, within) = Compare(expected[rows.Item1..rows.Item2], actual[rows.Item1..rows.Item2]);
+        Assert.True(mean < 0.3, $"mean difference {mean:F3}");
+        Assert.True(within > 0.999, $"channels within 4 levels: {within:P3}");
+        Assert.Equal(0, context.Counts.Total);
+    }
+
+    [Fact]
+    public async Task TextInsideAGeometryClip_LeavesThePixelsOutsideTheGeometryAlone()
+    {
+        using var context = await ContextAsync();
+        var untouched = Render(context, gpu: true, (canvas, font) => { });
+        var actual = Render(context, gpu: true, (canvas, font) =>
+        {
+            RoundedCard(canvas);
+            canvas.DrawRectangle(context.GetSolidBrush(PaintColor.FromArgb(255, 200, 40, 40)), 0, 0, Width, Height);
+            canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+            canvas.PopClip();
+        });
+
+        // The corner pixel and the margin are outside the card.
+        const int stride = (int)Width * 4;
+        foreach (var (x, y) in new[] { (0, 0), (3, 3), ((int)Width - 1, (int)Height - 1), (5, (int)Height / 2) })
+        {
+            for (var c = 0; c < 4; c++)
+                Assert.Equal(untouched[(y * stride) + (x * 4) + c], actual[(y * stride) + (x * 4) + c]);
+        }
+    }
+
+    [Fact]
+    public async Task NestedAndExcludingClips_ReleaseTheirSurfaces_EvenWhenLeftOpen()
+    {
+        using var context = await ContextAsync();
+        Render(context, gpu: true, (canvas, font) =>
+        {
+            RoundedCard(canvas);
+            canvas.PushClipExclude(new Rect(40, 30, 60, 20));
+            canvas.PushTransform(Matrix3x2.CreateTranslation(2, 2));
+            canvas.DrawString(Sample, font, PaintColor.Black, new PaintPoint(16, 14), new Core.Size(290, 20));
+            canvas.PopTransform();
+            canvas.PopClip();
+
+            // The outer clip is left open: disposing the canvas releases it.
+        });
+
+        Assert.Equal(0, context.Counts.Total);
+        Assert.Equal(0, context.Counts.ClipSurfaces);
+    }
+
     [Fact]
     public async Task GpuLcdText_LooksLikeTheReadBackText()
     {
