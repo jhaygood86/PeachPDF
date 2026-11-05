@@ -13,6 +13,7 @@ namespace PeachBrackets.Android.Example;
 public sealed class SampleActivity : Activity
 {
     private const string Tag = "PEACH_SMOKE";
+    private const int BeatInterval = 50;
 
     private const string Page = """
         <style>
@@ -37,6 +38,24 @@ public sealed class SampleActivity : Activity
     protected override void OnCreate(Bundle? savedInstanceState)
     {
         base.OnCreate(savedInstanceState);
+
+        // How long the main thread went without running anything from here until the page had loaded. Android reports an application that takes no input
+        // event for five seconds as not responding, so a load that holds the main thread shows up here (and the smoke test fails on it).
+        var heartbeat = new Handler(Looper.MainLooper!);
+        var lastBeat = SystemClock.UptimeMillis();
+        long longestGap = 0;
+        var watching = true;
+        System.Action? beat = null;
+        beat = () =>
+        {
+            var now = SystemClock.UptimeMillis();
+            longestGap = Math.Max(longestGap, now - lastBeat - BeatInterval);
+            lastBeat = now;
+            if (watching)
+                heartbeat.PostDelayed(beat!, BeatInterval);
+        };
+        heartbeat.PostDelayed(beat, BeatInterval);
+
         var view = new HtmlView(this) { Html = Page };
         // Android 15 draws edge to edge; the root keeps the page out from under the status and title bars.
         var root = new FrameLayout(this);
@@ -49,6 +68,9 @@ public sealed class SampleActivity : Activity
         {
             var document = view.Document!;
             document.Selection.SelectionChanged += (_, e) => Log.Info(Tag, $"selection anchor={e.Anchor} focus={e.Focus}");
+            watching = false;
+            longestGap = Math.Max(longestGap, SystemClock.UptimeMillis() - lastBeat - BeatInterval);
+            Log.Info(Tag, $"ui-stall-ms={longestGap}");
             Log.Info(Tag, $"loaded pages={document.Pages.Count} hint={document.TextRuns.Any(r => r.Text.Contains("touch only"))}");
             var link = document.GetElementBounds("link")!.Value;
             var locked = document.GetElementBounds("locked")!.Value;

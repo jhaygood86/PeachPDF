@@ -258,7 +258,7 @@ public sealed partial class HtmlView : FrameLayout
         ResetTiles();
         _document?.Dispose();
         _document = null;
-        _context?.Dispose();
+        RetireContext(_context);
         _context = null;
         base.OnDetachedFromWindow();
     }
@@ -295,17 +295,17 @@ public sealed partial class HtmlView : FrameLayout
     {
         var version = ++_loadVersion;
         var widthDp = Width / _density;
-        if (_context is null || _html is null || widthDp < 1)
+        if (_context is not { } context || _html is not { } html || widthDp < 1)
             return;
 
+        var options = BuildOptions(widthDp);
+        BeginLoad(context);
         try
         {
-            await LoadDeviceFontsAsync(_context);
-            var options = BuildOptions(widthDp);
-            var document = await HtmlDocument.LoadAsync(_html, _context, options);
-            using (var surface = SKSurface.Create(new SKImageInfo(1, 1)))
-            using (var measuring = new SkiaComposer(_context, surface, 1, 1))
-                await document.LayoutAsync(measuring.Canvas);
+            // Reading the fonts, parsing, styling and laying out the document is seconds of work on a cold runtime and a slow device, and Android reports
+            // an application that does not take an input event within five seconds as not responding. So it runs on a pool thread and the view goes on
+            // taking input; what follows (taking the document in, the first paint) is quick and needs the main thread.
+            var document = await Task.Run(() => LoadDocumentAsync(html, context, options));
 
             if (version != _loadVersion)
             {
@@ -328,6 +328,57 @@ public sealed partial class HtmlView : FrameLayout
         {
             DocumentFailed?.Invoke(this, new HtmlLoadFailedEventArgs(exception));
         }
+        finally
+        {
+            EndLoad(context);
+        }
+    }
+
+    // The part of a load that does not touch the view: it runs on a pool thread, so it uses only what it is handed.
+    private static async Task<HtmlDocument> LoadDocumentAsync(string html, SkiaRenderContext context, HtmlDocumentOptions options)
+    {
+        await LoadDeviceFontsAsync(context);
+        var document = await HtmlDocument.LoadAsync(html, context, options);
+        try
+        {
+            using var surface = SKSurface.Create(new SKImageInfo(1, 1));
+            using var measuring = new SkiaComposer(context, surface, 1, 1);
+            await document.LayoutAsync(measuring.Canvas);
+            return document;
+        }
+        catch
+        {
+            document.Dispose();
+            throw;
+        }
+    }
+
+    // A load that is running uses its render context from a pool thread, so a context the view lets go of (it left the window) is only disposed once the
+    // last load that holds it has finished. All of this runs on the main thread.
+    private readonly Dictionary<SkiaRenderContext, int> _loadsUsing = [];
+    private readonly HashSet<SkiaRenderContext> _retiredContexts = [];
+
+    private void BeginLoad(SkiaRenderContext context) => _loadsUsing[context] = _loadsUsing.GetValueOrDefault(context) + 1;
+
+    private void EndLoad(SkiaRenderContext context)
+    {
+        if (--_loadsUsing[context] > 0)
+            return;
+
+        _loadsUsing.Remove(context);
+        if (_retiredContexts.Remove(context))
+            context.Dispose();
+    }
+
+    private void RetireContext(SkiaRenderContext? context)
+    {
+        if (context is null)
+            return;
+
+        if (_loadsUsing.ContainsKey(context))
+            _retiredContexts.Add(context);
+        else
+            context.Dispose();
     }
 
     private HtmlDocumentOptions BuildOptions(double widthDp) => new()
@@ -366,13 +417,23 @@ public sealed partial class HtmlView : FrameLayout
     }
 
     // The device's own fonts: the engine reads font files, so the system families are registered by name, and the generic CSS families
-    // are pointed at the nearest of them.
-    private static async Task LoadDeviceFontsAsync(SkiaRenderContext context)
+    // are pointed at the nearest of them. Once per render context: a load that starts while another is still reading them waits for the same work.
+    private static Task LoadDeviceFontsAsync(SkiaRenderContext context)
     {
-        if (s_fontsLoadedInto.Contains(context))
-            return;
+        lock (s_fontsGate)
+        {
+            if (!s_fontsLoadedInto.TryGetValue(context, out var load) || load.IsFaulted)
+            {
+                load = AddDeviceFontsAsync(context);
+                s_fontsLoadedInto.AddOrUpdate(context, load);
+            }
 
-        s_fontsLoadedInto.Add(context);
+            return load;
+        }
+    }
+
+    private static async Task AddDeviceFontsAsync(SkiaRenderContext context)
+    {
         foreach (var (file, family) in new[]
         {
             ("Roboto-Regular.ttf", "sans-serif"), ("Roboto-Regular.ttf", "Roboto"), ("NotoSerif-Regular.ttf", "serif"),
@@ -388,7 +449,8 @@ public sealed partial class HtmlView : FrameLayout
         }
     }
 
-    private static readonly HashSet<SkiaRenderContext> s_fontsLoadedInto = [];
+    private static readonly object s_fontsGate = new();
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SkiaRenderContext, Task> s_fontsLoadedInto = new();
 
     // The height `vh` and a percentage root height resolve against, pinned when a document is loaded so it never follows the content.
     private double? PinViewport()

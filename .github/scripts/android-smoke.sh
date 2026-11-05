@@ -66,6 +66,19 @@ check() {
 }
 
 check 'loaded pages=' 'the document loaded'
+
+# The example times how long its main thread went without running anything while the page loaded. Android reports an application that takes no input
+# event for five seconds as not responding, and a cold emulator is several times slower than a development machine (about 0.3 s there with the load on a
+# pool thread, 1 to 2 s when it held the main thread), so the limit is well under five seconds and well over what the view needs itself.
+stall=$(grep -o 'ui-stall-ms=[0-9]*' <<<"$log" | head -1 | cut -d= -f2 || true)
+if [[ -z "$stall" ]]; then
+  echo "MISSING: the main thread's longest stall while the page loaded" >&2
+  fail=1
+elif ((stall > 3000)); then
+  echo "The main thread did not run anything for ${stall} ms while the page loaded (limit 3000 ms): the load holds it." >&2
+  fail=1
+fi
+
 check 'link-cursor=Pointer' 'a link asks for the pointer cursor'
 check 'locked-selectable=False' 'user-select: none is reported'
 check 'pinned-touch=None' 'touch-action: none is reported'
