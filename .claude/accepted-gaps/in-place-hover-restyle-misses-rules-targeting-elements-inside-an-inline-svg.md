@@ -1,5 +1,7 @@
 # The in-place hover restyle still misses an SVG-internal rule reached through a sibling combinator
 
+Tracked in #2205. Selectors Level 4 (`:hover` through the sibling combinators) is the rule it deviates from for the case below.
+
 **What is handled.** `a:hover .fill { fill: red }` over `<a><svg><rect class="fill"/></svg></a>`: the elements inside an inline SVG are not boxes (the scene graph is built once and the
 boxes dropped, `CssBoxSvg.EnsureDocument`), so the in-place restyle cannot restyle them. `CssData` records on the SVG box when a rule that reads the interaction state was a
 candidate for one of its elements (`HasSvgInnerStatefulCandidates`), and `InteractionRestyler` declines the fast path (a full load follows) when the state changed on or inside an
