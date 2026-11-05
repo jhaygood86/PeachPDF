@@ -40,6 +40,18 @@ public class HtmlDocumentTests
         Assert.NotNull(scene.Composer.Links.HitTest(link.Bounds.X + 1, link.Bounds.Y + 1));
     }
 
+    [Theory]
+    [InlineData(SkiaTextEngine.PeachDrawing)]
+    [InlineData(SkiaTextEngine.Native)]
+    public void The_default_font_is_a_family_the_context_knows(SkiaTextEngine engine)
+    {
+        // A document that names no font is set in FontDefaults.DefaultFamily, which on an Apple platform is the system font; Skia's own
+        // font manager matches that name but does not list it, so the native engine's context has to add it.
+        using var context = new SkiaRenderContext(engine);
+
+        Assert.True(context.IsFontExists(FontDefaults.DefaultFamily), $"{FontDefaults.DefaultFamily} is known to a {engine} context");
+    }
+
     [Fact]
     public async Task Effects_that_need_pixels_are_drawn_through_the_raster_seam()
     {

@@ -57,6 +57,17 @@ public class SkiaRenderContext : RenderContext, IDisposable
         foreach (var familyName in names)
             AddFontFamily(new SkiaFontFamily(familyName));
 
+        // Skia's font manager matches the name of the system interface font (San Francisco, "System Font" to this library's own font
+        // set) but does not list it among its families. The name is also what a document that names no font is set in on an Apple
+        // platform, so a context that did not know it would fail to find the default font.
+        if (textEngine == SkiaTextEngine.Native
+            && (OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS())
+            && _fontSet.ResolveGeneric(GenericFamily.SystemUi) is { } systemUi
+            && !names.Contains(systemUi, StringComparer.OrdinalIgnoreCase))
+        {
+            AddFontFamily(new SkiaFontFamily(systemUi));
+        }
+
         SyncFonts();
     }
 

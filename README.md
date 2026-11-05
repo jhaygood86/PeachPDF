@@ -199,7 +199,7 @@ PeachPDF is trimming-safe and [Native AOT](https://learn.microsoft.com/dotnet/co
 
 ### Default Font
 
-By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead. You can remap the default font (or any other family) to another one using
+By default, PeachPDF uses Segoe UI on Windows and the system font, San Francisco, on macOS and iOS. Neither is installed by default on the other platforms, so PeachPDF picks a different platform-appropriate default there instead. You can remap the default font (or any other family) to another one using
 
 ```csharp
 PdfGenerator generator = new();

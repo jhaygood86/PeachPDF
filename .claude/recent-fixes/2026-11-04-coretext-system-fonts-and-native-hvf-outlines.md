@@ -39,9 +39,12 @@
 - iOS itself was not run (no iOS app target in the repo builds with the simulator here). The virtual-path route (assemble
   from tables, read description and cmap from the assembled bytes) is exercised on macOS by `AppleSystemFontsTests`, which
   forces every font through it.
-- `FontDefaults.DefaultFamily` stays Arial on macOS (it is the engine's default for PDF output, not WebKit's
-  "standard font" Times); iOS, Mac Catalyst and tvOS, which used to fall through to Segoe UI, get Arial or the nearest
-  installed family.
+- `FontDefaults.DefaultFamily` is the system font (San Francisco) on macOS, iOS, Mac Catalyst and tvOS, as asked, with
+  Arial or the nearest installed family when CoreText has none. 26 engine fixtures were calibrated to Arial's widths and a
+  static bold face (San Francisco is variable and has no Hebrew), so `EngineTestDefaults` keeps `DefaultFont` at Arial for the
+  engine test assembly on an Apple host; `DefaultFontResolver.DefaultFont` therefore has an internal setter. The iOS-only
+  static-initialization order trap (the array of alternatives must be declared before `DefaultFont`) was found by running
+  the probe on the simulator.
 
 ## Evidence
 `PeachDrawing.Text.Tests` 6680, `PeachBrackets.Tests` 663 (was 10 failing on this Mac), `PeachBrackets.Engine.Tests` 18177,

@@ -21,11 +21,20 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         }
 
         [Fact]
-        public void DetermineDefaultFont_MacOS_ReturnsArial()
+        public void DetermineDefaultFont_MacOS_IsTheSystemFont_WhereTheHostHasOne_AndArialWhereItDoesNot()
         {
             var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: true, isLinux: false, isAndroid: false, isBrowser: false);
 
-            Assert.Equal("Arial", result);
+            if (OperatingSystem.IsMacOS())
+            {
+                // San Francisco, which Apple names by what it is for: whatever the system-ui generic resolves to.
+                Assert.Equal(new PeachDrawing.Text.FontSet().ResolveGeneric(PeachDrawing.Text.GenericFamily.SystemUi), result);
+                Assert.NotEqual("Arial", result);
+            }
+            else
+            {
+                Assert.Equal("Arial", result);
+            }
         }
 
         [Fact]
@@ -36,6 +45,9 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 
             Assert.NotEmpty(result);
             Assert.NotEqual("Segoe UI", result);
+
+            if (OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS())
+                Assert.Equal(new PeachDrawing.Text.FontSet().ResolveGeneric(PeachDrawing.Text.GenericFamily.SystemUi), result);
         }
 
         [Theory]

@@ -10,6 +10,6 @@ registered anywhere on the system is found, and a font outside those three direc
 is Courier (WebKit's default; Menlo is the fallback), `system-ui`, `-apple-system`, `BlinkMacSystemFont` and `ui-sans-serif`
 are San Francisco, `ui-serif` New York, `ui-monospace` SF Mono, `ui-rounded` SF Rounded (elsewhere the `ui-*` generics are
 `serif`, `monospace` and `system-ui`). PingFang and other `hvgl` fonts are drawn on macOS 15.4 / iOS 18.4 and later. iOS,
-Mac Catalyst and tvOS get the same default font as macOS (Arial) instead of Segoe UI. `Helvetica` is the real font on the
+Mac Catalyst and tvOS used to get Segoe UI, which they do not have. The default font (the one used when a document names none) is now the system font, San Francisco, on macOS, iOS, Mac Catalyst and tvOS; macOS used to default to Arial. It is a variable font, so text in it has different widths and line heights than Arial's, and a document that relied on the old default will reflow. `Helvetica` is the real font on the
 Apple platforms rather than an alias of Arial. Fonts a document author named by a family that only the directory scan
 found keep working when CoreText lists them, which is every installed font.

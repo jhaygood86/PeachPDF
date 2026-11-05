@@ -386,7 +386,7 @@ For the full compatibility details of the font-related CSS properties themselves
 
 ### Default Font
 
-By default, PeachPDF uses Segoe UI on Windows. Segoe UI isn't installed by default on other platforms, so PeachPDF picks a different platform-appropriate default there instead (see the generic-family table below — the same "verify installed, else fall back" logic applies). On a browser/WebAssembly host, where no system font is discoverable at all, the default is Liberation Sans; if you register some other family instead, the first one you register becomes the default, so text still renders (see [Rendering in the browser](#rendering-in-the-browser-blazor-webassembly)). You can remap the default font (or any other family) to another one using
+By default, PeachPDF uses Segoe UI on Windows and the system font, San Francisco, on macOS, Mac Catalyst, iOS and tvOS (the same font `system-ui` names there). Neither is installed by default on the other platforms, so PeachPDF picks a different platform-appropriate default there instead (see the generic-family table below — the same "verify installed, else fall back" logic applies). On a browser/WebAssembly host, where no system font is discoverable at all, the default is Liberation Sans; if you register some other family instead, the first one you register becomes the default, so text still renders (see [Rendering in the browser](#rendering-in-the-browser-blazor-webassembly)). You can remap the default font (or any other family) to another one using
 
 ```csharp
 PdfGenerator generator = new();
