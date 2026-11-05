@@ -49,6 +49,40 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         // -----------------------------------------------------------------------
+        // The conversion of a given file is kept for the next rule that names it
+        // -----------------------------------------------------------------------
+
+        [Fact]
+        public void ToOpenType_OfTheSameWoff2BytesAgain_ReturnsTheKeptConversion_EvenFromACopy()
+        {
+            var original = File.ReadAllBytes(BundledFonts.Woff2);
+            var copy = (byte[])original.Clone();
+
+            var first = FontFormatConverter.ToOpenType(original);
+            var again = FontFormatConverter.ToOpenType(copy);
+
+            Assert.Same(first, again);
+            Assert.NotSame(original, first);
+            Assert.False(Woff2Converter.IsWoff2(first));
+        }
+
+        [Fact]
+        public void ToOpenType_OfAFileThatDiffersByOneByte_IsNotTakenForTheKeptOne()
+        {
+            // A WOFF wrapper around a TTF, then the same wrapper with one byte of the font changed: the converted fonts must differ, whatever a hash says.
+            var ttf = File.ReadAllBytes(BundledFonts.Ttf);
+            var woff = WrapTtfAsWoff(ttf);
+            var changed = (byte[])ttf.Clone();
+            changed[changed.Length - 1] ^= 0xFF;
+
+            var a = FontFormatConverter.ToOpenType(woff);
+            var b = FontFormatConverter.ToOpenType(WrapTtfAsWoff(changed));
+
+            Assert.NotSame(a, b);
+            Assert.NotEqual(a, b);
+        }
+
+        // -----------------------------------------------------------------------
         // WOFF round-trip using a real system TTF
         // -----------------------------------------------------------------------
 
