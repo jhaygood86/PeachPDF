@@ -5,6 +5,7 @@ using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Utils;
 using PeachDrawing.PDF;
 using PeachBrackets.Svg;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace PeachBrackets.Engine.Tests.Svg
@@ -58,6 +59,42 @@ namespace PeachBrackets.Engine.Tests.Svg
             var rect = await BuildRectAsync("b + svg .x { fill: #ff0000 }", "<div><a style=\"display:block\">x</a>" + Svg + "</div>");
 
             Assert.NotEqual(Red, rect.Fill.PaintColor);
+        }
+        [Fact]
+        public async Task HostParent_IsTheNearestElement_AndDelegatesToIt()
+        {
+            var html = "<!DOCTYPE html><html><head></head><body><div id=\"d\" lang=\"fr\"><a style=\"display:block\">x</a>" + Svg + "</div></body></html>";
+            var renderContext = new HtmlRenderContext();
+            var container = new HtmlContainerInt(renderContext);
+            await container.SetHtml(html, null);
+            var size = new Size(595, 842);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
+            await container.PerformLayout(graphics);
+
+            var svgBox = DomUtils.GetBoxByTagName(container.Root!, "svg")!;
+            Assert.Null(svgBox.ParentBox!.HtmlTag); // layout wrapped it in an anonymous block
+
+            ICssDomNode node = new SvgCssBoxDomNode(svgBox, svgBox);
+            var parent = node.Parent!;
+            Assert.Equal("div", parent.TagName);
+            Assert.Equal("fr", parent.GetAttribute("lang"));
+            Assert.Equal(System.StringComparison.OrdinalIgnoreCase, parent.NameComparison);
+            Assert.False(parent.IsRoot);
+            Assert.False(parent.IsEmpty);
+            Assert.Equal("body", parent.Parent!.TagName);
+
+            parent.CustomProperties = new() { ["--x"] = "1" };
+            Assert.Equal("1", parent.CustomProperties!["--x"]);
+
+            Assert.Equal(new[] { "a", "svg" }, parent.Children.Select(c => c.TagName).ToArray());
+            Assert.Contains(node, parent.Children);
+
+            var again = node.Parent!;
+            Assert.True(parent.Equals(again));
+            Assert.Equal(parent.GetHashCode(), again.GetHashCode());
+            Assert.False(parent.Equals(null));
         }
     }
 }
