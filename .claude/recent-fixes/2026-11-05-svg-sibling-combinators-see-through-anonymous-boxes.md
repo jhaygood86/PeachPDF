@@ -1,7 +1,7 @@
 # Sibling combinators to an inline SVG see through anonymous boxes (#2215)
 
-An inline `<svg>`'s styling is resolved after layout, on the box tree. `SvgCssBoxDomNode.Parent` for the svg root returned the raw `ParentBox`, so `a + svg .x` / `a ~ svg .x` failed two ways: layout may have put the svg in an anonymous block (whose children lack the `<a>`), and the raw parent's children held the raw `CssBox` rather than the `SvgCssBoxDomNode` the matcher was holding, so `Equals` never found it.
+Layout wraps inline content that sits beside blocks (an inline `<svg>` after a block `<a>`) in an anonymous block, which is not in the DOM. An inline `<svg>`'s rules are matched after layout, so `a + svg .x` / `a ~ svg .x` looked for `<a>` among the anonymous box's children and never found it.
 
-Fix: the root's parent is now `SvgHostParentNode` - the nearest element ancestor (anonymous boxes skipped), delegating to its `CssBox` view except `Children`, which are listed through anonymous boxes and name the svg root by the same wrapper being matched. The HTML cascade and `SiblingIndex` are untouched (this runs post-layout only; the SVG wrapper path never used the index).
+Fix: `CssBox`'s selector view (`ICssDomNode.Parent`, `SelectorChildren`) now skips anonymous wrapper boxes (`IsAnonymousWrapper`: no element, not a pseudo-element, not a text run, holds boxes) - the parent is the nearest element and the children list each wrapper's contents in its place. A box with no wrapper child keeps returning its `Boxes` list, so `SiblingIndex` indexing is untouched. The svg root is still handed out as the raw `CssBox` (see the hover-restyle entry), which is what lets it be found among its siblings; a first attempt that wrapped the root in a new parent node broke those hover tests.
 
-Evidence: `InlineSvgSiblingCombinatorTests` failed before (2 of 3) and pass after; full `PeachBrackets.Engine.Tests` and the `*Svg*` PeachPDF tests pass.
+Evidence: `InlineSvgSiblingCombinatorTests` failed before the fix; full `PeachBrackets.Engine.Tests` and `PeachBrackets.Tests` pass.

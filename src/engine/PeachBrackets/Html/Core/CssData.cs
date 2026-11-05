@@ -908,7 +908,7 @@ namespace PeachBrackets.Html
                 if (indexed.Sharing.UsesInteractionState)
                 {
                     if (node is CssBox statefulCandidate) statefulCandidate.NoteStatefulCandidate(indexed.Sharing.StateOnSubjectOnly);
-                    else if (node is PeachBrackets.Svg.SvgCssBoxDomNode svgCandidate) svgCandidate.NoteStatefulCandidate();
+                    else if (node is PeachBrackets.Svg.SvgCssBoxDomNode svgCandidate) svgCandidate.NoteStatefulCandidate(indexed.Rule.Selector);
                 }
                 // @container is HTML-only (no query-container concept for SVG) - an SVG node (never a
                 // CssBox) permissively skips the check the same way a rule with no @container nesting
@@ -1191,6 +1191,61 @@ namespace PeachBrackets.Html
 
             return true;
         }
+
+        /// <summary>
+        /// Whether a change of the interaction state of <paramref name="changed"/> could make <paramref name="selector"/> match differently: whether
+        /// <paramref name="changed"/> could be the element one of its state compounds (<c>a:hover</c> in <c>a:hover + svg .x</c>) matches. Everything else in
+        /// that compound (tag, class, id, attributes) is tested against it; the rest of the selector is not, so it can answer yes where nothing would change,
+        /// never the reverse. A state read inside <c>:has()</c>, <c>:is()</c> or <c>:not()</c> is too loose to test and answers yes.
+        /// </summary>
+        internal static bool StateCompoundCouldMatch(ISelector selector, ICssDomNode changed)
+        {
+            switch (selector)
+            {
+                case ComplexSelector complex:
+                    foreach (var part in complex)
+                    {
+                        if (part.Selector is { } compound && StateCompoundCouldMatch(compound, changed)) return true;
+                    }
+
+                    return false;
+
+                case CompoundSelector compound:
+                {
+                    var readsState = false;
+                    foreach (var member in compound)
+                    {
+                        if (member is PseudoClassSelector pseudo) readsState |= IsInteractionStateClass(pseudo);
+                        else if (member is NotSelector or MatchesSelector or HasSelector && MentionsInteractionState(member.Text)) return true;
+                    }
+
+                    if (!readsState) return false;
+
+                    foreach (var member in compound)
+                    {
+                        if (member is PseudoElementSelector || member is PseudoClassSelector pseudo && IsInteractionStateClass(pseudo)) continue;
+                        if (!DoesSelectorMatch(member, changed)) return false;
+                    }
+
+                    return true;
+                }
+
+                // Whatever else it is (a list, a lone pseudo-class), too loose to test: yes when it reads the state at all.
+                default:
+                    return MentionsInteractionState(selector.Text);
+            }
+        }
+
+        private static bool IsInteractionStateClass(PseudoClassSelector pseudo)
+        {
+            var name = pseudo.Class;
+            return name == PseudoClassNames.Hover || name == PseudoClassNames.Active || name == PseudoClassNames.Focus
+                || name == PseudoClassNames.FocusVisible || name == PseudoClassNames.FocusWithin;
+        }
+
+        private static bool MentionsInteractionState(string text) =>
+            text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase)
+            || text.Contains(":focus", StringComparison.OrdinalIgnoreCase);
 
         // ::first-letter is not generated content but it changes the boxes the same way: it splits the first letter off an element's text.
         private static bool IsGeneratedContentPseudoElement(PseudoElementSelector pseudo) =>

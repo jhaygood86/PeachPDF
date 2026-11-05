@@ -61,7 +61,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.NotEqual(Red, rect.Fill.PaintColor);
         }
         [Fact]
-        public async Task HostParent_IsTheNearestElement_AndDelegatesToIt()
+        public async Task SelectorView_SkipsAnonymousBoxes()
         {
             var html = "<!DOCTYPE html><html><head></head><body><div id=\"d\" lang=\"fr\"><a style=\"display:block\">x</a>" + Svg + "</div></body></html>";
             var renderContext = new HtmlRenderContext();
@@ -76,7 +76,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var svgBox = DomUtils.GetBoxByTagName(container.Root!, "svg")!;
             Assert.Null(svgBox.ParentBox!.HtmlTag); // layout wrapped it in an anonymous block
 
-            ICssDomNode node = new SvgCssBoxDomNode(svgBox, svgBox);
+            ICssDomNode node = svgBox;
             var parent = node.Parent!;
             Assert.Equal("div", parent.TagName);
             Assert.Equal("fr", parent.GetAttribute("lang"));
@@ -91,10 +91,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(new[] { "a", "svg" }, parent.Children.Select(c => c.TagName).ToArray());
             Assert.Contains(node, parent.Children);
 
-            var again = node.Parent!;
-            Assert.True(parent.Equals(again));
-            Assert.Equal(parent.GetHashCode(), again.GetHashCode());
-            Assert.False(parent.Equals(null));
+            Assert.Same(parent, node.Parent);
         }
     }
 }

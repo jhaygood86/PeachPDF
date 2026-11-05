@@ -38,7 +38,7 @@ namespace PeachBrackets.Svg
     internal sealed class SvgCssBoxDomNode(CssBox box, CssBox svgRoot) : ICssDomNode
     {
         /// <summary>Tells the SVG this element belongs to that a rule reading the interaction state was a candidate for it.</summary>
-        internal void NoteStatefulCandidate() => svgRoot.NoteSvgInnerStatefulCandidate();
+        internal void NoteStatefulCandidate(ISelector selector) => svgRoot.NoteSvgInnerStatefulCandidate(selector);
 
         public string? TagName => box.HtmlTag?.Name;
 
@@ -58,8 +58,12 @@ namespace PeachBrackets.Svg
 
         public ICssDomNode? Parent =>
             ReferenceEquals(box, svgRoot)
-                ? SvgHostParentNode.For(box, svgRoot) // crossing out of the SVG fragment into HTML (case-insensitive)
-                : box.ParentBox is null ? null : new SvgCssBoxDomNode(box.ParentBox, svgRoot);
+                ? ((ICssDomNode)box).Parent // crossing out of the SVG fragment into HTML: the raw CssBox's view (case-insensitive), through anonymous wrappers
+                : box.ParentBox is null ? null
+                // The <svg> element itself is a child of the HTML tree: handed out as the raw CssBox, it is found among its parent's children, which the
+                // sibling combinators (`a:hover + svg .x`) look it up in. A wrapper would never equal the box in that list.
+                : ReferenceEquals(box.ParentBox, svgRoot) ? box.ParentBox
+                : new SvgCssBoxDomNode(box.ParentBox, svgRoot);
 
         public IReadOnlyList<ICssDomNode> Children =>
             box.Boxes.Select(ICssDomNode (b) => new SvgCssBoxDomNode(b, svgRoot)).ToList();
@@ -79,77 +83,6 @@ namespace PeachBrackets.Svg
         public override bool Equals(object? obj) => obj is SvgCssBoxDomNode other && ReferenceEquals(other.WrappedBox, box);
         public override int GetHashCode() => RuntimeHelpers.GetHashCode(box);
         private CssBox WrappedBox => box;
-    }
-
-    /// <summary>
-    /// The HTML element an inline <c>&lt;svg&gt;</c> sits in, as the selector engine's <c>+</c>/<c>~</c> need to see it: the
-    /// nearest ancestor that is an element (layout may have wrapped the <c>&lt;svg&gt;</c> in anonymous boxes, which are not
-    /// in the DOM), whose children are listed through any anonymous boxes and name the <c>&lt;svg&gt;</c> by the same
-    /// <see cref="SvgCssBoxDomNode"/> the selector is matching, so it is found among its siblings.
-    /// Everything else is the element's own <see cref="CssBox"/> view.
-    /// </summary>
-    internal sealed class SvgHostParentNode : ICssDomNode
-    {
-        private readonly CssBox _element;
-        private readonly CssBox _svgRoot;
-
-        private SvgHostParentNode(CssBox element, CssBox svgRoot)
-        {
-            _element = element;
-            _svgRoot = svgRoot;
-        }
-
-        /// <summary>The DOM parent of <paramref name="svgRoot"/>, or null when it has none.</summary>
-        internal static ICssDomNode? For(CssBox svgRoot, CssBox root)
-        {
-            var parent = svgRoot.ParentBox;
-            while (parent is not null && parent.HtmlTag is null && parent.ParentBox is not null) parent = parent.ParentBox;
-
-            return parent is null ? null : new SvgHostParentNode(parent, root);
-        }
-
-        public string? TagName => ((ICssDomNode)_element).TagName;
-        public string? GetAttribute(string name) => ((ICssDomNode)_element).GetAttribute(name);
-        public StringComparison NameComparison => ((ICssDomNode)_element).NameComparison;
-        public ICssDomNode? Parent
-        {
-            get
-            {
-                var up = ((ICssDomNode)_element).Parent;
-                while (up is CssBox { HtmlTag: null, ParentBox: not null } anonymous) up = anonymous.ParentBox;
-                return up;
-            }
-        }
-        public bool IsRoot => ((ICssDomNode)_element).IsRoot;
-        public bool IsEmpty => ((ICssDomNode)_element).IsEmpty;
-
-        public Dictionary<string, string>? CustomProperties
-        {
-            get => ((ICssDomNode)_element).CustomProperties;
-            set => ((ICssDomNode)_element).CustomProperties = value;
-        }
-
-        public IReadOnlyList<ICssDomNode> Children
-        {
-            get
-            {
-                var list = new List<ICssDomNode>();
-                Collect(_element);
-                return list;
-
-                void Collect(CssBox container)
-                {
-                    foreach (var child in container.Boxes)
-                    {
-                        if (child.HtmlTag is null) Collect(child);
-                        else list.Add(ReferenceEquals(child, _svgRoot) ? new SvgCssBoxDomNode(child, _svgRoot) : child);
-                    }
-                }
-            }
-        }
-
-        public override bool Equals(object? obj) => obj is SvgHostParentNode other && ReferenceEquals(other._element, _element);
-        public override int GetHashCode() => RuntimeHelpers.GetHashCode(_element);
     }
 
     /// <summary>

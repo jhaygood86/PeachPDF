@@ -106,10 +106,11 @@ namespace PeachBrackets.Html.Updates
             CollectStateful(root, stateful);
 
             // An inline SVG is a scene graph built once, with its elements' style resolved then and their boxes dropped, so a rule whose subject is an element
-            // inside it (`a:hover .icon`) cannot be restyled in place. When the state changed on or inside an element above such an SVG, leave it to a full load.
-            // html and body are always among them and say nothing: a rule on them reaches the SVG through the page's own boxes.
-            if (HasStatefulSvgUnderChanged(root, changed, false))
-                return Fail("The state changed above an inline SVG with elements that a rule reading it can style, which the fast path does not restyle.");
+            // inside it (`a:hover .icon`, `a:hover + svg .icon`) cannot be restyled in place. When a rule that reads the state could match differently because of the
+            // element whose state changed, wherever it sits, leave it to a full load. html and body are always among the changed and say nothing: a rule on them
+            // reaches the SVG through the page's own boxes.
+            if (HasStatefulSvgRuleReaching(root, changed))
+                return Fail("The state changed on an element that a rule reading it styles an inline SVG's elements through, which the fast path does not restyle.");
 
             var roots = new List<CssBox>();
             try
@@ -219,25 +220,44 @@ namespace PeachBrackets.Html.Updates
                 CollectStateful(child, into);
         }
 
-        // Whether an inline SVG that a rule reading the state was a candidate for sits under an element whose state changed (other than html and body).
-        private static bool HasStatefulSvgUnderChanged(CssBox box, HashSet<int> changed, bool underChanged)
+        // Whether a rule that reads the state and was a candidate for an element inside an inline SVG could match differently because an element whose state
+        // changed (other than html and body) is the one its state compound matches, wherever that element sits relative to the SVG.
+        private static bool HasStatefulSvgRuleReaching(CssBox root, HashSet<int> changed)
+        {
+            var svgs = new List<CssBox>();
+            var changedBoxes = new List<CssBox>();
+            CollectSvgsAndChanged(root, changed, svgs, changedBoxes);
+
+            foreach (var svg in svgs)
+            {
+                foreach (var selector in svg.SvgInnerStatefulSelectors!)
+                {
+                    foreach (var box in changedBoxes)
+                    {
+                        if (CssData.StateCompoundCouldMatch(selector, box)) return true;
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static void CollectSvgsAndChanged(CssBox box, HashSet<int> changed, List<CssBox> svgs, List<CssBox> changedBoxes)
         {
             if (box.HtmlTag is { SourceOrdinal: >= 0 } tag && changed.Contains(tag.SourceOrdinal)
                 && !tag.Name.Equals("html", StringComparison.OrdinalIgnoreCase) && !tag.Name.Equals("body", StringComparison.OrdinalIgnoreCase))
             {
-                underChanged = true;
+                changedBoxes.Add(box);
             }
 
             if (box is CssBoxSvg)
-                return underChanged && box.HasSvgInnerStatefulCandidates;
-
-            foreach (var child in box.Boxes)
             {
-                if (HasStatefulSvgUnderChanged(child, changed, underChanged))
-                    return true;
+                if (box.HasSvgInnerStatefulCandidates) svgs.Add(box);
+                return;
             }
 
-            return false;
+            foreach (var child in box.Boxes)
+                CollectSvgsAndChanged(child, changed, svgs, changedBoxes);
         }
 
         private static bool CollectSubtree(CssBox box, List<CssBox> into)

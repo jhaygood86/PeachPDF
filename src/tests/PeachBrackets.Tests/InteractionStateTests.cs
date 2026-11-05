@@ -157,6 +157,45 @@ public class InteractionStateTests
         Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
     }
 
+    [Theory]
+    [InlineData("<a id=link href='#'>hover me</a><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/><rect width='5' height='5' class='fill'/></svg>",
+        "a:hover + svg .fill")]
+    [InlineData("<a id=link href='#'>hover me</a><b>between</b><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg>",
+        "a:hover ~ svg .fill")]
+    [InlineData("<a id=link href='#'>hover me</a><div class=icons><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg></div>",
+        "a:hover ~ .icons .fill")]
+    public async Task AHoverRuleReachingAShapeInsideAnInlineSvgThroughASiblingCombinator_ChangesItsFill(string body, string rule)
+    {
+        var (context, document, measuring) = await LoadAsync(
+            body,
+            $"<style>body {{ display: flex }} a {{ width: 40px; height: 40px }} .fill {{ fill: rgb(0,0,255) }} {rule} {{ fill: rgb(255,0,0) }}</style>");
+        var (x, y) = Center(document, "link");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+        var hovered = await PixelAtAsync(context, document, "icon");
+        Assert.True(hovered.R == 255, $"applied={entered.Applied} reason={entered.Reason}");
+        Assert.Equal(0, hovered.B);
+
+        await document.ClearPointerStateAsync(measuring);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
+    }
+
+    [Fact]
+    public async Task AHoverOnAnElementNoRuleReachingAnInlineSvgCanMatch_KeepsTheFastPath()
+    {
+        // `a:hover + svg .fill` is a candidate for the SVG's shape, but the hovered <div> cannot be the `a` its state compound names.
+        var (_, document, measuring) = await LoadAsync(
+            "<div id=d style='height:40px'></div><a href='#'>x</a><svg width='40' height='40'><rect width='40' height='40' class='fill'/></svg>",
+            "<style>#d { background: rgb(0,0,255) } #d:hover { background: rgb(255,0,0) } .fill { fill: rgb(0,0,255) } a:hover + svg .fill { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "d");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied);
+        Assert.NotEmpty(entered.DirtyRegions);
+    }
+
     [Fact]
     public async Task AnInlineSvgWhoseRulesDoNotChangeWithTheHover_DoesNotTakeTheFastPathAway()
     {
