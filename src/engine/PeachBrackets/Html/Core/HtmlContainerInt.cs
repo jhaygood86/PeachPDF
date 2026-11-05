@@ -1879,9 +1879,9 @@ namespace PeachBrackets.Html
         /// document does anything (the highest density is already the sharpest). It changes bitmaps, never boxes.
         /// </summary>
         /// <returns>the image boxes whose bitmap changed</returns>
-        internal async ValueTask<List<CssBoxImage>> ReselectImagesAsync()
+        internal async ValueTask<List<CssBox>> ReselectImagesAsync()
         {
-            var changed = new List<CssBoxImage>();
+            var changed = new List<CssBox>();
             if (Root is null || ImageSelection.Policy != ImageSelectionPolicy.BestForTarget) return changed;
 
             var pending = new Stack<CssBox>();
@@ -1896,6 +1896,15 @@ namespace PeachBrackets.Html
                     changed.Add(image);
                 }
 
+                // The CSS images of the box: an image-set() takes the denser option the display now wants.
+                var upgraded = false;
+                foreach (var cssImage in CssImagesOf(box))
+                {
+                    if (cssImage is CssImage.Url url && await url.ReselectAsync(this)) upgraded = true;
+                }
+
+                if (upgraded) changed.Add(box);
+
                 foreach (var child in box.Boxes)
                 {
                     pending.Push(child);
@@ -1903,6 +1912,20 @@ namespace PeachBrackets.Html
             }
 
             return changed;
+        }
+
+        private static IEnumerable<CssImage> CssImagesOf(CssBox box)
+        {
+            if (box.BackgroundImages is { } backgrounds)
+                foreach (var image in backgrounds)
+                    if (image is not null) yield return image;
+
+            if (box.MaskImages is { } masks)
+                foreach (var image in masks)
+                    if (image is not null) yield return image;
+
+            if (box.ListStyleImage is { } marker) yield return marker;
+            if (box.ContentImage is { } content) yield return content;
         }
 
         private async ValueTask PerformLayoutConvergedAsync(Canvas g)

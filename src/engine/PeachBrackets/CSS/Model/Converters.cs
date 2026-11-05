@@ -718,11 +718,11 @@ namespace PeachBrackets.Css
 
         public static readonly IValueConverter MultipleShadowConverter = ShadowConverter.FromList().OrNone();
 
-        // The image functions PeachPDF validates but does not render (CSS Images 4). Composed into
+        // The image functions PeachPDF validates (CSS Images 4); only image-set() renders. Composed into
         // ImageSourceConverter so every <image> property (background-image, list-style-image, cursor,
         // content, and @property syntax:"<image>") accepts them syntactically; the render path
-        // (CssValueParser.ParseImage → CssImagePainter) still handles only url()/gradients, so they paint
-        // nothing (an unchanged engine-wide gap). See ExtendedImageConverters.cs.
+        // (CssValueParser.ParseImage → CssImagePainter) resolves image-set() to one of its options and
+        // paints nothing for cross-fade()/element() (an engine-wide gap). See ExtendedImageConverters.cs.
         public static readonly IValueConverter ImageSetImageConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ImageSet, new ImageSetConverter()));
         public static readonly IValueConverter CrossFadeImageConverter =

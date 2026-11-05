@@ -8,10 +8,10 @@ namespace PeachBrackets.Css
     using static Converters;
 
     /// <summary>
-    /// A validated-but-not-rendered image function (<c>image-set()</c>/<c>cross-fade()</c>/<c>element()</c>,
+    /// A validated image function (<c>image-set()</c>/<c>cross-fade()</c>/<c>element()</c>,
     /// CSS Images 4 §2/§3). PeachPDF accepts these as syntactically-valid <c>&lt;image&gt;</c> values (so a
-    /// property or <c>@property</c> registration using one is valid, per spec) but paints nothing for them —
-    /// the render path (<c>CssValueParser.ParseImage</c> → <c>CssImagePainter</c>) only handles url()/gradients.
+    /// property or <c>@property</c> registration using one is valid, per spec) but only <c>image-set()</c> paints —
+    /// <c>CssValueParser.ParseImage</c> resolves it to one of its options; cross-fade()/element() paint nothing.
     /// This value carries the original tokens for serialization only.
     /// </summary>
     internal sealed class ImageFunctionValue : IPropertyValue

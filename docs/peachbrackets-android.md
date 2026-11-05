@@ -37,7 +37,7 @@ fits the system windows (`SetFitsSystemWindows(true)`) or apply the insets yours
 | `Input` | The pointing devices the `hover` / `pointer` media queries report. By default the view asks the system which are attached (a touch screen is coarse and cannot hover; a mouse, trackpad or stylus is fine and can). |
 | `Document`, `Zoom`, `SelectedText` | The loaded `HtmlDocument` (replaced whenever the view reloads), the zoom factor, and the selected text. |
 | `CopySelection()`, `SelectAll()`, `ScrollToElement(id)` | Clipboard, selection and scrolling. Ctrl+C and Ctrl+A work with a keyboard. |
-| `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. |
+| `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. Reading the fonts, parsing and laying out run on a pool thread, so a slow load never holds the main thread (Android reports an app that takes no input for five seconds as not responding); both events are raised on the main thread. |
 | `LinkTapped` | Raised before a link is followed; set `Cancel` to handle it yourself. |
 
 ## Touch integration points

@@ -393,6 +393,14 @@ namespace PeachDrawing.Text
         /// <param name="rune">The character.</param>
         public bool HasGlyph(Rune rune) => Face.Descriptor.HasGlyph(rune);
 
+        /// <summary>
+        /// The space the font asks to be added to every glyph's advance at a point size, in design units (the <c>trak</c> table): zero for a font with none, and for most fonts. A face made to be
+        /// set tighter as it grows and looser as it shrinks (Apple's San Francisco) lists the amounts by size; a text layer that follows the platform adds this to each advance.
+        /// </summary>
+        /// <remarks>The amount is for the table's normal track, interpolated between the sizes it lists and held at the ends beyond them. It is negative for tighter.</remarks>
+        /// <param name="sizeInPoints">The font size, in points.</param>
+        public double GetTracking(double sizeInPoints) => Face.Fontface.Tracking?.At(sizeInPoints) ?? 0;
+
         /// <summary>The horizontal advance of a glyph, in design units (the <c>hmtx</c> table).</summary>
         /// <remarks>Glyphs past the last one with a metric of its own share the last metric, as in a monospaced font.</remarks>
         /// <param name="glyph">The glyph.</param>

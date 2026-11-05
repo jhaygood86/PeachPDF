@@ -33,10 +33,13 @@ public sealed partial class Win2dCanvas : Canvas
 {
     private enum OpenKind { Clip, Transform, Blend }
 
-    private readonly record struct Open(OpenKind Kind, CanvasActiveLayer? Layer, IDisposable? Resource, Matrix3x2 Ctm, Matrix3x2 Local, PaintBlendMode Blend, CanvasBlend SessionBlend);
+    private readonly record struct Open(OpenKind Kind, CanvasActiveLayer? Layer, IDisposable? Resource, Matrix3x2 Ctm, Matrix3x2 Local, PaintBlendMode Blend, CanvasBlend SessionBlend, ClipSurface? Surface = null);
+
+    /// <summary>A geometry clip drawn into a render target of its own (see <see cref="BeginSurfaceClip"/>), with what to put back when it is popped.</summary>
+    private sealed record ClipSurface(CanvasRenderTarget Target, CanvasDrawingSession Session, CanvasDrawingSession ParentSession, CanvasRenderTarget ParentTarget, CanvasGeometry Geometry);
 
     private readonly Win2dRenderContext _context;
-    private readonly CanvasDrawingSession _session;
+    private CanvasDrawingSession _session;
     private readonly bool _ownsSession;
     private readonly bool _isTile;
     private readonly double _ppp;
@@ -144,9 +147,9 @@ public sealed partial class Win2dCanvas : Canvas
 
     // ---- the push/pop stack -------------------------------------------------------------------------------
 
-    private void Push(OpenKind kind, CanvasActiveLayer? layer = null, IDisposable? resource = null)
+    private void Push(OpenKind kind, CanvasActiveLayer? layer = null, IDisposable? resource = null, ClipSurface? surface = null)
     {
-        _open.Add(new Open(kind, layer, resource, _ctm, _local, _blend, _session.Blend));
+        _open.Add(new Open(kind, layer, resource, _ctm, _local, _blend, _session.Blend, surface));
         if (layer is not null)
             _context.Counts.Layer(1);
     }
@@ -183,6 +186,9 @@ public sealed partial class Win2dCanvas : Canvas
     private void Release(Open entry)
     {
         // The layer goes before the state is put back: the clip ends under the transform it was pushed with.
+        if (entry.Surface is { } surface)
+            EndSurfaceClip(surface);
+
         if (entry.Layer is not null)
         {
             entry.Layer.Dispose();
@@ -218,7 +224,7 @@ public sealed partial class Win2dCanvas : Canvas
         var geometry = BuildGeometry(path);
         try
         {
-            Push(OpenKind.Clip, _session.CreateLayer(1f, geometry), geometry);
+            PushGeometryClip(geometry);
             _clipStack.Push(_clipStack.Peek());
         }
         catch
@@ -241,13 +247,90 @@ public sealed partial class Win2dCanvas : Canvas
         var geometry = everything.CombineWith(hole, Matrix3x2.Identity, CanvasGeometryCombine.Exclude);
         try
         {
-            Push(OpenKind.Clip, _session.CreateLayer(1f, geometry), geometry);
+            PushGeometryClip(geometry);
             _clipStack.Push(_clipStack.Peek());
         }
         catch
         {
             geometry.Dispose();
             throw;
+        }
+    }
+
+    private void PushGeometryClip(CanvasGeometry geometry)
+    {
+        if (BeginSurfaceClip(geometry) is { } surface)
+            Push(OpenKind.Clip, null, geometry, surface);
+        else
+            Push(OpenKind.Clip, _session.CreateLayer(1f, geometry), geometry);
+    }
+
+    /// <summary>
+    /// Starts a geometry clip that draws into a render target of its own instead of a Direct2D layer, so ClearType text inside it has the pixels behind it to
+    /// blend against (a layer's content is not in the target until the layer is popped). The target starts as a copy of the one being drawn to; at the pop it
+    /// is composited back through the geometry, which leaves everything outside it as it was. Null, with nothing changed, when this canvas does not blend
+    /// text on the GPU, or when no text could use it (the clip then costs what it always did).
+    /// </summary>
+    private ClipSurface? BeginSurfaceClip(CanvasGeometry geometry)
+    {
+        if (_lcdTarget is not { } parentTarget || _context.TextRendering is Win2dTextRendering.Outline or Win2dTextRendering.Grayscale
+            || (_context.TextRendering == Win2dTextRendering.Auto && !(_clearType ??= Win2dSystemText.ClearTypeEnabled)))
+            return null;
+
+        var parentSession = _session;
+        parentSession.Flush();
+        var size = parentTarget.SizeInPixels;
+        var target = new CanvasRenderTarget(parentSession.Device, (float)parentTarget.Size.Width, (float)parentTarget.Size.Height, parentTarget.Dpi, parentTarget.Format, CanvasAlphaMode.Ignore);
+        _context.Counts.ClipSurface(1);
+        target.CopyPixelsFromBitmap(parentTarget, 0, 0, 0, 0, (int)size.Width, (int)size.Height);
+
+        var session = target.CreateDrawingSession();
+        _context.Counts.Session(1);
+        session.Transform = parentSession.Transform;
+        session.Blend = parentSession.Blend;
+        session.Antialiasing = parentSession.Antialiasing;
+        session.TextAntialiasing = parentSession.TextAntialiasing;
+
+        _session = session;
+        _lcdTarget = target;
+        return new ClipSurface(target, session, parentSession, parentTarget, geometry);
+    }
+
+    // Composites the clip's target onto the one it was copied from, through the geometry, and puts the parent session back.
+    private void EndSurfaceClip(ClipSurface surface)
+    {
+        try
+        {
+            surface.Session.Dispose();
+            _context.Counts.Session(-1);
+        }
+        finally
+        {
+            _session = surface.ParentSession;
+            _lcdTarget = surface.ParentTarget;
+            try
+            {
+                // The geometry is in the user space the clip was pushed under, which is the parent session's transform still.
+                using var layer = _session.CreateLayer(1f, surface.Geometry);
+                var transform = _session.Transform;
+                var blend = _session.Blend;
+                try
+                {
+                    _session.Transform = Matrix3x2.Identity;
+                    _session.Blend = CanvasBlend.Copy;
+                    _session.DrawImage(surface.Target, 0, 0);
+                }
+                finally
+                {
+                    _session.Blend = blend;
+                    _session.Transform = transform;
+                }
+            }
+            finally
+            {
+                surface.Target.Dispose();
+                _context.Counts.ClipSurface(-1);
+            }
         }
     }
 

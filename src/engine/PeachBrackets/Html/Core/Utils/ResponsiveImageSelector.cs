@@ -168,17 +168,42 @@ namespace PeachBrackets.Html.Utils
             }
 
             var settings = box.HtmlContainer?.ImageSelection ?? ImageSelectionOptions.HighestDensityPolicy;
+            var container = box.HtmlContainer;
+            var target = container is null ? 1 : TargetDensity(container, settings);
+            return RankChoices(all, settings, target, ImageAspect(box));
+        }
 
+        /// <summary>The pixel density a screen shows images at: the device pixel ratio, times the render scale when the policy lets zoom count.</summary>
+        internal static double TargetDensity(HtmlContainerInt container, ImageSelectionOptions settings) =>
+            container.DevicePixelRatio * (settings.UpgradeOnZoom ? container.RenderScale : 1);
+
+        /// <summary>
+        /// Picks the density among the <c>x</c> candidates of a CSS <c>image-set()</c>, by the same policy an <c>&lt;img srcset&gt;</c> is ranked with.
+        /// </summary>
+        /// <param name="densities">each candidate's resolution in dppx, in declaration order</param>
+        /// <param name="container">the document whose selection policy and target density apply, or null for the paged-output policy</param>
+        /// <returns>the index into <paramref name="densities"/> of the best candidate, or -1 when it is empty</returns>
+        internal static int PickDensity(IReadOnlyList<double> densities, HtmlContainerInt? container)
+        {
+            if (densities.Count == 0) return -1;
+
+            var all = new List<(Choice Choice, double? WidthPx, int Index)>();
+            for (var i = 0; i < densities.Count; i++) all.Add((new Choice(i.ToString(CultureInfo.InvariantCulture), densities[i], densities[i]), null, i));
+
+            var settings = container?.ImageSelection ?? ImageSelectionOptions.HighestDensityPolicy;
+            var target = container is null ? 1 : TargetDensity(container, settings);
+            return int.Parse(RankChoices(all, settings, target, 1)[0].Url, CultureInfo.InvariantCulture);
+        }
+
+        private static List<Choice> RankChoices(List<(Choice Choice, double? WidthPx, int Index)> all, ImageSelectionOptions settings, double target, double aspect)
+        {
             if (settings.Policy == ImageSelectionPolicy.HighestDensity)
             {
                 // Stable, so the earliest of equal densities wins as it always has.
                 return all.OrderByDescending(c => c.Choice.Density).ThenBy(c => c.Index).Select(c => c.Choice).ToList();
             }
 
-            var container = box.HtmlContainer!;
-            var target = container.DevicePixelRatio * (settings.UpgradeOnZoom ? container.RenderScale : 1);
             var tolerance = settings.Tolerance >= 1 && double.IsFinite(settings.Tolerance) ? settings.Tolerance : 1.1;
-            var aspect = ImageAspect(box);
 
             bool OverBudget(double? widthPx) =>
                 settings.MaxDecodePixels is { } budget && widthPx is { } wpx && wpx * (wpx / aspect) > budget;

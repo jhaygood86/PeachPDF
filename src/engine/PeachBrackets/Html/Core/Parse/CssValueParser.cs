@@ -2222,11 +2222,17 @@ namespace PeachBrackets.Html.Parse
             };
         }
 
-        public CssImage? ParseImage(string value)
+        /// <param name="value">the <c>&lt;image&gt;</c> value</param>
+        /// <param name="container">the document whose image selection policy and display density choose among the options of an
+        /// <c>image-set()</c>; null picks the highest resolution, as paged output does</param>
+        public CssImage? ParseImage(string value, HtmlContainerInt? container = null)
         {
             if (string.IsNullOrWhiteSpace(value) ||
                 value.Equals("none", StringComparison.OrdinalIgnoreCase))
                 return null;
+
+            if (TryParseImageSet(value.Trim(), container, out var chosen))
+                return chosen;
 
             Token? urlToken;
             Token? funcToken;
@@ -2274,7 +2280,7 @@ namespace PeachBrackets.Html.Parse
         /// <c>-size</c>, <c>-repeat</c>...) are paired with, so a <c>none</c> layer must keep its place
         /// (CSS Backgrounds 3 §2.1). Returns <c>null</c> when no layer holds an image.
         /// </summary>
-        public IReadOnlyList<CssImage?>? ParseImages(string value)
+        public IReadOnlyList<CssImage?>? ParseImages(string value, HtmlContainerInt? container = null)
         {
             if (string.IsNullOrWhiteSpace(value) ||
                 value.Equals("none", StringComparison.OrdinalIgnoreCase))
@@ -2284,7 +2290,7 @@ namespace PeachBrackets.Html.Parse
             var any = false;
             foreach (var segment in SplitTopLevelCommas(value))
             {
-                var image = ParseImage(segment.Trim());
+                var image = ParseImage(segment.Trim(), container);
                 any |= image != null;
                 result.Add(image);
             }
@@ -2292,13 +2298,141 @@ namespace PeachBrackets.Html.Parse
             return any ? result : null;
         }
 
+        /// <summary>
+        /// <c>image-set( [ &lt;image&gt; | &lt;string&gt; ] [ &lt;resolution&gt; || type(&lt;string&gt;) ]? # )</c> (CSS Images 4 §2.4): drops the options
+        /// whose <c>type()</c> the render context cannot decode, then chooses among the rest by resolution the way a <c>srcset</c> is ranked.
+        /// Returns false when <paramref name="value"/> is not a whole <c>image-set()</c> call; <paramref name="image"/> is null when it is one
+        /// but no option is usable.
+        /// </summary>
+        private bool TryParseImageSet(string value, HtmlContainerInt? container, out CssImage? image)
+        {
+            image = null;
+
+            var open = value.IndexOf('(');
+            if (open <= 0 || !value[^1].Equals(')')) return false;
+
+            if (!value[..open].Equals(FunctionNames.ImageSet, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var sources = new List<CssImage>();
+            var densities = new List<double>();
+
+            foreach (var option in SplitTopLevelCommas(value[(open + 1)..^1]))
+            {
+                var text = option.Trim();
+                if (text.Length == 0) continue;
+
+                string sourceText;
+                string rest;
+
+                if (text[0] is '"' or '\'')
+                {
+                    var close = text.IndexOf(text[0], 1);
+                    if (close < 0) continue;
+                    sourceText = "url(" + text[0] + text[1..close] + text[0] + ")";
+                    rest = text[(close + 1)..];
+                }
+                else
+                {
+                    var paren = text.IndexOf('(');
+                    if (paren < 0) continue;
+                    var depth = 0;
+                    var end = -1;
+                    for (var i = paren; i < text.Length; i++)
+                    {
+                        if (text[i] == '(') depth++;
+                        else if (text[i] == ')' && --depth == 0) { end = i; break; }
+                    }
+
+                    if (end < 0) continue;
+                    sourceText = text[..(end + 1)];
+                    rest = text[(end + 1)..];
+                }
+
+                var density = 1d;
+                var supported = true;
+
+                foreach (var part in SplitTopLevelWhitespace(rest))
+                {
+                    if (part.StartsWith("type(", StringComparison.OrdinalIgnoreCase) && part.EndsWith(')'))
+                    {
+                        var mime = part[5..^1].Trim().Trim('"', '\'');
+                        supported &= _renderContext.SupportsImageType(mime);
+                    }
+                    else if (TryParseResolution(part, out var dppx))
+                    {
+                        density = dppx;
+                    }
+                    else
+                    {
+                        supported = false;
+                    }
+                }
+
+                if (!supported || !(density > 0)) continue;
+
+                // A nested image-set() would re-enter here with no container; the grammar does not take one.
+                if (ParseImage(sourceText) is { } source)
+                {
+                    sources.Add(source);
+                    densities.Add(density);
+                }
+            }
+
+            var pick = ResponsiveImageSelector.PickDensity(densities, container);
+            if (pick < 0) return true;
+
+            image = sources[pick];
+            if (image is CssImage.Url url)
+            {
+                // Kept so a zoomed screen document can choose again, and so the image's natural size follows the resolution it declared.
+                url.Density = densities[pick];
+                if (sources.Count > 1)
+                {
+                    url.Set = new CssImage.ImageSetOptions(sources, densities);
+                    url.ChosenIndex = pick;
+                }
+            }
+
+            return true;
+        }
+
+        /// <summary>A CSS <c>&lt;resolution&gt;</c> in dots per CSS pixel: <c>x</c>/<c>dppx</c>, <c>dpi</c> (96 per px) or <c>dpcm</c>.</summary>
+        private static bool TryParseResolution(string text, out double dppx)
+        {
+            dppx = 0;
+            var scale = 1d;
+            string number;
+
+            if (text.EndsWith("dppx", StringComparison.OrdinalIgnoreCase)) number = text[..^4];
+            else if (text.EndsWith("dpcm", StringComparison.OrdinalIgnoreCase)) { number = text[..^4]; scale = 2.54 / 96; }
+            else if (text.EndsWith("dpi", StringComparison.OrdinalIgnoreCase)) { number = text[..^3]; scale = 1d / 96; }
+            else if (text.EndsWith('x') || text.EndsWith('X')) number = text[..^1];
+            else return false;
+
+            if (!double.TryParse(number, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var n)
+                || !double.IsFinite(n))
+                return false;
+
+            dppx = n * scale;
+            return true;
+        }
+
         internal static IEnumerable<string> SplitTopLevelCommas(string value)
         {
             int depth = 0, start = 0;
+            char quote = default;
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
-                if (c == '(') depth++;
+                // A comma inside a quoted string (an image-set() source such as a data: URI) separates nothing.
+                if (quote != default)
+                {
+                    if (c == '\\') i++;
+                    else if (c == quote) quote = default;
+                }
+                else if (c is '"' or '\'') quote = c;
+                else if (c == '(') depth++;
                 else if (c == ')') depth--;
                 else if (c == ',' && depth == 0)
                 {

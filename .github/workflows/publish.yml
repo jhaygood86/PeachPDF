@@ -241,6 +241,47 @@ jobs:
     - name: Push to NuGet.org
       run: dotnet nuget push "./packages/PeachBrackets.WinUI.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
 
+  # PeachDrawing.CoreGraphics builds for the macOS and iOS target frameworks, which need a Mac and the macos and ios workloads, so it is packed and
+  # pushed by its own job once the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
+  publish-coregraphics:
+    needs: publish
+    runs-on: macos-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: |
+          10.0.x
+
+    - name: Install the macos and ios workloads
+      run: dotnet workload install macos ios
+
+    - name: Read package version
+      id: version
+      shell: bash
+      run: |
+        version=$(grep -o '<PackageVersion>[0-9][^<]*</PackageVersion>' src/Version.props | head -1 | sed 's/<[^>]*>//g')
+        echo "value=$version" >> "$GITHUB_OUTPUT"
+        echo "Version: $version"
+
+    - name: Build and pack
+      run: |
+        dotnet build src/drawing/PeachDrawing.CoreGraphics/PeachDrawing.CoreGraphics.csproj --configuration Release
+        dotnet pack src/drawing/PeachDrawing.CoreGraphics/PeachDrawing.CoreGraphics.csproj --configuration Release --no-build --output ./packages
+
+    - name: NuGet login
+      uses: NuGet/login@v1
+      id: login
+      with:
+        user: ${{ secrets.NUGET_USER }}
+
+    - name: Push to NuGet.org
+      run: dotnet nuget push "./packages/PeachDrawing.CoreGraphics.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
+
   # PeachDrawing.Win2D builds on Windows only (Win2D is a Windows App SDK component), so it is packed and pushed by its own job once
   # the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
   publish-win2d:

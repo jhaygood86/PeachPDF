@@ -1591,7 +1591,7 @@ public sealed partial class HtmlDocument : IDisposable
     }
 
     /// <summary>
-    /// Chooses the images of a <c>srcset</c> or <c>&lt;picture&gt;</c> again for the device pixel ratio and render scale set since
+    /// Chooses the images of a <c>srcset</c>, <c>&lt;picture&gt;</c> or CSS <c>image-set()</c> again for the device pixel ratio and render scale set since
     /// (<see cref="SetRenderScale"/>) and loads the sharper ones, without parsing or laying the document out again: the boxes keep their size and
     /// every <see cref="DocumentElement"/> stays valid. It never goes to a less dense image. Repaint the regions it returns
     /// (<see cref="PaintPageRegionAsync"/>).
