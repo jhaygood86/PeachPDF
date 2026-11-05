@@ -450,8 +450,17 @@ public sealed partial class HtmlDocument : IDisposable
         }
     }
 
+    /// <summary>
+    /// Whether the last <see cref="SetViewport"/> moved a box between the layer a host paints under its scroller (<see cref="DocumentPaintLayer.Content"/>) and the
+    /// one over it (<see cref="DocumentPaintLayer.ViewportAttached"/>): a sticky box began to stick or was released. The regions it returned then have to be painted
+    /// again in the content layer too, where the box was; when it is <see langword="false"/> only the attached layer changed, and a box that merely moves while held
+    /// needs no repaint of the content layer.
+    /// </summary>
+    public bool ViewportLayersChanged { get; private set; }
+
     private IReadOnlyList<DirtyRegion> ApplyViewport()
     {
+        ViewportLayersChanged = false;
         if (!_container.Continuous || _container.FragmentTree is not { Fragmentainers.Count: > 0 } tree)
             return [];
 
@@ -460,6 +469,7 @@ public sealed partial class HtmlDocument : IDisposable
         var visible = Viewport;
         var layoutViewport = new Rect(visible.X * ppp, visible.Y * ppp, visible.Width * ppp, visible.Height * ppp);
         var dirty = _container.View.Apply(_container, layoutViewport);
+        ViewportLayersChanged = _container.View.LayersChanged;
 
         if (dirty.Count == 0)
             return [];

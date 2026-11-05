@@ -387,7 +387,11 @@ namespace PeachBrackets.Html.Dom
                 {
                     double natural = ComputeLineCrossSize(line);
                     line.CrossSize = (lines.Count == 1 && containerCrossSize > 0)
-                        ? Math.Max(natural, containerCrossSize)
+                        // A single-line (nowrap) container is as tall as the line: its inner cross size, whatever the items need (CSS Flexbox 1 section
+                        // 9.4 step 8), so an item taller than the container overflows it and is centred on the container, not on a line as tall as it
+                        // is (a site header's 40-pixel bar with a 65-pixel logo in it). A wrap container with one line keeps the larger of the two: its
+                        // free space is the lines' to share (align-content), and a line that needs more than the container has overflows it.
+                        ? (_isWrap ? Math.Max(natural, containerCrossSize) : containerCrossSize)
                         : natural;
                 }
 

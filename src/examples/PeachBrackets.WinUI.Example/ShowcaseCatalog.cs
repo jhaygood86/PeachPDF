@@ -32,6 +32,7 @@ internal static class ShowcaseCatalog
         {
             new("web_peachpdf", "Web", "peachpdf.net", "The PeachPDF site, fetched live and laid out by the control (needs a network connection; turns AllowNetworkAccess on so its images, styles and fonts load).", "https://peachpdf.net/"),
             new("web_peachstate", "Web", "peachstatetechnologies.com", "The Peach State Technologies site, fetched live and laid out by the control (needs a network connection; turns AllowNetworkAccess on).", "https://peachstatetechnologies.com/"),
+            new("web_arstechnica", "Web", "arstechnica.com", "Ars Technica, a long server-rendered news front page with many lazy-loaded images, fetched live and laid out by the control (needs a network connection; turns AllowNetworkAccess on).", "https://arstechnica.com/"),
         });
         return showcases;
     }

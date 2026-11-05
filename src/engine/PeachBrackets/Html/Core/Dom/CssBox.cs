@@ -192,6 +192,12 @@ namespace PeachBrackets.Html.Dom
             set => _htmlContainer = value;
         }
 
+        /// <summary>
+        /// Whether the document is laid out for a screen, which is what gives it the browsers' default type size (16 px) and keyword scale
+        /// rather than the paper default.
+        /// </summary>
+        internal bool IsScreenMedia => HtmlContainer?.Continuous == true;
+
         /// <summary>The document's <c>@font-palette-values</c> registry, or null when none/unavailable.</summary>
         internal IReadOnlyDictionary<(string Name, string Family), RegisteredFontPalette>? FontPaletteValuesRegistry
             => HtmlContainer?.FontPaletteValues;
@@ -3912,7 +3918,7 @@ namespace PeachBrackets.Html.Dom
         private async ValueTask DriveBlockChildPass(Canvas g, CssBox child, bool framePlacesChild)
         {
 #if DEBUG
-            Console.WriteLine($"layout start: {child}");
+            if (EngineTrace.Enabled) Console.WriteLine($"layout start: {child}");
 #endif
 
             var resume = await child.BeginBlockPass(g);
@@ -4768,7 +4774,7 @@ namespace PeachBrackets.Html.Dom
                             }
 
 #if DEBUG
-                            foreach (var lineBox in LineBoxes)
+                            if (EngineTrace.Enabled) foreach (var lineBox in LineBoxes)
                             {
                                 Console.WriteLine($"layout linebox: {lineBox} [h: {lineBox.LineBottom}]");
                             }
@@ -8100,7 +8106,7 @@ namespace PeachBrackets.Html.Dom
             }
 
 #if DEBUG
-            Console.WriteLine($"layout finish: {ToString()} [x: {Location.X}, y: {Location.Y}, b: {ActualBottom}, r: {ActualRight}, h: {Size.Height}, w: {Size.Width}]");
+            if (EngineTrace.Enabled) Console.WriteLine($"layout finish: {ToString()} [x: {Location.X}, y: {Location.Y}, b: {ActualBottom}, r: {ActualRight}, h: {Size.Height}, w: {Size.Width}]");
 #endif
             // A fixed box is painted per page rather than flowed, and a running box is painted
             // into a page margin box - neither is part of the flow whose width ActualSize reports.

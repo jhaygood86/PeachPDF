@@ -407,7 +407,7 @@ namespace PeachBrackets.Html.Paint
             var box = fragment.Box;
 
 #if DEBUG
-            Console.WriteLine($"paint: {box}");
+            if (EngineTrace.Enabled) Console.WriteLine($"paint: {box}");
 #endif
 
             // A backdrop repaint (see FragmentPainter.Backdrop.cs) ends where the element it is repainting for begins.

@@ -85,7 +85,7 @@ public sealed partial class Win2dCanvas
 
         // Over a render target this canvas can sample, text is blended on the GPU: runs are queued and composited by a pixel shader against the pixels
         // already drawn (see Win2dCanvas.GpuText.cs), so neither LCD nor grayscale text needs the pixels behind it read back.
-        var gpu = _lcdTarget is not null && _blend == PaintBlendMode.Normal && _session.Blend == CanvasBlend.SourceOver;
+        var gpu = _lcdTarget is not null && _blend == PaintBlendMode.Normal && _session.Blend == CanvasBlend.SourceOver && !InsideGeometryLayer;
 
         // Whether this run is drawn with a coverage per stripe. Auto does it only on screen (a session the host owns), where the pixels
         // behind the text can be read and ClearType is what the user has chosen; asking for Lcd does it wherever the pixels can be read.
@@ -161,9 +161,9 @@ public sealed partial class Win2dCanvas
     }
 
     // Reading back means a canvas whose target can be read (a bitmap of this backend's own, or a host's session over one) and the ordinary blend.
-    // A pushed clip does not stop it: what is drawn inside a clip is in the target as soon as it is flushed, so the pixels behind the text are
-    // there to be read.
-    private bool CanReadBackdrop => _blend == PaintBlendMode.Normal && _session.Blend == CanvasBlend.SourceOver
+    // A rectangular clip does not stop it: what is drawn inside one is in the target as soon as it is flushed, so the pixels behind the text are
+    // there to be read. A clip made from a geometry does (see InsideGeometryLayer): its content is in a layer until the clip is popped.
+    private bool CanReadBackdrop => _blend == PaintBlendMode.Normal && _session.Blend == CanvasBlend.SourceOver && !InsideGeometryLayer
         && (_backdrop is not null || NativeTarget is not null);
 
     private bool TryReadBackdrop(Win2dTextMask run, out byte[] backdrop)

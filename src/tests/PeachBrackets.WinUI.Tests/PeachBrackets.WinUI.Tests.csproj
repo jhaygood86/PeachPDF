@@ -2,7 +2,7 @@
 
   <!--
     The tests of the WinUI control that need no window: the cursor mapping, the pointing devices a set of devices amounts to, page hit
-    mapping, which links the system may open, and the public-API snapshot. Windows-only, because WinUI is. The control itself is exercised
+    mapping, which links the system may open, the demo's page rewriter (its source is compiled in), and the public-API snapshot. Windows-only, because WinUI is. The control itself is exercised
     by the example app's smoke mode, which needs a desktop session.
   -->
   <PropertyGroup>
@@ -27,6 +27,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\engine\PeachBrackets.WinUI\PeachBrackets.WinUI.csproj" />
+    <PackageReference Include="AngleSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\..\examples\PeachBrackets.WinUI.Example\PageRewriter.cs" Link="Example\PageRewriter.cs" />
   </ItemGroup>
 
   <ItemGroup>

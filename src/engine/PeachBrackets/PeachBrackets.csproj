@@ -88,4 +88,11 @@
 		<None Include="..\..\drawing\PeachDrawing.Text\Internal\Hinting\FreeType\FTL.TXT" Pack="true" PackagePath="\" />
 		<None Include="..\..\..\docs\assets\img\peach.png" Pack="true" PackagePath="\" />
 	</ItemGroup>
+	<!-- The package version, as a constant, so the user-agent the resource loader sends names the PeachBrackets that sent it (the same pattern as PeachPDF's PeachPdfProductInfo). -->
+	<Target Name="GeneratePeachBracketsProductInfo" BeforeTargets="BeforeBuild">
+		<WriteLinesToFile File="$(IntermediateOutputPath)PeachBracketsProductInfo.g.cs" Lines="namespace PeachBrackets { internal static class PeachBracketsProductInfo { public const string Version = &quot;$(PackageVersion)&quot;%3B } }" Overwrite="true" />
+		<ItemGroup>
+			<Compile Include="$(IntermediateOutputPath)PeachBracketsProductInfo.g.cs" />
+		</ItemGroup>
+	</Target>
 </Project>

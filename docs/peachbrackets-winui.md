@@ -60,7 +60,7 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 
 ## Images, style sheets and fonts
 
-A document's images, style sheets and fonts load from `data:` URIs and from files. Web addresses are not fetched unless the host sets `AllowNetworkAccess` (off by default, so a document cannot make the application call out); changing it loads the document again. `IsLayoutSynchronous` still refuses anything that would have to be fetched. The loader is `PeachBrackets.HostResourceLoader`, which a host of its own (a `RenderContext` that answers `GetResourceStream`, or `RasterRenderContext.ResourceLoader`) can use too.
+A document's images, style sheets and fonts load from `data:` URIs and from files. Web addresses are not fetched unless the host sets `AllowNetworkAccess` (off by default, so a document cannot make the application call out); changing it loads the document again. `IsLayoutSynchronous` still refuses anything that would have to be fetched. The loader is `PeachBrackets.HostResourceLoader`, which a host of its own (a `RenderContext` that answers `GetResourceStream`, or `RasterRenderContext.ResourceLoader`) can use too. Its requests carry `HostResourceLoader.UserAgent`: by default the `User-Agent` Chromium sends on the same platform (`Mozilla/5.0 (<platform>; <oscpu>) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36`, with the platform and CPU values Chromium reports, such as `Windows NT 10.0; Win64; x64`, `Macintosh; Intel Mac OS X 10_15_7`, `X11; Linux x86_64` or `Linux; Android 10; K`) followed by `PeachBrackets/<version>`; set the property to send something else. A host that fetches a page itself can send the same string.
 
 ## One surface, not pages
 

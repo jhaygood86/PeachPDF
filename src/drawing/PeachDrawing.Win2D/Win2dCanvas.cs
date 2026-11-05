@@ -164,6 +164,22 @@ public sealed partial class Win2dCanvas : Canvas
         Release(entry);
     }
 
+    // Whether a clip made from a geometry (a rounded corner, an excluded rectangle) is open. Direct2D draws what is inside one into a layer of its own and
+    // composites it when the clip is popped, so until then the pixels the clip's content has drawn are not in the target to be read or sampled.
+    private bool InsideGeometryLayer
+    {
+        get
+        {
+            foreach (var open in _open)
+            {
+                if (open.Layer is not null && open.Resource is not null)
+                    return true;
+            }
+
+            return false;
+        }
+    }
+
     private void Release(Open entry)
     {
         // The layer goes before the state is put back: the clip ends under the transform it was pushed with.
