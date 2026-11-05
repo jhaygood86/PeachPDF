@@ -59,7 +59,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             var tables = new List<(string Tag, byte[] Data)>
             {
                 (TableTagNames.Cff, BuildCff(charStrings)),
-                (TableTagNames.HMtx, BuildHmtx(advances, leftBearings, lastGlyph + 1)),
+                (TableTagNames.HMtx, BuildHmtx(advances, leftBearings, lastGlyph + 1, glyphCount)),
                 (TableTagNames.MaxP, new byte[] { 0x00, 0x00, 0x50, 0x00, (byte)(glyphCount >> 8), (byte)glyphCount }), // version 0.5
             };
 
@@ -352,9 +352,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         // ---------------------------------------------------------------------------------------------------------------------------
 
         /// <summary>An <c>hmtx</c> with a full metric (advance and left side bearing) for every glyph up to <paramref name="metricCount"/>.</summary>
-        private static byte[] BuildHmtx(int[] advances, int[] leftBearings, int metricCount)
+        private static byte[] BuildHmtx(int[] advances, int[] leftBearings, int metricCount, int glyphCount)
         {
-            var table = new byte[metricCount * 4];
+            // The glyphs after the last one with a metric of its own have a left side bearing each (all zero: they are empty) - a reader
+            // takes them from the table, so a font of tens of thousands of glyphs cannot leave them out.
+            var table = new byte[metricCount * 4 + Math.Max(glyphCount - metricCount, 0) * 2];
             for (int glyph = 0; glyph < metricCount; glyph++)
             {
                 table[glyph * 4] = (byte)(advances[glyph] >> 8);

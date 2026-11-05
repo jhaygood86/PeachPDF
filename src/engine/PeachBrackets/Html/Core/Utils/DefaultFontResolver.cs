@@ -111,16 +111,34 @@ namespace PeachBrackets.Html.Utils
         ];
 
         /// <summary>
+        /// The families an Apple platform other than macOS (iOS, iPadOS, Mac Catalyst, tvOS) may use for the default font when the system
+        /// font cannot be found, in preference order: those platforms ship Arial too, but not every release does.
+        /// </summary>
+        /// <remarks>
+        /// Must be declared (and therefore initialized) before <see cref="DefaultFont"/> - see the remarks on <see cref="LinuxArialAlternatives"/>.
+        /// On iOS the initializer of DefaultFont reads this array while the class is still being initialized, and found it null.
+        /// </remarks>
+        private static readonly string[] AppleArialAlternatives = ["Arial", "Helvetica", "Helvetica Neue", "Times New Roman"];
+
+        /// <summary>
         /// Default font used when no font-family is specified. "Segoe UI" only exists on
         /// Windows, so macOS, Linux, Android, and browser/WebAssembly hosts need a different,
         /// actually-installed default.
         /// </summary>
-        public static readonly string DefaultFont = DetermineDefaultFont(
+        /// <remarks>
+        /// Settable only so that the engine's own test project can keep the layout fixtures that were calibrated to Arial's metrics
+        /// on a host whose default font is another (see <c>EngineTestDefaults</c>); nothing in the product assigns it.
+        /// </remarks>
+        public static string DefaultFont { get; internal set; } = DetermineDefaultFont(
             OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(),
-            OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser());
+            OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser(),
+            OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS());
 
-        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser)
+        // systemUiFamily stands in for asking the system for its interface font's family (null asks it), so the Apple branches run on any host.
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser, bool isAppleMobile = false, Func<string?>? systemUiFamily = null)
         {
+            systemUiFamily ??= AppleSystemUiFamily;
+
             // Checked before isLinux: Android is Linux-kernel-based and isLinux may also be
             // true there depending on how it was computed, so Android must take priority.
             if (isAndroid)
@@ -139,8 +157,13 @@ namespace PeachBrackets.Html.Utils
             if (isWindows)
                 return "Segoe UI";
 
+            // The Apple platforms use the system user interface font, San Francisco, as Safari does for system-ui and as the system's own
+            // apps do. iOS, iPadOS, Mac Catalyst and tvOS would otherwise fall through to "Segoe UI", which none of them has.
             if (isMacOS)
-                return "Arial";
+                return systemUiFamily() ?? "Arial";
+
+            if (isAppleMobile)
+                return systemUiFamily() ?? PickAppleMobileDefaultFont(GetInstalledFontFamilyNames());
 
             if (isLinux)
                 return PickLinuxDefaultFont(GetInstalledFontFamilyNames());
@@ -161,6 +184,17 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         internal static string PickLinuxDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
             PickBestAvailableFont(installedFontFamilyNames, LinuxArialAlternatives);
+
+        /// <summary>The family of the system user interface font (San Francisco) when this process runs on an Apple platform that has it, else <see langword="null"/>.</summary>
+        [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
+        private static string? AppleSystemUiFamily() =>
+            OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS()
+                ? new FontSet().ResolveGeneric(GenericFamily.SystemUi)
+                : null;
+
+        /// <summary>The default font of iOS, iPadOS, Mac Catalyst and tvOS when the system font cannot be found: Arial where it is installed, else the nearest family that is.</summary>
+        internal static string PickAppleMobileDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
+            PickBestAvailableFont(installedFontFamilyNames, AppleArialAlternatives);
 
         /// <summary>
         /// Picks the best available default font from a list of installed font family

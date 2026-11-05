@@ -325,11 +325,23 @@ namespace PeachDrawing.Text
             var isAndroid = OperatingSystem.IsAndroid();
             // Android is Linux-kernel-based and may also report as Linux; it has its own table and no fontconfig.
             var isLinux = OperatingSystem.IsLinux() && !isAndroid;
-            var operatingSystemAnswer = isLinux && generic != GenericFamily.Math
-                ? LinuxSystemFontResolver.ResolveGenericFamily(GenericFamilyTable.CssName(generic))
-                : null;
+            var isMac = OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst();
+            var isApple = isMac || OperatingSystem.IsIOS() || OperatingSystem.IsTvOS();
 
-            return GenericFamilyTable.Resolve(generic, operatingSystemAnswer, OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), isAndroid, isAvailable);
+            // The interface typefaces of an Apple platform are asked of the system itself (CoreText), which is the only
+            // one that knows what San Francisco is called on the OS version it runs.
+            string? operatingSystemAnswer = null;
+            if (isApple && GenericFamilyTable.AppleUiDesignOf(generic) is { } design)
+            {
+                operatingSystemAnswer = FontResolver.AppleUiFamilyName(design);
+            }
+            else if (isLinux && generic != GenericFamily.Math)
+            {
+                // fontconfig knows no ui-* names; it is asked for the generic they stand for.
+                operatingSystemAnswer = LinuxSystemFontResolver.ResolveGenericFamily(GenericFamilyTable.CssName(GenericFamilyTable.Equivalent(generic)));
+            }
+
+            return GenericFamilyTable.Resolve(generic, operatingSystemAnswer, OperatingSystem.IsWindows(), isMac, isAndroid, isAvailable, isIOS: isApple && !isMac);
         }
 
         /// <summary>

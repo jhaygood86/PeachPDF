@@ -24,12 +24,110 @@ namespace PeachDrawing.Text.Tests.Fonts
         [Theory]
         [InlineData(GenericFamily.Serif, "Times")]
         [InlineData(GenericFamily.SansSerif, "Helvetica")]
-        [InlineData(GenericFamily.Monospace, "Menlo")]
+        [InlineData(GenericFamily.Monospace, "Courier")]
         [InlineData(GenericFamily.Cursive, "Apple Chancery")]
         [InlineData(GenericFamily.Fantasy, "Papyrus")]
-        public void MacOS_ResolvesToVerifiedChromiumDefaults(GenericFamily generic, string expected)
+        public void MacOS_ResolvesToWebKitDefaults(GenericFamily generic, string expected)
         {
             Assert.Equal(expected, GenericFamilyTable.PlatformDefault(generic, isWindows: false, isMacOS: true, isAndroid: false));
+        }
+
+        [Theory]
+        [InlineData(GenericFamily.Serif, "Times New Roman", "Times New Roman")]
+        [InlineData(GenericFamily.SansSerif, "Helvetica Neue", "Helvetica Neue")]
+        [InlineData(GenericFamily.Monospace, "Courier New", "Courier New")]
+        [InlineData(GenericFamily.Monospace, "Menlo", "Menlo")]
+        [InlineData(GenericFamily.Cursive, "Snell Roundhand", "Snell Roundhand")]
+        [InlineData(GenericFamily.Fantasy, "Marker Felt", "Marker Felt")]
+        [InlineData(GenericFamily.SystemUi, "Helvetica", "Helvetica")]
+        [InlineData(GenericFamily.UiMonospace, "Menlo", "Menlo")]
+        [InlineData(GenericFamily.UiRounded, "Helvetica", "Helvetica")]
+        public void Apple_FallsThroughItsChainToTheFirstInstalledFamily(GenericFamily generic, string installed, string expected)
+        {
+            // The chain is tried in order and only for a name the caller says is available - on macOS and on iOS alike.
+            Assert.Equal(expected, GenericFamilyTable.Resolve(generic, null, isWindows: false, isMacOS: true, isAndroid: false, family => family == installed));
+            Assert.Equal(expected, GenericFamilyTable.Resolve(generic, null, isWindows: false, isMacOS: false, isAndroid: false, family => family == installed, isIOS: true));
+        }
+
+        [Theory]
+        [InlineData(GenericFamily.Serif)]
+        [InlineData(GenericFamily.SansSerif)]
+        [InlineData(GenericFamily.Monospace)]
+        [InlineData(GenericFamily.Cursive)]
+        [InlineData(GenericFamily.Fantasy)]
+        [InlineData(GenericFamily.SystemUi)]
+        [InlineData(GenericFamily.UiSerif)]
+        [InlineData(GenericFamily.UiSansSerif)]
+        [InlineData(GenericFamily.UiMonospace)]
+        [InlineData(GenericFamily.UiRounded)]
+        public void Apple_WithNothingInstalled_HasNoAnswer(GenericFamily generic)
+        {
+            Assert.Null(GenericFamilyTable.Resolve(generic, null, isWindows: false, isMacOS: true, isAndroid: false, _ => false));
+            Assert.Null(GenericFamilyTable.Resolve(generic, null, isWindows: false, isMacOS: false, isAndroid: false, _ => false, isIOS: true));
+        }
+
+        [Fact]
+        public void Apple_PrefersTheSystemsOwnAnswerWhenItIsAvailable_AndOtherwiseUsesItsTable()
+        {
+            Assert.Equal("System Font", GenericFamilyTable.Resolve(GenericFamily.SystemUi, "System Font", false, true, false, _ => true));
+            Assert.Equal("Helvetica Neue", GenericFamilyTable.Resolve(GenericFamily.SystemUi, "System Font", false, true, false, family => family == "Helvetica Neue"));
+            Assert.Equal(".New York", GenericFamilyTable.Resolve(GenericFamily.UiSerif, ".New York", false, false, false, _ => true, isIOS: true));
+        }
+
+        [Theory]
+        [InlineData(GenericFamily.UiSerif, GenericFamily.Serif)]
+        [InlineData(GenericFamily.UiMonospace, GenericFamily.Monospace)]
+        [InlineData(GenericFamily.UiSansSerif, GenericFamily.SystemUi)]
+        [InlineData(GenericFamily.UiRounded, GenericFamily.SystemUi)]
+        [InlineData(GenericFamily.Serif, GenericFamily.Serif)]
+        [InlineData(GenericFamily.Math, GenericFamily.Math)]
+        public void Equivalent_IsTheGenericAUiFamilyResembles(GenericFamily generic, GenericFamily expected)
+        {
+            Assert.Equal(expected, GenericFamilyTable.Equivalent(generic));
+        }
+
+        [Fact]
+        public void UiGenerics_OffTheApplePlatforms_AreTheGenericsTheyResemble()
+        {
+            Assert.Equal("Times New Roman", GenericFamilyTable.Resolve(GenericFamily.UiSerif, null, true, false, false, _ => true));
+            Assert.Equal("Consolas", GenericFamilyTable.Resolve(GenericFamily.UiMonospace, null, true, false, false, _ => true));
+            Assert.Equal("Droid Sans Mono", GenericFamilyTable.Resolve(GenericFamily.UiMonospace, null, false, false, true, _ => true));
+            // fontconfig is asked for the generic they resemble, so its answer is the one given for them.
+            Assert.Equal("FreeSans", GenericFamilyTable.Resolve(GenericFamily.UiSansSerif, "FreeSans", false, false, false, _ => true));
+            Assert.Null(GenericFamilyTable.Resolve(GenericFamily.UiRounded, null, true, false, false, _ => true));
+        }
+
+        [Theory]
+        [InlineData(GenericFamily.UiSerif, "ui-serif")]
+        [InlineData(GenericFamily.UiSansSerif, "ui-sans-serif")]
+        [InlineData(GenericFamily.UiMonospace, "ui-monospace")]
+        [InlineData(GenericFamily.UiRounded, "ui-rounded")]
+        public void CssName_OfTheUiGenerics_IsTheirKeyword(GenericFamily generic, string expected)
+        {
+            Assert.Equal(expected, GenericFamilyTable.CssName(generic));
+        }
+
+        [Theory]
+        [InlineData(GenericFamily.SystemUi, 0)]
+        [InlineData(GenericFamily.UiSansSerif, 0)]
+        [InlineData(GenericFamily.UiSerif, 1)]
+        [InlineData(GenericFamily.UiMonospace, 2)]
+        [InlineData(GenericFamily.UiRounded, 3)]
+        public void AppleUiDesignOf_NamesTheDesignOfAnInterfaceGeneric(GenericFamily generic, int design)
+        {
+            Assert.Equal((PeachDrawing.Text.Internal.Fonts.Apple.AppleUiDesign)design, GenericFamilyTable.AppleUiDesignOf(generic));
+        }
+
+        [Fact]
+        public void AppleUiDesignOf_AnOrdinaryGeneric_HasNone()
+        {
+            Assert.Null(GenericFamilyTable.AppleUiDesignOf(GenericFamily.Serif));
+        }
+
+        [Fact]
+        public void Apple_Math_UsesTheMacChain()
+        {
+            Assert.Equal("STIX Two Math", GenericFamilyTable.Resolve(GenericFamily.Math, null, false, false, false, family => family == "STIX Two Math", isIOS: true));
         }
 
         [Theory]

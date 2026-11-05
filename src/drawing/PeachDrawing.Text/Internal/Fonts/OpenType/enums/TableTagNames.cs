@@ -118,6 +118,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         public const string Cff2 = "CFF2";
 
         /// <summary>
+        /// Hierarchical variable font glyphs (Apple): the outlines of a font drawn by Apple's HVF library rather than from <c>glyf</c> or CFF.
+        /// </summary>
+        public const string Hvgl = "hvgl";
+
+        /// <summary>
+        /// Part remapping of a hierarchical variable font (Apple), which lets fonts of a collection share one <c>hvgl</c> table.
+        /// </summary>
+        public const string Hvpm = "hvpm";
+
+        /// <summary>
         /// Vertical Origin.
         /// </summary>
         public const string VOrg = "VORG";

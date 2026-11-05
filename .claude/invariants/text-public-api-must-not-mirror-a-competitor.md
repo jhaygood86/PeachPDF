@@ -44,7 +44,7 @@ The origin column is where the name and shape come from. "Ours" means we chose i
 | `AddOptions` (`FamilyName`, `Weight`, `IsItalic`, `Width`, `WeightRange`, `WidthRange`, `ObliqueRange`, `UnicodeRanges`) | The overrides of an `@font-face` rule | CSS `@font-face` descriptors (`font-weight`, `font-style`, `font-stretch`, `unicode-range`); the three `*Range` members are the "range of two values" form CSS Fonts 4 section 4.4 gives the first three |
 | `AxisRange` (`Minimum`, `Maximum`, `Contains`, `Clamp`) | An inclusive range of values along one design axis | CSS Fonts 4 section 4.4 descriptor ranges ("a range of two values"); the type and its members are ours, and it is deliberately not a `Range`/`Interval` of the BCL because it is a closed interval of doubles that clamps |
 | `RuneInterval` | An inclusive interval of scalar values | CSS `unicode-range`; the name is ours, the members are `Rune`'s |
-| `GenericFamily` | A generic font family | CSS Fonts 4 generic family keywords |
+| `GenericFamily` | A generic font family | CSS Fonts 4 generic family keywords, including the `ui-serif`, `ui-sans-serif`, `ui-monospace` and `ui-rounded` generics (`UiSerif`, `UiSansSerif`, `UiMonospace`, `UiRounded`) |
 | `TypefaceFormatException` | Data that is not a font | .NET exception convention |
 
 ### `PeachDrawing.Text.Outlines`

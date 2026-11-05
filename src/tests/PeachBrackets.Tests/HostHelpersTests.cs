@@ -31,6 +31,8 @@ namespace PeachBrackets.Tests
             Assert.True(FontDefaults.DefaultSizePoints > 0);
             Assert.Contains(FontDefaults.GenericFamilies, g => g.Keyword == "serif");
             Assert.DoesNotContain(FontDefaults.GenericFamilies, g => g.Keyword == "system-ui");
+            Assert.Contains(FontDefaults.GenericFamilies, g => g.Keyword == "ui-monospace" && g.Family == PeachDrawing.Text.GenericFamily.UiMonospace);
+            Assert.Contains("-apple-system", FontDefaults.SystemUiAliases);
         }
 
         [Fact]
