@@ -1,5 +1,7 @@
 # An auto-width `inline-grid` fills the available width instead of shrinking to fit
 
+Tracked in #2207. CSS Grid 1 section 3 (`inline-grid`) with CSS Sizing 3 (fit-content) is the rule it deviates from.
+
 **What.** `<span style="display: inline-grid">Badge</span>` (no `width`, no `grid-template-columns`) comes out as wide as the line, and the text after it wraps below, where a browser makes the
 box as wide as its content (CSS Grid 1 section 3, "inline-grid": the box's auto inline size is fit-content like an inline-block's, css-sizing-3). An `inline-flex` and an `inline-block`
 shrink correctly; a grid with an explicit `width`, or with fixed tracks, is unaffected.
