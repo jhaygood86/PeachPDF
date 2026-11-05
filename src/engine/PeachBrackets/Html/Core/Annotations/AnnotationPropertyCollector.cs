@@ -67,7 +67,12 @@ namespace PeachBrackets.Html.Annotations
 
             // An empty inline (the issue's <span></span> that only carries a paperclip) puts no word in the line, so layout emits no fragment
             // for it. It still stands somewhere, though: where the content before it ends.
-            var fragmentOf = fragment.Children.ToDictionary(child => child.Box);
+            // A box that continues into another column of the same parent (a list whose item runs past the end of a column) has a fragment in each, so the
+            // same box can stand in the children more than once: the first one is where it begins.
+            var fragmentOf = new Dictionary<CssBox, BoxFragment>(fragment.Children.Count);
+            foreach (var child in fragment.Children)
+                fragmentOf.TryAdd(child.Box, child);
+
             for (var i = 0; i < box.Boxes.Count; i++)
             {
                 var child = box.Boxes[i];
