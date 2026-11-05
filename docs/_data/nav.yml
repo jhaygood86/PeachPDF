@@ -32,6 +32,8 @@
       url: /peachdrawing-win2d.html
     - title: PeachDrawing.Skia
       url: /peachdrawing-skia.html
+    - title: PeachDrawing.CoreGraphics
+      url: /peachdrawing-coregraphics.html
     - title: PeachBrackets
       url: /peachbrackets.html
     - title: PeachImage

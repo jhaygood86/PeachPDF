@@ -720,6 +720,7 @@ PeachDrawing.Text.Typeface : sealed class
   method Boolean TryMapRune(Rune rune, out UInt16 glyph)
   method ColorPaint GetColorLayerPaint(Int32 index)
   method ColorPaint GetColorPaint(UInt16 glyph)
+  method Double GetTracking(Double sizeInPoints)
   method Int32 GetAdvance(UInt16 glyph)
   method Int32 GetHashCode()
   method Int32 GetVerticalAdvance(UInt16 glyph)

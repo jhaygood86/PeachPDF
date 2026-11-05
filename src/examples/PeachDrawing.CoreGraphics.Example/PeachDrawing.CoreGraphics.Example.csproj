@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A console app that draws a handful of scenes with PeachDrawing.CoreGraphics alone - no PeachPDF, no HTML, no PDF - and writes each as a
+    PNG file. It is the "how do I use the package" sample (docs/peachdrawing-coregraphics.md walks through it). It supplies its own bitmap
+    context through the composer; an iOS or macOS app would hand the package the CGContext of its view instead, and nothing else would change.
+    The macOS SDK builds it as an app bundle, so run it with run.sh.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0-macos</TargetFrameworks>
+    <ApplicationId>net.peachpdf.coregraphics.example</ApplicationId>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\drawing\PeachDrawing.CoreGraphics\PeachDrawing.CoreGraphics.csproj" />
+  </ItemGroup>
+
+  <!-- The font the text scene draws with, so the output is the same on every machine. -->
+  <ItemGroup>
+    <None Include="..\..\..\assets\fonts\SourceSans3-Regular.ttf" Link="SourceSans3-Regular.ttf" PublishFolderType="Assembly">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
