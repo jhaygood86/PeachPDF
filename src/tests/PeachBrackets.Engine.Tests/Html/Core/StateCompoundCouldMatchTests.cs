@@ -25,12 +25,15 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         [InlineData("#link:focus .x", "link", true)]
         [InlineData(":hover .x", "other", true)]
         [InlineData("a:hover, b:active svg", "other", true)]
-        [InlineData("a:hover, b:active svg", "s", false)]
+        [InlineData("a:hover, b:active svg", "s", true)]
         [InlineData(".x ~ svg", "link", false)]
         [InlineData(":not(:hover) .x", "other", true)]
         [InlineData(".k:has(:hover) + svg .x", "other", true)]
         [InlineData(":is(a, b):hover + svg .x", "other", true)]
         [InlineData("a:hover::before", "other", false)]
+        [InlineData(":not(:active) .x", "other", true)]
+        [InlineData(":is(:focus-within) .x", "other", true)]
+        [InlineData(":not(.k) .x", "other", false)]
         public async Task TestsTheStateCompoundAgainstTheChangedElement(string selector, string id, bool expected) =>
             Assert.Equal(expected, await CouldAsync(selector, id));
     }

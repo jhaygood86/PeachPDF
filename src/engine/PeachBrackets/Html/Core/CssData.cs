@@ -1202,14 +1202,6 @@ namespace PeachBrackets.Html
         {
             switch (selector)
             {
-                case ListSelector list:
-                    foreach (var alternative in list)
-                    {
-                        if (StateCompoundCouldMatch(alternative, changed)) return true;
-                    }
-
-                    return false;
-
                 case ComplexSelector complex:
                     foreach (var part in complex)
                     {
@@ -1238,14 +1230,9 @@ namespace PeachBrackets.Html
                     return true;
                 }
 
-                case PseudoClassSelector pseudoClass:
-                    return IsInteractionStateClass(pseudoClass);
-
-                case NotSelector or MatchesSelector or HasSelector:
-                    return MentionsInteractionState(selector.Text);
-
+                // Whatever else it is (a list, a lone pseudo-class), too loose to test: yes when it reads the state at all.
                 default:
-                    return false;
+                    return MentionsInteractionState(selector.Text);
             }
         }
 

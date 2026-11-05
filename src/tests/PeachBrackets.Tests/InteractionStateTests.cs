@@ -158,7 +158,7 @@ public class InteractionStateTests
     }
 
     [Theory]
-    [InlineData("<a id=link href='#'>hover me</a><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg>",
+    [InlineData("<a id=link href='#'>hover me</a><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/><rect width='5' height='5' class='fill'/></svg>",
         "a:hover + svg .fill")]
     [InlineData("<a id=link href='#'>hover me</a><b>between</b><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg>",
         "a:hover ~ svg .fill")]
