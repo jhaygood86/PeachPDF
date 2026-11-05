@@ -460,6 +460,7 @@ PeachBrackets.FontDefaults : static class
   method static IReadOnlyList<AxisSetting> ToAxisSettings(String encoded, Double sizeInPixels)
   property static Double DefaultSizePoints { get; }
   property static IReadOnlyList<GenericFontKeyword> GenericFamilies { get; }
+  property static IReadOnlyList<String> SystemUiAliases { get; }
   property static String DefaultFamily { get; }
 PeachBrackets.GenericFontKeyword : struct
   ctor(String Keyword, GenericFamily Family)

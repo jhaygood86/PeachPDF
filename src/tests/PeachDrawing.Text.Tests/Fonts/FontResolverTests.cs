@@ -1,5 +1,6 @@
 ﻿using PeachPDF.Tests.TestSupport;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -143,69 +144,58 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.NotNull(fonts);
         }
 
-        [Fact]
-        public void DiscoverSupportedFonts_OSX_UsesLibraryFontsDirectory()
+        [Theory]
+        [InlineData(true, false, false, false, true)]   // macOS
+        [InlineData(false, false, false, true, true)]   // Mac Catalyst
+        [InlineData(false, true, false, false, false)]  // iOS
+        [InlineData(false, false, true, false, false)]  // tvOS
+        public void DiscoverSupportedFonts_ApplePlatforms_AskCoreText_AndScanNoDirectory(bool isOSX, bool isIOS, bool isTvOS, bool isMacCatalyst, bool expectFiles)
         {
-            // The macOS font directories don't exist on non-macOS test runners, but the
-            // branch must still be exercised so it's covered on the platforms where it does.
-            // Missing directories are skipped rather than throwing, so this returns an
-            // empty (but non-null) array on non-macOS runners.
+            bool? askedForFiles = null;
+            var fonts = FontResolver.DiscoverSupportedFonts(
+                isOSX: isOSX, isLinux: false, isWindows: false, isAndroid: false, isIOS: isIOS,
+                isMacCatalyst: isMacCatalyst, isTvOS: isTvOS,
+                appleSource: preferFiles =>
+                {
+                    askedForFiles = preferFiles;
+                    return ["/x/one.ttf", "coretext:Two-Regular"];
+                });
+
+            Assert.Equal(["/x/one.ttf", "coretext:Two-Regular"], fonts);
+            Assert.Equal(expectFiles, askedForFiles);
+        }
+
+        [Fact]
+        public void DiscoverSupportedFonts_OnApplePlatformWithoutCoreText_IsEmptyRatherThanThrowing()
+        {
+            // Off an Apple OS there is no CoreText to ask, which is what a host running these tests is.
+            if (OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS())
+                Assert.Skip("This host is an Apple platform; CoreText answers for real.");
+
             var fonts = FontResolver.DiscoverSupportedFonts(
                 isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
 
-            Assert.NotNull(fonts);
+            Assert.Empty(fonts);
         }
 
         [Fact]
-        public void DiscoverSupportedFonts_OSX_IncludesUserLibraryFontsWhenHomeIsSet()
+        public void PreferPublicFamilies_DropsAppleInterfaceFamilies_WhenAPublicOneRemains()
         {
-            // Exercises the ~/Library/Fonts candidate path directly, regardless of whether
-            // the HOME environment variable happens to be set on the host running the tests
-            // (it typically isn't on Windows).
-            var originalHome = Environment.GetEnvironmentVariable("HOME");
-            try
-            {
-                Environment.SetEnvironmentVariable("HOME", Path.GetTempPath());
-
-                var fonts = FontResolver.DiscoverSupportedFonts(
-                    isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
-
-                Assert.NotNull(fonts);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("HOME", originalHome);
-            }
+            var candidates = new List<string> { ".apple color emoji ui", "apple color emoji", ".sf ns" };
+            FontResolver.PreferPublicFamilies(candidates);
+            Assert.Equal(["apple color emoji"], candidates);
         }
 
         [Fact]
-        public void DiscoverSupportedFonts_OSX_FindsFontsInAnExistingLibraryFontsDirectory()
+        public void PreferPublicFamilies_KeepsThemWhenNothingElseCovers_AndLeavesOrdinaryListsAlone()
         {
-            // The candidate-path existence checks (Directory.Exists) mean GetFontFiles's
-            // actual directory scan never runs on CI runners where none of the hardcoded
-            // macOS font directories exist. Point HOME at a temp directory that really does
-            // have a populated Library/Fonts subfolder so that scan executes for real,
-            // regardless of host OS.
-            var homeDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-            var fontsDir = Path.Combine(homeDir, "Library", "Fonts");
-            Directory.CreateDirectory(fontsDir);
-            File.Copy(BundledFonts.Ttf, Path.Combine(fontsDir, Path.GetFileName(BundledFonts.Ttf)));
+            var onlyHidden = new List<string> { ".geeza pro pua", ".baghdad pua" };
+            FontResolver.PreferPublicFamilies(onlyHidden);
+            Assert.Equal(2, onlyHidden.Count);
 
-            var originalHome = Environment.GetEnvironmentVariable("HOME");
-            try
-            {
-                Environment.SetEnvironmentVariable("HOME", homeDir);
-
-                var fonts = FontResolver.DiscoverSupportedFonts(
-                    isOSX: true, isLinux: false, isWindows: false, isAndroid: false, isIOS: false);
-
-                Assert.Contains(fonts, f => Path.GetDirectoryName(f) == fontsDir);
-            }
-            finally
-            {
-                Environment.SetEnvironmentVariable("HOME", originalHome);
-                TempDirectory.DeleteWithRetry(homeDir);
-            }
+            var ordinary = new List<string> { "arial", "helvetica" };
+            FontResolver.PreferPublicFamilies(ordinary);
+            Assert.Equal(["arial", "helvetica"], ordinary);
         }
 
         [Fact]
@@ -236,19 +226,6 @@ namespace PeachDrawing.Text.Tests.Fonts
                 isOSX: false, isLinux: true, isWindows: false, isAndroid: true, isIOS: false);
 
             Assert.Equal(androidOnly, androidAndLinux);
-        }
-
-        [Fact]
-        public void DiscoverSupportedFonts_IOS_ReturnsEmpty()
-        {
-            // iOS has no readable system font files and no public API to extract raw font
-            // bytes from CoreText -- this is an intentional, permanent no-op, not a gap to
-            // be filled in later. iOS apps are expected to embed and register their own
-            // fonts via PdfGenerator.AddFontFromStream.
-            var fonts = FontResolver.DiscoverSupportedFonts(
-                isOSX: false, isLinux: false, isWindows: false, isAndroid: false, isIOS: true);
-
-            Assert.Empty(fonts);
         }
 
         [Fact]

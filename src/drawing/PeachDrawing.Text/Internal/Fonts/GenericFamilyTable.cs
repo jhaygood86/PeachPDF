@@ -28,13 +28,22 @@ namespace PeachDrawing.Text.Internal.Fonts
             [GenericFamily.Fantasy] = "Impact"
         }.ToFrozenDictionary();
 
-        private static readonly FrozenDictionary<GenericFamily, string> MacOS = new Dictionary<GenericFamily, string>
+        // The Apple platforms follow WebKit's defaults, not Chromium's: Safari's standard, sans-serif and fixed fonts
+        // are Times, Helvetica and Courier (Chromium's macOS table has Menlo for monospace). The user interface
+        // typefaces are what WebKit maps system-ui and the ui-* generics to; the names here are only the answer
+        // when the platform's own question (see AppleUiDesign) could not be asked or had no answer.
+        private static readonly FrozenDictionary<GenericFamily, string[]> AppleNames = new Dictionary<GenericFamily, string[]>
         {
-            [GenericFamily.Serif] = "Times",
-            [GenericFamily.SansSerif] = "Helvetica",
-            [GenericFamily.Monospace] = "Menlo",
-            [GenericFamily.Cursive] = "Apple Chancery",
-            [GenericFamily.Fantasy] = "Papyrus"
+            [GenericFamily.Serif] = ["Times", "Times New Roman"],
+            [GenericFamily.SansSerif] = ["Helvetica", "Helvetica Neue"],
+            [GenericFamily.Monospace] = ["Courier", "Courier New", "Menlo"],
+            [GenericFamily.Cursive] = ["Apple Chancery", "Snell Roundhand"],
+            [GenericFamily.Fantasy] = ["Papyrus", "Marker Felt"],
+            [GenericFamily.SystemUi] = ["Helvetica Neue", "Helvetica"],
+            [GenericFamily.UiSansSerif] = ["Helvetica Neue", "Helvetica"],
+            [GenericFamily.UiSerif] = ["Times", "Times New Roman"],
+            [GenericFamily.UiMonospace] = ["SF Mono", "Menlo", "Courier"],
+            [GenericFamily.UiRounded] = ["SF Pro Rounded", "Helvetica Neue", "Helvetica"]
         }.ToFrozenDictionary();
 
         private static readonly FrozenDictionary<GenericFamily, string> Android = new Dictionary<GenericFamily, string>
@@ -66,6 +75,10 @@ namespace PeachDrawing.Text.Internal.Fonts
             GenericFamily.Fantasy => "fantasy",
             GenericFamily.SystemUi => "system-ui",
             GenericFamily.Math => "math",
+            GenericFamily.UiSerif => "ui-serif",
+            GenericFamily.UiSansSerif => "ui-sans-serif",
+            GenericFamily.UiMonospace => "ui-monospace",
+            GenericFamily.UiRounded => "ui-rounded",
             _ => throw new ArgumentOutOfRangeException(nameof(generic), generic, "Not a generic family.")
         };
 
@@ -78,9 +91,35 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         internal static string? PlatformDefault(GenericFamily generic, bool isWindows, bool isMacOS, bool isAndroid)
         {
-            var table = isAndroid ? Android : isWindows ? Windows : isMacOS ? MacOS : null;
-            return table is not null && table.TryGetValue(generic, out var resolved) ? resolved : null;
+            var table = isAndroid ? Android : isWindows ? Windows : null;
+            if (table is not null)
+                return table.TryGetValue(generic, out var resolved) ? resolved : null;
+
+            return isMacOS && AppleNames.TryGetValue(generic, out var names) ? names[0] : null;
         }
+
+        /// <summary>
+        /// The generic family a <c>ui-*</c> generic stands for where the platform has no typeface of its own to offer for
+        /// it (everywhere but the Apple platforms): <c>ui-serif</c> is the serif, <c>ui-monospace</c> the monospace,
+        /// <c>ui-sans-serif</c> and <c>ui-rounded</c> the interface typeface. Any other generic is its own equivalent.
+        /// </summary>
+        internal static GenericFamily Equivalent(GenericFamily generic) => generic switch
+        {
+            GenericFamily.UiSerif => GenericFamily.Serif,
+            GenericFamily.UiMonospace => GenericFamily.Monospace,
+            GenericFamily.UiSansSerif or GenericFamily.UiRounded => GenericFamily.SystemUi,
+            _ => generic
+        };
+
+        /// <summary>The Apple platforms' own interface design a generic is, or null for a generic that is not one.</summary>
+        internal static Apple.AppleUiDesign? AppleUiDesignOf(GenericFamily generic) => generic switch
+        {
+            GenericFamily.SystemUi or GenericFamily.UiSansSerif => Apple.AppleUiDesign.System,
+            GenericFamily.UiSerif => Apple.AppleUiDesign.Serif,
+            GenericFamily.UiMonospace => Apple.AppleUiDesign.Monospaced,
+            GenericFamily.UiRounded => Apple.AppleUiDesign.Rounded,
+            _ => null
+        };
 
         /// <summary>
         /// The first family of the platform's math chain that <paramref name="isAvailable"/> reports as present, or
@@ -115,14 +154,47 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <param name="isMacOS">Whether the platform is macOS.</param>
         /// <param name="isAndroid">Whether the platform is Android.</param>
         /// <param name="isAvailable">Whether a family name is one the caller can use.</param>
-        internal static string? Resolve(GenericFamily generic, string? operatingSystemAnswer, bool isWindows, bool isMacOS, bool isAndroid, Func<string, bool> isAvailable)
+        /// <param name="isIOS">Whether the platform is iOS (or another Apple platform that is not macOS), which shares macOS's table.</param>
+        internal static string? Resolve(GenericFamily generic, string? operatingSystemAnswer, bool isWindows, bool isMacOS, bool isAndroid, Func<string, bool> isAvailable, bool isIOS = false)
         {
-            if (generic == GenericFamily.Math)
+            var isApple = isMacOS || isIOS;
+
+            // Only the Apple platforms have a typeface of their own behind a ui-* generic; elsewhere it is the generic it resembles.
+            if (!isApple)
             {
-                return ResolveMathFamily(isWindows, isMacOS, isAndroid, isAvailable);
+                generic = Equivalent(generic);
             }
 
-            var target = operatingSystemAnswer ?? PlatformDefault(generic, isWindows, isMacOS, isAndroid);
+            if (generic == GenericFamily.Math)
+            {
+                return ResolveMathFamily(isWindows, isApple, isAndroid, isAvailable);
+            }
+
+            // The platform's own answer first, then the platform's table: the answer is asked of the system itself,
+            // the table is what a system that cannot answer is assumed to have. Where the table is empty (Linux) the
+            // answer stands alone, as it always has.
+            if (operatingSystemAnswer is not null && isAvailable(operatingSystemAnswer))
+            {
+                return operatingSystemAnswer;
+            }
+
+            if (isApple)
+            {
+                if (AppleNames.TryGetValue(generic, out var names))
+                {
+                    foreach (var name in names)
+                    {
+                        if (isAvailable(name))
+                        {
+                            return name;
+                        }
+                    }
+                }
+
+                return null;
+            }
+
+            var target = PlatformDefault(generic, isWindows, isMacOS, isAndroid);
             return target is not null && isAvailable(target) ? target : null;
         }
     }

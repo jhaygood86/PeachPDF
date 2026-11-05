@@ -73,6 +73,10 @@ PeachDrawing.Text.GenericFamily : enum Int32
   SansSerif = 1
   Serif = 0
   SystemUi = 5
+  UiMonospace = 9
+  UiRounded = 10
+  UiSansSerif = 8
+  UiSerif = 7
 PeachDrawing.Text.Layout.ContentWidths : struct
   ctor(Double MinContent, Double MaxContent)
   method Boolean Equals(ContentWidths other)

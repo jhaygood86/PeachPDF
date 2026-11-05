@@ -149,15 +149,32 @@ namespace PeachDrawing.Text.Internal.Fonts
             var isAndroid = System.OperatingSystem.IsAndroid();
             var isIOS = System.OperatingSystem.IsIOS();
             var isOSX = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.OSX);
+            var isMacCatalyst = System.OperatingSystem.IsMacCatalyst();
+            var isTvOS = System.OperatingSystem.IsTvOS();
             var isLinux = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Linux);
             var isWindows = System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows);
 
-            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows, isAndroid, isIOS);
+            SupportedFonts = DiscoverSupportedFonts(isOSX, isLinux, isWindows, isAndroid, isIOS, isMacCatalyst, isTvOS);
 
             (_systemFontPaths, _systemFamilies) = ParseSystemFonts(SupportedFonts);
         }
 
-        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows, bool isAndroid, bool isIOS)
+        /// <summary>
+        /// The installed fonts of the platform, each named by the "path" the rest of this class reads it from (see
+        /// <see cref="SystemFontStorage"/>). The platform is given as flags so every branch can be run on any host.
+        /// </summary>
+        /// <param name="isOSX">macOS.</param>
+        /// <param name="isLinux">Linux (fontconfig).</param>
+        /// <param name="isWindows">Windows.</param>
+        /// <param name="isAndroid">Android, checked before Linux because it can report as both.</param>
+        /// <param name="isIOS">iOS and iPadOS.</param>
+        /// <param name="isMacCatalyst">Mac Catalyst.</param>
+        /// <param name="isTvOS">tvOS.</param>
+        /// <param name="appleSource">
+        /// Stands in for the CoreText source on the Apple platforms (its argument says whether a font CoreText
+        /// backs with a readable file is named by that file); null uses CoreText itself.
+        /// </param>
+        internal static string[] DiscoverSupportedFonts(bool isOSX, bool isLinux, bool isWindows, bool isAndroid, bool isIOS, bool isMacCatalyst = false, bool isTvOS = false, Func<bool, string[]>? appleSource = null)
         {
             // Checked first: RuntimeInformation.IsOSPlatform(OSPlatform.Linux) is not
             // guaranteed to exclude Android (Linux-kernel-based), so Android/iOS must be
@@ -172,27 +189,16 @@ namespace PeachDrawing.Text.Internal.Fonts
                     .ToArray();
             }
 
-            if (isIOS)
+            // The Apple platforms have one source: CoreText, which knows every installed font. Their font
+            // directories are not scanned. Where the system hands out font files (macOS, Mac Catalyst) CoreText
+            // names them; where it does not (iOS, tvOS) the fonts are read table by table through CoreText.
+            if (isIOS || isTvOS || isMacCatalyst || isOSX)
             {
-                // iOS sandboxes apps away from system font files entirely, and CoreText
-                // exposes fonts only as opaque handles (CTFont/UIFont) with no public API
-                // to extract raw file bytes. There is nothing on-disk this resolver can
-                // discover here. iOS apps should embed their own fonts and register them
-                // via PdfGenerator.AddFontFromStream.
-                return [];
-            }
+                var preferFiles = isOSX || isMacCatalyst;
+                if (appleSource is not null)
+                    return appleSource(preferFiles);
 
-            if (isOSX)
-            {
-                var homeDir = System.Environment.GetEnvironmentVariable("HOME");
-                var candidateDirs = new List<string> { "/System/Library/Fonts", "/Library/Fonts" };
-                if (!string.IsNullOrEmpty(homeDir))
-                    candidateDirs.Add(Path.Combine(homeDir, "Library", "Fonts"));
-
-                return candidateDirs
-                    .SelectMany(GetFontFiles)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
+                return DiscoverApple(preferFiles);
             }
 
             if (isLinux)
@@ -217,6 +223,50 @@ namespace PeachDrawing.Text.Internal.Fonts
             return [];
         }
 
+
+        /// <summary>
+        /// The family the system user interface font in <paramref name="design"/> is installed under (San Francisco for
+        /// <see cref="Apple.AppleUiDesign.System"/>, whatever its name table calls it), or null off the Apple platforms and
+        /// when the system has no such font. Its name is not a name anyone could guess: the fonts are private to the system
+        /// and named ".SF NS" and the like, so the family is found through the font itself.
+        /// </summary>
+        internal static string? AppleUiFamilyName(Apple.AppleUiDesign design)
+        {
+            if (!(System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS()))
+                return null;
+
+            if (!_appleUiPaths.TryGetValue(design, out var path))
+                return null;
+
+            foreach (var (faceName, source) in _systemFontPaths)
+            {
+                if (!string.Equals(source.Path, path, StringComparison.Ordinal))
+                    continue;
+
+                foreach (var family in _systemFamilies.Values)
+                {
+                    if (family.Faces.Any(face => string.Equals(face.Description.FontNameInvariantCulture, faceName, StringComparison.Ordinal)))
+                        return family.Name;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Where the system interface font of each design is, by the "path" the font list names it by; set by the one discovery the process makes.</summary>
+        private static IReadOnlyDictionary<Apple.AppleUiDesign, string> _appleUiPaths = new Dictionary<Apple.AppleUiDesign, string>();
+
+        private static string[] DiscoverApple(bool preferFiles)
+        {
+            if (System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS())
+            {
+                var paths = Apple.AppleSystemFonts.Discover(preferFiles, out var uiPaths);
+                _appleUiPaths = uiPaths;
+                return paths;
+            }
+
+            return [];
+        }
 
         public FontResolver()
         {
@@ -503,6 +553,10 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         internal static byte[] LoadSystemFontBytes(string path, int faceIndex)
         {
+            // A font with no file behind it is made whole from the platform's tables - already a standalone font.
+            if (SystemFontStorage.IsVirtual(path))
+                return SystemFontStorage.ReadVirtual(path);
+
             using var stream = File.OpenRead(path);
 
             Span<byte> tag = stackalloc byte[4];
@@ -864,7 +918,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         {
             try
             {
-                using var stream = File.OpenRead(path);
+                using var stream = SystemFontStorage.OpenForCoverage(path);
                 var directory = SfntCollection.FaceOffset(stream, faceIndex);
 
                 stream.Seek(directory + 4, SeekOrigin.Begin);
@@ -945,12 +999,28 @@ namespace PeachDrawing.Text.Internal.Fonts
             }
             else
             {
+                // Apple names the fonts it keeps for its own interface with a leading dot (".Apple Color Emoji UI",
+                // ".SF NS", ".PingFang SC"): they are not meant to be picked from a list of families, and some are
+                // not even complete fonts (the emoji UI face has no ascent). A public family that covers the character
+                // always beats them; they stand in only when nothing else covers it.
+                PreferPublicFamilies(candidates);
+
                 candidates.Sort(StringComparer.Ordinal);
-                winner = PickScriptAwareWinner(candidates, codepoint, Usable);
+                winner = candidates.Count == 1 ? candidates[0] : PickScriptAwareWinner(candidates, codepoint, Usable);
             }
 
             _systemFallbackCache[(codepoint.Value, presentation)] = winner;
             return winner;
+        }
+
+        /// <summary>
+        /// Drops the families whose names start with a dot (the ones Apple keeps for its own interface) from
+        /// <paramref name="candidates"/> when at least one family does not; leaves the list alone otherwise.
+        /// </summary>
+        internal static void PreferPublicFamilies(List<string> candidates)
+        {
+            if (candidates.Exists(static key => key[0] != '.') && candidates.Exists(static key => key[0] == '.'))
+                candidates.RemoveAll(static key => key[0] == '.');
         }
 
         /// <summary>

@@ -18,7 +18,7 @@ dotnet add package PeachDrawing.Text
 ## What the engine does
 
 - **Fonts:** TrueType, OpenType (`glyf` and CFF), WOFF and WOFF2 loading; TrueType/OpenType collections; installed-font
-  discovery on Windows, macOS, Linux (through fontconfig) and Android; CSS Fonts 4 face matching by weight, width and
+  discovery on Windows, macOS, iOS (through CoreText, including Apple's hierarchical variable fonts), Linux (through fontconfig) and Android; CSS Fonts 4 face matching by weight, width and
   style; `unicode-range` and glyph-coverage fallback.
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, Khmer's own separate coeng/subjoined-consonant
@@ -115,7 +115,7 @@ Other things a `FontSet` does:
   the families asked for can, preferring the one whose coverage mostly lies in the character's own script, and, for a
   character with a text and an emoji form, a face that supports the presentation asked for (see `Emoji` below).
 - `ResolveGeneric` names a family for a CSS generic such as `serif` or `monospace` on this platform: fixed names on
-  Windows, macOS and Android, fontconfig on Linux, and the first available of a list of math fonts for `math`.
+  Windows and Android, WebKit's defaults and the system interface fonts (asked of CoreText) on macOS and iOS, fontconfig on Linux, and the first available of a list of math fonts for `math`.
 - `HasExplicitRanges` says whether any face of a family declares a `unicode-range`, which is when text has to be
   resolved character by character.
 - `FontSet.InstalledFamilyNames` lists the installed families.

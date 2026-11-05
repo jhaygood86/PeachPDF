@@ -19,10 +19,18 @@ namespace PeachBrackets
 
         /// <summary>
         /// The CSS generic font family keywords (<c>serif</c>, <c>sans-serif</c>, <c>monospace</c>, <c>cursive</c>,
-        /// <c>fantasy</c>, <c>math</c>) with the engine's generic family each one stands for. <c>system-ui</c> is not among them.
+        /// <c>fantasy</c>, <c>math</c>, and the <c>ui-serif</c>, <c>ui-sans-serif</c>, <c>ui-monospace</c> and <c>ui-rounded</c> families)
+        /// with the engine's generic family each one stands for. <c>system-ui</c> is not among them.
         /// </summary>
         public static IReadOnlyList<GenericFontKeyword> GenericFamilies { get; } =
             [.. GenericFontFamilyResolver.Generics.Select(g => new GenericFontKeyword(g.Keyword, g.Family))];
+
+        /// <summary>
+        /// The names the system user interface font (<c>system-ui</c>) goes by besides that keyword: <c>-apple-system</c> and
+        /// <c>BlinkMacSystemFont</c>, which style sheets written for Safari and Chrome on macOS and iOS use. A host maps each to
+        /// whatever it maps <c>system-ui</c> to.
+        /// </summary>
+        public static IReadOnlyList<string> SystemUiAliases { get; } = GenericFontFamilyResolver.SystemUiAliases;
 
         /// <summary>
         /// Turns an encoded <c>font-variation-settings</c> value, as the engine hands it to a

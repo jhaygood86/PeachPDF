@@ -17,6 +17,10 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         [InlineData(Keywords.Cursive, GenericFamily.Cursive)]
         [InlineData(Keywords.Fantasy, GenericFamily.Fantasy)]
         [InlineData(Keywords.Math, GenericFamily.Math)]
+        [InlineData(Keywords.UiSerif, GenericFamily.UiSerif)]
+        [InlineData(Keywords.UiSansSerif, GenericFamily.UiSansSerif)]
+        [InlineData(Keywords.UiMonospace, GenericFamily.UiMonospace)]
+        [InlineData(Keywords.UiRounded, GenericFamily.UiRounded)]
         public void EveryMappedKeyword_NamesItsEngineFamily(string keyword, GenericFamily expected)
         {
             Assert.Contains((keyword, expected), GenericFontFamilyResolver.Generics);
@@ -26,6 +30,13 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         public void SystemUi_IsNotOneOfTheMappedGenerics_BecauseItIsHandledSeparately()
         {
             Assert.DoesNotContain(GenericFontFamilyResolver.Generics, entry => entry.Family == GenericFamily.SystemUi);
+        }
+
+        [Fact]
+        public void TheSystemUiAliases_AreTheOnesSafariAndChromeAccept()
+        {
+            Assert.Equal(["-apple-system", "BlinkMacSystemFont"], GenericFontFamilyResolver.SystemUiAliases);
+            Assert.Equal(GenericFontFamilyResolver.SystemUiAliases, FontDefaults.SystemUiAliases);
         }
     }
 }

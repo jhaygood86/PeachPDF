@@ -88,6 +88,10 @@
         public const string Cursive = "cursive";
         public const string Fantasy = "fantasy";
         public const string Math = "math";
+        public const string UiSerif = "ui-serif";
+        public const string UiSansSerif = "ui-sans-serif";
+        public const string UiMonospace = "ui-monospace";
+        public const string UiRounded = "ui-rounded";
         public const string Caption = "caption";
         public const string Icon = "icon";
         public const string Menu = "menu";

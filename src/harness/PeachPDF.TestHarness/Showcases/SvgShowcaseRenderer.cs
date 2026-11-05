@@ -146,14 +146,21 @@ internal sealed class ShowcaseSvgRenderContext : SvgRenderContext
 {
     public ShowcaseSvgRenderContext()
     {
-        AddFontFamilyMapping("Helvetica", "Arial");
+        if (!IsFontExists("Helvetica"))
+            AddFontFamilyMapping("Helvetica", "Arial");
         if (!IsFontExists("Arial"))
             AddFontFamilyMapping("Arial", FontDefaults.DefaultFamily);
 
         foreach (var (keyword, generic) in FontDefaults.GenericFamilies)
             AddFontFamilyMapping(keyword, FontSet.ResolveGeneric(generic, IsFontExists) ?? FontDefaults.DefaultFamily);
 
-        AddFontFamilyMapping("system-ui", FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily);
+        var systemUi = FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily;
+        AddFontFamilyMapping("system-ui", systemUi);
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS())
+        {
+            foreach (var alias in FontDefaults.SystemUiAliases)
+                AddFontFamilyMapping(alias, systemUi);
+        }
     }
 
     public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();

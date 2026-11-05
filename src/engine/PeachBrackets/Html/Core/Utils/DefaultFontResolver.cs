@@ -117,9 +117,16 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static readonly string DefaultFont = DetermineDefaultFont(
             OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(),
-            OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser());
+            OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser(),
+            OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS());
 
-        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser)
+        /// <summary>
+        /// The families an Apple platform other than macOS (iOS, iPadOS, Mac Catalyst, tvOS) may have to stand in for the Arial macOS
+        /// uses, in preference order: those platforms ship Arial too, but not every release does.
+        /// </summary>
+        private static readonly string[] AppleArialAlternatives = ["Arial", "Helvetica", "Helvetica Neue", "Times New Roman"];
+
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser, bool isAppleMobile = false)
         {
             // Checked before isLinux: Android is Linux-kernel-based and isLinux may also be
             // true there depending on how it was computed, so Android must take priority.
@@ -142,6 +149,10 @@ namespace PeachBrackets.Html.Utils
             if (isMacOS)
                 return "Arial";
 
+            // iOS, iPadOS, Mac Catalyst and tvOS would otherwise fall through to "Segoe UI", which none of them has.
+            if (isAppleMobile)
+                return PickAppleMobileDefaultFont(GetInstalledFontFamilyNames());
+
             if (isLinux)
                 return PickLinuxDefaultFont(GetInstalledFontFamilyNames());
 
@@ -161,6 +172,10 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         internal static string PickLinuxDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
             PickBestAvailableFont(installedFontFamilyNames, LinuxArialAlternatives);
+
+        /// <summary>The default font of iOS, iPadOS, Mac Catalyst and tvOS: Arial where it is installed, else the nearest family that is.</summary>
+        internal static string PickAppleMobileDefaultFont(IEnumerable<string> installedFontFamilyNames) =>
+            PickBestAvailableFont(installedFontFamilyNames, AppleArialAlternatives);
 
         /// <summary>
         /// Picks the best available default font from a list of installed font family

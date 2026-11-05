@@ -236,7 +236,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 NormalLineHeightDescent = descender;
                 NormalLineHeightGap = lineGap;
 
-                if (!os2SeemsToBeEmpty)
+                // Apple Color Emoji sets its OS/2 win metrics to zero and keeps its metrics in hhea; a cell of no height is no metric at all.
+                bool winMetricsAreEmpty = FontFace.os2.usWinAscent == 0 && FontFace.os2.usWinDescent == 0;
+
+                if (!os2SeemsToBeEmpty && !winMetricsAreEmpty)
                 {
                     // Comment from WPF: we could use sTypoAscender, sTypoDescender, and sTypoLineGap which are supposed to represent
                     // optimal typographic values not constrained by backwards compatibility; however, many fonts get
@@ -709,7 +712,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// when it has one <see cref="CffTable.IsSupported">this reader supports</see> - an ordinary or
         /// CID-keyed CFF font alike, resolving each glyph's local Subrs via
         /// <see cref="CffTable.LocalSubrsFor"/> - else the charstring of a variable font's
-        /// <see cref="Cff2Table"/> at this descriptor's location. False for a font with none of them (one this reader could
+        /// <see cref="Cff2Table"/> at this descriptor's location, else the glyph of an <c>hvgl</c> table (Apple's hierarchical variable fonts,
+        /// drawn by Apple's HVF library where it is available) at this descriptor's location. False for a font with none of them (one this reader could
         /// not parse at all, or a CID-keyed CFF font missing/malformed <c>FDArray</c>/<c>FDSelect</c>).
         /// </summary>
         public bool TryGetGlyphOutline(int glyphIndex, out GlyphOutline outline)
@@ -724,6 +728,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
                 if (FontFace.cff2 is { IsSupported: true })
                     return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff2, glyphIndex, Variation, out outline);
+
+                // An Apple hierarchical variable font draws its glyphs from an hvgl table, through Apple's HVF library.
+                if (FontFace.Hvf is { } hvf)
+                    return hvf.TryRender(glyphIndex, Variation is { } variation ? variation.Normalized : default, out outline);
             }
 
             return false;

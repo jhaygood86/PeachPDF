@@ -29,6 +29,27 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public void DetermineDefaultFont_AppleMobile_IsNotTheWindowsFont()
+        {
+            // iOS, Mac Catalyst and tvOS used to fall through to "Segoe UI", which none of them has.
+            var result = DefaultFontResolver.DetermineDefaultFont(isWindows: false, isMacOS: false, isLinux: false, isAndroid: false, isBrowser: false, isAppleMobile: true);
+
+            Assert.NotEmpty(result);
+            Assert.NotEqual("Segoe UI", result);
+        }
+
+        [Theory]
+        [InlineData(new[] { "Arial", "Helvetica" }, "Arial")]
+        [InlineData(new[] { "Helvetica Neue", "Helvetica" }, "Helvetica")]
+        [InlineData(new[] { "Times New Roman", "Helvetica Neue" }, "Helvetica Neue")]
+        [InlineData(new[] { "Zapfino" }, "Zapfino")]
+        [InlineData(new string[0], "Arial")]
+        public void PickAppleMobileDefaultFont_PrefersArialThenTheNearestInstalledFamily(string[] installed, string expected)
+        {
+            Assert.Equal(expected, DefaultFontResolver.PickAppleMobileDefaultFont(installed));
+        }
+
+        [Fact]
         public void DetermineDefaultFont_Linux_ReturnsNonEmptyPickFromInstalledFonts()
         {
             // Exercises the real (non-forced) GetInstalledFontFamilyNames/FontResolver.SupportedFonts

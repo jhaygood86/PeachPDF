@@ -52,7 +52,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         public static TtfFontDescription LoadDescription(string path)
         {
-            using var stream = File.OpenRead(path);
+            using var stream = SystemFontStorage.OpenForDescription(path);
             return LoadDescription(stream);
         }
 
@@ -64,7 +64,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// </summary>
         public static IReadOnlyList<(int FaceIndex, TtfFontDescription Description)> LoadDescriptions(string path)
         {
-            using var stream = File.OpenRead(path);
+            using var stream = SystemFontStorage.OpenForDescription(path);
 
             var offsets = SfntCollection.ReadFaceOffsets(stream);
             if (offsets is null)

@@ -25,7 +25,8 @@ namespace PeachDrawing.Text.Export
         /// The exception is a variable font with CFF2 outlines, which is always written afresh, whatever its location, as a static
         /// font with CFF outlines that holds only the glyphs asked for: each outline is drawn at the location and written as a
         /// charstring of lines and curves over whole-number coordinates, with no hints and no subroutines, in a CID-keyed CFF font
-        /// (a glyph index is its own CID).
+        /// (a glyph index is its own CID). A font whose glyphs are in an <c>hvgl</c> table (Apple's hierarchical variable fonts, where
+        /// Apple's HVF library can draw them) is written the same way.
         /// </remarks>
         /// <param name="typeface">The typeface to cut.</param>
         /// <param name="glyphs">The glyph indices to keep.</param>
@@ -45,8 +46,10 @@ namespace PeachDrawing.Text.Export
 
             // A variable font's CFF2 outlines are written afresh as those of a static CFF font: a PDF has no use for the CFF2 table.
             // (The outlines are those the descriptor draws, so a font that also has a CFF table, which it should not, is a CFF font.)
+            // An Apple hierarchical variable font (hvgl outlines, drawn by Apple's HVF library) is written the same way, and for the same
+            // reason: it has no outlines a PDF could embed as they are.
             bool isCff2 = face.loca == null && face.glyf == null && face.cff is not { IsSupported: true }
-                && face.cff2 is { IsSupported: true } && face.maxp.numGlyphs > 0;
+                && (face.cff2 is { IsSupported: true } || face.Hvf is not null) && face.maxp.numGlyphs > 0;
 
             int glyphCount = face.maxp.numGlyphs;
             var wanted = new Dictionary<int, object>();

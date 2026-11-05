@@ -23,7 +23,11 @@ namespace PeachPDF.Rendering
         /// </summary>
         internal HtmlRenderContext()
         {
-            AddFontFamilyMapping("Helvetica", "Arial");
+            // Helvetica is Arial where Helvetica is not installed (Windows, most Linux); on the Apple platforms it is the real font.
+            if (!IsFontExists("Helvetica"))
+            {
+                AddFontFamilyMapping("Helvetica", "Arial");
+            }
 
             // "Arial" itself isn't installed on most Linux distros; fall back to whatever
             // metrically-compatible substitute FontDefaults.DefaultFamily already resolved to
@@ -67,7 +71,18 @@ namespace PeachPDF.Rendering
             // every band was 11.7% taller than the same band under Chromium, and on a page
             // whose top margin the band already fills, that difference is what tipped body
             // text into overprinting it.
-            AddFontFamilyMapping("system-ui", FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily);
+            var systemUi = FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily;
+            AddFontFamilyMapping("system-ui", systemUi);
+
+            // Safari and Chrome accept these names only on the Apple platforms; elsewhere a font stack such as
+            // "-apple-system, Roboto, sans-serif" must go on to the next name instead of stopping at an alias.
+            if (System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS())
+            {
+                foreach (var alias in FontDefaults.SystemUiAliases)
+                {
+                    AddFontFamilyMapping(alias, systemUi);
+                }
+            }
         }
 
         public RNetworkLoader NetworkLoader { get; set; } = new DataUriNetworkLoader();

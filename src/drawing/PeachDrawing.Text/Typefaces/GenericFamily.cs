@@ -28,6 +28,18 @@ namespace PeachDrawing.Text
         SystemUi,
 
         /// <summary>A typeface made for mathematical expressions, one with an OpenType MATH table (<c>math</c>).</summary>
-        Math
+        Math,
+
+        /// <summary>The serif typeface the platform's own interface offers (<c>ui-serif</c>): New York on Apple platforms, the platform's serif elsewhere.</summary>
+        UiSerif,
+
+        /// <summary>The sans-serif typeface the platform's own interface is set in (<c>ui-sans-serif</c>): the same typeface as <see cref="SystemUi"/>.</summary>
+        UiSansSerif,
+
+        /// <summary>The fixed-pitch typeface the platform's own interface offers (<c>ui-monospace</c>): SF Mono on Apple platforms, the platform's monospace elsewhere.</summary>
+        UiMonospace,
+
+        /// <summary>The rounded typeface the platform's own interface offers (<c>ui-rounded</c>): SF Rounded on Apple platforms, the interface typeface elsewhere.</summary>
+        UiRounded
     }
 }

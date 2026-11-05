@@ -724,6 +724,41 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private volatile bool _variationsRead;
 
         /// <summary>
+        /// The renderer for the glyphs of a font that has an <c>hvgl</c> table (Apple's hierarchical variable fonts), made on first use, or
+        /// <see langword="null"/> for a font without one and wherever Apple's HVF library is not available.
+        /// </summary>
+        internal Hvgl.HvfRenderer? Hvf
+        {
+            get
+            {
+                if (!_hvfRead)
+                {
+                    lock (SyncRoot)
+                    {
+                        if (!_hvfRead)
+                        {
+                            if (Hvgl.HvfRenderer.IsAvailable && TableDictionary.TryGetValue(TableTagNames.Hvgl, out var hvgl))
+                            {
+                                var bytes = FontSource.Bytes;
+                                var hvpm = TableDictionary.TryGetValue(TableTagNames.Hvpm, out var map)
+                                    ? bytes.AsSpan(map.Offset, map.Length)
+                                    : default;
+                                _hvf = Hvgl.HvfRenderer.TryCreate(bytes.AsSpan(hvgl.Offset, hvgl.Length), hvpm);
+                            }
+
+                            _hvfRead = true;
+                        }
+                    }
+                }
+
+                return _hvf;
+            }
+        }
+
+        private Hvgl.HvfRenderer? _hvf;
+        private volatile bool _hvfRead;
+
+        /// <summary>
         /// The lazy-lookup-cache idiom used throughout GSUB/GPOS (<c>_someCache.GetOrAdd(index, someDelegate)</c>)
         /// is safe for the <see cref="ConcurrentDictionary{TKey,TValue}"/> itself, but not for <paramref name="factory"/> -
         /// <c>GetOrAdd</c> may invoke its factory more than once under contention, and here the factory
