@@ -74,6 +74,41 @@ namespace PeachBrackets.Css
         public bool IsValid => _valid && _ready;
         public bool IsNested { get; private set; }
 
+        /// <summary>
+        /// Whether the list is a forgiving selector list (Selectors 4, "forgiving-selector-list": the arguments of <c>:is()</c> and <c>:where()</c>): an alternative that
+        /// does not parse is dropped and the others stay, instead of the whole list being invalid.
+        /// </summary>
+        public bool Forgiving { get; set; }
+
+        // How many alternatives of a forgiving list were kept.
+        private int _kept;
+
+        internal int KeptAlternatives => _kept;
+
+        /// <summary>Judges the alternative being read when a forgiving list ends: it is dropped when it is invalid or unfinished.</summary>
+        public void FinishForgiving()
+        {
+            if (!Forgiving)
+                return;
+
+            if (!_valid || !_ready || _state != State.Data)
+                DropAlternative();
+            else if (_temp != null || _complex != null)
+                _kept++;
+        }
+
+        // Forgets the alternative being read, whatever state it was left in.
+        private void DropAlternative()
+        {
+            _state = State.Data;
+            _combinators.Clear();
+            _temp = null;
+            _complex = null;
+            _pendingLeadingCombinator = Combinator.Descendent;
+            _valid = true;
+            _ready = true;
+        }
+
         public ISelector GetResult()
         {
             if (!IsValid)
@@ -203,6 +238,8 @@ namespace PeachBrackets.Css
             _leadingCombinators = null;
             _valid = true;
             IsNested = false;
+            Forgiving = false;
+            _kept = 0;
             _ready = true;
             _attributeSelector = attributeSelector;
             _pseudoClassSelector = pseudoClassSelector;
@@ -447,7 +484,16 @@ namespace PeachBrackets.Css
 
         private void InsertOr()
         {
+            if (Forgiving && (!_valid || _temp == null || _state != State.Data))
+            {
+                DropAlternative();
+                return;
+            }
+
             if (_temp == null) return;
+
+            if (Forgiving)
+                _kept++;
 
             _group ??= new ListSelector();
 
@@ -723,6 +769,9 @@ namespace PeachBrackets.Css
             {
                 _selector = parent.CreateChild();
                 _keyword = keyword;
+
+                // :is() and :where() take a forgiving list; the legacy :-webkit-any() and :-moz-any() do not.
+                _selector.Forgiving = keyword is "is" or "where";
             }
 
             protected override bool OnToken(Token token)
@@ -739,6 +788,12 @@ namespace PeachBrackets.Css
 
             public override ISelector Produce()
             {
+                _selector.FinishForgiving();
+
+                // A forgiving list that kept nothing matches nothing (and is not an error).
+                if (_selector.Forgiving && _selector.KeptAlternatives == 0)
+                    return new MatchesSelector(new UnknownSelector(), _keyword);
+
                 var valid = _selector.IsValid;
                 var sel = _selector.GetResult();
                 return valid ? new MatchesSelector(sel, _keyword) : null;

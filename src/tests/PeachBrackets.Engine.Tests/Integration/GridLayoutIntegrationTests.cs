@@ -56,6 +56,44 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"Container should be at least 60pt tall, was {container.ActualBoxSizingHeight}");
         }
 
+        // ─── order: items are placed in order-modified document order ───────────
+
+        [Fact]
+        public async Task Order_PlacesAnEarlierSourceItemAfterTheOnesWithALowerOrder()
+        {
+            // A sidebar written first with order 2 and a content block written second with order 1 (a news site's layout): the content takes the first
+            // cell and the sidebar the next, not the other way round.
+            var html = Wrap(@"
+                <div style='display:grid; width:300pt; grid-template-columns:100pt 100pt 100pt;'>
+                    <div id='side' style='order:2; height:20pt;'></div>
+                    <div id='main' style='order:1; grid-column: span 2; height:20pt;'></div>
+                    <div id='more' style='order:3; grid-column: span 2; height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var side = FindById(root, "side")!;
+            var main = FindById(root, "main")!;
+            var more = FindById(root, "more")!;
+
+            Assert.Equal(main.Location.Y, side.Location.Y, 0.5);
+            Assert.True(main.Location.X < side.Location.X, "the lower order is placed first, in the first columns");
+            Assert.Equal(200, main.ActualRight - main.Location.X, 0.5);
+            Assert.Equal(100, side.ActualRight - side.Location.X, 0.5);
+            Assert.True(more.Location.Y > main.Location.Y, "the next row");
+        }
+
+        [Fact]
+        public async Task Order_EqualOrdersKeepSourceOrder()
+        {
+            var html = Wrap(@"
+                <div style='display:grid; width:200pt; grid-template-columns:100pt 100pt;'>
+                    <div id='a' style='height:20pt;'></div>
+                    <div id='b' style='height:20pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+
+            Assert.True(FindById(root, "a")!.Location.X < FindById(root, "b")!.Location.X);
+        }
+
         // ─── Stage 2: fixed track sizing + row-major placement ───────────────────
 
         [Fact]

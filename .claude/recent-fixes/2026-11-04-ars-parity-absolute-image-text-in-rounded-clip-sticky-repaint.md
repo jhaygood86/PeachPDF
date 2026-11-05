@@ -26,3 +26,7 @@ document, skipping `display: none` subtrees; `DomParser.CascadeApplyStyleFonts` 
 time into the response cache. `image.load` fell from ~500 ms to ~100 ms and layout from ~1130 to ~880 ms (the prefetch itself is ~180 ms), so load is about 2.3-2.6 s.
 Only `HtmlView`'s context implements it, so PDF generation is unchanged. Trap: a relative `url()` in an inline `<style>` has no base and registering the face already
 refuses it, so it is not prefetched either.
+
+**5. Grid auto-placement ignored `order`** (found by laying the Chrome and engine grids side by side: the article list was in the right two columns, the ad column first).
+`CssLayoutEngineGrid.PlaceItems` now sorts the items stably by `order` before placing them and restores source order for the result. **Not done:** painting and
+hit-testing order for grid items by `order` (CSS Grid 1 section 8 says it applies there too). `:is()`/`:where()` now forgive an invalid argument (see the migration note).
