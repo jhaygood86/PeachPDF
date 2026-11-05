@@ -196,11 +196,15 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   on its pages. A host that has an accessibility tree of its own builds it from this one; **`GetAccessibilityNodeAt(pageIndex, x, y)`** gives the
   innermost part at a point. See [Accessibility](accessibility.md).
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
-  make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
-  laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint
-  (`DirtyRegions`): just the elements whose state changed when nothing moved, or every page from the first one that did. A state change that no
+  make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change that only changes how
+  something is painted - a colour, `opacity`, `transform`, `filter`, a shadow, an outline, `text-decoration`, `cursor` - is applied to the
+  styles in place with no layout: the `UpdateResult` has `Incremental = true`, `DirtyRegions` cover where the elements were painted and where
+  they are now (a shadow, outline, blur or transform widens them), and `DocumentElement` handles, text runs and the selection stay valid. A
+  change to anything else (a size, a font, `display`, generated content, a pseudo-element appearing) applies by cascading and laying the document
+  out again with it, so a rule can change anything, including the size of an element; `DirtyRegions` then name every page from the first one
+  that moved, `Incremental` is false, and `DocumentElement` handles taken before it are stale and must be taken again. A state change that no
   rule reads costs nothing, and one that is already in force returns `Applied = false`. Selection and highlights are kept when the text does not
-  change; `DocumentElement` handles taken before a restyle are stale and must be taken again. Combine it with `HtmlDocumentOptions.Input`, so
+  change. `HtmlDocumentOptions.IncrementalRestyle = false` always loads the document again. Combine it with `HtmlDocumentOptions.Input`, so
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.

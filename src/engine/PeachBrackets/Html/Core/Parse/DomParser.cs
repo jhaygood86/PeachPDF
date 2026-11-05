@@ -1199,6 +1199,11 @@ namespace PeachBrackets.Html.Parse
             /// <summary>Whether siblings like it may share its style at all; decided once, for the first.</summary>
             internal bool Eligible { get; } = eligible;
 
+            /// <summary>Whether a rule that reads the interaction state is among the candidates of siblings like it (see <see cref="CssBox.HasStatefulCandidates"/>).</summary>
+            internal bool Stateful { get; set; }
+
+            internal bool StatefulRelational { get; set; }
+
             /// <summary>The style the first of them ended up with, once it has one worth sharing.</summary>
             internal ComputedStyle? Style { get; set; }
         }
@@ -1265,6 +1270,9 @@ namespace PeachBrackets.Html.Parse
                 if (sibling is null)
                 {
                     sibling = siblings.Add(elementTag, box.GetType(), box.ComputedStyle, cssData.CanShareStyleAmongSiblings(box));
+
+                    // The siblings that adopt its style see the same candidate rules, so they have the same stateful ones.
+                    if (sibling is not null) (sibling.Stateful, sibling.StatefulRelational) = (box.HasStatefulCandidates, box.HasRelationalStatefulCandidates);
                 }
                 else if (sibling.Style is { } siblingStyle)
                 {
@@ -1276,6 +1284,7 @@ namespace PeachBrackets.Html.Parse
                     else
                     {
                         box.AdoptComputedStyle(siblingStyle);
+                        box.CopyStatefulCandidatesFrom(sibling.Stateful, sibling.StatefulRelational);
                         goto styleSettled;
                     }
                 }
@@ -1966,6 +1975,20 @@ namespace PeachBrackets.Html.Parse
             var valueParser = new CssValueParser(container.RenderContext);
             CascadeApplyStyles(valueParser, box, cssData, media);
             return true;
+        }
+
+        /// <summary>
+        /// Cascades <paramref name="box"/> and everything under it again for a change of the interaction state, against the sizes the last layout
+        /// pass left the size containers at. Matching adds no pseudo-element box and marks no element: the caller has already checked that the
+        /// change does not call for one (see <see cref="CssData.CompareStatefulMatches"/>).
+        /// </summary>
+        internal static void RecascadeForState(HtmlContainerInt container, CssBox box)
+        {
+            var cssData = container.CssData!;
+            var media = MediaQueryContext.FromContainer(container, container.Media);
+            var valueParser = new CssValueParser(container.RenderContext);
+            var sizes = container.PreviousPassContainerSizes;
+            CssData.WithoutPseudoElementCreation(() => CascadeApplyStyles(valueParser, box, cssData, media, sizes));
         }
 
         /// <summary>

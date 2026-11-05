@@ -1,15 +1,37 @@
-# A change of hover/focus state reloads the document
+# A change of hover/focus state that can move something still reloads the document
 
-`SetPointerStateAsync`/`SetFocusAsync` apply a state by parsing and cascading the source again with the
-new state, then laying it out (the same wholesale redo the container-query convergence loop uses). That
-keeps every selector form correct (`+`, `~`, `:has()`, `:is()`, rules that move or resize things) but costs
-a full cascade and layout per change that a rule reads, rather than restyling only the affected elements.
+`SetPointerStateAsync`/`SetFocusAsync` apply a state that only changes how something is *painted* in place
+(`InteractionRestyler`: the boxes that match different rules under the new state are cascaded again with
+their descendants and kept only if every changed property is on its paint-only list - colours, opacity,
+transform, filter, shadows, outlines, text decoration, cursor, caret/accent colour, mix-blend-mode).
+Everything else still takes the old route: the source is parsed and cascaded again with the new state and
+laid out (the same wholesale redo the container-query convergence loop uses). That keeps every selector
+form and every layout-affecting rule correct, but costs a full pipeline run per change.
+
+What still reloads (each gives `UpdateResult.Incremental == false` and `HtmlDocument.LastRestyleFallbackReason`):
+
+- Any layout- or tree-affecting property in the diff: `display`, `content`, `position`, `float`,
+  `visibility`, sizes, padding/margin, fonts, counters, list/table/flex/grid, `container-type`, and anything
+  not on the paint-only list (so `hover:font-bold`, `hover:p-*`, `hover:hidden` reload).
+- A new state that would add or mark a pseudo-element (`::before`/`::after`/`::marker`/`::first-letter`),
+  and any document with a state-reading rule on another pseudo-element (`::first-line`, `::placeholder`,
+  `::selection`...): those styles are resolved apart from the box's own and are not redone.
+- A transform or filter that appears or disappears on a box with absolutely/fixed-positioned descendants
+  (it becomes their containing block).
+- A restyle that reaches a table repeat/spacing box, foreign content, or more than a few thousand boxes.
+- A form change still waiting for its restyle (`NeedsRestyle`), whose attributes are only in the source
+  once it is loaded again.
+- `HtmlDocumentOptions.IncrementalRestyle = false`, or `PEACHPDF_FULL_RESTYLE=1`.
+
+Not done at all:
 
 - A document built with the declarative API (`CreateAsync`) has no source to parse again, and a document
   whose text was edited in place would lose its edits; both report `Applied = false` with a reason.
 - Transitions and animations a state change would start are not run: the document jumps to the new style.
-- The regions reported for a state change that moved nothing are the changed elements and their contents,
-  widened by 24 points; a shadow or outline that reaches farther than that is not covered.
+- Nothing is rolled back when the fast path gives up halfway: the tree it leaves is discarded by the
+  reload that follows, so it is never read. Do not add a code path that gives up and then keeps the tree.
 
-Restyling only the affected subtree needs the cascade to be re-runnable on a laid-out box tree, which it
-is not (generated content, anonymous boxes and `display: contents` shells are built from its result).
+Measured and rejected: cascading into throwaway shadow boxes and adopting the result. The cascade reads
+and writes the live box in dozens of places (siblings, pseudo-element synthesis, `display: contents`
+shells), so a faithful shadow would have been a second implementation of it; cascading in place and
+reloading on any surprise keeps one.

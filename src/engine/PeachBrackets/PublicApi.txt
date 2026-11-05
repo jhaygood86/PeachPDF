@@ -595,6 +595,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
   property Boolean IgnoreAuthorStyleSheets { get; set; }
+  property Boolean IncrementalRestyle { get; set; }
   property Boolean PaintFormControls { get; set; }
   property Boolean RecordTextRuns { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
@@ -947,6 +948,7 @@ PeachBrackets.Updates.UpdateResult : struct
   method virtual Int32 GetHashCode()
   method virtual String ToString()
   property Boolean Applied { get; init; }
+  property Boolean Incremental { get; init; }
   property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
   property String Reason { get; init; }
 PeachBrackets.Updates.ValidationKind : enum Int32

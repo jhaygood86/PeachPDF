@@ -78,14 +78,21 @@ namespace PeachBrackets.Html
         /// </summary>
         private sealed class RuleSharing
         {
-            internal static readonly RuleSharing Plain = new(stable: true, null, usesInteractionState: false);
+            internal static readonly RuleSharing Plain = new(stable: true, null, usesInteractionState: false, stateOnSubjectOnly: false);
 
-            private RuleSharing(bool stable, CompoundSelector[]? boxCreatingSubjects, bool usesInteractionState)
+            private RuleSharing(bool stable, CompoundSelector[]? boxCreatingSubjects, bool usesInteractionState, bool stateOnSubjectOnly)
             {
                 Stable = stable;
                 BoxCreatingSubjects = boxCreatingSubjects;
                 UsesInteractionState = usesInteractionState;
+                StateOnSubjectOnly = stateOnSubjectOnly;
             }
+
+            /// <summary>
+            /// Whether the state the selector reads can only be the state of the element it matches: one compound with no combinator, functional
+            /// pseudo-class or nesting in it. Such a rule matches a different set of elements only when the element's own state changed.
+            /// </summary>
+            internal bool StateOnSubjectOnly { get; }
 
             /// <summary>
             /// Whether its selector reads the document's interaction state (<c>:hover</c>, <c>:active</c>, <c>:focus</c>, <c>:focus-within</c>,
@@ -111,7 +118,9 @@ namespace PeachBrackets.Html
                 var stateful = text.Contains(":hover", StringComparison.OrdinalIgnoreCase) || text.Contains(":active", StringComparison.OrdinalIgnoreCase)
                     || text.Contains(":focus", StringComparison.OrdinalIgnoreCase);
 
-                return stable && subjects.Count == 0 && !stateful ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null, stateful);
+                var subjectOnly = stateful && text.AsSpan().IndexOfAny(" \t\r\n>+~()&[],") < 0;
+
+                return stable && subjects.Count == 0 && !stateful ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null, stateful, subjectOnly);
             }
         }
 
@@ -169,6 +178,39 @@ namespace PeachBrackets.Html
 
         private bool _hasSelectionRules;
         private bool _indexSawSelectionRule;
+        private bool _hasStatefulSpecialPseudo;
+        private bool _indexSawStatefulSpecialPseudo;
+
+        /// <summary>
+        /// True when a rule that reads the interaction state targets a pseudo-element other than <c>::before</c>, <c>::after</c>, <c>::marker</c>
+        /// and <c>::first-letter</c> (<c>::first-line</c>, <c>::placeholder</c>, <c>::selection</c>, ...): a style those take is resolved apart from
+        /// the box's own, which the incremental restyle does not redo.
+        /// </summary>
+        internal bool HasStatefulSpecialPseudoRules
+        {
+            get
+            {
+                EnsureIndex();
+                return _hasStatefulSpecialPseudo;
+            }
+        }
+
+        private static bool TargetsPseudoElementOtherThanGeneratedContent(string selectorText)
+        {
+            if (selectorText.Contains(":first-line", StringComparison.OrdinalIgnoreCase)) return true;
+
+            var rest = selectorText.AsSpan();
+            while (true)
+            {
+                var at = rest.IndexOf("::", StringComparison.Ordinal);
+                if (at < 0) return false;
+
+                rest = rest[(at + 2)..];
+                if (!(rest.StartsWith("before", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("after", StringComparison.OrdinalIgnoreCase)
+                    || rest.StartsWith("marker", StringComparison.OrdinalIgnoreCase) || rest.StartsWith("first-letter", StringComparison.OrdinalIgnoreCase)))
+                    return true;
+            }
+        }
 
         /// <summary>
         /// True when the document declares any rule whose selector could end in <c>::selection</c> - a superset like
@@ -204,6 +246,7 @@ namespace PeachBrackets.Html
             var order = 0;
             var hasFirstLineRules = false;
             _indexSawSelectionRule = false;
+            _indexSawStatefulSpecialPseudo = false;
 
             foreach (var stylesheet in Stylesheets)
             {
@@ -214,6 +257,7 @@ namespace PeachBrackets.Html
             HasCascadeLayers = _layerRanks.Count > 0;
             HasFirstLineRules = hasFirstLineRules;
             _hasSelectionRules = _indexSawSelectionRule;
+            _hasStatefulSpecialPseudo = _indexSawStatefulSpecialPseudo;
             _tagIndex = tagIndex;
             _classIndex = classIndex;
             _idIndex = idIndex;
@@ -348,6 +392,9 @@ namespace PeachBrackets.Html
 
                         if (!_indexSawSelectionRule && CouldEndInHighlightPseudo(styleRule.Selector))
                             _indexSawSelectionRule = true;
+
+                        if (!_indexSawStatefulSpecialPseudo && indexedRule.Sharing.UsesInteractionState && TargetsPseudoElementOtherThanGeneratedContent(styleRule.Selector.Text))
+                            _indexSawStatefulSpecialPseudo = true;
 
                         keys.Clear();
                         CollectIndexKeys(styleRule.Selector, keys);
@@ -841,7 +888,7 @@ namespace PeachBrackets.Html
         /// apply their own cascade ordering. Extracted so the normal and <c>!important</c> author
         /// orderings can share one matching pass (see <see cref="GetAuthorStyleRulesForCascade"/>).
         /// </summary>
-        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly, ContainerQuerySizes? containerSizes = null, string pseudoName = PseudoElementNames.FirstLine)
+        private List<IndexedRule> GatherMatchedRules(MediaQueryContext media, ICssDomNode node, bool? userAgentOnly, bool firstLineOnly, ContainerQuerySizes? containerSizes = null, string pseudoName = PseudoElementNames.FirstLine, int statefulMode = 0)
         {
             EnsureIndex();
 
@@ -854,7 +901,11 @@ namespace PeachBrackets.Html
             void Collect(IndexedRule indexed)
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
+                if (statefulMode != 0 && (!indexed.Sharing.UsesInteractionState || (statefulMode == 2 && indexed.Sharing.StateOnSubjectOnly))) return;
                 if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return;
+                // A rule that reads the interaction state could match this box under another state: the incremental restyle looks at these boxes
+                // when the state changes (see StatefulRulesOf).
+                if (indexed.Sharing.UsesInteractionState && node is CssBox statefulCandidate) statefulCandidate.NoteStatefulCandidate(indexed.Sharing.StateOnSubjectOnly);
                 // @container is HTML-only (no query-container concept for SVG) - an SVG node (never a
                 // CssBox) permissively skips the check the same way a rule with no @container nesting
                 // does, since ContainerQueryMatcher.Matches needs a CssBox to walk ParentBox from.
@@ -971,6 +1022,7 @@ namespace PeachBrackets.Html
             if (indexed.EnclosingContainers is not null) return false;
 
             var sharing = indexed.Sharing;
+            if (sharing.UsesInteractionState) box.NoteStatefulCandidate(sharing.StateOnSubjectOnly);
             if (!sharing.Stable) return false;
 
             // A document whose interaction state is live (a host tracking the pointer and focus) has one hovered element among identical siblings.
@@ -1515,6 +1567,63 @@ namespace PeachBrackets.Html
             _ => false
         };
 
+        // Set while the incremental restyle compares a box's matches under two states: matching then adds no box and marks no element, and
+        // records what it would have done instead. The restyle runs on one thread from start to end, so this needs no more than that.
+        [ThreadStatic]
+        private static HashSet<string>? _creationProbe;
+
+        /// <summary>
+        /// Compares the rules that read the interaction state and match <paramref name="box"/> under two states, without changing the tree.
+        /// </summary>
+        /// <returns>0 when the same rules match, 1 when they differ, 2 when matching would add or mark a pseudo-element differently under one state</returns>
+        internal int CompareStatefulMatches(MediaQueryContext media, CssBox box, ContainerQuerySizes? containerSizes, HtmlContainerInt container,
+            InteractionState before, InteractionState after, bool ownStateChanged)
+        {
+            var mode = ownStateChanged ? 1 : 2;
+
+            var (rulesBefore, creationBefore) = MatchStateful(media, box, containerSizes, container, before, mode);
+            var (rulesAfter, creationAfter) = MatchStateful(media, box, containerSizes, container, after, mode);
+
+            if (!creationBefore.SetEquals(creationAfter)) return 2;
+            return rulesBefore.SetEquals(rulesAfter) ? 0 : 1;
+        }
+
+        private (HashSet<IStyleRule> Rules, HashSet<string> Creation) MatchStateful(MediaQueryContext media, CssBox box, ContainerQuerySizes? containerSizes,
+            HtmlContainerInt container, InteractionState state, int mode)
+        {
+            var probe = new HashSet<string>(StringComparer.Ordinal);
+            var saved = _creationProbe;
+            _creationProbe = probe;
+            container.Interaction = state;
+            try
+            {
+                var rules = new HashSet<IStyleRule>();
+                foreach (var matched in GatherMatchedRules(media, box, null, false, containerSizes, statefulMode: mode))
+                    rules.Add(matched.Rule);
+
+                return (rules, probe);
+            }
+            finally
+            {
+                _creationProbe = saved;
+            }
+        }
+
+        /// <summary>Runs <paramref name="action"/> with pseudo-element synthesis switched off (see <see cref="CompareStatefulMatches"/>).</summary>
+        internal static void WithoutPseudoElementCreation(Action action)
+        {
+            var saved = _creationProbe;
+            _creationProbe = new HashSet<string>(StringComparer.Ordinal);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                _creationProbe = saved;
+            }
+        }
+
         internal static bool DoesSelectorMatch(CompoundSelector compoundSelector, ICssDomNode? node)
         {
             if (node is null)
@@ -1594,6 +1703,22 @@ namespace PeachBrackets.Html
                 // left on it and stayed flagged CssRect.AwaitsTheNextFragmentainer, which made
                 // FragmentEmitter drop the word entirely - the text simply disappeared from the PDF.
                 if (box.HtmlTag is null) return false;
+
+                // A probe asks whether the selector would add a box (or mark the element) without doing it.
+                if (_creationProbe is { } probe)
+                {
+                    var wouldCreate = pseudoElementSelector.Name switch
+                    {
+                        PseudoElementNames.Before => !box.Boxes.Any(b => b.IsBeforePseudoElement),
+                        PseudoElementNames.After => !box.Boxes.Any(b => b.IsAfterPseudoElement),
+                        PseudoElementNames.Marker => !box.Boxes.Any(b => b.IsMarkerPseudoElement),
+                        PseudoElementNames.FirstLetter => true,
+                        _ => false,
+                    };
+
+                    if (wouldCreate) probe.Add(pseudoElementSelector.Name);
+                    return false;
+                }
 
                 switch (pseudoElementSelector.Name)
                 {

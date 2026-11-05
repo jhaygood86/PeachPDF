@@ -1308,6 +1308,7 @@ public sealed partial class HtmlDocument : IDisposable
             return UpdateResult.NotApplied("The text was edited in place, which loading the document again would undo.");
 
         var changed = InteractionState.Difference(_interaction, next);
+        var previous = _interaction;
         _pointerChain = pointerChain;
         _pressed = pressed;
         _focused = focused;
@@ -1318,7 +1319,77 @@ public sealed partial class HtmlDocument : IDisposable
         if (!affectsStyle)
             return new UpdateResult(true, null, []);
 
+        // A form change waiting for its restyle is not in the tags the cascade would read until the source is loaded again.
+        if (_options.IncrementalRestyle && !FullRestyleForced && _restyleOrdinals.Count == 0 && _container.FragmentTree is { } tree)
+        {
+            var outcome = InteractionRestyler.TryApply(_container, previous, next, changed, tree.Fragmentainers);
+            LastRestyleFallbackReason = outcome.Reason;
+            if (outcome.Applied)
+            {
+                // Nothing was loaded again: whatever form change was waiting for a restyle has its answer, as it has after a reload.
+                _restyleOrdinals.Clear();
+                if (VerifyIncrementalRestyle)
+                    await VerifyAgainstFullRestyleAsync(measuringCanvas);
+
+                return new UpdateResult(true, null, outcome.DirtyRegions) { Incremental = true };
+            }
+
+        }
+
         return await RestyleAsync(changed, measuringCanvas);
+    }
+
+    // The environment switch for the old behaviour, read once.
+    private static readonly bool FullRestyleForced = Environment.GetEnvironmentVariable("PEACHPDF_FULL_RESTYLE") == "1";
+
+    /// <summary>Why the last change of state was not applied in place, or null when it was (or none has been made). For tests and diagnostics.</summary>
+    internal string? LastRestyleFallbackReason { get; private set; }
+
+    /// <summary>When set, a restyle applied in place is checked against loading the document again: the computed style of every box and the page geometry must be the same.</summary>
+    internal bool VerifyIncrementalRestyle { get; set; }
+
+    private async ValueTask VerifyAgainstFullRestyleAsync(Canvas measuringCanvas)
+    {
+        var geometryBefore = GeometrySignature();
+        var styleBefore = StyleDump();
+        await ReloadAsync(measuringCanvas);
+        var styleAfter = StyleDump();
+        var geometryAfter = GeometrySignature();
+
+        if (FirstGeometryChange(geometryBefore, geometryAfter) is { } page)
+            throw new InvalidOperationException($"The restyle in place left the geometry of page {page} different from loading the document again.");
+
+        if (styleBefore.Count != styleAfter.Count)
+            throw new InvalidOperationException($"The restyle in place left {styleBefore.Count} boxes; loading the document again makes {styleAfter.Count}.");
+
+        for (var i = 0; i < styleBefore.Count; i++)
+        {
+            if (styleBefore[i] != styleAfter[i])
+                throw new InvalidOperationException($"The restyle in place and loading the document again style a box differently:{Environment.NewLine}{styleBefore[i]}{Environment.NewLine}{styleAfter[i]}");
+        }
+    }
+
+    // Every box's computed style, in tree order, as text.
+    private List<string> StyleDump()
+    {
+        var dump = new List<string>();
+        void Walk(CssBox box)
+        {
+            var values = CssUtils.SnapshotProperties(box);
+            var text = new System.Text.StringBuilder();
+            text.Append(box.HtmlTag?.Name ?? (box.IsPseudoElement ? "::pseudo" : "#box")).Append('#').Append(box.HtmlTag?.SourceOrdinal ?? -1).Append(':');
+            foreach (var name in values.Keys.OrderBy(n => n, StringComparer.Ordinal))
+                text.Append(name).Append('=').Append(values[name]).Append(';');
+
+            dump.Add(text.ToString());
+            foreach (var child in box.Boxes)
+                Walk(child);
+        }
+
+        if (_container.Root is { } root)
+            Walk(root);
+
+        return dump;
     }
 
     // Loads the source again with the document's current state and reports what to repaint: every page from the first whose geometry moved, or

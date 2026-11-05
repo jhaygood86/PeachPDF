@@ -68,5 +68,12 @@ public readonly record struct TextEditResult(
 /// <param name="DirtyRegions">the parts of the pages that now look different, to repaint (see <see cref="HtmlDocument.PaintPageRegionAsync"/>); empty when nothing was applied</param>
 public readonly record struct UpdateResult(bool Applied, string? Reason, IReadOnlyList<DirtyRegion> DirtyRegions)
 {
+    /// <summary>
+    /// Whether a change of the pointer or focus state was applied to the styles in place, with no layout: the document's boxes, text runs,
+    /// selection and <see cref="DocumentElement"/> handles are exactly as they were, and only <see cref="DirtyRegions"/> look different. False
+    /// when the document was loaded and laid out again (or the change did not apply), which a host may have to hide from the user.
+    /// </summary>
+    public bool Incremental { get; init; }
+
     internal static UpdateResult NotApplied(string reason) => new(false, reason, []);
 }

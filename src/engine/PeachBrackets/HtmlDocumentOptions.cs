@@ -201,6 +201,14 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public bool EnableIncrementalUpdates { get; set; }
 
+    /// <summary>
+    /// Whether a change of the pointer or focus state (<c>:hover</c>, <c>:active</c>, <c>:focus</c>) that only changes how something is painted
+    /// (a colour, an opacity, a shadow, a transform...) is applied to the styles in place, instead of the document being loaded and laid out
+    /// again. A change to anything else still loads it again. On by default; the environment variable <c>PEACHPDF_FULL_RESTYLE=1</c> turns it
+    /// off for every document.
+    /// </summary>
+    public bool IncrementalRestyle { get; set; } = true;
+
     /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
     public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);
 
