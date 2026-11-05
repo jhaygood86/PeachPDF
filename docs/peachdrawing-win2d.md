@@ -229,6 +229,8 @@ device was lost throws `Win2dDeviceLostException`; draw it again.
   (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honoured on this canvas.
 - **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
   with unequal x and y deviations uses their mean.
+- **Text inside a rounded or path clip** (`PushClip(GraphicsPath)`, `PushClipExclude`) is drawn as `Grayscale` even where `Auto` would use `Lcd`: Direct2D keeps what is
+  drawn inside such a clip in a layer until the clip is popped, so the pixels behind the text cannot be read or sampled. Rectangular clips are not affected.
 - **DirectWrite text** is not feature complete; see the [table above](#directwrite-mode-is-not-feature-complete).
 - **Windows only.** Win2D is a Windows App SDK component, so the package builds, tests and packs on Windows only. The other packages still
   build elsewhere, but a build of the whole solution (`PeachPDF.slnx`) needs Windows because it includes this project.

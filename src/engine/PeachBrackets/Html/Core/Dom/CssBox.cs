@@ -9976,8 +9976,14 @@ namespace PeachBrackets.Html.Dom
             var current = this;
             // Capped defensively (real documents never nest this deep) so a malformed/cyclic box tree
             // degrades to "stop extending the group" instead of hanging or overflowing the stack.
+            //
+            // A box that establishes an independent formatting context (a flex or grid container, a flex or grid item, an inline-block, a table cell...)
+            // keeps its first child's margin inside it (CSS 2.1 §8.3.1 "margins of ... elements that establish new block formatting contexts do not collapse
+            // with their in-flow children"; css-flexbox-1 §4): walking on into its children would fold that margin into the group that positions the box
+            // itself, so the margin was applied twice - once moving the box, once inside it - while the box's height counted it once. (The document's root box is
+            // not one: it is the bookkeeping box above <html>, and the margins of the page's first elements are meant to reach it.)
             while (chainMembers.Count < 1000 && current.Overflow.Value == PeachBrackets.Css.Overflow.Visible &&
-                   !current.DerivedStyle.IsFlowRoot &&
+                   !current.DerivedStyle.IsFlowRoot && (current.ParentBox is null || !DomUtils.EstablishesIndependentFormattingContext(current)) &&
                    current.PhysicalBorderWidth(side) < 0.1 && current.PhysicalPadding(side) < 0.1)
             {
                 // A captioned table's grid decoration box (TableGridDecorationBox, issue #721) is a

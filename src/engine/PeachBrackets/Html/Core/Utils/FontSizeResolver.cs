@@ -14,6 +14,9 @@ namespace PeachBrackets.Html.Utils
     /// </summary>
     internal static class FontSizeResolver
     {
+        // CSS Fonts 4 leaves the ratio of `smaller` and `larger` to the user agent; browsers use 1.2 (on paper the engine keeps its fixed 2pt step).
+        private const double ScreenRelativeStep = 1.2;
+
         /// <summary>
         /// Overload for a caller with no typed <see cref="CssKeywordOrValue{TEnum,TValue}"/> in hand -
         /// today, only <c>MarginBoxRenderer</c>'s <c>@page</c> margin-box font resolution, which reads the
@@ -66,8 +69,8 @@ namespace PeachBrackets.Html.Utils
                 Keywords.Large => DefaultFontResolver.Keyword(2, screen),
                 Keywords.XLarge => DefaultFontResolver.Keyword(3, screen),
                 Keywords.XxLarge => DefaultFontResolver.Keyword(4, screen),
-                Keywords.Smaller => parentSize - 2,
-                Keywords.Larger => parentSize + 2,
+                Keywords.Smaller => screen ? parentSize / ScreenRelativeStep : parentSize - 2,
+                Keywords.Larger => screen ? parentSize * ScreenRelativeStep : parentSize + 2,
                 _ => CssValueParser.ParseLength(fontSizeValue, parentSize, parentSize, remSize, null, true,
                     containerInlineSizePt, containerBlockSizePt, viewportWidthPt, viewportHeightPt,
                     containerWidthPt, containerHeightPt, viewportInlineSizePt, viewportBlockSizePt, fonts: fonts)
@@ -131,8 +134,8 @@ namespace PeachBrackets.Html.Utils
                     FontSizeKeyword.Large => DefaultFontResolver.Keyword(2, screen),
                     FontSizeKeyword.XLarge => DefaultFontResolver.Keyword(3, screen),
                     FontSizeKeyword.XxLarge => DefaultFontResolver.Keyword(4, screen),
-                    FontSizeKeyword.Smaller => parentSize - 2,
-                    FontSizeKeyword.Larger => parentSize + 2,
+                    FontSizeKeyword.Smaller => screen ? parentSize / ScreenRelativeStep : parentSize - 2,
+                    FontSizeKeyword.Larger => screen ? parentSize * ScreenRelativeStep : parentSize + 2,
                     _ => DefaultFontResolver.Keyword(0, screen) // Medium, or unset (unreachable in practice - see CssKeywordOrValue's own doc comment)
                 };
             }
