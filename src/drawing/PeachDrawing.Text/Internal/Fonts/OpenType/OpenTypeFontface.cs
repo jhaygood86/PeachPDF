@@ -770,6 +770,32 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
         }
 
+        private TrackingTable? _tracking;
+        private bool _trackingRead;
+
+        /// <summary>The font's tracking table (<c>trak</c>), or <see langword="null"/> when it has none.</summary>
+        internal TrackingTable? Tracking
+        {
+            get
+            {
+                if (!_trackingRead)
+                {
+                    lock (SyncRoot)
+                    {
+                        if (!_trackingRead)
+                        {
+                            _tracking = TableDictionary.TryGetValue("trak", out var entry)
+                                ? TrackingTable.TryRead(_fontSource.Bytes, entry.Offset, entry.Length)
+                                : null;
+                            _trackingRead = true;
+                        }
+                    }
+                }
+
+                return _tracking;
+            }
+        }
+
         public int Seek(string tag)
         {
             if (TableDictionary.TryGetValue(tag, out var entry))

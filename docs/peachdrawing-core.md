@@ -13,7 +13,7 @@ dotnet add package PeachDrawing.Core
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
 > `PublicApi.txt` for the exact, machine-checked snapshot. Three concrete `Canvas`/`RenderContext`
-> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) and [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, drawing with SkiaSharp into a canvas you supply, on any platform) join them as a fourth and fifth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
+> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) and [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, drawing with SkiaSharp into a canvas you supply, on any platform) and [`PeachDrawing.CoreGraphics`](peachdrawing-coregraphics.md) (`CoreGraphicsCanvas`, drawing with Quartz 2D into a `CGContext` you supply, on macOS and iOS) join them as a fourth and fifth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
 > renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
@@ -265,7 +265,7 @@ layer (a measure-only pass) or, for a layer with effects, cannot apply them - dr
 default implementation builds a layer from `CreateTile` and the `DrawImage…` methods, so every `Canvas` gets one; a
 canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEffects` (the `PeachDrawing`
 package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`). A canvas whose layers apply their effects itself, on the
-graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas` and `SkiaCanvas` do), and a caller that can express a blurred
+graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCanvas` and `CoreGraphicsCanvas` do), and a caller that can express a blurred
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
@@ -361,7 +361,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), [PeachDrawing.Win2D](peachdrawing-win2d.md)'s `Win2dRenderContext`/`Win2dCanvas` (a hardware-accelerated Windows backend, with the resource-lifetime rules a native-handle backend needs), [PeachDrawing.Skia](peachdrawing-skia.md)'s `SkiaRenderContext`/`SkiaCanvas` (the cross-platform one, drawing into a host-supplied surface), PeachPDF's use of `RasterCanvas`
+[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), [PeachDrawing.Win2D](peachdrawing-win2d.md)'s `Win2dRenderContext`/`Win2dCanvas` (a hardware-accelerated Windows backend, with the resource-lifetime rules a native-handle backend needs), [PeachDrawing.Skia](peachdrawing-skia.md)'s `SkiaRenderContext`/`SkiaCanvas` (the cross-platform one, drawing into a host-supplied surface), [PeachDrawing.CoreGraphics](peachdrawing-coregraphics.md)'s `CoreGraphicsRenderContext`/`CoreGraphicsCanvas` (the Apple one, drawing into a host-supplied `CGContext`), PeachPDF's use of `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a
