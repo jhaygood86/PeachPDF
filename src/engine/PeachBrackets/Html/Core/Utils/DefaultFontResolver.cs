@@ -111,6 +111,16 @@ namespace PeachBrackets.Html.Utils
         ];
 
         /// <summary>
+        /// The families an Apple platform other than macOS (iOS, iPadOS, Mac Catalyst, tvOS) may have to stand in for the Arial macOS
+        /// uses, in preference order: those platforms ship Arial too, but not every release does.
+        /// </summary>
+        /// <remarks>
+        /// Must be declared (and therefore initialized) before <see cref="DefaultFont"/> - see the remarks on <see cref="LinuxArialAlternatives"/>.
+        /// On iOS the initializer of DefaultFont reads this array while the class is still being initialized, and found it null.
+        /// </remarks>
+        private static readonly string[] AppleArialAlternatives = ["Arial", "Helvetica", "Helvetica Neue", "Times New Roman"];
+
+        /// <summary>
         /// Default font used when no font-family is specified. "Segoe UI" only exists on
         /// Windows, so macOS, Linux, Android, and browser/WebAssembly hosts need a different,
         /// actually-installed default.
@@ -119,12 +129,6 @@ namespace PeachBrackets.Html.Utils
             OperatingSystem.IsWindows(), OperatingSystem.IsMacOS(), OperatingSystem.IsLinux(),
             OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser(),
             OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS());
-
-        /// <summary>
-        /// The families an Apple platform other than macOS (iOS, iPadOS, Mac Catalyst, tvOS) may have to stand in for the Arial macOS
-        /// uses, in preference order: those platforms ship Arial too, but not every release does.
-        /// </summary>
-        private static readonly string[] AppleArialAlternatives = ["Arial", "Helvetica", "Helvetica Neue", "Times New Roman"];
 
         internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser, bool isAppleMobile = false)
         {
