@@ -209,6 +209,19 @@ public class HtmlDocumentTests
     }
 
     [Fact]
+    public async Task AListThatRunsOverTheColumns_HasAnnotationsAndDoesNotThrow()
+    {
+        // The annotation collector looked the children of a fragment up by box; a list whose items run past the end of a column has a fragment in each
+        // column, so the same box twice under one parent, which made the lookup throw "an item with the same key has already been added".
+        var words = string.Join(" ", Enumerable.Range(0, 40).Select(w => $"word{w}"));
+        var items = string.Concat(Enumerable.Range(1, 3).Select(i => $"<li>Column item {i} {words}</li>"));
+        var (_, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap($"<div style='column-count:2;column-gap:2em;height:120pt'><ul style='margin:0;padding-left:2em'>{items}</ul></div>"));
+
+        Assert.NotNull(document.Annotations);
+    }
+
+    [Fact]
     public async Task ALinkAndAHeading_AppearInTheAnnotations()
     {
         var (_, document) = await TestDocument.LoadAsync(TestDocument.Wrap(
