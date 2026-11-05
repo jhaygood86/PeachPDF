@@ -37,9 +37,9 @@ namespace PeachBrackets.Html.Dom
             {
                 var first = tokens[0];
                 if (first.Type == TokenType.Url ||
-                    (first is { Type: TokenType.Function } ft && IsGradientFunctionName(ft.Data)))
+                    (first is { Type: TokenType.Function } ft && IsImageFunctionName(ft.Data)))
                 {
-                    var image = new CssValueParser(renderContext).ParseImage(cssBox.Content);
+                    var image = new CssValueParser(renderContext).ParseImage(cssBox.Content, cssBox.HtmlContainer);
                     if (image != null)
                     {
                         cssBox.ContentImage = image;
@@ -420,6 +420,10 @@ namespace PeachBrackets.Html.Dom
             "radial-gradient", "repeating-radial-gradient",
             "conic-gradient", "repeating-conic-gradient",
         ];
+
+        /// <summary>A function that yields an <c>&lt;image&gt;</c> here: a gradient or <c>image-set()</c>.</summary>
+        internal static bool IsImageFunctionName(ReadOnlySpan<char> name) =>
+            IsGradientFunctionName(name) || name.Is(FunctionNames.ImageSet);
 
         internal static bool IsGradientFunctionName(ReadOnlySpan<char> name)
         {

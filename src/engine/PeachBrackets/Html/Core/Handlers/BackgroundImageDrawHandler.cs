@@ -40,13 +40,15 @@ namespace PeachBrackets.Html.Handlers
         /// <param name="intrinsicSizeInCssPixels">true when <paramref name="image"/> is a natural bitmap whose
         /// Width/Height are CSS pixels (1px = 1/96in) needing conversion to layout points; false when it is a
         /// <see cref="Canvas.CreateTile"/>-produced tile already sized in layout units</param>
+        /// <param name="imageDensity">the resolution in dppx an <c>image-set()</c> option declared for a natural bitmap; 1 otherwise</param>
         public static void DrawBackgroundImage(
             Canvas g, Image image,
             string sizeValue, string positionValue, string backgroundRepeat,
             Rect positioningRect, Rect clipRect,
             GraphicsPath? roundedClipPath,
             CssBox box,
-            bool intrinsicSizeInCssPixels)
+            bool intrinsicSizeInCssPixels,
+            double imageDensity = 1)
         {
             var pxFactor = intrinsicSizeInCssPixels ? Length.PointsPerPx : 1d;
             backgroundRepeat = BackgroundLayerResolver.NormalizeRepeat(backgroundRepeat);
@@ -60,6 +62,9 @@ namespace PeachBrackets.Html.Handlers
             var (naturalWidth, naturalHeight) = intrinsicSizeInCssPixels
                 ? ImageResolutionResolver.NaturalSize(box, image)
                 : (orientedWidth, orientedHeight);
+            // An image-set() option declares its own resolution: its pixels per CSS pixel.
+            naturalWidth /= imageDensity;
+            naturalHeight /= imageDensity;
             var intrinsicWidth = orientedWidth > 0 ? naturalWidth * pxFactor : (double?)null;
             var intrinsicHeight = orientedHeight > 0 ? naturalHeight * pxFactor : (double?)null;
             var intrinsicRatio = intrinsicWidth is not null && intrinsicHeight is not null

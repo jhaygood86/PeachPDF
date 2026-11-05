@@ -270,7 +270,7 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         public void BackgroundImageExtendedFunctionLegal(string snippet)
         {
             // image-set()/cross-fade()/element() are valid <image> values (CSS Images 4) and now parse via the
-            // shared ImageSourceConverter, even though PeachPDF renders nothing for them (issue #229 gap 3).
+            // shared ImageSourceConverter, (image-set() renders; the others do not).
             var property = ParseDeclaration(snippet);
             Assert.Equal("background-image", property.Name);
             Assert.IsType<BackgroundImageProperty>(property);

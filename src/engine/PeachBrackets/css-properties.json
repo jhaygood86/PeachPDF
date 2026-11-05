@@ -613,7 +613,7 @@
         "propertyPath": "BorderImageSource",
         "csharpDataType": "CssImage?",
         "area": "BorderArea",
-        "customSetter": "{box}.BorderImageSource = {parser}.ParseImage({value});",
+        "customSetter": "{box}.BorderImageSource = {parser}.ParseImage({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }
@@ -2448,7 +2448,7 @@
         "propertyPath": "BackgroundImages",
         "csharpDataType": "IReadOnlyList<CssImage?>?",
         "area": "BackgroundArea",
-        "customSetter": "{box}.BackgroundImages = {parser}.ParseImages({value});",
+        "customSetter": "{box}.BackgroundImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }
@@ -2464,7 +2464,7 @@
         "propertyPath": "MaskImages",
         "csharpDataType": "IReadOnlyList<CssImage?>?",
         "area": "BackgroundArea",
-        "customSetter": "{box}.MaskImages = {parser}.ParseImages({value});",
+        "customSetter": "{box}.MaskImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }
@@ -4202,7 +4202,7 @@
         "propertyPath": "ListStyleImage",
         "csharpDataType": "CssImage?",
         "area": "ListArea",
-        "customSetter": "{box}.ListStyleImage = {parser}.ParseImage({value});",
+        "customSetter": "{box}.ListStyleImage = {parser}.ParseImage({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }
