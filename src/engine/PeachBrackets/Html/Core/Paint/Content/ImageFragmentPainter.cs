@@ -15,6 +15,16 @@ namespace PeachBrackets.Html.Paint.Content
         {
             var image = (CssBoxImage)box;
 
+            // An image that could not be loaded shows its alt text, clipped to the box it was given.
+            if (image.BrokenImageAlt is { } alt)
+            {
+                g.PushClip(rect);
+                g.DrawString(alt, box.ActualFont, box.ActualColor, new PaintPoint(rect.X, rect.Y), new Size(rect.Width, rect.Height),
+                    letterSpacing: 0, fontPalette: null, box.ActualTextShapingFeatures);
+                g.PopClip();
+                return;
+            }
+
             // object-fit / object-position honored via the shared replaced-content renderer.
             ReplacedContentRenderer.Paint(g, rect, image.Image, image.SvgDocument, box);
         }

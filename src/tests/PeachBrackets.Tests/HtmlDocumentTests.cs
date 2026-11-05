@@ -208,6 +208,26 @@ public class HtmlDocumentTests
         Assert.True(box.Classification.Checked);
     }
 
+    [Theory]
+    [InlineData("alt='Company logo'", true)]
+    [InlineData("", false)]
+    [InlineData("alt=''", false)]
+    public async Task AnImageThatCannotBeLoaded_ShowsItsAltTextOrNothing(string attributes, bool expectInk)
+    {
+        var (context, document) = await TestDocument.LoadAsync(
+            TestDocument.Wrap($"<p style='margin:0;font:16pt Arial'><img src='no-such-file.png' {attributes}></p>"), new HtmlDocumentOptions());
+        using var canvas = await TestDocument.PaintAsync(context, document);
+
+        var ink = false;
+        for (var y = 0; y < 40 && !ink; y++)
+        {
+            for (var x = 0; x < 200 && !ink; x++)
+                ink = TestDocument.Pixel(canvas, x, y) is { R: < 128 };
+        }
+
+        Assert.Equal(expectInk, ink);
+    }
+
     [Fact]
     public async Task ALinkAndAHeading_AppearInTheAnnotations()
     {

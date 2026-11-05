@@ -199,6 +199,17 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The <c>alt</c> text of an image whose source could not be loaded (a missing file, a refused request, bytes no decoder reads), which is then
+        /// rendered in its place; null for an image that loaded, one with no (or an empty) <c>alt</c>, and one whose content is not its <c>src</c>.
+        /// </summary>
+        internal string? BrokenImageAlt =>
+            _imageLoadHandler is not null && !_contentInjectedDirectly && Content == Keywords.Normal
+            && _imageWord.Image is null && _svgDocument is null
+            && GetAttribute("alt")?.Trim() is { Length: > 0 } alt
+                ? alt
+                : null;
+
+        /// <summary>
         /// The phantom word carrying this box's replaced content, whose own rectangle positions the
         /// image within the box. Read by <c>ImageFragmentPainter</c>.
         /// </summary>
@@ -276,6 +287,18 @@ namespace PeachBrackets.Html.Dom
                     var (w, h) = ImageResolutionResolver.NaturalSize(this, raster);
                     orientedWidth = w / _srcsetDensity;
                     orientedHeight = h / _srcsetDensity;
+                }
+                else if (BrokenImageAlt is { } alt)
+                {
+                    // An image that cannot be loaded and has alternative text is its text (HTML "rendering", "images": a broken image with a non-empty alt is
+                    // rendered as an inline box holding the text). The text's size stands in for the natural size, in CSS pixels as MeasureIntrinsicSize
+                    // expects; it has no ratio, so a width or height of the author's own sizes just that axis.
+                    var unit = Length.PointsPerPx * (HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+                    var text = g.MeasureString(alt, ActualFont);
+                    orientedWidth = text.Width / unit;
+                    orientedHeight = Math.Max(text.Height, ActualLineHeight) / unit;
+                    CssLayoutEngine.MeasureIntrinsicSize(_imageWord, orientedWidth, orientedHeight, hasIntrinsicRatio: false);
+                    return;
                 }
 
                 CssLayoutEngine.MeasureIntrinsicSize(_imageWord, orientedWidth, orientedHeight);
