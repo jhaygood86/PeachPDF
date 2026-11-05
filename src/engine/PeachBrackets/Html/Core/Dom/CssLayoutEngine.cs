@@ -4080,8 +4080,10 @@ namespace PeachBrackets.Html.Dom
                 && ResolveAtomicInlineDeclaredHeight(box) is { } declaredFlowHeight
                 && !TryGrowLineForBaselessAtomic(coordinates, box, blockBox, declaredFlowHeight))
             {
-                // A raised box reaches that much further above the line it was placed in.
-                var needed = declaredFlowHeight + Math.Max(0, CumulativeRaiseOf(box, blockBox));
+                // A raised box reaches that much further above the line it was placed in. The line holds the box's margin box (§10.8.1), so a vertical margin
+                // adds to what it needs (a negative one is not modelled here).
+                var needed = declaredFlowHeight + Math.Max(0, box.ActualMarginTop) + Math.Max(0, box.ActualMarginBottom)
+                             + Math.Max(0, CumulativeRaiseOf(box, blockBox));
 
                 if (coordinates.MaxBottom - trueStartY < needed)
                 {
@@ -4265,9 +4267,10 @@ namespace PeachBrackets.Html.Dom
         {
             // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
             // by the caller), so Location.X sits at the border-left edge (after margin).
+            // The line holds the box's margin box (CSS 2.1 §10.8.1): it starts below the box's top margin (a negative one is not modelled here).
             b.Location = new PaintPoint(
                 coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
-                coordinates.CurrentY);
+                coordinates.CurrentY + Math.Max(0, b.ActualMarginTop));
 
             // Unlike a plain inline box, b.Location is already final here, so string-set can be applied
             // and finalized in one step rather than split across entry/exit like plain inlines. `page`
@@ -4298,7 +4301,7 @@ namespace PeachBrackets.Html.Dom
             // Advance to content-right so that the outer rightSpacing addition lands correctly.
             coordinates.CurrentX = b.ClientRight;
             coordinates.MaxRight = Math.Max(coordinates.MaxRight, b.Location.X + b.ActualBoxSizingWidth);
-            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight);
+            coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, b.Location.Y + b.ActualBoxSizingHeight + Math.Max(0, b.ActualMarginBottom));
 
             // Register the box in the parent line so its border/background is painted.
             coordinates.Line.Rectangles[b] = new Rect(
@@ -4479,9 +4482,11 @@ namespace PeachBrackets.Html.Dom
         {
             // coordinates.CurrentX is already past the left margin+border+padding (leftSpacing was added
             // by the caller), so Location.X sits at the border-left edge (after margin).
+            // Below the box's top margin: the line holds the margin box (CSS 2.1 §10.8.1; the bottom margin is in the MaxBottom FlowAtomicBlockContentChild
+            // sets). A negative margin is not modelled here.
             b.Location = new PaintPoint(
                 coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth,
-                coordinates.CurrentY);
+                coordinates.CurrentY + Math.Max(0, b.ActualMarginTop));
             b.ActualBottom = b.Location.Y;
 
             // An inline-table/inline-grid resolves its own width internally via its own column/track
@@ -6003,8 +6008,11 @@ namespace PeachBrackets.Html.Dom
                 var appliesAtomicInset = b.DerivedStyle.ActualDisplay is Keywords.InlineBlock && !ReferenceEquals(b, box)
                     && !laysOutAsAtomicBox;
                 var clonesAtomicDecorations = appliesAtomicInset && b.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
-                var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop : 0;
-                var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom : 0;
+                // The margin box is what an atomic inline occupies on its line (CSS 2.1 §10.8.1): its vertical margins push the content down inside the
+                // line and make the line taller, exactly as its border and padding do. A negative margin is left out (it would pull the box above the line,
+                // which the line extent here does not model).
+                var atomicTopInset = appliesAtomicInset ? b.ActualBorderTopWidth + b.ActualPaddingTop + Math.Max(0, b.ActualMarginTop) : 0;
+                var atomicBottomInset = appliesAtomicInset ? b.ActualBorderBottomWidth + b.ActualPaddingBottom + Math.Max(0, b.ActualMarginBottom) : 0;
                 var preShiftedForAtomicInset = atomicTopInset > 0 && (childOpensHere || clonesAtomicDecorations);
                 var lineBeforeChild = coordinates.Line;
 

@@ -3,6 +3,8 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachPDF.Rendering;
+using PeachBrackets.Css;
+using PeachBrackets.Html.Utils;
 
 namespace PeachBrackets.Engine.Tests.Html.Core
 {
@@ -69,6 +71,34 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         [InlineData("xx-large", 15)]
         public async Task OnPaper_AbsoluteSizeKeywords_KeepTheirSteps(string keyword, double pt) =>
             Assert.Equal(pt, await FontSizePtAsync($"p {{ font-size: {keyword} }}", MediaType.Print), 0.01);
+
+        [Fact]
+        public async Task OnScreen_LargerAndSmaller_ScaleTheParentByTheBrowsersRatio()
+        {
+            Assert.Equal(12 * 1.2, await FontSizePtAsync("p { font-size: larger }", MediaType.Screen), 0.01);
+            Assert.Equal(12 / 1.2, await FontSizePtAsync("p { font-size: smaller }", MediaType.Screen), 0.01);
+        }
+
+        [Fact]
+        public async Task OnPaper_LargerAndSmaller_KeepTheirTwoPointStep()
+        {
+            Assert.Equal(13, await FontSizePtAsync("p { font-size: larger }", MediaType.Print), 0.01);
+            Assert.Equal(9, await FontSizePtAsync("p { font-size: smaller }", MediaType.Print), 0.01);
+        }
+
+        [Theory]
+        [InlineData("Larger", true, 14.4)]
+        [InlineData("Smaller", true, 10)]
+        [InlineData("Larger", false, 14)]
+        [InlineData("Smaller", false, 10)]
+        [InlineData("Medium", true, 12)]
+        [InlineData("Medium", false, 11)]
+        public void TheTypedResolver_StepsAndSizesKeywordsByTheMedium(string keyword, bool screen, double expectedPt)
+        {
+            var value = new CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>(Enum.Parse<FontSizeKeyword>(keyword), null);
+
+            Assert.Equal(expectedPt, FontSizeResolver.Resolve(value, 12, 12, screen: screen), 0.01);
+        }
 
         [Fact]
         public async Task OnScreen_RemIsSixteenPixels() =>
