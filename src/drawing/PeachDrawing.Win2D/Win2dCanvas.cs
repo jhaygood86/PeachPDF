@@ -278,47 +278,22 @@ public sealed partial class Win2dCanvas : Canvas
             return null;
 
         var parentSession = _session;
-        CanvasRenderTarget? target = null;
-        CanvasDrawingSession? session = null;
-        try
-        {
-            parentSession.Flush();
-            var size = parentTarget.SizeInPixels;
-            target = new CanvasRenderTarget(parentSession.Device, parentTarget.Size.Width > 0 ? (float)parentTarget.Size.Width : 1f,
-                parentTarget.Size.Height > 0 ? (float)parentTarget.Size.Height : 1f, parentTarget.Dpi, parentTarget.Format, CanvasAlphaMode.Ignore);
-            _context.Counts.ClipSurface(1);
-            target.CopyPixelsFromBitmap(parentTarget, 0, 0, 0, 0, (int)size.Width, (int)size.Height);
+        parentSession.Flush();
+        var size = parentTarget.SizeInPixels;
+        var target = new CanvasRenderTarget(parentSession.Device, (float)parentTarget.Size.Width, (float)parentTarget.Size.Height, parentTarget.Dpi, parentTarget.Format, CanvasAlphaMode.Ignore);
+        _context.Counts.ClipSurface(1);
+        target.CopyPixelsFromBitmap(parentTarget, 0, 0, 0, 0, (int)size.Width, (int)size.Height);
 
-            session = target.CreateDrawingSession();
-            _context.Counts.Session(1);
-            session.Transform = parentSession.Transform;
-            session.Blend = parentSession.Blend;
-            session.Antialiasing = parentSession.Antialiasing;
-            session.TextAntialiasing = parentSession.TextAntialiasing;
+        var session = target.CreateDrawingSession();
+        _context.Counts.Session(1);
+        session.Transform = parentSession.Transform;
+        session.Blend = parentSession.Blend;
+        session.Antialiasing = parentSession.Antialiasing;
+        session.TextAntialiasing = parentSession.TextAntialiasing;
 
-            var surface = new ClipSurface(target, session, parentSession, parentTarget, geometry);
-            _session = session;
-            _lcdTarget = target;
-            return surface;
-        }
-        catch
-        {
-            if (session is not null)
-            {
-                session.Dispose();
-                _context.Counts.Session(-1);
-            }
-
-            if (target is not null)
-            {
-                target.Dispose();
-                _context.Counts.ClipSurface(-1);
-            }
-
-            _session = parentSession;
-            _lcdTarget = parentTarget;
-            throw;
-        }
+        _session = session;
+        _lcdTarget = target;
+        return new ClipSurface(target, session, parentSession, parentTarget, geometry);
     }
 
     // Composites the clip's target onto the one it was copied from, through the geometry, and puts the parent session back.
