@@ -2382,7 +2382,20 @@ namespace PeachBrackets.Html.Parse
             }
 
             var pick = ResponsiveImageSelector.PickDensity(densities, container);
-            if (pick >= 0) image = sources[pick];
+            if (pick < 0) return true;
+
+            image = sources[pick];
+            if (image is CssImage.Url url)
+            {
+                // Kept so a zoomed screen document can choose again, and so the image's natural size follows the resolution it declared.
+                url.Density = densities[pick];
+                if (sources.Count > 1)
+                {
+                    url.Set = new CssImage.ImageSetOptions(sources, densities);
+                    url.ChosenIndex = pick;
+                }
+            }
+
             return true;
         }
 

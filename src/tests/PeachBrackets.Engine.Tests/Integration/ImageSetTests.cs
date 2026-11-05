@@ -3,6 +3,8 @@ using PeachBrackets.Engine.Tests.TestSupport;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Entities;
 using PeachBrackets.Html.Parse;
+using PeachPDF;
+using PeachPDF.Rendering;
 using PeachPDF.Tests.TestSupport;
 using System;
 using System.Linq;
@@ -124,6 +126,59 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await LayoutHarness.LayoutAsync(
                 LayoutHarness.Wrap("<ul><li id='d' style=\"list-style-image: image-set(url(a.png) 1x, url(b.png) 2x)\">x</li></ul>"));
             Assert.Equal("b.png", Href(LayoutHarness.FindById(root, "d")!.ListStyleImage));
+        }
+
+        // 100x50 and 200x100 solid PNGs: the same picture at 1x and 2x.
+        private static readonly string OneX = "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeSolidRgbaPngBytes(100, 50, 255, 0, 0));
+        private static readonly string TwoX = "data:image/png;base64," + Convert.ToBase64String(RasterPngFixture.MakeSolidRgbaPngBytes(200, 100, 0, 0, 255));
+
+        private static string SetBackground() =>
+            LayoutHarness.Wrap($"<div id='d' style=\"width:300pt; height:100pt; background: image-set(url({OneX}) 1x, url({TwoX}) 2x) no-repeat\"></div>");
+
+        private static async Task<(double Width, double Height)> PaintedSizeAsync(HtmlContainerInt container)
+        {
+            using var graphics = new RecordingGraphics(new HtmlRenderContext());
+            FragmentPaintHarness.PaintPage(container, graphics, 0);
+            var rect = Assert.Single(graphics.DrawnImageRects);
+            await Task.CompletedTask;
+            return (rect.Width, rect.Height);
+        }
+
+        [Fact]
+        public async Task BackgroundNaturalSize_FollowsTheDeclaredResolution()
+        {
+            // 200px wide at 2x is 100 CSS px = 75pt, not 150pt.
+            var (_, container) = await LayoutHarness.LayoutAsync(SetBackground(), configureContainer: c => c.ImageSelection = ImageSelectionOptions.HighestDensityPolicy);
+            var (w, h) = await PaintedSizeAsync(container);
+            Assert.Equal(75, w, 2);
+            Assert.Equal(37.5, h, 2);
+        }
+
+        [Fact]
+        public async Task ZoomingIn_SwapsInTheDenserOptionAndKeepsTheSize()
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(SetBackground(), configureContainer: c =>
+            {
+                c.DevicePixelRatio = 1;
+                c.ImageSelection = ImageSelectionOptions.ScreenDefault;
+            });
+            var box = LayoutHarness.FindById(root, "d")!;
+            Assert.Equal(OneX, Href(box.BackgroundImages!.Single()));
+            Assert.Empty(await container.ReselectImagesAsync());
+
+            container.RenderScale = 2;
+            var changed = await container.ReselectImagesAsync();
+
+            Assert.Same(box, Assert.Single(changed));
+            Assert.Equal(TwoX, Href(box.BackgroundImages!.Single()));
+            var (w, h) = await PaintedSizeAsync(container);
+            Assert.Equal(75, w, 2);
+            Assert.Equal(37.5, h, 2);
+
+            // Zooming back out keeps the sharper image.
+            container.RenderScale = 1;
+            Assert.Empty(await container.ReselectImagesAsync());
+            Assert.Equal(TwoX, Href(box.BackgroundImages!.Single()));
         }
     }
 }

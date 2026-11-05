@@ -77,7 +77,7 @@ namespace PeachBrackets.Html.Handlers
                     var repeatValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(repeatList), layerIndex);
                     BackgroundImageDrawHandler.DrawBackgroundImage(
                         g, urlImage.Image, sizeValue, positionValue, repeatValue, positioningRect, clipRect, roundedClipPath, box,
-                        intrinsicSizeInCssPixels: true);
+                        intrinsicSizeInCssPixels: true, imageDensity: urlImage.Density);
                     break;
                 }
                 case CssImage.Url urlImage when urlImage.SvgDocument != null:
