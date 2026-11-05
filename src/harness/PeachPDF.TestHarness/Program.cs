@@ -8927,6 +8927,12 @@ var baselineHtml = "<!DOCTYPE html><html><head>" + BaselineCss + "</head><body>"
     "<div class=\"sample\"><div class=\"label\">the same box with overflow: hidden - &sect;10.8.1 falls back to its bottom margin edge</div>" +
     "<div class=\"text\" style=\"font-size: 10pt\">before <span class=\"ib\" style=\"overflow: hidden\">inside</span> after Agy</div></div>" +
 
+    "<h2>6 &mdash; An inline flex container sits on its first item's baseline</h2>" +
+    "<p class=\"intro\">A badge or button made with <code>display: inline-flex</code> lines its first item's text up " +
+    "with the text beside it, however much padding the box has - the box grows around the shared baseline instead of hanging from the top of the line.</p>" +
+    "<div class=\"sample\"><div class=\"label\">inline-flex, 12pt label with 14px padding beside 12pt text</div>" +
+    "<div class=\"text\" style=\"font-size: 12pt\">Status <span style=\"display: inline-flex; padding: 14px 10px; background: #d6e4ff; border: 1px solid #5b8def; font-size: 9pt\">Badge</span> after Agy</div></div>" +
+
     "</body></html>";
 
 await SaveShowcaseAsync("baseline_alignment", "Typography & Text", "Baseline alignment & leading",
