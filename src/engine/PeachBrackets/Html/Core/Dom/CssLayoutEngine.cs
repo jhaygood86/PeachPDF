@@ -2866,6 +2866,19 @@ namespace PeachBrackets.Html.Dom
                 var fit = Math.Max(await GetFitContentWidth(g, box, width), await GetMinContentWidth(g, box));
                 width = fit - box.ActualBoxSizeIncludedWidth;
             }
+            else if (box is { Width: Keywords.Auto, Position.Value: not (PositionMode.Absolute or PositionMode.Fixed) }
+                     && box.DerivedStyle.ActualDisplay == Keywords.InlineGrid
+                     && box.Boxes.Count > 0
+                     && CssLayoutEngineGrid.TryMeasureIntrinsicWidth(g, box, out _, out _))
+            {
+                // CSS Grid 1 §3 / css-sizing-3 §5.1: an inline-grid's auto inline size is fit-content,
+                // min(max-content, max(min-content, available)), like an inline-block's. Spelled out rather
+                // than through GetFitContentWidth, whose descendant walk would fold the stretch width of a
+                // block-level grid item back in. Both measures are outer widths, as `width` still is here.
+                var min = await GetMinContentWidth(g, box);
+                var max = await GetMaxContentWidth(g, box);
+                width = Math.Min(max, Math.Max(min, width)) - box.ActualBoxSizeIncludedWidth;
+            }
             else if (box is { Width: Keywords.Auto, Position.Value: not (PositionMode.Absolute or PositionMode.Fixed) })
             {
                 width -= box.ActualBoxSizeIncludedWidth;
