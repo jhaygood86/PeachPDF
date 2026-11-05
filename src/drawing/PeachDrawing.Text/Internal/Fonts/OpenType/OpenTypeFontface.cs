@@ -737,15 +737,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     {
                         if (!_hvfRead)
                         {
-                            if (Hvgl.HvfRenderer.IsAvailable && TableDictionary.TryGetValue(TableTagNames.Hvgl, out var hvgl))
-                            {
-                                var bytes = FontSource.Bytes;
-                                var hvpm = TableDictionary.TryGetValue(TableTagNames.Hvpm, out var map)
-                                    ? bytes.AsSpan(map.Offset, map.Length)
-                                    : default;
-                                _hvf = Hvgl.HvfRenderer.TryCreate(bytes.AsSpan(hvgl.Offset, hvgl.Length), hvpm);
-                            }
-
+                            _hvf = Hvgl.HvfRenderer.TryCreateFor(this);
                             _hvfRead = true;
                         }
                     }

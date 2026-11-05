@@ -38,6 +38,21 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public void DetermineDefaultFont_Apple_IsTheSystemFontTheHostReports()
+        {
+            // The system is asked for its interface font's family; a stand-in answers so every host runs the branches.
+            Assert.Equal("Stand-in System Font", DefaultFontResolver.DetermineDefaultFont(false, true, false, false, false, systemUiFamily: () => "Stand-in System Font"));
+            Assert.Equal("Stand-in System Font", DefaultFontResolver.DetermineDefaultFont(false, false, false, false, false, isAppleMobile: true, systemUiFamily: () => "Stand-in System Font"));
+        }
+
+        [Fact]
+        public void DetermineDefaultFont_Apple_WithoutASystemFont_FallsBackToArial()
+        {
+            Assert.Equal("Arial", DefaultFontResolver.DetermineDefaultFont(false, true, false, false, false, systemUiFamily: () => null));
+            Assert.NotEmpty(DefaultFontResolver.DetermineDefaultFont(false, false, false, false, false, isAppleMobile: true, systemUiFamily: () => null));
+        }
+
+        [Fact]
         public void DetermineDefaultFont_AppleMobile_IsNotTheWindowsFont()
         {
             // iOS, Mac Catalyst and tvOS used to fall through to "Segoe UI", which none of them has.

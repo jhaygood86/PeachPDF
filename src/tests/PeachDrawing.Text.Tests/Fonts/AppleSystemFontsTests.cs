@@ -182,6 +182,24 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.Empty(FontResolver.ReadSystemCoverage("coretext:Helvetica", 0));
         }
 
+        [Fact]
+        public void FamilyOfPath_IsTheFamilyTheFontAtThatPathWasRegisteredUnder()
+        {
+            var (paths, families) = FontResolver.ParseSystemFonts([BundledFonts.Ttf, BundledFonts.VariableTest]);
+
+            var expected = TtfFontDescription.LoadDescription(BundledFonts.Ttf).FontFamilyInvariantCulture;
+            Assert.Equal(expected, FontResolver.FamilyOfPath(paths, families.Values, BundledFonts.Ttf), ignoreCase: true);
+            Assert.NotEqual(FontResolver.FamilyOfPath(paths, families.Values, BundledFonts.VariableTest), FontResolver.FamilyOfPath(paths, families.Values, BundledFonts.Ttf));
+        }
+
+        [Fact]
+        public void FamilyOfPath_APathNothingWasReadFrom_HasNoFamily()
+        {
+            var (paths, families) = FontResolver.ParseSystemFonts([BundledFonts.Ttf]);
+
+            Assert.Null(FontResolver.FamilyOfPath(paths, families.Values, "/no/such/font.ttf"));
+        }
+
         // ---- CoreText itself: Apple hosts only ----
 
         [SuppressMessage("Interoperability", "CA1416", Justification = "Guarded by the Skip above each call.")]

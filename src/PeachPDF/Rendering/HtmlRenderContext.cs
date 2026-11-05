@@ -74,14 +74,24 @@ namespace PeachPDF.Rendering
             var systemUi = FontSet.ResolveGeneric(GenericFamily.SystemUi, IsFontExists) ?? FontDefaults.DefaultFamily;
             AddFontFamilyMapping("system-ui", systemUi);
 
-            // Safari and Chrome accept these names only on the Apple platforms; elsewhere a font stack such as
-            // "-apple-system, Roboto, sans-serif" must go on to the next name instead of stopping at an alias.
-            if (System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS())
+            RegisterSystemUiAliases(System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS(), systemUi);
+        }
+
+        /// <summary>
+        /// Makes <c>-apple-system</c> and <c>BlinkMacSystemFont</c> names of <paramref name="systemUi"/>, but only on an Apple platform: Safari and Chrome
+        /// accept them only there, and elsewhere a font stack such as <c>-apple-system, Roboto, sans-serif</c> must go on to the next name
+        /// instead of stopping at an alias.
+        /// </summary>
+        internal void RegisterSystemUiAliases(bool applePlatform, string systemUi)
+        {
+            if (!applePlatform)
             {
-                foreach (var alias in FontDefaults.SystemUiAliases)
-                {
-                    AddFontFamilyMapping(alias, systemUi);
-                }
+                return;
+            }
+
+            foreach (var alias in FontDefaults.SystemUiAliases)
+            {
+                AddFontFamilyMapping(alias, systemUi);
             }
         }
 

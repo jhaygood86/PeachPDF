@@ -134,8 +134,11 @@ namespace PeachBrackets.Html.Utils
             OperatingSystem.IsAndroid(), OperatingSystem.IsBrowser(),
             OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS());
 
-        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser, bool isAppleMobile = false)
+        // systemUiFamily stands in for asking the system for its interface font's family (null asks it), so the Apple branches run on any host.
+        internal static string DetermineDefaultFont(bool isWindows, bool isMacOS, bool isLinux, bool isAndroid, bool isBrowser, bool isAppleMobile = false, Func<string?>? systemUiFamily = null)
         {
+            systemUiFamily ??= AppleSystemUiFamily;
+
             // Checked before isLinux: Android is Linux-kernel-based and isLinux may also be
             // true there depending on how it was computed, so Android must take priority.
             if (isAndroid)
@@ -157,10 +160,10 @@ namespace PeachBrackets.Html.Utils
             // The Apple platforms use the system user interface font, San Francisco, as Safari does for system-ui and as the system's own
             // apps do. iOS, iPadOS, Mac Catalyst and tvOS would otherwise fall through to "Segoe UI", which none of them has.
             if (isMacOS)
-                return AppleSystemUiFamily() ?? "Arial";
+                return systemUiFamily() ?? "Arial";
 
             if (isAppleMobile)
-                return AppleSystemUiFamily() ?? PickAppleMobileDefaultFont(GetInstalledFontFamilyNames());
+                return systemUiFamily() ?? PickAppleMobileDefaultFont(GetInstalledFontFamilyNames());
 
             if (isLinux)
                 return PickLinuxDefaultFont(GetInstalledFontFamilyNames());
@@ -183,6 +186,7 @@ namespace PeachBrackets.Html.Utils
             PickBestAvailableFont(installedFontFamilyNames, LinuxArialAlternatives);
 
         /// <summary>The family of the system user interface font (San Francisco) when this process runs on an Apple platform that has it, else <see langword="null"/>.</summary>
+        [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage]
         private static string? AppleSystemUiFamily() =>
             OperatingSystem.IsMacOS() || OperatingSystem.IsIOS() || OperatingSystem.IsMacCatalyst() || OperatingSystem.IsTvOS()
                 ? new FontSet().ResolveGeneric(GenericFamily.SystemUi)

@@ -235,22 +235,24 @@ namespace PeachDrawing.Text.Internal.Fonts
             if (!(System.OperatingSystem.IsMacOS() || System.OperatingSystem.IsIOS() || System.OperatingSystem.IsMacCatalyst() || System.OperatingSystem.IsTvOS()))
                 return null;
 
-            if (!_appleUiPaths.TryGetValue(design, out var path))
-                return null;
+            return _appleUiPaths.TryGetValue(design, out var path) ? FamilyOfPath(_systemFontPaths, _systemFamilies.Values, path) : null;
+        }
 
-            foreach (var (faceName, source) in _systemFontPaths)
-            {
-                if (!string.Equals(source.Path, path, StringComparison.Ordinal))
-                    continue;
+        /// <summary>
+        /// The family the face read from <paramref name="path"/> is registered under: the family of the first face (by face index) of that
+        /// path, or <see langword="null"/> when no face came from it.
+        /// </summary>
+        internal static string? FamilyOfPath(IEnumerable<KeyValuePair<string, (string Path, int FaceIndex)>> faces, IEnumerable<FontFamilyModel> families, string path)
+        {
+            var faceName = faces
+                .Where(face => string.Equals(face.Value.Path, path, StringComparison.Ordinal))
+                .OrderBy(face => face.Value.FaceIndex)
+                .Select(face => face.Key)
+                .FirstOrDefault();
 
-                foreach (var family in _systemFamilies.Values)
-                {
-                    if (family.Faces.Any(face => string.Equals(face.Description.FontNameInvariantCulture, faceName, StringComparison.Ordinal)))
-                        return family.Name;
-                }
-            }
-
-            return null;
+            return faceName is null
+                ? null
+                : families.FirstOrDefault(family => family.Faces.Any(face => string.Equals(face.Description.FontNameInvariantCulture, faceName, StringComparison.Ordinal)))?.Name;
         }
 
         /// <summary>Where the system interface font of each design is, by the "path" the font list names it by; set by the one discovery the process makes.</summary>

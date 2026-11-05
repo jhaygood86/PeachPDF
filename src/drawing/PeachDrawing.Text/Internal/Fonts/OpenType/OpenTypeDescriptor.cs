@@ -730,8 +730,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     return Type2CharstringInterpreter.TryGetGlyphOutline(FontFace.cff2, glyphIndex, Variation, out outline);
 
                 // An Apple hierarchical variable font draws its glyphs from an hvgl table, through Apple's HVF library.
-                if (FontFace.Hvf is { } hvf)
-                    return hvf.TryRender(glyphIndex, Variation is { } variation ? variation.Normalized : default, out outline);
+                return FontFace.Hvf is { } hvf && hvf.TryRender(glyphIndex, Variation is { } variation ? variation.Normalized : default, out outline);
             }
 
             return false;

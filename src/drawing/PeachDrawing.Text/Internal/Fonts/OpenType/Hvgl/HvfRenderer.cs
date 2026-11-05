@@ -65,6 +65,19 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Hvgl
             return true;
         }
 
+        /// <summary>A renderer for the <c>hvgl</c> (and <c>hvpm</c>) table of <paramref name="face"/>, or null when it has none or the library is not available.</summary>
+        internal static HvfRenderer? TryCreateFor(OpenTypeFontface face)
+        {
+            if (!IsAvailable || !face.TableDictionary.TryGetValue(TableTagNames.Hvgl, out var hvgl))
+                return null;
+
+            var bytes = face.FontSource.Bytes;
+            var hvpm = face.TableDictionary.TryGetValue(TableTagNames.Hvpm, out var map)
+                ? bytes.AsSpan(map.Offset, map.Length)
+                : default;
+            return TryCreate(bytes.AsSpan(hvgl.Offset, hvgl.Length), hvpm);
+        }
+
         /// <summary>A renderer over the given tables, or null when the library is not available or does not accept them.</summary>
         internal static HvfRenderer? TryCreate(ReadOnlySpan<byte> hvgl, ReadOnlySpan<byte> hvpm)
         {
