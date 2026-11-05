@@ -30,3 +30,10 @@ refuses it, so it is not prefetched either.
 **5. Grid auto-placement ignored `order`** (found by laying the Chrome and engine grids side by side: the article list was in the right two columns, the ad column first).
 `CssLayoutEngineGrid.PlaceItems` now sorts the items stably by `order` before placing them and restores source order for the result. **Not done:** painting and
 hit-testing order for grid items by `order` (CSS Grid 1 section 8 says it applies there too). `:is()`/`:where()` now forgive an invalid argument (see the migration note).
+
+**6. An inline image with `vertical-align: middle` was placed half its height too low.** Tailwind's preflight gives every `img` and `svg` `vertical-align: middle`; the arstechnica.com footer logo
+(`h-14`, a bottom margin) spilled over the paragraph under it. `GrowLineToItsExtent` sized the line as if the image sat on the baseline (the `default` arm), while
+`ApplyVerticalAlignment` later moved it to the middle, so the line was short by about half the image and the image ended lower than the line. The line is now sized for a `middle`
+image as its margin box centred on the baseline plus half the parent's x-height (CSS 2.1 10.8.1), and `VerticalAlignDeltaOf` aligns by the margin box's midpoint, not the border box's.
+Found with a throwaway engine test that fetched the page live and dumped the logo's word position next to its line; the unit test that first "reproduced" it passed because it
+checked only where the next block started, not where the image was (`InlineSvgLineHeightTests` now checks both). Engine 18,135 and PeachPDF 1,615 pass.

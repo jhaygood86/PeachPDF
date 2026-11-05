@@ -5844,6 +5844,16 @@ namespace PeachBrackets.Html.Dom
                         case VerticalAlignment.Bottom:
                             line.BottomAlignedAtomicHeight = Math.Max(line.BottomAlignedAtomicHeight, atomicHeight);
                             break;
+                        case VerticalAlignment.Middle:
+                            // The margin box's midpoint is on the parent's baseline plus half its x-height (CSS 2.1 §10.8.1), which is how
+                            // ApplyVerticalAlignment places it: the line has to be sized for it where it ends up. Sized as if it sat on the baseline, an image
+                            // (Tailwind's preflight gives every one `vertical-align: middle`) was moved down by half its height after the line was closed and
+                            // spilled over what followed, e.g. a 56px logo in a line sized for 72px.
+                            var half = atomicHeight / 2;
+                            var xHalf = XHeightOf((word.OwnerBox.ParentBox ?? word.OwnerBox).ActualFont) / 2;
+                            baselineExtent = baselineExtent.Union(RaisedBy(
+                                new LineBoxExtent(half + xHalf, half - xHalf), CumulativeRaiseOf(word.OwnerBox, blockBox)));
+                            break;
                         default:
                             baselineExtent = baselineExtent.Union(RaisedBy(
                                 new LineBoxExtent(atomicHeight, 0), CumulativeRaiseOf(word.OwnerBox, blockBox)));
@@ -9224,9 +9234,10 @@ namespace PeachBrackets.Html.Dom
                 case VerticalAlignment.Bottom:
                     return lineBottom - (alignsMarginBox ? styledBox.ActualMarginBottom : 0) - rect.Bottom;
                 case VerticalAlignment.Middle:
-                    // The box's vertical midpoint on the parent's baseline plus half the parent's x-height.
+                    // The box's vertical midpoint on the parent's baseline plus half the parent's x-height. A replaced element is aligned by its margin box,
+                    // whose midpoint is below the border box's by half the difference of its margins.
                     return (lineBox.BaselineY ?? flowTop) - XHeightOf((styledBox.ParentBox ?? styledBox).ActualFont) / 2
-                           - (rect.Top + rect.Height / 2);
+                           - (rect.Top + rect.Height / 2 + (alignsMarginBox ? (styledBox.ActualMarginBottom - styledBox.ActualMarginTop) / 2 : 0));
                 case VerticalAlignment.TextTop:
                 case VerticalAlignment.TextBottom:
                     // Align with the top/bottom of the parent's font box, per CSS1 §5.6.11 - not
