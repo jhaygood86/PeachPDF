@@ -2171,6 +2171,7 @@ namespace PeachBrackets.Html.Dom
             //Get the start x and y of the blockBox
             var startX = containingBox.ClientLeft;
             var startY = box.Location.Y;
+            var flowY = startY;
 
             var currentBoxIdx = containingBox.IndexOfChild(box);
 
@@ -2184,6 +2185,8 @@ namespace PeachBrackets.Html.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
+                    startY = NotAboveAnEarlierFloat(box, startY);
+
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
                     else FloatBoxLeft(box, containingBox, startX, startY);
                     break;
@@ -2199,6 +2202,10 @@ namespace PeachBrackets.Html.Dom
             // exactly that).
             if (box.Clear.Value is not ClearMode.None && !box.IsPageFloated)
             {
+                // The clearance is measured from where the float would have started, not from where the placement above left it: that
+                // may have sent it below blockers it clears anyway, and clearance can only ever move a box further down.
+                box.Location = new PaintPoint(box.Location.X, flowY);
+
                 ClearBox(box, currentBoxIdx, containingBox);
 
                 // css-break-3 §5.1: clearance can carry the float several bands down, onto a
@@ -2208,11 +2215,18 @@ namespace PeachBrackets.Html.Dom
                 // page) has lost its inline-end placement entirely by this point. Re-place it, once, at the
                 // clearance it landed on. Bounded by construction: ClearBox itself is not re-run.
                 if (box.EffectiveFloatSide == Floating.Right)
-                    FloatBoxRight(box, containingBox, startX, box.Location.Y);
+                    FloatBoxRight(box, containingBox, startX, NotAboveAnEarlierFloat(box, box.Location.Y));
                 else if (box.EffectiveFloatSide == Floating.Left)
-                    FloatBoxLeft(box, containingBox, startX, box.Location.Y);
+                    FloatBoxLeft(box, containingBox, startX, NotAboveAnEarlierFloat(box, box.Location.Y));
             }
         }
+
+        /// <summary>
+        /// CSS 2.1 §9.5.1 rule 5: the outer top of a float may not be higher than that of any float before it in the same formatting
+        /// context. <paramref name="top"/> is the float's border-box top; the comparison is between margin edges.
+        /// </summary>
+        private static double NotAboveAnEarlierFloat(CssBox box, double top) =>
+            Math.Max(top, DomUtils.GetLowestEarlierFloatTop(box) + box.ActualMarginTop);
 
         /// <summary>
         /// CSS Page Floats (<c>float: top/bottom/top-bottom/snap</c>): moves <paramref name="box"/> to the
@@ -3717,6 +3731,7 @@ namespace PeachBrackets.Html.Dom
             // repeated state sends the float below its blockers.
             HashSet<(double Left, double Right, double Top)> triedPositions = [];
             var attempts = 0;
+            var rightMargin = 0d;
 
             do
             {
@@ -3735,6 +3750,10 @@ namespace PeachBrackets.Html.Dom
                         break;
                     case Floating.Right:
                         coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft;
+                        // The blocker was found by its margin box reaching into this float's, so the float's margin-right has to
+                        // clear it as well. Without this the float would be judged to fit once and sent down only when the same
+                        // state is found again.
+                        rightMargin = box.ActualMarginRight;
                         break;
                 }
 
@@ -3743,7 +3762,7 @@ namespace PeachBrackets.Html.Dom
                     coordinates.MaxBottom = intersectingFloat.ActualBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth > coordinates.Right
+                if (coordinates.Left + box.ActualWidth + rightMargin > coordinates.Right
                     || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
@@ -3757,6 +3776,7 @@ namespace PeachBrackets.Html.Dom
                     // uniform-width document re-derives the same number, so nothing changes for it.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
                     coordinates.Right = limitRight;
+                    rightMargin = 0;
                 }
             } while (true);
 

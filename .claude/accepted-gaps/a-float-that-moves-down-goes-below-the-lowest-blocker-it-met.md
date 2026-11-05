@@ -1,0 +1,3 @@
+# A float that has to move down goes below the lowest blocker it met
+
+`FloatBoxLeft`/`FloatBoxRight` keep the largest bottom of every blocker they met (`MaxBottom`), including one the float had already moved past sideways, and drop there. CSS 2.1 §9.5.1 rules 7 and 8 want the highest position that fits, which can be the first blocker's bottom. In a 400px container: a left float 100x30, a right float 250x50, a left float 100x30 with `clear:left`, then a left float 100x30. The last lands at (0, 60) where Chrome has it at (100, 50), beside the cleared one (tracking issue #2222). The right-float mirror has it too.

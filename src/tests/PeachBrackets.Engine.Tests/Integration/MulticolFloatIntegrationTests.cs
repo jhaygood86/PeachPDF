@@ -152,6 +152,48 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task FloatInTheSecondColumn_IsNotHeldDownByAFloatAtTheFootOfTheFirst()
+        {
+            // A column's Y is measured from its own top, so CSS 2.1 9.5.1 rule 5 (a float starts no higher than an earlier float) must not
+            // compare f1, at the foot of column 1, with f2 in column 2: f2 sits after four rows, not at f1's Y.
+            var (root, _) = await BuildAndLayout($@"
+                <div id='mc' style='{FixedColumns}'>
+                    <p style='margin:0'>a<br>b<br>c<br>d<br>e<br>f<br>g<br>h<br>i</p>
+                    <div id='f1' style='float:left; width:15px; height:3px'></div>
+                    <p style='margin:0'>1<br>2<br>3<br>4</p>
+                    <div id='f2' style='float:left; width:15px; height:10px'></div>
+                </div>");
+
+            var f1 = FindById(root, "f1")!;
+            var f2 = FindById(root, "f2")!;
+
+            Assert.True(f2.Location.X >= SecondColumnLeft - 0.5, $"f2 at x={f2.Location.X}");
+            Assert.True(f2.Location.Y < f1.Location.Y - 10, $"f2 is at y={f2.Location.Y}, held down by f1 at y={f1.Location.Y}");
+        }
+
+        [Fact]
+        public async Task FloatsInAnOverflowHiddenRootInsideTheContainer_StillKeepToEachOthersTops()
+        {
+            // The root has coordinates of its own, so rule 5 holds inside it even when it is a direct child of the multi-column container: the
+            // third float sits beside the second, which the first pushed down, not beside the first above it.
+            var (root, _) = await BuildAndLayout(@"
+                <div style='columns:2; column-gap:0; width:200px'>
+                    <div style='overflow:hidden'>
+                        <div id='f1' style='float:left; width:75px; height:12px'></div>
+                        <div id='f2' style='float:left; width:50px; height:8px'></div>
+                        <div id='f3' style='float:left; width:12px; height:8px'></div>
+                    </div>
+                </div>");
+
+            var f1 = FindById(root, "f1")!;
+            var f2 = FindById(root, "f2")!;
+            var f3 = FindById(root, "f3")!;
+
+            Assert.Equal(f2.Location.Y, f3.Location.Y, 3);
+            Assert.True(f3.Location.Y > f1.Location.Y, $"f3 is at y={f3.Location.Y}, beside f1 at y={f1.Location.Y}");
+        }
+
+        [Fact]
         public async Task FloatThatIsDeferred_LeavesTheInFlowContentAfterItInThePreviousColumn()
         {
             // Only the float moves; the paragraph after it keeps filling column 1 where it has room.

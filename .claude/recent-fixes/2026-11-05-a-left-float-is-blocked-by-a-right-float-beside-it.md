@@ -1,0 +1,37 @@
+# A left float is blocked by a right float beside it; a float is not placed above an earlier float's top
+
+Fixes #2219, #2221 and #2224. Two parts of CSS 2.1 §9.5.1 that the float placement did not implement, and the formatting-context boundary of the blocker scan (§9.4.1) that the first one made matter.
+
+## 1. Rules 1-3: a left float over a right float
+
+`<div style="float:right;width:300px"></div><div style="float:left;width:200px"></div>` in a 400px container left the second float at the top, drawn over the first; Chrome puts it below. Left-then-right already worked, and so did two floats on the same side. It reached the table `align="right"` then `align="left"` pair through the float mapping, but is plain float placement and older than that change.
+
+**Cause.** `DomUtils.IsFloatIntersecting`'s `Floating.Left` case is a point test: a blocker counts only when the candidate's left edge lies inside it. A right float further along never contains that point, although `FloatBoxLeft`'s own switch already had a `Floating.Right` arm waiting for one.
+
+**Fix.** A second `Floating.Left` case: an earlier right float whose margin box starts before this float's margin box ends (`Left + ReferenceWidth + MarginRight`) and reaches past its left edge. Not under `LeftFloatsOnly`, the line flow's lookup (its `ReferenceWidth` is 0 and it must not see right floats). The overlap is tested with `FloatFitTolerance` (1e-6): 70% and 30% of the same width add up to it only to within rounding, and without the tolerance the left float went below the right one at 333, 347 and 523px containers while Chrome keeps them on one row. `FloatBoxLeft`'s fit check also adds the float's `margin-right` once a right blocker set the right limit (`rightMargin`, reset on a drop). That line is not needed for correctness: without it the margin-only case "fits" once, is found again in the same state and the repeated-state guard drops it to the same place. It sends the float down at once instead of leaning on the guard, which is why no test fails without it.
+
+## 2. Rule 5: not above an earlier float's top
+
+The second of three left floats of 300, 200 and 50 in a 400 container goes below the first; the third fits beside the first at y=0, above the second. Chrome puts it beside the second at y=50. `DomUtils.GetLowestEarlierFloatTop` climbs the same way the blocker scan does (earlier siblings at each level, stopping from the second level up at a formatting-context root) and returns the lowest margin-edge top of an earlier float, not looking inside a float or a formatting-context sibling; `CssLayoutEngine.NotAboveAnEarlierFloat` raises the float's start to it before placement.
+
+- **Margin edges, not border tops.** A first version compared border tops and moved two floats with negative `margin-top` (`FirstChildFloat_AppliesItsNegativeMarginTop_*`, `SecondRightFloatWithNegativeMarginTop_*`); rule 5 compares outer tops.
+- **Multi-column containers.** A column's `Y` is measured from its own top, so the top of a float at the foot of column 1 is not comparable with column 2's; the first version held a column 2 float down to it (found by a review: `FloatInTheSecondColumn_IsNotHeldDownByAFloatAtTheFootOfTheFirst`). `GetLowestEarlierFloatTop` now returns nothing once its climb reaches a multi-column container, so inside one rule 5 is not applied at all (the behaviour before this change), including between floats of the same column.
+- **Formatting contexts in the blocker scan.** The new `Floating.Left` case meets right floats, and `GetNextIntersectingFloatBox` descended into every preceding sibling, so a right float inside a fixed-height `overflow:hidden` card, a flex or grid container, an absolutely positioned panel or `contain:layout` box pushed a later left float down (`main` matched Chrome there, since it never saw right floats). It now does not look inside a box that is a formatting context of its own, a float included (CSS 2.1 §9.4.1), which is also the old left-after-left case of #2224, so that issue is closed by this change too. Cases with no fixed height, where the box grows to contain the float, were never affected.
+- **Relative offset.** `GetLowestEarlierFloatTop` reads `StaticTop`, since relative positioning only moves where a float is drawn (§9.4.3). A review reported a later float following such a float down by the offset; I could not reproduce it with or without this (harness or CLI), so there is no test, and the change stays only because it is what the spec says.
+- **`clear`.** A float is placed once before `ClearBox` moves it. With the new blocker the first placement drops a `clear:left` float below a right float it never needed to clear, and `ClearBox` then seeds clearance from that lowered `Y`, so it could not come back up. `FloatBox` now restores the start `Y` (`flowY`) before `ClearBox`, and the re-placement after clearance gets the rule 5 start too.
+
+## Checked
+
+Chrome (headless `getBoundingClientRect` against PeachPDF's fills): the sample, fits beside, margins either side, left-then-right, a short right float, three-float sequences, percent widths, `clear:left`, `<table align>` right then left. An independent grid of about 165 layouts (rtl, inline-start/end, nested containers, flow-root, table cells, flex/grid items, fixed-height multicol) found one regression, the `clear` case above, since fixed. 240 of 240 showcases render identically to `main`. A document of 3,000 random left and right floats takes 4 s, against 120 s before (the overlap made the search for floats run on). A long run of floats separated by paragraphs is up to about 30% slower at several thousand floats, because the rule 5 climb adds a scan of the earlier boxes per float on top of the blocker scan, which was already quadratic there.
+
+## Left known
+
+- Inside a multi-column container rule 5 is not applied ([#2225](../accepted-gaps/rule-5-is-not-applied-to-floats-inside-a-multi-column-container.md)).
+- A float whose `margin-bottom` is more negative than its height still blocks a later float over its border box (the blocker bottom is the border box's), where Chrome uses the margin box: `float:right;height:50px;margin-bottom:-60px` then a wide left float puts it at y=50 where Chrome has 0. Older code, newly reachable from the left-float side.
+- The "lowest blocker" gap below shows more often now: far more `R L L` sequences reach it. A right float 250x50, then two left floats 120x30: the second sits at y=50 where Chrome has y=30. Before, it overlapped the right float.
+
+## Not fixed, all older
+
+[#2222](../accepted-gaps/a-float-that-moves-down-goes-below-the-lowest-blocker-it-met.md) and [#2223](../accepted-gaps/floats-that-add-up-to-the-container-only-by-rounding-can-be-split.md) have their own gap files; blocks and BFC boxes not narrowing beside floats is #2187.
+
+Tests: `LeftFloatBesideRightFloatTests`, `FloatTopNotAboveAnEarlierFloatTests` and one in `MulticolFloatIntegrationTests`. Each guard was removed in turn and a test fails: the left-after-right case, the tolerance (2 of its 3 widths hit the rounding), the `clear` restore, the rule 5 clamp, the post-clearance re-placement, the climb across ancestors, the formatting-context stop in the climb and in `LowestFloatTopIn`, the margin-edge subtraction, the multi-column stop and the formatting-context stop in the blocker scan (`FloatInsideAFormattingContextSibling_*`, `FloatInsideAnAbsolutelyPositionedSibling_*`).
