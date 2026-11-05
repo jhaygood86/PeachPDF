@@ -1264,6 +1264,10 @@ namespace PeachBrackets.Html.Dom
 
         internal void InvalidateColor() => _actualColor = PaintColor.Empty;
 
+        internal void InvalidateBackgroundColor() => _actualBackgroundColor = PaintColor.Empty;
+
+        internal void InvalidateMixBlendMode() => _actualMixBlendModeComputed = false;
+
         /// <summary>
         /// The width of the stroke <c>-webkit-text-stroke-width</c> draws around this box's text, in layout units; 0 for no stroke. Not cached: the initial
         /// value is the literal <c>0</c>, which answers without parsing, and a stroked box's words are few next to the cost of drawing their outlines.

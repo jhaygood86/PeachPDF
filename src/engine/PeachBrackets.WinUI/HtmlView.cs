@@ -91,11 +91,13 @@ public sealed partial class HtmlView : UserControl
         _layers.Children.Add(_overlay);
         _host.Content = _layers;
         _scroller.ZoomMode = ZoomMode.Enabled;
-        _scroller.ViewChanged += (_, _) =>
+        _scroller.ViewChanged += (_, e) =>
         {
             var started = Stopwatch.GetTimestamp();
             var noted = 0.0;
             UpdateViewport();
+            if (!e.IsIntermediate)
+                QueueImageUpgrade();
             HtmlViewDiagnostics.Trace?.Invoke($"ViewChanged y={_scroller.VerticalOffset:F0} intermediate: NoteScrolling {noted:F1} ms, whole handler {HtmlViewDiagnostics.MillisecondsSince(started):F1} ms");
         };
         _scroller.MinZoomFactor = 0.5f;
@@ -285,6 +287,7 @@ public sealed partial class HtmlView : UserControl
         _reflowTimer.Interval = TimeSpan.FromMilliseconds(150);
         _reflowTimer.IsRepeating = false;
         _reflowTimer.Tick += (_, _) => StartReload(ActualWidth);
+        WatchDisplayScale();
         if (_scrollMode == HtmlViewScrollMode.Disabled)
             InvalidateMeasure();
         else
@@ -312,6 +315,7 @@ public sealed partial class HtmlView : UserControl
         _loaded = false;
         _loadVersion++;
         _reflowTimer?.Stop();
+        StopWatchingDisplayScale();
         _regionTarget?.Dispose();
         _regionTarget = null;
         ReleaseCursors();
@@ -577,6 +581,7 @@ public sealed partial class HtmlView : UserControl
         PaintFormControls = true,
         ColorScheme = ActualTheme == ElementTheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
+        DevicePixelRatio = CurrentDevicePixelRatio(),
     };
 
     private static InputCapabilities DetectInput()

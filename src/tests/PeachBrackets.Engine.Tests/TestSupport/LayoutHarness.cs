@@ -52,9 +52,12 @@ namespace PeachBrackets.Engine.Tests.TestSupport
             Action<CssBox>? prepare = null,
             Func<CssBox, HtmlContainerInt, Canvas, Task>? after = null,
             double pixelsPerPoint = 1.0,
-            Func<HtmlRenderContext, Task>? configureRenderContext = null)
+            Func<HtmlRenderContext, Task>? configureRenderContext = null,
+            Action<HtmlContainerInt>? configureContainer = null,
+            Func<HtmlRenderContext>? createRenderContext = null)
         {
-            var renderContext = new HtmlRenderContext { PixelsPerPoint = pixelsPerPoint };
+            var renderContext = createRenderContext?.Invoke() ?? new HtmlRenderContext();
+            renderContext.PixelsPerPoint = pixelsPerPoint;
             if (configureRenderContext is not null)
             {
                 await configureRenderContext(renderContext);
@@ -69,6 +72,7 @@ namespace PeachBrackets.Engine.Tests.TestSupport
 
             var sheet = new Size(pageWidth, pageHeight);
             container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(sheet, pixelsPerPoint);
+            configureContainer?.Invoke(container);
 
             await container.SetHtml(html, null);
 

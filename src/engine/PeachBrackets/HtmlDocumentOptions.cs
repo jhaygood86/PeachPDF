@@ -90,6 +90,21 @@ public sealed class HtmlDocumentOptions
     /// </summary>
     public bool PaintFormControls { get; set; }
 
+    /// <summary>
+    /// How many device pixels the host paints for one CSS pixel (1 by default): 2 on a display with twice the density, 1.5 at 150% display scaling.
+    /// The <c>resolution</c>, <c>device-pixel-ratio</c> and <c>-webkit-device-pixel-ratio</c> media features report it (a <c>&lt;source media&gt;</c>
+    /// condition and the <c>srcset</c> choice see it too), and a <see cref="MediaType.Screen"/> document uses it to pick the <c>srcset</c> image
+    /// that is just sharp enough (see <see cref="ImageSelection"/>). A value that is not a positive finite number is treated as 1.
+    /// </summary>
+    public double DevicePixelRatio { get; set; } = 1;
+
+    /// <summary>
+    /// How the image of a <c>srcset</c> or <c>&lt;picture&gt;</c> is chosen, or <see langword="null"/> (the default) for the policy of the medium:
+    /// <see cref="ImageSelectionPolicy.HighestDensity"/> for <see cref="MediaType.Print"/>, <see cref="ImageSelectionPolicy.BestForTarget"/> for
+    /// <see cref="MediaType.Screen"/>.
+    /// </summary>
+    public ImageSelectionOptions? ImageSelection { get; set; }
+
     /// <summary>The colour scheme <c>prefers-color-scheme</c> media queries report. Light by default.</summary>
     public ColorSchemePreference ColorScheme { get; set; } = ColorSchemePreference.Light;
 
@@ -185,6 +200,14 @@ public sealed class HtmlDocumentOptions
     /// instead of the document being loaded and laid out again. Off by default.
     /// </summary>
     public bool EnableIncrementalUpdates { get; set; }
+
+    /// <summary>
+    /// Whether a change of the pointer or focus state (<c>:hover</c>, <c>:active</c>, <c>:focus</c>) that only changes how something is painted
+    /// (a colour, an opacity, a shadow, a transform...) is applied to the styles in place, instead of the document being loaded and laid out
+    /// again. A change to anything else still loads it again. On by default; the environment variable <c>PEACHPDF_FULL_RESTYLE=1</c> turns it
+    /// off for every document.
+    /// </summary>
+    public bool IncrementalRestyle { get; set; } = true;
 
     /// <summary>The background of a selection where no <c>::selection</c> rule applies; light blue by default.</summary>
     public PeachDrawing.Core.PaintColor SelectionBackground { get; set; } = PeachDrawing.Core.PaintColor.FromArgb(255, 173, 214, 255);

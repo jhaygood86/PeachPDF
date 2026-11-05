@@ -113,6 +113,8 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `MediaType` | The medium: `Print` (the default) breaks the document into pages and applies `@media print`; `Screen` lays it out as one continuous surface and applies `@media screen`. See [Screen and print media](#screen-and-print-media). |
 | `ViewportHeightPoints` | For `Screen`: the height `vh`, a percentage root height and the `height`/`orientation` media features resolve against, and the least height of the surface. Null (the default) when the host does not know it. |
 | `ColorScheme` | What `prefers-color-scheme` reports: `Light` (the default) or `Dark`. |
+| `DevicePixelRatio` | Device pixels the host paints for one CSS pixel (1 by default). The `resolution` and `device-pixel-ratio` media features, a `<source media>` condition and the choice among `srcset` images see it. |
+| `ImageSelection` | How a `srcset` image is chosen: `ImageSelectionPolicy.HighestDensity` (the default for `Print`) or `BestForTarget` (the default for `Screen`), with a `Tolerance`, a `MaxDecodePixels` budget and `UpgradeOnZoom`. See [Responsive images on screen](#responsive-images-on-screen). |
 | `Preferences` | The reader's settings that `prefers-reduced-motion`, `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency` and `prefers-reduced-data` report (`UserPreferences`). The default is a static document's: reduced motion on, everything else off, so a document reports what it always did. A window or phone reads them from the system (Windows high contrast, Android's text-contrast and remove-animations settings). |
 | `FontScale` | A multiplier for the root font size (1, the default, leaves it alone), for a reader who sets a text size on their system. Text sized in `em`, `rem`, a percentage or a keyword follows; text in `px` or `pt` does not. Added to `UserStyleSheet`, so ignored when `StyleSheet` is set. |
 | `PaintFormControls` | Draw form controls with their look for a host that shows the page: a check box's check mark and a radio button's dot (in `accent-color`), a text field's value or placeholder, a button's label (`Submit` and `Reset` by default), a drop-down's chosen option and arrow, and a range's track and thumb. Everything is drawn from the control's own CSS, so borders, backgrounds, padding, fonts and colours apply. Off by default, which keeps a control the plain box it is in a PDF; it takes precedence over `CollectFormFields` for how a control is drawn, so a host can collect the fields and still show them. |
@@ -129,6 +131,21 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
+
+## Responsive images on screen
+
+For paged output a `srcset` or `<picture>` picks the candidate with the highest pixel density, the best print quality. A `Screen` document picks the smallest candidate that is sharp enough for the display, so a phone on a 2x screen does not decode the 4x image of a photo it shows 360 pixels wide:
+
+- the target density is `HtmlDocumentOptions.DevicePixelRatio` times the render scale (below); a candidate counts as sharp enough when its density, against the width the image is shown at, reaches the target divided by `ImageSelectionOptions.Tolerance` (1.1 by default);
+- when none is, the largest candidate within `MaxDecodePixels` is used (the pixel count is only known for width descriptors, estimated from the `width` and `height` attributes of the `<img>`);
+- a `<source type>` the host cannot decode is skipped, which is what `RenderContext.SupportsImageType` answers (a context that decodes with PeachImage reads PNG, JPEG, GIF, WebP, AVIF, JPEG XL, BMP, TIFF and ICO; one that is set to use only a platform codec says what that codec reads);
+- the box never changes size with the candidate: the natural size is divided by the density measured against the `sizes` slot, so choosing a smaller or larger bitmap changes pixels, not layout;
+- after layout the images are chosen again against the width they were really given (which is how `sizes="auto"` and a stylesheet width that differs from `sizes` are served), only towards a denser candidate, at most once per layout;
+- a candidate that cannot be loaded is replaced by the next best (up to three) and then by `src`; each failure is listed in `HtmlDocument.ImageLoadFailures`.
+
+A host that lets the reader zoom calls `HtmlDocument.SetRenderScale(zoom)` and then `UpgradeImagesAsync()`. The second chooses again without parsing or laying the document out again, so every `DocumentElement` stays valid, loads the denser images and returns the regions to repaint (`PaintPageRegionAsync`). The scale only grows, and zooming back out keeps the images already loaded. `SetRenderScale(zoom, devicePixelRatio)` also reports a display with another scale. The `resolution` media features are evaluated when the document is loaded; a new device pixel ratio reaches them on the next load. An image that nothing shows any more is dropped from the document's image cache.
+
+PDF output is not affected: `PdfGenerator` asks for `HighestDensity`.
 
 ## Screen and print media
 
@@ -179,11 +196,15 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   on its pages. A host that has an accessibility tree of its own builds it from this one; **`GetAccessibilityNodeAt(pageIndex, x, y)`** gives the
   innermost part at a point. See [Accessibility](accessibility.md).
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
-  make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change is applied by cascading and
-  laying the document out again with it, so a rule can change anything, including the size of an element; the `UpdateResult` names what to repaint
-  (`DirtyRegions`): just the elements whose state changed when nothing moved, or every page from the first one that did. A state change that no
+  make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change that only changes how
+  something is painted - a colour, `opacity`, `transform`, `filter`, a shadow, an outline, `text-decoration`, `cursor` - is applied to the
+  styles in place with no layout: the `UpdateResult` has `Incremental = true`, `DirtyRegions` cover where the elements were painted and where
+  they are now (a shadow, outline, blur or transform widens them), and `DocumentElement` handles, text runs and the selection stay valid. A
+  change to anything else (a size, a font, `display`, generated content, a pseudo-element appearing) applies by cascading and laying the document
+  out again with it, so a rule can change anything, including the size of an element; `DirtyRegions` then name every page from the first one
+  that moved, `Incremental` is false, and `DocumentElement` handles taken before it are stale and must be taken again. A state change that no
   rule reads costs nothing, and one that is already in force returns `Applied = false`. Selection and highlights are kept when the text does not
-  change; `DocumentElement` handles taken before a restyle are stale and must be taken again. Combine it with `HtmlDocumentOptions.Input`, so
+  change. `HtmlDocumentOptions.IncrementalRestyle = false` always loads the document again. Combine it with `HtmlDocumentOptions.Input`, so
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
   restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
   are not run.
@@ -221,6 +242,7 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   either a `Uri` or an `Anchor` with the `Destination` (`PagePosition`: page index and distance from the top) it leads to.
 - **`Bookmarks`** - the outline: each `Bookmark` has a `Level`, a `Title`, whether it starts open, and a `Uri` or `Destination`. Headings
   produce them by default; `bookmark-level`, `bookmark-label` and `bookmark-target` change that.
+- **`Annotations`** - the annotations authors asked for with `-peachpdf-pdf-annotation-type`: each `PageAnnotation` has its `PageIndex`, `Kind` (`PageAnnotationKind`: a note, a text mark, an attached-file icon, a shape, free text, a stamp, ink), `Bounds`, the `Quads` of a text mark, the `Strokes` of ink, an optional `PopupBounds`, and its icon name, colour, title, contents, author, attachment name and dates. Always collected.
 - **`FormFields`** - with `CollectFormFields` on, each `PageFormField` has its `PageIndex`, `Bounds`, a `Classification` (`FormFieldKind`,
   name, value, checked state, options, and the `readonly`/`required`/`maxlength`/`placeholder` attributes), and a `FormFieldAppearance` that
   paints each state of the control onto a canvas of your choosing, so an interactive field can look like the rest of the page.

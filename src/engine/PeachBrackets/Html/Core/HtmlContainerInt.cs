@@ -980,6 +980,13 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool HasStackingHoistCandidates { get; private set; }
 
+        /// <summary>Works <see cref="HasStackingHoistCandidates"/> out again, after a restyle changed which boxes form a stacking context without laying out.</summary>
+        internal void RefreshStackingHoistCandidates()
+        {
+            if (Root is not null)
+                HasStackingHoistCandidates = ComputeFlowFlags(Root, includeStackingHoistCandidates: true).HasStackingHoistCandidates;
+        }
+
         public Size PageSize { get; set; }
 
         /// <summary>
@@ -1151,6 +1158,34 @@ namespace PeachBrackets.Html
         }
 
         /// <summary>
+        /// Forgets a resolved image once no <c>&lt;img&gt;</c> shows it any more (a denser candidate replaced it), so the decoded bitmap can be reclaimed
+        /// instead of staying for the life of the document. It is dropped from the cache and not disposed, because a <c>background-image</c> or
+        /// <c>&lt;object&gt;</c> that named the same source may still hold it; the garbage collector frees it with the last of those.
+        /// </summary>
+        /// <param name="absoluteUri">the resolved source URI the image was cached under</param>
+        /// <param name="except">the box that is giving it up</param>
+        /// <returns>whether it was dropped: false when another <c>&lt;img&gt;</c> still shows it</returns>
+        internal bool TryEvictImage(string absoluteUri, CssBoxImage except)
+        {
+            if (Root is null) return false;
+
+            var pending = new Stack<CssBox>();
+            pending.Push(Root);
+
+            while (pending.Count > 0)
+            {
+                var box = pending.Pop();
+                if (box is CssBoxImage image && !ReferenceEquals(image, except) && image.ShowsSource(absoluteUri))
+                    return false;
+
+                foreach (var child in box.Boxes)
+                    pending.Push(child);
+            }
+
+            return _resolvedImageResources.Remove(absoluteUri);
+        }
+
+        /// <summary>
         /// The document's root (<c>&lt;html&gt;</c>) element's own resolved <c>writing-mode</c>, defaulting
         /// to the CSS initial <see cref="WritingMode.HorizontalTb"/> when there is no document yet. Set
         /// once per document parse (<c>DomParser.GenerateCssTree</c>, alongside <see cref="DocumentLanguage"/>)
@@ -1293,6 +1328,30 @@ namespace PeachBrackets.Html
         /// <see cref="ColorSchemePreference.Light"/>; set by <c>PdfGenerator.SetContent</c>.
         /// </summary>
         internal ColorSchemePreference PreferredColorScheme { get; set; } = ColorSchemePreference.Light;
+
+        /// <summary>
+        /// Device pixels per CSS pixel the host paints at (<see cref="PeachBrackets.HtmlDocumentOptions.DevicePixelRatio"/>); always a positive,
+        /// finite number. Held here rather than on a box so a restyle or container-query rebuild chooses images with the same inputs.
+        /// </summary>
+        internal double DevicePixelRatio
+        {
+            get => _devicePixelRatio;
+            set => _devicePixelRatio = double.IsFinite(value) && value > 0 ? value : 1;
+        }
+
+        private double _devicePixelRatio = 1;
+
+        /// <summary>The images of a <c>srcset</c> that could not be loaded, in the order they failed.</summary>
+        internal List<ImageLoadFailure> ImageLoadFailures { get; } = [];
+
+        /// <summary>How a <c>srcset</c> image is chosen; paged output takes the highest density unless the host says otherwise.</summary>
+        internal ImageSelectionOptions ImageSelection { get; set; } = ImageSelectionOptions.HighestDensityPolicy;
+
+        /// <summary>
+        /// The largest zoom the host has shown the document at (<see cref="HtmlDocument.SetRenderScale"/>), 1 until it says; part of the target
+        /// density images are chosen for. It only grows, so a restyle or rebuild after zooming back out keeps the sharper images.
+        /// </summary>
+        internal double RenderScale { get; set; } = 1;
 
         /// <summary>Whether the document was asked to need nothing asynchronous; see <see cref="PeachBrackets.HtmlDocumentOptions.SynchronousOnly"/>.</summary>
         internal bool SynchronousOnly { get; set; }
@@ -1807,6 +1866,47 @@ namespace PeachBrackets.Html
             using var layoutActivity = EngineTelemetry.Source.StartActivity("layout");
 
             await PrefetchImagesAsync();
+            await PerformLayoutConvergedAsync(g);
+
+            // Once the sizes are final, so that a width descriptor is judged against the width the image really got. Geometry is untouched
+            // by it, so there is no second layout to wait for: this runs at most once per layout.
+            await ReselectImagesAsync();
+        }
+
+        /// <summary>
+        /// Chooses the image of every <c>srcset</c> image again, for the widths the document has been laid out at and the current device pixel
+        /// ratio and render scale, and swaps in the sharper bitmap where there is one. Only a <see cref="ImageSelectionPolicy.BestForTarget"/>
+        /// document does anything (the highest density is already the sharpest). It changes bitmaps, never boxes.
+        /// </summary>
+        /// <returns>the image boxes whose bitmap changed</returns>
+        internal async ValueTask<List<CssBoxImage>> ReselectImagesAsync()
+        {
+            var changed = new List<CssBoxImage>();
+            if (Root is null || ImageSelection.Policy != ImageSelectionPolicy.BestForTarget) return changed;
+
+            var pending = new Stack<CssBox>();
+            pending.Push(Root);
+
+            while (pending.Count > 0)
+            {
+                var box = pending.Pop();
+
+                if (box is CssBoxImage image && await image.ReselectAsync())
+                {
+                    changed.Add(image);
+                }
+
+                foreach (var child in box.Boxes)
+                {
+                    pending.Push(child);
+                }
+            }
+
+            return changed;
+        }
+
+        private async ValueTask PerformLayoutConvergedAsync(Canvas g)
+        {
             await PerformLayoutOnePass(g);
 
             if (!HasSizeContainers) return;

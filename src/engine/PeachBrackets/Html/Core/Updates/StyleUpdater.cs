@@ -124,6 +124,80 @@ namespace PeachBrackets.Html.Updates
             return regions;
         }
 
+        /// <summary>
+        /// The regions that cover the boxes whose paint changed (and everything inside them): where each was painted before and where it is now,
+        /// each widened by how far it paints beyond itself in either state (a shadow, an outline, a blur) and by how far a transform can move it.
+        /// </summary>
+        internal static List<DirtyRegion> DirtyRegionsForExtents(HtmlContainerInt container, IReadOnlyDictionary<CssBox, InteractionRestyler.ExtentChange> changed,
+            IReadOnlyList<FragmentainerFragment> fragmentainers)
+        {
+            var regions = new List<DirtyRegion>();
+            if (changed.Count == 0)
+                return regions;
+
+            var ppp = container.RenderContext.LayoutUnitsPerPoint;
+            for (var page = 0; page < fragmentainers.Count; page++)
+            {
+                var geometry = fragmentainers[page].Geometry;
+                var frame = new TextRunCollector.Frame(geometry.ContentLeftPt, geometry.ContentTopPt, container.MarginLeft, container.MarginTop, ppp);
+                var rects = new List<Rect>();
+                WalkExtents(container, fragmentainers[page].Root, changed, 0, frame, rects);
+                foreach (var rect in Merge(rects))
+                    regions.Add(new DirtyRegion(page, rect));
+            }
+
+            return regions;
+        }
+
+        private static void WalkExtents(HtmlContainerInt container, BoxFragment fragment, IReadOnlyDictionary<CssBox, InteractionRestyler.ExtentChange> changed,
+            double insideReach, TextRunCollector.Frame frame, List<Rect> rects)
+        {
+            if (changed.TryGetValue(fragment.Box, out var change))
+            {
+                var rect = fragment.Rect;
+                var oldReach = ReachOf(change.OldBleed, change.OldTransform, change.OldMatrix, rect);
+                var newReach = ReachOf(change.NewBleed, change.NewTransform, change.NewMatrix, rect);
+                insideReach = Math.Max(insideReach, Math.Max(oldReach, newReach));
+            }
+
+            if (insideReach > 0 || changed.ContainsKey(fragment.Box))
+            {
+                var shift = container.View.DisplacementOf(fragment.Box);
+                var extra = insideReach / frame.Ppp;
+
+                void Add(Rect layout)
+                {
+                    var rect = ToPoints(Shifted(layout, shift), frame);
+                    rects.Add(new Rect(rect.X - extra, rect.Y - extra, rect.Width + (extra * 2), rect.Height + (extra * 2)));
+                }
+
+                foreach (var line in fragment.Lines)
+                    Add(line.Rect);
+
+                foreach (var word in fragment.Words)
+                    Add(word.Rect);
+
+                if (fragment.Lines.Count == 0 && fragment.Words.Count == 0)
+                    Add(fragment.Rect);
+            }
+
+            // Inside a changed box everything is covered, though a descendant that did not itself change adds no reach of its own: a one-point
+            // floor marks it as inside.
+            var inner = insideReach > 0 || changed.ContainsKey(fragment.Box) ? Math.Max(insideReach, double.Epsilon) : 0;
+            foreach (var child in fragment.Children)
+                WalkExtents(container, child, changed, inner, frame, rects);
+        }
+
+        private static double ReachOf(double bleed, bool hasTransform, System.Numerics.Matrix3x2 matrix, Rect rect)
+        {
+            if (!hasTransform)
+                return bleed;
+
+            var size = Math.Max(rect.Width, rect.Height) + (2 * bleed);
+            var scale = Math.Max(Math.Max(Math.Abs(matrix.M11) + Math.Abs(matrix.M21), Math.Abs(matrix.M12) + Math.Abs(matrix.M22)), 1);
+            return bleed + (size * (scale + 1)) + Math.Abs(matrix.M31) + Math.Abs(matrix.M32);
+        }
+
         /// <summary>The rectangle, in points on its page, of the box of <paramref name="element"/> itself - not its content or anything it paints around it.</summary>
         internal static DirtyRegion? BoxRegionOf(HtmlContainerInt container, CssBox element, IReadOnlyList<FragmentainerFragment> fragmentainers)
         {

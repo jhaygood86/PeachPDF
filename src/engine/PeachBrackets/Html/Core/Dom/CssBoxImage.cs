@@ -18,8 +18,10 @@ using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
 using PeachBrackets.Svg;
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using System.Xml.Linq;
 
@@ -90,12 +92,111 @@ namespace PeachBrackets.Html.Dom
             _contentInjectedDirectly || Content != Keywords.Normal || _imageLoadHandler != null || string.IsNullOrWhiteSpace(SelectSource().Url) ? null : SelectSource().Url;
 
         private double _srcsetDensity = 1;
-        private (string Url, double Density)? _selectedSource;
+        private ResponsiveImageSelector.Selection? _selection;
 
         /// <summary>
         /// The src/srcset/&lt;picture&gt; selection, made once per box (see <see cref="ResponsiveImageSelector"/>).
         /// </summary>
-        private (string Url, double Density) SelectSource() => _selectedSource ??= ResponsiveImageSelector.Select(this);
+        private (string Url, double Density) SelectSource()
+        {
+            _selection ??= ResponsiveImageSelector.Select(this);
+            return (_selection.Chosen.Url, _selection.Chosen.Density);
+        }
+
+        /// <summary>
+        /// Chooses the image again for the width the box was laid out at, and swaps the bitmap in when that is a sharper candidate than the
+        /// one loaded. It never goes to a less dense candidate, and never changes the box: the density the natural size is divided by stays
+        /// that of the <c>sizes</c> slot, so the bitmap changes and the size it is drawn at does not.
+        /// </summary>
+        /// <returns>whether the bitmap changed</returns>
+        internal async ValueTask<bool> ReselectAsync()
+        {
+            if (_imageLoadHandler is null || _selection is null || _contentInjectedDirectly || _svgDocument is not null || Content != Keywords.Normal)
+                return false;
+
+            var unitsPerCssPx = Length.PointsPerPx * (HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+            var usedWidth = _imageWord.Width / unitsPerCssPx;
+            if (usedWidth is not > 0) return false;
+
+            var next = ResponsiveImageSelector.Select(this, usedWidth);
+            var current = _selection.Chosen;
+            if (next.Chosen.Url == current.Url) return false;
+
+            // Compare against what the loaded candidate is worth at this width, which is not what it was worth when it was chosen.
+            double? currentNow = null;
+            foreach (var alternate in next.Alternates)
+            {
+                if (alternate.Url == current.Url) currentNow = alternate.EffectiveDensity;
+            }
+
+            if (currentNow is { } worth && next.Chosen.EffectiveDensity <= worth) return false;
+
+            var handler = new ImageLoadHandler(HtmlContainer!);
+            await handler.LoadImage(next.Chosen.Url);
+
+            if (handler.Image is null || handler.SvgDocument is not null)
+            {
+                handler.Dispose();
+                return false;
+            }
+
+            // Nothing else shows the image it replaces: let it go. Otherwise the retired handler owns the stream a cached image another box got by
+            // a cache hit still reads from, so it lives until this box does.
+            var retired = _imageLoadHandler;
+            var previous = AbsoluteSource(current.Url);
+            if (previous is not null && HtmlContainer!.TryEvictImage(previous, this))
+                retired.Dispose();
+            else
+                (_retiredHandlers ??= []).Add(retired);
+
+            _imageLoadHandler = handler;
+            _imageWord.Image = handler.Image;
+            _srcsetDensity = next.Chosen.Density;
+            _selection = next;
+            return true;
+        }
+
+        private List<ImageLoadHandler>? _retiredHandlers;
+
+        private string? AbsoluteSource(string url) =>
+            HtmlContainer is { } container && !string.IsNullOrEmpty(url) ? CommonUtils.ResolveAgainstDocumentBase(container, url)?.AbsoluteUri : null;
+
+        /// <summary>Whether this box currently shows the image resolved to <paramref name="absoluteUri"/>.</summary>
+        internal bool ShowsSource(string absoluteUri) =>
+            _selection is { } selection && _imageWord.Image is not null && AbsoluteSource(selection.Chosen.Url) == absoluteUri;
+
+        /// <summary>The most next-best srcset candidates tried after the chosen one cannot be loaded, before the <c>src</c>.</summary>
+        private const int MaxFallbackCandidates = 3;
+
+        /// <summary>
+        /// Loads the selected source; when it cannot be loaded (a missing file, a refused request, bytes no decoder reads) tries the next-best
+        /// candidates, up to <see cref="MaxFallbackCandidates"/>, then the <c>src</c>, and records each failure on the container.
+        /// </summary>
+        private async ValueTask LoadSelectedSourceAsync(ImageLoadHandler handler)
+        {
+            SelectSource();
+            var selection = _selection!;
+            var srcAttribute = GetAttribute("src")?.Trim();
+            ResponsiveImageSelector.Choice? src = string.IsNullOrEmpty(srcAttribute) ? null : new ResponsiveImageSelector.Choice(srcAttribute, 1, 1);
+            var tries = new List<ResponsiveImageSelector.Choice> { selection.Chosen };
+            tries.AddRange(selection.Alternates.Where(c => c.Url != selection.Chosen.Url).Take(MaxFallbackCandidates));
+            if (src is { } srcChoice && tries.TrueForAll(c => c.Url != srcChoice.Url)) tries.Add(srcChoice);
+
+            for (var i = 0; i < tries.Count; i++)
+            {
+                var choice = tries[i];
+                _srcsetDensity = choice.Density;
+                await handler.LoadImage(choice.Url);
+
+                if (handler.Image is not null || handler.SvgDocument is not null || string.IsNullOrEmpty(choice.Url))
+                {
+                    _selection = new ResponsiveImageSelector.Selection(choice, selection.Alternates);
+                    return;
+                }
+
+                HtmlContainer!.ImageLoadFailures.Add(new ImageLoadFailure(choice.Url, i + 1 < tries.Count ? tries[i + 1].Url : null));
+            }
+        }
 
         /// <summary>
         /// The phantom word carrying this box's replaced content, whose own rectangle positions the
@@ -150,9 +251,7 @@ namespace PeachBrackets.Html.Dom
                     }
                     else
                     {
-                        var (url, density) = SelectSource();
-                        _srcsetDensity = density;
-                        await _imageLoadHandler.LoadImage(url);
+                        await LoadSelectedSourceAsync(_imageLoadHandler);
                     }
 
                     OnLoadImageComplete();
@@ -189,6 +288,11 @@ namespace PeachBrackets.Html.Dom
         public override void Dispose()
         {
             _imageLoadHandler?.Dispose();
+            if (_retiredHandlers is not null)
+            {
+                foreach (var retired in _retiredHandlers) retired.Dispose();
+            }
+
             base.Dispose();
         }
 

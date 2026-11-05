@@ -220,8 +220,15 @@ namespace PeachDrawing.PDF
                     fileSpecification.Description = file.Description;
 
                 document.Catalog.AddAttachment(file.FileName, fileSpecification);
+                _specifications[file.FileName] = fileSpecification;
             }
         }
+
+        private readonly Dictionary<string, PdfFileSpecification> _specifications = new(StringComparer.Ordinal);
+
+        /// <summary>Finds the file specification written for the embedded file called <paramref name="fileName"/> (ordinal), once <see cref="Apply"/> has run.</summary>
+        public bool TryGetSpecification(string fileName, out PdfFileSpecification specification)
+            => _specifications.TryGetValue(fileName, out specification!);
 
         /// <summary>"/F" is the legacy, plain-ASCII file name; anything else in the name is written only to "/UF".</summary>
         private static string AsciiFileName(string fileName)

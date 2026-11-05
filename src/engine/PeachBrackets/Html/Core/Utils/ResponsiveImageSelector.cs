@@ -1,8 +1,9 @@
-#nullable enable
+﻿#nullable enable
 
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Parse;
@@ -12,50 +13,71 @@ namespace PeachBrackets.Html.Utils
     /// <summary>
     /// Picks the image an <c>&lt;img&gt;</c> loads from its <c>srcset</c>/<c>sizes</c> attributes and an
     /// enclosing <c>&lt;picture&gt;</c>'s <c>&lt;source&gt;</c> siblings (HTML Standard 4.8.4.3). A PDF has
-    /// a fixed page rather than a viewport the reader resizes, so among the candidates that apply the
-    /// highest pixel density wins (the best print quality) instead of the one closest to a device's DPR.
+    /// a fixed page rather than a viewport the reader resizes, so for paged output the highest pixel density
+    /// among the candidates that apply wins (the best print quality). A screen document ranks them for the
+    /// container's <see cref="ImageSelectionPolicy.BestForTarget"/> policy instead: the smallest candidate
+    /// that is sharp enough for its device pixel ratio and zoom.
     /// </summary>
     internal static class ResponsiveImageSelector
     {
         internal readonly record struct Candidate(string Url, double Density, double? Width);
 
-        private static readonly HashSet<string> _supportedTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
-            "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
-        };
+        /// <summary>One chosen image: its URL, the density its natural size is divided by, and the density it has against the width it is used at.</summary>
+        /// <param name="Url">the image URL as written</param>
+        /// <param name="Density">the candidate's pixel density (1 for a plain <c>src</c>), by which the image's natural size is divided; for a width descriptor it is measured against the <c>sizes</c> slot, so the box keeps its size when another candidate is swapped in</param>
+        /// <param name="EffectiveDensity">the density against the width the image is actually used at; equal to <paramref name="Density"/> until a used width is known</param>
+        internal readonly record struct Choice(string Url, double Density, double EffectiveDensity);
+
+        /// <summary>The ranked outcome of a selection: the chosen image and the next-best ones to try when it cannot be loaded.</summary>
+        /// <param name="Chosen">the selected image</param>
+        /// <param name="Alternates">the remaining candidates best-first, ending with the <c>src</c> attribute</param>
+        internal sealed record Selection(Choice Chosen, IReadOnlyList<Choice> Alternates);
 
         /// <summary>
         /// Resolves the image source for <paramref name="img"/>. <c>Density</c> is the selected
         /// candidate's pixel density (1 for a plain <c>src</c>), by which the image's natural size is divided.
         /// </summary>
-        internal static (string Url, double Density) Select(CssBox img)
+        /// <param name="img">the <c>&lt;img&gt;</c> box</param>
+        /// <param name="usedWidthCssPx">the width, in CSS pixels, the image is shown at when that is known more precisely than the <c>sizes</c> slot (after layout); null before</param>
+        internal static Selection Select(CssBox img, double? usedWidthCssPx = null)
         {
+            var src = img.GetAttribute("src");
+            Choice? srcFallback = string.IsNullOrWhiteSpace(src) ? null : new Choice(src.Trim(), 1, 1);
+
             foreach (var source in EnumerateSources(img))
             {
                 var srcset = source.GetAttribute("srcset");
                 if (string.IsNullOrWhiteSpace(srcset)) continue;
                 if (!MediaMatches(source.GetAttribute("media"), img)) continue;
-                if (!TypeSupported(source.GetAttribute("type"))) continue;
+                if (!TypeSupported(source.GetAttribute("type"), img)) continue;
 
-                if (Pick(ParseSrcset(srcset), source.GetAttribute("sizes"), img) is { } hit)
+                if (Rank(ParseSrcset(srcset), source.GetAttribute("sizes"), img, usedWidthCssPx) is { Count: > 0 } ranked)
                 {
-                    return (hit.Url, hit.Density);
+                    return Finish(ranked, srcFallback);
                 }
             }
 
             var own = img.GetAttribute("srcset");
-            var src = img.GetAttribute("src");
 
             if (!string.IsNullOrWhiteSpace(own))
             {
                 var candidates = ParseSrcset(own);
                 if (!string.IsNullOrWhiteSpace(src)) candidates.Add(new Candidate(src.Trim(), 1, null));
 
-                if (Pick(candidates, img.GetAttribute("sizes"), img) is { } hit) return (hit.Url, hit.Density);
+                if (Rank(candidates, img.GetAttribute("sizes"), img, usedWidthCssPx) is { Count: > 0 } ranked)
+                {
+                    return Finish(ranked, srcFallback);
+                }
             }
 
-            return (src, 1);
+            return new Selection(new Choice(src, 1, 1), []);
+        }
+
+        private static Selection Finish(List<Choice> ranked, Choice? srcFallback)
+        {
+            var alternates = ranked.Skip(1).ToList();
+            if (srcFallback is { } fallback && ranked.TrueForAll(c => c.Url != fallback.Url)) alternates.Add(fallback);
+            return new Selection(ranked[0], alternates);
         }
 
         /// <summary>The <c>&lt;source&gt;</c> elements preceding <paramref name="img"/> inside its <c>&lt;picture&gt;</c>, in order.</summary>
@@ -93,8 +115,9 @@ namespace PeachBrackets.Html.Utils
             return false;
         }
 
-        private static bool TypeSupported(string type) =>
-            string.IsNullOrWhiteSpace(type) || _supportedTypes.Contains(type.Trim());
+        private static bool TypeSupported(string type, CssBox box) =>
+            string.IsNullOrWhiteSpace(type)
+            || (box.HtmlContainer?.RenderContext?.SupportsImageType(type) ?? true);
 
         private static bool MediaMatches(string? media, CssBox box)
         {
@@ -112,31 +135,71 @@ namespace PeachBrackets.Html.Utils
             }
         }
 
-        private static Candidate? Pick(List<Candidate> candidates, string sizes, CssBox box)
+        /// <summary>
+        /// Orders the candidates best-first for the container's policy. <see cref="ImageSelectionPolicy.HighestDensity"/> is the highest
+        /// density first; <see cref="ImageSelectionPolicy.BestForTarget"/> is the smallest candidate sharp enough for the target density
+        /// first, then the larger ones, then the insufficient ones largest first, with candidates over the decode budget last.
+        /// </summary>
+        private static List<Choice> Rank(List<Candidate> candidates, string sizes, CssBox box, double? usedWidthCssPx)
         {
             double? slot = null;
-            Candidate? best = null;
-            var bestDensity = double.NegativeInfinity;
+            var all = new List<(Choice Choice, double? WidthPx, int Index)>();
 
             foreach (var candidate in candidates)
             {
                 var density = candidate.Density;
+                var effective = density;
+                double? widthPx = null;
+
                 if (candidate.Width is { } w)
                 {
                     slot ??= ResolveSlotWidth(sizes, box);
                     if (slot is not > 0) continue;
                     density = w / slot.Value;
+                    effective = usedWidthCssPx is > 0 ? w / usedWidthCssPx.Value : density;
+                    widthPx = w;
+                }
+                else if (usedWidthCssPx is > 0)
+                {
+                    widthPx = density * usedWidthCssPx.Value;
                 }
 
-                if (density > bestDensity)
-                {
-                    bestDensity = density;
-                    best = candidate with { Density = density };
-                }
+                all.Add((new Choice(candidate.Url, density, effective), widthPx, all.Count));
             }
 
-            return best;
+            var settings = box.HtmlContainer?.ImageSelection ?? ImageSelectionOptions.HighestDensityPolicy;
+
+            if (settings.Policy == ImageSelectionPolicy.HighestDensity)
+            {
+                // Stable, so the earliest of equal densities wins as it always has.
+                return all.OrderByDescending(c => c.Choice.Density).ThenBy(c => c.Index).Select(c => c.Choice).ToList();
+            }
+
+            var container = box.HtmlContainer!;
+            var target = container.DevicePixelRatio * (settings.UpgradeOnZoom ? container.RenderScale : 1);
+            var tolerance = settings.Tolerance >= 1 && double.IsFinite(settings.Tolerance) ? settings.Tolerance : 1.1;
+            var aspect = ImageAspect(box);
+
+            bool OverBudget(double? widthPx) =>
+                settings.MaxDecodePixels is { } budget && widthPx is { } wpx && wpx * (wpx / aspect) > budget;
+
+            var inBudget = all.Where(c => !OverBudget(c.WidthPx)).ToList();
+            var overBudget = all.Where(c => OverBudget(c.WidthPx)).OrderBy(c => c.WidthPx).Select(c => c.Choice);
+
+            var threshold = target / tolerance;
+            var sufficient = inBudget.Where(c => c.Choice.EffectiveDensity >= threshold)
+                .OrderBy(c => c.Choice.EffectiveDensity).ThenBy(c => c.Index);
+            var rest = inBudget.Where(c => c.Choice.EffectiveDensity < threshold)
+                .OrderByDescending(c => c.Choice.EffectiveDensity).ThenBy(c => c.Index);
+
+            return sufficient.Concat(rest).Select(c => c.Choice).Concat(overBudget).ToList();
         }
+
+        /// <summary>The width over height given by the <c>&lt;img&gt;</c>'s <c>width</c>/<c>height</c> attributes, or 1 when they give none.</summary>
+        private static double ImageAspect(CssBox box) =>
+            double.TryParse(box.GetAttribute("width"), NumberStyles.Float, CultureInfo.InvariantCulture, out var w)
+            && double.TryParse(box.GetAttribute("height"), NumberStyles.Float, CultureInfo.InvariantCulture, out var h)
+            && w > 0 && h > 0 ? w / h : 1;
 
         /// <summary>HTML "parse a srcset attribute": invalid candidates (bad or multiple descriptors) are dropped.</summary>
         internal static List<Candidate> ParseSrcset(string input)
@@ -222,6 +285,15 @@ namespace PeachBrackets.Html.Utils
                     if (length.Length == 0) continue;
                     if (condition.Length > 0 && !MediaMatches(condition, box)) continue;
 
+                    if (length.Equals("auto", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // sizes="auto" is the width the image is laid out at, and only counts on a lazy image (HTML Standard, "sizes"
+                        // attribute). Layout has not run yet, so a definite width of its own is all there is; the next entry or 100vw
+                        // stands in, and the refinement after layout chooses the bitmap against the real width.
+                        if (IsLazy(box) && DefiniteWidth(box) is { } definite && definite > 0) return definite / unitsPerCssPx;
+                        continue;
+                    }
+
                     try
                     {
                         var units = CssValueParser.ParseLength(length, basis, box);
@@ -235,6 +307,24 @@ namespace PeachBrackets.Html.Utils
             }
 
             return basis > 0 ? basis / unitsPerCssPx : null;
+        }
+
+        private static bool IsLazy(CssBox box) => string.Equals(box.GetAttribute("loading")?.Trim(), "lazy", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The image's own absolute <c>width</c>, in layout units, or null when it is <c>auto</c>, a percentage or unparsable.</summary>
+        private static double? DefiniteWidth(CssBox box)
+        {
+            var length = new CssLength(box.Width);
+            if (length.HasError || length.IsPercentage || length.Number <= 0) return null;
+
+            try
+            {
+                return CssValueParser.ParseLength(box.Width, 0, box);
+            }
+            catch (Exception ex) when (ex is FormatException or ArgumentException)
+            {
+                return null;
+            }
         }
 
         private static List<string> SplitTopLevel(string value)

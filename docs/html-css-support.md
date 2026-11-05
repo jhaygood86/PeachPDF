@@ -209,7 +209,7 @@ Example:
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `img` | [img](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img) | Full support; images are loaded via the configured network loader. `data:` URIs and local `file:` URIs (including relative paths, which resolve against the document base — see [Usage Examples](usage-examples.md#rendering-a-local-html-file)) are always supported regardless of the configured loader. An SVG source (`.svg` file, `data:image/svg+xml`) renders as real vector PDF content — see [Supported SVG Features](supported-svg-features.md). Raster decode support: JPEG, PNG, BMP, GIF, WebP (VP8/VP8L, including alpha), AVIF (baseline still images, including alpha), and TIFF (uncompressed/LZW/PackBits, 1/2/4/8/16-bit grayscale/RGB/palette/CMYK — decode only, no encode), and JPEG XL (lossy and lossless, alpha, 16-bit/HDR, ICC; an animation renders its first frame; a file made by recompressing a JPEG is embedded as that JPEG, so a CMYK or ICC-tagged one is byte-for-byte, and any other is decoded — decode only); TGA, PSD, and HDR are not supported. A CMYK or YCCK JPEG is embedded preserving its native CMYK data (with its embedded ICC profile carried through when present) rather than converted to RGB, always at its natural pixel size — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles). A CMYK TIFF is likewise preserved (decoded natively and embedded as a raw CMYK stream, with its embedded ICC profile carried through when present) rather than converted to RGB. An opaque PNG (no real per-pixel alpha channel, not interlaced) embeds losslessly and byte-for-byte via its own compressed data rather than being re-encoded as a lossy JPEG — including a `tRNS` chroma-key PNG, via a PDF color-key `Mask` array — and an opaque BMP/GIF embeds via a raw lossless stream at its own natural display size — see [Lossless embedding for opaque PNG/BMP/GIF images](usage-examples.md#lossless-embedding-for-opaque-pngbmpgif-images) for the `ImageCompression` option controlling this Responsive images: `srcset` (`x` and `w` descriptors) with `sizes`, and `<picture>`/`<source>` selection by `media` and `type`, are honored — see the `picture` row. A PDF has no resizable viewport, so the candidate with the **highest pixel density** wins (best print quality), where `100vw` in `sizes` is the page content width; the chosen image's natural size is divided by its density. |
+| `img` | [img](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/img) | Full support; images are loaded via the configured network loader. `data:` URIs and local `file:` URIs (including relative paths, which resolve against the document base — see [Usage Examples](usage-examples.md#rendering-a-local-html-file)) are always supported regardless of the configured loader. An SVG source (`.svg` file, `data:image/svg+xml`) renders as real vector PDF content — see [Supported SVG Features](supported-svg-features.md). Raster decode support: JPEG, PNG, BMP, GIF, WebP (VP8/VP8L, including alpha), AVIF (baseline still images, including alpha), and TIFF (uncompressed/LZW/PackBits, 1/2/4/8/16-bit grayscale/RGB/palette/CMYK — decode only, no encode), and JPEG XL (lossy and lossless, alpha, 16-bit/HDR, ICC; an animation renders its first frame; a file made by recompressing a JPEG is embedded as that JPEG, so a CMYK or ICC-tagged one is byte-for-byte, and any other is decoded — decode only); TGA, PSD, and HDR are not supported. A CMYK or YCCK JPEG is embedded preserving its native CMYK data (with its embedded ICC profile carried through when present) rather than converted to RGB, always at its natural pixel size — see [Color and ICC profiles](usage-examples.md#color-and-icc-profiles). A CMYK TIFF is likewise preserved (decoded natively and embedded as a raw CMYK stream, with its embedded ICC profile carried through when present) rather than converted to RGB. An opaque PNG (no real per-pixel alpha channel, not interlaced) embeds losslessly and byte-for-byte via its own compressed data rather than being re-encoded as a lossy JPEG — including a `tRNS` chroma-key PNG, via a PDF color-key `Mask` array — and an opaque BMP/GIF embeds via a raw lossless stream at its own natural display size — see [Lossless embedding for opaque PNG/BMP/GIF images](usage-examples.md#lossless-embedding-for-opaque-pngbmpgif-images) for the `ImageCompression` option controlling this Responsive images: `srcset` (`x` and `w` descriptors) with `sizes`, and `<picture>`/`<source>` selection by `media` and `type`, are honored — see the `picture` row. A PDF has no resizable viewport, so for paged output the candidate with the **highest pixel density** wins (best print quality), where `100vw` in `sizes` is the page content width; the chosen image's natural size is divided by its density, so which candidate loads never changes the size of the box. A [`MediaType.Screen`](peachbrackets.md#responsive-images-on-screen) document instead takes the **smallest candidate that is sharp enough** for the display: the device pixel ratio its host reports times its zoom, with 10% of leeway. `sizes="auto"` is honored on an image with `loading="lazy"` (the used width is its definite `width`, then the width it was laid out at); without `loading="lazy"` it is ignored, as the [HTML Standard](https://html.spec.whatwg.org/multipage/images.html#sizes-attributes) says. A candidate that cannot be loaded is replaced by the next best (up to three), then by `src`. |
 | `picture`, `source` | [picture](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/picture) | `<picture>` is an inline wrapper; its `<source>` children (void elements, `display: none`) are consulted in order before the `<img>`: the first whose `media` query matches the page, whose `type` is a decodable image format, and whose `srcset` yields a candidate supplies the image (`sizes` and the `x`/`w` descriptors work as on `img`); otherwise the `<img>`'s own `srcset`/`src` applies. `<source>` inside `<video>`/`<audio>` is parsed as void but is not used for media selection. |
 | `object` | [object](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/object) | Implements the HTML "replacement algorithm" for a static renderer: if `data` resolves to a supported image (including through the `type` attribute or a `data:` URI's own MIME header — checked without a network fetch when the declared type is already known not to be an image), the element renders exactly like `img`. Otherwise it falls back to its DOM children, which may themselves be nested `object`/`img` elements and are resolved the same way recursively — matching how browsers fall through a chain of nested `<object>` fallbacks |
 | `embed` | [embed](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/embed) | A void element, rendered as an atomic inline replaced box. If `src` resolves to a supported image or SVG (a `type` attribute or `data:` URI MIME header that is not `image/*` is declined without a network fetch), it renders exactly like `img`, sized by the `width`/`height` attributes and honoring [`object-fit`/`object-position`](#box-model) and `transform`. Any other resource (a plugin type, no `src`) is not rendered, but the element still reserves its `width` x `height` box |
@@ -1446,7 +1446,7 @@ Because PeachPDF renders a static PDF with no live browsing state, most state-ba
 
 Known gap: `:nth-column()`/`:nth-last-column()`'s same-row-only limitation described above.
 
-`:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` match only when a host that shows the document on a screen tells it where the pointer and focus are (`HtmlDocument.SetPointerStateAsync`, `ClearPointerStateAsync` and `SetFocusAsync` in [PeachBrackets](peachbrackets.md#interaction-state)); in a PDF they select nothing. `:checked`, `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only` and `:read-write` match the attributes the document has when it is styled, as [HTML defines them](https://html.spec.whatwg.org/multipage/semantics-other.html#pseudo-classes): `:checked` a checked check box or radio button and a selected `<option>`; `:disabled` a control with `disabled`, inside a disabled `<fieldset>` (except in its first `<legend>`) or, for an option, in a disabled `<optgroup>`, and `:enabled` the rest of the controls; `:required`/`:optional` the controls `required` applies to; `:read-write` a text-like `<input>` or `<textarea>` that is not `readonly` or disabled and anything `contenteditable`, and `:read-only` everything else. When a host changes a control after load (`SetChecked`, `Activate`, `SetValue`), `HtmlDocument.NeedsRestyle` says a rule reads the state that changed and `RestyleFormAsync` styles the document again with the controls as they are now, so `input:checked + label` follows the box; the WinUI and Android views do this themselves. The other state-based pseudo-classes besides `:link`/`:any-link` and the generation-time `:placeholder-shown` state (`:visited`, `:valid`, `:indeterminate`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
+`:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` match only when a host that shows the document on a screen tells it where the pointer and focus are (`HtmlDocument.SetPointerStateAsync`, `ClearPointerStateAsync` and `SetFocusAsync` in [PeachBrackets](peachbrackets.md#interaction-state)); a change that only affects painting is applied without a layout pass); in a PDF they select nothing. `:checked`, `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only` and `:read-write` match the attributes the document has when it is styled, as [HTML defines them](https://html.spec.whatwg.org/multipage/semantics-other.html#pseudo-classes): `:checked` a checked check box or radio button and a selected `<option>`; `:disabled` a control with `disabled`, inside a disabled `<fieldset>` (except in its first `<legend>`) or, for an option, in a disabled `<optgroup>`, and `:enabled` the rest of the controls; `:required`/`:optional` the controls `required` applies to; `:read-write` a text-like `<input>` or `<textarea>` that is not `readonly` or disabled and anything `contenteditable`, and `:read-only` everything else. When a host changes a control after load (`SetChecked`, `Activate`, `SetValue`), `HtmlDocument.NeedsRestyle` says a rule reads the state that changed and `RestyleFormAsync` styles the document again with the controls as they are now, so `input:checked + label` follows the box; the WinUI and Android views do this themselves. The other state-based pseudo-classes besides `:link`/`:any-link` and the generation-time `:placeholder-shown` state (`:visited`, `:valid`, `:indeterminate`, etc.) are parsed but not applied — PeachPDF renders a static PDF with no browsing history or interaction state, so `:visited`/`:active` never match by design. Crucially they are *recognized*, so they do not invalidate a selector list they share with a selector that does match; see [Recognized but unmatchable selectors](#recognized-but-unmatchable-selectors) for the full set and for the vendor-extension rule.
 
 ### Cascade & Specificity
 
@@ -1488,7 +1488,7 @@ PeachPDF renders to PDF, so only media queries that target the `print` medium (o
 | Comma-separated list | Partial | Applied if **any** entry in the list matches print (e.g. `@media print, screen` applies) |
 | `min-width`/`max-width`/`width`, and `height` | Yes | Evaluated against the **page-box** dimensions. Range syntax (`width >= 48rem`) and `min-`/`max-` prefixes both supported |
 | `orientation`, `aspect-ratio` | Yes | Derived from the page-box width and height |
-| `resolution`, `device-pixel-ratio` | Yes | Evaluated against the CSS reference density of 96 dpi (1 dppx) |
+| `resolution`, `device-pixel-ratio` | Yes | Evaluated against 96 dpi times the document's device pixel ratio (`HtmlDocumentOptions.DevicePixelRatio`, 1 by default, so 1 dppx; a host that shows the page on a 2x display reports 2) |
 | `prefers-color-scheme` | Yes | Reports `light` by default; set `PdfGenerateConfig.PreferredColorScheme = PdfColorScheme.Dark` to render dark-mode styles |
 | `color`, `color-index`, `monochrome`, `grid` | Yes | Fixed device characteristics: color output (8 bits/channel), not a color-index/monochrome device, not a grid/tty |
 | `hover`, `any-hover`, `pointer`, `any-pointer` | Yes | Report the pointing devices of the host, which a PDF does not have: `none` unless `HtmlDocumentOptions.Input` says otherwise (`InputCapabilities.Mouse`, `.Touch`, or a mix of `PointerTypes`; see [PeachBrackets](peachbrackets.md)). The boolean form `(hover)` is true when the device can hover, `(pointer)` when there is any pointer; a keyword the feature does not define never matches |
@@ -2353,6 +2353,127 @@ input.confirmation-code { -peachpdf-pdf-form-field-comb: 6; }
 | `input[type=hidden]`, `input[type=submit]`, `input[type=reset]`, `input[type=button]`, `input[type=image]`, `input[type=file]` | `none` |
 | `textarea` | `text` (a multi-line field) |
 | `button`, any other element | `none` (fixed — cannot be overridden) |
+
+---
+
+## PDF Annotations Support
+
+Eleven properties turn an element into a real PDF annotation: a sticky note, a highlight or underline over its text, an outlined shape, a box of free text, a rubber stamp, freehand ink, or a clickable icon that opens a file embedded in the document. They are PeachPDF's own extension (no W3C specification), modelled on the annotation properties of other CSS-to-PDF engines, and a reader shows what they make with its own annotation tools: notes open their text on click, an attached-file icon opens the file, the viewer's comment list shows them all.
+
+Nothing happens until `-peachpdf-pdf-annotation-type` names a kind; no document that does not use it gets an annotation. Every annotation carries an appearance stream, so the output is valid at any PDF/A level that allows annotations at all; an attached-file icon additionally needs a PDF/A-3 level (or no PDF/A), since that is where embedded files are allowed.
+
+### `-peachpdf-pdf-annotation-type`
+
+| | |
+|---|---|
+| Initial value | `none` |
+| Applies to | all elements |
+| Inherited | No |
+| Percentages | N/A |
+
+```css
+.note   { -peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-contents: "Check these figures"; }
+mark    { -peachpdf-pdf-annotation-type: highlight; }
+```
+
+| Value | Annotation | Drawn over |
+|---|---|---|
+| `none` | — | — |
+| `text` | A sticky note: an icon that opens [`-contents`](#text-properties-of-an-annotation) | An icon at the element's top-left corner |
+| `highlight`, `underline`, `wavy`, `line-through` | A text mark (PDF `Highlight`, `Underline`, `Squiggly`, `StrikeOut`) | Each line of the element's text |
+| `file-attachment` | An icon that opens an embedded file, named by [`-attachment`](#-peachpdf-pdf-annotation-attachment) | An icon at the element's top-left corner |
+| `square`, `circle` | The outline of a rectangle, or of the ellipse inside it | The element's box |
+| `line` | A straight line from the box's top-left to its bottom-right corner | The element's box |
+| `free-text` | A box of text (the element's `-contents`) on a pale background with a thin border | The element's box |
+| `stamp` | A rubber stamp reading the element's `-contents` (or `-title`), in capitals, inside a double border; `Draft` if it has neither | The element's box |
+| `ink` | Freehand strokes from [`-path`](#-peachpdf-pdf-annotation-path) | The strokes themselves |
+
+A mark, shape, free-text box, stamp or `line` needs an element with some area (an empty element draws nothing); an icon does not.
+
+**Icon size and place.** An icon is 16pt square and sits at the element's top-left corner. If the element's own box is between 8pt and 48pt on both sides — an `inline-block` you sized like an icon — the icon fills that box instead. An empty `<span></span>` has no width and takes up no room, so the icon (12pt) is drawn where the span stands and covers what follows it; give the span `display: inline-block` and a width and height to reserve space for it.
+
+### `-peachpdf-pdf-annotation-attachment`
+
+| | |
+|---|---|
+| Initial value | `none` |
+| Applies to | all elements |
+| Inherited | No |
+| Percentages | N/A |
+
+A `<string>`: the `FileName` of one of the files in [`PdfGenerateConfig.Attachments`](usage-examples.md#embedding-files-pdfa-3-attachments). The annotation points at that one embedded file, so the file is stored once however many icons refer to it, and it still appears in the viewer's attachments panel.
+
+```html
+<p>
+  Q3 sales by region
+  <span style="-peachpdf-pdf-annotation-type: file-attachment;
+               -peachpdf-pdf-annotation-attachment: 'q3-sales.csv';
+               display: inline-block; width: 14pt; height: 14pt"></span>
+</p>
+```
+
+An annotation that names no file, or a file the document does not embed (or is generated with a PDF/A level that forbids embedded files), is left out.
+
+### Text properties of an annotation
+
+| Property | Value | PDF entry | Notes |
+|---|---|---|---|
+| `-peachpdf-pdf-annotation-title` | `none` \| `<string>` | `/Subj` | The annotation's subject |
+| `-peachpdf-pdf-annotation-contents` | `none` \| `<string>` | `/Contents` | The text a note opens; the text of free text and stamps |
+| `-peachpdf-pdf-annotation-author` | `none` \| `<string>` | `/T` | Who made it; a viewer shows it as the author |
+| `-peachpdf-pdf-annotation-createdate` | `auto` \| `<string>` | `/CreationDate` | An ISO 8601 date such as `'2026-03-04T05:06:07Z'` |
+| `-peachpdf-pdf-annotation-modifydate` | `auto` \| `<string>` | `/M` | As above; the time of writing when unset |
+
+All are non-inherited and apply to all elements.
+
+### `-peachpdf-pdf-annotation-icon`
+
+`auto` | `note` | `comment` | `key` | `help` | `new-paragraph` | `paragraph` | `insert` | `paperclip` | `push-pin` | `graph` | `tag` (initial value `auto`)
+
+The icon of a `text` or `file-attachment` annotation. A note takes the first seven (default `note`), an attached file the last four (default `paperclip`); a name from the other set falls back to the default. The icons are drawn as vectors in the annotation's appearance stream, so they look the same in every viewer.
+
+### `-peachpdf-pdf-annotation-color`
+
+`auto` | `<color>` (initial value `auto`)
+
+The colour of the annotation: an icon's fill, a mark's colour, a shape's outline, ink, the border and text of free text and stamps. `auto` picks the kind's own: yellow for notes and highlights, green for underlines, red for strike-outs, shapes, ink and stamps, black text for free text.
+
+### `-peachpdf-pdf-annotation-position`
+
+`auto` | `[ left | right | top | bottom | center | page-left | page-right | page-top | page-bottom | <length-percentage> ]{1,4}` (initial value `auto`)
+
+Where the annotation's visible icon, or its popup window, goes.
+
+- For an icon annotation (`text`, `file-attachment`), it places the icon. By default the icon is at the element's top-left corner. `left`, `right`, `top`, `bottom` and `center` put it against that edge of the element's box; the `page-*` keywords put it against that edge of the page; a length (or percentage of the box's width or height) offsets it, the first horizontally and the second vertically.
+- For every other kind, it places the popup window a reader opens to show `-contents` or `-title` (written as a linked `Popup` annotation, and only when there is text to show), with the same keywords. The mark or shape itself always stays on the element.
+
+```css
+.margin-note { -peachpdf-pdf-annotation-type: text; -peachpdf-pdf-annotation-position: page-right 4pt; }
+mark         { -peachpdf-pdf-annotation-type: highlight; -peachpdf-pdf-annotation-contents: "Up 12%"; -peachpdf-pdf-annotation-position: page-right; }
+```
+
+### `-peachpdf-pdf-annotation-merge`
+
+`none` | `duplicates` | `key(<string>)` (initial value `none`)
+
+By default every element produces its annotation, once per page it appears on. `duplicates` keeps only the first of the annotations with identical kind, text, colour and attachment; `key("id")` keeps only the first annotation of all the elements that give the same key. Use it for something that repeats (a table header on every page) or that should be a single annotation however many elements mention it.
+
+### `-peachpdf-pdf-annotation-path`
+
+`none` | `path(<string>)` (initial value `none`)
+
+The strokes of an `ink` annotation, as [SVG path data](https://developer.mozilla.org/en-US/docs/Web/SVG/Attribute/d) in CSS pixels from the element's top-left corner. Each subpath is one stroke; curves are sampled and an arc is drawn as the straight line to its end. An `ink` annotation without a path is left out.
+
+```css
+.signature { -peachpdf-pdf-annotation-type: ink; -peachpdf-pdf-annotation-color: #1a73e8;
+             -peachpdf-pdf-annotation-path: path("M 4 40 C 20 -10 40 90 60 20 S 90 50 104 8"); }
+```
+
+### Limits
+
+- An annotation is placed from the element's rectangles on each page, with a CSS transform and a fixed or sticky position followed. A box that continues onto another page gets one annotation per page.
+- A mark's appearance is drawn over the text rather than blended with it, so a highlight is a translucent fill the text shows through.
+- Annotations inside page margin boxes are not produced.
 
 ---
 

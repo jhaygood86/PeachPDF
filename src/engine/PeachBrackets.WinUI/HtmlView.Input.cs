@@ -319,6 +319,7 @@ public sealed partial class HtmlView
                 // A restyle drops the old layout before the new one is in; a region painted in between would be cleared and left empty, so the
                 // painter leaves what is on the surface alone until the new layout is there (see OnRegionsInvalidated).
                 _restyling = true;
+                var started = System.Diagnostics.Stopwatch.GetTimestamp();
                 try
                 {
                     if (_pendingPointer is { } pointer)
@@ -336,6 +337,9 @@ public sealed partial class HtmlView
                 {
                     _restyling = false;
                 }
+
+                HtmlViewDiagnostics.Trace?.Invoke(
+                    $"pointer state: {System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds:F1} ms, applied={result.Applied}, regions={result.DirtyRegions.Count}");
 
                 if (_paintDeferred)
                 {

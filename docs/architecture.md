@@ -926,6 +926,21 @@ every later call (a different set throws, exactly like a changed `PdfAConformanc
 only), which is valid at any size and needs no `/Limits` bookkeeping. See
 [Embedding files](usage-examples.md#embedding-files-pdfa-3-attachments) for the user-facing behavior.
 
+`Apply` also remembers each file's `PdfFileSpecification` by name, so a `FileAttachment` annotation
+(`-peachpdf-pdf-annotation-type: file-attachment`, see [PDF Annotations](html-css-support.md#pdf-annotations-support))
+can point its `/FS` at the specification that already holds the stream - one embedded file reachable from `/AF`, from
+the name tree and from every icon that names it.
+
+### Annotations from CSS
+
+`AnnotationPropertyCollector` (in `PeachBrackets`) walks the fragment tree page by page and turns every box whose
+`-peachpdf-pdf-annotation-type` is set into a `PageAnnotation`: the page-local rectangles of the fragment (the lines of
+an inline, the box of a block) are placed on the page in points the way links are, with transforms and fixed/sticky
+displacement followed. An empty inline has no fragment, so it is placed where the content before it ends. PeachPDF's
+`AnnotationBuilder` turns each `PageAnnotation` into a `PdfAnnotationDefinition` for the writer's `PdfAnnotationBuilder`, with
+the appearance stream drawn by `PdfAnnotationAppearance` (icons, text marks, shapes, free text, stamps, ink), which the writer
+package exposes so a caller with no HTML can write the same annotations.
+
 ### Coverage
 
 See [Supported MathML Features](supported-mathml-features.md) for the complete element/attribute

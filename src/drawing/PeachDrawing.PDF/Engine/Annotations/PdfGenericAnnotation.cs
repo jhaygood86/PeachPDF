@@ -22,7 +22,16 @@ internal sealed class PdfGenericAnnotation : PdfAnnotation
         if (value is not null) Elements.SetString(key, value, PdfStringEncoding.Unicode);
     }
 
+    /// <summary>Sets a string of plain ASCII (such as a default appearance string), written as it is, without a byte order mark.</summary>
+    public void SetAsciiString(string key, string value) => Elements.SetString(key, value, PdfStringEncoding.LatinOneByteEncoding);
+
     public void SetName(string key, string value) => Elements.SetName(key, "/" + value.TrimStart('/'));
+
+    public void SetDate(string key, System.DateTimeOffset value) => Elements.SetDateTime(key, value.LocalDateTime);
+
+    public void SetReference(string key, PdfObject value) => Elements.SetReference(key, value);
+
+    public void SetBoolean(string key, bool value) => Elements.SetBoolean(key, value);
 
     public void SetNumber(string key, double value) => Elements.SetReal(key, value);
 

@@ -1295,7 +1295,19 @@ namespace PeachBrackets.Html.Dom
                 .SetPropertyValueShared(cache, generatedContent.PdfFormField, parentStyle.GeneratedContent.PdfFormField, static (a, v) => a with { PdfFormField = v })
                 .SetPropertyValueShared(cache, generatedContent.PdfFormFieldAutoFontSize, parentStyle.GeneratedContent.PdfFormFieldAutoFontSize, static (a, v) => a with { PdfFormFieldAutoFontSize = v })
                 .SetPropertyValueShared(cache, generatedContent.PdfFormFieldComb, parentStyle.GeneratedContent.PdfFormFieldComb, static (a, v) => a with { PdfFormFieldComb = v })
-                .SetPropertyValueShared(cache, generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v });
+                .SetPropertyValueShared(cache, generatedContent.PdfFormFieldDoNotScroll, parentStyle.GeneratedContent.PdfFormFieldDoNotScroll, static (a, v) => a with { PdfFormFieldDoNotScroll = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationType, parentStyle.GeneratedContent.PdfAnnotationType, static (a, v) => a with { PdfAnnotationType = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationAttachment, parentStyle.GeneratedContent.PdfAnnotationAttachment, static (a, v) => a with { PdfAnnotationAttachment = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationTitle, parentStyle.GeneratedContent.PdfAnnotationTitle, static (a, v) => a with { PdfAnnotationTitle = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationContents, parentStyle.GeneratedContent.PdfAnnotationContents, static (a, v) => a with { PdfAnnotationContents = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationAuthor, parentStyle.GeneratedContent.PdfAnnotationAuthor, static (a, v) => a with { PdfAnnotationAuthor = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationIcon, parentStyle.GeneratedContent.PdfAnnotationIcon, static (a, v) => a with { PdfAnnotationIcon = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationColor, parentStyle.GeneratedContent.PdfAnnotationColor, static (a, v) => a with { PdfAnnotationColor = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationPosition, parentStyle.GeneratedContent.PdfAnnotationPosition, static (a, v) => a with { PdfAnnotationPosition = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationCreateDate, parentStyle.GeneratedContent.PdfAnnotationCreateDate, static (a, v) => a with { PdfAnnotationCreateDate = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationModifyDate, parentStyle.GeneratedContent.PdfAnnotationModifyDate, static (a, v) => a with { PdfAnnotationModifyDate = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationMerge, parentStyle.GeneratedContent.PdfAnnotationMerge, static (a, v) => a with { PdfAnnotationMerge = v })
+                .SetPropertyValueShared(cache, generatedContent.PdfAnnotationPath, parentStyle.GeneratedContent.PdfAnnotationPath, static (a, v) => a with { PdfAnnotationPath = v });
             _computedStyle = _computedStyle.AdoptAreaShared(cache, generatedContent, newGeneratedContent, static (s, a) => s with { GeneratedContent = a });
         }
     }
