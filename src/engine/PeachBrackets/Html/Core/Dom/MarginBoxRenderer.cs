@@ -417,7 +417,7 @@ namespace PeachBrackets.Html.Dom
 
                 var first = tokens[0];
                 return first.Type == TokenType.Url ||
-                    (first is { Type: TokenType.Function } ft && CssContentEngine.IsGradientFunctionName(ft.Data));
+                    (first is { Type: TokenType.Function } ft && CssContentEngine.IsImageFunctionName(ft.Data));
             }
 
             if (!IsImageContent(contentValue))
@@ -426,7 +426,7 @@ namespace PeachBrackets.Html.Dom
             if (imageCache.TryGetValue(contentValue, out var cached))
                 return cached;
 
-            var image = new CssValueParser(renderContext).ParseImage(contentValue);
+            var image = new CssValueParser(renderContext).ParseImage(contentValue, htmlContainer);
             if (image != null)
                 await image.EnsureLoadedAsync(htmlContainer);
 

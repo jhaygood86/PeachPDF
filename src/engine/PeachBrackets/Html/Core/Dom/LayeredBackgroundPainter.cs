@@ -119,7 +119,7 @@ namespace PeachBrackets.Html.Dom
 
             if (!imageCache.TryGetValue(imageValue, out var images))
             {
-                images = new CssValueParser(renderContext).ParseImages(imageValue);
+                images = new CssValueParser(renderContext).ParseImages(imageValue, htmlContainer);
                 if (images != null)
                 {
                     foreach (var image in images)
