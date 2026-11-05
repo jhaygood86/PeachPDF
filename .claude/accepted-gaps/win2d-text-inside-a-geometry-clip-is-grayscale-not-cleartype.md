@@ -1,5 +1,7 @@
 # Win2D text inside a rounded or path clip is grayscale, not ClearType
 
+Tracked in #2206.
+
 **What.** In `PeachDrawing.Win2D`, text drawn while a clip made from a geometry is open (`PushClip(GraphicsPath)`, `PushClipExclude`: a rounded corner on an `overflow: hidden`
 card, a `clip-path`) is drawn as grayscale-antialiased text even when the user has ClearType on. Text outside such a clip, and inside a rectangular clip, uses ClearType. On
 arstechnica.com the article cards (rounded, `overflow: hidden`) therefore have grayscale text beside ClearType text elsewhere.
