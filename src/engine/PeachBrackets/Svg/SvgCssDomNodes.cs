@@ -38,7 +38,7 @@ namespace PeachBrackets.Svg
     internal sealed class SvgCssBoxDomNode(CssBox box, CssBox svgRoot) : ICssDomNode
     {
         /// <summary>Tells the SVG this element belongs to that a rule reading the interaction state was a candidate for it.</summary>
-        internal void NoteStatefulCandidate() => svgRoot.NoteSvgInnerStatefulCandidate();
+        internal void NoteStatefulCandidate(ISelector selector) => svgRoot.NoteSvgInnerStatefulCandidate(selector);
 
         public string? TagName => box.HtmlTag?.Name;
 
@@ -59,7 +59,11 @@ namespace PeachBrackets.Svg
         public ICssDomNode? Parent =>
             ReferenceEquals(box, svgRoot)
                 ? box.ParentBox // crossing out of the SVG fragment into HTML: raw CssBox (case-insensitive)
-                : box.ParentBox is null ? null : new SvgCssBoxDomNode(box.ParentBox, svgRoot);
+                : box.ParentBox is null ? null
+                // The <svg> element itself is a child of the HTML tree: handed out as the raw CssBox, it is found among its parent's children, which the
+                // sibling combinators (`a:hover + svg .x`) look it up in. A wrapper would never equal the box in that list.
+                : ReferenceEquals(box.ParentBox, svgRoot) ? box.ParentBox
+                : new SvgCssBoxDomNode(box.ParentBox, svgRoot);
 
         public IReadOnlyList<ICssDomNode> Children =>
             box.Boxes.Select(ICssDomNode (b) => new SvgCssBoxDomNode(b, svgRoot)).ToList();

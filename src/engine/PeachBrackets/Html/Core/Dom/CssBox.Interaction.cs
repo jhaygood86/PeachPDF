@@ -1,6 +1,7 @@
 using PeachBrackets.Css;
 using PeachDrawing.Core;
 using System;
+using System.Collections.Generic;
 
 namespace PeachBrackets.Html.Dom
 {
@@ -22,9 +23,21 @@ namespace PeachBrackets.Html.Dom
         /// Whether a rule that reads the interaction state was among the candidates the cascade offered an element inside this inline SVG. Those elements are not
         /// boxes the incremental restyle can restyle, so it compares what they match under the two states (see <c>InteractionRestyler</c>).
         /// </summary>
-        internal bool HasSvgInnerStatefulCandidates { get; private set; }
+        internal bool HasSvgInnerStatefulCandidates => SvgInnerStatefulSelectors is { Count: > 0 };
 
-        internal void NoteSvgInnerStatefulCandidate() => HasSvgInnerStatefulCandidates = true;
+        /// <summary>The selectors of those rules, each once, for asking which of them a given changed element could make match differently.</summary>
+        internal List<ISelector>? SvgInnerStatefulSelectors { get; private set; }
+
+        internal void NoteSvgInnerStatefulCandidate(ISelector selector)
+        {
+            SvgInnerStatefulSelectors ??= [];
+            foreach (var known in SvgInnerStatefulSelectors)
+            {
+                if (ReferenceEquals(known, selector)) return;
+            }
+
+            SvgInnerStatefulSelectors.Add(selector);
+        }
 
         internal void NoteStatefulCandidate(bool ownStateOnly)
         {
