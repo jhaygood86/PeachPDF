@@ -9084,7 +9084,7 @@ namespace PeachBrackets.Html.Dom
                     // place on its own line, and nothing above it is on this line at all.
                     if (ReferenceEquals(atomic, lineBox.OwnerBox)) break;
 
-                    if (atomic.DerivedStyle.ActualDisplay != Keywords.InlineBlock) continue;
+                    if (atomic.DerivedStyle.ActualDisplay is not (Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid)) continue;
                     if (!lineBox.Rectangles.TryGetValue(atomic, out var atomicRect)) continue;
                     if (AtomicInlineBaselineOf(atomic, lineBox, atomicRect) is not { } atomicBaseline) continue;
 
@@ -9360,6 +9360,12 @@ namespace PeachBrackets.Html.Dom
             if (ReferenceEquals(box, lineBox.OwnerBox)) return null;
 
             if (box.IsImage) return rect.Bottom + box.ActualMarginBottom;
+
+            // An inline flex or grid container's baseline is its first item's first line's (css-flexbox-1 §8.5, css-grid-1 §6.1); with no text in any item it is
+            // synthesized from the bottom margin edge, as for a replaced element.
+            if (box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid)
+                return FirstOwnLineBaselineOf(box) ?? rect.Bottom + box.ActualMarginBottom;
+
             if (box.DerivedStyle.ActualDisplay != Keywords.InlineBlock) return null;
             if (box.Overflow.Value != Overflow.Visible) return rect.Bottom + box.ActualMarginBottom;
 
@@ -9373,6 +9379,39 @@ namespace PeachBrackets.Html.Dom
             }
 
             return HasWordOnLine(box, lineBox) ? null : rect.Bottom + box.ActualMarginBottom;
+        }
+
+        /// <summary>The baseline of the first line box in <paramref name="box"/>'s own normal flow, or null when it holds none: what an inline flex or grid container takes as its own.</summary>
+        internal static double? FirstOwnLineBaselineOf(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.DerivedStyle.ActualDisplay == Keywords.None) continue;
+                if (child.Position.Value is PositionMode.Absolute or PositionMode.Fixed) continue;
+                if (child.Float.Value is not Floating.None) continue;
+
+                if (FirstOwnLineBaselineOf(child) is { } nested) return nested;
+            }
+
+            foreach (var line in box.LineBoxes)
+            {
+                if (line.BaselineY is { } baselineY && !LineHasLostItsWords(line)) return baselineY;
+            }
+
+            return null;
+        }
+
+        // A line box left over from an earlier layout of its box, whose words have since been flowed onto another line (see LastOwnLineBaselineOf).
+        private static bool LineHasLostItsWords(CssLineBox line)
+        {
+            if (line.Words.Count == 0) return false;
+
+            foreach (var word in line.Words)
+            {
+                if (ReferenceEquals(word.Line, line)) return false;
+            }
+
+            return true;
         }
 
         /// <summary>
