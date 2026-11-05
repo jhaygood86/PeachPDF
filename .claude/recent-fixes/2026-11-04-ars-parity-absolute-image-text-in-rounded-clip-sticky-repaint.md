@@ -37,3 +37,9 @@ hit-testing order for grid items by `order` (CSS Grid 1 section 8 says it applie
 image as its margin box centred on the baseline plus half the parent's x-height (CSS 2.1 10.8.1), and `VerticalAlignDeltaOf` aligns by the margin box's midpoint, not the border box's.
 Found with a throwaway engine test that fetched the page live and dumped the logo's word position next to its line; the unit test that first "reproduced" it passed because it
 checked only where the next block started, not where the image was (`InlineSvgLineHeightTests` now checks both). Engine 18,135 and PeachPDF 1,615 pass.
+
+**7. The in-place hover restyle (main) did not reach `a:hover .icon` rules inside an inline SVG.** Found by writing the hover-fill test the SVG style cache needed (see the accepted gap
+for what is and is not handled). The fix declines the fast path only for an SVG with state-reading candidate rules under a changed element. First attempt, rejected: declining
+whenever any SVG sits under the changed chain (`html`/`body` are always in it, so every page with an SVG lost the fast path). Second, also rejected: comparing the matches of the SVG's
+inner elements under both states, which cannot work because `CssBoxSvg.EnsureDocument` clears those boxes after building the scene graph (an instrumented run showed the compare was never called).
+

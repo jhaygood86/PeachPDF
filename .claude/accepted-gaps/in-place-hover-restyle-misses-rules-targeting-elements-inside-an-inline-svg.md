@@ -1,17 +1,13 @@
-# The in-place hover restyle does not reach a rule whose target is an element inside an inline SVG
+# The in-place hover restyle still misses an SVG-internal rule reached through a sibling combinator
 
-**What.** With `a:hover .fill { fill: red }` and `<a><svg><rect class="fill"/></svg></a>`, hovering the link leaves the rectangle's old fill on screen when the
-restyle is applied in place (the fast path). `a:hover svg { fill: red }` works (the `svg` is a box). With `PEACHPDF_FULL_RESTYLE=1`, or a document that is
-reloaded, both work.
+**What is handled.** `a:hover .fill { fill: red }` over `<a><svg><rect class="fill"/></svg></a>`: the elements inside an inline SVG are not boxes (the scene graph is built once and the
+boxes dropped, `CssBoxSvg.EnsureDocument`), so the in-place restyle cannot restyle them. `CssData` records on the SVG box when a rule that reads the interaction state was a
+candidate for one of its elements (`HasSvgInnerStatefulCandidates`), and `InteractionRestyler` declines the fast path (a full load follows) when the state changed on or inside an
+element above such an SVG, `html` and `body` excepted.
 
-**Why.** The elements inside an inline SVG are not boxes: the SVG builder reads and matches them itself at paint-preparation time. The in-place restyle finds the
-boxes whose matched rules differ under the new state, so a rule whose subject is not a box has nothing to restyle, and the box-level caches (the SVG's matched
-declarations are kept per element, see `CssBoxSvgSourceNode`) are not told. `InteractionRestyler` now bumps `HtmlContainerInt.StyleGeneration` after every in-place
-restyle, so the cache cannot serve a stale match for a box that did restyle; it does not make the SVG internals notice the change.
+**What is not.** A rule that reaches the SVG's elements from state on an element that is *not above* the SVG: `a:hover + svg .x`, `a:hover ~ .icons .x`. The changed element is a
+sibling, so the check does not see it and the SVG keeps its old look until the document is next loaded. Also, a page whose SVGs carry such candidate rules loses the fast path
+for hovers inside the elements that hold them (the cost of the full load, as before the fast path existed).
 
-**Tried and rejected.** Declining the fast path whenever the changed state is on or inside an element holding an SVG: the hovered chain always includes `html`, `body`
-and the page wrappers, so every page with any inline SVG (Ars Technica has 129) would lose the fast path. A precise test needs to know whether any stateful rule's subject
-can match an element inside an SVG, which needs selector analysis the matcher does not expose.
-
-**What would close it.** At index time, record whether a stateful rule's rightmost compound can match an element of an inline SVG (a tag from the SVG vocabulary, or a
-class/id/attribute compound that appears inside one), and decline the fast path only then.
+**What would close it.** Record the stateful rule alongside the candidate and evaluate its non-subject compounds against the changed element, so only a rule that can change
+is a reason to decline; that needs the matcher to expose a "could this rule's state compound be the changed element" test.

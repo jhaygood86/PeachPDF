@@ -18,6 +18,14 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal bool HasRelationalStatefulCandidates { get; private set; }
 
+        /// <summary>
+        /// Whether a rule that reads the interaction state was among the candidates the cascade offered an element inside this inline SVG. Those elements are not
+        /// boxes the incremental restyle can restyle, so it compares what they match under the two states (see <c>InteractionRestyler</c>).
+        /// </summary>
+        internal bool HasSvgInnerStatefulCandidates { get; private set; }
+
+        internal void NoteSvgInnerStatefulCandidate() => HasSvgInnerStatefulCandidates = true;
+
         internal void NoteStatefulCandidate(bool ownStateOnly)
         {
             HasStatefulCandidates = true;

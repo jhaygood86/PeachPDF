@@ -37,6 +37,9 @@ namespace PeachBrackets.Svg
     /// </summary>
     internal sealed class SvgCssBoxDomNode(CssBox box, CssBox svgRoot) : ICssDomNode
     {
+        /// <summary>Tells the SVG this element belongs to that a rule reading the interaction state was a candidate for it.</summary>
+        internal void NoteStatefulCandidate() => svgRoot.NoteSvgInnerStatefulCandidate();
+
         public string? TagName => box.HtmlTag?.Name;
 
         public StringComparison NameComparison => StringComparison.Ordinal;
