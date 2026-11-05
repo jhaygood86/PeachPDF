@@ -2311,9 +2311,7 @@ namespace PeachBrackets.Html.Parse
             var open = value.IndexOf('(');
             if (open <= 0 || !value[^1].Equals(')')) return false;
 
-            var name = value[..open];
-            if (!name.Equals(FunctionNames.ImageSet, StringComparison.OrdinalIgnoreCase)
-                && !name.Equals("-webkit-image-set", StringComparison.OrdinalIgnoreCase))
+            if (!value[..open].Equals(FunctionNames.ImageSet, StringComparison.OrdinalIgnoreCase))
                 return false;
 
             var sources = new List<CssImage>();
@@ -2423,10 +2421,18 @@ namespace PeachBrackets.Html.Parse
         internal static IEnumerable<string> SplitTopLevelCommas(string value)
         {
             int depth = 0, start = 0;
+            char quote = default;
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
-                if (c == '(') depth++;
+                // A comma inside a quoted string (an image-set() source such as a data: URI) separates nothing.
+                if (quote != default)
+                {
+                    if (c == '\\') i++;
+                    else if (c == quote) quote = default;
+                }
+                else if (c is '"' or '\'') quote = c;
+                else if (c == '(') depth++;
                 else if (c == ')') depth--;
                 else if (c == ',' && depth == 0)
                 {

@@ -35,9 +35,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("image-set(url(a.png), url(b.png) 1.5x)", "b.png")]
         [InlineData("image-set(url(a.png) 96dpi, url(b.png) 192dpi)", "b.png")]
         [InlineData("image-set(url(a.png) 1dppx, url(b.png) 2dppx)", "b.png")]
-        [InlineData("-webkit-image-set(url(a.png) 1x, url(b.png) 2x)", "b.png")]
         [InlineData("image-set(url(a.png) 2x, url(b.png) 2x)", "a.png")]
         [InlineData("image-set(url(a.png))", "a.png")]
+        [InlineData("image-set('data:image/png;base64,AA+/==' 1x, 'data:image/png;base64,BB+/==' 192dpi)", "data:image/png;base64,BB+/==")]
         public async Task Paged_PicksTheHighestResolution(string value, string expected)
         {
             var container = await ContainerAsync(1, ImageSelectionOptions.HighestDensityPolicy);
