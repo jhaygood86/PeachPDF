@@ -1383,7 +1383,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         // DomParser.CascadeApplyStyles' HtmlConstants.Border case: a non-zero `border` attribute forces
         // every side's style to solid (CssProperty<LineStyle>.FromValue(Keywords.Solid, LineStyle.Solid)
         // / the shared SolidBorderStyle constant). Only the plain-element path is covered here - the
-        // table-to-cell cascade (ApplyTableBorder/SetForAllCells, issue #636) is covered by
+        // table-to-cell cascade (DomParser.TranslateTableCellAttributes, issue #636) is covered by
         // PresentationalAttributeIntegrationTests.BorderAttribute_OnTable_CascadesASolidBorderToCells.
 
         [Fact]

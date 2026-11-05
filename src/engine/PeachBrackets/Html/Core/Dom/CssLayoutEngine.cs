@@ -2277,10 +2277,13 @@ namespace PeachBrackets.Html.Dom
             }
 
             // The table layout engine passes the resolved table width explicitly (only tables reach
-            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width. A table wider than its
+            // containing block is over-constrained, so its auto margins are 0 (CSS 2.1 §10.3.3), not a negative margin that
+            // pulls it out past the start edge: it starts at the edge and overflows at the end, as ResolveAutoHorizontalMargin
+            // does for a block.
             if (boxWidth is not null)
             {
-                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
+                return Math.Max(0, ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box, blockTop);
@@ -2313,10 +2316,13 @@ namespace PeachBrackets.Html.Dom
             }
 
             // The table layout engine passes the resolved table width explicitly (only tables reach
-            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width.
+            // here with a non-null boxWidth) so a `margin: … auto` table centers against that width. A table wider than its
+            // containing block is over-constrained, so its auto margins are 0 (CSS 2.1 §10.3.3), not a negative margin that
+            // pulls it out past the start edge: it starts at the edge and overflows at the end, as ResolveAutoHorizontalMargin
+            // does for a block.
             if (boxWidth is not null)
             {
-                return (ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
+                return Math.Max(0, ContainingContentWidth(box, blockTop) - boxWidth.Value) / 2;
             }
 
             return ResolveAutoHorizontalMargin(box, blockTop);
@@ -2379,8 +2385,9 @@ namespace PeachBrackets.Html.Dom
         /// <remarks>
         /// The block counterpart is <c>CssBox.ResolveBlockInlineStart</c>, which cannot cover a table because its
         /// used width is not known until the table engine has settled its columns. An <c>auto</c> margin is not
-        /// this case: the table engine already resolves a single one, or both, from the settled width. Horizontal
-        /// writing modes only, as for a block.
+        /// this case unless the table is wider than its containing block
+        /// (<see cref="AnchorsOverWideTableToInlineEnd"/>): otherwise the table engine resolves a single one, or
+        /// both, from the settled width. Horizontal writing modes only, as for a block.
         /// </remarks>
         /// <param name="table">the table wrapper box</param>
         internal static bool AnchorsTableToInlineEnd(CssBox table) =>
@@ -2390,6 +2397,22 @@ namespace PeachBrackets.Html.Dom
             && table.MarginLeft.Value.IsValue
             && table.MarginRight.Value.IsValue
             && IsInNormalFlow(table);
+
+        /// <summary>
+        /// Whether an in-flow <c>&lt;table&gt;</c> with an <c>auto</c> horizontal margin is wider than its
+        /// <c>rtl</c> containing block, which makes it over-constrained like <see cref="AnchorsTableToInlineEnd"/>:
+        /// the <c>auto</c> margin is 0 (CSS 2.1 §10.3.3), so <c>margin-left</c> is the one ignored and the table
+        /// hangs from the right edge, overflowing toward the start edge.
+        /// </summary>
+        /// <param name="table">the table wrapper box</param>
+        /// <param name="usedWidth">the border-box width the table engine settled on</param>
+        internal static bool AnchorsOverWideTableToInlineEnd(CssBox table, double usedWidth) =>
+            table.DerivedStyle.ActualDisplay is Keywords.Table
+            && table.ParentBox is not null
+            && table.ContainingBlock is { Direction.Value: DirectionMode.Rtl, WritingMode.Value: Css.WritingMode.HorizontalTb }
+            && (!table.MarginLeft.Value.IsValue || !table.MarginRight.Value.IsValue)
+            && IsInNormalFlow(table)
+            && ContainingContentWidth(table, table.Location.Y) < usedWidth;
 
         /// <summary>
         /// Whether <paramref name="box"/> is an ordinary in-flow, block-level box - the only kind CSS 2.1

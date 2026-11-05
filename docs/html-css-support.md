@@ -194,7 +194,7 @@ Example:
 
 | Element | MDN Reference | Notes |
 |---------|--------------|-------|
-| `table` | [table](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table) | Full support |
+| `table` | [table](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/table) | Full support. The legacy attributes follow the HTML Standard's rendering rules: `align` places the table itself (`left` and `right` float it, `center` gives it auto side margins) and does not change the text alignment of its cells, and `cellpadding` and `border` are presentational hints of the cells, so a `padding` or `border` the author declares on a cell (inline or in a stylesheet) wins over them, the way an HTML email's `<table cellpadding="0">` with padded `<td style="padding: …">` cells expects. `align` matches the exact value, ASCII case-insensitively; on a `td`, `tr`, `div` or `p` it still sets `text-align` |
 | `caption` | [caption](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/caption) | Full support |
 | `col` | [col](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/col) | Width attribute is applied |
 | `colgroup` | [colgroup](https://developer.mozilla.org/en-US/docs/Web/HTML/Element/colgroup) | Full support |

@@ -265,12 +265,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task BorderAttribute_OnTable_CascadesASolidBorderToCells()
         {
-            // Regression for issue #636: ApplyTableBorder's SetForAllCells call used to run mid-cascade
-            // (from inside the table's own TranslateAttributes), before the cell's own CascadeApplyStyles
-            // pass ran - which then reset the cell's just-set border back to its initial value (see
-            // CascadeApplyStyles's "defaulting" step, which re-runs once a box's ComputedStyle diverges
-            // from the shared Default singleton). The cascade to cells now happens after the whole tree's
-            // cascade has completed, so it survives.
+            // Regression for issue #636: the table's border used to be written onto its cells from inside the
+            // table's own cascade, before the cell's own CascadeApplyStyles pass ran - which then reset it to
+            // its initial value (the "defaulting" step re-runs once a box's ComputedStyle diverges from the
+            // shared Default singleton). It is now applied from the cell's own cascade, so it survives.
             var (root, _) = await BuildAndLayout(Wrap("<table border='1'><tr><td id='c'>x</td></tr></table>"));
             var cell = FindById(root, "c")!;
 
@@ -323,10 +321,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task CellpaddingAttribute_CascadesToTableCells()
         {
-            // Regression for issue #636: ApplyTablePadding's SetForAllCells call used to run mid-cascade
-            // (from inside the table's own TranslateAttributes), before the cell's own CascadeApplyStyles
-            // pass ran - which then reset the cell's just-set padding back to its initial value. The
-            // cascade to cells now happens after the whole tree's cascade has completed, so it survives.
+            // Regression for issue #636: the table's cellpadding used to be written onto its cells from inside
+            // the table's own cascade, before the cell's own CascadeApplyStyles pass ran - which then reset it
+            // to its initial value. It is now applied from the cell's own cascade, so it survives.
             var (root, _) = await BuildAndLayout(Wrap("<table id='t' cellpadding='5'><tr><td id='c'>x</td></tr></table>"));
             var cell = FindById(root, "c")!;
 

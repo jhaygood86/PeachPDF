@@ -335,10 +335,25 @@ namespace PeachBrackets.Html.Dom
         /// <summary>
         /// The lowest physical X the column axis may start at: the page's left edge, except for a table anchored to
         /// its rtl container's right edge, which overflows toward the start edge and so may begin left of it
-        /// (<see cref="CssLayoutEngine.AnchorsTableToInlineEnd"/>).
+        /// (<see cref="CssLayoutEngine.AnchorsTableToInlineEnd"/>), and a floated table, which a right float wider than
+        /// its container puts left of the page's edge as well.
         /// </summary>
         private double ColumnAxisFloor =>
-            !_isVertical && CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox) ? double.NegativeInfinity : 0;
+            !_isVertical
+            && (_tableBox.IsFloated
+                || CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox)
+                || AnchorsOverWideToInlineEnd)
+                ? double.NegativeInfinity
+                : 0;
+
+        /// <summary>
+        /// Whether this table is wider than its <c>rtl</c> containing block with an <c>auto</c> margin
+        /// (<see cref="CssLayoutEngine.AnchorsOverWideTableToInlineEnd"/>). The direction is read first so the column
+        /// widths are only summed for the tables it can be true of.
+        /// </summary>
+        private bool AnchorsOverWideToInlineEnd =>
+            _tableBox.ContainingBlock is { Direction.Value: DirectionMode.Rtl }
+            && CssLayoutEngine.AnchorsOverWideTableToInlineEnd(_tableBox, GetWidthSum());
 
         /// <summary>
         /// What a repeated <c>&lt;thead&gt;</c> takes from the top of every band the table covers, spacing
@@ -781,24 +796,37 @@ namespace PeachBrackets.Html.Dom
             // Once per table, for the same reason the whole-table pre-checks below are: the offset is
             // derived from the containing block rather than from where the table currently is, so a
             // continuation adding it again would center an already-centered table a second time.
-            if (!_continuesAPreviousPass && _tableBox.MarginLeft.Value.IsKeyword)
+            if (!_continuesAPreviousPass && !_isVertical && _tableBox.IsFloated)
             {
-                _tableBox.Location = _tableBox.Location with
-                {
-                    X = _tableBox.Location.X + CssLayoutEngine.GetActualMarginLeft(_tableBox, GetWidthSum())
-                };
+                // A floated table is placed before this engine has run, when its used width is still unknown (a table
+                // skips the block width resolution that gives any other float its own), so a float to the right was
+                // anchored with no width to subtract and sat at the containing block's right edge, off the page. Place it
+                // again now that the columns have settled the width: the scan restarts from the containing block and
+                // finds the same blockers, this time with the width a left float needs to know whether it still fits.
+                _tableBox.ActualRight = _tableBox.Location.X + GetWidthSum();
+                CssLayoutEngine.FloatBox(_tableBox);
             }
-            else if (!_continuesAPreviousPass && !_isVertical && CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox))
+            else if (!_continuesAPreviousPass && !_isVertical
+                     && (CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox)
+                         || AnchorsOverWideToInlineEnd))
             {
                 // An over-constrained table in an rtl containing block ignores margin-left (CSS 2.1 §10.3.3),
                 // so it hangs from the right edge: end-aligned when narrower, overflowing toward the start
                 // edge when wider. The block rule is CssBox.ResolveBlockInlineStart; a table's width is only
-                // known here.
+                // known here. A table wider than its container with an auto margin is over-constrained too,
+                // since the auto margin is then 0.
                 _tableBox.Location = _tableBox.Location with
                 {
                     X = CssLayoutEngine.ContentRightOf(_tableBox.ContainingBlock, _tableBox.Location.Y)
                         - CssLayoutEngine.GetActualMarginRight(_tableBox, null, _tableBox.Location.Y)
                         - GetWidthSum()
+                };
+            }
+            else if (!_continuesAPreviousPass && _tableBox.MarginLeft.Value.IsKeyword)
+            {
+                _tableBox.Location = _tableBox.Location with
+                {
+                    X = _tableBox.Location.X + CssLayoutEngine.GetActualMarginLeft(_tableBox, GetWidthSum())
                 };
             }
 
