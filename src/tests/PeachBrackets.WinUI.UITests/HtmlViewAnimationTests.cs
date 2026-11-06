@@ -27,6 +27,10 @@ public class HtmlViewAnimationTests
         {
             var view = await LoadedAsync(window);
 
+            // A slow runner may not have made the animation yet.
+            for (var waited = 0; waited < 100 && view.Document!.GetAnimations().Count == 0; waited++)
+                await Task.Delay(100);
+
             // Let the animation run its course and the loop stop.
             await Task.Delay(1500);
             var settled = view.FrameCount;
