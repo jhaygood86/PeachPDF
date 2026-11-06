@@ -38,6 +38,7 @@ internal sealed class DemoWindow : Window
     // The page of the web showcase as it was fetched, kept so a change of theme lays it out again with the other theme's classes without fetching it again.
     private string? _webSource;
     private Slider? _widthSlider;
+    private ToggleSwitch? _fillToggle;
     private string _lastLink = string.Empty;
     private double _loadMilliseconds;
 
@@ -199,6 +200,9 @@ internal sealed class DemoWindow : Window
         _stage.HorizontalScrollMode = ScrollMode.Auto;
         _stage.Content = _hostBox;
 
+        // The box follows the width the window gives the stage, so the document fills it (a document with a width of its own keeps that).
+        _stage.SizeChanged += (_, _) => FitHostWidth();
+
         var header = new StackPanel { Margin = new Thickness(16, 12, 16, 0), Spacing = 2 };
         header.Children.Add(_title);
         header.Children.Add(_description);
@@ -219,8 +223,10 @@ internal sealed class DemoWindow : Window
         panel.Children.Add(new TextBlock { Text = "Host knobs", FontSize = 18, FontWeight = new Windows.UI.Text.FontWeight { Weight = 600 } });
 
         Section(panel, "The host's box");
+        _fillToggle = Toggle(_settings.FillWidth, v => { _settings.FillWidth = v; ApplySettings(); });
+        Knob(panel, "Fill width", "The host's box is as wide as the window and follows it as it is resized; the document lays out to that width, and fills it unless it sets a width of its own.", _fillToggle);
         _widthSlider = Slider(200, 1200, _settings.HostWidth, v => { _settings.HostWidth = v; ApplySettings(); });
-        Knob(panel, "Width", "How wide the host makes the widget. The document lays out to this width.", _widthSlider);
+        Knob(panel, "Width", "How wide the host makes the widget when Fill width is off. The document lays out to this width.", _widthSlider);
         Knob(panel, "Height", "Fixed: the widget has a height and scrolls. Content: the widget is as tall as its document, like a row in a list.",
             Combo(["Fixed", "Content"], (int)_settings.HeightMode, i => { _settings.HeightMode = (HeightMode)i; ApplySettings(); }));
         Knob(panel, "Fixed height", "The height used when Height is Fixed. It is also the viewport that vh and fixed boxes use.",
@@ -362,6 +368,11 @@ internal sealed class DemoWindow : Window
         }
 
         // A web page is laid out for a desktop-wide window.
+        if (_fillToggle is not null)
+            _fillToggle.IsOn = false;
+        else
+            _settings.FillWidth = false;
+
         if (_widthSlider is not null)
             _widthSlider.Value = 1200;
         else
@@ -484,11 +495,24 @@ internal sealed class DemoWindow : Window
         }
     }
 
+    // The width of the box: the stage's, less the box's margin and the room a vertical scroll bar may take, when it fills the window; otherwise the knob's.
+    private void FitHostWidth()
+    {
+        if (!_settings.FillWidth)
+        {
+            _hostBox.Width = _settings.HostWidth;
+            return;
+        }
+
+        var available = _stage.ActualWidth - _hostBox.Margin.Left - _hostBox.Margin.Right - 20;
+        _hostBox.Width = available >= 200 ? available : _settings.HostWidth;
+    }
+
     // Hands every knob to the view and the box it sits in.
     private void ApplySettings()
     {
         _settings.Apply(_view);
-        _hostBox.Width = _settings.HostWidth;
+        FitHostWidth();
         _hostBox.Height = _settings.HeightMode == HeightMode.Fixed || _settings.ListMode ? _settings.HostHeight : double.NaN;
         _hostBox.Background = new SolidColorBrush(_settings.PageBackground);
         _root.RequestedTheme = _settings.Theme;

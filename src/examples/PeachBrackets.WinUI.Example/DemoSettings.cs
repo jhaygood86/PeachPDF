@@ -55,6 +55,9 @@ internal sealed class DemoSettings
 
     public bool AnimationsEnabled { get; set; } = true;
 
+    /// <summary>Whether the host's box is as wide as the window lets it be (and follows the window as it is resized); off, it is <see cref="HostWidth"/> wide.</summary>
+    public bool FillWidth { get; set; } = true;
+
     public double HostWidth { get; set; } = 700;
 
     public double HostHeight { get; set; } = 520;
