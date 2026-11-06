@@ -162,6 +162,29 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(r[Red].X + r[Red].W, r[Blue].X, 1);
         }
 
+        // The float is in an offset box itself, and its blocker in another: they are compared in one frame, so it sits beside the blocker.
+        [Fact]
+        public async Task FloatInAnOffsetBox_IsPlacedBesideABlockerInAnOffsetSibling()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='position:relative;top:15pt'>" + Float("left", "#0f0", "width:75pt;height:7.5pt") + "</div>" +
+                "<div style='position:relative;top:15pt;height:150pt'>" + Float("left", "#f00", "width:75pt;height:22.5pt") + "</div></div>");
+
+            Assert.Equal(r[Lime].X + r[Lime].W, r[Red].X, 1);
+            Assert.Equal(r[Lime].Top, r[Red].Top, 1);
+        }
+
+        // An inline-block that sticks out of an earlier block is on that block's line, not on the float's.
+        [Fact]
+        public async Task InlineBlockOverflowingAnEarlierBlock_DoesNotPushALaterFloatDown()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='height:15pt'><span style='display:inline-block;width:75pt;height:75pt;background:#0f0'></span></div>" +
+                Float("right", "#f00", "width:337.5pt;height:22.5pt") + "</div>");
+
+            Assert.Equal(r[Lime].Top - 15, r[Red].Top, 1);
+        }
+
         [Fact]
         public async Task ClearAfterAFloatInARelativelyPositionedBox_ClearsItsStaticBottom()
         {

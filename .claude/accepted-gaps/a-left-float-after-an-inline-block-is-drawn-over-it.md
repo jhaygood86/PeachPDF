@@ -1,0 +1,3 @@
+# A left float after an inline-block on the same line is drawn over it
+
+A browser lays the line out again around a left float placed after an `inline-block` (`inline-flex`, `inline-grid`, `inline-table`): the box moves right if it fits beside the float, and the float goes below the line if it does not. Here the float is placed at the line start over the box in both cases. The words on a line are moved beside such a float (`ShiftLineBesideFloat`), but a box already placed with content of its own is not. A right float after one goes below the line (`FloatOverlapsLineBox` and the blocker scan), which needs nothing moved (tracking issue #2227).

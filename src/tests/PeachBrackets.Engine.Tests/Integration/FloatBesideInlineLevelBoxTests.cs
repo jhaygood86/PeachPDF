@@ -46,7 +46,7 @@ public class FloatBesideInlineLevelBoxTests
     {
         var (c, r, _) = await LayoutAsync(
             "<div style='display:inline-block;vertical-align:top;width:225pt;height:60pt'></div>" +
-            "<div id='r' style='float:right;width:150pt;height:30pt'></div><div id='l' style='float:left;width:10pt;height:30pt'></div>");
+            "<div id='r' style='float:right;width:150pt;height:30pt'></div>");
 
         Assert.Equal(c.Location.Y, r.Location.Y, 1);
         Assert.Equal(c.Location.X + 225, r.Location.X, 1);
@@ -81,15 +81,32 @@ public class FloatBesideInlineLevelBoxTests
         Assert.True(r.Location.Y >= c.Location.Y + 60, $"the float is at {r.Location.Y - c.Location.Y}, over the line");
     }
 
-    // A left float is moved beside the line's content rather than below it, and was never under the inline-block's control: it stays where it
-    // was put.
+    // An inline-block that sticks out of an earlier block is on that block's line, not on the float's: the float after the block does not
+    // have to clear it.
     [Fact]
-    public async Task LeftFloatAfterAnInlineBlock_IsNotMovedBelowTheLine()
+    public async Task InlineBlockOverflowingAnEarlierBlock_IsNotOnTheFloatsLine()
     {
-        var (c, _, l) = await LayoutAsync(
-            "<div style='display:inline-block;vertical-align:top;width:225pt;height:60pt'></div>" +
-            "<div id='r' style='float:right;width:10pt;height:30pt'></div><div id='l' style='float:left;width:150pt;height:30pt'></div>");
+        var (c, r, _) = await LayoutAsync(
+            "<div style='height:15pt'><span style='display:inline-block;width:75pt;height:75pt'></span></div>" +
+            "<div id='r' style='float:right;width:337.5pt;height:22.5pt'></div><div id='l' style='float:left;width:10pt;height:22.5pt'></div>");
 
-        Assert.Equal(c.Location.Y, l.Location.Y, 1);
+        Assert.Equal(c.Location.Y + 15, r.Location.Y, 1);
+    }
+
+    // The float goes below the line, and what follows it in the source goes on the line after the inline-block, as in a browser: the
+    // container holds one line, not two.
+    [Fact]
+    public async Task InlineContentAfterAFloatThatWentBelowTheLine_StaysOnTheLine()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:375pt'><span style='display:inline-block;width:225pt;height:22.5pt'></span>" +
+            "<div id='r' style='float:right;width:187.5pt;height:75pt'></div>" +
+            "<span style='display:inline-block;width:30pt;height:22.5pt'></span></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var c = LayoutHarness.FindById(root, "c")!;
+
+        Assert.True(LayoutHarness.FindById(root, "r")!.Location.Y >= c.Location.Y + 22.5 - 0.1, "the float is below the line");
+        Assert.True(c.ActualBottom - c.Location.Y < 40, $"the second inline-block is on a line of its own (the container is {c.ActualBottom - c.Location.Y}pt tall)");
     }
 }

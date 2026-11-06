@@ -3627,7 +3627,8 @@ namespace PeachBrackets.Html.Dom
         private static void ClearBox(CssBox box, int currentBoxIdx, CssBox containingBox)
         {
             var clearance = Math.Max(containingBox.ClientTop, box.Location.Y);
-            var floor = clearance;
+            // A float is not held to the containing block's content top: a negative margin-top lets it start above it, as in a browser.
+            var floor = box.IsFloated ? box.Location.Y : clearance;
 
             // The lowest float edge the box clears, apart from the containing block's own content top that
             // `clearance` is seeded with: only a float's edge is clearance (§9.5.2).
@@ -3668,10 +3669,10 @@ namespace PeachBrackets.Html.Dom
             // collapsed through although no float had cleared it.
             box.HasClearance = floatEdge > box.Location.Y + 0.01;
 
-            // A float's margin box, not its border box, goes below the floats it clears (§9.5.1 rules 1-3 keep the outer edges of floats from
-            // overlapping), so its own margin-top sits between the lowest float's bottom outer edge and its border box, and a negative one
-            // reaches back above it. The §9.5.2 rule that puts the top BORDER edge at that bottom outer edge is for a block-level box.
-            if (box.IsFloated && !double.IsNegativeInfinity(floatEdge)) clearance = Math.Max(floor, floatEdge + box.ActualMarginTop);
+            // A float's top OUTER edge goes below the bottom outer edges of the floats it clears (CSS 2.1 §9.5.2's last constraint on floats), so
+            // its own margin-top sits between the lowest float's edge and its border box, and a negative one reaches back above it. The rule
+            // that puts the top BORDER edge at that bottom outer edge is clearance, for a block-level box.
+            if (box.IsFloated) clearance = Math.Max(floor, floatEdge + box.ActualMarginTop);
 
             box.Location = new PaintPoint(box.ClientLeft, clearance);
         }
@@ -3769,15 +3770,17 @@ namespace PeachBrackets.Html.Dom
                         break;
                 }
 
-                // The blocker's static bottom, as a relative offset is visual only (CSS 2.1 §9.4.3).
+                // The blocker's static bottom, as a relative offset is visual only (CSS 2.1 §9.4.3), and its margin edge: the float goes below the
+                // blocker's margin box (rule 8). Never above the border box, as in FloatBoxRight.
                 var blockerStaticBottom = intersectingFloat.ActualBottom - coordinates.BlockerOffsetY;
+                blockerStaticBottom = Math.Max(blockerStaticBottom, blockerStaticBottom + intersectingFloat.ActualMarginBottom);
                 if (blockerStaticBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerStaticBottom;
                 }
 
                 if (coordinates.Left + box.ActualWidth + rightMargin > coordinates.Right + DomUtils.FloatFitTolerance
-                    ||!triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
@@ -3870,7 +3873,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft + DomUtils.FloatFitTolerance
-                    ||!triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
+                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
@@ -4320,11 +4323,8 @@ namespace PeachBrackets.Html.Dom
             var leadingSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
             var trailingSpacing = box.ActualBorderRightWidth + box.ActualPaddingRight;
 
-            if (DomUtils.IsInlineLevelFormattingContext(box))
-            {
-                coordinates.Line.AtomicInlineRight = Math.Max(coordinates.Line.AtomicInlineRight,
-                    startX + Math.Max(usedContentWidth, contentWidth) + trailingSpacing + box.ActualMarginRight);
-            }
+            coordinates.Line.AtomicInlineRight = Math.Max(coordinates.Line.AtomicInlineRight,
+                startX + Math.Max(usedContentWidth, contentWidth) + trailingSpacing + box.ActualMarginRight);
 
             if (coordinates.WordOrdinal != startOrdinal) return;
 
@@ -4951,11 +4951,19 @@ namespace PeachBrackets.Html.Dom
             // sent a float wider than the line to a third line and left the line before it drawn twice.
             // A line that cannot wrap (white-space: nowrap or pre) stays one line, as in a browser: it may be wider
             // than the column, and moving it or opening a line after it draws its words twice or on top of each other.
+            var overlapsLineBox = FloatOverlapsLineBox(b, coordinates);
+
             if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
-                && (FloatOverlapsLineWords(b, coordinates.Line) || FloatOverlapsLineBox(b, coordinates.Line)))
+                && (FloatOverlapsLineWords(b, coordinates.Line) || overlapsLineBox))
             {
-                // A box already placed on the line cannot be moved beside the float as its words can, so a right float over one goes below.
-                if (!FloatOverlapsLineBox(b, coordinates.Line) && ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
+                if (overlapsLineBox)
+                {
+                    // A box already placed on the line cannot be moved beside the float as its words can, so a right float over one goes below the
+                    // line, and the line stays as it is: what follows the float in the source goes on after the box, as in a browser.
+                    coordinates.InlineFloats?.Remove(b);
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates, coordinates.MaxBottom);
+                }
+                else if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {
                     foreach (var word in coordinates.Line.Words)
                     {
@@ -4976,13 +4984,18 @@ namespace PeachBrackets.Html.Dom
             await LayoutContentUnbroken(g, b, pushLinesPastThePageFoot: true);
         }
 
-        private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates)
+        /// <param name="g">The canvas the box's width is resolved against.</param>
+        /// <param name="blockBox">The block whose lines are being flowed.</param>
+        /// <param name="b">The float.</param>
+        /// <param name="coordinates">The line being flowed.</param>
+        /// <param name="top">Where the float's margin box starts when it is not at the top of the line.</param>
+        private static async ValueTask PlaceFloatAtLineTop(Canvas g, CssBox blockBox, CssBox b, CssLineBoxCoordinates coordinates, double? top = null)
         {
             // The float's margin box starts at the line top (CSS 2.1 section 9.5.1 rule 6) and its margins never
             // collapse (section 8.3.1), so the border box sits margin-top below it, a negative one above.
             b.Location = new PaintPoint(
                 blockBox.ClientLeft + b.ActualMarginLeft,
-                (coordinates.Line.FlowTop ?? coordinates.CurrentY) + b.ActualMarginTop);
+                (top ?? coordinates.Line.FlowTop ?? coordinates.CurrentY) + b.ActualMarginTop);
             b.ActualBottom = b.Location.Y;
 
             var width = await GetBoxWidth(g, b, b.Location.Y);
@@ -4997,13 +5010,13 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
-        /// Whether the right float <paramref name="floated"/>, placed at the top of <paramref name="line"/>, overlaps an inline-block (or
-        /// inline-flex, -grid, -table) already on it. Such a box is placed with its own content, which the words' shift beside a float does not
-        /// move, so a float over one goes below the line, as it does when the box does not fit beside it. A left float is left as it was.
+        /// Whether the right float <paramref name="floated"/>, placed at the top of the line being flowed, overlaps an inline-block already on it
+        /// whose content flows into the line. Such a box is placed with its own content, which the words' shift beside a float does not move,
+        /// so a float over one goes below the line, as it does when the box does not fit beside it. A left float is left as it was.
         /// </summary>
-        private static bool FloatOverlapsLineBox(CssBox floated, CssLineBox line) =>
+        private static bool FloatOverlapsLineBox(CssBox floated, CssLineBoxCoordinates coordinates) =>
             floated.EffectiveFloatSide == Floating.Right
-            && line.AtomicInlineRight > floated.Location.X - floated.ActualMarginLeft + DomUtils.FloatFitTolerance;
+            && coordinates.Line.AtomicInlineRight > floated.Location.X - floated.ActualMarginLeft + DomUtils.FloatFitTolerance;
 
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {

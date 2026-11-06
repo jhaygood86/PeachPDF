@@ -179,8 +179,9 @@ namespace PeachBrackets.Html.Dom
         public Dictionary<CssBox, Rect> Rectangles { get; }
 
         /// <summary>
-        /// The right margin edge of the furthest inline-block (or inline-flex, -grid, -table) placed on this line so far, or negative infinity
-        /// when there is none. A float placed after it cannot move it aside as it moves the line's words, so it has to know it is there.
+        /// The right margin edge of the furthest inline-block whose content flows into this line placed on it so far, or negative infinity when
+        /// there is none. A float placed after it cannot move it aside as it moves the line's words, so it has to know it is there. (One that
+        /// holds block-level content, an inline-flex, -grid or -table has a box of its own that the float scan finds instead.)
         /// </summary>
         public double AtomicInlineRight { get; set; } = double.NegativeInfinity;
 

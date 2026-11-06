@@ -146,7 +146,46 @@ public class LeftFloatBesideRightFloatTests
             $"<div id='l' style='float:{secondSide};width:{secondWidth};height:30px'></div></div>");
         var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
 
-        Assert.Equal(LayoutHarness.FindById(root, "r")!.Location.Y, LayoutHarness.FindById(root, "l")!.Location.Y, 1);
+        var first = LayoutHarness.FindById(root, "r")!;
+        var second = LayoutHarness.FindById(root, "l")!;
+
+        Assert.Equal(first.Location.Y, second.Location.Y, 1);
+
+        // Side by side, not over each other: whichever is further left ends where the other starts.
+        var (left, right) = first.Location.X < second.Location.X ? (first, second) : (second, first);
+        Assert.Equal(left.ActualRight, right.Location.X, 0.5);
+    }
+
+    // The tolerance is a few hundredths of a point: floats that really overlap, by a tenth of a pixel or more, still go to two rows.
+    [Theory]
+    [InlineData("right", "left")]
+    [InlineData("left", "right")]
+    [InlineData("left", "left")]
+    [InlineData("right", "right")]
+    public async Task FloatsThatReallyOverlap_GoOnTwoRows(string firstSide, string secondSide)
+    {
+        var html = LayoutHarness.Wrap(
+            $"<div id='c' style='width:700px'><div id='r' style='float:{firstSide};width:66.6667%;height:30px'></div>" +
+            $"<div id='l' style='float:{secondSide};width:33.4%;height:30px'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var first = LayoutHarness.FindById(root, "r")!;
+
+        Assert.Equal(first.ActualBottom, LayoutHarness.FindById(root, "l")!.Location.Y, 1);
+    }
+
+    // A float goes below its blocker's margin box (rule 8): a float that does not fit beside a blocker with a bottom margin starts below
+    // the margin.
+    [Theory]
+    [InlineData("right", "left")]
+    [InlineData("left", "left")]
+    public async Task FloatThatDoesNotFitBesideABlockerWithABottomMargin_GoesBelowItsMarginBox(string blockerSide, string floatSide)
+    {
+        var (c, _, l) = await LayoutAsync(
+            $"<div id='r' style='float:{blockerSide};width:187.5pt;height:15pt;margin-bottom:7.5pt'></div>" +
+            $"<div id='l' style='float:{floatSide};width:188.25pt;height:15pt'></div>");
+
+        Assert.Equal(c.Location.Y + 22.5, l.Location.Y, 1);
     }
 
     // `clear: left` only has to clear the left float; once it has, the right float does not stop this one sitting beside it.

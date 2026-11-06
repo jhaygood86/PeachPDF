@@ -1028,6 +1028,15 @@ namespace PeachBrackets.Html.Utils
             return false;
         }
 
+        /// <param name="reference">The box being placed (a float) or whose lines are being laid out.</param>
+        /// <param name="coordinates">The area a float has to intersect to be returned.</param>
+        /// <param name="floatProp">Which side's floats to look for.</param>
+        /// <returns>
+        /// The first blocker. For a float being placed, <see cref="CssFloatCoordinates.BlockerOffsetX"/>/<c>Y</c> then say how far its edges are from
+        /// the static positions in the frame the coordinates are in (CSS 2.1 §9.4.3): the edges to place against are its coordinates less those.
+        /// The line flow's lookup (<see cref="CssFloatCoordinates.LeftFloatsOnly"/>) reads the edges as drawn, as it always has: it uses the
+        /// returned float's own edges, which it cannot be given the offsets of.
+        /// </returns>
         public static CssBox? GetFirstIntersectingFloatBox(CssBox reference, CssFloatCoordinates coordinates, Floating floatProp)
         {
             var container = reference.HtmlContainer;
@@ -1066,6 +1075,11 @@ namespace PeachBrackets.Html.Utils
             var lowest = double.NegativeInfinity;
             var isStartingLevel = true;
 
+            // The float being placed is in a frame that has the relative offsets of the boxes it lies in (those are applied before their content is
+            // laid out), while an earlier sibling's floats have that sibling's own; the first is taken off every float found, so that all of them are
+            // compared in the float's frame with no offset but their own removed (CSS 2.1 §9.4.3).
+            var frameOffsetY = 0d;
+
             for (; reference.ParentBox is { } parent; reference = parent)
             {
                 if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) break;
@@ -1082,8 +1096,10 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < index; i++)
                 {
-                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], 0));
+                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], -frameOffsetY));
                 }
+
+                frameOffsetY += parent.RelativeOffsetY;
             }
 
             return lowest;
@@ -1123,6 +1139,13 @@ namespace PeachBrackets.Html.Utils
         {
             var isStartingLevel = true;
 
+            // How far the frame the float is in has been moved by the relative offsets of the boxes it lies in, up to the level being scanned
+            // (its own is applied after it is placed): those are applied before a box's content is laid out, so the coordinates being compared
+            // include them, and a blocker's own (from the earlier sibling down) are removed from it as well, so both are then in the same frame.
+            var frameOffsetX = 0d;
+            var frameOffsetY = 0d;
+            var useStaticEdges = !coordinates.LeftFloatsOnly;
+
             while (true)
             {
                 if (reference.ParentBox is null)
@@ -1159,13 +1182,17 @@ namespace PeachBrackets.Html.Utils
                     return null;
                 }
 
+                // Only the boxes next to the one being placed are in its line context: an inline-block inside an earlier block is on a line of that
+                // block, which a float after the block does not share even where the inline-block overflows it.
+                var isSiblingLevel = isStartingLevel;
                 isStartingLevel = false;
 
                 var currentBoxIdx = reference.ParentBox.IndexOfChild(reference);
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    var next = GetNextIntersectingFloatBox(reference.ParentBox.Boxes[i], coordinates, floatProp, ref boxesVisited, 0, 0);
+                    var next = GetNextIntersectingFloatBox(reference.ParentBox.Boxes[i], coordinates, floatProp, ref boxesVisited, -frameOffsetX, -frameOffsetY,
+                        isSiblingLevel);
 
                     if (next is not null)
                     {
@@ -1174,6 +1201,12 @@ namespace PeachBrackets.Html.Utils
                 }
 
                 reference = reference.ParentBox;
+
+                if (useStaticEdges)
+                {
+                    frameOffsetX += reference.RelativeOffsetX;
+                    frameOffsetY += reference.RelativeOffsetY;
+                }
             }
         }
 
@@ -1899,15 +1932,19 @@ namespace PeachBrackets.Html.Utils
         /// <param name="boxesVisited">Accumulator: every box examined is added to it.</param>
         /// <param name="offsetX">How far the boxes above <paramref name="box"/>, down from the earlier sibling the search started from, have been moved sideways by relative positioning.</param>
         /// <param name="offsetY">The same, vertically.</param>
+        /// <param name="isSibling">Whether <paramref name="box"/> is a sibling of the box being placed, rather than something inside an earlier sibling.</param>
         private static CssBox? GetNextIntersectingFloatBox(CssBox box, CssFloatCoordinates coordinates, Floating floatProp, ref int boxesVisited,
-            double offsetX, double offsetY)
+            double offsetX, double offsetY, bool isSibling = false)
         {
             boxesVisited++;
 
             // A relative offset is visual only (CSS 2.1 §9.4.3), so where a float goes is decided against where its blockers are in flow; but
             // everything inside a relatively positioned box moves with it, so the offsets of the boxes a blocker lies in have to come off too.
-            offsetX += box.RelativeOffsetX;
-            offsetY += box.RelativeOffsetY;
+            if (!coordinates.LeftFloatsOnly)
+            {
+                offsetX += box.RelativeOffsetX;
+                offsetY += box.RelativeOffsetY;
+            }
 
             if (IsFloatIntersecting(coordinates, floatProp, box, offsetX, offsetY))
             {
@@ -1919,8 +1956,9 @@ namespace PeachBrackets.Html.Utils
             // An inline-block (or inline-flex, -grid, -table) already on the line is content a right float has to stay clear of, as one that
             // would overlap it goes below the line (§9.5.1 rules 1-3: the float's margin box may not overlap a line box's content). It is not
             // looked into, as below, but it counts by its own margin box. A left float is not given the same: the words on its line are moved
-            // beside it (ShiftLineBesideFloat), which an already placed box with content of its own cannot be.
-            if (floatProp == Floating.Right && IsInlineLevelFormattingContext(box) && IsLineContentIntersecting(coordinates, box, offsetX, offsetY))
+            // beside it (ShiftLineBesideFloat), which an already placed box with content of its own cannot be. Only a sibling of the float is on
+            // its line: one in an earlier block is on that block's own line, whatever it overflows.
+            if (isSibling && floatProp == Floating.Right && IsInlineLevelFormattingContext(box) && IsLineContentIntersecting(coordinates, box, offsetX, offsetY))
             {
                 coordinates.BlockerOffsetX = offsetX;
                 coordinates.BlockerOffsetY = offsetY;
@@ -1948,12 +1986,13 @@ namespace PeachBrackets.Html.Utils
         /// <summary>
         /// How far two floats' margin boxes may overlap and still count as fitting side by side. Widths such as 70% and 30% of the
         /// same container sum to it only up to rounding, which must not send the second float below the first. A used width is a
-        /// single-precision value, so two such widths can be off by a few 1e-5 points; 0.01 point (about a hundredth of a pixel, less than a
-        /// browser's own 1/64 pixel layout unit) is well above that and far below anything a reader can see. Every test of whether a float
+        /// single-precision value, so two such widths can be off by a few 1e-5 points. A browser floors each width to its 1/64 pixel layout
+        /// unit (0.0117pt), so a row of a few floats can be a few hundredths of a point over and still be one row there: 0.025pt (a thirtieth of a
+        /// pixel) is above that, and below the 0.03 pixel at which a browser starts to split rows. Every test of whether a float
         /// fits beside another has to use it (the blocker test below and the fit tests in <c>CssLayoutEngine.FloatBoxLeft</c> and
         /// <c>FloatBoxRight</c>), or the two disagree about a pair that is one rounding error too wide.
         /// </summary>
-        internal const double FloatFitTolerance = 0.01;
+        internal const double FloatFitTolerance = 0.025;
 
         /// <summary>An inline-block, inline-flex, inline-grid or inline-table box: atomic inline content that is a formatting context of its own.</summary>
         internal static bool IsInlineLevelFormattingContext(CssBox box) =>

@@ -52,6 +52,35 @@ public class FloatClearanceMarginTests
         Assert.Equal(c.Location.Y + 46.5, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
     }
 
+    // A float with `clear` and nothing to clear is not held to the container's top: its negative margin-top lets it start above it, and the
+    // next float (rule 5) is placed against that top, not a clamped one.
+    [Fact]
+    public async Task ClearedFloatWithANegativeMarginTopAndNothingToClear_IsNotClampedToTheContainerTop()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:750pt'><div id='a' style='float:left;width:150pt;height:30pt;margin:-4.5pt 0 0;clear:both'></div>" +
+            "<div id='b' style='float:left;width:150pt;height:30pt;margin:6pt 0 0'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var c = LayoutHarness.FindById(root, "c")!;
+
+        Assert.Equal(c.Location.Y - 4.5, LayoutHarness.FindById(root, "a")!.Location.Y, 1);
+        Assert.Equal(c.Location.Y + 6, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
+    // The margin term is for floats. A block that clears a float gets §9.5.2's clearance, which puts its top border edge at the float's bottom
+    // outer edge whatever its own margin-top is.
+    [Fact]
+    public async Task BlockWithClearAndAMarginTop_IsStillClearedToTheFloatsBottomOuterEdge()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:750pt'><div style='float:left;width:300pt;height:30pt;margin:6pt 0'></div>" +
+            "<div id='b' style='clear:both;margin-top:15pt;height:10pt'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        Assert.Equal(LayoutHarness.FindById(root, "c")!.Location.Y + 42, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
     // A cleared float is still never above the float it does not clear, and clearing one side leaves the other alone.
     [Fact]
     public async Task ClearRightOfAFloatOnTheLeft_ClearsNothingAndKeepsRuleFive()

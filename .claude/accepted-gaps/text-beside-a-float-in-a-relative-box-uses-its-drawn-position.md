@@ -1,0 +1,3 @@
+# Text beside a float in a `position: relative` box is placed against the float's drawn position
+
+Placing a float against other floats takes their static position (CSS 2.1 §9.4.3: relative positioning is visual only), but the line flow's lookups (`DomUtils.GetLastLeftIntersectingFloatBox`, `FindNarrowestRightFloatBox`, `ScanForNarrowestRightFloatBox` and the vertical float insets) read the drawn edges, and the code that uses the float found reads its own edges, which carry the offset. Making the test static and leaving the advance drawn stacked all the text of a line on top of itself for a large negative `left`, so the line flow stays on drawn edges until the readers are given the offsets together (tracking issue #2229).
