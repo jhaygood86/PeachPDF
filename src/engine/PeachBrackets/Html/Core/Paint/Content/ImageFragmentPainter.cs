@@ -26,7 +26,7 @@ namespace PeachBrackets.Html.Paint.Content
             }
 
             // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, rect, image.Image, image.SvgDocument, box);
+            ReplacedContentRenderer.Paint(g, rect, image.Image, image.SvgDocument?.Current, box);
         }
     }
 }

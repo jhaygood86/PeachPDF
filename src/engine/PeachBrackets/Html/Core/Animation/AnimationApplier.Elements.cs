@@ -47,20 +47,45 @@ namespace PeachBrackets.Html.Animation
             if (box.HtmlContainer is not { Keyframes: { Count: > 0 } keyframes } container) return null;
 
             // A snapshot samples every animation at one fraction of its own run; a running clock gives the time, and each animation's delay, iterations and fill apply.
-            var fractionOrNull = container.AnimationProgress;
-            var seconds = container.SvgAnimationSeconds;
-            if (fractionOrNull is null && seconds is null) return null;
-            var fraction = fractionOrNull ?? 0;
-
+            if (container.AnimationProgress is null && container.SvgAnimationSeconds is null) return null;
             if (IsNone(box.AnimationName)) return null;
 
-            var names = SplitList(box.AnimationName);
-            var durations = SplitList(box.AnimationDuration);
-            var delays = fractionOrNull is null ? SplitList(CssUtils.GetPropertyValue(box, "animation-delay")) : null;
-            var iterationCounts = SplitList(box.AnimationIterationCount);
-            var directions = SplitList(box.AnimationDirection);
-            var fillModes = SplitList(box.AnimationFillMode);
-            var timingFunctions = SplitList(box.AnimationTimingFunction);
+            return BuildPlan(BoxStyle(box), keyframes, container.AnimationProgress, container.SvgAnimationSeconds, new CssValueParser(container.RenderContext));
+        }
+
+        /// <summary>
+        /// The animations of an element of a standalone SVG (its style is the declarations its own style sheets give it, <paramref name="style"/> reading one longhand by name) that
+        /// are in play <paramref name="seconds"/> after the image began to show; null when there are none.
+        /// </summary>
+        internal static ElementPlan? PlanStandaloneElement(Func<string, string?> style, IReadOnlyDictionary<string, KeyframeSet> keyframes, double seconds, CssValueParser parser) =>
+            keyframes.Count == 0 || IsNone(style("animation-name")) ? null : BuildPlan(style, keyframes, null, seconds, parser);
+
+        // The longhands of the animation properties of a box, by name.
+        private static Func<string, string?> BoxStyle(CssBox box) => name => name switch
+        {
+            "animation-name" => box.AnimationName,
+            "animation-duration" => box.AnimationDuration,
+            "animation-iteration-count" => box.AnimationIterationCount,
+            "animation-direction" => box.AnimationDirection,
+            "animation-fill-mode" => box.AnimationFillMode,
+            "animation-timing-function" => box.AnimationTimingFunction,
+            _ => CssUtils.GetPropertyValue(box, name)
+        };
+
+        private static ElementPlan? BuildPlan(Func<string, string?> style, IReadOnlyDictionary<string, KeyframeSet> keyframes, double? fractionOrNull, double? seconds, CssValueParser parser)
+        {
+            var fraction = fractionOrNull ?? 0;
+
+            var names = SplitList(style("animation-name"));
+            var durations = SplitList(style("animation-duration"));
+            var delays = fractionOrNull is null ? SplitList(style("animation-delay")) : null;
+
+            // The elements of an SVG are not restyled while it plays, so a paused animation stays where it began: its time never advances (a still frame has no play state at all).
+            var playStates = fractionOrNull is null ? SplitList(style("animation-play-state")) : null;
+            var iterationCounts = SplitList(style("animation-iteration-count"));
+            var directions = SplitList(style("animation-direction"));
+            var fillModes = SplitList(style("animation-fill-mode"));
+            var timingFunctions = SplitList(style("animation-timing-function"));
 
             List<ElementAnimation>? animations = null;
 
@@ -79,7 +104,7 @@ namespace PeachBrackets.Html.Animation
                         ParseDirection(Cycle(directions, i)),
                         fillsForwards)
                     : AnimationTimeline.LiveProgress(
-                        seconds!.Value,
+                        Cycle(playStates!, i).Equals("paused", StringComparison.OrdinalIgnoreCase) ? 0 : seconds!.Value,
                         ParseSeconds(Cycle(delays!, i)),
                         ParseSeconds(Cycle(durations, i)),
                         ParseIterationCount(Cycle(iterationCounts, i)),
@@ -94,26 +119,39 @@ namespace PeachBrackets.Html.Animation
                 (animations ??= []).Add(new ElementAnimation(set, directed, easing));
             }
 
-            return animations is null ? null : new ElementPlan(animations, new CssValueParser(container.RenderContext));
+            return animations is null ? null : new ElementPlan(animations, parser);
         }
 
         /// <summary>
         /// When the last CSS animation <paramref name="box"/> names ends, in seconds (infinite when one repeats for ever), or null when it names none that exists.
         /// What decides whether a playing <c>&lt;svg&gt;</c> still has frames to draw.
         /// </summary>
-        internal static double? ElementAnimationEnd(CssBox box)
-        {
-            if (box.HtmlContainer is not { Keyframes: { Count: > 0 } keyframes } || IsNone(box.AnimationName)) return null;
+        internal static double? ElementAnimationEnd(CssBox box) =>
+            box.HtmlContainer is not { Keyframes: { Count: > 0 } keyframes } || IsNone(box.AnimationName) ? null : AnimationEnd(BoxStyle(box), keyframes);
 
-            var names = SplitList(box.AnimationName);
-            var durations = SplitList(box.AnimationDuration);
-            var delays = SplitList(CssUtils.GetPropertyValue(box, "animation-delay"));
-            var iterationCounts = SplitList(box.AnimationIterationCount);
+        /// <summary>The same for an element of a standalone SVG.</summary>
+        internal static double? StandaloneAnimationEnd(Func<string, string?> style, IReadOnlyDictionary<string, KeyframeSet> keyframes) =>
+            keyframes.Count == 0 || IsNone(style("animation-name")) ? null : AnimationEnd(style, keyframes);
+
+        private static double? AnimationEnd(Func<string, string?> style, IReadOnlyDictionary<string, KeyframeSet> keyframes)
+        {
+            var names = SplitList(style("animation-name"));
+            var durations = SplitList(style("animation-duration"));
+            var delays = SplitList(style("animation-delay"));
+            var iterationCounts = SplitList(style("animation-iteration-count"));
+            var playStates = SplitList(style("animation-play-state"));
 
             double? end = null;
             for (var i = 0; i < names.Count; i++)
             {
                 if (names[i].Equals("none", StringComparison.OrdinalIgnoreCase) || !keyframes.ContainsKey(Unquote(names[i]))) continue;
+
+                // A paused animation never gets anywhere (see BuildPlan), so it ends nothing.
+                if (Cycle(playStates, i).Equals("paused", StringComparison.OrdinalIgnoreCase))
+                {
+                    end ??= 0;
+                    continue;
+                }
 
                 var duration = ParseSeconds(Cycle(durations, i));
                 var count = ParseIterationCount(Cycle(iterationCounts, i));
@@ -136,7 +174,7 @@ namespace PeachBrackets.Html.Animation
         /// <param name="parent">The parent element's value of the property, which <c>inherit</c> in a keyframe takes.</param>
         /// <param name="initial">The property's initial value, which <c>initial</c> in a keyframe takes.</param>
         /// <param name="inherited">Whether the property is inherited, which makes <c>unset</c> mean <c>inherit</c> (and otherwise <c>initial</c>).</param>
-        internal static string? SampleElement(CssBox box, ElementPlan plan, string property,
+        internal static string? SampleElement(CssBox? box, ElementPlan plan, string property,
             Func<string?> underlying, Func<string?> parent, Func<string?> initial, bool inherited)
         {
             var valueParser = plan.ValueParser;

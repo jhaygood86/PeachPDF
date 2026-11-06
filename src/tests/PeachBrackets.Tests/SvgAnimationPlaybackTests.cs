@@ -310,4 +310,144 @@ public class SvgAnimationPlaybackTests
         At(skew, 3);
         Assert.True(IsRed(await PixelAsync(skewContext, skew, 35, 20)));
     }
+
+    [Fact]
+    public async Task AnAnimateOfTheTransformAttribute_IsMixedFunctionByFunction()
+    {
+        var (context, document) = await LoadAsync(
+            "<rect width=40 height=40 fill=\"rgb(255,0,0)\"><animate attributeName=transform from=\"translate(0 0)\" to=\"translate(100 0)\" dur=2s fill=freeze /></rect>");
+        At(document, 0);
+        At(document, 3);
+        Assert.True(IsWhite(await PixelAsync(context, document, 10, 10)));
+        Assert.True(IsRed(await PixelAsync(context, document, 90, 10)));
+    }
+
+    [Fact]
+    public async Task ASetOfTheTransformAttribute_AppliesFromItsBegin()
+    {
+        var (context, document) = await LoadAsync(
+            "<rect width=40 height=40 fill=\"rgb(255,0,0)\"><set attributeName=transform to=\"translate(100 0)\" begin=1s /></rect>");
+        At(document, 0);
+        At(document, 0.5);
+        Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
+        At(document, 2);
+        Assert.True(IsWhite(await PixelAsync(context, document, 10, 10)));
+        Assert.True(IsRed(await PixelAsync(context, document, 90, 10)));
+    }
+
+    [Fact]
+    public async Task APausedCssAnimationOnAnSvgElement_StaysWhereItBegan()
+    {
+        const string css = "@keyframes tint { from { fill: rgb(255,0,0) } to { fill: rgb(0,255,0) } } #r { animation: tint 2s linear forwards paused }";
+        var (context, document) = await LoadAsync("<rect id=r width=200 height=100 fill=\"rgb(0,0,255)\" />", css);
+
+        At(document, 0);
+        At(document, 5);
+        Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
+        Assert.False(document.HasRunningAnimations);
+    }
+
+    // Loads a document whose images are fetched (a data: URI goes through the resource loader like any other address).
+    private static async Task<(RasterRenderContext Context, HtmlDocument Document)> LoadWithImagesAsync(string body)
+    {
+        var context = await TestDocument.NewContextAsync();
+        context.ResourceLoader = uri => HostResourceLoader.LoadAsync(uri);
+        var document = await HtmlDocument.LoadAsync(TestDocument.Wrap(body, "<style>body { margin: 0 }</style>"), context, Playing());
+        using var measuring = context.CreateCanvas(1, 1);
+        await document.LayoutAsync(measuring);
+        return (context, document);
+    }
+
+    private static string SvgImage(string body) =>
+        "data:image/svg+xml;base64," + Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+            $"<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"200\" height=\"100\" viewBox=\"0 0 200 100\">{body}</svg>"));
+
+    [Fact]
+    public async Task AStandaloneSvgImage_IsPlayedLikeAnAnimatedImage()
+    {
+        var image = SvgImage("<rect width=\"200\" height=\"100\" fill=\"rgb(255,0,0)\"><animate attributeName=\"fill\" from=\"rgb(255,0,0)\" to=\"rgb(0,255,0)\" dur=\"2s\" fill=\"freeze\"/></rect>");
+        var (context, document) = await LoadWithImagesAsync($"<img id=s src=\"{image}\" width=200 height=100>");
+
+        Assert.True(document.HasRunningAnimations);
+        At(document, 0);
+        Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
+
+        Assert.True(At(document, 1).IsRunning);
+        var middle = await PixelAsync(context, document, 10, 10);
+        Assert.InRange(middle.R, 90, 165);
+
+        At(document, 3);
+        Assert.True(IsGreen(await PixelAsync(context, document, 10, 10)));
+        Assert.False(At(document, 4).IsRunning);
+    }
+
+    [Fact]
+    public async Task TwoImagesOfOneStandaloneSvg_ShowTheSameMoment_AndRepaintOnlyTheirOwnRectangles()
+    {
+        var image = SvgImage("<rect width=\"200\" height=\"100\" fill=\"rgb(255,0,0)\"><animate attributeName=\"fill\" values=\"rgb(255,0,0);rgb(0,255,0)\" dur=\"2s\" fill=\"freeze\"/></rect>");
+        var (context, document) = await LoadWithImagesAsync($"<img id=a src=\"{image}\" width=100 height=50><p style=\"height:80pt\">text</p><img id=b src=\"{image}\" width=100 height=50>");
+
+        At(document, 0);
+        var frame = At(document, 1);
+        var a = document.GetElementBounds("a")!.Value;
+        var b = document.GetElementBounds("b")!.Value;
+
+        using var canvas = await TestDocument.PaintAsync(context, document);
+        var first = TestDocument.Pixel(canvas, (int)a.X + 5, (int)a.Y + 5);
+        var second = TestDocument.Pixel(canvas, (int)b.X + 5, (int)b.Y + 5);
+        Assert.Equal(first.R, second.R);
+        Assert.Equal(first.G, second.G);
+        Assert.Equal(2, frame.DirtyRegions.Count);
+    }
+
+    [Fact]
+    public async Task AStandaloneSvgWithNothingToPlay_IsStatic()
+    {
+        var image = SvgImage("<rect width=\"200\" height=\"100\" fill=\"rgb(255,0,0)\"/>");
+        var (_, document) = await LoadWithImagesAsync($"<img src=\"{image}\" width=200 height=100>");
+
+        At(document, 0);
+        Assert.False(At(document, 1).IsRunning);
+        Assert.False(document.HasRunningAnimations);
+    }
+
+    [Fact]
+    public async Task ACssAnimationInsideAStandaloneSvg_IsPlayedWithTheImage()
+    {
+        var image = SvgImage("<style>@keyframes tint { from { fill: rgb(255,0,0) } to { fill: rgb(0,255,0) } } rect { animation: tint 2s linear forwards }</style><rect width=\"200\" height=\"100\" fill=\"rgb(0,0,255)\"/>");
+        var (context, document) = await LoadWithImagesAsync($"<img id=s src=\"{image}\" width=200 height=100>");
+
+        At(document, 0);
+        Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
+
+        Assert.True(At(document, 1).IsRunning);
+        Assert.InRange((await PixelAsync(context, document, 10, 10)).R, 90, 165);
+
+        At(document, 3);
+        Assert.True(IsGreen(await PixelAsync(context, document, 10, 10)));
+        Assert.False(At(document, 4).IsRunning);
+    }
+
+    [Fact]
+    public async Task APausedCssAnimationInAStandaloneSvg_HoldsItsFirstFrame()
+    {
+        var image = SvgImage("<style>@keyframes tint { from { fill: rgb(255,0,0) } to { fill: rgb(0,255,0) } } rect { animation: tint 2s linear forwards paused }</style><rect width=\"200\" height=\"100\" fill=\"rgb(0,0,255)\"/>");
+        var (context, document) = await LoadWithImagesAsync($"<img id=s src=\"{image}\" width=200 height=100>");
+
+        At(document, 0);
+        At(document, 5);
+        Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
+        Assert.False(document.HasRunningAnimations);
+    }
+
+    [Fact]
+    public async Task AnAnimatedStandaloneSvg_AsAnObject_IsPlayedToo()
+    {
+        var image = SvgImage("<rect width=\"200\" height=\"100\" fill=\"rgb(255,0,0)\"><set attributeName=\"fill\" to=\"rgb(0,255,0)\" begin=\"1s\"/></rect>");
+        var (context, document) = await LoadWithImagesAsync($"<object id=s data=\"{image}\" type=\"image/svg+xml\" width=200 height=100></object>");
+
+        At(document, 0);
+        At(document, 2);
+        Assert.True(IsGreen(await PixelAsync(context, document, 10, 10)));
+    }
 }

@@ -364,7 +364,7 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
-        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying, Func<string, string, double, string>? mix = null, string? composition = null)
+        private static string? Sample(CssValueParser valueParser, CssBox? box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying, Func<string, string, double, string>? mix = null, string? composition = null)
         {
             var frames = BuildFrames(stops, property, underlying, composition is null ? null : new CompositionContext(valueParser, box, composition));
             return frames is null ? null : SampleFrames(valueParser, box, frames, property, progress, animationEasing, mix);
@@ -406,7 +406,7 @@ namespace PeachBrackets.Html.Animation
             return frames;
         }
 
-        private static string? SampleFrames(CssValueParser valueParser, CssBox box, List<(double Offset, string Value, string? Easing)> frames, string property, double progress, EasingFunction animationEasing, Func<string, string, double, string>? mix = null)
+        private static string? SampleFrames(CssValueParser valueParser, CssBox? box, List<(double Offset, string Value, string? Easing)> frames, string property, double progress, EasingFunction animationEasing, Func<string, string, double, string>? mix = null)
         {
             // Before the first keyframe and past the last one, the nearest value holds. Exactly *at* the first
             // keyframe is the start of its interval, which its easing still shapes: step-start shows its first step
@@ -438,9 +438,12 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>Substitutes <c>var()</c> in a keyframe value against the box's custom properties; null when it cannot be resolved.</summary>
-        private static string? ResolveVariables(CssValueParser valueParser, CssBox box, string value)
+        private static string? ResolveVariables(CssValueParser valueParser, CssBox? box, string value)
         {
             if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0) return value;
+
+            // A standalone SVG has no box to read custom properties from: a keyframe that needs one is left out.
+            if (box is null) return null;
 
             var registered = box.HtmlContainer?.RegisteredProperties;
             var context = registered is { Count: > 0 } ? new CssVarResolver.VarContext(registered, valueParser) : null;

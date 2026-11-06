@@ -82,7 +82,7 @@ namespace PeachBrackets.Svg
 
             // An attribute an animation element animates reads as what it is at the time (SMIL Animation §3.7). A presentation property is animated where the
             // builder resolves it against the CSS (GetAnimatedValue), over the value that gives, so it is left as written here and not animated twice.
-            if (SmilTime is { } time && !PresentationProperties.Contains(name) && SmilAnimationSet!.Targets(_box)
+            if (SmilTime is { } time && !SmilSet.IsPresentationProperty(name) && SmilAnimationSet!.Targets(_box)
                 && SmilAnimationSet.Sample(_box, name, time, () => declared, ((CssBoxSvg)_svgRoot).SmilParser) is { } animated)
             {
                 return animated;
@@ -155,14 +155,6 @@ namespace PeachBrackets.Svg
 
         public ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => new CssBoxSvgSourceNode(_box, _svgRoot, _cssData, _media, _varContext, (_box, use));
 
-        // The properties the builder resolves through the CSS cascade (ResolveStyledAttr), where SMIL sits above the declarations and the CSS animations.
-        private static readonly HashSet<string> PresentationProperties = new(StringComparer.Ordinal)
-        {
-            "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin",
-            "stroke-miterlimit", "fill-rule", "clip-rule", "color", "display", "visibility", "stop-color", "stop-opacity", "flood-color", "flood-opacity", "lighting-color",
-            "font-size", "font-family", "font-weight", "font-style", "letter-spacing", "word-spacing", "text-anchor", "clip-path", "mask", "filter"
-        };
-
         private bool CssAnimationsPlay => _box.HtmlContainer is { } container && (container.AnimationProgress is not null || container.SvgAnimationSeconds is not null);
 
         public bool IsAnimated => (CssAnimationsPlay && _box.GetSvgAnimationPlan() is not null) || (SmilTime is not null && SmilAnimationSet!.Targets(_box));
@@ -188,7 +180,7 @@ namespace PeachBrackets.Svg
                 css = AnimationApplier.SampleElement(_box, plan, name, underlying, parent, initial, inherited);
 
             // SMIL sits above CSS animations, over the value they give. A transform is read from the attribute, which is where its animation is applied.
-            if (SmilTime is { } time && PresentationProperties.Contains(name)
+            if (SmilTime is { } time && SmilSet.IsPresentationProperty(name)
                 && SmilAnimationSet!.Sample(_box, name, time, () => css ?? underlying(), ((CssBoxSvg)_svgRoot).SmilParser) is { } smil)
             {
                 return smil;

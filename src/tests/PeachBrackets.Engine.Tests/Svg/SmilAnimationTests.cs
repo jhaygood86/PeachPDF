@@ -274,7 +274,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var (set, _) = await ReadAsync(
                 "<rect id=\"r\" width=\"5\" height=\"5\"/><set href=\"#r\" attributeName=\"x\" to=\"9\"/>");
 
-            Assert.Equal("r", set.Animations[0].Target.GetAttribute("id", null));
+            Assert.Equal("r", set.Animations[0].Target.GetAttribute("id"));
         }
 
         [Fact]
@@ -285,6 +285,34 @@ namespace PeachBrackets.Engine.Tests.Svg
 
             Assert.Equal(6, set.StillFrameLength, 6);
             Assert.True(set.ChangesAfter(100));
+        }
+    
+
+        [Fact]
+        public void AStandaloneSvg_IsReadFromItsXml_AndSampledLikeAnInlineOne()
+        {
+            var root = System.Xml.Linq.XElement.Parse(
+                "<svg xmlns=\"http://www.w3.org/2000/svg\"><rect id=\"r\" x=\"1\"><animate attributeName=\"x\" from=\"0\" to=\"10\" dur=\"2s\" fill=\"freeze\"/></rect>" +
+                "<path id=\"p\" d=\"M0,0 L0,100\"/><circle><animateMotion dur=\"2s\" fill=\"freeze\"><mpath xlink:href=\"#p\" xmlns:xlink=\"http://www.w3.org/1999/xlink\"/></animateMotion></circle></svg>");
+
+            var set = Assert.IsType<SmilSet>(SmilSet.Read(new XElementSmilNode(root)));
+            var rect = new XElementSmilNode(root.Elements().First());
+
+            Assert.True(set.Targets(rect.Key));
+            Assert.Equal("5", set.Sample(rect, "x", 1, () => "1", null));
+            Assert.Equal("10", set.Sample(rect, "x", 9, () => "1", null));
+
+            var circle = new XElementSmilNode(root.Elements().Last());
+            Assert.Equal("translate(0 50)", set.Sample(circle, "transform", 1, () => null, null));
+        }
+
+        [Fact]
+        public void TwoNodesOfOneElement_ShareTheirKey()
+        {
+            var element = System.Xml.Linq.XElement.Parse("<rect/>");
+            Assert.Same(new XElementSmilNode(element).Key, new XElementSmilNode(element).Key);
+            Assert.Null(new XElementSmilNode(element).Box);
+            Assert.Null(new XElementSmilNode(element).Parent);
         }
     }
 }

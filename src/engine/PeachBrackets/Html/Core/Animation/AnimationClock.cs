@@ -10,6 +10,7 @@ using PeachBrackets.Html.Paint;
 using PeachBrackets.Html.TextGeometry;
 using PeachBrackets.Html.Updates;
 using PeachBrackets.Html.Utils;
+using PeachBrackets.Svg;
 using PeachBrackets.Updates;
 using PeachDrawing.Core;
 
@@ -136,8 +137,8 @@ namespace PeachBrackets.Html.Animation
             public bool LastHasTransform { get; set; }
             public bool BleedStale { get; set; }
 
-            /// <summary>Whether the box is an inline <c>&lt;svg&gt;</c> a clock plays: SMIL or CSS animations of its elements, built again for each frame.</summary>
-            public bool Svg => Box is CssBoxSvg { TimeVarying: true };
+            /// <summary>Whether the box is an inline <c>&lt;svg&gt;</c> a clock plays (SMIL or CSS animations of its elements, built again for each frame), or shows a standalone SVG that is played.</summary>
+            public bool Svg => Box is CssBoxSvg { TimeVarying: true } || PlayerOf(Box) is not null;
         }
 
         internal sealed class TransitionRun
@@ -628,6 +629,19 @@ namespace PeachBrackets.Html.Animation
             HashSet<BoxState>? laidOut = null;
             List<CssBox>? cascadeBoxes = null;
 
+            // A standalone SVG is stepped once for all the boxes that show it.
+            Dictionary<StandaloneSvgPlayer, (bool Changed, bool Running)>? playerSteps = null;
+            foreach (var state in _states)
+            {
+                if (PlayerOf(state.Box) is not { } player) continue;
+
+                playerSteps ??= [];
+                if (playerSteps.ContainsKey(player)) continue;
+
+                if (!_playerStart.TryGetValue(player, out var start)) _playerStart[player] = start = _svgClock;
+                playerSteps[player] = player.Step(_svgClock - start);
+            }
+
             foreach (var state in _states)
             {
                 var box = state.Box;
@@ -655,7 +669,7 @@ namespace PeachBrackets.Html.Animation
 
                 if (state.Svg)
                 {
-                    var (svgChanged, svgRunning) = ((CssBoxSvg)box).StepAnimation(_svgClock);
+                    var (svgChanged, svgRunning) = PlayerOf(box) is { } shown ? playerSteps![shown] : ((CssBoxSvg)box).StepAnimation(_svgClock);
                     running |= svgRunning;
                     if (svgChanged)
                     {
@@ -873,6 +887,17 @@ namespace PeachBrackets.Html.Animation
         }
 
         private double _svgClock;
+
+        // The standalone SVG a box shows when a clock plays it (<img src="x.svg">, <object>), which is one for every box that shows the same file.
+        private static StandaloneSvgPlayer? PlayerOf(CssBox box) => box switch
+        {
+            CssBoxImage { SvgDocument.Player: { } player } => player,
+            CssBoxObject { SvgDocument.Player: { } player } => player,
+            _ => null
+        };
+
+        // When each such image began to show, on the time the inline svgs are at: its animations start then, as an animated image's frames do.
+        private readonly Dictionary<StandaloneSvgPlayer, double> _playerStart = [];
         private readonly List<BoxState> _changed = [];
         private readonly List<Rect> _pageRects = [];
 
@@ -1273,7 +1298,7 @@ namespace PeachBrackets.Html.Animation
         {
             if (_byBox.ContainsKey(box)) goto children;
 
-            if (!AnimationApplier.IsNone(box.AnimationName) || HasTransition(box) || box is CssBoxSvg { TimeVarying: true })
+            if (!AnimationApplier.IsNone(box.AnimationName) || HasTransition(box) || box is CssBoxSvg { TimeVarying: true } || PlayerOf(box) is not null)
             {
                 var ordinal = box.HtmlTag?.SourceOrdinal ?? -1;
                 var state = new BoxState { Box = box, Ordinal = ordinal };

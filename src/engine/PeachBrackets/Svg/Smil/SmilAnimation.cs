@@ -23,10 +23,10 @@ namespace PeachBrackets.Svg.Smil
         public required SmilKind Kind { get; init; }
 
         /// <summary>The animation element's own box.</summary>
-        public required CssBox Element { get; init; }
+        public required ISmilNode Element { get; init; }
 
         /// <summary>The element it animates: its parent, or the one its <c>href</c> names.</summary>
-        public required CssBox Target { get; init; }
+        public required ISmilNode Target { get; init; }
 
         /// <summary>The document order of the element, which breaks a tie in the order animations apply in.</summary>
         public int Order { get; init; }

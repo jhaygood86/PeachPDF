@@ -430,7 +430,7 @@ a box with `overflow: auto` or `scroll` has no scroll position, so a timeline on
 
 ### Animated SVG
 
-An inline `<svg>` plays too: the CSS animations of its elements and its SMIL animation elements (`animate`, `set`, `animateTransform`, `animateMotion`; see [SMIL animation](supported-svg-features.md#smil-animation)).
+An inline `<svg>` plays too (and so does a standalone SVG that an `<img>` or `<object>` shows, like an animated GIF, see [Standalone SVG images](supported-svg-features.md#standalone-svg-images)): the CSS animations of its elements and its SMIL animation elements (`animate`, `set`, `animateTransform`, `animateMotion`; see [SMIL animation](supported-svg-features.md#smil-animation)).
 The clock starts them when the document loads, builds the graphic again at its time on every step and reports the `<svg>`'s rectangle as the region to repaint, so a page of which only one icon
 spins repaints that icon. `AnimationFrame.IsRunning` stays true while a graphic still has something to play (an animation that repeats for ever, or one yet to end) and is false once every
 animation of it has ended and is frozen or removed. A document loaded for a still frame (`AnimationProgress`) samples SMIL at that fraction of the span the animations cover instead.

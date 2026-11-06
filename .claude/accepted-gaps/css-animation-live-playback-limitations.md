@@ -31,10 +31,12 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
 - **Scroll-driven timelines and `animation-range`** are not supported, as in the still frame.
 - **SVG animation is played, but the graphic is rebuilt for each frame.** CSS animations of the elements of an inline `<svg>` and its SMIL animations (see [the recent fix](../recent-fixes/2026-11-05-svg-animation-playback.md))
   rebuild the whole scene graph at the clock's time and repaint the `<svg>`'s rectangle; a graphic with thousands of elements animating costs a rebuild of all of them. Only the `<svg>` as a whole is
-  a dirty region, not the changed element. A standalone SVG (`<img src="x.svg">`) is not played, and the box of the `<svg>` is laid out once: animating the root's `width`, `height` or `viewBox`
-  changes what is drawn inside, not the size of the box.
+  a dirty region, not the changed element. The box of the `<svg>` (and of an `<img>` of a standalone one) is laid out once: animating the root's `width`, `height` or `viewBox` changes what is drawn inside, not the size of the box.
+  A standalone SVG is played when an `<img>` or `<object>` shows it, not when it is a CSS `background-image`, and a CSS animation in it that needs `var()` is left out. The elements of an
+  inline `<svg>` are not restyled while it plays (they are detached from the cascade), so a `:hover` rule on one of them, or a change to its `animation-play-state`, does not take effect.
+  **The repaint is the whole rectangle of the `<svg>` or image, not the changed element:** a bounding box that is safe to repaint needs the painted extent of every kind of element (stroke, miter, markers, filters, masks, clips, `<use>`, text, transforms),
+  and one that is too small leaves stale pixels, so it was not attempted; a frame costs about a millisecond on the animated SVG showcase.
 - **Only the Win2D backend keeps layers as textures and decodes animated images for the WinUI view**; `RasterRenderContext` decodes animated images and the default retained layer works
   on every canvas, but Skia, CoreGraphics and the PDF/SVG writers show the first frame of an animated image.
 - **The Android view does not play animations.** Only the WinUI view steps the document each frame (`AdvanceAnimations` on the display's frame clock) and raises the animation events; `PeachBrackets.Android.HtmlView` has no frame loop (a `Choreographer` callback calling `AdvanceAnimations`), so a document shown there is a still frame.
 - **Left from the review of the clock** (each is small and has no tracking issue yet):
-  - CSS animations on the elements of an inline `<svg>` ignore `animation-play-state: paused`, and a SMIL `set`/`animate` of the `transform` attribute is ignored (only `animateTransform` and `animateMotion` give a transform).

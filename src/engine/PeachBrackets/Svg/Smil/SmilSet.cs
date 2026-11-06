@@ -13,33 +13,48 @@ namespace PeachBrackets.Svg.Smil
     /// </summary>
     internal sealed class SmilSet
     {
-        private readonly Dictionary<CssBox, List<SmilAnimation>> _byTarget = [];
-        private readonly Dictionary<string, CssBox> _elementsById = new(StringComparer.Ordinal);
+        private readonly Dictionary<object, List<SmilAnimation>> _byTarget = [];
+        private readonly Dictionary<string, ISmilNode> _elementsById = new(StringComparer.Ordinal);
 
         private SmilSet(List<SmilAnimation> animations)
         {
             Animations = animations;
             foreach (var animation in animations)
             {
-                if (!_byTarget.TryGetValue(animation.Target, out var list)) _byTarget[animation.Target] = list = [];
+                if (!_byTarget.TryGetValue(animation.Target.Key, out var list)) _byTarget[animation.Target.Key] = list = [];
                 list.Add(animation);
             }
         }
 
         public List<SmilAnimation> Animations { get; }
 
-        /// <summary>Whether any animation targets <paramref name="box"/>.</summary>
-        public bool Targets(CssBox box) => _byTarget.ContainsKey(box);
+        // The properties the builder resolves through the CSS cascade (ResolveStyledAttr), where SMIL sits above the declarations and the CSS animations: they are animated there,
+        // over the value that gives. Every other attribute is animated where the builder reads it.
+        private static readonly HashSet<string> PresentationProperties = new(StringComparer.Ordinal)
+        {
+            "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin",
+            "stroke-miterlimit", "fill-rule", "clip-rule", "color", "display", "visibility", "stop-color", "stop-opacity", "flood-color", "flood-opacity", "lighting-color",
+            "font-size", "font-family", "font-weight", "font-style", "letter-spacing", "word-spacing", "text-anchor", "clip-path", "mask", "filter"
+        };
+
+        /// <summary>Whether <paramref name="name"/> is a property the SVG builder resolves through the CSS cascade.</summary>
+        internal static bool IsPresentationProperty(string name) => PresentationProperties.Contains(name);
+
+        /// <summary>Whether any animation targets the element <paramref name="key"/> (its box, or its XML element).</summary>
+        public bool Targets(object key) => _byTarget.ContainsKey(key);
 
         #region Reading
 
         private static readonly string[] AnimationTags = ["animate", "animateColor", "set", "animateTransform", "animateMotion"];
 
-        /// <summary>The animations of the <c>&lt;svg&gt;</c> <paramref name="root"/>, or null when it has none.</summary>
-        internal static SmilSet? Read(CssBox root)
+        /// <summary>The animations of the inline <c>&lt;svg&gt;</c> <paramref name="root"/>, or null when it has none.</summary>
+        internal static SmilSet? Read(CssBox root) => Read(new CssBoxSmilNode(root));
+
+        /// <summary>The animations of the SVG <paramref name="root"/>, or null when it has none.</summary>
+        internal static SmilSet? Read(ISmilNode root)
         {
-            var found = new List<CssBox>();
-            var ids = new Dictionary<string, CssBox>(StringComparer.Ordinal);
+            var found = new List<ISmilNode>();
+            var ids = new Dictionary<string, ISmilNode>(StringComparer.Ordinal);
             Walk(root);
             if (found.Count == 0) return null;
 
@@ -56,79 +71,77 @@ namespace PeachBrackets.Svg.Smil
             set.ResolveTimes();
             return set;
 
-            void Walk(CssBox box)
+            void Walk(ISmilNode node)
             {
-                foreach (var child in box.Boxes)
+                foreach (var child in node.Children)
                 {
-                    if (child.HtmlTag is not { } tag) continue;
-
-                    if (child.GetAttribute("id", null) is { Length: > 0 } id) ids.TryAdd(id, child);
-                    if (AnimationTags.Any(name => tag.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) found.Add(child);
+                    if (child.GetAttribute("id") is { Length: > 0 } id) ids.TryAdd(id, child);
+                    if (AnimationTags.Any(name => child.Name.Equals(name, StringComparison.OrdinalIgnoreCase))) found.Add(child);
 
                     Walk(child);
                 }
             }
         }
 
-        private static SmilAnimation? Create(CssBox element, Dictionary<string, CssBox> ids, int order)
+        private static SmilAnimation? Create(ISmilNode element, Dictionary<string, ISmilNode> ids, int order)
         {
-            var name = element.HtmlTag!.Name;
+            var name = element.Name;
             var kind = name.Equals("set", StringComparison.OrdinalIgnoreCase) ? SmilKind.Set
                 : name.Equals("animateTransform", StringComparison.OrdinalIgnoreCase) ? SmilKind.Transform
                 : name.Equals("animateMotion", StringComparison.OrdinalIgnoreCase) ? SmilKind.Motion
                 : SmilKind.Animate;
 
             // The target is the parent element, or the one the href names.
-            var target = element.ParentBox;
-            var href = element.GetAttribute("href", null) ?? element.GetAttribute("xlink:href", null);
+            var target = element.Parent;
+            var href = element.GetAttribute("href") ?? element.GetAttribute("xlink:href");
             if (href is { Length: > 1 } && href[0] == '#' && ids.TryGetValue(href[1..], out var referenced)) target = referenced;
-            if (target?.HtmlTag is null) return null;
+            if (target is null) return null;
 
             string? attribute = kind switch
             {
                 SmilKind.Transform => "transform",
                 SmilKind.Motion => null,
-                _ => element.GetAttribute("attributeName", null)?.Trim()
+                _ => element.GetAttribute("attributeName")?.Trim()
             };
 
             if (kind != SmilKind.Motion && string.IsNullOrEmpty(attribute)) return null;
 
             // dur: a clock value above zero, or indefinite (also what "media" and a missing dur mean here). A zero or malformed one is an error and the animation is ignored.
             double? duration = null;
-            if (element.GetAttribute("dur", null) is { } dur && !dur.Trim().Equals("indefinite", StringComparison.Ordinal) && !dur.Trim().Equals("media", StringComparison.Ordinal))
+            if (element.GetAttribute("dur") is { } dur && !dur.Trim().Equals("indefinite", StringComparison.Ordinal) && !dur.Trim().Equals("media", StringComparison.Ordinal))
             {
                 if (!SmilAnimation.TryParseClock(dur, out var seconds) || seconds <= 0) return null;
                 duration = seconds;
             }
 
-            var beginText = element.GetAttribute("begin", null);
+            var beginText = element.GetAttribute("begin");
             var begin = beginText is null ? [new SmilTime(0)] : SmilAnimation.ParseTimes(beginText);
-            var endText = element.GetAttribute("end", null);
+            var endText = element.GetAttribute("end");
 
             var repeatCount = double.NaN;
-            if (element.GetAttribute("repeatCount", null) is { } count)
+            if (element.GetAttribute("repeatCount") is { } count)
             {
                 if (count.Trim().Equals("indefinite", StringComparison.Ordinal)) repeatCount = double.PositiveInfinity;
                 else if (double.TryParse(count, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsedCount) && parsedCount > 0) repeatCount = parsedCount;
             }
 
             var repeatDuration = double.NaN;
-            if (element.GetAttribute("repeatDur", null) is { } repeatDur)
+            if (element.GetAttribute("repeatDur") is { } repeatDur)
             {
                 if (repeatDur.Trim().Equals("indefinite", StringComparison.Ordinal)) repeatDuration = double.PositiveInfinity;
                 else if (SmilAnimation.TryParseClock(repeatDur, out var parsedRepeat) && parsedRepeat > 0) repeatDuration = parsedRepeat;
             }
 
             var min = double.NaN;
-            if (element.GetAttribute("min", null) is { } minText && SmilAnimation.TryParseClock(minText, out var parsedMin) && parsedMin >= 0) min = parsedMin;
+            if (element.GetAttribute("min") is { } minText && SmilAnimation.TryParseClock(minText, out var parsedMin) && parsedMin >= 0) min = parsedMin;
             var max = double.NaN;
-            if (element.GetAttribute("max", null) is { } maxText)
+            if (element.GetAttribute("max") is { } maxText)
             {
                 if (maxText.Trim().Equals("indefinite", StringComparison.Ordinal)) max = double.NaN;
                 else if (SmilAnimation.TryParseClock(maxText, out var parsedMax) && parsedMax > 0) max = parsedMax;
             }
 
-            var calc = (element.GetAttribute("calcMode", null) ?? (kind == SmilKind.Motion ? "paced" : "linear")).Trim().ToLowerInvariant() switch
+            var calc = (element.GetAttribute("calcMode") ?? (kind == SmilKind.Motion ? "paced" : "linear")).Trim().ToLowerInvariant() switch
             {
                 "discrete" => SmilCalcMode.Discrete,
                 "paced" => SmilCalcMode.Paced,
@@ -139,10 +152,10 @@ namespace PeachBrackets.Svg.Smil
             string? mpath = null;
             if (kind == SmilKind.Motion)
             {
-                foreach (var child in element.Boxes)
+                foreach (var child in element.Children)
                 {
-                    if (child.HtmlTag?.Name.Equals("mpath", StringComparison.OrdinalIgnoreCase) == true)
-                        mpath = child.GetAttribute("href", null) ?? child.GetAttribute("xlink:href", null);
+                    if (child.Name.Equals("mpath", StringComparison.OrdinalIgnoreCase))
+                        mpath = child.GetAttribute("href") ?? child.GetAttribute("xlink:href");
                 }
             }
 
@@ -153,7 +166,7 @@ namespace PeachBrackets.Svg.Smil
                 Target = target,
                 Order = order,
                 Attribute = attribute,
-                Id = element.GetAttribute("id", null),
+                Id = element.GetAttribute("id"),
                 Begin = begin,
                 End = endText is null ? [] : SmilAnimation.ParseTimes(endText),
                 HasEnd = endText is not null,
@@ -162,22 +175,22 @@ namespace PeachBrackets.Svg.Smil
                 RepeatDuration = repeatDuration,
                 Min = min,
                 Max = max,
-                Freeze = element.GetAttribute("fill", null)?.Trim().Equals("freeze", StringComparison.Ordinal) == true,
-                Restart = element.GetAttribute("restart", null)?.Trim() ?? "always",
-                From = element.GetAttribute("from", null),
-                To = element.GetAttribute("to", null),
-                By = element.GetAttribute("by", null),
-                Values = SmilValues.SplitList(element.GetAttribute("values", null)),
-                KeyTimes = SmilValues.ParseNumbers(element.GetAttribute("keyTimes", null)),
-                KeySplines = element.GetAttribute("keySplines", null) is { } splines ? SmilValues.SplitList(splines) : null,
+                Freeze = element.GetAttribute("fill")?.Trim().Equals("freeze", StringComparison.Ordinal) == true,
+                Restart = element.GetAttribute("restart")?.Trim() ?? "always",
+                From = element.GetAttribute("from"),
+                To = element.GetAttribute("to"),
+                By = element.GetAttribute("by"),
+                Values = SmilValues.SplitList(element.GetAttribute("values")),
+                KeyTimes = SmilValues.ParseNumbers(element.GetAttribute("keyTimes")),
+                KeySplines = element.GetAttribute("keySplines") is { } splines ? SmilValues.SplitList(splines) : null,
                 CalcMode = calc,
-                AdditiveSum = element.GetAttribute("additive", null)?.Trim().Equals("sum", StringComparison.Ordinal) == true,
-                AccumulateSum = element.GetAttribute("accumulate", null)?.Trim().Equals("sum", StringComparison.Ordinal) == true,
-                TransformType = element.GetAttribute("type", null)?.Trim(),
-                Path = element.GetAttribute("path", null),
+                AdditiveSum = element.GetAttribute("additive")?.Trim().Equals("sum", StringComparison.Ordinal) == true,
+                AccumulateSum = element.GetAttribute("accumulate")?.Trim().Equals("sum", StringComparison.Ordinal) == true,
+                TransformType = element.GetAttribute("type")?.Trim(),
+                Path = element.GetAttribute("path"),
                 MPathHref = mpath,
-                KeyPoints = SmilValues.ParseNumbers(element.GetAttribute("keyPoints", null)),
-                Rotate = element.GetAttribute("rotate", null)?.Trim()
+                KeyPoints = SmilValues.ParseNumbers(element.GetAttribute("keyPoints")),
+                Rotate = element.GetAttribute("rotate")?.Trim()
             };
         }
 
@@ -400,9 +413,16 @@ namespace PeachBrackets.Svg.Smil
         /// <param name="time">The time, in seconds from the start of the document.</param>
         /// <param name="underlying">The value without any animation, which an animation with no <c>from</c> starts at and an additive one adds to.</param>
         /// <param name="parser">The parser that settles colours and keywords while values are mixed; null mixes numbers only.</param>
-        public string? Sample(CssBox box, string attribute, double time, Func<string?> underlying, CssValueParser? parser)
+        public string? Sample(CssBox box, string attribute, double time, Func<string?> underlying, CssValueParser? parser) =>
+            Sample(box, box, attribute, time, underlying, parser);
+
+        /// <summary>The same for an element given as a node (of an inline or a standalone SVG).</summary>
+        public string? Sample(ISmilNode target, string attribute, double time, Func<string?> underlying, CssValueParser? parser) =>
+            Sample(target.Key, target.Box, attribute, time, underlying, parser);
+
+        private string? Sample(object key, CssBox? box, string attribute, double time, Func<string?> underlying, CssValueParser? parser)
         {
-            if (!_byTarget.TryGetValue(box, out var candidates)) return null;
+            if (!_byTarget.TryGetValue(key, out var candidates)) return null;
 
             if (attribute.Equals("transform", StringComparison.Ordinal)) return SampleTransform(box, candidates, time, underlying);
 
@@ -453,7 +473,7 @@ namespace PeachBrackets.Svg.Smil
             return begin;
         }
 
-        private static string? Value(SmilAnimation animation, double progress, int iteration, string? underlying, string attribute, CssBox box, CssValueParser? parser)
+        private static string? Value(SmilAnimation animation, double progress, int iteration, string? underlying, string attribute, CssBox? box, CssValueParser? parser)
         {
             if (animation.Kind == SmilKind.Set) return animation.To;
 
@@ -553,7 +573,7 @@ namespace PeachBrackets.Svg.Smil
             return SmilValues.Mix(parser, attribute, values[segment], values[segment + 1], local, box);
         }
 
-        private string? SampleTransform(CssBox box, List<SmilAnimation> candidates, double time, Func<string?> underlying)
+        private string? SampleTransform(CssBox? box, List<SmilAnimation> candidates, double time, Func<string?> underlying)
         {
             string? result = null;
             string? current = null;
@@ -568,17 +588,20 @@ namespace PeachBrackets.Svg.Smil
             var active = new List<(SmilAnimation Animation, double Progress, int Iteration)>();
             foreach (var animation in candidates)
             {
-                if (animation.Kind != SmilKind.Transform) continue;
+                // animateTransform, and animate or set of the transform attribute itself (a list of transform functions, mixed function by function).
+                var plain = animation.Kind is (SmilKind.Animate or SmilKind.Set) && string.Equals(animation.Attribute, "transform", StringComparison.Ordinal);
+                if (animation.Kind != SmilKind.Transform && !plain) continue;
                 if (TryPhase(animation, time, out var progress, out var iteration)) active.Add((animation, progress, iteration));
             }
 
             foreach (var (animation, progress, iteration) in OrderOfBegin(active, time))
             {
+                var plainValue = animation.Kind != SmilKind.Transform;
                 var type = animation.TransformType ?? "translate";
-                var value = Value(animation, progress, iteration, null, "transform", box, null);
+                var value = Value(animation, progress, iteration, plainValue ? Current() : null, "transform", box, null);
                 if (value is null) continue;
 
-                var text = $"{type}({value})";
+                var text = plainValue ? value : $"{type}({value})";
                 result = animation.AdditiveSum ? $"{Current()} {text}".Trim() : text;
                 produced = true;
             }
@@ -601,7 +624,7 @@ namespace PeachBrackets.Svg.Smil
         {
             var path = animation.Path;
             if (path is null && animation.MPathHref is { Length: > 1 } href && href[0] == '#' && _elementsById.TryGetValue(href[1..], out var referenced))
-                path = referenced.GetAttribute("d", null);
+                path = referenced.GetAttribute("d");
 
             if (path is null)
             {

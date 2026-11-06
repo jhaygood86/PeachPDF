@@ -19,7 +19,7 @@ namespace PeachBrackets.Html.Paint.Content
             var obj = (CssBoxObject)box;
 
             // object-fit / object-position honored via the shared replaced-content renderer.
-            ReplacedContentRenderer.Paint(g, rect, obj.ReplacedWord?.Image, obj.SvgDocument, box);
+            ReplacedContentRenderer.Paint(g, rect, obj.ReplacedWord?.Image, obj.SvgDocument?.Current, box);
         }
     }
 }
