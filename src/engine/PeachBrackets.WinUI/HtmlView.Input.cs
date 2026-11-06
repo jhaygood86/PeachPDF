@@ -62,6 +62,8 @@ public sealed partial class HtmlView
 
         var document = _document!;
 
+        MoveTrackRepeat(x, y);
+
         // A scrollbar thumb being dragged, or a finger dragging a scroll container, takes the movement.
         if (DragScrollbar(x, y) || (e.Pointer.PointerDeviceType == PointerDeviceType.Touch && MoveTouchScroll(position)))
             return;
@@ -147,6 +149,7 @@ public sealed partial class HtmlView
             return;
 
         _pressed = false;
+        EndTrackRepeat();
         _dragSelecting = false;
         _fieldAnchor = null;
         _fieldPressed = false;

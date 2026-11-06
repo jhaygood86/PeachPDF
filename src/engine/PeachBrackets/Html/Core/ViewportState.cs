@@ -106,7 +106,7 @@ namespace PeachBrackets.Html
                 {
                     // Laid out in a frame that is the viewport with the document at the top.
                     PositionMode.Fixed => (viewport.X, viewport.Y),
-                    PositionMode.Sticky => StickyDisplacement(entry, viewport),
+                    PositionMode.Sticky => StickyFor(container, entry, viewport),
                     _ => default,
                 };
 
@@ -136,7 +136,8 @@ namespace PeachBrackets.Html
             var attached = new HashSet<CssBox>(ReferenceEqualityComparer.Instance);
             foreach (var entry in _index.Entries)
             {
-                if (entry.Box.Position.Value == PositionMode.Fixed || next.ContainsKey(entry.Box))
+                // A sticky box held by a scroll container of its own is drawn in that container's frame, clipped by it, not above the content.
+                if (entry.Box.Position.Value == PositionMode.Fixed || (next.ContainsKey(entry.Box) && StickyScrollerOf(container, entry.Box) is null))
                     attached.Add(entry.Box);
             }
 
@@ -179,14 +180,65 @@ namespace PeachBrackets.Html
 
         // CSS Positioned Layout 3 §3.4: the box is held inside the sticky view rectangle by the insets that are not auto, and never leaves its
         // containing block. The nearest scroll container is the viewport here: any other one is clipped, never scrolled, so a box inside it does not stick.
-        private static (double Dx, double Dy) StickyDisplacement(ViewportIndex.Entry entry, Rect viewport)
+        private (double Dx, double Dy) StickyFor(HtmlContainerInt container, ViewportIndex.Entry entry, Rect viewport)
+        {
+            // The nearest scroll container is what the box sticks to: the scrollport as the content is scrolled, in the frame the content is laid out in.
+            if (StickyScrollerOf(container, entry.Box) is { } scroller && ScrollStateOf(container, scroller) is { } state)
+                {
+                // A box held by the scroll container itself is kept inside everything the container can scroll to, not only its own padding box.
+                Rect? block = ReferenceEquals(entry.Parent?.Box, scroller) ? new Rect(state.Port.X, state.Port.Y, Math.Max(state.Port.Width, state.ContentWidth), Math.Max(state.Port.Height, state.ContentHeight)) : null;
+                return StickyDisplacement(entry, new Rect(state.Port.X + state.X, state.Port.Y + state.Y, state.Port.Width, state.Port.Height), block);
+            }
+
+            return entry.InsideOtherScrollContainer ? default : StickyDisplacement(entry, viewport);
+        }
+
+        /// <summary>The scroll container a sticky box sticks to: the nearest one that holds it, or null when it sticks to the viewport.</summary>
+        internal CssBox? StickyScrollerOf(HtmlContainerInt container, CssBox box)
+        {
+            if (IndexFor(container) is not { Entries.Count: > 0 } index)
+                return null;
+
+            for (var ancestor = box.EffectiveParentBox; ancestor is not null; ancestor = ancestor.EffectiveParentBox)
+            {
+                if (index.Entries.ContainsKey(ancestor))
+                    return ancestor;
+            }
+
+            return null;
+        }
+
+        /// <summary>Moves the sticky boxes of a scroll container that was scrolled: they are held against its scrollport, which has moved along the content.</summary>
+        private void RefreshSticky(HtmlContainerInt container, CssBox scroller)
+        {
+            var tree = container.FragmentTree;
+            if (!container.Continuous || tree is not { Fragmentainers.Count: > 0 })
+                return;
+
+            if (_index is null || !ReferenceEquals(_index.Tree, tree))
+                _index = ViewportIndex.Build(tree);
+
+            foreach (var entry in _index.Entries)
+            {
+                if (entry.Box.Position.Value != PositionMode.Sticky || !ReferenceEquals(StickyScrollerOf(container, entry.Box), scroller))
+                    continue;
+
+                var shift = StickyFor(container, entry, Viewport);
+                if (shift == default)
+                    _displacements.Remove(entry.Box);
+                else
+                    _displacements[entry.Box] = shift;
+            }
+        }
+
+        private static (double Dx, double Dy) StickyDisplacement(ViewportIndex.Entry entry, Rect viewport, Rect? blockOverride = null)
         {
             var box = entry.Box;
-            if (viewport.Width <= 0 || viewport.Height <= 0 || entry.InsideOtherScrollContainer)
+            if (viewport.Width <= 0 || viewport.Height <= 0)
                 return default;
 
             var rect = entry.Fragment.WholeBoxRect;
-            var block = entry.Parent?.WholeBoxRect;
+            var block = blockOverride ?? entry.Parent?.WholeBoxRect;
 
             return (
                 Axis(rect.X, rect.Right, block?.X, block?.Right, viewport.X, viewport.Right, box.LeftInset(viewport.Width), box.RightInset(viewport.Width)),

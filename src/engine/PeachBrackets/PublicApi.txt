@@ -503,7 +503,8 @@ PeachBrackets.HtmlDocument : sealed class
   method IReadOnlyList<DirtyRegion> DragScrollBy(DocumentElement element, Double dx, Double dy)
   method IReadOnlyList<DirtyRegion> ScrollBy(DocumentElement element, Double dx, Double dy, ScrollBehavior behavior = Auto)
   method IReadOnlyList<DirtyRegion> ScrollByPage(DocumentElement element, ScrollbarAxis axis, Int32 direction)
-  method IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element, ScrollBehavior behavior = Auto)
+  method IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element, ScrollBehavior behavior = Auto, ScrollAlignment block = Nearest, ScrollAlignment inline = Nearest)
+  method IReadOnlyList<DirtyRegion> ScrollTextIntoView(TextRange range, ScrollBehavior behavior = Auto, ScrollAlignment block = Nearest, ScrollAlignment inline = Nearest)
   method IReadOnlyList<DirtyRegion> ScrollThumbTo(DocumentElement element, ScrollbarAxis axis, Double thumbStart)
   method IReadOnlyList<DirtyRegion> SetScrollPosition(DocumentElement element, Double x, Double y, ScrollBehavior behavior = Auto)
   method IReadOnlyList<DirtyRegion> SetViewport(Rect viewport)
@@ -703,13 +704,18 @@ PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2
   None = 0
+PeachBrackets.ScrollAlignment : enum Int32
+  Center = 2
+  End = 3
+  Nearest = 0
+  Start = 1
 PeachBrackets.ScrollBehavior : enum Int32
   Auto = 0
   Instant = 1
   Smooth = 2
 PeachBrackets.ScrollMetrics : struct
-  ctor(Double X, Double Y, Double MaxX, Double MaxY, Rect Viewport, Double ContentWidth, Double ContentHeight)
-  method Void Deconstruct(out Double X, out Double Y, out Double MaxX, out Double MaxY, out Rect Viewport, out Double ContentWidth, out Double ContentHeight)
+  ctor(Double X, Double Y, Double MaxX, Double MaxY, Rect Viewport, Double ContentWidth, Double ContentHeight, Double MinX = 0, Double MinY = 0)
+  method Void Deconstruct(out Double X, out Double Y, out Double MaxX, out Double MaxY, out Rect Viewport, out Double ContentWidth, out Double ContentHeight, out Double MinX, out Double MinY)
   method virtual Boolean Equals(Object obj)
   method virtual Boolean Equals(ScrollMetrics other)
   method virtual Int32 GetHashCode()
@@ -718,6 +724,8 @@ PeachBrackets.ScrollMetrics : struct
   property Double ContentWidth { get; init; }
   property Double MaxX { get; init; }
   property Double MaxY { get; init; }
+  property Double MinX { get; init; }
+  property Double MinY { get; init; }
   property Double X { get; init; }
   property Double Y { get; init; }
   property Rect Viewport { get; init; }

@@ -632,6 +632,10 @@ public sealed partial class HtmlDocument : IDisposable
         // A page whose fragments are not there (the layout is being replaced) has nothing at the point.
         if ((uint)pageIndex >= (uint)fragmentainers.Count)
             return new DocumentCursor(CursorShape.Default, []);
+        // A scrollbar is the system's arrow, whatever the box under it asks for.
+        if (pageIndex == 0 && _container.View.HasScrollContainers(_container) && _container.View.ScrollbarAt(_container, x * _unitsPerPoint, y * _unitsPerPoint) is not null)
+            return new DocumentCursor(CursorShape.Default, []);
+
         return CursorQueries.At(_container, fragmentainers[pageIndex], x, y);
     }
 
@@ -1489,6 +1493,9 @@ public sealed partial class HtmlDocument : IDisposable
         var before = _styleSnapshot ?? (_container.AnimationsEnabled ? SnapshotStyles(_container.Root) : null);
         _styleSnapshot = null;
 
+        // A reload makes new boxes; a scroll container is found again by its place in the source, so it stays where it was scrolled to.
+        var scrolled = _container.View.TakeScrollByOrdinal();
+
         _container.AttributeOverrides = AttributeOverridesForReload();
         await _container.ReparseAsync();
 
@@ -1510,6 +1517,7 @@ public sealed partial class HtmlDocument : IDisposable
         _container.ResetSemanticTree();
         _annotations = null;
         await LayOutAsync(measuringCanvas);
+        _container.View.RestoreScrollByOrdinal(_container, scrolled);
     }
 
     private static CssBox? FindByOrdinal(CssBox? box, int ordinal)

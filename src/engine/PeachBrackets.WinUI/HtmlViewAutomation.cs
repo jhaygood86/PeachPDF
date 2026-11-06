@@ -317,15 +317,15 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     // IScrollProvider: a node whose element is a scroll container of the document (a list, a region, a table with overflow: auto) scrolls from UI Automation as it does from the wheel.
     private PeachBrackets.ScrollMetrics? Scrolled => _view.ScrollMetricsOf(_node);
 
-    public bool HorizontallyScrollable => Scrolled is { MaxX: > 0 };
+    public bool HorizontallyScrollable => Scrolled is { } m && m.MaxX - m.MinX > 0;
 
-    public double HorizontalScrollPercent => Scrolled is { MaxX: > 0 } m ? m.X / m.MaxX * 100 : ScrollPatternIdentifiers.NoScroll;
+    public double HorizontalScrollPercent => Scrolled is { } m && m.MaxX - m.MinX > 0 ? (m.X - m.MinX) / (m.MaxX - m.MinX) * 100 : ScrollPatternIdentifiers.NoScroll;
 
     public double HorizontalViewSize => Scrolled is { ContentWidth: > 0 } m ? Math.Min(100, m.Viewport.Width / m.ContentWidth * 100) : 100;
 
-    public bool VerticallyScrollable => Scrolled is { MaxY: > 0 };
+    public bool VerticallyScrollable => Scrolled is { } m && m.MaxY - m.MinY > 0;
 
-    public double VerticalScrollPercent => Scrolled is { MaxY: > 0 } m ? m.Y / m.MaxY * 100 : ScrollPatternIdentifiers.NoScroll;
+    public double VerticalScrollPercent => Scrolled is { } m && m.MaxY - m.MinY > 0 ? (m.Y - m.MinY) / (m.MaxY - m.MinY) * 100 : ScrollPatternIdentifiers.NoScroll;
 
     public double VerticalViewSize => Scrolled is { ContentHeight: > 0 } m ? Math.Min(100, m.Viewport.Height / m.ContentHeight * 100) : 100;
 

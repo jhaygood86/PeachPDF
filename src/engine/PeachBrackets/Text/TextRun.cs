@@ -81,6 +81,9 @@ public sealed class TextRun
 
     internal IReadOnlyList<PeachBrackets.Html.TextGeometry.TextWordSlice> Slices { get; }
 
+    /// <summary>The block box the run's text belongs to; what a scroll container that holds the text is found from.</summary>
+    internal PeachBrackets.Html.Dom.CssBox? Owner { get; init; }
+
     internal int LineId { get; }
 
     internal bool FollowsForcedBreak { get; }

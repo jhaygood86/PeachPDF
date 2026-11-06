@@ -21,6 +21,18 @@ public sealed partial class HtmlView
     private bool _touchScrolling;
     private DocumentElement? _touchContainer;
 
+    // The speed of the finger (points per second) and when it last moved: a lifted finger carries the container on at this speed (a fling).
+    private double _touchVx;
+    private double _touchVy;
+    private long _touchTicks;
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _flingTimer;
+    private DocumentElement? _flingContainer;
+    private long _flingTicks;
+
+    // A press held on a scrollbar track keeps paging toward the pointer.
+    private Microsoft.UI.Dispatching.DispatcherQueueTimer? _repeatTimer;
+    private (DocumentElement Element, ScrollbarAxis Axis, int Direction, Point Position)? _trackRepeat;
+
     private const double KeyArrowPoints = 40;
     private const double PageFraction = 0.875;
 
@@ -51,8 +63,55 @@ public sealed partial class HtmlView
             return true;
         }
 
-        ApplyScroll(document.ScrollByPage(bar.Element, bar.Axis, bar.Part == ScrollbarPart.TrackAfter ? 1 : -1));
+        var direction = bar.Part == ScrollbarPart.TrackAfter ? 1 : -1;
+        ApplyScroll(document.ScrollByPage(bar.Element, bar.Axis, direction));
+        BeginTrackRepeat(bar.Element, bar.Axis, direction, page, x, y);
         return true;
+    }
+
+    // After a pause, a press held on the track pages again at a steady rate, until the thumb reaches the pointer or the button is let go.
+    private void BeginTrackRepeat(DocumentElement element, ScrollbarAxis axis, int direction, int page, double x, double y)
+    {
+        EndTrackRepeat();
+        _trackRepeat = (element, axis, direction, new Point(x, y));
+        _repeatTimer = DispatcherQueue.CreateTimer();
+        _repeatTimer.Interval = TimeSpan.FromSeconds(HtmlViewLogic.TrackRepeatDelay);
+        _repeatTimer.IsRepeating = false;
+        _repeatTimer.Tick += (_, _) =>
+        {
+            if (_trackRepeat is not { } repeat || _document is not { } document)
+            {
+                EndTrackRepeat();
+                return;
+            }
+
+            // Still on the same side of the thumb: the track ahead of it in the direction asked.
+            var bar = document.GetScrollbarAt(page, repeat.Position.X, repeat.Position.Y);
+            var expected = repeat.Direction > 0 ? ScrollbarPart.TrackAfter : ScrollbarPart.TrackBefore;
+            if (bar is null || bar.Part != expected || !ApplyScroll(document.ScrollByPage(repeat.Element, repeat.Axis, repeat.Direction)))
+            {
+                EndTrackRepeat();
+                return;
+            }
+
+            _repeatTimer!.Interval = TimeSpan.FromSeconds(HtmlViewLogic.TrackRepeatInterval);
+            _repeatTimer.Start();
+        };
+        _repeatTimer.Start();
+    }
+
+    private void EndTrackRepeat()
+    {
+        _trackRepeat = null;
+        _repeatTimer?.Stop();
+        _repeatTimer = null;
+    }
+
+    // The pointer moved while a track is held: the repeat follows it.
+    private void MoveTrackRepeat(double x, double y)
+    {
+        if (_trackRepeat is { } repeat)
+            _trackRepeat = repeat with { Position = new Point(x, y) };
     }
 
     // The pointer moved with a thumb held: the container scrolls so the thumb stays under it.
@@ -95,7 +154,7 @@ public sealed partial class HtmlView
 
         var page = key is VirtualKey.PageDown or VirtualKey.PageUp or VirtualKey.Space;
         if (toStart || toEnd)
-            return ApplyScroll(document.SetScrollPosition(container, double.NaN, toStart ? 0 : metrics.MaxY));
+            return ApplyScroll(document.SetScrollPosition(container, double.NaN, toStart ? metrics.MinY : metrics.MaxY));
 
         var step = page ? metrics.Viewport.Height * PageFraction : KeyArrowPoints;
         return ApplyScroll(document.ScrollBy(container, dx * step, dy * step));
@@ -138,8 +197,8 @@ public sealed partial class HtmlView
             return;
 
         // NoScroll (-1) leaves an axis where it is.
-        var x = horizontalPercent < 0 ? double.NaN : metrics.MaxX * Math.Clamp(horizontalPercent, 0, 100) / 100;
-        var y = verticalPercent < 0 ? double.NaN : metrics.MaxY * Math.Clamp(verticalPercent, 0, 100) / 100;
+        var x = horizontalPercent < 0 ? double.NaN : metrics.MinX + ((metrics.MaxX - metrics.MinX) * Math.Clamp(horizontalPercent, 0, 100) / 100);
+        var y = verticalPercent < 0 ? double.NaN : metrics.MinY + ((metrics.MaxY - metrics.MinY) * Math.Clamp(verticalPercent, 0, 100) / 100);
         ApplyScroll(document.SetScrollPosition(element, x, y));
     }
 
@@ -148,6 +207,7 @@ public sealed partial class HtmlView
     {
         _touchStart = null;
         _touchScrolling = false;
+        EndFling(settle: false);
         if (_document is not { } document || _scrollMode == HtmlViewScrollMode.Disabled)
             return;
 
@@ -191,6 +251,13 @@ public sealed partial class HtmlView
         }
 
         _touchContainer = container;
+        // The finger's speed over this movement.
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var seconds = _touchTicks == 0 ? 0 : (now - _touchTicks) / (double)System.Diagnostics.Stopwatch.Frequency;
+        _touchVx = HtmlViewLogic.SmoothVelocity(_touchVx, dx, seconds);
+        _touchVy = HtmlViewLogic.SmoothVelocity(_touchVy, dy, seconds);
+        _touchTicks = now;
+
         ApplyScroll(document.DragScrollBy(container, dx, dy));
         return true;
     }
@@ -198,8 +265,54 @@ public sealed partial class HtmlView
     /// <summary>Whether a finger is dragging a scroll container, which the view's own scroller leaves to it. For tests.</summary>
     internal bool IsTouchScrollingContainer => _touchScrolling;
 
+    // A lifted finger carries the container on at the speed it left with, slowing to a stop; the container then settles on a snap position.
+    private void BeginFling(DocumentElement container, double vx, double vy)
+    {
+        EndFling(settle: false);
+        _flingContainer = container;
+        _flingTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+        _flingTimer = DispatcherQueue.CreateTimer();
+        _flingTimer.Interval = TimeSpan.FromMilliseconds(8);
+        _flingTimer.IsRepeating = true;
+        _flingTimer.Tick += (_, _) => StepFling(ref vx, ref vy);
+        _flingTimer.Start();
+    }
+
+    private void StepFling(ref double vx, ref double vy)
+    {
+        if (_flingContainer is not { } container || _document is not { } document)
+        {
+            EndFling(settle: false);
+            return;
+        }
+
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var seconds = Math.Min((now - _flingTicks) / (double)System.Diagnostics.Stopwatch.Frequency, 0.05);
+        _flingTicks = now;
+
+        var decay = HtmlViewLogic.FlingDecay(seconds);
+        vx *= decay;
+        vy *= decay;
+
+        // Stops at the end of the content, or when it has slowed to a crawl.
+        var moved = ApplyScroll(document.DragScrollBy(container, vx * seconds, vy * seconds));
+        if (!moved || Math.Max(Math.Abs(vx), Math.Abs(vy)) < HtmlViewLogic.FlingStopSpeed)
+            EndFling(settle: true);
+    }
+
+    private void EndFling(bool settle)
+    {
+        _flingTimer?.Stop();
+        _flingTimer = null;
+        var container = _flingContainer;
+        _flingContainer = null;
+        if (settle && container is not null && _document is { } document)
+            ApplyScroll(document.SettleScroll(container));
+    }
+
     internal void EndScrollbarDrag()
     {
+        EndTrackRepeat();
         if (_scrollbarDrag is { } drag && _document is { } document)
             ApplyScroll(document.SettleScroll(drag.Element));
 
@@ -208,10 +321,18 @@ public sealed partial class HtmlView
 
     internal void EndTouchScroll()
     {
-        if (_touchContainer is { } container && _document is { } document)
+        var container = _touchContainer;
+        _touchContainer = null;
+
+        // A finger lifted while it was still moving carries the container on; one that stopped first settles it.
+        var idle = (System.Diagnostics.Stopwatch.GetTimestamp() - _touchTicks) / (double)System.Diagnostics.Stopwatch.Frequency;
+        if (container is not null && _touchScrolling && idle < 0.1 && Math.Max(Math.Abs(_touchVx), Math.Abs(_touchVy)) > HtmlViewLogic.FlingStopSpeed * 4)
+            BeginFling(container, _touchVx, _touchVy);
+        else if (container is not null && _document is { } document)
             ApplyScroll(document.SettleScroll(container));
 
-        _touchContainer = null;
+        _touchVx = _touchVy = 0;
+        _touchTicks = 0;
         _touchStart = null;
         _touchLast = null;
         _touchScrolling = false;

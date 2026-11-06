@@ -423,9 +423,14 @@ namespace PeachBrackets.Html.Animation
                 if (_container.View.ScrollStateOf(_container, scroller) is not { } state || SubjectRect(scroller, fragmentainers) is not { } scrollerRect) return null;
 
                 var ppp = _container.RenderContext.LayoutUnitsPerPoint;
-                position = (vertical ? state.Y : state.X) / ppp;
+                var min = vertical ? state.MinY : state.MinX;
+                var max = vertical ? state.MaxY : state.MaxX;
+                var offset = vertical ? state.Y : state.X;
+
+                // Where the content starts is where the scroll starts: the right edge of right-to-left text, from which it scrolls on to negative offsets.
+                position = (max <= 0 && min < 0 ? -offset : offset - min) / ppp;
                 size = (vertical ? state.Port.Height : state.Port.Width) / ppp;
-                total = size + ((vertical ? state.MaxY : state.MaxX) / ppp);
+                total = size + ((max - min) / ppp);
 
                 // Where the content starts: the scrollport's edge (the border box less the border), which a view timeline measures its subject from.
                 portStart = vertical ? scrollerRect.Y + (scroller.ActualBorderTopWidth / ppp) : scrollerRect.X + (scroller.ActualBorderLeftWidth / ppp);

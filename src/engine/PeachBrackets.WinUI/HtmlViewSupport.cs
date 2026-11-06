@@ -57,6 +57,20 @@ public sealed class HtmlLoadFailedEventArgs : EventArgs
 /// <summary>The pieces of <see cref="HtmlView"/> that do not need a window, kept apart so they can be tested without one.</summary>
 internal static class HtmlViewLogic
 {
+    /// <summary>The speed (points per second) under which a fling has stopped.</summary>
+    internal const double FlingStopSpeed = 20;
+
+    /// <summary>How long the first press on a scrollbar track waits before it repeats, and the time between repeats (seconds).</summary>
+    internal const double TrackRepeatDelay = 0.4;
+    internal const double TrackRepeatInterval = 0.08;
+
+    /// <summary>The share of a fling's speed left after <paramref name="seconds"/>: it slows by a constant share each moment, to a stop within about a second.</summary>
+    internal static double FlingDecay(double seconds) => Math.Exp(-seconds / 0.35);
+
+    /// <summary>A finger's speed from its movement over a time, blended with the speed before it so one jittery sample does not throw a fling.</summary>
+    internal static double SmoothVelocity(double previous, double distance, double seconds) =>
+        seconds > 0 ? (0.6 * (distance / seconds)) + (0.4 * previous) : previous;
+
     /// <summary>
     /// The size of one side of a render target for a region that needs <paramref name="needed"/> (in DIPs) when the target in use has <paramref name="kept"/>: never
     /// smaller than what is kept or 512, and rounded up to a multiple of 512, so a region that grows a little each frame makes a new texture once per step, not per frame.

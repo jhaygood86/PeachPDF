@@ -36,8 +36,8 @@ namespace PeachBrackets.Html
 
             var verticalAlways = box.OverflowY.Value == Overflow.Scroll;
             var horizontalAlways = box.OverflowX.Value == Overflow.Scroll;
-            var vertical = box.OverflowY.Value is Overflow.Auto or Overflow.Scroll && (state.MaxY > 0 || verticalAlways);
-            var horizontal = box.OverflowX.Value is Overflow.Auto or Overflow.Scroll && (state.MaxX > 0 || horizontalAlways);
+            var vertical = box.OverflowY.Value is Overflow.Auto or Overflow.Scroll && (state.MaxY - state.MinY > 0 || verticalAlways);
+            var horizontal = box.OverflowX.Value is Overflow.Auto or Overflow.Scroll && (state.MaxX - state.MinX > 0 || horizontalAlways);
             if (!vertical && !horizontal)
                 return (null, null);
 
@@ -52,16 +52,16 @@ namespace PeachBrackets.Html
             {
                 var x = port.Right - thickness - inset;
                 var length = Math.Max(0, port.Height - reserved - (2 * inset));
-                var (start, size) = Thumb(length, state.ContentHeight, port.Height, state.Y, state.MaxY, MinimumThumb * px);
-                v = new ScrollbarShape(new Rect(x, port.Y + inset, thickness, length), new Rect(x, port.Y + inset + start, thickness, size), verticalAlways || state.MaxY > 0);
+                var (start, size) = Thumb(length, state.ContentHeight, port.Height, state.Y - state.MinY, state.MaxY - state.MinY, MinimumThumb * px);
+                v = new ScrollbarShape(new Rect(x, port.Y + inset, thickness, length), new Rect(x, port.Y + inset + start, thickness, size), verticalAlways || state.MaxY - state.MinY > 0);
             }
 
             if (horizontal)
             {
                 var y = port.Bottom - thickness - inset;
                 var length = Math.Max(0, port.Width - reserved - (2 * inset));
-                var (start, size) = Thumb(length, state.ContentWidth, port.Width, state.X, state.MaxX, MinimumThumb * px);
-                h = new ScrollbarShape(new Rect(port.X + inset, y, length, thickness), new Rect(port.X + inset + start, y, size, thickness), horizontalAlways || state.MaxX > 0);
+                var (start, size) = Thumb(length, state.ContentWidth, port.Width, state.X - state.MinX, state.MaxX - state.MinX, MinimumThumb * px);
+                h = new ScrollbarShape(new Rect(port.X + inset, y, length, thickness), new Rect(port.X + inset + start, y, size, thickness), horizontalAlways || state.MaxX - state.MinX > 0);
             }
 
             return (v, h);

@@ -46,4 +46,22 @@ public class AnimationLogicTests
     [InlineData(1025f, 1024f, 1536f)]
     public void ARenderTargetGrowsInSteps_AndNeverShrinksWhileInUse(float needed, float kept, float expected) =>
         Assert.Equal(expected, HtmlViewLogic.TargetExtent(needed, kept));
+
+    [Fact]
+    public void AFlingSlowsToAStopWithinAboutASecond()
+    {
+        var speed = 2000d;
+        var frames = 0;
+        while (speed > HtmlViewLogic.FlingStopSpeed && frames++ < 1000)
+            speed *= HtmlViewLogic.FlingDecay(1d / 120);
+
+        Assert.InRange(frames / 120d, 0.5, 2.0);
+    }
+
+    [Fact]
+    public void AFingerSpeed_BlendsTheNewSampleWithTheOldOne()
+    {
+        Assert.Equal((0.6 * 1000) + (0.4 * 500), HtmlViewLogic.SmoothVelocity(500, 10, 0.01), 6);
+        Assert.Equal(500, HtmlViewLogic.SmoothVelocity(500, 10, 0));
+    }
 }

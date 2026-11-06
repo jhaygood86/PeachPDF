@@ -1,3 +1,4 @@
+using PeachBrackets.Text;
 using System;
 using System.Collections.Generic;
 using PeachBrackets.Html.Dom;
@@ -40,7 +41,7 @@ public sealed partial class HtmlDocument
 
         var ppp = _unitsPerPoint;
         return new ScrollMetrics(state.X / ppp, state.Y / ppp, state.MaxX / ppp, state.MaxY / ppp,
-            new Rect(state.Port.X / ppp, state.Port.Y / ppp, state.Port.Width / ppp, state.Port.Height / ppp), state.ContentWidth / ppp, state.ContentHeight / ppp);
+            new Rect(state.Port.X / ppp, state.Port.Y / ppp, state.Port.Width / ppp, state.Port.Height / ppp), state.ContentWidth / ppp, state.ContentHeight / ppp, state.MinX / ppp, state.MinY / ppp);
     }
 
     /// <summary>
@@ -168,13 +169,53 @@ public sealed partial class HtmlDocument
     /// <param name="element">the element to show</param>
     /// <returns>the regions that look different</returns>
     /// <param name="behavior">how each container gets there; see <see cref="SetScrollPosition"/></param>
-    public IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element, ScrollBehavior behavior = ScrollBehavior.Auto)
+    /// <param name="block">where the element comes to along the block axis (vertical in horizontal text): <see cref="ScrollAlignment.Nearest"/> moves as little as it takes</param>
+    /// <param name="inline">where the element comes to along the inline axis</param>
+    public IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element, ScrollBehavior behavior = ScrollBehavior.Auto,
+        ScrollAlignment block = ScrollAlignment.Nearest, ScrollAlignment inline = ScrollAlignment.Nearest)
     {
         ArgumentNullException.ThrowIfNull(element);
         ThrowIfDisposed();
 
         var regions = new List<DirtyRegion>();
-        foreach (var (scroller, port) in _container.View.ScrollIntoView(_container, element.Box, (int)behavior))
+        foreach (var (scroller, port) in _container.View.ScrollIntoView(_container, element.Box, (int)behavior, (int)block, (int)inline))
+            regions.AddRange(AfterScroll(new DocumentElement(scroller), port));
+
+        return regions;
+    }
+
+    /// <summary>
+    /// Scrolls every scroll container that holds a piece of text so the first line of <paramref name="range"/> shows: what a find bar or a selection made by script calls to
+    /// bring a match into view. Nothing moves when the text is in no scroll container, or is in view already (with <see cref="ScrollAlignment.Nearest"/>).
+    /// </summary>
+    /// <param name="range">a range of <see cref="TextRuns"/>, as <see cref="FindText"/> returns it</param>
+    /// <param name="behavior">how each container gets there; see <see cref="SetScrollPosition"/></param>
+    /// <param name="block">where the text comes to along the block axis</param>
+    /// <param name="inline">where the text comes to along the inline axis</param>
+    /// <returns>the regions that look different</returns>
+    public IReadOnlyList<DirtyRegion> ScrollTextIntoView(TextRange range, ScrollBehavior behavior = ScrollBehavior.Auto,
+        ScrollAlignment block = ScrollAlignment.Nearest, ScrollAlignment inline = ScrollAlignment.Nearest)
+    {
+        ThrowIfDisposed();
+        var runs = TextRuns;
+        if (range.Start.RunIndex < 0 || range.Start.RunIndex >= runs.Count || runs[range.Start.RunIndex].Owner is not { } owner)
+            return [];
+
+        var rects = GetSelectionRects(range.Start, range.End);
+        if (rects.Count == 0 || _container.FragmentTree is not { Fragmentainers.Count: > 0 } tree)
+            return [];
+
+        // The text is on the one surface of a screen document. Its rectangle is where it is drawn, in points of the page; the container works in layout units before anything
+        // scrolls or sticks, so it goes back through the page's geometry and the displacement of the box that holds it.
+        var geometry = tree.Fragmentainers[Math.Clamp(runs[range.Start.RunIndex].PageIndex, 0, tree.Fragmentainers.Count - 1)].Geometry;
+        var ppp = _unitsPerPoint;
+        var (dx, dy) = _container.View.DisplacementOf(owner);
+        var drawn = rects[0];
+        var layout = new Rect(((drawn.X - geometry.ContentLeftPt) * ppp) + _container.MarginLeft - dx, ((drawn.Y - geometry.ContentTopPt) * ppp) + _container.MarginTop - dy,
+            drawn.Width * ppp, drawn.Height * ppp);
+
+        var regions = new List<DirtyRegion>();
+        foreach (var (scroller, port) in _container.View.ScrollIntoView(_container, owner, (int)behavior, (int)block, (int)inline, layout))
             regions.AddRange(AfterScroll(new DocumentElement(scroller), port));
 
         return regions;
@@ -235,7 +276,9 @@ public sealed partial class HtmlDocument
 
         var fraction = Math.Clamp((thumbStart - trackStart) / travel, 0, 1);
         var max = (isVertical ? state.MaxY : state.MaxX) / ppp;
-        return isVertical ? ScrollExactly(element, double.NaN, fraction * max) : ScrollExactly(element, fraction * max, double.NaN);
+        var min = (isVertical ? state.MinY : state.MinX) / ppp;
+        var position = min + (fraction * (max - min));
+        return isVertical ? ScrollExactly(element, double.NaN, position) : ScrollExactly(element, position, double.NaN);
     }
 
     /// <summary>Scrolls a container by a page along one axis (seven eighths of its scrollport, as a press on the track of a scrollbar does).</summary>
@@ -303,10 +346,28 @@ public sealed partial class HtmlDocument
 /// <param name="Y">how far the content is scrolled up (<c>scrollTop</c>)</param>
 /// <param name="MaxX">the most it can be scrolled to the left; zero when its content fits across</param>
 /// <param name="MaxY">the most it can be scrolled up; zero when its content fits down</param>
+/// <param name="MinX">the most it can be scrolled the other way: zero, or negative where the content starts at the right and runs on to the left (right-to-left text, vertical-rl)</param>
+/// <param name="MinY">the same along y</param>
 /// <param name="Viewport">the scrollport (the container's padding box), from the top-left of the content area</param>
 /// <param name="ContentWidth">the width of the scrollable overflow area (<c>scrollWidth</c>)</param>
 /// <param name="ContentHeight">the height of the scrollable overflow area (<c>scrollHeight</c>)</param>
-public readonly record struct ScrollMetrics(double X, double Y, double MaxX, double MaxY, Rect Viewport, double ContentWidth, double ContentHeight);
+public readonly record struct ScrollMetrics(double X, double Y, double MaxX, double MaxY, Rect Viewport, double ContentWidth, double ContentHeight, double MinX = 0, double MinY = 0);
+
+/// <summary>Where an element is brought to in a scroll container's scrollport by <see cref="HtmlDocument.ScrollIntoView"/> (CSSOM View's <c>ScrollLogicalPosition</c>).</summary>
+public enum ScrollAlignment
+{
+    /// <summary>As little as it takes to show it; nothing when it is in view already.</summary>
+    Nearest,
+
+    /// <summary>Its start edge at the start edge of the scrollport.</summary>
+    Start,
+
+    /// <summary>Its middle at the middle of the scrollport.</summary>
+    Center,
+
+    /// <summary>Its end edge at the end edge of the scrollport.</summary>
+    End,
+}
 
 /// <summary>How a programmatic scroll of a scroll container gets to its position (CSSOM View's <c>ScrollBehavior</c>).</summary>
 public enum ScrollBehavior

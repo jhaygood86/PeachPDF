@@ -70,8 +70,8 @@ namespace PeachBrackets.Html
 
             var fromX = state.X;
             var fromY = state.Y;
-            x = double.IsNaN(x) ? state.X : Math.Clamp(x, 0, state.MaxX);
-            y = double.IsNaN(y) ? state.Y : Math.Clamp(y, 0, state.MaxY);
+            x = double.IsNaN(x) ? state.X : Math.Clamp(x, state.MinX, state.MaxX);
+            y = double.IsNaN(y) ? state.Y : Math.Clamp(y, state.MinY, state.MaxY);
             if (snap) (x, y) = Snapped(container, box, state, x, y, fromX, fromY);
 
             var smooth = behavior == 2 || (behavior == 0 && IsSmooth(box));
@@ -133,12 +133,12 @@ namespace PeachBrackets.Html
             if (!snapX && !snapY) return (x, y);
 
             var (xs, ys) = SnapPositions(container, box, state);
-            if (snapX) x = Settle(xs, x, fromX, state.MaxX, state.Port.Width, mandatory);
-            if (snapY) y = Settle(ys, y, fromY, state.MaxY, state.Port.Height, mandatory);
+            if (snapX) x = Settle(xs, x, fromX, state.MinX, state.MaxX, state.Port.Width, mandatory);
+            if (snapY) y = Settle(ys, y, fromY, state.MinY, state.MaxY, state.Port.Height, mandatory);
             return (x, y);
         }
 
-        private static double Settle(List<SnapPosition> positions, double desired, double from, double max, double portSize, bool mandatory)
+        private static double Settle(List<SnapPosition> positions, double desired, double from, double min, double max, double portSize, bool mandatory)
         {
             if (positions.Count == 0) return desired;
 
@@ -152,7 +152,7 @@ namespace PeachBrackets.Html
                 if (stop is null || Math.Abs(position.Offset - from) < Math.Abs(stop.Value.Offset - from)) stop = position;
             }
 
-            if (stop is { } held) return Math.Clamp(held.Offset, 0, max);
+            if (stop is { } held) return Math.Clamp(held.Offset, min, max);
 
             var best = positions[0].Offset;
             foreach (var position in positions)
@@ -161,7 +161,7 @@ namespace PeachBrackets.Html
             }
 
             if (!mandatory && Math.Abs(best - desired) > portSize * ProximityShare) return desired;
-            return Math.Clamp(best, 0, max);
+            return Math.Clamp(best, min, max);
         }
 
         // The scroll positions at which each snap area of the container lines up with its snapport (the scrollport less the scroll-padding), on each axis.

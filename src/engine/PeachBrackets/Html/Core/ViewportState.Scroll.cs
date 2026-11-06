@@ -16,10 +16,12 @@ namespace PeachBrackets.Html
     /// <param name="Y">how far the content is scrolled up</param>
     /// <param name="MaxX">the most it can be scrolled to the left (zero when it does not overflow on that axis)</param>
     /// <param name="MaxY">the most it can be scrolled up</param>
+    /// <param name="MinX">the most it can be scrolled the other way (zero, or below it where the content starts at the right and runs on to the left: right-to-left text, vertical-rl)</param>
+    /// <param name="MinY">the same along y</param>
     /// <param name="Port">the scrollport: the container's padding box, in the surface's space</param>
     /// <param name="ContentWidth">the width of the scrollable overflow area</param>
     /// <param name="ContentHeight">the height of the scrollable overflow area</param>
-    internal readonly record struct ScrollState(double X, double Y, double MaxX, double MaxY, Rect Port, double ContentWidth, double ContentHeight);
+    internal readonly record struct ScrollState(double X, double Y, double MaxX, double MaxY, Rect Port, double ContentWidth, double ContentHeight, double MinX = 0, double MinY = 0);
 
     /// <summary>
     /// The scroll containers of a continuous document - boxes whose <c>overflow</c> is <c>auto</c>, <c>scroll</c> or <c>hidden</c> (CSS Overflow 3 §2) - and how far each is
@@ -103,6 +105,41 @@ namespace PeachBrackets.Html
             return (dx, dy);
         }
 
+        /// <summary>The offsets of the scrolled containers by the place of each in the source, and forgets them: the boxes are about to be replaced by a reload.</summary>
+        internal Dictionary<int, (double X, double Y)> TakeScrollByOrdinal()
+        {
+            var taken = new Dictionary<int, (double X, double Y)>();
+            foreach (var (box, offset) in _scroll)
+            {
+                if (box.HtmlTag is { SourceOrdinal: >= 0 } tag)
+                    taken[tag.SourceOrdinal] = offset;
+            }
+
+            _scroll.Clear();
+            _scrollIndex = null;
+            return taken;
+        }
+
+        /// <summary>Scrolls the containers of a reloaded layout to the offsets <see cref="TakeScrollByOrdinal"/> took, kept within what each can now scroll.</summary>
+        internal void RestoreScrollByOrdinal(HtmlContainerInt container, Dictionary<int, (double X, double Y)> taken)
+        {
+            if (taken.Count == 0 || IndexFor(container) is not { } index)
+                return;
+
+            foreach (var (box, entry) in index.Entries)
+            {
+                if (box.HtmlTag is { SourceOrdinal: >= 0 } tag && taken.TryGetValue(tag.SourceOrdinal, out var offset))
+                {
+                    var clamped = (Math.Clamp(offset.X, entry.MinX, entry.MaxX), Math.Clamp(offset.Y, entry.MinY, entry.MaxY));
+                    if (clamped != default)
+                        _scroll[box] = clamped;
+                }
+            }
+
+            foreach (var box in new List<CssBox>(_scroll.Keys))
+                RefreshSticky(container, box);
+        }
+
         /// <summary>Whether <paramref name="box"/> is a scroll container of the laid-out document.</summary>
         internal bool IsScrollContainer(HtmlContainerInt container, CssBox box) => IndexFor(container)?.Entries.ContainsKey(box) == true;
 
@@ -170,8 +207,8 @@ namespace PeachBrackets.Html
                 if (!index.Entries.TryGetValue(current, out var entry)) continue;
 
                 var offset = ScrollOffsetOf(current);
-                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > 0);
-                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > 0);
+                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > entry.MinX);
+                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > entry.MinY);
                 if ((dx == 0 && dy == 0) || scrollsX || scrollsY) return current;
             }
 
@@ -199,7 +236,7 @@ namespace PeachBrackets.Html
                 return null;
 
             var offset = ScrollOffsetOf(box);
-            return new ScrollState(offset.X, offset.Y, entry.MaxX, entry.MaxY, entry.Port, entry.ContentWidth, entry.ContentHeight);
+            return new ScrollState(offset.X, offset.Y, entry.MaxX, entry.MaxY, entry.Port, entry.ContentWidth, entry.ContentHeight, entry.MinX, entry.MinY);
         }
 
         /// <summary>
@@ -211,8 +248,8 @@ namespace PeachBrackets.Html
             if (ScrollStateOf(container, box) is not { } state)
                 return null;
 
-            x = double.IsNaN(x) ? state.X : Math.Clamp(x, 0, state.MaxX);
-            y = double.IsNaN(y) ? state.Y : Math.Clamp(y, 0, state.MaxY);
+            x = double.IsNaN(x) ? state.X : Math.Clamp(x, state.MinX, state.MaxX);
+            y = double.IsNaN(y) ? state.Y : Math.Clamp(y, state.MinY, state.MaxY);
             if (x == state.X && y == state.Y)
                 return null;
 
@@ -220,6 +257,8 @@ namespace PeachBrackets.Html
                 _scroll.Remove(box);
             else
                 _scroll[box] = (x, y);
+
+            RefreshSticky(container, box);
 
             // Where the scrollport is drawn: the container itself may be carried by a scroller of its own.
             var shift = DisplacementOf(box);
@@ -257,8 +296,8 @@ namespace PeachBrackets.Html
 
                 // Asked for a direction, the container must be able to go that way on an axis that was asked for.
                 var offset = ScrollOffsetOf(box);
-                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > 0);
-                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > 0);
+                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > entry.MinX);
+                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > entry.MinY);
                 if (scrollsX || scrollsY) return box;
 
                 if ((dx != 0 && OverscrollContained(box, vertical: false)) || (dy != 0 && OverscrollContained(box, vertical: true)))
@@ -294,10 +333,10 @@ namespace PeachBrackets.Html
         /// Scrolls the scroll containers that hold <paramref name="box"/>, outermost first, by as little as brings it into view. Returns each one that moved with the scrollport that
         /// looks different.
         /// </summary>
-        internal List<(CssBox Scroller, Rect Port)> ScrollIntoView(HtmlContainerInt container, CssBox box, int behavior = 0)
+        internal List<(CssBox Scroller, Rect Port)> ScrollIntoView(HtmlContainerInt container, CssBox box, int behavior = 0, int block = 0, int inline = 0, Rect? at = null)
         {
             var moved = new List<(CssBox, Rect)>();
-            if (IndexFor(container) is not { Entries.Count: > 0 } index || FragmentRectOf(container, box) is not { } own)
+            if (IndexFor(container) is not { Entries.Count: > 0 } index || (at ?? FragmentRectOf(container, box)) is not { } own)
                 return moved;
 
             var chain = new List<CssBox>();
@@ -310,7 +349,8 @@ namespace PeachBrackets.Html
             }
 
             chain.Reverse();
-            var margins = Margins(box);
+            // A piece of text inside the box (at) has no scroll margin of its own.
+            var margins = at is null ? Margins(box) : default;
             foreach (var scroller in chain)
             {
                 var entry = index.Entries[scroller];
@@ -325,18 +365,25 @@ namespace PeachBrackets.Html
 
                 var offset = ScrollOffsetOf(scroller);
                 var targetY = offset.Y;
-                if (rect.Y < port.Y || rect.Height > port.Height) targetY += rect.Y - port.Y;
-                else if (rect.Bottom > port.Bottom) targetY += rect.Bottom - port.Bottom;
+                targetY += Align(block, rect.Y, rect.Bottom, port.Y, port.Bottom);
 
                 var targetX = offset.X;
-                if (rect.X < port.X || rect.Width > port.Width) targetX += rect.X - port.X;
-                else if (rect.Right > port.Right) targetX += rect.Right - port.Right;
+                targetX += Align(inline, rect.X, rect.Right, port.X, port.Right);
 
                 if (Navigate(container, scroller, targetX, targetY, snap: true, behavior) is { } changed) moved.Add((scroller, changed));
             }
 
             return moved;
         }
+
+        // How far the content has to move so the span comes where the alignment says (0 nearest, 1 start, 2 center, 3 end) in the port's span.
+        private static double Align(int alignment, double start, double end, double portStart, double portEnd) => alignment switch
+        {
+            1 => start - portStart,
+            2 => ((start + end) / 2) - ((portStart + portEnd) / 2),
+            3 => end - portEnd,
+            _ => start < portStart || end - start > portEnd - portStart ? start - portStart : end > portEnd ? end - portEnd : 0,
+        };
 
         /// <summary>The rectangle of <paramref name="box"/> in the layout, before anything scrolls or sticks it; null when it has no fragment.</summary>
         private static Rect? FragmentRectOf(HtmlContainerInt container, CssBox box)
@@ -384,7 +431,7 @@ namespace PeachBrackets.Html
                         }
 
                         var offset = _scroll[box];
-                        var clamped = (Math.Clamp(offset.X, 0, entry.MaxX), Math.Clamp(offset.Y, 0, entry.MaxY));
+                        var clamped = (Math.Clamp(offset.X, entry.MinX, entry.MaxX), Math.Clamp(offset.Y, entry.MinY, entry.MaxY));
                         if (clamped.Item1 == 0 && clamped.Item2 == 0) _scroll.Remove(box);
                         else _scroll[box] = clamped;
                     }
@@ -397,7 +444,7 @@ namespace PeachBrackets.Html
         /// <summary>The scroll containers of one layout, each with its scrollport and the extent of what it holds.</summary>
         private sealed class ScrollIndex
         {
-            internal sealed record Entry(BoxFragment Fragment, Rect Port, double MaxX, double MaxY, double ContentWidth, double ContentHeight);
+            internal sealed record Entry(BoxFragment Fragment, Rect Port, double MaxX, double MaxY, double ContentWidth, double ContentHeight, double MinX = 0, double MinY = 0);
 
             private ScrollIndex(FragmentTree tree) => Tree = tree;
 
@@ -430,34 +477,57 @@ namespace PeachBrackets.Html
                 var port = RenderUtils.PaddingEdgeOf(box, fragment.WholeBoxRect);
 
                 // The scrollable overflow area: what the container holds (its own text and every box under it), and the padding at the far end of the content.
-                double right = double.NegativeInfinity, bottom = double.NegativeInfinity;
+                double right = double.NegativeInfinity, bottom = double.NegativeInfinity, left = double.PositiveInfinity, top = double.PositiveInfinity;
                 void Add(Rect rect)
                 {
                     if (!(rect.Width > 0) || !(rect.Height > 0) || double.IsNaN(rect.X + rect.Y + rect.Width + rect.Height)) return;
                     right = Math.Max(right, rect.Right);
                     bottom = Math.Max(bottom, rect.Bottom);
+                    left = Math.Min(left, rect.X);
+                    top = Math.Min(top, rect.Y);
                 }
 
                 foreach (var word in fragment.Words) Add(word.Rect);
 
+                // The box a transform moves counts where it is moved to (CSS Overflow 3 section 2.2), so each box carries the transforms of the boxes around it, inside the container.
+                void AddMoved(Rect rect, System.Numerics.Matrix3x2 by)
+                {
+                    if (by.IsIdentity) { Add(rect); return; }
+
+                    double minX = double.PositiveInfinity, minY = double.PositiveInfinity, maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
+                    foreach (var corner in new[] { new System.Numerics.Vector2((float)rect.X, (float)rect.Y), new System.Numerics.Vector2((float)rect.Right, (float)rect.Y),
+                                                   new System.Numerics.Vector2((float)rect.X, (float)rect.Bottom), new System.Numerics.Vector2((float)rect.Right, (float)rect.Bottom) })
+                    {
+                        var moved = System.Numerics.Vector2.Transform(corner, by);
+                        minX = Math.Min(minX, moved.X); maxX = Math.Max(maxX, moved.X);
+                        minY = Math.Min(minY, moved.Y); maxY = Math.Max(maxY, moved.Y);
+                    }
+
+                    Add(new Rect(minX, minY, maxX - minX, maxY - minY));
+                }
+
                 // What a nested scroll container holds is clipped to it, so only its own box counts here; a fixed box is held by the viewport and does not
                 // belong to the scrollable area of what it sits in.
-                void AddBelow(BoxFragment node)
+                void AddBelow(BoxFragment node, System.Numerics.Matrix3x2 outer)
                 {
                     foreach (var child in node.Children)
                     {
                         if (child.Box.Position.Value == PositionMode.Fixed) continue;
 
-                        Add(child.WholeBoxRect);
-                        Add(child.Rect);
-                        foreach (var line in child.Lines) Add(line.Rect);
-                        foreach (var word in child.Words) Add(word.Rect);
+                        var by = outer;
+                        if (child.Box.HasTransform)
+                            by = child.Box.ActualTransformMatrix.RebaseOrigin(child.WholeBoxRect.X, child.WholeBoxRect.Y) * outer;
 
-                        if (!DomUtils.IsScrollerOnScreen(child.Box)) AddBelow(child);
+                        AddMoved(child.WholeBoxRect, by);
+                        AddMoved(child.Rect, by);
+                        foreach (var line in child.Lines) AddMoved(line.Rect, by);
+                        foreach (var word in child.Words) AddMoved(word.Rect, by);
+
+                        if (!DomUtils.IsScrollerOnScreen(child.Box)) AddBelow(child, by);
                     }
                 }
 
-                AddBelow(fragment);
+                AddBelow(fragment, System.Numerics.Matrix3x2.Identity);
 
                 var maxX = right > port.Right ? Math.Max(0, right + box.ActualPaddingRight - port.Right) : 0;
                 var maxY = bottom > port.Bottom ? Math.Max(0, bottom + box.ActualPaddingBottom - port.Bottom) : 0;
@@ -466,7 +536,16 @@ namespace PeachBrackets.Html
                 if (box.OverflowX.Value is Overflow.Visible or Overflow.Clip) maxX = 0;
                 if (box.OverflowY.Value is Overflow.Visible or Overflow.Clip) maxY = 0;
 
-                return new Entry(fragment, port, maxX, maxY, port.Width + maxX, port.Height + maxY);
+                // Content that runs past the start edge is out of reach, except where the start is at the right or bottom (right-to-left text, vertical-rl): there it runs on
+                // to the left or up, and the container scrolls to it (CSS Overflow 3 section 2.2).
+                var inlineStart = LogicalPropertyResolver.InlineStart(box.WritingMode.Value, box.Direction.Value);
+                var blockStart = LogicalPropertyResolver.BlockStart(box.WritingMode.Value);
+                var minX = inlineStart == PhysicalSide.Right || blockStart == PhysicalSide.Right ? Math.Min(0, left - box.ActualPaddingLeft - port.X) : 0;
+                var minY = inlineStart == PhysicalSide.Bottom || blockStart == PhysicalSide.Bottom ? Math.Min(0, top - box.ActualPaddingTop - port.Y) : 0;
+                if (box.OverflowX.Value is Overflow.Visible or Overflow.Clip) minX = 0;
+                if (box.OverflowY.Value is Overflow.Visible or Overflow.Clip) minY = 0;
+
+                return new Entry(fragment, port, maxX, maxY, port.Width + maxX - minX, port.Height + maxY - minY, minX, minY);
             }
         }
     }

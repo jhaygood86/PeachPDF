@@ -86,6 +86,30 @@ public class HtmlViewScrollContainerTests
     }
 
     [Fact]
+    public async Task ATrackHeldDown_KeepsPagingUntilItIsLetGo()
+    {
+        var (held, later) = await UiThread.RunAsync(async window =>
+        {
+            var view = await LoadedAsync(window);
+            var document = view.Document!;
+            var scroller = document.GetElement("s")!;
+            var port = document.GetScrollMetrics(scroller)!.Value.Viewport;
+
+            Assert.True(view.PressScrollbarAt(0, port.Right - 4, port.Bottom - 8));
+            await Task.Delay(1200);
+            var held = document.GetScrollMetrics(scroller)!.Value.Y;
+
+            view.EndScrollbarDrag();
+            await Task.Delay(500);
+            return (held, document.GetScrollMetrics(scroller)!.Value.Y);
+        });
+
+        // More than the one page the press itself made (65.6 points), and nothing more once it was let go.
+        Assert.True(held > 100, $"{held}");
+        Assert.Equal(held, later, 1);
+    }
+
+    [Fact]
     public async Task TheFocus_ScrollsTheContainerToShowIt_AndTheKeysScrollItFromThere()
     {
         var (afterFocus, afterUp, afterEnd) = await UiThread.RunAsync(async window =>
