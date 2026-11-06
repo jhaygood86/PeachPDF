@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    An iOS app with one HtmlView full screen and a menu of the screen showcases. After the sample page loads it prints PEACH_SMOKE lines to the
+    device log (what the document says at a few points, how long the main thread went without running, a scripted scroll), so the view can be
+    checked in the simulator without looking at it: run it with run.sh. Not in PeachPDF.slnx (needs the ios workload).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0-ios</TargetFrameworks>
+    <SupportedOSPlatformVersion>15.0</SupportedOSPlatformVersion>
+    <RuntimeIdentifier>iossimulator-arm64</RuntimeIdentifier>
+    <ApplicationId>net.peachpdf.brackets.ios.example</ApplicationId>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
+    <!-- Rewrites a page fetched from the web (its root classes and base address) before the view loads it; see PageRewriter. Demo only, not shipped. -->
+    <PackageReference Include="AngleSharp" />
+    <Compile Include="..\PeachBrackets.Apple.Demo.Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The screen-only showcases shared with the Windows, Android and macOS demos (and their list). -->
+  <ItemGroup>
+    <BundleResource Include="..\ScreenShowcases\**\*" Link="screen\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Every showcase of the PDF harness as HTML only, written once into obj/showcases (see the macOS example); set SkipShowcaseExport=true to build without them. -->
+  <PropertyGroup>
+    <ShowcaseExportDir>$(MSBuildProjectDirectory)/obj/showcases/</ShowcaseExportDir>
+  </PropertyGroup>
+  <Target Name="ExportHarnessShowcases" Condition="'$(SkipShowcaseExport)' != 'true'"
+          Inputs="..\..\harness\PeachPDF.TestHarness\Program.cs" Outputs="$(ShowcaseExportDir)showcases.json">
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../../harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj&quot; -f net10.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('/'))&quot;" />
+  </Target>
+  <Target Name="StageHarnessShowcases" BeforeTargets="BeforeBuild" DependsOnTargets="ExportHarnessShowcases">
+    <ItemGroup>
+      <HarnessShowcaseFile Include="$(ShowcaseExportDir)**/*" />
+      <BundleResource Include="@(HarnessShowcaseFile)" Link="showcases/%(HarnessShowcaseFile.RecursiveDir)%(HarnessShowcaseFile.Filename)%(HarnessShowcaseFile.Extension)" />
+    </ItemGroup>
+  </Target>
+
+</Project>

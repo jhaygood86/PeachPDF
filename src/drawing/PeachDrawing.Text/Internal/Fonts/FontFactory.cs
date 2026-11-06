@@ -102,11 +102,6 @@ namespace PeachDrawing.Text.Internal.Fonts
                         else
                         {
                             // Case: No such font resolver info exists.
-                            // Add to both dictionaries.
-                            FontResolverInfosByName.Add(typefaceKey, fontResolverInfo);
-                            Debug.Assert(resolverInfoKey == fontResolverInfo.Key);
-                            FontResolverInfosByName.Add(resolverInfoKey, fontResolverInfo);
-
                             // Create font source if not yet exists.
                             FontFileData previousFontSource;
                             if (FontSourcesByName.TryGetValue(fontResolverInfo.FaceName, out previousFontSource))
@@ -125,6 +120,12 @@ namespace PeachDrawing.Text.Internal.Fonts
                                 if (string.Compare(fontResolverInfo.FaceName, fontSource.FontName, StringComparison.OrdinalIgnoreCase) != 0)
                                     FontSourcesByName.Add(fontResolverInfo.FaceName, fontSource);
                             }
+
+                            // Add to both dictionaries, but only once the font source exists: a font that cannot be read throws above, and an
+                            // info left behind without its source would be handed out for every later request of the face.
+                            FontResolverInfosByName.Add(typefaceKey, fontResolverInfo);
+                            Debug.Assert(resolverInfoKey == fontResolverInfo.Key);
+                            FontResolverInfosByName.Add(resolverInfoKey, fontResolverInfo);
                         }
                     }
                 }

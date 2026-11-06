@@ -454,7 +454,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     // symbol-font detection.
                     bool isBmpCandidate =
                         (platformId == PlatformId.Win && ((WinEncodingId)encodingId == WinEncodingId.Symbol || (WinEncodingId)encodingId == WinEncodingId.Unicode))
-                        || (platformId == PlatformId.Apple && (AppleEncodingId)encodingId == AppleEncodingId.Unicode20BmpOnly);
+                        // The Unicode platform's encodings 0 to 3 (Unicode 1.0, 1.1, ISO 10646, 2.0 BMP) all name a BMP repertoire for a format-4 subtable;
+                        // macOS's own Helvetica Neue and others carry encoding 1 or 3 and no other subtable.
+                        || (platformId == PlatformId.Apple && (AppleEncodingId)encodingId <= AppleEncodingId.Unicode20BmpOnly);
 
                     // Any Unicode platform subtable, or the Windows "Unicode BMP" or "Unicode full repertoire" one.
                     bool isFullUnicodeCandidate =

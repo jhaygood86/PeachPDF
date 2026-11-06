@@ -1,0 +1,79 @@
+name: Apple
+
+# PeachBrackets.Apple (the macOS and iOS HtmlView) builds for the macOS and iOS target frameworks, which need the macos and ios workloads and a
+# Mac, so the main test workflow does not build it (its platform-free logic is tested there). This workflow builds the package and both examples,
+# runs the macOS example's smoke check, and runs the example on an iOS simulator, asserting on what it logs. Not part of the required `test-gate`.
+
+on:
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'src/engine/PeachBrackets.Apple/**'
+      - 'src/examples/PeachBrackets.Apple.*/**'
+      - 'src/tests/PeachBrackets.Apple.Tests/**'
+      - 'src/tests/PeachBrackets.Apple.AppTests/**'
+      - 'src/engine/PeachBrackets/**'
+      - 'src/drawing/PeachDrawing.CoreGraphics/**'
+      - 'src/drawing/PeachDrawing.Core/**'
+      - 'src/drawing/PeachDrawing/**'
+      - 'src/drawing/PeachDrawing.Text/**'
+      - 'src/Directory.*.props'
+      - 'src/Version.props'
+      - '.github/workflows/apple.yml'
+      - '.github/scripts/ios-smoke.sh'
+  workflow_dispatch:
+
+concurrency:
+  group: apple-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup .NET
+      uses: ./.github/actions/setup-dotnet
+      with:
+        include-net11: 'false'
+
+    - name: Install the macos and ios workloads
+      run: dotnet workload install macos ios
+
+    - name: Build the package for macOS and iOS
+      run: dotnet build src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
+
+    # The logic tests are plain .NET; the public-surface test reads the build above for both platforms.
+    - name: Test the platform-free logic and the public surface
+      run: dotnet test --project src/tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj
+
+    # The real view in an offscreen window: loads, paints tiles read back as pixels, hover, links, forms, drags, VoiceOver elements, the sticky header, reflow.
+    - name: Test the macOS view
+      run: src/tests/PeachBrackets.Apple.AppTests/run.sh
+
+    - name: Smoke-test the macOS example
+      # The report says what failed, so it is read whatever the exit code was.
+      run: src/examples/PeachBrackets.Apple.macOS.Example/run.sh --smoke "$RUNNER_TEMP/macos-smoke.txt" --screenshot "$RUNNER_TEMP/macos-shot.png" || true
+
+    - name: Check the macOS smoke report
+      run: |
+        cat "$RUNNER_TEMP/macos-smoke.txt"
+        head -1 "$RUNNER_TEMP/macos-smoke.txt" | grep -qx OK
+
+    - name: Smoke-test the iOS example on a simulator
+      run: .github/scripts/ios-smoke.sh
+
+    - name: Keep the screenshot
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: apple-example
+        path: |
+          ${{ runner.temp }}/macos-shot.png
+          ${{ runner.temp }}/macos-smoke.txt
