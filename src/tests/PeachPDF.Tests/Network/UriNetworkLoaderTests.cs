@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.Network
 
             Assert.NotNull(response?.ResourceStream);
             using var reader = new StreamReader(response!.ResourceStream!);
-            Assert.Contains("color:red", await reader.ReadToEndAsync());
+            Assert.Contains("color:red", await reader.ReadToEndAsync(TestContext.Current.CancellationToken));
         }
     }
 }
