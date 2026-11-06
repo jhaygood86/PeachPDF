@@ -49,8 +49,14 @@ public sealed partial class HtmlView
     // Whether this view plays animations: the host asked, and the system does not ask for reduced motion.
     private bool PlaysAnimations => AnimationsEnabled && HtmlViewLogic.SystemAllowsMotion(SystemAnimationsEnabled());
 
+    /// <summary>Stands in for the system's animation-effects setting when set; for tests on a machine that has them off (a build agent).</summary>
+    internal static bool? SystemAnimationsOverride { get; set; }
+
     private static bool SystemAnimationsEnabled()
     {
+        if (SystemAnimationsOverride is { } forced)
+            return forced;
+
         try
         {
             return new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;

@@ -12,6 +12,8 @@ public class HtmlViewAnimationTests
 
     private static async Task<HtmlView> LoadedAsync(Window window)
     {
+        // A build agent often has the system's animation effects off, which the view honours.
+        HtmlView.SystemAnimationsOverride = true;
         var view = new HtmlView { Html = Page, AnimationsEnabled = true, PageBackground = Microsoft.UI.Colors.White };
         var loaded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         view.DocumentLoaded += (_, _) => loaded.TrySetResult();
