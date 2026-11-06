@@ -2019,6 +2019,8 @@ namespace PeachBrackets.Html.Dom
                 farEdge = isVertical ? CssBox.GetMaximumRight(b, farEdge) : CssBox.GetMaximumBottom(b, farEdge);
             }
 
+            if (!isVertical) farEdge = Math.Max(farEdge, CellContentBottom(cell));
+
             var dist = cellKeyword switch
             {
                 VerticalAlignment.Bottom => cellFarEdge - farEdge,
@@ -2039,6 +2041,46 @@ namespace PeachBrackets.Html.Dom
             OffsetCellContent(cell, dist, isVertical);
 
             return dist;
+        }
+
+        /// <summary>
+        /// Where the content of <paramref name="cell"/> ends: the bottom margin edge of its last in-flow block-level child and the bottom of the
+        /// lines it holds itself. The words' own rectangles stop short of both: a line is taller than its text by its leading, a <c>&lt;br&gt;</c>
+        /// that holds a line of its own has no word, and a margin has none, so measured from them a cell with no room to spare was thought to have
+        /// some and its content was moved down by half of it.
+        /// </summary>
+        /// <remarks>
+        /// A cell is a formatting context root, so the margins of its children do not collapse through it (CSS 2.1 §8.3.1) and the last one is
+        /// inside the cell; a float it holds is inside it too (§10.6.7). A box that is not in the flow is not content (§10.6.3), a relatively
+        /// positioned one counts where it is in the flow (§9.4.3).
+        /// </remarks>
+        private static double CellContentBottom(CssBox cell)
+        {
+            var bottom = double.NegativeInfinity;
+
+            foreach (var b in cell.Boxes)
+            {
+                if (b.IsInline || b.Text is not null || b.IsOutOfFlow && !b.IsFloated || b.IsRunningPositioned
+                    || b.DerivedStyle.ActualDisplay == Keywords.None)
+                {
+                    continue;
+                }
+
+                bottom = Math.Max(bottom, b.StaticBottom + b.ActualMarginBottom);
+            }
+
+            // The lines the cell holds itself: a line box reaches as far below its baseline as the strut and the boxes on it say, leading included
+            // (CSS 2.1 §10.8.1), which its LineBottom, the lowest of its words' rectangles, does not.
+            foreach (var line in cell.LineBoxes)
+            {
+                var lineBottom = line.BaselineY is { } baseline && line.BaselineExtent is { } extent
+                    ? baseline + extent.BelowBaseline
+                    : line.LineBottom > line.LineTop ? line.LineBottom : double.NegativeInfinity;
+
+                bottom = Math.Max(bottom, lineBottom);
+            }
+
+            return bottom;
         }
 
         /// <summary>
