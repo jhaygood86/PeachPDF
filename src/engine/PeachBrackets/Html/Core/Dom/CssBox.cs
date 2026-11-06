@@ -2862,6 +2862,12 @@ namespace PeachBrackets.Html.Dom
         internal (double Left, double Width)? ColumnsBesideFloats { get => _rare is null ? default((double Left, double Width)?) : _rare.ColumnsBesideFloats; set { if (_rare is null) { if (EqualityComparer<(double Left, double Width)?>.Default.Equals(value, default((double Left, double Width)?))) return; _rare = new BoxRareState(); } _rare.ColumnsBesideFloats = value; } }
 
         /// <summary>
+        /// For a multi-column container being filled, the child its current column starts at; null when it is not being filled. A float
+        /// of an earlier column has a <c>Y</c> measured from that column's own top, so what a later column's <c>clear</c> looks at begins here.
+        /// </summary>
+        internal CssBox? CurrentColumnFirstChild { get => _rare?.CurrentColumnFirstChild; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.CurrentColumnFirstChild = value; } }
+
+        /// <summary>
         /// The floats placed while building the line this box's inline flow discarded at its last break. The resumed
         /// pass places them again, so the fragmentainer the flow stopped in must not claim them.
         /// </summary>

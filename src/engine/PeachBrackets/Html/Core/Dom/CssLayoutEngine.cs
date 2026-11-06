@@ -3634,33 +3634,24 @@ namespace PeachBrackets.Html.Dom
             // `clearance` is seeded with: only a float's edge is clearance (§9.5.2).
             var floatEdge = double.NegativeInfinity;
 
-            for (var i = 0; i < currentBoxIdx; i++)
+            // In a multi-column container the floats of the columns before this one are measured from their own column's top, so only the
+            // children from the one this column starts at are looked at.
+            var firstSibling = containingBox.CurrentColumnFirstChild is { } columnStart
+                ? Math.Max(0, containingBox.Boxes.IndexOf(columnStart))
+                : 0;
+
+            for (var i = firstSibling; i < currentBoxIdx; i++)
             {
-                var siblingBox = containingBox.Boxes[i];
+                var siblingEdge = LowestFloatBottomIn(containingBox.Boxes[i], box.EffectiveClear, 0);
 
-                var clears = box.EffectiveClear;
-
-                var nestedClearance = GetClearance(siblingBox, clears, siblingBox.RelativeOffsetY);
-                if (nestedClearance > 0) floatEdge = Math.Max(floatEdge, nestedClearance);
-                clearance = Math.Max(clearance, nestedClearance);
-
-                if (!siblingBox.IsFloated) continue;
-
-                switch (siblingBox.EffectiveFloatSide)
+                // CSS 2.1 §9.5.2: clearance places the cleared box's top border edge even with the float's bottom OUTER (margin) edge, not
+                // its border edge - a float with a negative bottom margin (Acid2's ".nose { margin: -2em 2em -1em }") is cleared 1em
+                // higher than its visible bottom.
+                if (!double.IsNegativeInfinity(siblingEdge))
                 {
-                    case Floating.Left when clears is ClearMode.Right:
-                    case Floating.Right when clears is ClearMode.Left:
-                        continue;
+                    floatEdge = Math.Max(floatEdge, siblingEdge);
+                    clearance = Math.Max(clearance, siblingEdge);
                 }
-
-                // CSS 2.1 §9.5.2: clearance places the cleared box's top border edge even with the
-                // float's bottom OUTER (margin) edge, not its border edge - a float with a negative
-                // bottom margin (Acid2's ".nose { margin: -2em 2em -1em }") is cleared 1em higher
-                // than its visible bottom. StaticBottom so a float that is ALSO position:relative
-                // clears at its static position, not its visual offset (CSS 2.1 §9.4.3).
-                floatEdge = Math.Max(floatEdge, siblingBox.StaticBottom + siblingBox.ActualMarginBottom);
-                clearance = Math.Max(clearance, siblingBox.StaticBottom + siblingBox.ActualMarginBottom);
-
             }
 
             // Clearance exists only when a float's margin edge is below where the box would have been (§9.5.2).
@@ -3677,44 +3668,43 @@ namespace PeachBrackets.Html.Dom
             box.Location = new PaintPoint(box.ClientLeft, clearance);
         }
 
-        /// <param name="box">The box whose descendants' floats are looked for.</param>
-        /// <param name="clearPropValue">The <c>clear</c> value of the box that is clearing, which says which sides' floats count.</param>
-        /// <param name="offsetY">How far <paramref name="box"/> and the boxes above it, down from the sibling the clearing box looks into, have been
+        /// <summary>
+        /// The lowest bottom outer (margin) edge among the floats <paramref name="box"/> is or holds that a box with <paramref name="clearPropValue"/>
+        /// clears, or <see cref="double.NegativeInfinity"/> when it has none. Every level is looked at, down to a box that is a formatting
+        /// context of its own: what a float does there stays there (CSS 2.1 §9.4.1), and a float is one, so its contents are not looked into.
+        /// </summary>
+        /// <param name="box">The box to look in, which may be a float itself.</param>
+        /// <param name="clearPropValue">The <c>clear</c> value of the box that is clearing, not the <c>clear</c> of the box searched (usually
+        /// <c>none</c>, which would filter nothing): it says which sides' floats count.</param>
+        /// <param name="offsetAbove">How far the boxes above <paramref name="box"/>, down from the sibling the clearing box looks into, have been
         /// moved by relative positioning; a float's static bottom is its bottom less those and its own (CSS 2.1 §9.4.3).</param>
-        private static double GetClearance(CssBox box, ClearMode clearPropValue, double offsetY)
+        private static double LowestFloatBottomIn(CssBox box, ClearMode clearPropValue, double offsetAbove)
         {
-            var clearance = 0d;
+            var offset = offsetAbove + box.RelativeOffsetY;
 
-            foreach (var childBox in box.Boxes)
+            if (box.IsFloated)
             {
-                var childOffsetY = offsetY + childBox.RelativeOffsetY;
-
-                foreach (var childChildBox in childBox.Boxes)
-                {
-                    clearance = Math.Max(clearance, GetClearance(childChildBox, clearPropValue, childOffsetY + childChildBox.RelativeOffsetY));
-                }
-
-                if (!childBox.IsFloated)
-                {
-                    continue;
-                }
-
-                // clearPropValue (the CLEARING box's own `clear` value, passed down through the
-                // recursion) - not box.Clear, which is the container being searched and is usually
-                // "none", never filtering anything.
-                switch (childBox.EffectiveFloatSide)
+                switch (box.EffectiveFloatSide)
                 {
                     case Floating.Left when clearPropValue is ClearMode.Right:
                     case Floating.Right when clearPropValue is ClearMode.Left:
-                        continue;
+                        return double.NegativeInfinity;
                 }
 
-                // Bottom outer (margin) edge at the static position, same as ClearBox above
-                // (CSS 2.1 §9.5.2 / §9.4.3).
-                clearance = Math.Max(clearance, childBox.ActualBottom - childOffsetY + childBox.ActualMarginBottom);
+                // At the static position, so that a float that is itself position:relative clears where it is in the flow (CSS 2.1 §9.4.3).
+                return box.ActualBottom - offset + box.ActualMarginBottom;
             }
 
-            return clearance;
+            if (DomUtils.EstablishesIndependentFormattingContext(box)) return double.NegativeInfinity;
+
+            var lowest = double.NegativeInfinity;
+
+            foreach (var child in box.Boxes)
+            {
+                lowest = Math.Max(lowest, LowestFloatBottomIn(child, clearPropValue, offset));
+            }
+
+            return lowest;
         }
 
         /// <summary>

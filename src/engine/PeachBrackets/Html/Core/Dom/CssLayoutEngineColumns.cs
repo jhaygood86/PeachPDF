@@ -882,11 +882,14 @@ namespace PeachBrackets.Html.Dom
 
                 var columnStart = FirstChildIndexOf(carry, children);
                 var columnInlineLeft = columnLeft + col * pitch;
+                var markedAtColumnStart = new List<CssBox>();
 
                 try
                 {
                     columnsBox.ActualBottom = boxTop;
                     PlaceColumn(columnsBox, columnInlineLeft, columnWidth);
+
+                    markedAtColumnStart = MarkColumnStart(carry);
 
                     stopped = await columnsBox.FillFragmentainerWithBlockChildren(g, carry);
 
@@ -945,6 +948,8 @@ namespace PeachBrackets.Html.Dom
                 }
                 finally
                 {
+                    foreach (var marked in markedAtColumnStart) marked.CurrentColumnFirstChild = null;
+
                     htmlContainer.LeaveNestedFragmentainer(previousContext);
                     PlaceColumn(columnsBox, columnLeft, containerWidth);
                 }
@@ -981,6 +986,26 @@ namespace PeachBrackets.Html.Dom
             }
 
             return (carry, contentBottom, filledColumns);
+        }
+
+        /// <summary>
+        /// Tells each block the column about to be filled resumes in which of its children the column starts at
+        /// (<see cref="CssBox.CurrentColumnFirstChild"/>), down the chain of <paramref name="carry"/>: the floats of the columns before it are
+        /// measured from their own tops, so what a <c>clear</c> in this column looks at begins there. Returns the blocks told, to be reset.
+        /// </summary>
+        private static List<CssBox> MarkColumnStart(BreakToken? carry)
+        {
+            var marked = new List<CssBox>();
+
+            for (var token = carry as BlockBreakToken; token is not null; token = token.ChildToken as BlockBreakToken)
+            {
+                if (token.ResumeChildIndex < 0 || token.ResumeChildIndex >= token.Box.Boxes.Count) continue;
+
+                token.Box.CurrentColumnFirstChild = token.Box.Boxes[token.ResumeChildIndex];
+                marked.Add(token.Box);
+            }
+
+            return marked;
         }
 
         /// <summary>
