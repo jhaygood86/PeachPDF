@@ -32,6 +32,26 @@ public class LeftFloatBesideRightFloatTests
         Assert.Equal(c.Location.X + 75, r.Location.X, 1);
     }
 
+    // The words on the line stay where they are: the left float went below the right one, so it is not beside the line, and moving the words
+    // beside it would put them 150pt to the right of where a browser has them.
+    [Fact]
+    public async Task LeftFloatBelowAnEarlierRightFloat_LeavesTheWordsOnTheLineInPlace()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:375pt'><div id='t' style='display:inline-block;vertical-align:top;width:225pt;height:60pt'>text</div>" +
+            "<div id='r' style='float:right;width:225pt;height:30pt'></div><div id='l' style='float:left;width:150pt;height:30pt'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+        var c = LayoutHarness.FindById(root, "c")!;
+        var l = LayoutHarness.FindById(root, "l")!;
+        var t = LayoutHarness.FindById(root, "t")!;
+
+        Assert.True(l.Location.Y >= c.Location.Y + 59, "the left float goes below the line");
+        static IEnumerable<CssRect> WordsOf(CssBox box) => box.Words.Concat(box.Boxes.SelectMany(WordsOf));
+
+        Assert.NotEmpty(WordsOf(t));
+        Assert.Equal(c.Location.X, WordsOf(t).Min(w => w.Left), 1);
+    }
+
     [Fact]
     public async Task LeftFloatThatFitsBesideAnEarlierRightFloat_StaysOnItsRow()
     {

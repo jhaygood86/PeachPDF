@@ -9,3 +9,4 @@
 - A float with `clear` now goes below the floats it clears by its own `margin-top` as well: two cleared floats with `margin: 8px 0` are 16px apart, not 8px, as in a browser. A page with a column of cleared floats that have a top margin (chat bubbles, say) moves down by that margin for each float after the first one in the run. `clear` on a block that is not a float is unchanged.
 - A right float that does not fit beside an `inline-block` (or `inline-flex`, `inline-grid`, `inline-table`) already on its line goes below the line instead of over the box.
 - A float is placed against where an earlier float is in the flow, not where a `position: relative` offset draws it, so an offset on a box of floats no longer moves the floats after it.
+- A line of text before a left float that goes below an earlier right float stays where it is. It was moved beside the float, as if the float were on the line, so it sat to the right of where a browser puts it.

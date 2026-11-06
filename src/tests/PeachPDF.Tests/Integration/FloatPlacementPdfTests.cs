@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
 
+using PeachPDF.Tests.TestSupport;
+
 namespace PeachPDF.Tests.Integration
 {
     /// <summary>
@@ -23,9 +25,16 @@ namespace PeachPDF.Tests.Integration
 
         private static async Task<Dictionary<string, Rect>> RenderAsync(string body)
         {
-            var html = "<!DOCTYPE html><html><head><style>body { margin: 0 } div { box-sizing: border-box }</style></head><body>" +
+            // Text in a fixture is set in the bundled font: the platform's default one has metrics that differ between Windows, Linux and macOS,
+            // which moves a line by a few tenths of a point.
+            var generator = new PdfGenerator();
+            await using (var stream = File.OpenRead(BundledFonts.LiberationSans))
+                await generator.AddFontFromStream(stream);
+            var family = TypefaceFixtures.FamilyNameOf(BundledFonts.LiberationSans);
+
+            var html = $"<!DOCTYPE html><html><head><style>body {{ margin: 0; font-family: '{family}' }} div {{ box-sizing: border-box }}</style></head><body>" +
                        body + "</body></html>";
-            var result = await new PdfGenerator().GeneratePdf(html, PageSize.A4);
+            var result = await generator.GeneratePdf(html, PageSize.A4);
             var file = result.Inspect();
 
             var rects = new Dictionary<string, Rect>();
@@ -133,8 +142,13 @@ namespace PeachPDF.Tests.Integration
                 "<div style='width:375pt'><div style='display:inline-block;vertical-align:top;width:225pt;" + height + "background:#0f0'>" + content + "</div>" +
                 Float("right", "#f00", "width:225pt;height:30pt") + Float("left", "#00f", "width:150pt;height:30pt") + "</div>");
 
-            Assert.Equal(r[Lime].Y, r[Red].Top, 1);
-            Assert.Equal(r[Lime].Y, r[Blue].Top, 1);
+            // A point of leeway: an inline-block that holds text sits a few tenths of a point lower than the line top (set in the bundled font:
+            // 0.324pt), which has nothing to do with the floats, and is far from the 60pt a float left beside the box would be off by.
+            Assert.InRange(r[Red].Top, r[Lime].Y - 1, r[Lime].Y + 1);
+            Assert.InRange(r[Blue].Top, r[Lime].Y - 1, r[Lime].Y + 1);
+
+            // The left float is below the line, not beside it, so the box stays at the line start rather than moving beside the float.
+            Assert.Equal(r[Blue].X, r[Lime].X, 1);
         }
 
         [Fact]

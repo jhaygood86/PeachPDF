@@ -4951,8 +4951,12 @@ namespace PeachBrackets.Html.Dom
             // than the column, and moving it or opening a line after it draws its words twice or on top of each other.
             var overlapsLineBox = FloatOverlapsLineBox(b, coordinates);
 
+            // A float that went below an earlier float is not beside the line at all, whatever the words' horizontal extent: it leaves them where
+            // they are (CSS 2.1 section 9.5.1 rule 6 puts the float below the line only when it does not fit beside it).
+            var floatIsBesideTheLine = b.Location.Y - b.ActualMarginTop < coordinates.MaxBottom - DomUtils.FloatFitTolerance;
+
             if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
-                && (FloatOverlapsLineWords(b, coordinates.Line) || overlapsLineBox))
+                && ((floatIsBesideTheLine && FloatOverlapsLineWords(b, coordinates.Line)) || overlapsLineBox))
             {
                 if (overlapsLineBox)
                 {
