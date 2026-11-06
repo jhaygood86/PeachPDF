@@ -119,6 +119,7 @@ namespace PeachDrawing.Core
         public override void Dispose()
         {
             Seal();
+            (_image as IDisposable)?.Dispose();
             _image = null;
         }
     }
