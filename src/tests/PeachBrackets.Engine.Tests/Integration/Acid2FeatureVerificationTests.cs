@@ -213,7 +213,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task ClearLeft_NestedRightFloat_IsIgnoredByDirectionFilter()
         {
-            // CssLayoutEngine.GetClearance's direction filter must test the CLEARING box's own `clear`
+            // CssLayoutEngine.LowestFloatBottomIn's direction filter must test the CLEARING box's own `clear`
             // value (the clearPropValue parameter) - a previous revision tested the searched
             // container's `clear` (always "none"), so a clear:left box was wrongly pushed past
             // right-floated descendants of its previous siblings too.

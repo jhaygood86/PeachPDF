@@ -186,6 +186,47 @@ public class ClearConsidersEveryFloatTests
         Assert.Equal(c.Location.Y + 75, b.Location.Y, 1);
     }
 
+    // The floats of the column before are not looked at inside the child the column resumes in either: the float is in the wrapper's first
+    // column and the box that clears follows the wrapper in the second.
+    [Fact]
+    public async Task FloatInTheResumedChildInAnEarlierColumn_IsNotCleared()
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='{Columns}'><div style='height:7.5pt'></div><div><div style='height:7.5pt'></div>" +
+            "<div style='float:left;width:75pt;height:67.5pt;margin:6pt 0'></div><div style='break-before:column;height:7.5pt'></div></div>" +
+            "<div id='b' style='float:left;clear:left;width:75pt;height:22.5pt;margin:15pt 0 3.75pt'></div></div>");
+
+        Assert.True(b.Location.X > c.Location.X + 140, "the float starts the second column");
+        Assert.Equal(c.Location.Y + 7.5 + 15, b.Location.Y, 1);
+    }
+
+    // ... and one in the resumed child that is in this column is: the block that clears goes below it.
+    [Fact]
+    public async Task FloatInTheResumedChildInThisColumn_IsCleared()
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='{Columns}'><div style='height:7.5pt'></div><div><div style='height:7.5pt'></div>" +
+            "<div style='break-before:column;height:7.5pt'></div><div style='float:left;width:75pt;height:40pt'></div></div>" +
+            "<div id='b' style='clear:left;height:22.5pt'></div></div>");
+
+        Assert.True(b.Location.X > c.Location.X + 140, "the box is in the second column");
+        Assert.Equal(c.Location.Y + 7.5 + 40, b.Location.Y, 1);
+    }
+
+    // A container that balances fills its columns more than once, and what one fill knew about where its column starts is gone for the next:
+    // the float is in the first column of the last fill too.
+    [Fact]
+    public async Task FloatInTheFirstColumnOfABalancedContainer_IsCleared()
+    {
+        var (c, b, _) = await LayoutAsync(
+            "<div id='c' style='columns:2;column-gap:10pt;width:300pt'>" +
+            "<div style='float:left;width:75pt;height:45pt'></div><div id='b' style='clear:left;height:30pt'></div>" +
+            "<div style='height:30pt'></div><div style='height:30pt'></div><div style='height:30pt'></div></div>");
+
+        Assert.Equal(c.Location.X, b.Location.X, 1);
+        Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
+    }
+
     // A float two levels down in the box's own column is found, and one in the column before is not.
     [Fact]
     public async Task NestedFloatInTheSecondColumn_IsClearedAndTheFirstColumnsIsNot()

@@ -882,7 +882,7 @@ namespace PeachBrackets.Html.Dom
 
                 var columnStart = FirstChildIndexOf(carry, children);
                 var columnInlineLeft = columnLeft + col * pitch;
-                var markedAtColumnStart = new List<CssBox>();
+                IReadOnlyList<CssBox> markedAtColumnStart = [];
 
                 try
                 {

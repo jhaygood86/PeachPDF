@@ -2862,8 +2862,9 @@ namespace PeachBrackets.Html.Dom
         internal (double Left, double Width)? ColumnsBesideFloats { get => _rare is null ? default((double Left, double Width)?) : _rare.ColumnsBesideFloats; set { if (_rare is null) { if (EqualityComparer<(double Left, double Width)?>.Default.Equals(value, default((double Left, double Width)?))) return; _rare = new BoxRareState(); } _rare.ColumnsBesideFloats = value; } }
 
         /// <summary>
-        /// For a multi-column container being filled, the child its current column starts at; null when it is not being filled. A float
-        /// of an earlier column has a <c>Y</c> measured from that column's own top, so what a later column's <c>clear</c> looks at begins here.
+        /// For a block in the chain a multi-column container resumes its current column in (the container itself and the blocks nested in it
+        /// that continue from the column before), the child that column starts at; null otherwise. A float of an earlier column has a
+        /// <c>Y</c> measured from that column's own top, so what a later column's <c>clear</c> looks at begins here.
         /// </summary>
         internal CssBox? CurrentColumnFirstChild { get => _rare?.CurrentColumnFirstChild; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.CurrentColumnFirstChild = value; } }
 
@@ -10343,14 +10344,6 @@ namespace PeachBrackets.Html.Dom
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;
-            // So is any other root of a formatting context of its own (a table, a table cell, an inline-block, a flex or grid item): it contains
-            // its floats too, and a table that holds only a float is as tall as it. Looked at only when the document has floats at all.
-            if (HtmlContainer is { HasFloatedBoxes: true } && ParentBox is not null && DomUtils.EstablishesIndependentFormattingContext(this)
-                && !double.IsNegativeInfinity(DomUtils.LowestFloatBottomInOwnFormattingContext(this)))
-            {
-                return false;
-            }
-
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it
@@ -10361,6 +10354,15 @@ namespace PeachBrackets.Html.Dom
                 (CssValueParser.IsValidLength(MinHeight) &&
                  CssValueParser.ParseLength(MinHeight, ContainingBlock.Size.Height, this) <= 0);
             if (!minHeightZero) return false;
+
+            // Any other root of a formatting context of its own (a table, a table cell, an inline-block, a flex or grid item) contains its
+            // floats too, as the boxes above do, and a table that holds only a float is as tall as it. Last of the checks, since it walks the
+            // box, and only when the document has floats at all.
+            if (HtmlContainer is { HasFloatedBoxes: true } && ParentBox is not null && DomUtils.EstablishesIndependentFormattingContext(this)
+                && !double.IsNegativeInfinity(DomUtils.LowestFloatBottomInOwnFormattingContext(this)))
+            {
+                return false;
+            }
 
             // Every in-flow child must itself collapse through (an empty set trivially does); a loop, not a filtered list,
             // since this is asked of every box on every margin fold.
