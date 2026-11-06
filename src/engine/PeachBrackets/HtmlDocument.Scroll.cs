@@ -51,30 +51,93 @@ public sealed partial class HtmlDocument
     /// <param name="x">how far to scroll to the left; <see cref="double.NaN"/> leaves that axis where it is</param>
     /// <param name="y">how far to scroll up; <see cref="double.NaN"/> leaves that axis where it is</param>
     /// <returns>the regions that look different, which is none when the element is not a scroll container or was already there</returns>
-    public IReadOnlyList<DirtyRegion> SetScrollPosition(DocumentElement element, double x, double y)
+    /// <param name="behavior">how it gets there: by default as the container's <c>scroll-behavior</c> says (<c>smooth</c> glides, and the result is empty until the glide is stepped by
+    /// <see cref="AdvanceAnimations(TimeSpan)"/>), and settled on a snap position when the container has <c>scroll-snap-type</c></param>
+    public IReadOnlyList<DirtyRegion> SetScrollPosition(DocumentElement element, double x, double y, ScrollBehavior behavior = ScrollBehavior.Auto)
     {
         ArgumentNullException.ThrowIfNull(element);
         ThrowIfDisposed();
 
         var ppp = _unitsPerPoint;
-        if (_container.View.SetScroll(_container, element.Box, double.IsNaN(x) ? double.NaN : x * ppp, double.IsNaN(y) ? double.NaN : y * ppp) is not { } port)
+        if (_container.View.Navigate(_container, element.Box, double.IsNaN(x) ? double.NaN : x * ppp, double.IsNaN(y) ? double.NaN : y * ppp, snap: true, (int)behavior) is not { } port)
             return [];
 
         return AfterScroll(element, port);
+    }
+
+    /// <summary>
+    /// Settles a scroll container that has stopped moving on the nearest snap position (CSS Scroll Snap 1 §6): what a host calls when a dragged thumb is let go or a finger is lifted,
+    /// which move the content without snapping while they are held. Nothing moves when the container does not snap.
+    /// </summary>
+    /// <param name="element">the scroll container</param>
+    /// <param name="behavior">how it gets there; by default as the container's <c>scroll-behavior</c> says</param>
+    public IReadOnlyList<DirtyRegion> SettleScroll(DocumentElement element, ScrollBehavior behavior = ScrollBehavior.Auto)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ThrowIfDisposed();
+        return _container.View.Settle(_container, element.Box, (int)behavior) is { } port ? AfterScroll(element, port) : [];
+    }
+
+    /// <summary>
+    /// Scrolls a container by a distance in points as a finger or a dragged thumb moves it: at once and without snapping, which wait for <see cref="SettleScroll"/> when it is let go.
+    /// </summary>
+    public IReadOnlyList<DirtyRegion> DragScrollBy(DocumentElement element, double dx, double dy)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ThrowIfDisposed();
+        var offset = _container.View.ScrollOffsetOf(element.Box);
+        var ppp = _unitsPerPoint;
+        return ScrollExactly(element, (offset.X / ppp) + dx, (offset.Y / ppp) + dy);
+    }
+
+    // Moves the content where a drag put it, with no snapping and no glide.
+    private IReadOnlyList<DirtyRegion> ScrollExactly(DocumentElement element, double x, double y)
+    {
+        var ppp = _unitsPerPoint;
+        return _container.View.SetScroll(_container, element.Box, double.IsNaN(x) ? double.NaN : x * ppp, double.IsNaN(y) ? double.NaN : y * ppp) is { } port
+            ? AfterScroll(element, port)
+            : [];
+    }
+
+    // The glides of containers with scroll-behavior: smooth, moved on to the time of a frame; the regions to paint and whether any still goes.
+    private (IReadOnlyList<DirtyRegion> Regions, bool Running) StepScrollTweens(TimeSpan now)
+    {
+        if (!_container.View.HasTweens)
+            return ([], false);
+
+        var (moved, running) = _container.View.StepTweens(_container, now.TotalSeconds);
+        var regions = new List<DirtyRegion>();
+        foreach (var (scroller, port) in moved)
+            regions.AddRange(AfterScroll(new DocumentElement(scroller), port));
+
+        return (regions, running);
+    }
+
+    // A frame of the clock with the glides of the scroll containers added to it.
+    private AnimationFrame WithScrollTweens(AnimationFrame frame, TimeSpan now)
+    {
+        var (regions, running) = StepScrollTweens(now);
+        if (regions.Count == 0 && !running)
+            return frame;
+
+        var combined = new List<DirtyRegion>(frame.DirtyRegions);
+        combined.AddRange(regions);
+        return frame with { IsRunning = frame.IsRunning || running, DirtyRegions = combined };
     }
 
     /// <summary>Scrolls a scroll container by (<paramref name="dx"/>, <paramref name="dy"/>) points (CSSOM View <c>scrollBy</c>); see <see cref="SetScrollPosition"/>.</summary>
     /// <param name="element">the scroll container</param>
     /// <param name="dx">how far to scroll to the left, in points</param>
     /// <param name="dy">how far to scroll up, in points</param>
-    public IReadOnlyList<DirtyRegion> ScrollBy(DocumentElement element, double dx, double dy)
+    /// <param name="behavior">how it gets there; see <see cref="SetScrollPosition"/></param>
+    public IReadOnlyList<DirtyRegion> ScrollBy(DocumentElement element, double dx, double dy, ScrollBehavior behavior = ScrollBehavior.Auto)
     {
         ArgumentNullException.ThrowIfNull(element);
         ThrowIfDisposed();
 
         var offset = _container.View.ScrollOffsetOf(element.Box);
         var ppp = _unitsPerPoint;
-        return SetScrollPosition(element, (offset.X / ppp) + dx, (offset.Y / ppp) + dy);
+        return SetScrollPosition(element, (offset.X / ppp) + dx, (offset.Y / ppp) + dy, behavior);
     }
 
     /// <summary>
@@ -104,13 +167,14 @@ public sealed partial class HtmlDocument
     /// </summary>
     /// <param name="element">the element to show</param>
     /// <returns>the regions that look different</returns>
-    public IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element)
+    /// <param name="behavior">how each container gets there; see <see cref="SetScrollPosition"/></param>
+    public IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element, ScrollBehavior behavior = ScrollBehavior.Auto)
     {
         ArgumentNullException.ThrowIfNull(element);
         ThrowIfDisposed();
 
         var regions = new List<DirtyRegion>();
-        foreach (var (scroller, port) in _container.View.ScrollIntoView(_container, element.Box))
+        foreach (var (scroller, port) in _container.View.ScrollIntoView(_container, element.Box, (int)behavior))
             regions.AddRange(AfterScroll(new DocumentElement(scroller), port));
 
         return regions;
@@ -171,7 +235,7 @@ public sealed partial class HtmlDocument
 
         var fraction = Math.Clamp((thumbStart - trackStart) / travel, 0, 1);
         var max = (isVertical ? state.MaxY : state.MaxX) / ppp;
-        return isVertical ? SetScrollPosition(element, double.NaN, fraction * max) : SetScrollPosition(element, fraction * max, double.NaN);
+        return isVertical ? ScrollExactly(element, double.NaN, fraction * max) : ScrollExactly(element, fraction * max, double.NaN);
     }
 
     /// <summary>Scrolls a container by a page along one axis (seven eighths of its scrollport, as a press on the track of a scrollbar does).</summary>
@@ -243,6 +307,19 @@ public sealed partial class HtmlDocument
 /// <param name="ContentWidth">the width of the scrollable overflow area (<c>scrollWidth</c>)</param>
 /// <param name="ContentHeight">the height of the scrollable overflow area (<c>scrollHeight</c>)</param>
 public readonly record struct ScrollMetrics(double X, double Y, double MaxX, double MaxY, Rect Viewport, double ContentWidth, double ContentHeight);
+
+/// <summary>How a programmatic scroll of a scroll container gets to its position (CSSOM View's <c>ScrollBehavior</c>).</summary>
+public enum ScrollBehavior
+{
+    /// <summary>As the container's <c>scroll-behavior</c> property says: <c>smooth</c> glides, <c>auto</c> jumps.</summary>
+    Auto,
+
+    /// <summary>At once, whatever the property says.</summary>
+    Instant,
+
+    /// <summary>Gliding, whatever the property says (unless the user asks for reduced motion).</summary>
+    Smooth,
+}
 
 /// <summary>Which scrollbar of a scroll container.</summary>
 public enum ScrollbarAxis

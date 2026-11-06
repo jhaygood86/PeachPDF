@@ -2026,11 +2026,11 @@ public sealed partial class HtmlDocument : IDisposable
     {
         ThrowIfDisposed();
         if (!_container.AnimationsEnabled)
-            return new AnimationFrame(false, []);
+            return WithScrollTweens(new AnimationFrame(false, []), now);
 
         var clock = _container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(_container);
         FeedScroll(clock);
-        return clock.Advance(now.TotalSeconds, _container.FragmentTree?.Fragmentainers ?? []);
+        return WithScrollTweens(clock.Advance(now.TotalSeconds, _container.FragmentTree?.Fragmentainers ?? []), now);
     }
 
     /// <summary>
@@ -2066,7 +2066,10 @@ public sealed partial class HtmlDocument : IDisposable
         return CompleteSynchronously(AdvanceAnimationsCoreAsync(now, measuringCanvas));
     }
 
-    private async ValueTask<AnimationFrame> AdvanceAnimationsCoreAsync(TimeSpan now, Canvas measuringCanvas)
+    private async ValueTask<AnimationFrame> AdvanceAnimationsCoreAsync(TimeSpan now, Canvas measuringCanvas) =>
+        WithScrollTweens(await AdvanceClockAsync(now, measuringCanvas), now);
+
+    private async ValueTask<AnimationFrame> AdvanceClockAsync(TimeSpan now, Canvas measuringCanvas)
     {
         ThrowIfDisposed();
         if (!_container.AnimationsEnabled)
@@ -2129,7 +2132,8 @@ public sealed partial class HtmlDocument : IDisposable
     /// Whether an animation, a transition or an animated image is playing, so <see cref="AdvanceAnimations(TimeSpan)"/> should be called on the next frame.
     /// True before the first step of a document that has animations to start.
     /// </summary>
-    public bool HasRunningAnimations => _container.AnimationsEnabled && (_container.AnimationClock is null || _container.AnimationClock.NeedsStep);
+    public bool HasRunningAnimations =>
+        (_container.AnimationsEnabled && (_container.AnimationClock is null || _container.AnimationClock.NeedsStep)) || _container.View.HasTweens;
 
     /// <summary>
     /// The CSS animations and transitions that are running on the document, as <see cref="DocumentAnimation"/> objects to look at and control (Web Animations

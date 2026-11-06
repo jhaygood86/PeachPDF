@@ -434,6 +434,14 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter TransitionBehaviorConverter = Map.TransitionBehaviors.ToConverter();
 
         // Scroll-driven animations: each is stored as its own text and read through TimelineGrammar, which these validate against.
+        public static readonly IValueConverter ScrollBehaviorConverter = new GrammarValueConverter(ScrollGrammar.IsScrollBehavior);
+        public static readonly IValueConverter OverscrollBehaviorConverter = new GrammarValueConverter(ScrollGrammar.IsOverscrollBehavior);
+        public static readonly IValueConverter ScrollSnapTypeConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapType(text, out _, out _));
+        public static readonly IValueConverter ScrollSnapAlignConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapAlign(text, out _, out _));
+        public static readonly IValueConverter ScrollSnapStopConverter = new GrammarValueConverter(ScrollGrammar.IsSnapStop);
+        public static readonly IValueConverter ScrollbarWidthConverter = new GrammarValueConverter(ScrollGrammar.IsScrollbarWidth);
+        public static readonly IValueConverter ScrollbarColorConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseScrollbarColor(text, out _, out _));
+        public static readonly IValueConverter ScrollbarGutterConverter = new GrammarValueConverter(ScrollGrammar.IsScrollbarGutter);
         public static readonly IValueConverter AnimationTimelineConverter = new GrammarValueConverter(text => TimelineGrammar.TryParseTimeline(text, out _));
         public static readonly IValueConverter TimelineNameConverter = new GrammarValueConverter(TimelineGrammar.IsTimelineName);
         public static readonly IValueConverter TimelineScopeEntryConverter = new GrammarValueConverter(TimelineGrammar.IsTimelineScopeEntry);

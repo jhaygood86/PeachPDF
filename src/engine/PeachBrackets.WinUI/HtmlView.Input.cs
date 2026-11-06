@@ -126,7 +126,7 @@ public sealed partial class HtmlView
         var wasClick = Math.Abs(position.X - _pressPoint.X) <= ClickSlop && Math.Abs(position.Y - _pressPoint.Y) <= ClickSlop;
         var wasSelecting = _dragSelecting;
         var wasField = _fieldPressed || _rangeElement is not null || _scrollbarDrag is not null || _touchScrolling;
-        _scrollbarDrag = null;
+        EndScrollbarDrag();
         EndTouchScroll();
         EndPress();
         _canvas.ReleasePointerCapture(e.Pointer);
@@ -209,7 +209,9 @@ public sealed partial class HtmlView
         if (_document is not { } document || document.GetScrollContainerAt(page, x, y, dx, dy) is not { } container)
             return false;
 
-        return ApplyScroll(document.ScrollBy(container, dx, dy));
+        // A container that takes the wheel keeps it even when it is already at its end and nothing moves (overscroll-behavior: contain).
+        ApplyScroll(document.ScrollBy(container, dx, dy));
+        return true;
     }
 
     private const double WheelNotchPoints = 42;

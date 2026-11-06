@@ -4,14 +4,15 @@ A box with `overflow: auto | scroll | hidden` of a document shown on a screen cl
 none: print lets `auto` and `scroll` content run on past its box, which is the long-standing behaviour. These are left out.
 
 - **Input in the WinUI view is the wheel, scrollbar presses and drags, the keys when the focus is inside a container, focus scrolling, a finger dragged over a container, and the UI Automation
-  scroll pattern.** What is left: a drag with a finger has no momentum (a fling stops when the finger does) and does not hand over to the page half way (a new gesture does); a touch in a view that
+  scroll pattern.** What is left: a drag with a finger has no momentum (snapping settles it when the finger lifts) (a fling stops when the finger does) and does not hand over to the page half way (a new gesture does); a touch in a view that
   does not scroll itself (`HtmlViewScrollMode.Disabled`, a view in a list) scrolls the list, not a container; a key goes to a container only through the focused element, so a container with nothing
   focusable in it is reached by the wheel, the bars or a finger; pressing and holding a track does not repeat; the pointer over a bar is the arrow; and UI Automation sees a container only when it has a node
   in the accessibility tree (a list, a region, a table, a landmark), not a plain `div`.
-- **`scroll-behavior: smooth`, `overscroll-behavior`, `scroll-snap-*`, `scrollbar-gutter`, `scrollbar-width` and `scrollbar-color` do nothing.** A scroll is instant, chains to the container around it
-  (and then the page) when the inner one cannot go that way, the bars are overlays of a fixed width and colour that take no room from the content, and a scroll does not settle on a snap point.
-- **Only `scroll-margin-top` and the root's `scroll-padding-top` exist as properties**, so `ScrollIntoView` keeps room at the top edge only and a scroll container's `scroll-padding` is not read.
-  `ScrollIntoView` is `nearest` alignment; there is no `start`/`center`/`end`.
+- **Scrolling properties not modelled**: `scrollbar-gutter` (the bars are overlays that take no room, so there is nothing to reserve), `scroll-snap-type` on the root (the document's own scroll does
+  not snap), `scroll-snap-align` of a box taller than the scrollport (it aligns by its edge, with none of the spec's "free scrolling inside the box"), and the `x`/`y` axes of `scroll-snap-type` only along the
+  physical axes. `overscroll-behavior` is read for the wheel and touch routing of `GetScrollContainerAt`; it has no overscroll glow or bounce. `scroll-behavior: smooth` is a fixed 0.3 s ease-out
+  tween, not the user agent's own curve, and a smooth scroll is stepped by `AdvanceAnimations` (a host that never calls it never sees one finish).
+- **`ScrollIntoView` is `nearest` alignment**; there is no `start`/`center`/`end` argument.
 - **`position: sticky` inside a scroll container does not stick** (it keeps its laid-out place, as before); only a box that sticks to the page's own scroll does. A `position: fixed` box is held by the
   viewport and is not carried by a container, and neither clipped by it unless the container forms its containing block.
 - **The scrollable overflow area is the border boxes, lines and words of what the container holds, plus the padding at its end.** It does not include the overflow of a nested scroll container (its own box

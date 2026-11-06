@@ -5712,6 +5712,201 @@
         "csharpDataType": "string",
         "area": "GeneratedContentArea"
       }
+    },
+    {
+      "name": "scroll-margin-right",
+      "comment": "css-scroll-snap-1 section 3.1: the room kept clear on this side of the element when it is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollMarginRight",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-margin-bottom",
+      "comment": "css-scroll-snap-1 section 3.1: the room kept clear on this side of the element when it is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollMarginBottom",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-margin-left",
+      "comment": "css-scroll-snap-1 section 3.1: the room kept clear on this side of the element when it is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollMarginLeft",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-padding-right",
+      "comment": "css-scroll-snap-1 section 3.2: the room a scroll container keeps clear on this side when something is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollPaddingRight",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-padding-bottom",
+      "comment": "css-scroll-snap-1 section 3.2: the room a scroll container keeps clear on this side when something is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollPaddingBottom",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-padding-left",
+      "comment": "css-scroll-snap-1 section 3.2: the room a scroll container keeps clear on this side when something is scrolled into view or snapped to.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.LengthConverter"},
+      "initialValue": "0",
+      "cssDataType": "length",
+      "html": {
+        "propertyPath": "ScrollPaddingLeft",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-behavior",
+      "comment": "css-cssom-view-1 section 3: smooth makes a programmatic scroll of the container (ScrollBy, SetScrollPosition, ScrollIntoView) glide. Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollBehaviorConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollBehaviorProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollBehavior",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "overscroll-behavior-x",
+      "comment": "css-overscroll-1 section 3: contain and none keep a scroll that has reached the end of the container from passing on to the one around it (scroll chaining). Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverscrollBehaviorConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverscrollBehaviorXProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverscrollBehaviorX",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "overscroll-behavior-y",
+      "comment": "css-overscroll-1 section 3: see overscroll-behavior-x.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverscrollBehaviorConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverscrollBehaviorYProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverscrollBehaviorY",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-snap-type",
+      "comment": "css-scroll-snap-1 section 2.1: none, or the axis the container snaps on and how strictly (mandatory always snaps, proximity only when a snap position is near). Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollSnapTypeConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollSnapTypeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollSnapType",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-snap-align",
+      "comment": "css-scroll-snap-1 section 3.3: where in the scrollport the element stops when its container snaps (block axis, then inline). Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollSnapAlignConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollSnapAlignProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollSnapAlign",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scroll-snap-stop",
+      "comment": "css-scroll-snap-1 section 3.4: always keeps a scroll from passing over this snap position.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollSnapStopConverter"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollSnapStopProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollSnapStop",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scrollbar-width",
+      "comment": "css-scrollbars-1 section 3: thin draws the bars narrower, none draws none (the container still scrolls). Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollbarWidthConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollbarWidthProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollbarWidth",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scrollbar-color",
+      "comment": "css-scrollbars-1 section 2: the thumb colour then the track colour of the bars. Read through ScrollGrammar.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollbarColorConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollbarColorProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollbarColor",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "scrollbar-gutter",
+      "comment": "css-overflow-4 section 3: stable keeps room for a classic scrollbar; the bars here are overlays, which take none, so it changes nothing. Accepted and kept.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScrollbarGutterConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollbarGutterProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollbarGutter",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
     }
   ]
 }

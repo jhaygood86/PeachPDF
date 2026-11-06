@@ -238,28 +238,34 @@ namespace PeachBrackets.Html
             if (IndexFor(container) is not { Entries.Count: > 0 } index)
                 return null;
 
-            CssBox? best = null;
-            var bestDepth = -1;
+            // Innermost first: the first container that can go the way asked has it, and one that cannot but says its overscroll stays with it (overscroll-behavior: contain or
+            // none on that axis, CSS Overscroll Behavior 1 §3) keeps it from the containers around.
+            var holders = new List<(CssBox Box, ScrollIndex.Entry Entry, int Depth)>();
             foreach (var (box, entry) in index.Entries)
             {
                 if (!PortHolds(entry.Port, box, x, y) || !VisibleThroughScrollers(index, box, x, y)) continue;
 
-                var offset = ScrollOffsetOf(box);
-                // Asked for a direction, the container must be able to go that way on an axis that was asked for.
-                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > 0);
-                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > 0);
-                if ((dx != 0 || dy != 0) && !scrollsX && !scrollsY) continue;
-
                 var depth = 0;
                 for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox) depth++;
-                if (depth > bestDepth)
-                {
-                    best = box;
-                    bestDepth = depth;
-                }
+                holders.Add((box, entry, depth));
             }
 
-            return best;
+            holders.Sort((p, q) => q.Depth.CompareTo(p.Depth));
+            foreach (var (box, entry, _) in holders)
+            {
+                if (dx == 0 && dy == 0) return box;
+
+                // Asked for a direction, the container must be able to go that way on an axis that was asked for.
+                var offset = ScrollOffsetOf(box);
+                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > 0);
+                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > 0);
+                if (scrollsX || scrollsY) return box;
+
+                if ((dx != 0 && OverscrollContained(box, vertical: false)) || (dy != 0 && OverscrollContained(box, vertical: true)))
+                    return box;
+            }
+
+            return null;
         }
 
         // The scrollport as it is drawn: carried by whatever scrolls the container itself.
@@ -288,7 +294,7 @@ namespace PeachBrackets.Html
         /// Scrolls the scroll containers that hold <paramref name="box"/>, outermost first, by as little as brings it into view. Returns each one that moved with the scrollport that
         /// looks different.
         /// </summary>
-        internal List<(CssBox Scroller, Rect Port)> ScrollIntoView(HtmlContainerInt container, CssBox box)
+        internal List<(CssBox Scroller, Rect Port)> ScrollIntoView(HtmlContainerInt container, CssBox box, int behavior = 0)
         {
             var moved = new List<(CssBox, Rect)>();
             if (IndexFor(container) is not { Entries.Count: > 0 } index || FragmentRectOf(container, box) is not { } own)
@@ -304,27 +310,29 @@ namespace PeachBrackets.Html
             }
 
             chain.Reverse();
-            var margin = CssValueParser.ParseLength(box.ScrollMarginTop ?? "0", 0, box);
+            var margins = Margins(box);
             foreach (var scroller in chain)
             {
                 var entry = index.Entries[scroller];
 
-                // Where the element is drawn now, with every shift in place.
+                // Where the element is drawn now, with every shift in place: its margin box, against the scrollport less the container's scroll-padding.
                 var (sx, sy) = DisplacementOf(box);
-                var rect = new Rect(own.X + sx, own.Y + sy, own.Width, own.Height);
+                var rect = new Rect(own.X + sx - margins.Left, own.Y + sy - margins.Top, own.Width + margins.Left + margins.Right, own.Height + margins.Top + margins.Bottom);
                 var (px, py) = DisplacementOf(scroller);
-                var port = new Rect(entry.Port.X + px, entry.Port.Y + py, entry.Port.Width, entry.Port.Height);
+                var padding = Paddings(scroller, entry.Port);
+                var port = new Rect(entry.Port.X + px + padding.Left, entry.Port.Y + py + padding.Top,
+                    Math.Max(0, entry.Port.Width - padding.Left - padding.Right), Math.Max(0, entry.Port.Height - padding.Top - padding.Bottom));
 
                 var offset = ScrollOffsetOf(scroller);
                 var targetY = offset.Y;
-                if (rect.Y - margin < port.Y || rect.Height + margin > port.Height) targetY += rect.Y - margin - port.Y;
+                if (rect.Y < port.Y || rect.Height > port.Height) targetY += rect.Y - port.Y;
                 else if (rect.Bottom > port.Bottom) targetY += rect.Bottom - port.Bottom;
 
                 var targetX = offset.X;
                 if (rect.X < port.X || rect.Width > port.Width) targetX += rect.X - port.X;
                 else if (rect.Right > port.Right) targetX += rect.Right - port.Right;
 
-                if (SetScroll(container, scroller, targetX, targetY) is { } changed) moved.Add((scroller, changed));
+                if (Navigate(container, scroller, targetX, targetY, snap: true, behavior) is { } changed) moved.Add((scroller, changed));
             }
 
             return moved;

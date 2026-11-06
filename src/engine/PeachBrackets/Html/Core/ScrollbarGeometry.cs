@@ -19,14 +19,19 @@ namespace PeachBrackets.Html
     {
         // The width of the bars, their distance from the edge and the shortest thumb, in CSS pixels.
         internal const double Thickness = 8;
+        internal const double ThinThickness = 5;
         internal const double Inset = 2;
         internal const double MinimumThumb = 24;
 
         /// <summary>The scrollbars of <paramref name="box"/> as it is scrolled in <paramref name="state"/>; each is null when the container shows none on that axis.</summary>
         internal static (ScrollbarShape? Vertical, ScrollbarShape? Horizontal) Of(CssBox box, ScrollState state, double layoutUnitsPerPoint)
         {
-            // overflow: hidden scrolls by script only and shows no bar; auto shows one only when there is something to scroll to.
+            // overflow: hidden scrolls by script only and shows no bar; auto shows one only when there is something to scroll to; scrollbar-width: none shows none either.
             if (box.Overflow.Value is not (Overflow.Auto or Overflow.Scroll))
+                return (null, null);
+
+            var width = box.ScrollbarWidth?.Trim().ToLowerInvariant();
+            if (width == "none")
                 return (null, null);
 
             var verticalAlways = box.OverflowY.Value == Overflow.Scroll;
@@ -37,7 +42,7 @@ namespace PeachBrackets.Html
                 return (null, null);
 
             var px = Length.PointsPerPx * layoutUnitsPerPoint;
-            var thickness = Thickness * px;
+            var thickness = (width == "thin" ? ThinThickness : Thickness) * px;
             var inset = Inset * px;
             var port = state.Port;
             var reserved = vertical && horizontal ? thickness + inset : 0;

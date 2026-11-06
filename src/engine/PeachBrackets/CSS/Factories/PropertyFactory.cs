@@ -274,6 +274,15 @@ namespace PeachBrackets.Css
                 PropertyNames.OverflowX,
                 PropertyNames.OverflowY);
 
+            AddShorthand(PropertyNames.ScrollMargin, () => new ScrollMarginProperty(),
+                PropertyNames.ScrollMarginTop, PropertyNames.ScrollMarginRight, PropertyNames.ScrollMarginBottom, PropertyNames.ScrollMarginLeft);
+
+            AddShorthand(PropertyNames.ScrollPadding, () => new ScrollPaddingProperty(),
+                PropertyNames.ScrollPaddingTop, PropertyNames.ScrollPaddingRight, PropertyNames.ScrollPaddingBottom, PropertyNames.ScrollPaddingLeft);
+
+            AddShorthand(PropertyNames.OverscrollBehavior, () => new OverscrollBehaviorProperty(),
+                PropertyNames.OverscrollBehaviorX, PropertyNames.OverscrollBehaviorY);
+
             AddShorthand(PropertyNames.Padding, () => new PaddingProperty(),
                 PropertyNames.PaddingTop,
                 PropertyNames.PaddingRight,

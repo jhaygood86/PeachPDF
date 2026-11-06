@@ -19,6 +19,7 @@ public sealed partial class HtmlView
     private Point? _touchLast;
     private (int Page, double X, double Y)? _touchStart;
     private bool _touchScrolling;
+    private DocumentElement? _touchContainer;
 
     private const double KeyArrowPoints = 40;
     private const double PageFraction = 0.875;
@@ -189,17 +190,28 @@ public sealed partial class HtmlView
             _touchPolicyActive = true;
         }
 
-        ApplyScroll(document.ScrollBy(container, dx, dy));
+        _touchContainer = container;
+        ApplyScroll(document.DragScrollBy(container, dx, dy));
         return true;
     }
 
     /// <summary>Whether a finger is dragging a scroll container, which the view's own scroller leaves to it. For tests.</summary>
     internal bool IsTouchScrollingContainer => _touchScrolling;
 
-    internal void EndScrollbarDrag() => _scrollbarDrag = null;
+    internal void EndScrollbarDrag()
+    {
+        if (_scrollbarDrag is { } drag && _document is { } document)
+            ApplyScroll(document.SettleScroll(drag.Element));
+
+        _scrollbarDrag = null;
+    }
 
     internal void EndTouchScroll()
     {
+        if (_touchContainer is { } container && _document is { } document)
+            ApplyScroll(document.SettleScroll(container));
+
+        _touchContainer = null;
         _touchStart = null;
         _touchLast = null;
         _touchScrolling = false;
