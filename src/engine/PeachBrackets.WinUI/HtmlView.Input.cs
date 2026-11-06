@@ -356,6 +356,9 @@ public sealed partial class HtmlView
                 if (!result.Applied || !ReferenceEquals(document, _document))
                     continue;
 
+                // A hover that starts a transition has the clock to run.
+                EnsureAnimationLoop();
+
                 if (result.DirtyRegions.Count > 0)
                 {
                     UpdateMetrics();

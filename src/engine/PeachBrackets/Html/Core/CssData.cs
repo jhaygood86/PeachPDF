@@ -70,7 +70,36 @@ namespace PeachBrackets.Html
         // (null = unlayered). The layer's numeric precedence rank is resolved lazily at sort time from
         // _layerRanks - which is only known after the whole layer tree has been walked (a nested
         // sub-layer's rank depends on where its parent first appeared), so it can't be baked in here.
-        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName, RuleSharing Sharing);
+        private readonly record struct IndexedRule(IStyleRule Rule, bool IsUserAgent, int DocumentOrder, MediaList[]? EnclosingMedia, ContainerCondition[]? EnclosingContainers, string? LayerName, RuleSharing Sharing, bool IsStartingStyle = false);
+
+        // Whether the rule being indexed is inside an @starting-style block, which can hold @media and the like around the style rules.
+        private bool _indexInStartingStyle;
+        private bool _indexSawStartingStyle;
+
+        /// <summary>Whether any <c>@starting-style</c> rule is in the style sheets: only then is a starting style worked out for an element.</summary>
+        internal bool HasStartingStyleRules { get { EnsureIndex(); return _hasStartingStyleRules; } }
+
+        private bool _hasStartingStyleRules;
+
+        [ThreadStatic] private static bool _startingStylePass;
+
+        /// <summary>
+        /// Runs <paramref name="cascade"/> with the rules inside <c>@starting-style</c> taking part as ordinary rules (CSS Transitions 2 §4.2: the starting style is the
+        /// cascade with them, in the order of their layer, specificity and place). Without this they take no part in any cascade.
+        /// </summary>
+        internal static void WithStartingStyle(Action cascade)
+        {
+            var saved = _startingStylePass;
+            _startingStylePass = true;
+            try
+            {
+                cascade();
+            }
+            finally
+            {
+                _startingStylePass = saved;
+            }
+        }
 
         /// <summary>
         /// What the cascade needs to know of a rule to let siblings share a computed style (see <see cref="CanShareStyleAmongSiblings"/>),
@@ -247,6 +276,8 @@ namespace PeachBrackets.Html
             var hasFirstLineRules = false;
             _indexSawSelectionRule = false;
             _indexSawStatefulSpecialPseudo = false;
+            _indexSawStartingStyle = false;
+            _indexInStartingStyle = false;
 
             foreach (var stylesheet in Stylesheets)
             {
@@ -258,6 +289,7 @@ namespace PeachBrackets.Html
             HasFirstLineRules = hasFirstLineRules;
             _hasSelectionRules = _indexSawSelectionRule;
             _hasStatefulSpecialPseudo = _indexSawStatefulSpecialPseudo;
+            _hasStartingStyleRules = _indexSawStartingStyle;
             _tagIndex = tagIndex;
             _classIndex = classIndex;
             _idIndex = idIndex;
@@ -385,7 +417,7 @@ namespace PeachBrackets.Html
                 switch (rule)
                 {
                     case IStyleRule styleRule:
-                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer, RuleSharing.Of(styleRule.Selector));
+                        var indexedRule = new IndexedRule(styleRule, isUserAgent, order++, enclosingMedia, enclosingContainers, currentLayer, RuleSharing.Of(styleRule.Selector), _indexInStartingStyle);
 
                         if (!hasFirstLineRules && CouldMatchAsFirstLineSelector(styleRule.Selector))
                             hasFirstLineRules = true;
@@ -427,6 +459,15 @@ namespace PeachBrackets.Html
                         // ties by source order, matching its textual position after the parent).
                         if (styleRule.NestedRules.Count > 0)
                             IndexRules(styleRule.NestedRules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
+                        break;
+
+                    // @starting-style: its rules are indexed like any other, in the surrounding context, but marked so the ordinary cascade leaves them out.
+                    case IStartingStyleRule startingStyle:
+                        var savedStarting = _indexInStartingStyle;
+                        _indexInStartingStyle = true;
+                        _indexSawStartingStyle = true;
+                        IndexRules(startingStyle.Rules, isUserAgent, enclosingMedia, enclosingContainers, currentLayer, tagIndex, classIndex, idIndex, universal, keys, layerRegistry, ref order, ref hasFirstLineRules);
+                        _indexInStartingStyle = savedStarting;
                         break;
 
                     case IMediaRule mediaRule:
@@ -901,6 +942,7 @@ namespace PeachBrackets.Html
             void Collect(IndexedRule indexed)
             {
                 if (userAgentOnly.HasValue && indexed.IsUserAgent != userAgentOnly.Value) return;
+                if (indexed.IsStartingStyle && !_startingStylePass) return;
                 if (statefulMode != 0 && (!indexed.Sharing.UsesInteractionState || (statefulMode == 2 && indexed.Sharing.StateOnSubjectOnly))) return;
                 if (!MediaQueryMatcher.Matches(indexed.EnclosingMedia, media)) return;
                 // A rule that reads the interaction state could match this box under another state: the incremental restyle looks at these boxes

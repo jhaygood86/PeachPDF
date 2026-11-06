@@ -56,6 +56,7 @@ namespace PeachBrackets.Html.Animation
             var directions = SplitList(box.AnimationDirection);
             var fillModes = SplitList(box.AnimationFillMode);
             var timingFunctions = SplitList(box.AnimationTimingFunction);
+            var compositions = SplitList(box.AnimationComposition);
 
             // currentcolor in one animation's keyframes stands for the `color` the box has at that moment, and that `color` may come
             // from another animation in the list, a later one included. When several animations are in play and some of them animate
@@ -142,7 +143,7 @@ namespace PeachBrackets.Html.Animation
                         continue;
                     }
 
-                    var value = Sample(valueParser, box, stops, property, directed, easing, CssUtils.GetPropertyValue(box, property));
+                    var value = Sample(valueParser, box, stops, property, directed, easing, CssUtils.GetPropertyValue(box, property), composition: Cycle(compositions, i));
                     if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
                 }
             }
@@ -172,7 +173,7 @@ namespace PeachBrackets.Html.Animation
             box.CustomProperties[property] = value;
         }
 
-        private static string MixCustomProperty(CssValueParser valueParser, RegisteredProperty? registered, string property, string from, string to, double t)
+        internal static string MixCustomProperty(CssValueParser valueParser, RegisteredProperty? registered, string property, string from, string to, double t)
         {
             var type = registered?.InterpolableTypeOf(from, to, valueParser);
             if (type is null) return t < 0.5 ? from : to;
@@ -259,7 +260,10 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>One keyframe with its values settled: <c>var()</c> substituted, global keywords resolved against the box, shorthands split into longhands.</summary>
-        private sealed record ResolvedStop(double Offset, string? Easing, Dictionary<string, string> Values);
+        internal sealed record ResolvedStop(double Offset, string? Easing, Dictionary<string, string> Values, string? Composite = null);
+
+        /// <summary>How an animation's values combine with the value underneath them (<c>animation-composition</c>), and what that needs to be worked out.</summary>
+        internal readonly record struct CompositionContext(CssValueParser Parser, CssBox? Box, string Operation);
 
         private static List<ResolvedStop> ResolveStops(CssValueParser valueParser, CssBox box, KeyframeSet set, Func<string, string, string?> resolveKeyword)
         {
@@ -281,7 +285,7 @@ namespace PeachBrackets.Html.Animation
                         values[longhand] = value;
                 }
 
-                stops.Add(new ResolvedStop(stop.Offset, stop.Easing, values));
+                stops.Add(new ResolvedStop(stop.Offset, stop.Easing, values, stop.Composite));
             }
 
             return stops;
@@ -360,14 +364,33 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>The value of one property at <paramref name="progress"/> through the keyframes, or null if it has none.</summary>
-        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying, Func<string, string, double, string>? mix = null)
+        private static string? Sample(CssValueParser valueParser, CssBox box, List<ResolvedStop> stops, string property, double progress, EasingFunction animationEasing, string? underlying, Func<string, string, double, string>? mix = null, string? composition = null)
+        {
+            var frames = BuildFrames(stops, property, underlying, composition is null ? null : new CompositionContext(valueParser, box, composition));
+            return frames is null ? null : SampleFrames(valueParser, box, frames, property, progress, animationEasing, mix);
+        }
+
+        /// <summary>
+        /// The keyframes that name <paramref name="property"/>, with the 0% and 100% ones filled in from <paramref name="underlying"/>; null when none does. With a
+        /// composite operation (the keyframe's own, else the animation's) each keyframe's value is first combined with <paramref name="underlying"/>, as Web Animations 1 §5.5
+        /// has it, so the interpolation that follows runs between the combined values.
+        /// </summary>
+        internal static List<(double Offset, string Value, string? Easing)>? BuildFrames(List<ResolvedStop> stops, string property, string? underlying, CompositionContext? composition = null)
         {
             var frames = new List<(double Offset, string Value, string? Easing)>();
 
             foreach (var stop in stops)
             {
-                if (stop.Values.TryGetValue(property, out var value))
-                    frames.Add((stop.Offset, value, stop.Easing));
+                if (!stop.Values.TryGetValue(property, out var value)) continue;
+
+                var operation = stop.Composite ?? composition?.Operation;
+                if (underlying is not null && composition is { } context && operation is not null
+                    && CssValueInterpolator.Composite(context.Parser, property, operation, underlying, value, context.Box) is { } combined)
+                {
+                    value = combined;
+                }
+
+                frames.Add((stop.Offset, value, stop.Easing));
             }
 
             if (frames.Count == 0) return null;
@@ -380,6 +403,11 @@ namespace PeachBrackets.Html.Animation
                 if (frames[^1].Offset < 1) frames.Add((1, underlying, null));
             }
 
+            return frames;
+        }
+
+        private static string? SampleFrames(CssValueParser valueParser, CssBox box, List<(double Offset, string Value, string? Easing)> frames, string property, double progress, EasingFunction animationEasing, Func<string, string, double, string>? mix = null)
+        {
             // Before the first keyframe and past the last one, the nearest value holds. Exactly *at* the first
             // keyframe is the start of its interval, which its easing still shapes: step-start shows its first step
             // there, not the 0% value. Exactly at the last is the end of the last interval, which its easing still

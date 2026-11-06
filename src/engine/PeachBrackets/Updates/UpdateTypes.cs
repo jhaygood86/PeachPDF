@@ -62,6 +62,20 @@ public readonly record struct TextEditResult(
     internal static TextEditResult NotApplied(string reason, int pages) => new(false, reason, pages, pages, null, [], null);
 }
 
+/// <summary>What one step of the document's animations and transitions changed (<see cref="HtmlDocument.AdvanceAnimations(TimeSpan)"/>).</summary>
+/// <param name="IsRunning">whether something is still playing, so another step is due on the next frame; false once every animation and transition has ended or is paused</param>
+/// <param name="DirtyRegions">the parts of the pages that look different now, to repaint (see <see cref="HtmlDocument.PaintPageRegionAsync"/>)</param>
+/// <param name="LayoutChanged">whether the step changed a property that moves or resizes boxes and so laid the document out again: the pages may have a new size
+/// (<see cref="HtmlDocument.Pages"/>), the text runs, links and outline are made again, and <paramref name="DirtyRegions"/> is every page, whole</param>
+public readonly record struct AnimationFrame(bool IsRunning, IReadOnlyList<DirtyRegion> DirtyRegions, bool LayoutChanged = false)
+{
+    /// <summary>
+    /// The animation and transition events that happened since the last step (<c>animationstart</c>, <c>transitionend</c> and the rest), in order. Events made by a
+    /// change to the document (a transition that was created or replaced, an animation that was cancelled) are reported by the next step.
+    /// </summary>
+    public IReadOnlyList<AnimationEventInfo> Events { get; init; } = [];
+}
+
 /// <summary>What <see cref="HtmlDocument.SetStyle"/> did.</summary>
 /// <param name="Applied">whether the change was made; when false the document is exactly as it was</param>
 /// <param name="Reason">why it was not applied, or null when it was</param>

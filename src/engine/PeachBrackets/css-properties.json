@@ -44,6 +44,48 @@
       }
     },
     {
+      "name": "translate",
+      "comment": "CSS Transforms 2 §3. Composed in front of the transform list (translate, rotate, scale, then transform), inside the same transform-origin, so it is a transform for stacking contexts and containing blocks too, whatever it computes to. Painted on HTML boxes; an SVG element ignores it.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TranslateIndividualConverter.OrNone()", "animatable": true, "registryAnimatable": true},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TranslateProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Translate",
+        "invalidates": "InvalidateTransform",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "rotate",
+      "comment": "CSS Transforms 2 §3. See translate.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.RotateIndividualConverter.OrNone()", "animatable": true, "registryAnimatable": true},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.RotateProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Rotate",
+        "invalidates": "InvalidateTransform",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "scale",
+      "comment": "CSS Transforms 2 §3. See translate.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ScaleIndividualConverter.OrNone()", "animatable": true, "registryAnimatable": true},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScaleProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Scale",
+        "invalidates": "InvalidateTransform",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
       "name": "box-sizing",
       "comment": "Replaces the old CssUtils.IsValidBoxSizing helper. CssProperty<BoxSizingMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
@@ -877,7 +919,7 @@
       "name": "mix-blend-mode",
       "comment": "CSS Compositing and Blending Level 1 §2: mix-blend-mode does not inherit. enum-keyword reuses the pre-existing BlendMode enum/Map.BlendModes dictionary (built alongside Html.Adapters.Entities.PaintBlendMode for the shared PDF blend-mode infrastructure) rather than binding directly to PaintBlendMode itself - the enum-keyword codegen (AreasEmitter/RegistryEmitter) hardcodes its enumType's namespace to PeachBrackets.Css, so a Core-side enum is required regardless of Html.Core's ability to reference Html.Adapters.Entities directly; PeachBrackets.Css.BlendMode is mapped to PaintBlendMode at the one paint call site that needs it (FragmentPainter.ToRBlendMode).",
       "inherited": false,
-      "cssom": {"converter": "Converters.MixBlendModeConverter"},
+      "cssom": {"converter": "Converters.MixBlendModeConverter", "registryAnimatable": true},
       "initialValue": "normal",
       "cssDataType": {
         "type": "enum-keyword",
@@ -1190,6 +1232,136 @@
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationPlayStateProperty.ValueGrammar.Convert" },
       "html": {
         "propertyPath": "AnimationPlayState",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-composition",
+      "comment": "CSS Animations 2 §3.10. Raw comma-separated replace | add | accumulate list, one per animation-name: how an animation's values combine with the value underneath them. Not part of the animation shorthand.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AnimationCompositionConverter.FromList()"},
+      "initialValue": "replace",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationCompositionProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationComposition",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-timeline",
+      "comment": "Scroll-driven Animations 1 §4.1 / CSS Animations 2 §3.7. Raw comma-separated list, one per animation-name: auto (the document's time), none, a dashed name from scroll-timeline-name or view-timeline-name, scroll() or view(). Read through TimelineGrammar. Not part of the animation shorthand, which does not reset it here.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.AnimationTimelineConverter.FromList()"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationTimelineProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationTimeline",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-range-start",
+      "comment": "Scroll-driven Animations 1 §4.3. Raw comma-separated list: normal, an offset, or a named range of a view timeline with an optional offset into it. See animation-timeline.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.RangeEdgeConverter.FromList()"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationRangeStartProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationRangeStart",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "animation-range-end",
+      "comment": "Scroll-driven Animations 1 §4.3. See animation-range-start.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.RangeEdgeConverter.FromList()"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.AnimationRangeEndProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "AnimationRangeEnd",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "scroll-timeline-name",
+      "comment": "Scroll-driven Animations 1 §3.1. Raw comma-separated none | <dashed-ident> list: the names an element's scroll position goes by.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineNameConverter.FromList()"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollTimelineNameProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollTimelineName",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "scroll-timeline-axis",
+      "comment": "Scroll-driven Animations 1 §3.1. Raw comma-separated block | inline | x | y list.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineAxisConverter.FromList()"},
+      "initialValue": "block",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ScrollTimelineAxisProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ScrollTimelineAxis",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "view-timeline-name",
+      "comment": "Scroll-driven Animations 1 §4.2. Raw comma-separated none | <dashed-ident> list: the names an element's visibility in its scroller goes by.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineNameConverter.FromList()"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ViewTimelineNameProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ViewTimelineName",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "view-timeline-axis",
+      "comment": "Scroll-driven Animations 1 §4.2. Raw comma-separated block | inline | x | y list.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineAxisConverter.FromList()"},
+      "initialValue": "block",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ViewTimelineAxisProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ViewTimelineAxis",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "view-timeline-inset",
+      "comment": "Scroll-driven Animations 1 §4.2. Raw comma-separated list of [ auto | <length-percentage> ]{1,2}: how far the scrollport is shrunk at each end for this timeline.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineInsetConverter.FromList()"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ViewTimelineInsetProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ViewTimelineInset",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "timeline-scope",
+      "comment": "Scroll-driven Animations 1 §5. Raw comma-separated none | all | <dashed-ident> list: names declared below this element that its descendants and siblings of the declaring element can use.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TimelineScopeEntryConverter.FromList()"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TimelineScopeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TimelineScope",
         "csharpDataType": "string",
         "area": "GeneratedContentArea"
       }
@@ -2533,7 +2705,7 @@
     {
       "name": "display",
       "inherited": false,
-      "cssom": {"converter": "Converters.DisplayModeConverter"},
+      "cssom": {"converter": "Converters.DisplayModeConverter", "registryAnimatable": true},
       "initialValue": "inline",
       "cssDataType": {
         "type": "enum-keyword",
@@ -5478,35 +5650,68 @@
     },
     {
       "name": "transition-delay",
-      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "comment": "CSS Transitions 1 §2. Raw comma-separated list, read by the live animation clock (AnimationClock) when a restyle changes a property; a PDF never runs a transition.",
       "inherited": false,
       "cssom": {"converter": "Converters.TimeConverter.FromList()"},
       "initialValue": "0s",
-      "cssDataType": "unsupported"
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransitionDelayProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TransitionDelay",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
     },
     {
       "name": "transition-duration",
-      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "comment": "CSS Transitions 1 §2. Raw comma-separated list, read by the live animation clock (AnimationClock) when a restyle changes a property; a PDF never runs a transition.",
       "inherited": false,
       "cssom": {"converter": "Converters.TimeConverter.FromList()"},
       "initialValue": "0s",
-      "cssDataType": "unsupported"
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransitionDurationProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TransitionDuration",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
     },
     {
       "name": "transition-property",
-      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "comment": "CSS Transitions 1 §2. Raw comma-separated list, read by the live animation clock (AnimationClock) when a restyle changes a property; a PDF never runs a transition.",
       "inherited": false,
       "cssom": {"converter": "Converters.AnimatableConverter.FromList().OrNone()"},
       "initialValue": "all",
-      "cssDataType": "unsupported"
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransitionPropertyProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TransitionProperty",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
     },
     {
       "name": "transition-timing-function",
-      "comment": "CSS-OM only: the render layer does not read this property (no html or svg binding), so this entry exists to generate its CSS-OM class and carry its inheritance.",
+      "comment": "CSS Transitions 1 §2. Raw comma-separated list, read by the live animation clock (AnimationClock) when a restyle changes a property; a PDF never runs a transition.",
       "inherited": false,
       "cssom": {"converter": "Converters.TransitionConverter.FromList()"},
       "initialValue": "ease",
-      "cssDataType": "unsupported"
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransitionTimingFunctionProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TransitionTimingFunction",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
+    },
+    {
+      "name": "transition-behavior",
+      "comment": "CSS Transitions 2 §2.5. Raw comma-separated normal | allow-discrete list, read by the live animation clock (AnimationClock): a property that does not interpolate (display, visibility, ...) only transitions when its entry says allow-discrete.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TransitionBehaviorConverter.FromList()"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.TransitionBehaviorProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "TransitionBehavior",
+        "csharpDataType": "string",
+        "area": "GeneratedContentArea"
+      }
     }
   ]
 }

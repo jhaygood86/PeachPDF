@@ -269,6 +269,28 @@ graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCan
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
+### Retained layers
+
+A layer from `BeginLayer` is composited once, when it is disposed. A `RetainedLayer` is for content that stays the same while the way it is placed changes, such as a box
+that an animation moves or fades: record it once, then draw it as often as you like.
+
+```csharp
+using var layer = canvas.CreateRetainedLayer(new Rect(10, 10, 100, 60))!;   // the region it covers, in this canvas's coordinates
+layer.Recorder.DrawRectangle(brush, 10, 10, 100, 60);                      // record in the same coordinates
+layer.Seal();                                                              // finish recording
+
+layer.Draw(canvas);                                                        // where it was recorded
+canvas.PushTransform(Matrix3x2.CreateRotation(0.3f, new Vector2(60, 40)));
+layer.Draw(canvas, opacity: 0.5);                                          // again, rotated, half transparent
+canvas.PopTransform();
+```
+
+`Draw` places the layer under the target's current transform and takes the opacity of that one draw; the content is not recorded again. `CanDraw(target)` says whether a canvas can
+still draw it (a lost graphics device or another document makes the answer no, and the layer is recorded anew). `CreateRetainedLayer` returns `null` for an empty region or a
+canvas that cannot make one. The default is built from `CreateTile`, so every `Canvas` gets one and a draw replays the tile; `Win2dCanvas` overrides it to keep a texture on the GPU,
+so a draw is one textured quad.
+
+
 ## Links and destinations
 
 A format with hyperlinks does not need a side channel for them: they are `Canvas` calls, so whatever draws a page can say what is
@@ -344,7 +366,9 @@ whatever synthetic bold/italic a match required (`Font.SyntheticStyle`) - delibe
 needs. `FontFamily` is the family a font was matched from. `Image` (`Width`, `Height`, `Interpolate`,
 `GetPixels()`) is a drawable raster or vector image; `GetPixels()` returns a `PixelBuffer` (premultiplied
 RGBA8) for an image whose pixels a `Canvas` implementation needs to read directly, or `null` for one with
-none (a vector tile from `CreateTile`, say).
+none (a vector tile from `CreateTile`, say). An animated image (a GIF or WebP with more than one frame) reports `FrameCount`, `GetFrameDuration(index)` and `LoopCount` (0 is
+forever), and draws the frame `CurrentFrame` names, which whoever plays the animation sets (`PeachBrackets.HtmlDocument.AdvanceAnimations` does); every use of the image shows the same
+frame. A still image has one frame and ignores `CurrentFrame`. `RasterRenderContext` and `Win2dRenderContext` decode animated images this way; a backend that does not shows the first frame.
 
 ## Implementing your own `Canvas`
 

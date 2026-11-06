@@ -209,7 +209,7 @@ namespace PeachBrackets.Html.Parse
 
             // Collect @keyframes (read by AnimationApplier mid-cascade); nothing consults them unless animations
             // are being sampled, so a document pays nothing for them otherwise.
-            htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null
+            htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null || htmlContainer.AnimationsEnabled
                 ? RegisteredKeyframes.BuildRegistry(cssData, media)
                 : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
             htmlContainer.KeyframesUseRevert = htmlContainer.Keyframes.Values.Any(set => set.UsesRevert);
@@ -1307,7 +1307,7 @@ namespace PeachBrackets.Html.Parse
             // animated (the sampled values are applied per box).
             var inheritedOnly = box.HtmlTag is null && !box.IsPseudoElement
                 && box.ParentBox is { } styleParent && styleParent.ComputedStyle.CustomProperties is not { Count: > 0 }
-                && box.HtmlContainer?.AnimationProgress is null;
+                && box.HtmlContainer?.AnimationProgress is null && box.HtmlContainer?.LiveOverridesActive != true;
             var inheritedOnlyKey = inheritedOnly ? (box.ComputedStyle, box.ParentBox!.ComputedStyle) : default;
             var verifyingInheritedOnly = false;
             ComputedStyle? sharedStyle = null;
@@ -1335,7 +1335,7 @@ namespace PeachBrackets.Html.Parse
             if (!inheritedOnly && siblings is not null && box.HtmlTag is { } elementTag && !box.IsWithinForeignContent
                 && !DisableSiblingStyleSharing.Value
                 && box.ParentBox is { } elementParent && elementParent.ComputedStyle.CustomProperties is not { Count: > 0 }
-                && box.HtmlContainer?.AnimationProgress is null)
+                && box.HtmlContainer?.AnimationProgress is null && box.HtmlContainer?.LiveOverridesActive != true)
             {
                 sibling = siblings.Find(elementTag, box.GetType(), box.ComputedStyle);
                 if (sibling is null)
@@ -1549,6 +1549,12 @@ namespace PeachBrackets.Html.Parse
                     colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties, importantCustomProperties ??= new HashSet<string>(StringComparer.Ordinal));
 
                 AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot, colorIsImportant, importantCustomProperties);
+            }
+            else if (box.HtmlContainer?.AnimationClock is { HasOverrides: true } liveClock)
+            {
+                // A running animation: the values the clock last gave this box stand in the animation origin, so a box cascaded again (one a
+                // font-size animation inherits through) keeps them and what inherits from it sees them.
+                liveClock.ApplyLiveValues(valueParser, box);
             }
 
             // 6. Author !important. Note: this means an author-!important "revert" can roll back to

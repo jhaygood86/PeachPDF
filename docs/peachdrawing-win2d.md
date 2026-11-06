@@ -210,6 +210,7 @@ Every native Win2D object the backend creates has one owner and is released dete
 | A pushed clip (a Win2D layer, or a render target of its own for a path clip on a `FromRenderTarget` canvas) | The canvas that pushed it | `PopClip`, or `Win2dCanvas.Dispose()` for any still pushed |
 | Brushes, stroke styles, geometry, effects | The one draw call that needs them | The end of that call, even when it throws |
 | A tile (`CreateTile`) | The caller, through the canvas and image it returned | Disposing them; disposing the image also closes a tile canvas still open |
+| A retained layer (`CreateRetainedLayer`) | The caller, through the `RetainedLayer` returned | `Dispose()`: releases the texture and the session that filled it; `Seal()` closes the session first, so the texture can be drawn |
 | A layer (`BeginLayer`) | The `CanvasLayer` returned | Disposing it composites and releases; a canvas disposed first abandons it without compositing |
 | Decoded image | The `Image` | `Dispose()`; its bitmap is made per device on first draw and rebuilt for another |
 | DirectWrite font sets and temp font files | `Win2dRenderContext` | `Dispose()` |
@@ -222,6 +223,15 @@ one thread at a time.
 **Device loss.** If the device is lost (a driver reset, a removed adapter) `Win2dRenderContext.DeviceLost` is raised, a device the
 context made is replaced on next use, and the images and bitmaps it made are rebuilt lazily. Reading or saving a composer's page whose
 device was lost throws `Win2dDeviceLostException`; draw it again.
+
+## Retained layers and animated images
+
+`CreateRetainedLayer(bounds)` draws the group once into a `CanvasRenderTarget` at the density the host draws at (its session's DPI times the scale of the transform it set) and keeps it
+on the device; `Draw` is then one textured quad under the canvas's transform with the opacity of that draw, with no content to execute again. It is what `PeachBrackets.WinUI`'s
+animations use for a box that moves or fades. A layer larger than 8192 device pixels either way is not made (`null`), and `CanDraw` is false once the device was lost.
+
+An animated GIF or WebP is decoded by PeachImage whatever `ImageCodec` is set (Windows' codecs deliver the first frame only) into every frame, composited; `Image.CurrentFrame` selects the
+frame that is drawn, and a change of frame writes the new pixels into the bitmap the device already has instead of making another.
 
 ## Limitations
 

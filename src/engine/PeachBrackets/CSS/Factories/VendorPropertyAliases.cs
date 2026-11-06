@@ -54,6 +54,11 @@ namespace PeachBrackets.Css
                 PropertyNames.WritingMode, PropertyNames.TextOrientation,
                 PropertyNames.MaskImage, PropertyNames.MaskMode, PropertyNames.MaskRepeat, PropertyNames.MaskPosition,
                 PropertyNames.MaskSize, PropertyNames.MaskOrigin, PropertyNames.MaskClip, PropertyNames.MaskComposite,
+                PropertyNames.Animation, PropertyNames.AnimationName, PropertyNames.AnimationDuration, PropertyNames.AnimationTimingFunction,
+                PropertyNames.AnimationDelay, PropertyNames.AnimationIterationCount, PropertyNames.AnimationDirection,
+                PropertyNames.AnimationFillMode, PropertyNames.AnimationPlayState,
+                PropertyNames.Transition, PropertyNames.TransitionProperty, PropertyNames.TransitionDuration,
+                PropertyNames.TransitionTimingFunction, PropertyNames.TransitionDelay,
             };
 
             foreach (var name in prefixed)

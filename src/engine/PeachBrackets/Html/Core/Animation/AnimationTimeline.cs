@@ -75,6 +75,83 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>
+        /// Where a running animation is on its own timeline, <paramref name="elapsedSeconds"/> after it started and counting only the time it was
+        /// not paused: <c>animation-delay</c>, the iterations, <c>animation-direction</c> and <c>animation-fill-mode</c> all apply (CSS Animations 1 §3.5-§3.9,
+        /// §4.2-§4.3). Null when the animation contributes nothing now: before its delay with no backwards fill, or after its end with no forwards one.
+        /// </summary>
+        /// <param name="elapsedSeconds">time since the animation started, excluding paused time</param>
+        /// <param name="delaySeconds"><c>animation-delay</c>; negative starts it part-way through</param>
+        /// <param name="durationSeconds"><c>animation-duration</c></param>
+        /// <param name="iterationCount"><c>animation-iteration-count</c>; <see cref="double.PositiveInfinity"/> for <c>infinite</c></param>
+        /// <param name="direction"><c>animation-direction</c></param>
+        /// <param name="fillsBackwards">whether <c>animation-fill-mode</c> is <c>backwards</c> or <c>both</c></param>
+        /// <param name="fillsForwards">whether <c>animation-fill-mode</c> is <c>forwards</c> or <c>both</c></param>
+        /// <param name="finished">set when the animation is past its end, so nothing more will change</param>
+        public static double? LiveProgress(double elapsedSeconds, double delaySeconds, double durationSeconds, double iterationCount,
+            AnimationDirectionKind direction, bool fillsBackwards, bool fillsForwards, out bool finished)
+        {
+            finished = false;
+            var local = elapsedSeconds - delaySeconds;
+            var hasInterval = durationSeconds > 0 && iterationCount > 0;
+
+            if (local < 0)
+            {
+                // Before the active interval: only a backwards fill shows its first state.
+                return fillsBackwards ? Direct(0, 0, direction) : null;
+            }
+
+            if (!hasInterval)
+            {
+                finished = true;
+                if (!fillsForwards) return null;
+                var (zeroProgress, zeroIteration) = iterationCount > 0 ? EndOfActiveInterval(iterationCount) : (0d, 0d);
+                return Direct(zeroProgress, zeroIteration, direction);
+            }
+
+            if (!double.IsPositiveInfinity(iterationCount) && local >= durationSeconds * iterationCount)
+            {
+                finished = true;
+                if (!fillsForwards) return null;
+                var (endProgress, endIteration) = EndOfActiveInterval(iterationCount);
+                return Direct(endProgress, endIteration, direction);
+            }
+
+            var overall = local / durationSeconds;
+            var iteration = Math.Floor(overall);
+            return Direct(overall - iteration, iteration, direction);
+        }
+
+        /// <summary>
+        /// The progress of an animation on a scroll or view timeline (Scroll-driven Animations 1 §4.4): <paramref name="raw"/> is how far through its range the timeline is,
+        /// 0 at the start of the range and 1 at its end. The active interval is the range, whatever <c>animation-duration</c> and <c>animation-delay</c> say, and the
+        /// iterations share it. Null when the animation contributes nothing at this point: before the range with no backwards fill, after it with no forwards one.
+        /// </summary>
+        public static double? ScrollProgress(double? raw, double iterationCount, AnimationDirectionKind direction, bool fillsBackwards, bool fillsForwards)
+        {
+            if (raw is not { } position || double.IsNaN(position)) return null;
+
+            var count = double.IsInfinity(iterationCount) || iterationCount <= 0 ? 1 : iterationCount;
+
+            if (position < 0) return fillsBackwards ? Direct(0, 0, direction) : null;
+            if (position > 1)
+            {
+                if (!fillsForwards) return null;
+                var (endProgress, endIteration) = EndOfActiveInterval(count);
+                return Direct(endProgress, endIteration, direction);
+            }
+
+            if (position == 1)
+            {
+                var (lastProgress, lastIteration) = EndOfActiveInterval(count);
+                return Direct(lastProgress, lastIteration, direction);
+            }
+
+            var overall = position * count;
+            var iteration = Math.Floor(overall);
+            return Direct(overall - iteration, iteration, direction);
+        }
+
+        /// <summary>
         /// The iteration progress and the (zero-based) iteration at the end of the active interval. CSS Animations
         /// 1 §4.3 / Web Animations 1 §4.6.3: the progress is the fractional part of the count, or 1 for a whole
         /// number of cycles. An infinite animation has no end, so its end is the end of the first cycle.

@@ -144,6 +144,8 @@ public sealed partial class HtmlView
 
     private void Repaint(PeachBrackets.Updates.UpdateResult result)
     {
+        // A change of state can start a transition.
+        EnsureAnimationLoop();
         if (!result.Applied || result.DirtyRegions.Count == 0)
             return;
 

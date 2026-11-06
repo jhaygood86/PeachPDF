@@ -27,7 +27,7 @@ namespace PeachBrackets.Html.Animation
     /// defines a way to compare them - <c>none</c> against a <c>transform</c> or <c>filter</c> list, or against
     /// <c>visibility</c> - that is handled first.
     /// </remarks>
-    internal static class CssValueInterpolator
+    internal static partial class CssValueInterpolator
     {
         private enum TokenKind { Number, Word, Color, Open, Close, Space, Punct, Text }
 
@@ -90,6 +90,25 @@ namespace PeachBrackets.Html.Animation
             "z-index", "order", "column-count", "orphans", "widows"
         };
 
+        private static bool IsBareZero(string value) => value is "0" or "0.0" or "+0" or "-0";
+
+        // The unit of a value that is one number with a unit (`40pt`, `10%`), or null when it is anything else.
+        private static string? UnitOf(string value)
+        {
+            var i = 0;
+            if (i < value.Length && (value[i] == '+' || value[i] == '-')) i++;
+            var digits = 0;
+            while (i < value.Length && (char.IsAsciiDigit(value[i]) || value[i] == '.')) { i++; digits++; }
+            if (digits == 0 || i >= value.Length) return null;
+
+            for (var j = i; j < value.Length; j++)
+            {
+                if (!char.IsAsciiLetter(value[j]) && !(j == value.Length - 1 && value[j] == '%')) return null;
+            }
+
+            return value[i..];
+        }
+
         /// <summary>
         /// Mixes <paramref name="from"/> and <paramref name="to"/> at <paramref name="t"/> (0 = from, 1 = to; may
         /// leave 0 to 1 for an easing that overshoots). <paramref name="box"/> is what a length in a <c>transform</c> list
@@ -109,6 +128,18 @@ namespace PeachBrackets.Html.Animation
             }
 
             if (string.Equals(from, to, StringComparison.OrdinalIgnoreCase)) return from;
+
+            // CSS Transforms 2 §3: translate, rotate and scale mix on their own, from one shape. Rotations about different axes are discrete.
+            if (IsIndividualTransform(property) && !TryNormalizeIndividual(property, ref from, ref to))
+                return t < 0.5 ? from : to;
+
+            // CSS Values 4 §6.1: a bare 0 is a length; against a length (or a percentage) it takes that value's unit, which is how a property that was
+            // never set (its initial value is a bare 0, `margin-top`'s) is mixed with one that was.
+            if (!ZeroIsANumberProperties.Contains(property))
+            {
+                if (IsBareZero(from) && UnitOf(to) is { } toUnit) from = "0" + toUnit;
+                else if (IsBareZero(to) && UnitOf(from) is { } fromUnit) to = "0" + fromUnit;
+            }
 
             // CSS Text 3 §8.1 and §8.2: normal is the zero length for the two spacings, and a keyword does not mix with a length as it is.
             if (SpacingProperties.Contains(property))

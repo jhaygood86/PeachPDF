@@ -8,10 +8,11 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
 - **Per-animation progress and an absolute time.** One global fraction, taken of each animation's *own* run. Two animations
   with different durations land at the same fraction, not the same time. A `@keyframes`-name-keyed override and an
   "at 3s on the timeline" option are the natural next steps.
-- **`animation-delay`, `animation-fill-mode`, `animation-play-state` do not change the result** (the frame is inside the
-  run). Only an animation with no run (zero duration / iteration count) consults the fill mode.
-- **`transition` never runs.** A transition starts from a style *change*; a freshly loaded document has none. Nothing to
-  render, so nothing was built. The properties are still parsed.
+- **`animation-delay`, `animation-fill-mode`, `animation-play-state` do not change the still frame** (the frame is inside the
+  run). Only an animation with no run (zero duration / iteration count) consults the fill mode. The live clock a screen host runs
+  ([live playback](css-animation-live-playback-limitations.md)) applies all three.
+- **`transition` never runs in a PDF.** A transition starts from a style *change*; a freshly loaded document has none. The
+  properties are still parsed, and a screen host that turns the live clock on runs them (see the live playback file).
 - **Interpolation is structural, on text.** Colours mix in premultiplied sRGB when both are legacy and in Oklab otherwise
   (`CssValueInterpolator.MixColors`), but only the colour syntaxes `CssValueParser.TryGetColor` understands are mixed - any other
   (`color()`, relative colour syntax, `rgb(none ...)`; #1772) is not read at all, static or animated, so its keyframe stands for the value the property has without the animation. `color-mix(in hsl)` and `in hwb`
@@ -41,8 +42,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   `rem` in the matrix part of a `transform` mix resolve against the box's font at the animation step, before the
   `!important` phase and before a `font-size` the same animation sets later; a pair mixed per function keeps the text
   and resolves at paint. They differ only when the font size changes after the animation step.
-- **Not animated:** `animation-composition` (`add`/`accumulate`),
-  `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
+- **Not animated:** `animation-timeline`/`animation-range` (scroll-driven), `@keyframes` `timeline-range` percentages, and the declarative
   document-building API (its cascade is a different entry point and does not call the applier).
 - **Overshoot is clamped only for a whole-value, non-negative property.** An easing that overshoots is followed past the end
   value, and a width, padding, border width, radius, `font-size` and the like stop at 0 (a fixed list in
@@ -70,8 +70,8 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   two `stroke-dasharray` lists that need more than 256 items to repeat to a common length flip, where a browser mixes them; a `var()` that
   resolves to a negative number in a keyframe of `r`, `width` and the like is mixed, where a browser treats it as invalid at computed-value time; an ancestor's `font-size` as a keyword (`larger`, `x-large`) or in `vw` is not resolved when an animation starts from it (#2131); `var()` and `currentcolor` in a keyframe on a `<use>` instance read the referenced element's own custom properties and `color` (#2130); `currentcolor` in a keyframe is the colour of the svg's HTML ancestor, so a `color` set inside the svg is seen by the mixed
   frames (which use the element's own `color`) and not by the end points (#1798).
-- **Gradients and vendor prefixes.** A gradient is mixed stop by stop where a browser flips half
-  way; `@-webkit-keyframes` and `-webkit-animation` are ignored.
+- **Gradients.** A gradient is mixed stop by stop where a browser flips half way.
+- **`animation-composition` is not applied to the elements of an inline `<svg>` or to a custom property**: both replace.
 - **`prefers-reduced-motion` is reported as `reduce`** (a static PDF has no motion), so the common
   `@media (prefers-reduced-motion: reduce) { * { animation: none !important } }` reset switches every animation off even
   when a progress is set. That is the browser-faithful answer for the media feature; a caller who wants a frame despite such a

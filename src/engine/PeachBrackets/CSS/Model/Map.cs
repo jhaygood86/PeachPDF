@@ -376,6 +376,26 @@ namespace PeachBrackets.Css
             {
                 {Keywords.NoLimit, NoLimitKeyword.NoLimit}
             }.Freeze();
+        public static readonly KeywordMap<RotationAxis> RotationAxes =
+            new KeywordMap<RotationAxis>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"x", RotationAxis.X},
+                {"y", RotationAxis.Y},
+                {"z", RotationAxis.Z}
+            }.Freeze();
+        public static readonly KeywordMap<TransitionBehavior> TransitionBehaviors =
+            new KeywordMap<TransitionBehavior>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Normal, TransitionBehavior.Normal},
+                {Keywords.AllowDiscrete, TransitionBehavior.AllowDiscrete}
+            }.Freeze();
+        public static readonly KeywordMap<AnimationComposition> AnimationCompositions =
+            new KeywordMap<AnimationComposition>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Replace, AnimationComposition.Replace},
+                {Keywords.Add, AnimationComposition.Add},
+                {Keywords.Accumulate, AnimationComposition.Accumulate}
+            }.Freeze();
         public static readonly KeywordMap<PlayState> PlayStates =
             new KeywordMap<PlayState>(StringComparer.OrdinalIgnoreCase)
             {

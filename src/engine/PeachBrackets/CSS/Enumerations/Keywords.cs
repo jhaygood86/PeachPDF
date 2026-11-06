@@ -375,6 +375,9 @@
         public const string Progressive = "progressive";
         public const string Interlace = "interlace";
         public const string Replace = "replace";
+        public const string Add = "add";
+        public const string Accumulate = "accumulate";
+        public const string AllowDiscrete = "allow-discrete";
         public const string At = "at";
         public const string Yes = "yes";
         public const string No = "no";

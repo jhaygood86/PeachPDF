@@ -362,6 +362,10 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Decodes with the codec this context is set to use, falling back to PeachImage where allowed.</summary>
     internal Win2dImage? DecodeImage(byte[] bytes)
     {
+        // A format that can hold an animation is read by PeachImage whatever the codec: Windows' codecs deliver the first frame only.
+        if (Win2dImage.MayBeAnimated(bytes) && Win2dImage.TryDecode(bytes) is { FrameCount: > 1 } animated)
+            return animated;
+
         if (_imageCodec == Win2dImageCodec.Auto)
         {
             // Windows decodes straight into the device's bitmap when it has a codec; anything else is PeachImage's.

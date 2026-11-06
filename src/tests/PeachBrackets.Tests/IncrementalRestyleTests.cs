@@ -180,7 +180,6 @@ public class IncrementalRestyleTests
     [InlineData("#a:hover { filter: blur(2px) } #a { height: 20px }", "<div id=a><div style=\"position:absolute\">abs</div></div>")]
     [InlineData("#a:hover::first-line { color: red }", "<p id=a>x</p>")]
     [InlineData("#a:hover::after { content: 'x' }", "<div id=a>x</div>")]
-    [InlineData("#a:hover { visibility: hidden }", "<div id=a>x</div>")]
     [InlineData("#a:hover { background-image: linear-gradient(red, blue) }", "<div id=a>x</div>")]
     public async Task AChangeThatCouldMoveOrCreateSomething_LoadsTheDocumentAgain(string rule, string body)
     {
@@ -188,6 +187,21 @@ public class IncrementalRestyleTests
 
         Assert.True(result.Applied);
         Assert.False(result.Incremental);
+    }
+
+    [Fact]
+    public async Task Visibility_OnlyPaints_SoItIsRestyledInPlaceWithTheBoxesUnderIt()
+    {
+        const string head = "<style>#a { height: 20px; background-color: rgb(200, 0, 0) } #a:hover { visibility: hidden }</style>";
+        var (context, document) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a><div id=c style=\"background-color: rgb(0, 0, 200); height: 10px\"></div></div>", head), new HtmlDocumentOptions { MediaType = MediaType.Screen });
+        var (referenceContext, reference) = await TestDocument.LoadAsync(TestDocument.Wrap("<div id=a><div id=c style=\"background-color: rgb(0, 0, 200); height: 10px\"></div></div>", head), new HtmlDocumentOptions { MediaType = MediaType.Screen, IncrementalRestyle = false });
+        var (x, y) = Center(document, "a");
+
+        var result = await document.SetPointerStateAsync(0, x, y, false, context.CreateCanvas(1, 1));
+        await reference.SetPointerStateAsync(0, x, y, false, referenceContext.CreateCanvas(1, 1));
+
+        Assert.True(result.Incremental);
+        Assert.Equal(await PixelsAsync(referenceContext, reference), await PixelsAsync(context, document));
     }
 
     [Fact]

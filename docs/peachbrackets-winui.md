@@ -54,6 +54,7 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | `IsZoomEnabled` | Whether Ctrl+wheel and pinch zoom the document (only a view that scrolls itself zooms). |
 | `SelectionColor` | The colour behind selected text. |
 | `UserStyleSheet`, `DocumentMargin` | A style sheet applied before the document's own, and the space left around the document (none by default). |
+| `AnimationsEnabled` | Plays CSS animations, transitions and animated images (GIF, WebP); off by default and always off when Windows' animation effects are. See [Animations](#animations). |
 | `FontSet` | The fonts the view resolves families from; the shared [`HtmlViewFonts`](#fonts) set unless you give it another. |
 | `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. |
 | `LinkClicked` | Raised before a link is followed; set `Cancel` to handle it yourself. |
@@ -139,6 +140,24 @@ still works; the font is added to the same set. Views that use the DirectWrite t
 | `@media (hover)`, `(pointer)` | Match the devices attached to the machine (or `Input`). |
 | Links | A click (not a drag) on a link opens `http`, `https`, `mailto` and `tel` addresses with the system handler; a link to a place in the document scrolls to it. Other schemes are never launched. |
 | Selection | Drag to select, double-click to select a word, long-press with a finger for a word. |
+
+## Animations
+
+Set `AnimationsEnabled` and the view plays the document's CSS animations, transitions and animated images, stepping the document on the display's own frame clock
+(`CompositionTarget.Rendering`) only while something is playing, so an idle page costs nothing. See [Animations and transitions](peachbrackets.md#animations-and-transitions)
+for what plays. A box that animates `transform` or `opacity` is kept as a texture on the graphics device (a [`RetainedLayer`](peachdrawing-core.md#retained-layers) of
+[`PeachDrawing.Win2D`](peachdrawing-win2d.md)) and drawn again each frame, so it follows the display's refresh rate (120 fps and more on a fast display) without painting what is inside it;
+other properties that cannot change layout repaint the rectangle they cover, painted in one pass however the surface cuts it into regions. A property that moves or
+resizes boxes (`width`, `margin`, `top`, `font-size`, flex and grid sizing) plays by laying the document out again on each frame and repainting where something moved, so its
+cost follows the size of the document. Nothing plays when Windows' "Animation effects" setting is off, and `prefers-reduced-motion` then reports `reduce`. Changing
+`AnimationsEnabled` loads the document again.
+
+Animations on a scroll or view timeline follow the view's own scrolling, and the view steps the document on every scroll step for them (the demo has a showcase). `AnimationEvents` reports the animation and transition events of each frame (see [Events and controlling the animations](peachbrackets.md#events-and-controlling-the-animations)), and `view.Document.GetAnimations()` lists what is running to pause, seek or cancel it.
+
+Limits: a `background-image` GIF shows its first frame; what an animated box paints is recorded at the resolution the view draws at, so a box that scales up a lot is resampled.
+
+The demo has a toggle for it, four screen-only showcases of keyframes, transitions, layout and 120 boxes at once, one of an animated GIF, and `--anim-bench <result file>`, which plays them
+in a real window and writes the frame rate, the time between frames and what stepping the document and repainting cost (run it in Release on an otherwise idle machine).
 
 ## Accessibility
 

@@ -479,6 +479,8 @@ PeachBrackets.HostResourceLoader : static class
 PeachBrackets.HtmlDocument : sealed class
   method AccessibilityNode GetAccessibilityNodeAt(Int32 pageIndex, Double x, Double y)
   method AccessibilityTree GetAccessibilityTree()
+  method AnimationFrame AdvanceAnimations(TimeSpan now)
+  method AnimationFrame AdvanceAnimations(TimeSpan now, Canvas measuringCanvas)
   method Boolean IsResetButton(DocumentElement element)
   method Boolean RemoveHighlight(String name)
   method DocumentCursor GetCursorAt(Int32 pageIndex, Double x, Double y)
@@ -495,6 +497,8 @@ PeachBrackets.HtmlDocument : sealed class
   method FormSubmission CreateFormSubmission(DocumentElement submitter, Int32 pageIndex, Double x, Double y)
   method FormSubmission CreateImplicitSubmission(DocumentElement field)
   method IReadOnlyList<DirtyRegion> SetViewport(Rect viewport)
+  method IReadOnlyList<DocumentAnimation> GetAnimations()
+  method IReadOnlyList<DocumentAnimation> GetAnimations(DocumentElement element)
   method IReadOnlyList<Rect> GetSelectionRects(TextPosition from, TextPosition to)
   method IReadOnlyList<SelectOption> GetSelectOptions(DocumentElement element)
   method IReadOnlyList<TextRange> FindText(String query, Boolean ignoreCase = False)
@@ -505,6 +509,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Int32? GetEditIndexByLine(Canvas measuringCanvas, Int32 index, Int32 lines)
   method PaintColor? GetCaretColor(TextPosition position)
   method Rect? GetElementBounds(String elementId)
+  method String GetAttribute(DocumentElement element, String name)
   method String GetText(TextPosition from, TextPosition to)
   method TextEditPlace? GetEditPlace(Canvas measuringCanvas, Int32 index = -1)
   method TextPosition? GetCaretPosition(Int32 pageIndex, Double x, Double y)
@@ -529,6 +534,7 @@ PeachBrackets.HtmlDocument : sealed class
   method ValueTask LayoutAsync(Canvas measuringCanvas)
   method ValueTask PaintPageAsync(Int32 pageIndex, Canvas canvas, DocumentPaintLayer layer = All)
   method ValueTask PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region, DocumentPaintLayer layer = All)
+  method ValueTask<AnimationFrame> AdvanceAnimationsAsync(TimeSpan now, Canvas measuringCanvas)
   method ValueTask<FocusMoveResult> MoveFocusAsync(Boolean forward, Canvas measuringCanvas)
   method ValueTask<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
   method ValueTask<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
@@ -538,13 +544,19 @@ PeachBrackets.HtmlDocument : sealed class
   method ValueTask<TextEditResult> SplitParagraphAsync(TextPosition at, Canvas measuringCanvas)
   method ValueTask<TextEditResult> UnwrapElementAsync(DocumentElement element, Canvas measuringCanvas)
   method ValueTask<TextEditResult> WrapRangeAsync(TextPosition from, TextPosition to, String tagName, IReadOnlyDictionary<String, String> attributes, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> AddClassAsync(DocumentElement element, String className, Canvas measuringCanvas)
   method ValueTask<UpdateResult> ClearPointerStateAsync(Canvas measuringCanvas)
   method ValueTask<UpdateResult> FocusAsync(AccessibilityNode node, Boolean focusVisible, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> RemoveAttributeAsync(DocumentElement element, String name, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> RemoveClassAsync(DocumentElement element, String className, Canvas measuringCanvas)
   method ValueTask<UpdateResult> ResetFormAsync(DocumentElement control, Canvas measuringCanvas)
   method ValueTask<UpdateResult> RestyleFormAsync(Canvas measuringCanvas)
+  method ValueTask<UpdateResult> SetAttributeAsync(DocumentElement element, String name, String value, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetFocusAsync(DocumentElement element, Boolean focusVisible, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetOpenAsync(DocumentElement element, Boolean open, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> SetPreferencesAsync(UserPreferences preferences, ColorSchemePreference colorScheme, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> ToggleClassAsync(DocumentElement element, String className, Canvas measuringCanvas)
   method ValueTask<UpdateResult> UpgradeImagesAsync()
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
   method Void ClearHighlights()
@@ -561,6 +573,7 @@ PeachBrackets.HtmlDocument : sealed class
   method static ValueTask<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property AccessibilityNode FocusedNode { get; }
+  property Boolean HasRunningAnimations { get; }
   property Boolean HasViewportBackgrounds { get; }
   property Boolean NeedsRestyle { get; }
   property Boolean ViewportLayersChanged { get; }
@@ -595,6 +608,7 @@ PeachBrackets.HtmlDocumentMetadata : sealed class
 PeachBrackets.HtmlDocumentOptions : sealed class
   ctor()
   method Void SetMargins(Double points)
+  property Boolean AnimationsEnabled { get; set; }
   property Boolean CollectFormFields { get; set; }
   property Boolean EnableIncrementalUpdates { get; set; }
   property Boolean EnableSelectionStyling { get; set; }
@@ -832,6 +846,44 @@ PeachBrackets.TouchActions : enum Int32
   PanRight = 2
   PanUp = 4
   PinchZoom = 16
+PeachBrackets.Updates.AnimationEventInfo : sealed class
+  ctor(AnimationEventKind Kind, DocumentElement Element, String Name, TimeSpan ElapsedTime)
+  method AnimationEventInfo <Clone>$()
+  method Void Deconstruct(out AnimationEventKind Kind, out DocumentElement Element, out String Name, out TimeSpan ElapsedTime)
+  method virtual Boolean Equals(AnimationEventInfo other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property AnimationEventKind Kind { get; init; }
+  property Boolean IsTransition { get; }
+  property DocumentElement Element { get; init; }
+  property String Name { get; init; }
+  property TimeSpan ElapsedTime { get; init; }
+PeachBrackets.Updates.AnimationEventKind : enum Int32
+  AnimationCancel = 3
+  AnimationEnd = 2
+  AnimationIteration = 1
+  AnimationStart = 0
+  TransitionCancel = 7
+  TransitionEnd = 6
+  TransitionRun = 4
+  TransitionStart = 5
+PeachBrackets.Updates.AnimationFrame : struct
+  ctor(Boolean IsRunning, IReadOnlyList<DirtyRegion> DirtyRegions, Boolean LayoutChanged = False)
+  method Void Deconstruct(out Boolean IsRunning, out IReadOnlyList<DirtyRegion> DirtyRegions, out Boolean LayoutChanged)
+  method virtual Boolean Equals(AnimationFrame other)
+  method virtual Boolean Equals(Object obj)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property Boolean IsRunning { get; init; }
+  property Boolean LayoutChanged { get; init; }
+  property IReadOnlyList<AnimationEventInfo> Events { get; init; }
+  property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
+PeachBrackets.Updates.AnimationPlayState : enum Int32
+  Finished = 3
+  Idle = 0
+  Paused = 2
+  Running = 1
 PeachBrackets.Updates.ChosenFile : sealed class
   ctor(String Name, String ContentType, Byte[] Content)
   method ChosenFile <Clone>$()
@@ -852,6 +904,20 @@ PeachBrackets.Updates.DirtyRegion : struct
   method virtual String ToString()
   property Int32 PageIndex { get; init; }
   property Rect Bounds { get; init; }
+PeachBrackets.Updates.DocumentAnimation : sealed class
+  method Void Cancel()
+  method Void Finish()
+  method Void Pause()
+  method Void Play()
+  method Void Reverse()
+  method Void UpdatePlaybackRate(Double playbackRate)
+  property AnimationPlayState PlayState { get; }
+  property Boolean IsTransition { get; }
+  property DocumentElement Element { get; }
+  property Double PlaybackRate { get; set; }
+  property String Name { get; }
+  property Task Finished { get; }
+  property TimeSpan CurrentTime { get; set; }
 PeachBrackets.Updates.DocumentElement : sealed class
   method virtual Boolean Equals(Object obj)
   method virtual Int32 GetHashCode()

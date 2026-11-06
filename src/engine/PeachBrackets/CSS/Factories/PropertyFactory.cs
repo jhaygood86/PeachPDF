@@ -173,6 +173,19 @@ namespace PeachBrackets.Css
             AddShorthand(PropertyNames.PlaceSelf, () => new PlaceSelfProperty(),
                 PropertyNames.AlignSelf, PropertyNames.JustifySelf);
 
+            AddShorthand(PropertyNames.AnimationRange, () => new AnimationRangeProperty(),
+                PropertyNames.AnimationRangeStart,
+                PropertyNames.AnimationRangeEnd);
+
+            AddShorthand(PropertyNames.ScrollTimeline, () => new ScrollTimelineProperty(),
+                PropertyNames.ScrollTimelineName,
+                PropertyNames.ScrollTimelineAxis);
+
+            AddShorthand(PropertyNames.ViewTimeline, () => new ViewTimelineProperty(),
+                PropertyNames.ViewTimelineName,
+                PropertyNames.ViewTimelineAxis,
+                PropertyNames.ViewTimelineInset);
+
             AddShorthand(PropertyNames.ColumnRule, () => new ColumnRuleProperty(),
                 PropertyNames.ColumnRuleWidth,
                 PropertyNames.ColumnRuleStyle,
@@ -310,7 +323,8 @@ namespace PeachBrackets.Css
                 PropertyNames.TransitionProperty,
                 PropertyNames.TransitionDuration,
                 PropertyNames.TransitionTimingFunction,
-                PropertyNames.TransitionDelay);
+                PropertyNames.TransitionDelay,
+                PropertyNames.TransitionBehavior);
 
 
             // CSS Logical Properties and Values Level 1. Each logical longhand is its own genuine,
@@ -575,7 +589,7 @@ namespace PeachBrackets.Css
             name = VendorPropertyAliases.Canonicalize(name);
             return _longhands.ContainsKey(name)
                 ? _animatables.Contains(name)
-                : GetLonghands(name).Any(_ => _animatables.Contains(name));
+                : GetLonghands(name).Any(longhand => _animatables.Contains(longhand));
         }
 
         public string[] GetLonghands(string name)

@@ -832,12 +832,13 @@ namespace PeachBrackets.Html.Dom
             get
             {
                 // Nearly every box has no transform: answer without a cache (and so without the paint extras).
-                if (_paint is not { _actualTransformComputed: true } && IsNoneValue(Style.VisualEffects.Transform)) return Matrix3x2.Identity;
+                if (_paint is not { _actualTransformComputed: true } && HasNoTransformValue) return Matrix3x2.Identity;
 
                 if (!Paint._actualTransformComputed)
                 {
+                    var effects = Style.VisualEffects;
                     (Paint._actualTransformMatrix, Paint._actualTransform4) = IsTransformable
-                        ? CssValueParser.ParseTransformFull(Style.VisualEffects.Transform, Style.VisualEffects.TransformOrigin, Owner)
+                        ? CssValueParser.ParseTransformFull(CssValueParser.EffectiveTransform(effects.Translate, effects.Rotate, effects.Scale, effects.Transform), effects.TransformOrigin, Owner)
                         : (Matrix3x2.Identity, null);
                     Paint._actualTransformComputed = true;
                 }
@@ -853,7 +854,7 @@ namespace PeachBrackets.Html.Dom
         {
             get
             {
-                if (_paint is not { _actualTransformComputed: true } && IsNoneValue(Style.VisualEffects.Transform)) return null;
+                if (_paint is not { _actualTransformComputed: true } && HasNoTransformValue) return null;
 
                 _ = ActualTransformMatrix;
                 return Paint._actualTransform4;
@@ -897,15 +898,19 @@ namespace PeachBrackets.Html.Dom
             {
                 // Cached: the stacking-context predicate asks this of every box from several places.
                 if (_paint?._hasTransform is { } cached) return cached;
-                if (IsNoneValue(Style.VisualEffects.Transform)) return false;
+                if (HasNoTransformValue) return false;
 
-                var value = Style.VisualEffects.Transform;
-                var has = IsTransformable
-                    && !string.IsNullOrWhiteSpace(value) && !value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+                // Any of transform, translate, rotate and scale that is not none counts, whatever it works out to (CSS Transforms 2 §3).
+                var has = IsTransformable;
                 Paint._hasTransform = has;
                 return has;
             }
         }
+
+        // Whether transform, translate, rotate and scale are all none: nearly every box, which is answered without a cache.
+        private bool HasNoTransformValue =>
+            IsNoneValue(Style.VisualEffects.Transform) && IsNoneValue(Style.VisualEffects.Translate)
+            && IsNoneValue(Style.VisualEffects.Rotate) && IsNoneValue(Style.VisualEffects.Scale);
 
 
 
@@ -2235,9 +2240,16 @@ namespace PeachBrackets.Html.Dom
     /// <summary>
     /// Holds the eight computed (overlap-reduced) corner radii for a box rectangle.
     /// </summary>
-    internal readonly struct BorderRadii
+    internal readonly struct BorderRadii : IEquatable<BorderRadii>
     {
         public readonly double TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY;
+
+        public bool Equals(BorderRadii other) =>
+            TLX == other.TLX && TLY == other.TLY && TRX == other.TRX && TRY == other.TRY && BRX == other.BRX && BRY == other.BRY && BLX == other.BLX && BLY == other.BLY;
+
+        public override bool Equals(object? obj) => obj is BorderRadii other && Equals(other);
+
+        public override int GetHashCode() => HashCode.Combine(TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY);
 
         public BorderRadii(double tlX, double tlY, double trX, double trY,
                            double brX, double brY, double blX, double blY)

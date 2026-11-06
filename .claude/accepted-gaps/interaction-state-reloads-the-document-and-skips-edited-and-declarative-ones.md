@@ -27,7 +27,8 @@ Not done at all:
 
 - A document built with the declarative API (`CreateAsync`) has no source to parse again, and a document
   whose text was edited in place would lose its edits; both report `Applied = false` with a reason.
-- Transitions and animations a state change would start are not run: the document jumps to the new style.
+- With `AnimationsEnabled`, the transitions a state change that loads the document again would start are run (the style of each element is kept before and compared after); see
+  [the live playback gaps](css-animation-live-playback-limitations.md) for the ones that are not. A document without `AnimationsEnabled` jumps to the new style.
 - Nothing is rolled back when the fast path gives up halfway: the tree it leaves is discarded by the
   reload that follows, so it is never read. Do not add a code path that gives up and then keeps the tree.
 

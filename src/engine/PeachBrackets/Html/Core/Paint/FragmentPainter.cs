@@ -617,6 +617,11 @@ namespace PeachBrackets.Html.Paint
             {
                 // Needs transparency the document forbids: painted as an opaque bitmap in its place.
             }
+            else if (filter is { RequiresRaster: false, HasColorMatrix: false, OpacityMultiplier: >= 1.0 } && box.ActualMixBlendMode == BlendMode.Normal
+                     && TryPaintRetained(g, fragment))
+            {
+                // Animated by transform or opacity: what it paints is kept as a layer, and only drawn again here with the current opacity.
+            }
             else if ((filter.RequiresRaster || (g.PrefersRasterGroups && NeedsGroupCompositing(box, filter))) &&
                      PaintRasterized(g, fragment, filter))
             {

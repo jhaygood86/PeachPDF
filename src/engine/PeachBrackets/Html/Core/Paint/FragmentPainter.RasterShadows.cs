@@ -1,3 +1,4 @@
+using System;
 using PeachDrawing.Core;
 using PeachBrackets.Html.Dom;
 using PeachDrawing;
@@ -77,6 +78,76 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         /// <returns>false, having painted nothing, when the canvas turns the layer down.</returns>
         private static bool TryPaintBlurredOutsetShadowNative(Canvas g, CssBox box, Rect borderBox, Rect shadowRect,
+            BorderRadii shadowRadii, double blur, PaintColor color, Rect bounds)
+        {
+            if (box.HtmlContainer is { } container && TryPaintCachedOutsetShadow(g, container.ShadowLayers, box, borderBox, shadowRect, shadowRadii, blur, color))
+                return true;
+
+            return PaintOutsetShadowLayer(g, box, borderBox, shadowRect, shadowRadii, blur, color, bounds);
+        }
+
+        // A shadow bigger than this (in layout units, each way) is not worth a texture of its own.
+        private const double MaxCachedShadowExtent = 3000;
+
+        /// <summary>
+        /// Paints the shadow from a layer made once for its shape: the blur is the same wherever the box is, so a box that moves (or another with the same shadow) draws
+        /// the layer again, translated, instead of blurring a layer anew. False when the canvas cannot keep one or the shadow is too large.
+        /// </summary>
+        private static bool TryPaintCachedOutsetShadow(Canvas g, ShadowLayerCache cache, CssBox box, Rect borderBox, Rect shadowRect, BorderRadii shadowRadii, double blur, PaintColor color)
+        {
+            var margin = 1.5 * blur;
+            if (shadowRect.Width + (2 * margin) > MaxCachedShadowExtent || shadowRect.Height + (2 * margin) > MaxCachedShadowExtent)
+                return false;
+
+            var scale = g.TransformScale;
+            var rounded = box.IsRounded;
+            var key = new ShadowKey(shadowRect.Width, shadowRect.Height, blur, borderBox.X - shadowRect.X, borderBox.Y - shadowRect.Y, borderBox.Width, borderBox.Height, color,
+                shadowRadii, rounded, rounded ? ShadowCornerRadii(box, borderBox, spread: 0) : default, Math.Round(scale.X, 2), Math.Round(scale.Y, 2));
+
+            if (!cache.TryGet(key, g, out var layer))
+            {
+                // Recorded with the shadow's corner at the origin, in the coordinates the layer was made in.
+                var local = new Rect(-margin, -margin, shadowRect.Width + (2 * margin), shadowRect.Height + (2 * margin));
+                if (g.CreateRetainedLayer(local) is not { } made)
+                    return false;
+
+                try
+                {
+                    var shadowAtOrigin = new Rect(0, 0, shadowRect.Width, shadowRect.Height);
+                    var boxAtOrigin = new Rect(key.BoxX, key.BoxY, borderBox.Width, borderBox.Height);
+                    if (!PaintOutsetShadowLayer(made.Recorder, box, boxAtOrigin, shadowAtOrigin, shadowRadii, blur, color, local))
+                    {
+                        made.Dispose();
+                        return false;
+                    }
+
+                    made.Seal();
+                }
+                catch
+                {
+                    made.Dispose();
+                    throw;
+                }
+
+                cache.Add(key, made);
+                layer = made;
+            }
+
+            g.PushTransform(new System.Numerics.Matrix3x2(1, 0, 0, 1, (float)shadowRect.X, (float)shadowRect.Y));
+            try
+            {
+                layer.Draw(g);
+            }
+            finally
+            {
+                g.PopTransform();
+            }
+
+            return true;
+        }
+
+        // The shadow shape in a blurred layer under a clip that leaves out the border box, drawn straight onto the canvas.
+        private static bool PaintOutsetShadowLayer(Canvas g, CssBox box, Rect borderBox, Rect shadowRect,
             BorderRadii shadowRadii, double blur, PaintColor color, Rect bounds)
         {
             var ppp = g.PixelsPerPoint;

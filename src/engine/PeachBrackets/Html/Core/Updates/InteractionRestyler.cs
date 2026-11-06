@@ -25,12 +25,42 @@ namespace PeachBrackets.Html.Updates
         // Properties whose value only ever changes how a box is painted. A change to any other property stays out of the fast path.
         private static readonly HashSet<string> PaintOnly = new(StringComparer.OrdinalIgnoreCase)
         {
-            "color", "background-color", "caret-color", "accent-color", "cursor", "opacity", "mix-blend-mode", "transform", "filter", "box-shadow", "text-shadow",
+            "color", "background-color", "caret-color", "accent-color", "cursor", "opacity", "mix-blend-mode", "visibility", "transform", "translate", "rotate", "scale", "filter", "box-shadow", "text-shadow",
             "text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness", "text-underline-offset",
             "outline-color", "outline-style", "outline-width", "outline-offset",
             "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color",
             "-webkit-text-stroke-color",
         };
+
+        /// <summary>Whether a change to <paramref name="property"/> only ever changes how a box is painted, so it can be applied with no layout pass.</summary>
+        internal static bool IsPaintOnly(string property) => PaintOnly.Contains(property);
+
+        /// <summary>Whether <paramref name="property"/> is one of the four that make a box's transform: <c>transform</c>, <c>translate</c>, <c>rotate</c> and <c>scale</c>.</summary>
+        internal static bool IsTransformProperty(string property) =>
+            property.Equals("transform", StringComparison.OrdinalIgnoreCase) || property.Equals("translate", StringComparison.OrdinalIgnoreCase)
+            || property.Equals("rotate", StringComparison.OrdinalIgnoreCase) || property.Equals("scale", StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsTransformProperty(HashSet<string> names) =>
+            names.Contains("transform") || names.Contains("translate") || names.Contains("rotate") || names.Contains("scale");
+
+        // Properties that change what boxes there are or how the tree is built, which a layout pass over the boxes that exist cannot follow.
+        private static readonly HashSet<string> Structural = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "display", "position", "float", "clear", "content", "contain", "container-type", "container-name", "writing-mode", "direction", "unicode-bidi",
+            "will-change", "quotes", "counter-reset", "counter-increment", "counter-set", "all", "visibility",
+        };
+
+        /// <summary>
+        /// Whether a running animation can write <paramref name="property"/> onto the boxes that exist: a paint-only property is only repainted, and any
+        /// other that does not change the shape of the box tree is followed by a layout pass. Custom properties and the properties that build boxes are left out.
+        /// </summary>
+        internal static bool IsLiveAnimatable(string property) =>
+            PaintOnly.Contains(property)
+            || (!Structural.Contains(property) && !property.StartsWith("--", StringComparison.Ordinal)
+                && !property.StartsWith("animation", StringComparison.OrdinalIgnoreCase) && !property.StartsWith("transition", StringComparison.OrdinalIgnoreCase));
+
+        /// <summary>Whether a change to <paramref name="property"/> reaches the boxes under the one that has it (it is inherited), so they are cascaded again.</summary>
+        internal static bool InheritsToDescendants(string property) => CssPropertyRegistry.InheritedProperties.Contains(property);
 
         // Every property the registry can read back: those with an initial value (the cascade resets all of them) and those the revert snapshots read.
         private static readonly string[] AllPropertyNames =
@@ -51,7 +81,7 @@ namespace PeachBrackets.Html.Updates
         internal readonly record struct Outcome(bool Applied, string? Reason, List<DirtyRegion> DirtyRegions);
 
         // What a box paints beyond its rectangle, and how it is moved, in layout units.
-        private readonly record struct PaintExtent(double Bleed, bool HasTransform, Matrix3x2 Matrix)
+        internal readonly record struct PaintExtent(double Bleed, bool HasTransform, Matrix3x2 Matrix)
         {
             internal static PaintExtent Of(CssBox box)
             {
@@ -183,7 +213,7 @@ namespace PeachBrackets.Html.Updates
                 if (ReferenceEquals(oldStyle, box.ComputedStyle))
                     continue;
 
-                var verdict = Classify(box, oldStyle, out var names, out var transformFlip);
+                var verdict = Classify(box, oldStyle, out var names, out var transformFlip, out var changes);
                 if (verdict is not null)
                     return Fail(verdict);
 
@@ -194,10 +224,19 @@ namespace PeachBrackets.Html.Updates
                     return Fail("A transform or filter appears or goes under a box with positioned descendants, which it makes their containing block.");
 
                 InvalidatePaintCaches(box);
+
+                // A property the box's transition-* names does not snap to its new value but runs to it from the old one.
+                if (container.AnimationsEnabled && changes.Count > 0 && !PropertyFactoryHasNoTransition(box))
+                {
+                    container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(container);
+                    container.AnimationClock.BeginTransitions(box, changes);
+                    InvalidatePaintCaches(box);
+                }
+
                 var newExtent = PaintExtent.Of(box);
                 extents[box] = new ExtentChange(oldExtent.Bleed, newExtent.Bleed, oldExtent.HasTransform, newExtent.HasTransform, oldExtent.Matrix, newExtent.Matrix);
 
-                if (names.Contains("opacity") || names.Contains("transform") || names.Contains("filter") || names.Contains("mix-blend-mode"))
+                if (names.Contains("opacity") || IsTransformProperty(names) || names.Contains("filter") || names.Contains("mix-blend-mode"))
                     stackingChanged = true;
             }
 
@@ -287,10 +326,11 @@ namespace PeachBrackets.Html.Updates
         }
 
         // Says why the box's new style cannot be kept (null when it can), and which properties differ.
-        private static string? Classify(CssBox box, ComputedStyle old, out HashSet<string> names, out bool transformFlip)
+        private static string? Classify(CssBox box, ComputedStyle old, out HashSet<string> names, out bool transformFlip, out List<(string Property, string? Old, string? New)> changes)
         {
             names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             transformFlip = false;
+            changes = [];
 
             var current = box.ComputedStyle;
             if (AreasEqual(old, current))
@@ -326,15 +366,58 @@ namespace PeachBrackets.Html.Updates
                 if (name.Equals("background-color", StringComparison.OrdinalIgnoreCase) && box.HtmlTag is { Name: "html" or "body" })
                     return "The background of html and body is the page's canvas background.";
 
-                if ((name.Equals("transform", StringComparison.OrdinalIgnoreCase) || name.Equals("filter", StringComparison.OrdinalIgnoreCase))
+                if ((IsTransformProperty(name) || name.Equals("filter", StringComparison.OrdinalIgnoreCase))
                     && IsNone(previous) != IsNone(value))
                     transformFlip = true;
 
                 names.Add(name);
+                changes.Add((name, previous, value));
             }
 
             return null;
         }
+
+        /// <summary>
+        /// Every property whose value differs between <paramref name="old"/> and the style <paramref name="box"/> has now, as (property, old value, new value),
+        /// for the transitions a style change starts. Empty when the style did not change. The box ends up holding the style it had.
+        /// </summary>
+        internal static List<(string Property, string? Old, string? New)> DiffStyles(CssBox box, ComputedStyle old)
+        {
+            var changes = new List<(string, string?, string?)>();
+            var current = box.ComputedStyle;
+            if (ReferenceEquals(old, current) || AreasEqual(old, current))
+                return changes;
+
+            Dictionary<string, string?> oldValues;
+            box.AdoptComputedStyle(old);
+            try
+            {
+                oldValues = ReadAll(box);
+            }
+            finally
+            {
+                box.AdoptComputedStyle(current);
+            }
+
+            foreach (var (name, now) in ReadAll(box))
+            {
+                // A property the style does not set reads back as nothing: its value is the initial one.
+                var value = now ?? CssDefaults.GetInitialValue(name);
+                var previous = oldValues.GetValueOrDefault(name) ?? CssDefaults.GetInitialValue(name);
+                if (string.Equals(previous, value, StringComparison.Ordinal))
+                    continue;
+
+                changes.Add((name, previous, value));
+            }
+
+            // What was derived from the old style while it was read back is not the new style's.
+            box.ResetDerivedStyle();
+            return changes;
+        }
+
+        internal static bool PropertyFactoryHasNoTransition(CssBox box) => AnimationNone(box.TransitionProperty) || AnimationNone(box.TransitionDuration);
+
+        private static bool AnimationNone(string? list) => string.IsNullOrWhiteSpace(list) || list.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) || list.Trim() is "0s" or "0ms";
 
         private static bool IsNone(string? value) => string.IsNullOrEmpty(value) || value.Equals("none", StringComparison.OrdinalIgnoreCase);
 
@@ -359,6 +442,9 @@ namespace PeachBrackets.Html.Updates
             {
                 Opacity = a.VisualEffects.Opacity,
                 Transform = a.VisualEffects.Transform,
+                Translate = a.VisualEffects.Translate,
+                Rotate = a.VisualEffects.Rotate,
+                Scale = a.VisualEffects.Scale,
                 Filter = a.VisualEffects.Filter,
                 MixBlendMode = a.VisualEffects.MixBlendMode,
             });
@@ -386,7 +472,7 @@ namespace PeachBrackets.Html.Updates
         }
 
         // The values derived from the style that the setters do not clear, for the properties that may have changed.
-        private static void InvalidatePaintCaches(CssBox box)
+        internal static void InvalidatePaintCaches(CssBox box)
         {
             var style = box.DerivedStyle;
             style.InvalidateColor();

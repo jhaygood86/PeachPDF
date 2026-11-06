@@ -44,7 +44,8 @@ namespace PeachBrackets.Css
 
             if (token.Data.Is(RuleNames.FontFace)) return CreateFontFace(token);
 
-            if (token.Data.Is(RuleNames.Keyframes)) return CreateKeyframes(token);
+            // @-webkit-keyframes took the same grammar before the name was unprefixed.
+            if (token.Data.Is(RuleNames.Keyframes) || token.Data.Isi("-webkit-keyframes")) return CreateKeyframes(token);
 
             if (token.Data.Is(RuleNames.Import)) return CreateImport(token);
 
@@ -69,6 +70,8 @@ namespace PeachBrackets.Css
             if (token.Data.Is(RuleNames.FontFeatureValues)) return CreateFontFeatureValues(token);
 
             if (token.Data.Is(RuleNames.Layer)) return CreateLayer(token);
+
+            if (token.Data.Is(RuleNames.StartingStyle)) return CreateStartingStyle(token);
 
             return token.Data.Is(RuleNames.Document) ? CreateDocument(token) : CreateUnknown(token);
         }
@@ -673,6 +676,27 @@ namespace PeachBrackets.Css
             index = close + 1;
             var list = new MediaList(_parser) { MediaText = featureText };
             return new ContainerSizeTerm(list);
+        }
+
+        public Rule CreateStartingStyle(Token current)
+        {
+            var start = current.Position;
+            var token = NextToken();
+            ParseComments(ref token);
+
+            // Only the block form has a meaning, and it has no prelude.
+            if (token.Type != TokenType.CurlyBracketOpen)
+            {
+                MoveToRuleEnd(ref token);
+                return null;
+            }
+
+            var rule = new StartingStyleRule(_parser);
+            _nodes.Push(rule);
+            var end = FillRules(rule);
+            rule.StylesheetText = CreateView(start, end);
+            _nodes.Pop();
+            return rule;
         }
 
         public Rule CreateLayer(Token current)
@@ -1946,7 +1970,8 @@ namespace PeachBrackets.Css
         }
 
         private static bool IsNestableGroupRule(Token token) =>
-            token.Data.Is(RuleNames.Media) || token.Data.Is(RuleNames.Supports) || token.Data.Is(RuleNames.Container) || token.Data.Is(RuleNames.Layer);
+            token.Data.Is(RuleNames.Media) || token.Data.Is(RuleNames.Supports) || token.Data.Is(RuleNames.Container) || token.Data.Is(RuleNames.Layer)
+            || token.Data.Is(RuleNames.StartingStyle);
 
         /// <summary>The style rule whose declaration block is being filled, when the construct being read sits directly in one.</summary>
         private StyleRule NearestStyleRule()

@@ -16,6 +16,7 @@ internal sealed class Win2dResourceCounts
     private int _textBitmaps;
     private int _lcdLayers;
     private int _clipSurfaces;
+    private int _retainedLayers;
 
     /// <summary>Clip layers (<c>CanvasActiveLayer</c>) pushed and not yet popped.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -41,6 +42,11 @@ internal sealed class Win2dResourceCounts
     /// <summary>Render targets geometry clips draw into (see <c>Win2dCanvas.BeginSurfaceClip</c>) and have not yet composited and released.</summary>
     public int ClipSurfaces => Volatile.Read(ref _clipSurfaces);
 
+    /// <summary>Retained layers (textures kept for an animation to draw again) created and not yet disposed.</summary>
+    public int RetainedLayers => Volatile.Read(ref _retainedLayers);
+
+    public void RetainedLayer(int delta) => Interlocked.Add(ref _retainedLayers, delta);
+
     public void ClipSurface(int delta) => Interlocked.Add(ref _clipSurfaces, delta);
 
     public void LcdLayer(int delta) => Interlocked.Add(ref _lcdLayers, delta);
@@ -58,5 +64,5 @@ internal sealed class Win2dResourceCounts
     public void Session(int delta) => Interlocked.Add(ref _sessions, delta);
 
     /// <summary>The sum of everything still alive.</summary>
-    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets + ClipSurfaces;
+    public int Total => Layers + Tiles + CommandLists + Sessions + NativeTargets + ClipSurfaces + RetainedLayers;
 }

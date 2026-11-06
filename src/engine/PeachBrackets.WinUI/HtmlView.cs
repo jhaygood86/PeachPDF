@@ -313,6 +313,7 @@ public sealed partial class HtmlView : UserControl
     private void OnUnloaded()
     {
         _loaded = false;
+        StopAnimationLoop();
         _loadVersion++;
         _reflowTimer?.Stop();
         StopWatchingDisplayScale();
@@ -489,6 +490,7 @@ public sealed partial class HtmlView : UserControl
         RefreshAccessibility(document);
         _canvas.Invalidate();
         RaiseOutsideMeasure(() => DocumentLoaded?.Invoke(this, EventArgs.Empty));
+        EnsureAnimationLoop();
     }
 
     // Tells the document which part of it is showing, so a fixed box stays where it was put in the view and a sticky one follows the top of it. An
@@ -504,6 +506,9 @@ public sealed partial class HtmlView : UserControl
             _scroller.ViewportWidth / zoom / PixelsPerPoint, _scroller.ViewportHeight / zoom / PixelsPerPoint);
 
         var moved = document.SetViewport(viewport);
+
+        // An animation on a scroll or view timeline is due a step for this scroll, however still the frame loop was.
+        EnsureAnimationLoop();
 
         // A sticky box that began to stick or was released changed layer: the surface under the scroller has to be painted again where it was.
         if (document.ViewportLayersChanged)
@@ -582,6 +587,8 @@ public sealed partial class HtmlView : UserControl
         ColorScheme = ActualTheme == ElementTheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
         DevicePixelRatio = CurrentDevicePixelRatio(),
+        AnimationsEnabled = PlaysAnimations,
+        Preferences = PlaysAnimations ? new UserPreferences { ReducedMotion = false } : null,
     };
 
     private static InputCapabilities DetectInput()
@@ -669,6 +676,8 @@ public sealed partial class HtmlView : UserControl
         }
         finally
         {
+            // Painting is when an image box first has its image, which may be one that moves.
+            EnsureAnimationLoop();
             HtmlViewDiagnostics.Stop(started, regions.Sum(r => r.Width * r.Height), regions.Count);
             HtmlViewDiagnostics.Trace?.Invoke($"RegionsInvalidated: {regions.Count} regions {string.Join(" ", regions.Select(r => $"[{r.Left:F0},{r.Top:F0} {r.Width:F0}x{r.Height:F0}]"))} took {HtmlViewDiagnostics.MillisecondsSince(started):F1} ms");
         }
@@ -676,47 +685,62 @@ public sealed partial class HtmlView : UserControl
 
     private void PaintRegions(CanvasVirtualControl sender, List<Windows.Foundation.Rect> regions, HtmlDocument? document, Win2dRenderContext? context)
     {
-        foreach (var region in regions)
+        // The surface hands over what was invalidated cut into bands and tiles (a few rectangles arrive as a couple of dozen), and a session has to be
+        // opened on every one of them. The document is painted once for each cluster of regions that lie together and each region takes its part of that.
+        var clusters = HtmlViewLogic.ClusterRegions(regions.ConvertAll(r => new PeachDrawing.Core.Rect(r.Left, r.Top, r.Width, r.Height)));
+
+        foreach (var cluster in clusters)
         {
-            if (_restyling && document is not null && !_viewportMode)
+            CanvasRenderTarget? shared = null;
+            var bound = ToRect(cluster.Bounds);
+
+            foreach (var index in cluster.Members)
             {
-                // The layout is being rebuilt, so there is nothing to paint yet. A drawing session must not even be opened on the region: the surface
-                // does not keep what a region showed once a session is opened on it, so opening one and drawing nothing blanks it. What is shown stays,
-                // and the region is painted again once the restyle has finished.
-                _paintDeferred = true;
-                continue;
+                var region = regions[index];
+                if (_restyling && document is not null && !_viewportMode)
+                {
+                    // The layout is being rebuilt, so there is nothing to paint yet. A drawing session must not even be opened on the region: the surface
+                    // does not keep what a region showed once a session is opened on it, so opening one and drawing nothing blanks it. What is shown stays,
+                    // and the region is painted again once the restyle has finished.
+                    _paintDeferred = true;
+                    continue;
+                }
+
+                using var session = sender.CreateDrawingSession(region);
+
+                if (document is null || context is null || _viewportMode)
+                {
+                    session.Clear(_viewportMode ? Microsoft.UI.Colors.Transparent : _pageBackground);
+                    continue;
+                }
+
+                if (_pageBackground.A != 255)
+                {
+                    // A page with transparency has no opaque surface to blend text against on the GPU.
+                    session.Clear(_pageBackground);
+                    PaintPages(session, region, document, context, null, region.Left, region.Top, drawingIntoSurface: true);
+                    continue;
+                }
+
+                // The cluster is painted into a render target of its own and then put on the surface: text is blended against the pixels already drawn
+                // by a pixel shader on the GPU, which needs a target it can read (the surface's session cannot be), and reading the pixels behind each
+                // word back from the GPU instead costs far more than a scroll can afford.
+                if (shared is null)
+                {
+                    shared = RegionTarget(sender, bound);
+                    using var offscreen = shared.CreateDrawingSession();
+                    offscreen.Clear(_pageBackground);
+                    PaintPages(offscreen, bound, document, context, shared, bound.Left, bound.Top, drawingIntoSurface: false);
+                }
+
+                session.Blend = CanvasBlend.Copy;
+                session.DrawImage(shared, (float)region.Left, (float)region.Top,
+                    new Windows.Foundation.Rect(region.Left - bound.Left, region.Top - bound.Top, region.Width, region.Height));
             }
-
-            using var session = sender.CreateDrawingSession(region);
-
-            if (document is null || context is null || _viewportMode)
-            {
-                session.Clear(_viewportMode ? Microsoft.UI.Colors.Transparent : _pageBackground);
-                continue;
-            }
-
-            if (_pageBackground.A != 255)
-            {
-                // A page with transparency has no opaque surface to blend text against on the GPU.
-                session.Clear(_pageBackground);
-                PaintPages(session, region, document, context, null, region.Left, region.Top, drawingIntoSurface: true);
-                continue;
-            }
-
-            // The region is painted into a render target of its own and then put on the surface: text is blended against the pixels already drawn
-            // by a pixel shader on the GPU, which needs a target it can read (the surface's session cannot be), and reading the pixels behind each
-            // word back from the GPU instead costs far more than a scroll can afford.
-            var target = RegionTarget(sender, region);
-            using (var offscreen = target.CreateDrawingSession())
-            {
-                offscreen.Clear(_pageBackground);
-                PaintPages(offscreen, region, document, context, target, region.Left, region.Top, drawingIntoSurface: false);
-            }
-
-            session.Blend = CanvasBlend.Copy;
-            session.DrawImage(target, (float)region.Left, (float)region.Top, new Windows.Foundation.Rect(0, 0, region.Width, region.Height));
         }
     }
+
+    private static Windows.Foundation.Rect ToRect(PeachDrawing.Core.Rect rect) => new(rect.X, rect.Y, rect.Width, rect.Height);
 
     // The part of each page that lies in a region, painted into a session whose origin is the region's top-left (or the surface's, when it is the surface's).
     private void PaintPages(CanvasDrawingSession session, Windows.Foundation.Rect region, HtmlDocument document, Win2dRenderContext context, CanvasRenderTarget? target,
@@ -767,8 +791,13 @@ public sealed partial class HtmlView : UserControl
             return current;
         }
 
+        // A region that grows every frame (a box whose height animates pushes everything below it) would otherwise make a new texture each time: the target
+        // never gets smaller while it is in use, and grows in steps, so a run of growing regions makes a few.
+        var kept = _regionTarget is { } old && ReferenceEquals(old.Device, sender.Device) && old.Dpi == sender.Dpi ? old.Size : default;
+        var newWidth = HtmlViewLogic.TargetExtent(width, (float)kept.Width);
+        var newHeight = HtmlViewLogic.TargetExtent(height, (float)kept.Height);
         _regionTarget?.Dispose();
-        _regionTarget = new CanvasRenderTarget(sender, Math.Max(width, 512), Math.Max(height, 512), sender.Dpi,
+        _regionTarget = new CanvasRenderTarget(sender, newWidth, newHeight, sender.Dpi,
             Windows.Graphics.DirectX.DirectXPixelFormat.B8G8R8A8UIntNormalized, CanvasAlphaMode.Ignore);
         return _regionTarget;
     }

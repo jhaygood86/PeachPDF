@@ -75,11 +75,11 @@ public class CascadeLayerAtRuleCollectionTests
     [Fact]
     public async Task EnumerateRulesRecursive_SkipsAtRulesNestedInAFalseSupportsBlock()
     {
-        // transition-duration parses in the CSS-OM but PeachPDF never renders transitions, so this condition
+        // text-justify parses in the CSS-OM but nothing renders it, so this condition
         // is false - the @property inside must not be collected (its var() below falls back, not to the
         // registered initial-value).
         const string css =
-            "@supports (transition-duration: 1s) { @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
+            "@supports (text-justify: inter-word) { @property --x { syntax: \"<color>\"; initial-value: red; inherits: false; } }";
 
         var cssData = await CssData.Parse(new HtmlRenderContext(), css, combineWithDefault: false);
         var all = cssData.EnumerateRulesRecursive().ToList();
