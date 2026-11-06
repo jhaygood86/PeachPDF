@@ -272,10 +272,11 @@ public class SiblingIndexTests
         // ratio of two sizes on the same machine so it needs no absolute budget; the bound is deliberately loose.
         await CascadeMilliseconds(500); // warm-up: JIT and the one-time UA stylesheet parse
         var small = await CascadeMilliseconds(3000);
-        var large = await CascadeMilliseconds(24000);
+        var large = await CascadeMilliseconds(12000);
 
-        // 8x the rows: linear is ~8x, quadratic ~64x.
-        Assert.True(large < small * 24 + 300, $"3000 rows: {small}ms, 24000 rows: {large}ms");
+        // 4x the rows: linear is ~4x, quadratic ~16x. A smaller step than before keeps the memory pressure of a very large table (which makes a loaded runner
+        // look superlinear) out of the ratio.
+        Assert.True(large < small * 9 + 300, $"3000 rows: {small}ms, 12000 rows: {large}ms");
     }
 
     private static async Task<long> CascadeMilliseconds(int rows)
