@@ -36,6 +36,22 @@ public class AbsolutelyPositionedBoxWithFloatTests
         Assert.True(WordsOf(t).Max(w => w.Right) < c.Location.X + 75, "the words run from the container's edge");
     }
 
+    // A page-float value is computed to none as well: the box was collected as a page float and reserved its height at the top of the page,
+    // which moved the container and the text down although the box takes no room.
+    [Theory]
+    [InlineData("float:top")]
+    [InlineData("float:bottom")]
+    [InlineData("float:top-bottom")]
+    [InlineData("float:snap")]
+    public async Task AbsolutelyPositionedBoxWithAPageFloat_TakesNoRoomAtTheTopOfThePage(string pageFloat)
+    {
+        var (_, _, without) = await LayoutAsync("");
+        var (_, a, withBox) = await LayoutAsync($"<div id='a' style='position:absolute;{pageFloat};top:75pt;left:37.5pt;width:75pt;height:20pt'></div>");
+
+        Assert.False(a.IsPageFloated);
+        Assert.Equal(without.Location.Y, withBox.Location.Y, 1);
+    }
+
     // A box that is only positioned relatively keeps its float.
     [Fact]
     public async Task RelativelyPositionedFloat_StaysAFloat()
