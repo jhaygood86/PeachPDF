@@ -213,6 +213,19 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(r[Red].Y, r[Blue].Top, 1);
         }
 
+        // CSS 2.1 §9.7: float computes to none on an absolutely positioned box, so the text beside it starts where it would without the box.
+        [Theory]
+        [InlineData("position:absolute;float:left")]
+        [InlineData("position:fixed;float:left")]
+        public async Task TextBesideAnAbsolutelyPositionedBoxWithFloat_StartsAtTheContainersEdge(string style)
+        {
+            var r = await RenderAsync(
+                "<div style='position:relative;width:300pt;height:150pt'>" +
+                $"<div style='{style};width:75pt;height:52.5pt;background:#f00'></div><div><span style='background:#0f0'>text</span></div></div>");
+
+            Assert.Equal(r[Red].X, r[Lime].X, 1);
+        }
+
         [Fact]
         public async Task RightFloatThatFitsBesideAnInlineBlock_StaysOnTheLine()
         {

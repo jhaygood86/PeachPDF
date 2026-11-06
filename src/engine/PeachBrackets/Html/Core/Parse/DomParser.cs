@@ -1835,6 +1835,15 @@ namespace PeachBrackets.Html.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 _ => BlockifyInlineLevel(box.Display)
             };
+
+            // CSS 2.1 §9.7: `float` computes to `none` on an absolutely or fixed positioned box. Coerced here, as for a flex or grid item below,
+            // because IsFloated/IsPageFloated are read all over layout: a box that was out of flow by position and still answered "I float"
+            // was found by the float scans, so the lines beside it were narrowed for a box that takes no room in them (text at x=100
+            // beside an absolutely positioned box with `float: left`, where a browser has x=0).
+            if (box.IsFloated || box.IsPageFloated)
+            {
+                box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
+            }
         }
 
         /// <summary>
