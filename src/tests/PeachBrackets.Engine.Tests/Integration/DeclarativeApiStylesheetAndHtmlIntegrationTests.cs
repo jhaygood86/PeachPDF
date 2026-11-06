@@ -150,6 +150,34 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.InRange(box!.ActualPaddingTop, 7, 9);
         }
 
+        // CSS 2.1 §9.7 on the declarative path too, which never runs the HTML cascade: an absolutely positioned box is blockified and its
+        // float computed to none (the text beside it was narrowed as beside a float).
+        [Theory]
+        [InlineData(".abs { position: absolute; float: left; width: 75pt; height: 52.5pt }")]
+        [InlineData(".abs { position: absolute; display: inline; float: left; width: 75pt; height: 52.5pt }")]
+        [InlineData(".abs { position: fixed; float: right; width: 75pt; height: 52.5pt }")]
+        public async Task AbsolutelyPositionedBoxWithFloat_IsNotAFloatOnTheDeclarativePath(string rule)
+        {
+            var stylesheet = await new PdfGenerator().ParseStyleSheet(".wrap { position: relative; width: 300pt; height: 150pt } " + rule);
+            CssBox? abs = null;
+
+            await BuildAndLayoutPage(page =>
+            {
+                page.Content(container =>
+                {
+                    var parent = (ContainerBuilder)container.Class("wrap");
+                    parent.Column(column =>
+                    {
+                        abs = ((ContainerBuilder)column.Item().Class("abs")).Node.Box;
+                        ((ContainerBuilder)column.Item()).Text("text");
+                    });
+                });
+            }, stylesheet);
+
+            Assert.False(abs!.IsFloated, "float computes to none on an absolutely positioned box");
+            Assert.Equal(Keywords.Block, abs.DerivedStyle.ActualDisplay);
+        }
+
         [Fact]
         public async Task DescendantSelector_MatchesAcrossDeclarativelyBuiltAncestorAndChild()
         {

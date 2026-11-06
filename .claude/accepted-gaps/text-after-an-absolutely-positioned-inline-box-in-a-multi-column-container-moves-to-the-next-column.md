@@ -1,0 +1,3 @@
+# Text after an absolutely positioned inline box in a multi-column container moves to the next column
+
+`DomParser.JoinsTheInlineRun` joins an out-of-flow child to the inline run around it through `JoinsAsOutOfFlow`, which deliberately refuses an absolutely positioned child of a multi-column container, so `aaa <span style="position:absolute"></span> bbb` becomes two anonymous blocks and "bbb" starts the next column (x=210 where Chrome has x=31, tracking issue #2247). A box that also said `float: left` used to be joined through `IsFloated` and stayed in the run; with `float` computing to `none` on a positioned box it takes the same path as one without.

@@ -1695,6 +1695,10 @@ namespace PeachBrackets.Html
                 DomParser.ApplyDeclarativeStylesheet(root, CssData, media, RenderContext, DisplayContentsShells);
             }
 
+            // Step 10 of the HTML cascade, which this path never runs: a positioned box is blockified and its float computed to none once
+            // the builder's and the stylesheet's styles are final.
+            DomParser.BlockifyPositionedBoxes(root);
+
             // Mirrors DomParser.GenerateCssTree's own ordering (AssignBidiLevels, then the tree walk that
             // calls ParseToWords on every text box) - see this method's own <paramref name="root"/> remarks
             // for why the order matters.

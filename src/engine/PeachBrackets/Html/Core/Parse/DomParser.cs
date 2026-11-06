@@ -1589,7 +1589,8 @@ namespace PeachBrackets.Html.Parse
             // 9. Resolve var() references now that every custom property's final cascaded value is known
             ResolveDeferredVarProperties(valueParser, box, pendingVarProperties);
 
-            // 10. Blockify an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7): its
+            // 10. Blockify an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7), whose `float`
+            // also computes to `none`: its
             // computed display's inline-level outer type is coerced to the block-level equivalent. Without
             // this a box whose display is (or defaults to) inline — e.g. a `::before` with no explicit
             // display — would stay inline+in-flow even with `position: absolute`, so it never becomes
@@ -1812,13 +1813,27 @@ namespace PeachBrackets.Html.Parse
         }
 
         /// <summary>
+        /// Runs <see cref="BlockifyPositionedBox"/> over a declaratively built tree: the declarative path never runs the HTML cascade, so step 10 of
+        /// it (blockify an absolutely or fixed positioned box and compute its <c>float</c> to <c>none</c>) is applied once its styles are final.
+        /// A box flagged <see cref="CssBox.IsFragmentStyled"/> went through a real cascade of its own and is skipped, but its children are visited.
+        /// </summary>
+        internal static void BlockifyPositionedBoxes(CssBox box)
+        {
+            if (!box.IsFragmentStyled) BlockifyPositionedBox(box);
+
+            foreach (var child in box.Boxes)
+                BlockifyPositionedBoxes(child);
+        }
+
+        /// <summary>
         /// Blockifies an absolutely/fixed-positioned box (CSS 2.1 §9.7 / CSS Display 3 §2.7): its inline-level
         /// outer display type is coerced to the block-level equivalent (<c>inline</c>/<c>inline-block</c> →
         /// <c>block</c>, <c>inline-flex</c> → <c>flex</c>, <c>inline-table</c> → <c>table</c>, a table-internal
-        /// display such as <c>table-row</c> or <c>table-cell</c> → <c>block</c>). Only
-        /// <c>position: absolute</c>/<c>fixed</c> are handled here; floats are also blockified per spec but are
-        /// left as-is (PeachPDF's float layout already treats them block-like, and changing that is out of
-        /// scope for this fix).
+        /// display such as <c>table-row</c> or <c>table-cell</c> → <c>block</c>), and its <c>float</c> is
+        /// computed to <c>none</c> (§9.7, <see cref="ComputeFloatToNone"/>). Only
+        /// <c>position: absolute</c>/<c>fixed</c> are handled here; the <c>display</c> of a floated box is also
+        /// blockified per spec but is left as-is (PeachPDF's float layout already treats a float block-like, and
+        /// changing that is out of scope).
         /// </summary>
         private static void BlockifyPositionedBox(CssBox box)
         {
@@ -1835,6 +1850,33 @@ namespace PeachBrackets.Html.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Block, DisplayMode.Block),
                 _ => BlockifyInlineLevel(box.Display)
             };
+
+            // CSS 2.1 §9.7: `float` computes to `none` on an absolutely or fixed positioned box. A box that was out of flow by position and
+            // still answered "I float" was found by the float scans: the lines beside it were narrowed for a box that takes no room in them
+            // (text at x=100 beside an absolutely positioned box with `float: left`, where a browser has x=0; a right float with no insets
+            // pushed the text below it), and a page-float value (`float: top`) reserved its height at the top of the page.
+            ComputeFloatToNone(box);
+        }
+
+        /// <summary>
+        /// Computes <c>float</c> to <c>none</c> for a box it has no effect on: an absolutely or fixed positioned box (CSS 2.1 §9.7) or a flex or
+        /// grid item (css-flexbox-1 §4). Coerced in the computed style rather than ignored by one reader, because IsFloated/IsPageFloated are read
+        /// all over layout - CssLayoutEngine.FloatBox, sibling walks, line-box wrap-around - and a box that is out of the flow for its own
+        /// reason and still answers "yes, I float" gets both treatments. Covers every IsFloated/IsPageFloated value
+        /// (left/right/inside/outside/inline-start/inline-end/top/bottom/top-bottom/snap) for that reason, not just left/right.
+        /// </summary>
+        /// <remarks>
+        /// <see cref="Floating.Footnote"/> is deliberately not touched: it is not a layout float but the marker <c>DetachFootnoteBodies</c> acts
+        /// on after the cascade, replacing the footnote source with its inline call and moving the body to the note area. An absolutely
+        /// positioned box is never a footnote source (<c>IsFootnoteSource</c> refuses it), so for one the stored value changes nothing; a flex
+        /// or grid item that is a footnote source is the container's item through that call.
+        /// </remarks>
+        private static void ComputeFloatToNone(CssBox box)
+        {
+            if (box.IsFloated || box.IsPageFloated)
+            {
+                box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
+            }
         }
 
         /// <summary>
@@ -1922,23 +1964,12 @@ namespace PeachBrackets.Html.Parse
                 _ => BlockifyInlineLevel(box.Display)
             };
 
-            // `float` has no effect on a flex/grid item (css-flexbox-1 §4). Coerced to `none` here rather
-            // than merely ignored by the item-collection filter, because IsFloated/IsPageFloated are read
-            // all over layout - CssLayoutEngine.FloatBox, sibling walks, line-box wrap-around - and a box
-            // that is an item *and* still answers "yes, I float" gets both treatments: the item was
-            // collected, then displaced by the float machinery, landing on its own row with a hole beside
-            // it (or, for a page-float value, simply dropped - IsPageFloated is folded into IsOutOfFlow the
-            // same way IsFloated is, so the item-collection filter excludes it and nothing else lays it
-            // out). Covers every IsFloated/IsPageFloated value (left/right/inside/outside/top/bottom/
-            // top-bottom/snap) for that reason, not just left/right.
-            // Floating.Footnote is deliberately not touched: DetachFootnoteBodies replaces a footnote source
-            // with its inline call, which is then the container's item, and the body moves to the note area
-            // (a footnote is not a plain float, so css-flexbox-1 section 3's "float has no effect" is not
-            // what governs it).
-            if (box.IsFloated || box.IsPageFloated)
-            {
-                box.Float = CssProperty<Floating>.FromValue(Keywords.None, Floating.None);
-            }
+            // `float` has no effect on a flex/grid item (css-flexbox-1 §4). A box that is an item *and* still answers "yes, I float" got both
+            // treatments: the item was collected, then displaced by the float machinery, landing on its own row with a hole beside it (or, for a
+            // page-float value, simply dropped - IsPageFloated is folded into IsOutOfFlow the same way IsFloated is, so the item-collection
+            // filter excludes it and nothing else lays it out). A footnote source is the container's item through its inline call
+            // (DetachFootnoteBodies), which is why Floating.Footnote is left alone.
+            ComputeFloatToNone(box);
         }
 
         /// <summary>
