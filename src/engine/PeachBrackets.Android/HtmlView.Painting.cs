@@ -40,12 +40,50 @@ public sealed partial class HtmlView
     {
         _tilesStale = true;
         RequestPaint();
+
+        // What changed may have started a transition.
+        EnsureAnimationLoop();
+    }
+
+    /// <summary>
+    /// Asks for the tiles that hold any of the regions an animation frame repainted to be painted again, and for nothing else: the rest of the page, and
+    /// the boxes drawn over it, are kept as they are.
+    /// </summary>
+    private void InvalidateTiles(IReadOnlyList<PeachBrackets.Updates.DirtyRegion> regions)
+    {
+        // The graphics thread reads the tiles while it paints.
+        lock (_documentLock)
+        {
+            if (_tiles is not { } tiles)
+                return;
+
+            var scale = Scale;
+            var contentWidth = _contentWidth * scale;
+            var contentHeight = _contentHeight * scale;
+            foreach (var region in regions)
+            {
+                if ((uint)region.PageIndex >= (uint)_pageTops.Length)
+                    continue;
+
+                var (left, top, width, height) = AnimationLogic.RegionToPixels(region.Bounds, _pageTops[region.PageIndex], PixelsPerPoint, scale);
+                foreach (var key in TileGrid.Visible(left, top, width, height, contentWidth, contentHeight))
+                    tiles.Remove(key);
+            }
+        }
     }
 
     private void PaintFrame(SKSurface surface, SKImageInfo info, GRContext? gpu)
     {
         var canvas = surface.Canvas;
         canvas.Clear(PageBackground);
+
+        // The document is stepped by the main thread (see HtmlView.Animation.cs) and painted by the graphics thread: one at a time.
+        lock (_documentLock)
+            PaintFrameLocked(canvas, info, gpu);
+    }
+
+    private void PaintFrameLocked(SKCanvas canvas, SKImageInfo info, GRContext? gpu)
+    {
         var document = _document;
         var context = _context;
         if (document is null || context is null)
@@ -61,6 +99,9 @@ public sealed partial class HtmlView
         // A page whose background is attached to the viewport changes under every scroll step, so it cannot be held in tiles.
         if (gpu is not null && !document.HasViewportBackgrounds && TryPaintTiles(canvas, info, gpu, document, originX, originY))
         {
+            // The boxes that only move or fade are not in the tiles: each frame draws them over, as a texture the canvas keeps for each, and the boxes the
+            // viewport holds in place are over those.
+            PaintWindow(canvas, document, originX, originY, info.Width, info.Height, DocumentPaintLayer.Animated);
             PaintWindow(canvas, document, originX, originY, info.Width, info.Height, DocumentPaintLayer.ViewportAttached);
             return;
         }

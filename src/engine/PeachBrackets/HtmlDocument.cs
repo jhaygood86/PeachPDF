@@ -552,7 +552,28 @@ public sealed partial class HtmlDocument : IDisposable
             return;
         }
 
+        if (layer == DocumentPaintLayer.Animated)
+        {
+            if (_container.Continuous && _container.AnimationClock?.OverlayFor(painter.Fragmentainers) is { } plan)
+            {
+                _container.View.Layer = layer;
+                try
+                {
+                    painter.PaintAnimated(fragmentainer, plan.Roots, () => new CanvasLease(canvas));
+                }
+                finally
+                {
+                    _container.View.Layer = DocumentPaintLayer.All;
+                }
+            }
+
+            return;
+        }
+
         _container.View.Layer = layer;
+        if (layer == DocumentPaintLayer.Content && _container.Continuous)
+            _container.OverlayBoxes = _container.AnimationClock?.OverlayFor(painter.Fragmentainers)?.Boxes;
+
         try
         {
             await _painter.PaintPageAsync(
@@ -568,6 +589,7 @@ public sealed partial class HtmlDocument : IDisposable
         finally
         {
             _container.View.Layer = DocumentPaintLayer.All;
+            _container.OverlayBoxes = null;
         }
     }
 
@@ -2096,6 +2118,7 @@ public sealed partial class HtmlDocument : IDisposable
         _annotations = null;
 
         var before = _container.FragmentTree?.Fragmentainers ?? [];
+        var overlayBefore = clock.CurrentOverlay?.Boxes;
         await LayOutAsync(measuringCanvas);
 
         // What moved is repainted; when the pages cannot be compared they are repainted whole.
@@ -2113,7 +2136,11 @@ public sealed partial class HtmlDocument : IDisposable
         // What painted differently without moving (a fade, an animated image, an svg) is not in the layout diff: the frame's own regions are added to it.
         regions.AddRange(frame.DirtyRegions);
 
-        return frame with { DirtyRegions = regions };
+        // A box the animated layer drew before the layout and the content layer now draws (or the other way round) is repainted where it is.
+        if (_container.FragmentTree is { } laidOut)
+            regions.AddRange(clock.OverlayFlipRegions(overlayBefore, laidOut.Fragmentainers));
+
+        return frame with { DirtyRegions = regions, OverlayChanged = true };
     }
 
     // Tells the clock how the document is scrolled, for the animations that run on a scroll or view timeline.

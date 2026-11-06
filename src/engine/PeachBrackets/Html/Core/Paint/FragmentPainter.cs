@@ -147,6 +147,19 @@ namespace PeachBrackets.Html.Paint
                 PaintFragment(g, fragment);
         }
 
+        /// <summary>
+        /// Paints only the animated boxes drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>). Each is in a plain chain of ancestors (see
+        /// <c>AnimationClock.OverlayFor</c>): nothing above it clips, transforms or composites it, so it is painted as it is when reached from the page.
+        /// </summary>
+        internal void PaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        {
+            _pageRoot = fragmentainer.Root;
+            _slot = fragmentainer.SlotIndex;
+            _recordsPlacements = true;
+            foreach (var fragment in roots)
+                PaintFragment(g, fragment);
+        }
+
         internal void Paint(Canvas g, FragmentainerFragment fragmentainer)
         {
             var pageClip = container.PageClipOverride ?? container.PageBoxRect;
@@ -427,6 +440,10 @@ namespace PeachBrackets.Html.Paint
             // A box the viewport holds in place is drawn by its own layer: the scrolled surface leaves it out, so it is never drawn into content
             // that moves before the box can be put back.
             if (container.View.Layer == DocumentPaintLayer.Content && container.View.IsAttached(box))
+                return;
+
+            // The same for a box the animated layer draws: it is composited over the content each frame, so the content must not hold a copy of it.
+            if (container.View.Layer == DocumentPaintLayer.Content && container.OverlayBoxes is { } overlay && overlay.Contains(box))
                 return;
 
             try

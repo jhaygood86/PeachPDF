@@ -128,10 +128,31 @@ device or emulator without a working GL driver. On the hardware:
   is heading for, so the frame that reaches it finds it there. What is attached to the viewport (a fixed or stuck box) is painted over the tiles on
   every frame. A change of what the page shows (a pointer state, a selection, a focus ring, a caret, a form value) paints the tiles again, and so
   does a change of zoom, which is a different grid.
+- **Animations stay off the tiles.** With `AnimationsEnabled`, a box that only moves or fades is not in the tiles: each frame draws it over them as a texture
+  (`DocumentPaintLayer.Animated`, see [the animated layer](peachbrackets.md#animations-and-transitions)), under the fixed and stuck boxes. What else an animation repaints
+  (a colour, a shadow, a layout property) drops only the tiles that hold the changed regions; the rest stay.
 - **A page whose background is attached to the viewport** (`background-attachment: fixed`) changes under every scroll step, so it is painted
   straight, on the hardware but without tiles.
 - **Shadows, filters and `backdrop-filter`** are layers with effects that Skia composes itself, and an image Skia can decode is decoded into the
   texture it uploads (see [Images](peachdrawing-skia.md#images)).
+
+## Animations
+
+Set `AnimationsEnabled` and the view plays the document's CSS animations, transitions and animated images, stepping the document on the display's own frame clock
+(`Choreographer`) only while something is playing, so an idle page costs nothing; the clock is paused when the view is detached and starts again on its own when a
+control call (`HtmlDocument.GetAnimations()`), a scroll on a scroll timeline or a state change starts one. Nothing plays when the system removes animations (the animator
+duration scale is 0), and `prefers-reduced-motion` then reports `reduce`. Changing `AnimationsEnabled` loads the document again. `AnimationEvents` reports the animation and
+transition events of each frame. See [Animations and transitions](peachbrackets.md#animations-and-transitions); the demo's Animation showcases show them, and
+`adb shell am start ... --es showcase screen_animation_keyframes` opens one.
+
+## Tablets, laptops and resizable windows
+
+The view lays the document out for the width it is given and follows every change of it, so a free-form window (a tablet, ChromeOS, a Googlebook) that is resized while the app
+runs lays the page out again where it is. It takes a mouse, trackpad and keyboard as well as touch: hover and `:hover` rules, pointer icons for `cursor`, the wheel,
+Ctrl with plus and minus to zoom, Tab to move focus, and the arrow, Page and Home/End keys to scroll. An app that wants to survive a resize without a restart declares the
+configuration changes it handles (`screenSize`, `smallestScreenSize`, `screenLayout`, `orientation`, `density`, `keyboard`, `keyboardHidden`, `navigation`, `uiMode`) and is
+`resizeableActivity`; one that also runs on a laptop-class device with no touch screen marks `android.hardware.touchscreen` as not required. The demo does all of this and, from
+a window 840 dp wide (the Expanded window size class), puts the list of showcases in a pane beside the page.
 
 ## Limits of this version
 
@@ -151,7 +172,7 @@ The view reports the screen density (`DisplayMetrics.density`) as the document's
 
 ## The demo
 
-`src/examples/PeachBrackets.Android.Example` is a showcase browser: every showcase of the PDF test harness and the screen-only ones (see the [WinUI demo](peachbrackets-winui.md#the-demo)) in an `HtmlView`, with a panel of the knobs the view has: the width and height of the box it sits in, `PageBackground`, the input devices and the theme (Android 12 and later). The view lays its document out as one continuous surface and tells it where it is scrolled and zoomed, so fixed and sticky boxes follow the finger. The build runs the harness with `--html-only` and packs the documents into the APK as assets.
+`src/examples/PeachBrackets.Android.Example` is a showcase browser: every showcase of the PDF test harness and the screen-only ones (see the [WinUI demo](peachbrackets-winui.md#the-demo)) in an `HtmlView`, with a panel of the knobs the view has: `AnimationsEnabled`, the width and height of the box it sits in, `PageBackground`, the input devices and the theme (Android 12 and later). The view lays its document out as one continuous surface and tells it where it is scrolled and zoomed, so fixed and sticky boxes follow the finger. The build runs the harness with `--html-only` and packs the documents into the APK as assets.
 
 ## Trying it, on an emulator
 

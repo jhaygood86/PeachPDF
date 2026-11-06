@@ -288,7 +288,7 @@ canvas.PopTransform();
 `Draw` places the layer under the target's current transform and takes the opacity of that one draw; the content is not recorded again. `CanDraw(target)` says whether a canvas can
 still draw it (a lost graphics device or another document makes the answer no, and the layer is recorded anew). `CreateRetainedLayer` returns `null` for an empty region or a
 canvas that cannot make one. The default is built from `CreateTile`, so every `Canvas` gets one and a draw replays the tile; `Win2dCanvas` overrides it to keep a texture on the GPU,
-so a draw is one textured quad.
+and so does `SkiaCanvas` (the group is drawn once into a bitmap and kept as an image, uploaded to the render context's `GpuContext` when it has one), so a draw is one textured quad.
 
 
 ## Links and destinations

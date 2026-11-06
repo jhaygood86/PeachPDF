@@ -152,6 +152,7 @@ resizes boxes (`width`, `margin`, `top`, `font-size`, flex and grid sizing) play
 cost follows the size of the document; text is positioned to an eighth of a pixel while it plays (`Win2dRenderContext.TextPositionSteps`), so text that moves each frame does not need a new bitmap on the device for every position. Nothing plays when Windows' "Animation effects" setting is off, and `prefers-reduced-motion` then reports `reduce`. Changing
 `AnimationsEnabled` loads the document again.
 
+A box that only moves or fades is not painted into the surface under the scroller: the layer over it draws it every frame (`DocumentPaintLayer.Animated`), so such a frame repaints nothing of the page.
 Animations on a scroll or view timeline follow the view's own scrolling, and the view steps the document on every scroll step for them (the demo has a showcase). `AnimationEvents` reports the animation and transition events of each frame (see [Events and controlling the animations](peachbrackets.md#events-and-controlling-the-animations)), and `view.Document.GetAnimations()` lists what is running to pause, seek or cancel it.
 
 Limits: a `background-image` GIF shows its first frame; what an animated box paints is recorded at the resolution the view draws at, so a box that scales up a lot is resampled.

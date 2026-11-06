@@ -529,7 +529,7 @@ public sealed partial class HtmlView : UserControl
     }
 
     // The layer over the scroller: the boxes the viewport holds in place, drawn where the viewport is, so they are already where they belong on the
-    // frame the scroller moved.
+    // frame the scroller moved - and the animated boxes that are drawn apart from the page (DocumentPaintLayer.Animated).
     private void OnOverlayDraw(CanvasControl sender, CanvasDrawEventArgs args)
     {
         if (_document is not { } document || _context is not { } context || _scrollMode == HtmlViewScrollMode.Disabled || document.Pages.Count == 0)
@@ -542,6 +542,9 @@ public sealed partial class HtmlView : UserControl
         using var canvas = Win2dCanvas.FromSession(context, session, new PeachDrawing.Core.Rect(0, 0, size.WidthPoints * PixelsPerPoint, size.HeightPoints * PixelsPerPoint));
         if (!_viewportMode)
         {
+            // The boxes that only move or fade are drawn here, each a composite of what the canvas keeps for it, so a frame that animates them paints nothing of
+            // the surface under; the boxes the viewport holds are over them.
+            document.PaintPageAsync(0, canvas, DocumentPaintLayer.Animated).GetAwaiter().GetResult();
             document.PaintPageAsync(0, canvas, DocumentPaintLayer.ViewportAttached).GetAwaiter().GetResult();
             return;
         }

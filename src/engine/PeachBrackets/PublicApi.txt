@@ -454,6 +454,7 @@ PeachBrackets.DocumentPage : struct
   property Int32 Index { get; init; }
 PeachBrackets.DocumentPaintLayer : enum Int32
   All = 0
+  Animated = 3
   Content = 1
   ViewportAttached = 2
 PeachBrackets.FontDefaults : static class
@@ -942,6 +943,7 @@ PeachBrackets.Updates.AnimationFrame : struct
   method virtual String ToString()
   property Boolean IsRunning { get; init; }
   property Boolean LayoutChanged { get; init; }
+  property Boolean OverlayChanged { get; init; }
   property IReadOnlyList<AnimationEventInfo> Events { get; init; }
   property IReadOnlyList<DirtyRegion> DirtyRegions { get; init; }
 PeachBrackets.Updates.AnimationPlayState : enum Int32

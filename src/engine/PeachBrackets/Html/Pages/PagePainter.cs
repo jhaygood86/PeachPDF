@@ -73,6 +73,13 @@ namespace PeachBrackets.Html.Pages
             _container.PerformPaintAttached(attachedCanvas, fragmentainer);
         }
 
+        /// <summary>Paints only the animated boxes drawn apart from the page; <paramref name="lease"/> supplies the canvas.</summary>
+        public void PaintAnimated(FragmentainerFragment fragmentainer, IReadOnlyList<PeachBrackets.Html.Fragments.BoxFragment> roots, Func<CanvasLease> lease)
+        {
+            using var animatedCanvas = lease();
+            _container.PerformPaintAnimated(animatedCanvas, fragmentainer, roots);
+        }
+
         /// <summary>
         /// Paints one page. <paramref name="lease"/> supplies a canvas for each stage; <paramref name="shift"/> moves everything painted
         /// afterwards by (x, y) points until the returned scope is disposed (<see langword="null"/> when there is nothing to undo).
