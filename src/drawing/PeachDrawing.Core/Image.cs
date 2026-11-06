@@ -71,5 +71,28 @@ namespace PeachDrawing.Core
 
         /// <summary>The vertical pixel density the image's file records, in pixels per inch; see <see cref="ResolutionDpiX"/>.</summary>
         public virtual double? ResolutionDpiY => null;
+
+        /// <summary>
+        /// How many frames the image has: 1 for a still image, more for an animated one (an animated GIF, WebP or PNG). A canvas that
+        /// shows animation draws <see cref="CurrentFrame"/>; one that does not draws the first frame.
+        /// </summary>
+        public virtual int FrameCount => 1;
+
+        /// <summary>How long frame <paramref name="index"/> is shown before the next one, or <see cref="TimeSpan.Zero"/> for a still image.</summary>
+        /// <param name="index">the frame, from 0 to <see cref="FrameCount"/> - 1</param>
+        public virtual TimeSpan GetFrameDuration(int index) => TimeSpan.Zero;
+
+        /// <summary>How many times an animated image plays through before it stops on its last frame; 0 means forever. 1 for a still image.</summary>
+        public virtual int LoopCount => 1;
+
+        /// <summary>
+        /// The frame a canvas draws, from 0 to <see cref="FrameCount"/> - 1. Whoever plays the animation (see <c>PeachBrackets.HtmlDocument.AdvanceAnimations</c>)
+        /// sets it, and every use of the image shows the same frame. Always 0 for a still image, and setting it there does nothing.
+        /// </summary>
+        public virtual int CurrentFrame
+        {
+            get => 0;
+            set { }
+        }
     }
 }

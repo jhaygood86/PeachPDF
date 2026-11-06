@@ -249,6 +249,8 @@ internal sealed class DemoWindow : Window
                 };
                 ApplySettings();
             }));
+        Knob(panel, "AnimationsEnabled", "Whether CSS animations, transitions and animated images play. transform and opacity are kept as textures on the GPU and drawn again each frame.",
+            Toggle(_settings.AnimationsEnabled, v => { _settings.AnimationsEnabled = v; ApplySettings(); }));
         Knob(panel, "AllowNetworkAccess", "Whether the document may load images, style sheets and fonts from the web. Off by default; data: URIs and files always load.",
             Toggle(_settings.AllowNetworkAccess, v => { _settings.AllowNetworkAccess = v; ApplySettings(); }));
         Knob(panel, "SelectionColor", "The colour behind selected text. Select some text to see it.",

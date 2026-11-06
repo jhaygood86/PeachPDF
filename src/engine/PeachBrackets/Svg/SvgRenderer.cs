@@ -49,7 +49,7 @@ namespace PeachBrackets.Svg
                 return;
 
             // What a filter reading BackgroundImage shows depends on what was painted behind it, which differs at every placement.
-            if (document.ReadsBackdrop)
+            if (document.ReadsBackdrop || document.IsTimeVarying)
             {
                 RenderInto(g, document, viewportRect);
                 return;

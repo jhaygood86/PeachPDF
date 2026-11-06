@@ -94,6 +94,7 @@ public sealed partial class HtmlDocument : IDisposable
 
         var container = new HtmlContainerInt(renderContext);
         var document = new HtmlDocument(container, renderContext);
+        container.AnimationWakeRequested = () => document.AnimationsWoke?.Invoke(document, EventArgs.Empty);
 
         try
         {
@@ -118,6 +119,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.PageNumberOffset = options.PageNumberOffset;
             container.TotalPagesOverride = options.TotalPagesOverride;
             container.AnimationProgress = options.AnimationProgress;
+            container.AnimationsEnabled = options.AnimationsEnabled && options.AnimationProgress is null;
             container.InteractiveForms = options.CollectFormFields;
             container.PaintFormControls = options.PaintFormControls;
             document.ApplyTextOptions(options);
@@ -150,6 +152,9 @@ public sealed partial class HtmlDocument : IDisposable
                 resolvedSheet.Height - ((container.MarginTop + container.MarginBottom) / unitsPerPoint));
             container.PageSize = Utils.ToPixels(content, unitsPerPoint);
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+
+            // An element with a @starting-style runs from it as the document first appears.
+            document.StartEntryTransitions();
 
             return document;
         }
@@ -245,6 +250,9 @@ public sealed partial class HtmlDocument : IDisposable
                 sheet.Height - ((container.MarginTop + container.MarginBottom) / unitsPerPoint));
             container.PageSize = Utils.ToPixels(content, unitsPerPoint);
             container.Location = new PaintPoint(container.MarginLeft, container.MarginTop);
+
+            // An element with a @starting-style runs from it as the document first appears.
+            document.StartEntryTransitions();
 
             return document;
         }
@@ -440,6 +448,9 @@ public sealed partial class HtmlDocument : IDisposable
     {
         _ = Pages;
         _viewport = viewport;
+
+        // What runs on a scroll or view timeline is due a step, though no time passes.
+        _container.AnimationClock?.NotifyViewportChanged();
         return ApplyViewport();
     }
 
@@ -621,6 +632,10 @@ public sealed partial class HtmlDocument : IDisposable
         // A page whose fragments are not there (the layout is being replaced) has nothing at the point.
         if ((uint)pageIndex >= (uint)fragmentainers.Count)
             return new DocumentCursor(CursorShape.Default, []);
+        // A scrollbar is the system's arrow, whatever the box under it asks for.
+        if (pageIndex == 0 && _container.View.HasScrollContainers(_container) && _container.View.ScrollbarAt(_container, x * _unitsPerPoint, y * _unitsPerPoint) is not null)
+            return new DocumentCursor(CursorShape.Default, []);
+
         return CursorQueries.At(_container, fragmentainers[pageIndex], x, y);
     }
 
@@ -1332,10 +1347,15 @@ public sealed partial class HtmlDocument : IDisposable
         // A form change waiting for its restyle is not in the tags the cascade would read until the source is loaded again.
         if (_options.IncrementalRestyle && !FullRestyleForced && _restyleOrdinals.Count == 0 && _container.FragmentTree is { } tree)
         {
+            // The attempt restyles boxes in place before it finds out it cannot keep the change (a property that moves something), which is then loaded again:
+            // what the elements looked like is taken before, for the transitions that load starts.
+            _styleSnapshot = _container.AnimationsEnabled ? SnapshotStyles(_container.Root) : null;
             var outcome = InteractionRestyler.TryApply(_container, previous, next, changed, tree.Fragmentainers);
             LastRestyleFallbackReason = outcome.Reason;
             if (outcome.Applied)
             {
+                _styleSnapshot = null;
+
                 // Nothing was loaded again: whatever form change was waiting for a restyle has its answer, as it has after a reload.
                 _restyleOrdinals.Clear();
                 if (VerifyIncrementalRestyle)
@@ -1469,8 +1489,19 @@ public sealed partial class HtmlDocument : IDisposable
         _container.PageSize = Utils.ToPixels(sheet, units);
         _container.CssPageSize = null;
 
-        _container.AttributeOverrides = _formChanges;
+        // What each element looked like, so that a property whose value is different afterwards can run to it (CSS Transitions 1 §3: a style change event).
+        var before = _styleSnapshot ?? (_container.AnimationsEnabled ? SnapshotStyles(_container.Root) : null);
+        _styleSnapshot = null;
+
+        // A reload makes new boxes; a scroll container is found again by its place in the source, so it stays where it was scrolled to.
+        var scrolled = _container.View.TakeScrollByOrdinal();
+
+        _container.AttributeOverrides = AttributeOverridesForReload();
         await _container.ReparseAsync();
+
+        // The new styles are in; the boxes have not been laid out, so a property that starts at its old value is laid out at it.
+        if (before is not null)
+            StartTransitionsFrom(before);
 
         var resolvedSheet = _container.CssPageSize ?? sheet;
         var content = new Size(
@@ -1486,6 +1517,7 @@ public sealed partial class HtmlDocument : IDisposable
         _container.ResetSemanticTree();
         _annotations = null;
         await LayOutAsync(measuringCanvas);
+        _container.View.RestoreScrollByOrdinal(_container, scrolled);
     }
 
     private static CssBox? FindByOrdinal(CssBox? box, int ordinal)
@@ -1989,6 +2021,156 @@ public sealed partial class HtmlDocument : IDisposable
         }
 
         return Math.Max(0, top - margin - padding);
+    }
+
+    /// <summary>
+    /// Moves the document's animations, transitions and animated images to <paramref name="now"/> and says what looks different. Call it once per
+    /// frame while <see cref="HasRunningAnimations"/> is true (the first call starts the clock) and repaint <see cref="AnimationFrame.DirtyRegions"/>.
+    /// Needs <see cref="HtmlDocumentOptions.AnimationsEnabled"/>; without it nothing is ever running.
+    /// </summary>
+    /// <param name="now">a time that only increases, such as the host's frame timestamp; only the differences between calls matter</param>
+    /// <returns>whether anything is still playing, and the regions to repaint</returns>
+    public AnimationFrame AdvanceAnimations(TimeSpan now)
+    {
+        ThrowIfDisposed();
+        if (!_container.AnimationsEnabled)
+            return WithScrollTweens(new AnimationFrame(false, []), now);
+
+        var clock = _container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(_container);
+        FeedScroll(clock);
+        return WithScrollTweens(clock.Advance(now.TotalSeconds, _container.FragmentTree?.Fragmentainers ?? []), now);
+    }
+
+    /// <summary>
+    /// Moves the document's animations, transitions and animated images to <paramref name="now"/> like <see cref="AdvanceAnimations(TimeSpan)"/>, and also
+    /// plays the properties that move or resize boxes (<c>width</c>, <c>margin</c>, <c>top</c>, <c>font-size</c>, flex and grid sizing, ...): when a step changes one
+    /// the document is laid out again on <paramref name="measuringCanvas"/>, for as long as it runs, so the layout of a frame is exactly what a document with
+    /// those values would have. The result then has <see cref="AnimationFrame.LayoutChanged"/> set and every page to repaint.
+    /// </summary>
+    /// <remarks>
+    /// Only a <see cref="MediaType.Screen"/> document without container queries follows layout properties; any other plays the properties that do not change
+    /// layout, as <see cref="AdvanceAnimations(TimeSpan)"/> does. The cost of a layout step is the cost of laying out the whole document.
+    /// </remarks>
+    /// <param name="now">a time that only increases, such as the host's frame timestamp</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text; nothing is drawn on it</param>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    public ValueTask<AnimationFrame> AdvanceAnimationsAsync(TimeSpan now, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        return AdvanceAnimationsCoreAsync(now, measuringCanvas);
+    }
+
+    /// <summary>
+    /// The synchronous form of <see cref="AdvanceAnimationsAsync"/>. The document must have been loaded with <see cref="HtmlDocumentOptions.SynchronousOnly"/>.
+    /// </summary>
+    /// <param name="now">a time that only increases, such as the host's frame timestamp</param>
+    /// <param name="measuringCanvas">a canvas made by the same render context, used to measure text; nothing is drawn on it</param>
+    /// <exception cref="ArgumentNullException"><paramref name="measuringCanvas"/> is null</exception>
+    /// <exception cref="InvalidOperationException">the document was not loaded with <see cref="HtmlDocumentOptions.SynchronousOnly"/>, or tried to do something asynchronous</exception>
+    public AnimationFrame AdvanceAnimations(TimeSpan now, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        RequireSynchronousDocument();
+        return CompleteSynchronously(AdvanceAnimationsCoreAsync(now, measuringCanvas));
+    }
+
+    private async ValueTask<AnimationFrame> AdvanceAnimationsCoreAsync(TimeSpan now, Canvas measuringCanvas) =>
+        WithScrollTweens(await AdvanceClockAsync(now, measuringCanvas), now);
+
+    private async ValueTask<AnimationFrame> AdvanceClockAsync(TimeSpan now, Canvas measuringCanvas)
+    {
+        ThrowIfDisposed();
+        if (!_container.AnimationsEnabled)
+            return new AnimationFrame(false, []);
+
+        var clock = _container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(_container);
+        FeedScroll(clock);
+        var frame = clock.Advance(now.TotalSeconds, _container.FragmentTree?.Fragmentainers ?? [], allowLayout: _pages is not null);
+        if (!frame.LayoutChanged)
+            return frame;
+
+        // What was worked out from the old layout is not true of the new one; the text itself is the same, so the selection stands.
+        _container.ClipReport.Words.Clear();
+        _textRuns = null;
+        _container.ResetSemanticTree();
+        _annotations = null;
+
+        var before = _container.FragmentTree?.Fragmentainers ?? [];
+        await LayOutAsync(measuringCanvas);
+
+        // What moved is repainted; when the pages cannot be compared they are repainted whole.
+        List<DirtyRegion>? regions = null;
+        if (_container.FragmentTree is { } after)
+            regions = PeachBrackets.Html.Animation.AnimationClock.DirtyRegionsForLayout(_container, before, after.Fragmentainers);
+
+        if (regions is null)
+        {
+            regions = new List<DirtyRegion>(_pages!.Count);
+            for (var page = 0; page < _pages.Count; page++)
+                regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
+        }
+
+        // What painted differently without moving (a fade, an animated image, an svg) is not in the layout diff: the frame's own regions are added to it.
+        regions.AddRange(frame.DirtyRegions);
+
+        return frame with { DirtyRegions = regions };
+    }
+
+    // Tells the clock how the document is scrolled, for the animations that run on a scroll or view timeline.
+    private void FeedScroll(PeachBrackets.Html.Animation.AnimationClock clock)
+    {
+        var viewport = Viewport;
+        if (_pages is { Count: > 0 } pages)
+            clock.SetScroll(viewport, pages[0].WidthPoints, pages[0].HeightPoints);
+        else
+            clock.SetScroll(viewport, viewport.Width, viewport.Height);
+    }
+
+    /// <summary>How many retained layers the painter has recorded for animated boxes so far. For tests.</summary>
+    internal int RetainedLayersRecorded => _container.AnimationClock?.RecordedLayers ?? 0;
+
+    /// <summary>
+    /// Raised when the animation control API (<see cref="DocumentAnimation"/>: play, seek, finish, cancel, reverse) makes a clock that had stopped run again, so a host that
+    /// stopped stepping the document when <see cref="HasRunningAnimations"/> went false knows to start again. Not raised while the clock is running, or from a step.
+    /// It may be raised on whichever thread made the call.
+    /// </summary>
+    public event EventHandler? AnimationsWoke;
+
+    /// <summary>
+    /// Whether an animation, a transition or an animated image is playing, so <see cref="AdvanceAnimations(TimeSpan)"/> should be called on the next frame.
+    /// True before the first step of a document that has animations to start.
+    /// </summary>
+    public bool HasRunningAnimations =>
+        (_container.AnimationsEnabled && (_container.AnimationClock is null || _container.AnimationClock.NeedsStep)) || _container.View.HasTweens;
+
+    /// <summary>
+    /// The CSS animations and transitions that are running on the document, as <see cref="DocumentAnimation"/> objects to look at and control (Web Animations
+    /// 1 §6, <c>document.getAnimations()</c>): play, pause, seek, change the speed, finish, reverse or cancel one. Empty without <see cref="HtmlDocumentOptions.AnimationsEnabled"/>.
+    /// </summary>
+    /// <returns>the animations, in the order of the elements they are on</returns>
+    public IReadOnlyList<DocumentAnimation> GetAnimations()
+    {
+        ThrowIfDisposed();
+        if (!_container.AnimationsEnabled)
+            return [];
+
+        _container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(_container);
+        return _container.AnimationClock.GetAnimations(null);
+    }
+
+    /// <summary>The animations and transitions running on one element (<c>element.getAnimations()</c>); see <see cref="GetAnimations()"/>.</summary>
+    /// <param name="element">the element, from <see cref="GetElement"/> or <see cref="GetElementAt(int, double, double)"/></param>
+    /// <returns>the animations on it</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    public IReadOnlyList<DocumentAnimation> GetAnimations(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ThrowIfDisposed();
+        if (!_container.AnimationsEnabled || element.Box.HtmlTag is not { SourceOrdinal: >= 0 } tag)
+            return [];
+
+        _container.AnimationClock ??= new PeachBrackets.Html.Animation.AnimationClock(_container);
+        return _container.AnimationClock.GetAnimations(tag.SourceOrdinal);
     }
 
     /// <summary>Releases the document's cached images and layout state.</summary>

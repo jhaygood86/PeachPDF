@@ -131,13 +131,23 @@ namespace PeachBrackets.Engine.Tests.CSS
         }
 
         // The old oracle (Property.TrySetValue) is a proven mismatch in both directions:
-        // transition-duration parses fine in the CSS-OM but Layer B never dispatches it (false positive);
+        // transition-duration was a false positive while transitions were not rendered, and is a true positive now (see the next test);
         // fill isn't registered in the CSS-OM's PropertyFactory at all despite full SVG support
         // (false negative). These two prove DeclarationCondition.Check() now gets both right.
         [Fact]
-        public void SupportsTransitionDurationRule_NoLongerFalsePositive()
+        public void SupportsTransitionDurationRule_IsTrue_NowThatTransitionsAreRendered()
         {
             var source = @"@supports (transition-duration: 1s) { }";
+            var sheet = ParseStyleSheet(source);
+            var supports = (SupportsRule)sheet.Rules[0];
+            Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
+        }
+
+        // text-justify parses in the CSS-OM but nothing renders it, so it is the probe for a property that is not supported.
+        [Fact]
+        public void SupportsTextJustifyRule_IsFalse_BecauseNothingRendersIt()
+        {
+            var source = @"@supports (text-justify: inter-word) { }";
             var sheet = ParseStyleSheet(source);
             var supports = (SupportsRule)sheet.Rules[0];
             Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
@@ -403,7 +413,7 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.True(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
-        // PeachPDF's CSS-OM parses transition-property/transition-delay fine (it understands the
+        // PeachPDF's CSS-OM parses text-justify fine (it understands the
         // grammar), but the render engine never dispatches either - they aren't authored into
         // css-properties.json (see CLAUDE.md's generator section), so both branches of the OR are
         // false and the AND short-circuits false regardless of `transform` (which genuinely is
@@ -412,28 +422,28 @@ namespace PeachBrackets.Engine.Tests.CSS
         [Fact]
         public void SupportsTransitionPropertyOrDelayAndTransformFrontBracketRule()
         {
-            var source = @"@supports ((transition-property: color) or
-           (transition-delay: 1s)) and
+            var source = @"@supports ((text-justify: inter-word) or
+           (text-justify: inter-character)) and
           (transform: rotate(10deg)) { }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.Equal("((transition-property: color) or (transition-delay: 1s)) and (transform: rotate(10deg))", supports.ConditionText);
+            Assert.Equal("((text-justify: inter-word) or (text-justify: inter-character)) and (transform: rotate(10deg))", supports.ConditionText);
             Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 
         [Fact]
         public void SupportsTransitionPropertyOrDelayAndTransformBackBracketRule()
         {
-            var source = @"@supports (transition-property: color) or
-           ((transition-delay: 1s) and
+            var source = @"@supports (text-justify: inter-word) or
+           ((text-justify: inter-character) and
           (transform: rotate(10deg))) { }";
             var sheet = ParseStyleSheet(source);
             Assert.Equal(1, sheet.Rules.Length);
             Assert.IsType<SupportsRule>(sheet.Rules[0]);
             var supports = (SupportsRule)sheet.Rules[0];
-            Assert.Equal("(transition-property: color) or ((transition-delay: 1s) and (transform: rotate(10deg)))", supports.ConditionText);
+            Assert.Equal("(text-justify: inter-word) or ((text-justify: inter-character) and (transform: rotate(10deg)))", supports.ConditionText);
             Assert.False(supports.Condition.Check(new PeachPDF.Rendering.HtmlRenderContext()));
         }
 

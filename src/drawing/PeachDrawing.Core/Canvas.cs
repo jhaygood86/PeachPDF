@@ -345,6 +345,23 @@ namespace PeachDrawing.Core
             });
         }
 
+        /// <summary>
+        /// Begins a <see cref="RetainedLayer"/>: a group of drawing recorded once that can be drawn many times, each with its own opacity and
+        /// under the transform this canvas has then. A canvas backed by a GPU keeps it as a texture, so drawing it again costs a composite
+        /// and not a repaint.
+        /// </summary>
+        /// <param name="bounds">the region the layer covers, in this canvas's coordinates</param>
+        /// <returns>the layer, or <see langword="null"/> when this canvas cannot make one (as with <see cref="CreateTile"/>); the caller then
+        /// paints straight onto this canvas each time</returns>
+        /// <remarks>The default builds the layer from <see cref="CreateTile"/>, so it works on any canvas; a canvas with a better way overrides it.</remarks>
+        public virtual RetainedLayer? CreateRetainedLayer(Rect bounds)
+        {
+            if (!(bounds.Width > 0) || !(bounds.Height > 0) || CreateTile(bounds.Width, bounds.Height) is not { } tile)
+                return null;
+
+            return new TileRetainedLayer(bounds, tile.Graphics, tile.Image, TileCacheOwner);
+        }
+
         /// <summary>Whether this canvas can apply <see cref="LayerEffect"/>s in <see cref="BeginLayer"/>. False unless a subclass overrides it along with <see cref="ApplyLayerEffects"/>.</summary>
         protected virtual bool SupportsLayerEffects => false;
 

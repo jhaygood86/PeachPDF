@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 
 namespace PeachBrackets.Css
@@ -311,6 +311,26 @@ namespace PeachBrackets.Css
                 new FunctionValueConverter(FunctionNames.RotateZ, WithArgs(TransformAngleConverter)));
         });
 
+        // CSS Transforms 2 §3: translate: <length-percentage> [ <length-percentage> <length>? ]?
+        public static readonly IValueConverter TranslateIndividualConverter = Construct(() =>
+            WithOrder(LengthOrPercentConverter.Required(), LengthOrPercentConverter.Option(), LengthConverter.Option()));
+
+        // scale: [ <number> | <percentage> ]{1,3}
+        public static readonly IValueConverter ScaleIndividualConverter = Construct(() =>
+        {
+            var factor = NumberConverter.Or(PercentConverter);
+            return WithOrder(factor.Required(), factor.Option(), factor.Option());
+        });
+
+        // rotate: <angle> | [ x | y | z | <number>{3} ] && <angle>
+        public static readonly IValueConverter RotateIndividualConverter = Construct(() =>
+        {
+            var angle = TransformAngleConverter.Required();
+            var number = NumberConverter.Required();
+            var axisNumbers = WithOrder(number, number, number);
+            return TransformAngleConverter.Or(WithAny(Map.RotationAxes.ToConverter().Required(), angle)).Or(WithAny(axisNumbers, angle));
+        });
+
         public static readonly IValueConverter SkewTransformConverter = Construct(() =>
         {
             var angle = TransformAngleConverter.Required();
@@ -411,6 +431,24 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter VisibilityConverter = Map.Visibilities.ToConverter();
         public static readonly IValueConverter PointerEventsConverter = Map.PointerEventsModes.ToConverter();
         public static readonly IValueConverter PlayStateConverter = Map.PlayStates.ToConverter();
+        public static readonly IValueConverter TransitionBehaviorConverter = Map.TransitionBehaviors.ToConverter();
+
+        // Scroll-driven animations: each is stored as its own text and read through TimelineGrammar, which these validate against.
+        public static readonly IValueConverter ScrollBehaviorConverter = new GrammarValueConverter(ScrollGrammar.IsScrollBehavior);
+        public static readonly IValueConverter OverscrollBehaviorConverter = new GrammarValueConverter(ScrollGrammar.IsOverscrollBehavior);
+        public static readonly IValueConverter ScrollSnapTypeConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapType(text, out _, out _));
+        public static readonly IValueConverter ScrollSnapAlignConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapAlign(text, out _, out _));
+        public static readonly IValueConverter ScrollSnapStopConverter = new GrammarValueConverter(ScrollGrammar.IsSnapStop);
+        public static readonly IValueConverter ScrollbarWidthConverter = new GrammarValueConverter(ScrollGrammar.IsScrollbarWidth);
+        public static readonly IValueConverter ScrollbarColorConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseScrollbarColor(text, out _, out _));
+        public static readonly IValueConverter ScrollbarGutterConverter = new GrammarValueConverter(ScrollGrammar.IsScrollbarGutter);
+        public static readonly IValueConverter AnimationTimelineConverter = new GrammarValueConverter(text => TimelineGrammar.TryParseTimeline(text, out _));
+        public static readonly IValueConverter TimelineNameConverter = new GrammarValueConverter(TimelineGrammar.IsTimelineName);
+        public static readonly IValueConverter TimelineScopeEntryConverter = new GrammarValueConverter(TimelineGrammar.IsTimelineScopeEntry);
+        public static readonly IValueConverter TimelineAxisConverter = new GrammarValueConverter(TimelineGrammar.IsAxis);
+        public static readonly IValueConverter TimelineInsetConverter = new GrammarValueConverter(text => TimelineGrammar.TryParseInset(text, out _, out _));
+        public static readonly IValueConverter RangeEdgeConverter = new GrammarValueConverter(text => TimelineGrammar.TryParseRangeEdge(text, out _));
+        public static readonly IValueConverter AnimationCompositionConverter = Map.AnimationCompositions.ToConverter();
         public static readonly IValueConverter FontVariantCapsConverter = Map.FontVariantCapsKeywords.ToConverter();
         public static readonly IValueConverter FontVariantPositionConverter = Map.FontVariantPositionKeywords.ToConverter();
         public static readonly IValueConverter FontVariantEmojiConverter = Map.FontVariantEmojiKeywords.ToConverter();

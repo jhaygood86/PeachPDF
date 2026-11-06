@@ -10,7 +10,8 @@
             AnimatableConverter.Option().For(PropertyNames.TransitionProperty), // 0
             TimeConverter.Option().For(PropertyNames.TransitionDuration), // 1
             TransitionConverter.Option().For(PropertyNames.TransitionTimingFunction), // 2
-            TimeConverter.Option().For(PropertyNames.TransitionDelay) // 3
+            TimeConverter.Option().For(PropertyNames.TransitionDelay), // 3
+            TransitionBehaviorConverter.Option().For(PropertyNames.TransitionBehavior) // 4
         ).FromList().OrDefault();
 
         internal TransitionProperty()

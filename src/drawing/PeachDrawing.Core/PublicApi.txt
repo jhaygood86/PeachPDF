@@ -72,6 +72,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Object AddDestinationLink(Rect bounds, String destinationName, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
   method virtual Void AddDestination(String name, Double top)
   method virtual Void AddSemanticRegion(Rect bounds, SemanticInfo info)
@@ -469,12 +470,16 @@ PeachDrawing.Core.ISvgGlyphPainter : interface
 PeachDrawing.Core.Image : abstract class
   method abstract Void Dispose()
   method virtual PixelBuffer? GetPixels()
+  method virtual TimeSpan GetFrameDuration(Int32 index)
   property Boolean Interpolate { get; set; }
   property Double Height { get; }
   property Double Width { get; }
   property Double? ResolutionDpiX { get; }
   property Double? ResolutionDpiY { get; }
+  property Int32 CurrentFrame { get; set; }
   property Int32 ExifOrientation { get; }
+  property Int32 FrameCount { get; }
+  property Int32 LoopCount { get; }
 PeachDrawing.Core.ImageSampling : enum Int32
   Automatic = 0
   Bicubic = 3
@@ -816,6 +821,14 @@ PeachDrawing.Core.RenderContext : abstract class
   property Int64 MaxRasterPixels { get; set; }
   property RUri BaseUri { get; }
   property TextHinting TextHinting { get; set; }
+PeachDrawing.Core.RetainedLayer : abstract class
+  method abstract Boolean CanDraw(Canvas target)
+  method abstract Void Dispose()
+  method abstract Void Draw(Canvas target, Double opacity = 1)
+  method abstract Void Seal()
+  property Boolean IsSealed { get; }
+  property Canvas Recorder { get; }
+  property Rect Bounds { get; }
 PeachDrawing.Core.SemanticInfo : sealed class
   ctor(String Role)
   method SemanticInfo <Clone>$()

@@ -135,6 +135,11 @@ public sealed partial class HtmlView
             RefreshAccessibility(document);
 
         UpdateEditing();
+
+        // The scroll containers around what took the focus show it first, and the tree is taken again for the places it is at now.
+        if (focusedId is not null && ScrollContainersTo(document, focusedId))
+            RefreshAccessibility(document);
+
         if (focusedId is not null && _accessibilityTree?.FindById(focusedId) is { } focused)
         {
             BringIntoView(focused);
@@ -144,6 +149,8 @@ public sealed partial class HtmlView
 
     private void Repaint(PeachBrackets.Updates.UpdateResult result)
     {
+        // A change of state can start a transition.
+        EnsureAnimationLoop();
         if (!result.Applied || result.DirtyRegions.Count == 0)
             return;
 

@@ -148,6 +148,18 @@ public sealed class HtmlDocumentOptions
     private double? _animationProgress;
 
     /// <summary>
+    /// Whether the document plays its CSS animations and transitions and its animated images (GIF, WebP) over time. Off by default: a PDF is a
+    /// single moment. When on, nothing moves by itself: the host calls <see cref="HtmlDocument.AdvanceAnimations(TimeSpan)"/> once per frame with the time
+    /// and repaints the regions it returns. <c>prefers-reduced-motion</c> is the document's to honour through <see cref="Preferences"/>; the
+    /// host decides whether to turn this on at all. Ignored when <see cref="AnimationProgress"/> is set.
+    /// </summary>
+    /// <remarks>
+    /// Properties that cannot change layout (<c>transform</c>, <c>opacity</c>, <c>filter</c>, colours, shadows) animate in place with no layout
+    /// pass; an animation of a property that can move or resize something does not play.
+    /// </remarks>
+    public bool AnimationsEnabled { get; set; }
+
+    /// <summary>
     /// How many pages precede this document in the file it is part of. Added to the number <c>counter(page)</c> shows in a page's margin
     /// boxes and running elements, so a document that is one part of a larger one numbers its pages on from the part before. Pages
     /// are still selected by <c>@page</c> rules (<c>:first</c>, <c>:left</c>) by their place in this document. Zero by default.

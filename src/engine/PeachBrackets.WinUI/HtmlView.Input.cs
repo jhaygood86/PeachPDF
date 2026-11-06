@@ -61,6 +61,13 @@ public sealed partial class HtmlView
         }
 
         var document = _document!;
+
+        MoveTrackRepeat(x, y);
+
+        // A scrollbar thumb being dragged, or a finger dragging a scroll container, takes the movement.
+        if (DragScrollbar(x, y) || (e.Pointer.PointerDeviceType == PointerDeviceType.Touch && MoveTouchScroll(position)))
+            return;
+
         if (e.Pointer.PointerDeviceType != PointerDeviceType.Touch)
         {
             // The pointer the document asks for here, and the state that :hover and :active rules read.
@@ -93,12 +100,17 @@ public sealed partial class HtmlView
         if (e.Pointer.PointerDeviceType == PointerDeviceType.Touch)
         {
             ApplyTouchPolicy(document.GetInteractionAt(page, x, y));
+            BeginTouchScroll(page, x, y, point.Position);
             RequestState(page, x, y, pressed: true);
             return;
         }
 
         RequestState(page, x, y, pressed: true);
         if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        // A press on a scrollbar of a scroll container takes hold of the thumb or pages the container.
+        if (PressScrollbarAt(page, x, y))
             return;
 
         // A press on a text field puts the caret there at once, so a drag can select inside it.
@@ -115,7 +127,9 @@ public sealed partial class HtmlView
         var position = e.GetCurrentPoint(_canvas).Position;
         var wasClick = Math.Abs(position.X - _pressPoint.X) <= ClickSlop && Math.Abs(position.Y - _pressPoint.Y) <= ClickSlop;
         var wasSelecting = _dragSelecting;
-        var wasField = _fieldPressed || _rangeElement is not null;
+        var wasField = _fieldPressed || _rangeElement is not null || _scrollbarDrag is not null || _touchScrolling;
+        EndScrollbarDrag();
+        EndTouchScroll();
         EndPress();
         _canvas.ReleasePointerCapture(e.Pointer);
 
@@ -135,6 +149,7 @@ public sealed partial class HtmlView
             return;
 
         _pressed = false;
+        EndTrackRepeat();
         _dragSelecting = false;
         _fieldAnchor = null;
         _fieldPressed = false;
@@ -171,15 +186,35 @@ public sealed partial class HtmlView
         }
     }
 
-    // The wheel over a text area that has more lines than show scrolls the text area; at its first or last line, or anywhere else, the page scrolls.
+    // The wheel over a scroll container (an element with overflow auto, scroll or hidden) scrolls it, and passes on to the container around it, then to the page, at the
+    // end of its content (scroll chaining); over a text area that has more lines than show it scrolls the text area; anywhere else the page scrolls.
     private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(_canvas);
-        if (point.Properties.IsHorizontalMouseWheel || !TryLocate(point.Position, out var page, out var x, out var y))
+        if (!TryLocate(point.Position, out var page, out var x, out var y))
             return;
 
-        if (ScrollTextAreaAt(page, x, y, -point.Properties.MouseWheelDelta / 120.0 * WheelNotchPoints))
+        var notches = point.Properties.MouseWheelDelta / 120.0 * WheelNotchPoints;
+        var horizontal = point.Properties.IsHorizontalMouseWheel;
+        if (ScrollContainerAt(page, x, y, horizontal ? notches : 0, horizontal ? 0 : -notches))
+        {
             e.Handled = true;
+            return;
+        }
+
+        if (!horizontal && ScrollTextAreaAt(page, x, y, -notches))
+            e.Handled = true;
+    }
+
+    // Scrolls the innermost scroll container under a point that can go the way asked, by an amount in points; false when there is none, and the page scrolls instead.
+    internal bool ScrollContainerAt(int page, double x, double y, double dx, double dy)
+    {
+        if (_document is not { } document || document.GetScrollContainerAt(page, x, y, dx, dy) is not { } container)
+            return false;
+
+        // A container that takes the wheel keeps it even when it is already at its end and nothing moves (overscroll-behavior: contain).
+        ApplyScroll(document.ScrollBy(container, dx, dy));
+        return true;
     }
 
     private const double WheelNotchPoints = 42;
@@ -213,6 +248,12 @@ public sealed partial class HtmlView
         }
 
         if (HandleEditKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (HandleScrollKey(e.Key))
         {
             e.Handled = true;
             return;
@@ -355,6 +396,9 @@ public sealed partial class HtmlView
 
                 if (!result.Applied || !ReferenceEquals(document, _document))
                     continue;
+
+                // A hover that starts a transition has the clock to run.
+                EnsureAnimationLoop();
 
                 if (result.DirtyRegions.Count > 0)
                 {

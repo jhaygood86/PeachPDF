@@ -1,3 +1,5 @@
+PeachBrackets.WinUI.HtmlAnimationEventsEventArgs : sealed class
+  property IReadOnlyList<AnimationEventInfo> Events { get; }
 PeachBrackets.WinUI.HtmlFormInvalidEventArgs : sealed class
   property IReadOnlyList<ValidationProblem> Problems { get; }
 PeachBrackets.WinUI.HtmlFormSubmittingEventArgs : sealed class
@@ -11,6 +13,7 @@ PeachBrackets.WinUI.HtmlLoadFailedEventArgs : sealed class
 PeachBrackets.WinUI.HtmlView : sealed class
   ctor()
   field static DependencyProperty AllowNetworkAccessProperty
+  field static DependencyProperty AnimationsEnabledProperty
   field static DependencyProperty ContentHeightProperty
   field static DependencyProperty DocumentBaseUriProperty
   field static DependencyProperty DocumentMarginProperty
@@ -27,6 +30,7 @@ PeachBrackets.WinUI.HtmlView : sealed class
   method Void SelectAll()
   property AccessibilityNode FocusedNode { get; }
   property Boolean AllowNetworkAccess { get; set; }
+  property Boolean AnimationsEnabled { get; set; }
   property Boolean IsLayoutSynchronous { get; set; }
   property Boolean IsZoomEnabled { get; set; }
   property Color PageBackground { get; set; }

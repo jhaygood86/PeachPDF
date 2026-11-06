@@ -138,5 +138,85 @@
     "html": "screen_chat_messages.html",
     "sourceKind": "html",
     "svg": null
+  },
+  {
+    "slug": "screen_animation_keyframes",
+    "category": "Screen only",
+    "title": "Keyframe animations",
+    "description": "@keyframes playing over time: rotate, translate, scale and opacity on the GPU, delay, direction, fill-mode and a hover that pauses.",
+    "pdf": "",
+    "html": "screen_animation_keyframes.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_transitions",
+    "category": "Screen only",
+    "title": "Transitions",
+    "description": "Hover or tab to a card: transform, opacity and filter transitions with easing, steps and delays, plus colour and shadow transitions that repaint only the card.",
+    "pdf": "",
+    "html": "screen_animation_transitions.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_stress",
+    "category": "Screen only",
+    "title": "Many animations at once",
+    "description": "120 independently animating boxes, each its own retained layer.",
+    "pdf": "",
+    "html": "screen_animation_stress.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_layout",
+    "category": "Screen only",
+    "title": "Animating layout",
+    "description": "width, height, margin, padding, font-size and flex-grow animate by laying the page out again each frame.",
+    "pdf": "",
+    "html": "screen_animation_layout.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_scroll",
+    "category": "Screen only",
+    "title": "Scroll-driven animations",
+    "description": "A progress bar on scroll(), and cards and swatches on view() with named ranges: progress follows the scroll position, not time.",
+    "pdf": "",
+    "html": "screen_animation_scroll.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_images",
+    "category": "Screen only",
+    "title": "Animated images",
+    "description": "An animated GIF playing at its own frame durations, also inside a rotating layer.",
+    "pdf": "",
+    "html": "screen_animation_images.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_animation_svg",
+    "category": "Screen only",
+    "title": "Animated SVG",
+    "description": "SMIL (animate, set, animateTransform, animateMotion) and CSS animations on the elements of an inline svg: only the svg's rectangle repaints each frame.",
+    "pdf": "",
+    "html": "screen_animation_svg.html",
+    "sourceKind": "html",
+    "svg": null
+  },
+  {
+    "slug": "screen_scroll_containers",
+    "category": "Screen only",
+    "title": "Scroll containers",
+    "description": "Elements with overflow: auto clip and scroll by the wheel, chain to the box around them, and drive scroll and view timelines of their own.",
+    "pdf": "",
+    "html": "screen_scroll_containers.html",
+    "sourceKind": "html",
+    "svg": null
   }
 ]

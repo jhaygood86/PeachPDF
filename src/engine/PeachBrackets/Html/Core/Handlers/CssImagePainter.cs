@@ -81,7 +81,7 @@ namespace PeachBrackets.Html.Handlers
                     break;
                 }
                 case CssImage.Url urlImage when urlImage.SvgDocument != null:
-                    PaintSvgLayer(g, urlImage.SvgDocument, layerIndex, positioningRect, clipRect, roundedClipPath,
+                    PaintSvgLayer(g, urlImage.SvgDocument.Current, layerIndex, positioningRect, clipRect, roundedClipPath,
                         positionList, sizeList, repeatList, box);
                     break;
                 case CssImage.LinearGradient lg:

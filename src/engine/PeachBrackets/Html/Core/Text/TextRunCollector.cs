@@ -216,7 +216,10 @@ namespace PeachBrackets.Html.TextGeometry
                     pageIndex, current.Text.ToString(), bounds, current.Baseline, current.Ascent, current.Descent,
                     current.Offsets.ToArray(), current.Boundaries.ToArray(), current.Rtl, blockId,
                     block.HtmlTag?.TryGetAttribute("id") is { Length: > 0 } id ? id : null, current.Link,
-                    lineId, followsForcedBreak && firstOfLine, current.Slices.ToArray()));
+                    lineId, followsForcedBreak && firstOfLine, current.Slices.ToArray())
+                {
+                    Owner = block,
+                });
                 firstOfLine = false;
                 current = new RunBuilder { Rtl = lineRtl };
             }

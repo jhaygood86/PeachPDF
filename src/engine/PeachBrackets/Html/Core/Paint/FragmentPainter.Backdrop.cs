@@ -61,7 +61,7 @@ namespace PeachBrackets.Html.Paint
                 return;
 
             var borderBox = geometry.DecorationRect;
-            var region = Intersect(borderBox, g.GetClip());
+            var region = Intersect(borderBox, ClipForCulling(g));
             if (region.Width <= 0 || region.Height <= 0)
                 return;
 

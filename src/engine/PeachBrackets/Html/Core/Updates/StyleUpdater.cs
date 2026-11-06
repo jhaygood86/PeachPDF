@@ -299,7 +299,10 @@ namespace PeachBrackets.Html.Updates
             // The deepest match wins, and among siblings the one painted last (on top).
             // The boxes the viewport holds in place are drawn above everything else, so they are tried before the content that follows them in the
             // source; each group last to first, as painted.
-            for (var pass = container.View.HasAttached ? 0 : 1; pass < 2; pass++)
+            // What a scroll container holds is clipped to its scrollport: a point outside it is not on any of that content.
+            var clipped = container.View.TryGetScrollPort(container, fragment.Box, out var port) && !Contains(port, x, y, frame);
+
+            for (var pass = container.View.HasAttached ? 0 : 1; pass < 2 && !clipped; pass++)
             {
                 for (var i = fragment.Children.Count - 1; i >= 0; i--)
                 {

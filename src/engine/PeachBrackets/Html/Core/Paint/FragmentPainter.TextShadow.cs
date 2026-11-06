@@ -84,7 +84,7 @@ namespace PeachBrackets.Html.Paint
                 var overhang = size.Height * 0.25;
                 var margin = 1.5 * blur + overhang;
                 var run = new Rect(shadowPoint.X, shadowPoint.Y, size.Width, size.Height);
-                var bounds = Intersect(Inflate(run, margin), Inflate(g.GetClip(), margin));
+                var bounds = Intersect(Inflate(run, margin), Inflate(ClipForCulling(g), margin));
                 if (bounds.Width <= 0 || bounds.Height <= 0)
                     continue;
 

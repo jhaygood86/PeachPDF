@@ -14,15 +14,13 @@ namespace PeachDrawing.Win2D;
 /// are applied when it is drawn), so one entry serves every colour and background.
 /// </summary>
 /// <remarks>
-/// A mask is stored for the run's origin at a fraction of a pixel (quantized to 1/64) and shifted onto the whole pixel it is wanted at, so a view
+/// A mask is stored for the run's origin at a fraction of a pixel (quantized to 1/64 unless <see cref="Win2dRenderContext.TextPositionSteps"/> says otherwise) and shifted onto the whole pixel it is wanted at, so a view
 /// that scrolls by whole pixels hits the entry made for the same text a screen ago. The entries are immutable once stored.
 /// </remarks>
 internal sealed class Win2dTextMaskCache
 {
     /// <summary>The most bytes of coverage the cache keeps.</summary>
     private const long Budget = 48L * 1024 * 1024;
-
-    private const int PhaseSteps = 64;
 
     private readonly object _gate = new();
     private readonly Dictionary<Key, LinkedListNode<Entry>> _entries = [];
@@ -31,7 +29,7 @@ internal sealed class Win2dTextMaskCache
 
     internal readonly record struct Key(
         string Text, Typeface Typeface, double Size, SyntheticStyle Synthetic, double LetterSpacing, double Ppp, double ScaleX, double ScaleY,
-        int SubPixels, FontPalette? Palette, ShapeSettings Features, int PhaseX, int PhaseY, TextHinting Hinting, bool StemDarkening);
+        int SubPixels, FontPalette? Palette, ShapeSettings Features, int PhaseX, int PhaseY, int PhaseSteps, TextHinting Hinting, bool StemDarkening);
 
     private sealed record Entry(Key Key, Win2dTextMask Mask, long Bytes);
 
@@ -71,15 +69,16 @@ internal sealed class Win2dTextMaskCache
     {
         var ix = (int)Math.Floor(originX);
         var iy = (int)Math.Floor(originY);
-        var phaseX = (int)Math.Round((originX - ix) * PhaseSteps);
-        var phaseY = (int)Math.Round((originY - iy) * PhaseSteps);
-        if (phaseX == PhaseSteps)
+        var phaseSteps = context.TextPositionSteps;
+        var phaseX = (int)Math.Round((originX - ix) * phaseSteps);
+        var phaseY = (int)Math.Round((originY - iy) * phaseSteps);
+        if (phaseX == phaseSteps)
         {
             phaseX = 0;
             ix++;
         }
 
-        if (phaseY == PhaseSteps)
+        if (phaseY == phaseSteps)
         {
             phaseY = 0;
             iy++;
@@ -87,7 +86,7 @@ internal sealed class Win2dTextMaskCache
 
         var raster = context.MaskContext;
         key = new Key(text, font.Typeface!, font.Size, font.SyntheticStyle, letterSpacing, ppp, scaleX, scaleY, subPixels, palette, features,
-            phaseX, phaseY, raster.TextHinting, raster.TextStemDarkening);
+            phaseX, phaseY, phaseSteps, raster.TextHinting, raster.TextStemDarkening);
         whole = false;
 
         Win2dTextMask? mask = null;
@@ -113,9 +112,9 @@ internal sealed class Win2dTextMaskCache
             // At the origin of the grid, so the mask is the same wherever the run is drawn on whole pixels.
             // From the masks of its letters when they can be (most of a new word's letters have been drawn before), whole otherwise.
             mask = context.GlyphMasks.TryRasterize(context, text, font, letterSpacing, ppp, scaleX, scaleY,
-                    phaseX / (double)PhaseSteps, phaseY / (double)PhaseSteps, palette, features, subPixels)
+                    phaseX / (double)phaseSteps, phaseY / (double)phaseSteps, palette, features, subPixels)
                 ?? Win2dTextMask.Rasterize(context, text, font, new PaintPoint(0, 0), letterSpacing, ppp, scaleX, scaleY,
-                    phaseX / (double)PhaseSteps, phaseY / (double)PhaseSteps, palette, features, subPixels);
+                    phaseX / (double)phaseSteps, phaseY / (double)phaseSteps, palette, features, subPixels);
             Win2dTextStatistics.Add(Win2dTextStatistics.Stage.Rasterize, Stopwatch.GetTimestamp() - started);
             if (mask is not { } rasterized)
                 return null;

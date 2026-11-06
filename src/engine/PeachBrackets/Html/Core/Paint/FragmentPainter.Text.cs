@@ -79,7 +79,7 @@ namespace PeachBrackets.Html.Paint
                     RememberPaintedWord(g, word, wordFragment.Rect);
                     continue;
                 }
-                var clip = g.GetClip();
+                var clip = ClipForCulling(g);
                 clip.Intersect(wordFragment.Rect);
 
                 // A word whose box was relocated to the next page's content top (keep-with-next,

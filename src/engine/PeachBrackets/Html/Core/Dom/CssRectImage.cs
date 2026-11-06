@@ -30,7 +30,18 @@ namespace PeachBrackets.Html.Dom
         /// <summary>
         /// Gets the image this words represents (if one exists)
         /// </summary>
-        public override Image? Image { get; set; }
+        public override Image? Image
+        {
+            get => _image;
+            set
+            {
+                _image = value;
+                // An animation clock finds the images that move by this; the box tree does not say when one arrives.
+                if (OwnerBox.HtmlContainer is { } container) container.ImageGeneration++;
+            }
+        }
+
+        private Image? _image;
 
         /// <summary>
         /// Gets if the word represents an image.

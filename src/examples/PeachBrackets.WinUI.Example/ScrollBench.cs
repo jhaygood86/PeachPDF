@@ -186,7 +186,7 @@ internal static class ScrollBench
         report.AppendLine($"GC: gen0={GC.CollectionCount(0) - gen0} gen1={GC.CollectionCount(1) - gen1} gen2={GC.CollectionCount(2) - gen2} pause={(GC.GetTotalPauseDuration() - pause).TotalMilliseconds:F0} ms, allocated={(GC.GetTotalAllocatedBytes() - allocated) / 1048576.0:F1} MB");
     }
 
-    private static void Describe(StringBuilder report, string what, List<(double Milliseconds, double Pixels, int Regions)> events, double windowMs)
+    private static void Describe(StringBuilder report, string what, List<(double Milliseconds, double Pixels, int Regions, long AllocatedBytes)> events, double windowMs)
     {
         if (events.Count == 0)
         {

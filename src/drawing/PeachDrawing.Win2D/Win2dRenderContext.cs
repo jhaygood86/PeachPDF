@@ -108,6 +108,20 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// </summary>
     public Win2dTextRendering TextRendering { get; set; } = Win2dTextRendering.Auto;
 
+    private int _textPositionSteps = 64;
+
+    /// <summary>
+    /// How many steps of a pixel a text run's position is kept at before its coverage is made, from 1 to 64 (the default is 64). A run is drawn from a mask made for
+    /// where it falls within a pixel, so text that moves a little every frame (an animation of layout) needs a new mask, and a new bitmap on the device, for each of those
+    /// positions it passes through; with fewer steps there are fewer to make, at the cost of drawing text up to half a step away from where it belongs (4 steps is
+    /// an eighth of a pixel). It has no effect on <see cref="Win2dTextEngine.DirectWrite"/> text.
+    /// </summary>
+    public int TextPositionSteps
+    {
+        get => _textPositionSteps;
+        set => _textPositionSteps = Math.Clamp(value, 1, 64);
+    }
+
     /// <summary>
     /// Whether the stripes of an LCD pixel run blue, green, red from left to right instead of the usual red, green, blue, for
     /// <see cref="Win2dTextRendering.Lcd"/> text on a display built that way. <see cref="Win2dTextRendering.Auto"/> follows the Windows setting as well.
@@ -362,6 +376,10 @@ public class Win2dRenderContext : RenderContext, IDisposable
     /// <summary>Decodes with the codec this context is set to use, falling back to PeachImage where allowed.</summary>
     internal Win2dImage? DecodeImage(byte[] bytes)
     {
+        // A format that can hold an animation is read by PeachImage whatever the codec: Windows' codecs deliver the first frame only.
+        if (Win2dImage.MayBeAnimated(bytes) && Win2dImage.TryDecode(bytes) is { FrameCount: > 1 } animated)
+            return animated;
+
         if (_imageCodec == Win2dImageCodec.Auto)
         {
             // Windows decodes straight into the device's bitmap when it has a codec; anything else is PeachImage's.

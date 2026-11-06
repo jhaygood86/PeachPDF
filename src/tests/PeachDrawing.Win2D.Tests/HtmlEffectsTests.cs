@@ -48,7 +48,24 @@ public class HtmlEffectsTests
         Assert.Equal(0, scene.Context.Counts.Total);
     }
 
-    private const string FilteredBox = ".box{width:40pt;height:30pt;margin:30pt;background:rgb(255,0,0);";
+    [Fact]
+    public async Task Two_boxes_with_the_same_shadow_get_the_same_soft_edge_wherever_they_are()
+    {
+        // The second box draws the shadow the first one's layer holds, moved; nothing shows it was not blurred anew.
+        using var scene = await PaintAsync(
+            "<div class='box'></div><div class='box'></div>",
+            ".box{width:53.3333px;height:40px;margin:20pt 30pt;background:transparent;box-shadow:0 0 8px rgb(0,0,0);}", width: 140, height: 140);
+
+        // Boxes are 40 x 30 points at (30, 20) and (30, 70); the left edge is at x = 30.
+        var first = scene.Px(28, 35).A;
+        var second = scene.Px(28, 85).A;
+        Assert.InRange(first, 20, 250);
+        Assert.InRange(Math.Abs(first - second), 0, 2);
+        Assert.True(scene.IsClear(50, 85), "inside the second border box");
+        Assert.Equal(0, scene.Context.Counts.Total);
+    }
+
+    private const string FilteredBox =".box{width:40pt;height:30pt;margin:30pt;background:rgb(255,0,0);";
 
     [Fact]
     public async Task A_blur_filter_softens_the_edge_and_keeps_the_middle_solid()

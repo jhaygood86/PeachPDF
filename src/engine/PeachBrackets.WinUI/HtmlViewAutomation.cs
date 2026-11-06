@@ -234,7 +234,7 @@ public sealed class HtmlViewAutomationPeer : FrameworkElementAutomationPeer
 }
 
 /// <summary>One part of the page - a paragraph, a heading, a link, a control, a landmark - in the tree a screen reader walks.</summary>
-internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IRangeValueProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider
+internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, IToggleProvider, IValueProvider, IRangeValueProvider, IGridProvider, ITableProvider, IGridItemProvider, ITableItemProvider, IScrollProvider
 {
     private readonly HtmlViewAutomationPeer _root;
     private readonly HtmlView _view;
@@ -305,6 +305,7 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
     {
         PatternInterface.Invoke when _node.Role is AccessibilityRole.Link or AccessibilityRole.Button => this,
         PatternInterface.Toggle when HtmlViewLogic.IsToggleControl(_node.Role) => this,
+        PatternInterface.Scroll when _view.ScrollMetricsOf(_node) is not null => this,
         PatternInterface.Value when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => this,
         PatternInterface.Text when _node.Role is AccessibilityRole.TextBox or AccessibilityRole.SearchBox => new HtmlTextProvider(_root, _view, _node),
         PatternInterface.RangeValue when HtmlViewLogic.IsRangeRole(_node.Role) => this,
@@ -312,6 +313,27 @@ internal sealed class HtmlNodeAutomationPeer : AutomationPeer, IInvokeProvider, 
         PatternInterface.GridItem or PatternInterface.TableItem when HtmlViewLogic.IsGridCellRole(_node.Role) && HtmlViewLogic.TableOf(_node) is not null => this,
         _ => null,
     };
+
+    // IScrollProvider: a node whose element is a scroll container of the document (a list, a region, a table with overflow: auto) scrolls from UI Automation as it does from the wheel.
+    private PeachBrackets.ScrollMetrics? Scrolled => _view.ScrollMetricsOf(_node);
+
+    public bool HorizontallyScrollable => Scrolled is { } m && m.MaxX - m.MinX > 0;
+
+    public double HorizontalScrollPercent => Scrolled is { } m && m.MaxX - m.MinX > 0 ? (m.X - m.MinX) / (m.MaxX - m.MinX) * 100 : ScrollPatternIdentifiers.NoScroll;
+
+    public double HorizontalViewSize => Scrolled is { ContentWidth: > 0 } m ? Math.Min(100, m.Viewport.Width / m.ContentWidth * 100) : 100;
+
+    public bool VerticallyScrollable => Scrolled is { } m && m.MaxY - m.MinY > 0;
+
+    public double VerticalScrollPercent => Scrolled is { } m && m.MaxY - m.MinY > 0 ? (m.Y - m.MinY) / (m.MaxY - m.MinY) * 100 : ScrollPatternIdentifiers.NoScroll;
+
+    public double VerticalViewSize => Scrolled is { ContentHeight: > 0 } m ? Math.Min(100, m.Viewport.Height / m.ContentHeight * 100) : 100;
+
+    public void Scroll(ScrollAmount horizontalAmount, ScrollAmount verticalAmount) =>
+        _view.DispatcherQueue.TryEnqueue(() => _view.ScrollFromAutomation(_node, horizontalAmount, verticalAmount));
+
+    public void SetScrollPercent(double horizontalPercent, double verticalPercent) =>
+        _view.DispatcherQueue.TryEnqueue(() => _view.ScrollToPercentFromAutomation(_node, horizontalPercent, verticalPercent));
 
     protected override void ShowContextMenuCore() { }
 

@@ -11,7 +11,10 @@
 // "The Art of War"
 
 using PeachBrackets.Html;
+using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.Parse;
+using PeachBrackets.Svg.Smil;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Linq;
@@ -36,13 +39,18 @@ namespace PeachBrackets.Svg
         private readonly string _media;
         private readonly CssVarResolver.VarContext? _varContext;
 
+        // Set for a standalone SVG a clock plays: the SMIL animations of the document and the time they are at.
+        private readonly SvgAnimationContext? _animation;
+
         public XElementSvgSourceNode(XElement element)
             : this(element, element, null, "print", null)
         {
         }
 
-        internal XElementSvgSourceNode(XElement element, XElement svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null)
+        internal XElementSvgSourceNode(XElement element, XElement svgRoot, CssData? cssData, string media, CssVarResolver.VarContext? varContext = null,
+            SvgAnimationContext? animation = null)
         {
+            _animation = animation;
             _element = element;
             _svgRoot = svgRoot;
             _cssData = cssData;
@@ -53,6 +61,63 @@ namespace PeachBrackets.Svg
         public string Name => _element.Name.LocalName;
 
         public string? GetAttribute(string name)
+        {
+            var declared = GetDeclaredAttribute(name);
+
+            // An attribute an animation element animates reads as what it is at the time (SMIL Animation §3.7); a presentation property is animated where the builder
+            // resolves it against the CSS (GetAnimatedValue), so it is left as written here and not animated twice.
+            if (_animation is { Smil: { } smil } animation && !SmilSet.IsPresentationProperty(name) && smil.Targets(_element)
+                && smil.Sample(new XElementSmilNode(_element), name, animation.Seconds, () => declared, animation.Parser) is { } animated)
+            {
+                return animated;
+            }
+
+            return declared;
+        }
+
+        // The CSS animations of this element at the time: its own style sheets name them, and the keyframes are the document's.
+        private AnimationApplier.ElementPlan? CssPlan
+        {
+            get
+            {
+                if (_animation is not { Keyframes.Count: > 0 } animation) return null;
+                if (animation.Plans.TryGetValue(_element, out var known)) return known;
+
+                var declarations = GetMatchedCssDeclarations();
+                var plan = declarations is null
+                    ? null
+                    : AnimationApplier.PlanStandaloneElement(name => declarations.TryGetValue(name, out var value) ? value : null, animation.Keyframes, animation.Seconds, animation.Parser);
+                animation.Plans[_element] = plan;
+                return plan;
+            }
+        }
+
+        public bool IsAnimated => CssPlan is not null || (_animation is { Smil: { } smil } && smil.Targets(_element));
+
+        public ISvgSourceNode? Parent =>
+            _animation is not null && !ReferenceEquals(_element, _svgRoot) && _element.Parent is { } parent
+                ? new XElementSvgSourceNode(parent, _svgRoot, _cssData, _media, _varContext, _animation)
+                : null;
+
+        public object? IdentityKey => _animation is null ? null : _element;
+
+        public string? GetAnimatedValue(string name, Func<string?> underlying, Func<string?> parent, Func<string?> initial, bool inherited)
+        {
+            if (_animation is not { } animation) return null;
+
+            var css = CssPlan is { } plan ? AnimationApplier.SampleElement(null, plan, name, underlying, parent, initial, inherited) : null;
+
+            // SMIL sits above the CSS animations, over the value they give.
+            if (animation.Smil is { } smil && SmilSet.IsPresentationProperty(name)
+                && smil.Sample(new XElementSmilNode(_element), name, animation.Seconds, () => css ?? underlying(), animation.Parser) is { } animated)
+            {
+                return animated;
+            }
+
+            return css;
+        }
+
+        private string? GetDeclaredAttribute(string name)
         {
             if (name == "xlink:href")
                 return _element.Attribute(XlinkNamespace + "href")?.Value ?? _element.Attribute("href")?.Value;
@@ -70,13 +135,13 @@ namespace PeachBrackets.Svg
         }
 
         public IEnumerable<ISvgSourceNode> Children =>
-            _element.Elements().Select(e => (ISvgSourceNode)new XElementSvgSourceNode(e, _svgRoot, _cssData, _media, _varContext));
+            _element.Elements().Select(e => (ISvgSourceNode)new XElementSvgSourceNode(e, _svgRoot, _cssData, _media, _varContext, _animation));
 
         public IEnumerable<SvgContentNode> ContentNodes =>
             _element.Nodes().Select(n => n switch
             {
                 XText text => SvgContentNode.OfText(text.Value),
-                XElement element => SvgContentNode.OfElement(new XElementSvgSourceNode(element, _svgRoot, _cssData, _media, _varContext)),
+                XElement element => SvgContentNode.OfElement(new XElementSvgSourceNode(element, _svgRoot, _cssData, _media, _varContext, _animation)),
                 _ => (SvgContentNode?)null,
             }).Where(c => c is not null).Select(c => c!.Value);
 

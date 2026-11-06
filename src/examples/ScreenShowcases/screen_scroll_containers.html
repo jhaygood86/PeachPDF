@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><title>Scroll containers</title>
+<style>body{margin:0;padding:24px;font:14px/1.5 "Segoe UI",system-ui,sans-serif;color:#222;background:#f6f8ff}
+@keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes reveal{from{opacity:0}to{opacity:1}}
+h1{margin:0 0 4px;font-size:24px}p.lead{margin:0 0 18px;color:#555;max-width:640px}
+.row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;timeline-scope:--list}
+.card{width:260px;background:#fff;border:1px solid #cfdcf3;border-radius:12px;padding:10px}.card b{display:block;margin-bottom:6px;font-size:12px;color:#2a5aa8}
+.box{height:160px;overflow:auto;border:1px solid #cfdcf3;border-radius:8px;background:#fbfdff}
+.box.h{overflow:hidden}.box .item{padding:10px 12px;border-bottom:1px solid #e6edf8}.box .item:nth-child(odd){background:#f1f6ff}
+.nested{height:200px;overflow:auto;border:1px solid #cfdcf3;border-radius:8px}.nested .inner{height:90px;overflow:auto;margin:60px 10px;background:#fff3e6;border:1px solid #f0c9a0}.nested .tall{height:260px;padding:8px}
+.progress{height:6px;background:#e1ecff;border-radius:3px;margin-bottom:8px;overflow:hidden}.progress i{display:block;height:100%;background:#0077b6;transform-origin:0 50%;animation:grow linear both;animation-timeline:--list}
+.timed .box{scroll-timeline:--list}
+.reveal{opacity:0;animation:reveal linear both;animation-timeline:view();animation-range:entry 0% entry 100%}
+.sticky .hd{position:sticky;top:0;background:#0077b6;color:#fff;padding:6px 12px;font-weight:600}
+.snap{scroll-snap-type:y mandatory;scroll-behavior:smooth}.snap .item{height:70px;scroll-snap-align:start;display:flex;align-items:center}
+.rtl{direction:rtl;overflow:auto;height:auto}.rtl .wide{width:520px;padding:10px;background:linear-gradient(90deg,#fde2e2,#e2ecfd)}
+.thin{scrollbar-width:thin;scrollbar-color:#e63946 #ffe5e8}
+</style></head><body>
+<h1>Scroll containers</h1>
+<p class="lead">Elements with <code>overflow: auto</code> clip and scroll on their own: wheel over a box. At its end the wheel passes on to the box around it, then to the page. The bar above the second list follows how far that list is scrolled.</p>
+<div class="row">
+<div class="card"><b>overflow: auto</b><div class="box"><div class="item">One</div><div class="item">Two</div><div class="item">Three</div><div class="item">Four</div><div class="item">Five</div><div class="item">Six</div><div class="item">Seven</div><div class="item">Eight</div><div class="item">Nine</div><div class="item">Ten</div></div></div>
+<div class="card timed"><b>scroll-timeline on the list</b><div class="progress"><i></i></div><div class="box"><div class="item">Alpha</div><div class="item">Bravo</div><div class="item">Charlie</div><div class="item">Delta</div><div class="item">Echo</div><div class="item">Foxtrot</div><div class="item">Golf</div><div class="item">Hotel</div><div class="item">India</div><div class="item">Juliet</div></div></div>
+<div class="card"><b>view() inside the list</b><div class="box"><div class="item">A</div><div class="item">B</div><div class="item">C</div><div class="item reveal">D fades in</div><div class="item reveal">E fades in</div><div class="item reveal">F fades in</div><div class="item reveal">G fades in</div><div class="item reveal">H fades in</div><div class="item reveal">I fades in</div></div></div>
+<div class="card"><b>nested containers</b><div class="nested"><div class="inner"><div class="tall">Inner: scroll me first, then the outer one. Inner: scroll me first, then the outer one. Inner: scroll me first, then the outer one.</div></div><div class="tall" style="background:#eef7ee">Outer content below the inner box.</div></div></div>
+<div class="card"><b>overflow: hidden (script only)</b><div class="box h"><div class="item">Clipped</div><div class="item">Clipped</div><div class="item">Clipped</div><div class="item">Clipped</div><div class="item">Clipped</div><div class="item">Clipped</div><div class="item">Clipped</div></div></div>
+<div class="card sticky"><b>sticky header in a scroller</b><div class="box"><div class="hd">Sticks to the top</div><div class="item">One</div><div class="item">Two</div><div class="item">Three</div><div class="item">Four</div><div class="item">Five</div><div class="item">Six</div><div class="item">Seven</div><div class="item">Eight</div></div></div>
+<div class="card"><b>scroll-snap (mandatory) and smooth</b><div class="box snap"><div class="item">Snap 1</div><div class="item">Snap 2</div><div class="item">Snap 3</div><div class="item">Snap 4</div><div class="item">Snap 5</div></div></div>
+<div class="card"><b>scrollbar-width / scrollbar-color</b><div class="box thin"><div class="item">One</div><div class="item">Two</div><div class="item">Three</div><div class="item">Four</div><div class="item">Five</div><div class="item">Six</div><div class="item">Seven</div></div></div>
+<div class="card"><b>right-to-left: starts at the right</b><div class="box rtl"><div class="wide">Scrolls on to the left. Scrolls on to the left. Scrolls on to the left.</div></div></div>
+</div>
+</body></html>

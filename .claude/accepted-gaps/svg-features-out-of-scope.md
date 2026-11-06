@@ -1,6 +1,6 @@
 # SVG features that are out of scope entirely
 
-SMIL animation, scripting, `<cursor>`/`<view>`, legacy SVG glyph-outline fonts.
+Scripting, `<cursor>`/`<view>`, legacy SVG glyph-outline fonts. (SMIL animation is supported for an inline `<svg>`; events and access keys in `begin`/`end` are not.)
 
 `<filter>`/`fe*` primitives are supported: a filter of only PDF-expressible primitives (`feFlood`, `feOffset`, `feMerge`,
 `feTile`, the Porter-Duff `feComposite` operators, `feBlend`, a channel-independent `feColorMatrix`, a linear

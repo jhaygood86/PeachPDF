@@ -82,7 +82,7 @@ namespace PeachBrackets.Html.Paint
             if (SubtreeExtent(fragment) is not { } extent)
                 return false;
 
-            var bounds = Intersect(Inflate(extent, SubtreeBleed(fragment)), g.GetClip());
+            var bounds = Intersect(Inflate(extent, SubtreeBleed(fragment)), ClipForCulling(g));
             if (bounds.Width <= 0 || bounds.Height <= 0)
             {
                 // Nothing of it is visible (outside the clip); nothing to paint, and nothing for its descendants to paint either.

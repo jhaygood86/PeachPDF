@@ -76,6 +76,15 @@ public sealed class ExampleApp : Application
             return;
         }
 
+        var animBench = Array.IndexOf(_args, "--anim-bench");
+        if (animBench >= 0 && animBench + 1 < _args.Length)
+        {
+            _window = new Window { Title = "PeachBrackets.WinUI animation bench" };
+            _window.Activate();
+            AnimationBench.Run(_window, _args[animBench + 1], _args[(animBench + 2)..], this);
+            return;
+        }
+
         var smoke = Array.IndexOf(_args, "--smoke");
         if (smoke >= 0 && smoke + 1 < _args.Length)
         {

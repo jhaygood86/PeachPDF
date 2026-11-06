@@ -1121,6 +1121,85 @@ namespace PeachBrackets.Html.Parse
         private readonly record struct Final4Result(Matrix4x4 Final4, double Ox, double Oy);
 
         /// <summary>
+        /// The transform list a box's <c>translate</c>, <c>rotate</c>, <c>scale</c> and <c>transform</c> make together (CSS Transforms 2 §3): the matrix is
+        /// translate x rotate x scale x transform, so the individual properties are the functions written in front of the list, in that order. Just
+        /// <paramref name="transform"/> when none of them is set.
+        /// </summary>
+        internal static string EffectiveTransform(string? translate, string? rotate, string? scale, string? transform)
+        {
+            var prefix = new System.Text.StringBuilder();
+
+            if (!IsNoneText(translate))
+            {
+                var parts = SplitTopLevel(translate!);
+                prefix.Append("translate3d(").Append(parts[0]).Append(", ").Append(parts.Count > 1 ? parts[1] : "0px").Append(", ").Append(parts.Count > 2 ? parts[2] : "0px").Append(") ");
+            }
+
+            if (!IsNoneText(rotate))
+            {
+                var parts = SplitTopLevel(rotate!);
+                var angle = parts.Find(IsAngleText);
+                if (angle is not null)
+                {
+                    var axis = parts.FindAll(p => !ReferenceEquals(p, angle));
+                    var (x, y, z) = axis.Count switch
+                    {
+                        1 when axis[0].Equals("x", StringComparison.OrdinalIgnoreCase) => ("1", "0", "0"),
+                        1 when axis[0].Equals("y", StringComparison.OrdinalIgnoreCase) => ("0", "1", "0"),
+                        3 => (axis[0], axis[1], axis[2]),
+                        _ => ("0", "0", "1"),
+                    };
+
+                    prefix.Append("rotate3d(").Append(x).Append(", ").Append(y).Append(", ").Append(z).Append(", ").Append(angle).Append(") ");
+                }
+            }
+
+            if (!IsNoneText(scale))
+            {
+                var parts = SplitTopLevel(scale!);
+                prefix.Append("scale3d(").Append(parts[0]).Append(", ").Append(parts.Count > 1 ? parts[1] : parts[0]).Append(", ").Append(parts.Count > 2 ? parts[2] : "1").Append(") ");
+            }
+
+            if (prefix.Length == 0) return transform ?? Keywords.None;
+            return IsNoneText(transform) ? prefix.ToString().TrimEnd() : prefix + transform!;
+        }
+
+        private static bool IsNoneText(string? value) => string.IsNullOrWhiteSpace(value) || value.Trim().Equals(Keywords.None, StringComparison.OrdinalIgnoreCase);
+
+        internal static bool IsAngleText(string text) =>
+            text.EndsWith("deg", StringComparison.OrdinalIgnoreCase) || text.EndsWith("grad", StringComparison.OrdinalIgnoreCase)
+            || text.EndsWith("rad", StringComparison.OrdinalIgnoreCase) || text.EndsWith("turn", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("calc(", StringComparison.OrdinalIgnoreCase);
+
+        // The white-space separated parts of a value, keeping a function's arguments together.
+        internal static List<string> SplitTopLevel(string value)
+        {
+            var parts = new List<string>();
+            var depth = 0;
+            var start = -1;
+            for (var i = 0; i <= value.Length; i++)
+            {
+                var end = i == value.Length;
+                var c = end ? ' ' : value[i];
+                if (c == '(') depth++;
+                else if (c == ')') depth--;
+
+                if (!char.IsWhiteSpace(c) || depth > 0)
+                {
+                    if (start < 0) start = i;
+                }
+                else if (start >= 0)
+                {
+                    parts.Add(value[start..i]);
+                    start = -1;
+                }
+            }
+
+            if (parts.Count == 0) parts.Add("0");
+            return parts;
+        }
+
+        /// <summary>
         /// Shared core of transform parsing: tokenizes, composes the per-function 4x4 matrices (see
         /// <see cref="BuildFunctionMatrix"/>) in CSS's last-written-applied-first order, and wraps the result
         /// around the box-local transform-origin. Returns null for "none"/empty/unparsable input.

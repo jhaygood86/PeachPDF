@@ -68,5 +68,20 @@ namespace PeachBrackets.Svg
         /// behind the element, so the document's artwork cannot be painted once and shared as a cached form.
         /// </summary>
         public bool ReadsBackdrop { get; set; }
+
+        /// <summary>
+        /// True for a document built to be one moment of an animation (SMIL, or CSS animations of its elements, played by a clock): the next frame builds another, so
+        /// painting it as a reusable form would only fill the cache with artwork nobody paints again.
+        /// </summary>
+        public bool IsTimeVarying { get; set; }
+
+        /// <summary>
+        /// The player that builds this standalone SVG again for each moment of its animations, when a clock plays the document that shows it; null for every other document.
+        /// A box that shows the image paints <see cref="Current"/>.
+        /// </summary>
+        internal StandaloneSvgPlayer? Player { get; set; }
+
+        /// <summary>The scene graph to paint now: the player's latest one for an animated image, this document otherwise.</summary>
+        internal SvgDocument Current => Player?.Current ?? this;
     }
 }

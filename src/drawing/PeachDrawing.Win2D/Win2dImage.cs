@@ -2,6 +2,7 @@ using Microsoft.Graphics.Canvas;
 using PeachDrawing.Core;
 using PeachImage;
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Threading.Tasks;
@@ -25,6 +26,12 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
     private CanvasDevice? _bitmapDevice;
     private bool _disposed;
 
+    // An animated image holds every frame composited, ready to upload, and the frame that is drawn.
+    private (byte[] Pixels, TimeSpan Duration)[]? _frames;
+    private int _loopCount = 1;
+    private int _currentFrame;
+    private int _bitmapFrame;
+
     private Win2dImage(int width, int height, byte[]? premultipliedRgba, int exifOrientation = 1, byte[]? encoded = null)
     {
         Width = width;
@@ -41,6 +48,30 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
     public override bool Interpolate { get; set; } = true;
 
     public override int ExifOrientation { get; }
+
+    public override int FrameCount => _frames?.Length ?? 1;
+
+    public override TimeSpan GetFrameDuration(int index) => _frames is { } frames && (uint)index < (uint)frames.Length ? frames[index].Duration : TimeSpan.Zero;
+
+    public override int LoopCount => _loopCount;
+
+    public override int CurrentFrame
+    {
+        get
+        {
+            lock (_gate)
+                return _currentFrame;
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                if (_frames is { } frames)
+                    _currentFrame = Math.Clamp(value, 0, frames.Length - 1);
+            }
+        }
+    }
 
     public override PixelBuffer? GetPixels() => new PixelBuffer((int)Width, (int)Height, Pixels());
 
@@ -60,6 +91,9 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
         lock (_gate)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            if (_frames is { } frames)
+                return frames[_currentFrame].Pixels;
+
             return _premultipliedRgba ??= DecodePixels(_encoded!, (int)Width, (int)Height);
         }
     }
@@ -82,14 +116,26 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
             ObjectDisposedException.ThrowIf(_disposed, this);
             var device = creator.Device;
             if (_bitmap is not null && ReferenceEquals(_bitmapDevice, device))
+            {
+                // The next frame goes into the texture that is there: no new allocation on the device.
+                if (_frames is { } playing && _bitmapFrame != _currentFrame)
+                {
+                    _bitmap.SetPixelBytes(playing[_currentFrame].Pixels);
+                    _bitmapFrame = _currentFrame;
+                }
+
                 return _bitmap;
+            }
 
             // A bitmap of another (or a lost) device is of no use; release it before making the replacement.
             _bitmap?.Dispose();
             _bitmap = null;
             _bitmapDevice = null;
 
-            _bitmap = _premultipliedRgba is null ? LoadOnDevice(device) : CreateFromPixels(creator, _premultipliedRgba);
+            _bitmap = _frames is { } frames
+                ? CreateFromPixels(creator, frames[_currentFrame].Pixels)
+                : _premultipliedRgba is null ? LoadOnDevice(device) : CreateFromPixels(creator, _premultipliedRgba);
+            _bitmapFrame = _currentFrame;
             _bitmapDevice = device;
             return _bitmap;
         }
@@ -197,15 +243,85 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
 
     public static Win2dImage? TryDecode(byte[] source)
     {
-        if (!PeachImage.Image.TryLoad(new MemoryStream(source), out var image, new DecoderOptions { TargetPixelFormat = PixelFormat.Rgba32 }) || image is null)
+        var options = new DecoderOptions { TargetPixelFormat = PixelFormat.Rgba32 };
+        if (!PeachImage.Image.TryLoad(new MemoryStream(source), out var image, options) || image is null)
             return null;
 
         using (image)
         {
+            if (image.IsAnimated && TryDecodeAnimation(source, options, image.Width, image.Height) is { } animated)
+                return animated;
+
             var rgba = image.PixelMemory.Span.ToArray();
             Premultiply(rgba);
             return new Win2dImage(image.Width, image.Height, rgba, StoredOrientation(source));
         }
+    }
+
+    // Every frame of an animated GIF or WebP, composited, with how long each is shown. Null when the file turns out to hold a single frame.
+    private const long MaxAnimationBytes = 256L * 1024 * 1024;
+
+    private static Win2dImage? TryDecodeAnimation(byte[] source, DecoderOptions options, int width, int height)
+    {
+        try
+        {
+            var animation = AnimatedImage.Load(new MemoryStream(source), options);
+            var frames = new List<(byte[] Pixels, TimeSpan Duration)>();
+            foreach (var frame in animation.Frames)
+            {
+                if (frame.Image.Width != width || frame.Image.Height != height)
+                    return null;
+
+                var rgba = frame.Image.PixelMemory.Span.ToArray();
+                Premultiply(rgba);
+                frames.Add((rgba, frame.Duration));
+            }
+
+            if (frames.Count < 2)
+                return null;
+
+            // Every frame is kept composited; a huge animation stays a still image rather than take gigabytes.
+            if ((long)width * height * 4 * frames.Count > MaxAnimationBytes)
+                return null;
+
+            return new Win2dImage(width, height, frames[0].Pixels, StoredOrientation(source))
+            {
+                _frames = [.. frames],
+                _loopCount = animation.LoopCount,
+            };
+        }
+        catch (Exception ex) when (ex is InvalidDataException or NotSupportedException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Whether <paramref name="source"/> looks like a format that can hold an animation (GIF, WebP or PNG), so it is read by PeachImage whatever codec is set.</summary>
+    internal static bool MayBeAnimated(byte[] source)
+    {
+        if (source.Length < 16)
+            return false;
+
+        // GIF87a / GIF89a
+        if (source[0] == 'G' && source[1] == 'I' && source[2] == 'F')
+            return true;
+
+        // RIFF....WEBP
+        if (source[0] == 'R' && source[1] == 'I' && source[2] == 'F' && source[3] == 'F' && source[8] == 'W' && source[9] == 'E' && source[10] == 'B' && source[11] == 'P')
+            return true;
+
+        // An APNG has an acTL chunk before its first image data.
+        if (source[0] == 0x89 && source[1] == 'P' && source[2] == 'N' && source[3] == 'G')
+        {
+            var limit = Math.Min(source.Length - 4, 2048);
+            for (var i = 8; i < limit; i++)
+            {
+                if (source[i] == 'a' && source[i + 1] == 'c' && source[i + 2] == 'T' && source[i + 3] == 'L')
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     public static Win2dImage FromPixels(PixelBuffer pixels) =>

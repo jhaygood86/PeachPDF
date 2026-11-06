@@ -10,7 +10,8 @@ namespace PeachBrackets.Html.Animation
     /// <param name="Declarations">Property name to specified value; no <c>!important</c> or <c>animation-*</c> entries.</param>
     /// <param name="Easing">The keyframe's own <c>animation-timing-function</c>, which eases the interval that starts here; null to use the animation's.</param>
     /// <param name="Functional">The properties whose value was written as a function (see <see cref="IsLiteral"/>); null when none is recorded.</param>
-    internal sealed record KeyframeStop(double Offset, Dictionary<string, string> Declarations, string? Easing, HashSet<string>? Functional = null)
+    /// <param name="Composite">The keyframe's own <c>animation-composition</c> (<c>replace</c>, <c>add</c> or <c>accumulate</c>), which composes its values with the value underneath; null to use the animation's.</param>
+    internal sealed record KeyframeStop(double Offset, Dictionary<string, string> Declarations, string? Easing, HashSet<string>? Functional = null, string? Composite = null)
     {
         /// <summary>
         /// Whether <paramref name="property"/> was written as a plain value here, and not as a function (<c>calc()</c>, <c>min()</c>, <c>var()</c>...): the CSS-OM
@@ -102,6 +103,7 @@ namespace PeachBrackets.Html.Animation
                         byOffset[offset] = existing = new KeyframeStop(offset, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
 
                     var easing = existing.Easing;
+                    var composite = existing.Composite;
 
                     foreach (var property in keyframe.Style)
                     {
@@ -114,6 +116,13 @@ namespace PeachBrackets.Html.Animation
                             continue;
                         }
 
+                        // CSS Animations 2 §3.10: a keyframe may name its own composite operation.
+                        if (property.Name.Equals(PropertyNames.AnimationComposition, StringComparison.OrdinalIgnoreCase))
+                        {
+                            composite = FirstListEntry(property.Value);
+                            continue;
+                        }
+
                         if (!IsAnimatable(property.Name)) continue;
 
                         // The CSS-wide keywords are kept and resolved against the element when sampled.
@@ -123,8 +132,8 @@ namespace PeachBrackets.Html.Animation
                         else existing.Functional?.Remove(property.Name);
                     }
 
-                    if (!ReferenceEquals(easing, existing.Easing))
-                        byOffset[offset] = existing with { Easing = easing };
+                    if (!ReferenceEquals(easing, existing.Easing) || !ReferenceEquals(composite, existing.Composite))
+                        byOffset[offset] = existing with { Easing = easing, Composite = composite };
                 }
             }
 

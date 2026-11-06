@@ -24,6 +24,7 @@ namespace PeachBrackets.Css
         Layer,
         LayerStatement,
         FontPaletteValues,
-        FontFeatureValueSet
+        FontFeatureValueSet,
+        StartingStyle
     }
 }

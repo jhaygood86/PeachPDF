@@ -1023,6 +1023,29 @@ namespace PeachBrackets.Html
         internal double? AnimationProgress { get; set; }
 
         /// <summary>
+        /// The time, in seconds, the animations of the inline <c>&lt;svg&gt;</c>s are at while a running clock plays them (CSS animations on their elements and SMIL);
+        /// null for a document that is not playing. A <c>&lt;svg&gt;</c> built while it is set is built as it looks at that time.
+        /// </summary>
+        internal double? SvgAnimationSeconds { get; set; }
+
+        /// <summary>Whether the document plays its animations over time (see <c>HtmlDocumentOptions.AnimationsEnabled</c>); read while it is cascaded, to collect the keyframes.</summary>
+        internal bool AnimationsEnabled { get; set; }
+
+        /// <summary>The running clock, created with the first step of the animations; null for a document that is not played.</summary>
+        internal PeachBrackets.Html.Animation.AnimationClock? AnimationClock { get; set; }
+
+        /// <summary>Raised when something outside a frame step (the control API) makes an idle clock run again; the document turns it into <c>HtmlDocument.AnimationsWoke</c>.</summary>
+        internal Action? AnimationWakeRequested { get; set; }
+
+        private PeachBrackets.Html.Paint.ShadowLayerCache? _shadowLayers;
+
+        /// <summary>The blurred box shadows this document has painted, kept as layers a canvas that can draws again instead of blurring them anew.</summary>
+        internal PeachBrackets.Html.Paint.ShadowLayerCache ShadowLayers => _shadowLayers ??= new PeachBrackets.Html.Paint.ShadowLayerCache();
+
+        /// <summary>Whether the running clock holds values the cascade must apply to the boxes it cascades again (see <c>AnimationClock.ApplyLiveValues</c>).</summary>
+        internal bool LiveOverridesActive => AnimationClock is { HasOverrides: true };
+
+        /// <summary>
         /// The document's <c>@keyframes</c> rules, keyed by name (case-sensitive). Only built when
         /// <see cref="AnimationProgress"/> is set; empty otherwise. Rebuilt each parse pass.
         /// </summary>
@@ -1433,6 +1456,9 @@ namespace PeachBrackets.Html
         /// worked out in, so a change that does not rebuild the boxes must raise this.
         /// </summary>
         internal int StyleGeneration { get; set; }
+
+        /// <summary>Increases whenever an image box is given its image, so a clock that plays animated images knows to look for new ones.</summary>
+        internal int ImageGeneration { get; set; }
 
         /// <summary>
         /// What a host changed on elements since the source was loaded (a control's state, a <c>details</c>' <c>open</c>), by the element's place in the
@@ -5856,6 +5882,10 @@ namespace PeachBrackets.Html
         {
             try
             {
+                AnimationClock?.Dispose();
+                AnimationClock = null;
+                _shadowLayers?.Dispose();
+                _shadowLayers = null;
                 CssData = null;
                 Root?.Dispose();
                 Root = null;

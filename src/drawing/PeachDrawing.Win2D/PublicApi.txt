@@ -12,6 +12,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual Object AddLink(Rect bounds, String uri, IReadOnlyList<PaintPoint> quad = null)
   method virtual Object SetAntiAliasSmoothingMode()
   method virtual RasterRegion BeginRasterSurface(Rect layoutBounds, Double? dpiOverride = null)
+  method virtual RetainedLayer CreateRetainedLayer(Rect bounds)
   method virtual Size MeasureString(String str, Font font, ShapeSettings? features = null)
   method virtual ValueTuple<Canvas, Image>? CreateTile(Double width, Double height)
   method virtual Void AddCursor(Rect bounds, CursorShape shape, IReadOnlyList<CursorImage> images = null)
@@ -148,6 +149,7 @@ PeachDrawing.Win2D.Win2dRenderContext : class
   property CanvasDevice Device { get; }
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+  property Int32 TextPositionSteps { get; set; }
   property Win2dImageCodec ImageCodec { get; }
   property Win2dTextEngine TextEngine { get; }
   property Win2dTextRendering TextRendering { get; set; }

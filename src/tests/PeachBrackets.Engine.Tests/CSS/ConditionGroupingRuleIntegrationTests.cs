@@ -42,10 +42,10 @@ public class ConditionGroupingRuleIntegrationTests
     [Fact]
     public async Task Supports_InnerRules_DoNotApply_WhenConditionIsUnsupported()
     {
-        // transition-duration parses fine in the CSS-OM but PeachPDF never renders transitions - the
+        // text-justify parses fine in the CSS-OM but nothing renders it - the
         // condition must evaluate false, not merely "unknown so ignored."
         var html = Html(
-            "p { color: #ff0000; } @supports (transition-duration: 1s) { p { color: #0000ff; } }",
+            "p { color: #ff0000; } @supports (text-justify: inter-word) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
         Assert.Equal(Red, box.Color);
@@ -89,7 +89,7 @@ public class ConditionGroupingRuleIntegrationTests
     public async Task SupportsNot_Fallback_Applies_WhenFeatureIsUnsupported()
     {
         var html = Html(
-            "@supports not (transition-duration: 1s) { p { color: #0000ff; } }",
+            "@supports not (text-justify: inter-word) { p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");
         Assert.Equal(Blue, box.Color);
@@ -127,7 +127,7 @@ public class ConditionGroupingRuleIntegrationTests
         // though `transform` alone is genuinely supported.
         var html = Html(
             "p { color: #ff0000; } " +
-            "@supports ((transition-property: color) or (transition-duration: 1s)) and (transform: rotate(10deg)) " +
+            "@supports ((text-justify: inter-word) or (text-justify: inter-word)) and (transform: rotate(10deg)) " +
             "{ p { color: #0000ff; } }",
             "<p>text</p>");
         var box = await FindBoxByTag(html, "p");

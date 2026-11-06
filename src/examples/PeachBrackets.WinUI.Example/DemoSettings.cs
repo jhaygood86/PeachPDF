@@ -53,6 +53,8 @@ internal sealed class DemoSettings
 
     public bool AllowNetworkAccess { get; set; }
 
+    public bool AnimationsEnabled { get; set; } = true;
+
     public double HostWidth { get; set; } = 700;
 
     public double HostHeight { get; set; } = 520;
@@ -75,6 +77,7 @@ internal sealed class DemoSettings
         view.PageBackground = PageBackground;
         view.TextRendering = TextRendering;
         view.AllowNetworkAccess = AllowNetworkAccess;
+        view.AnimationsEnabled = AnimationsEnabled;
         view.RequestedTheme = Theme;
         view.Input = Input switch
         {

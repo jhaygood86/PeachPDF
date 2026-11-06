@@ -57,7 +57,7 @@ namespace PeachBrackets.Html.Paint
             var bounds = Inflate(ink, margin + bleed);
 
             // Ink outside the clip is invisible, except that a blur pulls in content from up to `margin` away.
-            bounds = Intersect(bounds, Inflate(g.GetClip(), margin));
+            bounds = Intersect(bounds, Inflate(ClipForCulling(g), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return false;
 
@@ -177,7 +177,7 @@ namespace PeachBrackets.Html.Paint
         /// The union of everything <paramref name="fragment"/> and its descendants paint, or null when nothing has an extent. Fragments in
         /// <paramref name="excluded"/> (the other planes of a 3D rendering context) and their subtrees are left out.
         /// </summary>
-        private static Rect? SubtreeExtent(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
+        internal static Rect? SubtreeExtent(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
         {
             var union = new ExtentUnion();
             union.Add(fragment.WholeBoxRect);
@@ -284,7 +284,7 @@ namespace PeachBrackets.Html.Paint
         /// filtered element's own extent just as its own does, and would otherwise be cut off at the bitmap's edge. Fragments in
         /// <paramref name="excluded"/> and their subtrees are not counted.
         /// </summary>
-        private static double SubtreeBleed(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
+        internal static double SubtreeBleed(BoxFragment fragment, HashSet<BoxFragment>? excluded = null)
         {
             var bleed = ShadowBleed(fragment.Box);
             var children = fragment.Children;

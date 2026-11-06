@@ -142,7 +142,7 @@ namespace PeachBrackets.Html.Paint
 
             if (_ellipsisLineFragments.TryGetValue(line, out var fragments))
             {
-                var clip = g.GetClip();
+                var clip = ClipForCulling(g);
 
                 foreach (var fragment in fragments)
                 {
@@ -403,7 +403,7 @@ namespace PeachBrackets.Html.Paint
         /// <summary>Mirrors <c>PaintWordSequence</c>'s own issue-#113 visibility check for a draw call that bypasses it (a truncation's kept run/ellipsis glyph, drawn directly through <see cref="FragmentPainter.DrawWordGlyphs"/>).</summary>
         private static bool IsVisible(Canvas g, Rect rect)
         {
-            var clip = g.GetClip();
+            var clip = ClipForCulling(g);
             clip.Intersect(rect);
             return clip.Width > VisibilityClipEpsilon && clip.Height > VisibilityClipEpsilon;
         }

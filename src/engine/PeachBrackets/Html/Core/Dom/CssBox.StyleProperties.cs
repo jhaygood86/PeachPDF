@@ -65,10 +65,20 @@ namespace PeachBrackets.Html.Dom
             _computedStyle = _computedStyle.AdoptArea(_computedStyle.Background, source._computedStyle.Background, static (s, a) => s with { Background = a });
         }
 
-        private readonly DerivedStyle _derivedStyle;
+        private DerivedStyle _derivedStyle;
 
         /// <summary>Values calculated from <see cref="ComputedStyle"/> for this box. See <see cref="Dom.DerivedStyle"/>.</summary>
         internal DerivedStyle DerivedStyle => _derivedStyle;
+
+        /// <summary>
+        /// Forgets everything calculated from the style (fonts, resolved lengths, paint colours) and the text measured with it, so the next layout
+        /// works it all out again. For a box whose style was changed in place by something other than the cascade that built it (a running animation).
+        /// </summary>
+        internal void ResetDerivedStyle()
+        {
+            _derivedStyle = new DerivedStyle(this);
+            _wordsSizeMeasured = false;
+        }
 
         /// <summary>
         /// Size ratio applied to an originally-lowercase run when synthesizing
@@ -1194,6 +1204,9 @@ namespace PeachBrackets.Html.Dom
             var visualEffects = _computedStyle.VisualEffects;
             visualEffects = visualEffects
                 .SetPropertyValueShared(cache, visualEffects.Transform, parentStyle.VisualEffects.Transform, static (a, v) => a with { Transform = v })
+                .SetPropertyValueShared(cache, visualEffects.Translate, parentStyle.VisualEffects.Translate, static (a, v) => a with { Translate = v })
+                .SetPropertyValueShared(cache, visualEffects.Rotate, parentStyle.VisualEffects.Rotate, static (a, v) => a with { Rotate = v })
+                .SetPropertyValueShared(cache, visualEffects.Scale, parentStyle.VisualEffects.Scale, static (a, v) => a with { Scale = v })
                 .SetPropertyValueShared(cache, visualEffects.TransformOrigin, parentStyle.VisualEffects.TransformOrigin, static (a, v) => a with { TransformOrigin = v })
                 .SetPropertyValueShared(cache, visualEffects.Opacity, parentStyle.VisualEffects.Opacity, static (a, v) => a with { Opacity = v });
             _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.VisualEffects, visualEffects, static (s, a) => s with { VisualEffects = a });

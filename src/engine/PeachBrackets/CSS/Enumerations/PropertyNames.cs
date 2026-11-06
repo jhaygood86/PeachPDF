@@ -1,4 +1,4 @@
-﻿namespace PeachBrackets.Css
+namespace PeachBrackets.Css
 {
     internal static class PropertyNames
     {
@@ -375,6 +375,36 @@
         public static readonly string TransitionDuration = "transition-duration";
         public static readonly string TransitionTimingFunction = "transition-timing-function";
         public static readonly string TransitionProperty = "transition-property";
+        public static readonly string TransitionBehavior = "transition-behavior";
+        public static readonly string Translate = "translate";
+        public static readonly string Rotate = "rotate";
+        public static readonly string Scale = "scale";
+        public static readonly string AnimationComposition = "animation-composition";
+        public static readonly string AnimationTimeline = "animation-timeline";
+        public static readonly string AnimationRange = "animation-range";
+        public static readonly string AnimationRangeStart = "animation-range-start";
+        public static readonly string AnimationRangeEnd = "animation-range-end";
+        public static readonly string ScrollTimeline = "scroll-timeline";
+        public static readonly string ScrollTimelineName = "scroll-timeline-name";
+        public static readonly string ScrollTimelineAxis = "scroll-timeline-axis";
+        public static readonly string ViewTimeline = "view-timeline";
+        public static readonly string ViewTimelineName = "view-timeline-name";
+        public static readonly string ViewTimelineAxis = "view-timeline-axis";
+        public static readonly string ViewTimelineInset = "view-timeline-inset";
+        public static readonly string TimelineScope = "timeline-scope";
+        public static readonly string ScrollMargin = "scroll-margin";
+        public static readonly string ScrollMarginTop = "scroll-margin-top";
+        public static readonly string ScrollMarginRight = "scroll-margin-right";
+        public static readonly string ScrollMarginBottom = "scroll-margin-bottom";
+        public static readonly string ScrollMarginLeft = "scroll-margin-left";
+        public static readonly string ScrollPadding = "scroll-padding";
+        public static readonly string ScrollPaddingTop = "scroll-padding-top";
+        public static readonly string ScrollPaddingRight = "scroll-padding-right";
+        public static readonly string ScrollPaddingBottom = "scroll-padding-bottom";
+        public static readonly string ScrollPaddingLeft = "scroll-padding-left";
+        public static readonly string OverscrollBehavior = "overscroll-behavior";
+        public static readonly string OverscrollBehaviorX = "overscroll-behavior-x";
+        public static readonly string OverscrollBehaviorY = "overscroll-behavior-y";
         public static readonly string Top = "top";
         public static readonly string UnicodeBidirectional = "unicode-bidi";
         public static readonly string VerticalAlign = "vertical-align";

@@ -231,6 +231,12 @@ namespace PeachBrackets.Html.Handlers
 
                     SvgDocument = SvgTreeBuilder.Build(sourceNode, _htmlContainer.RenderContext, prefetchedImages: prefetchedImages,
                         fontPaletteValues: paletteValues, fontFeatureValues: featureValues);
+
+                    // A document a clock plays shows its animations: the image is built again for each moment, as the frames of a GIF are.
+                    if (_htmlContainer.AnimationsEnabled)
+                    {
+                        SvgDocument.Player = StandaloneSvgPlayer.TryCreate(root, cssData, varContext, _htmlContainer.RenderContext, prefetchedImages, paletteValues, featureValues, SvgDocument);
+                    }
                 }
             }
             catch (XmlException ex)

@@ -897,8 +897,22 @@ namespace PeachBrackets.Html.Utils
         /// <param name="box">the candidate clipping box</param>
         /// <returns>true when <paramref name="box"/> has <c>overflow: hidden</c> and <c>overflow</c> applies to it</returns>
         internal static bool ClipsItsOverflow(CssBox box) =>
-            (box.Overflow.Value == Overflow.Hidden || box.ClipsWithoutScrolling)
+            (box.Overflow.Value == Overflow.Hidden || box.ClipsWithoutScrolling || IsScrollerOnScreen(box))
             && !(box.IsInline && !IsAtomicInline(box))
+            && !box.IsTableRowGroupBox
+            && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is a scroll container of a document shown on a screen: its <c>overflow</c> is <c>auto</c>, <c>scroll</c> or <c>hidden</c> (CSS Overflow 3 §2),
+        /// it is not what the viewport takes its overflow from, and <c>overflow</c> applies to it. Such a box clips its content and can be scrolled. A paged document has no scrolling, and
+        /// <c>auto</c> and <c>scroll</c> boxes show the whole of their content on the page (see <c>CappedScrollContainer</c>).
+        /// </summary>
+        internal static bool IsScrollerOnScreen(CssBox box) =>
+            box.HtmlContainer is { Continuous: true }
+            && box.Overflow.Value is Overflow.Auto or Overflow.Scroll or Overflow.Hidden
+            && Fragmentation.MonolithicContent.IsScrollContainer(box)
+            && !(box.IsInline && !IsAtomicInline(box))
+            && box.HtmlTag?.Name is not ("textarea" or "select" or "input")
             && !box.IsTableRowGroupBox
             && box.DerivedStyle.ActualDisplay is not (Keywords.TableRow or Keywords.TableColumn or Keywords.TableColumnGroup);
 

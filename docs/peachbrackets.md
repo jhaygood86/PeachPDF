@@ -124,6 +124,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
 | `DefaultLanguage` | The language to assume when the document declares none; it drives hyphenation and language-dependent line breaking. |
 | `AnimationProgress` | Paint the document at a point in its animations, from 0 to 1, instead of its static look. |
+| `AnimationsEnabled` | Play the document's CSS animations, transitions and animated images over time; see [Animations and transitions](#animations-and-transitions). |
 | `SnapBoxDecorationsToCssPixels`, `SnapBorderWidthsToCssPixels` | Snap backgrounds, borders and border widths to whole CSS pixels, as a browser does. |
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
@@ -157,6 +158,22 @@ PDF output is not affected: `PdfGenerator` asks for `HighestDensity`.
 What does not apply on a screen, as in a browser: `@page` (size, margins, borders, named pages, `:first`/`:left`/`:right`) and page margin boxes, page breaks (`break-*: page|left|right|recto|verso`, `page-break-*`), running elements (`position: running()`), `string-set`/`bookmark-*` output, and the css-gcpm footnote and css-page-floats values (`float: footnote|top|bottom|top-bottom|snap`), whose declarations are dropped so the box stays in the flow. Multi-column containers still break into columns, including `break-before: column` and `break-inside: avoid` inside them. `counter(pages)` is 1.
 
 The media features describe the widget: `width` and `height` are the viewport, `orientation` is `portrait` when the height is at least the width, `scan` is `progressive` and `display-mode` is `browser`.
+
+### Scroll containers
+
+On a screen, a box whose `overflow` is `auto`, `scroll` or `hidden` is a scroll container ([CSS Overflow 3 §2](https://www.w3.org/TR/css-overflow-3/#scroll-container)): its content is clipped to its padding box and moves as the container is scrolled. A paged document has none (print shows the whole of the content), and the root and the body, whose `overflow` belongs to the viewport, are not scroll containers: the host scrolls the surface itself. A `<textarea>`, `<select>` and `<input>` are never one; they scroll their own text.
+
+```csharp
+var list = document.GetElement("list")!;
+var metrics = document.GetScrollMetrics(list);            // null when it is not a scroll container: X, Y, MaxX, MaxY, Viewport, ContentWidth, ContentHeight (points)
+foreach (var region in document.SetScrollPosition(list, 0, 120))   // scrollTo; NaN leaves an axis, a position past the end is clamped
+    Invalidate(region);                                     // the scrollport, and only that: nothing is laid out again
+document.ScrollBy(list, 0, 40);                             // scrollBy
+document.ScrollIntoView(someItem);                          // every container that holds it, outermost first, by the least that brings it into view
+document.ScrollPositionChanged += (_, e) => Log(e.Element.Id, e.X, e.Y);
+```
+
+Scrolling moves what is drawn, not the layout, so it costs a repaint of the scrollport. `GetElementBounds`, hit testing (`GetCursorAt`, `GetInteractionAt`), text runs, links and form controls follow the scrolled position, and a point outside a container's scrollport is not on what it clips. A host that draws no bars of its own routes input with `GetScrollbarAt(page, x, y)` (the container, the axis, the thumb or the track before or after it, and the track and thumb in points), `ScrollThumbTo` (a thumb being dragged: where its leading edge is to be), `ScrollByPage` (a press on the track), `GetScrollContainerFor(element, dx, dy)` (the container a key goes to when the focus is in `element`) and `GetElementOf(node)` (the element of an accessibility node). A host that routes a wheel turn or a touch drag asks which container is under the pointer with `GetScrollContainerAt(page, x, y, dx, dy)`: the innermost one that can scroll the way asked, so a container at the end of its content passes the turn on to the one around it (scroll chaining), and `null` means the host scrolls the surface. The scrollable overflow area is what the container holds, plus the padding at its end; a nested scroll container counts as its own box. A container drawn with `overflow: auto` or `scroll` shows overlay scrollbars (a thumb on the right and bottom edges, over the content); `hidden` scrolls by these calls only and shows none. A scroll moves by the container's `scroll-behavior`: `smooth` glides (about 0.3 s, stepped by `AdvanceAnimations`, and instant under reduced motion), and `SetScrollPosition`, `ScrollBy` and `ScrollIntoView` take a `ScrollBehavior` (`Auto`, `Instant`, `Smooth`) to override it. A container with `scroll-snap-type` settles on the nearest snap position of its children's `scroll-snap-align` (`start`, `center`, `end`; `mandatory` always, `proximity` only when one is near; `scroll-snap-stop: always` holds a scroll back at each position) after every programmatic scroll; a host that moves content by a drag calls `DragScrollBy` while the thumb or finger is held, and `SettleScroll` when it is let go. `ScrollIntoView` keeps the room `scroll-margin` (on the element) and `scroll-padding` (on the container) ask for on every side. `ScrollIntoView(element, behavior, block, inline)` also takes a `ScrollAlignment` for each axis (`Nearest`, `Start`, `Center`, `End`), and `ScrollTextIntoView(range)` brings a range found by `FindText` into view in the containers that hold it. A `position: sticky` box inside a scroll container sticks to its scrollport, within the container's scrollable area. Where the content starts at the right (right-to-left text, `vertical-rl`) it runs on to the left and the offsets are negative: `ScrollMetrics.MinX` is how far (`scrollLeft` is zero at the start, as in a browser). The scrollable overflow area counts a transformed box where the transform puts it; shadows and outlines are ink overflow and do not extend it. A reload (a class change that restyles the document) keeps the offsets, finding each container again by its place in the source. The cursor over a scrollbar is the default arrow. `scrollbar-gutter` has no effect, as the specification says of overlay scrollbars. `overscroll-behavior: contain` or `none` stops `GetScrollContainerAt` passing a turn on from a container that is at its end, so the host leaves the page where it is. `scrollbar-width: none` shows no bars and `thin` narrower ones, and `scrollbar-color` sets the thumb and track colours. The scroll offsets are kept while the document is laid out again and are dropped when a container goes away. Scroll and view timelines (`animation-timeline: scroll(self)`, `scroll(nearest)`, `scroll-timeline`, `view()`) follow the container that scrolls them, see [Scroll-driven animations](#scroll-driven-animations).
 
 ### The viewport, fixed and sticky boxes
 
@@ -206,8 +223,8 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   rule reads costs nothing, and one that is already in force returns `Applied = false`. Selection and highlights are kept when the text does not
   change. `HtmlDocumentOptions.IncrementalRestyle = false` always loads the document again. Combine it with `HtmlDocumentOptions.Input`, so
   `@media (hover: hover)` offers hover styling only on a host with something to hover with. Limits: only a document loaded from HTML can be
-  restyled this way (not a declarative one), and not after its text was edited in place; transitions and animations a state change would start
-  are not run.
+  restyled this way (not a declarative one), and not after its text was edited in place. A state change starts the transitions the box
+  names when `AnimationsEnabled` is on (see [Animations and transitions](#animations-and-transitions)).
 - **`NeedsRestyle`** and **`RestyleFormAsync(canvas)`**: after a change to a control, `NeedsRestyle` is true when a style sheet rule reads the state that changed (`:checked`,
   `:disabled`, `:enabled`, `:required`, `:optional`, `:read-only`, `:read-write`), and `RestyleFormAsync` styles the document again with the controls as they are now and
   reports the pages to repaint. Typing into a field is not such a change. A restyle for another reason (a `:focus` rule) also settles it.
@@ -357,6 +374,105 @@ an element of the laid-out document and returns an `UpdateResult`: whether it wa
 - A background or outline set to `currentcolor` earlier keeps the colour it had; only a later write picks up the new one.
 - To show the change, clear each region on the page's canvas and call `PaintPageRegionAsync(page, canvas, region)`, which paints only what
   lies inside it; or paint the page again.
+
+## Animations and transitions
+
+A PDF is one moment, so by default a document does not move. Set `HtmlDocumentOptions.AnimationsEnabled` and the document plays its CSS animations
+and transitions and its animated images (GIF, WebP) over time, for a host that shows it on a screen. Nothing moves by itself: the host calls
+`AdvanceAnimations(TimeSpan now)` once per frame with a clock that only increases (a display's frame timestamp), and repaints the regions it returns.
+
+```csharp
+var document = await HtmlDocument.LoadAsync(html, context, new HtmlDocumentOptions { MediaType = MediaType.Screen, AnimationsEnabled = true });
+await document.LayoutAsync(measuring);
+
+// Once per frame, while something is playing:
+while (document.HasRunningAnimations)
+{
+    AnimationFrame frame = document.AdvanceAnimations(frameTimestamp);
+    foreach (DirtyRegion region in frame.DirtyRegions)
+        await document.PaintPageRegionAsync(region.PageIndex, canvas, region.Bounds);   // clear the region first
+    if (!frame.IsRunning) break;
+}
+```
+
+- **What plays.** `@keyframes` animations with their delay, iteration count, direction, fill mode, timing function and play state; transitions started by a
+  change of `:hover`, `:active` or `:focus` state (see [Restyling in place](#restyling-in-place)); animated images at the frame durations and loop count the file
+  records (an `<img>`; a `background-image` shows its first frame). `HasRunningAnimations` says whether another step is due, and an `AnimationFrame`'s `IsRunning` whether
+  anything is still playing after this one: a paused animation, one that has ended and a document with none make no more frames, so a host stops its frame loop and starts
+  it again when a state change or a newly loaded image makes `HasRunningAnimations` true.
+- **What it costs.** `AdvanceAnimations(now)` plays the properties that cannot change layout (`transform`, `opacity`, `filter`, colours, shadows, outlines): a frame runs
+  no layout and no cascade, just the sampling of what is playing and a repaint of the regions that changed.
+- **Layout properties.** `AdvanceAnimations(now, measuringCanvas)` (or `AdvanceAnimationsAsync`) also plays the properties that move or resize boxes (`width`, `height`,
+  `margin`, `padding`, `top`/`left`, `border-width`, `font-size`, flex and grid sizing, ...). A step that changes one lays the whole document out again on the canvas, so
+  the geometry of every frame is what a document written with those values would have, a `font-size` reaches the boxes that inherit it, and the boxes after an animated one
+  move with it. The `AnimationFrame` then has `LayoutChanged` set (`HtmlDocument.Pages` may have a new size; text runs, links and the outline are made again) and its
+  `DirtyRegions` are the places where a box, line or word is not where it was, or the pages whole when they cannot be compared. The cost is the cost of laying out the whole
+  document, so it follows the document's size, not the animated box's. Only a `MediaType.Screen` document without container queries plays them; any other plays what
+  does not change layout. Properties that change what boxes there are (`display`, `position`, `float`, `content`) and custom properties do not play.
+- **Retained layers.** A box that animates `transform` or `opacity`, and has no box inside it that does, is painted into a [`RetainedLayer`](peachdrawing-core.md#retained-layers)
+  once and drawn again each frame with the new matrix and opacity, so a canvas backed by a GPU (see [`PeachDrawing.Win2D`](peachdrawing-win2d.md)) composites a texture and does
+  not paint what is inside the box again. What a layer holds is recorded again when anything else about the page changes (a restyle, a reload). On a canvas with no better way,
+  a layer is a recording replayed each frame.
+- **Reduced motion.** The default `Preferences` report `prefers-reduced-motion: reduce`, so a style sheet that switches animation off for it does; pass
+  `new UserPreferences { ReducedMotion = false }` along with `AnimationsEnabled` to let them play, and leave `AnimationsEnabled` off when the system asks for no motion.
+- **A PDF.** `AnimationProgress` (a still frame, see [Animations](html-css-support.md#animations)) takes precedence and turns the clock off.
+
+### Events and controlling the animations
+
+- **Events.** Each `AnimationFrame` has `Events`, the events a browser would dispatch for what happened since the last step, in order, as `AnimationEventInfo` (`Kind`, `Element`, `Name`,
+  `ElapsedTime`): `AnimationStart`, `AnimationIteration` (at the start of each iteration after the first), `AnimationEnd` and `AnimationCancel` (an animation that began and stopped before it
+  ended because the element no longer names it, or it was cancelled), and for a transition `TransitionRun` (when it is created, even with a delay to wait), `TransitionStart`,
+  `TransitionEnd` and `TransitionCancel` (replaced by a newer transition of the property, its element gone, or cancelled). `Name` is the `animation-name` or the property. An event
+  caused by a call (a transition that a class change created, an animation `Cancel()`ed) is reported by the next step, and `HasRunningAnimations` is true until it has been. A
+  WinUI `HtmlView` raises them as `AnimationEvents`.
+- **Control.** `HtmlDocument.GetAnimations()` (or `GetAnimations(element)`) lists the animations and transitions that are running as `DocumentAnimation` objects, which follow
+  Web Animations 1 §4.4: `Name`, `IsTransition`, `Element`, `PlayState` (`Idle`, `Running`, `Paused`, `Finished`), `CurrentTime` (seek by setting it, paused or not), `PlaybackRate` and
+  `UpdatePlaybackRate` (negative plays backwards), `Play()`, `Pause()`, `Finish()` (an animation that repeats for ever has no end and throws), `Reverse()`, `Cancel()` (the element has the value
+  it would have without the animation; a transition ends on the value the style has) and `Finished`, a task that completes when it finishes and is cancelled if it is cancelled or removed first.
+  A change takes effect on the next step. The object stays the animation it was when the document is loaded again for a restyle, and is `Idle` once the element stops naming it. Seeking does
+  not report the events of the time it skips over: the flags that say what was reported follow the new position.
+
+### Scroll-driven animations
+
+An animation with `animation-timeline: scroll()` or `view()` (or a name from `scroll-timeline-name`/`view-timeline-name`, with `timeline-scope` to reach it from elsewhere) takes its progress from how
+the document is scrolled instead of from time, over the part of the scroll `animation-range` names (see [Animations](html-css-support.md#animations) for the grammar). The host says how it is scrolled
+with `SetViewport` (as it already does for fixed and sticky boxes, see [the viewport](#the-viewport-fixed-and-sticky-boxes)); that wakes the clock for one step, so `HasRunningAnimations` is true
+after a scroll and `AdvanceAnimations` (or `AdvanceAnimationsAsync`) then writes the new values and reports the regions to repaint. `AnimationFrame.IsRunning` is false afterwards: nothing runs on time,
+so a host's frame loop idles between scrolls. A WinUI `HtmlView` does this itself on every scroll.
+
+An animation on a scroll timeline plays over the distance the document can scroll; on a view timeline, over the part of the scroll where the element is in view (`cover`, or the named range). Animations on
+these timelines send no events and ignore `CurrentTime`, `PlaybackRate`, `Finish()` and `Reverse()` of the control API (`Pause()` holds the last value, `Cancel()` removes the effect). Only the document scrolls:
+a box with `overflow: auto` or `scroll` has no scroll position, so a timeline on it, or `scroll(nearest)` from inside one, does not exist and the animation has no effect.
+
+### Animated SVG
+
+An inline `<svg>` plays too (and so does a standalone SVG that an `<img>` or `<object>` shows, like an animated GIF, see [Standalone SVG images](supported-svg-features.md#standalone-svg-images)): the CSS animations of its elements and its SMIL animation elements (`animate`, `set`, `animateTransform`, `animateMotion`; see [SMIL animation](supported-svg-features.md#smil-animation)).
+The clock starts them when the document loads, builds the graphic again at its time on every step and reports the `<svg>`'s rectangle as the region to repaint, so a page of which only one icon
+spins repaints that icon. `AnimationFrame.IsRunning` stays true while a graphic still has something to play (an animation that repeats for ever, or one yet to end) and is false once every
+animation of it has ended and is frozen or removed. A document loaded for a still frame (`AnimationProgress`) samples SMIL at that fraction of the span the animations cover instead.
+
+`HtmlDocument.AnimationsWoke` is raised when the control API (`Play`, `CurrentTime`, `Finish`, `Cancel`, `Reverse`...) makes a clock that had stopped run again, so a host that stopped its frame loop when `HasRunningAnimations` went false starts it again; it is not raised while the clock is running or from a step, and it may arrive on any thread. A WinUI `HtmlView` handles it itself.
+
+## Changing classes, attributes and preferences
+
+A host that has no script engine changes what a loaded document looks like by changing the elements, as a page's script would, and the document is styled again:
+
+| Call | Does |
+| --- | --- |
+| `AddClassAsync` / `RemoveClassAsync` / `ToggleClassAsync(element, className, canvas)` | Changes one class in the element's `class` attribute. |
+| `SetAttributeAsync(element, name, value, canvas)` / `RemoveAttributeAsync(element, name, canvas)` | Sets or removes any attribute (`data-*`, `id`, `style`, `hidden`...). |
+| `GetAttribute(element, name)` | Reads an attribute as the document has it now. |
+| `SetPreferencesAsync(preferences, colorScheme, canvas)` | Changes what `prefers-color-scheme`, `prefers-reduced-motion`, `forced-colors` and the other user preferences report. |
+
+Each returns an `UpdateResult` (`Applied`, and the `DirtyRegions` to repaint). Every rule that reads the attribute or media feature matches again: `.open`, `[data-state=open]`, `#id`, sibling
+and descendant combinators, `@media (prefers-color-scheme: dark)`. The document is loaded from its source again with the change applied, so the element handles taken before are stale (a
+handle still names its element, but take new ones from `GetElement` to be safe), what was selected stays only if the text did not change, and the change is kept: loading the document
+again for a pointer or focus rule applies it too. A document built with the declarative API, or one whose text was edited in place, has no source to load again, and the call is not applied.
+
+With `AnimationsEnabled`, every restyle that loads the document again (these calls, a `:hover` or `:focus` rule that moves something, a form state, `SetOpenAsync`) compares what each
+element looked like before with what it looks like after, and a property whose value differs and that the element's `transition-property` names (`all`, the property, or a shorthand that sets it
+such as `margin`) runs to its new value over `transition-duration` instead of snapping. A property that moves or resizes boxes (`width`, `margin`, `top`, ...) runs when the host steps the
+document with a canvas (`AdvanceAnimationsAsync`); an inherited one (`font-size`) and a property a running animation animates snap. A transition of a pseudo-element (`::before`) does not run.
 
 ## Editing the text
 

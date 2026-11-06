@@ -57,6 +57,74 @@ public sealed class HtmlLoadFailedEventArgs : EventArgs
 /// <summary>The pieces of <see cref="HtmlView"/> that do not need a window, kept apart so they can be tested without one.</summary>
 internal static class HtmlViewLogic
 {
+    /// <summary>The speed (points per second) under which a fling has stopped.</summary>
+    internal const double FlingStopSpeed = 20;
+
+    /// <summary>How long the first press on a scrollbar track waits before it repeats, and the time between repeats (seconds).</summary>
+    internal const double TrackRepeatDelay = 0.4;
+    internal const double TrackRepeatInterval = 0.08;
+
+    /// <summary>The share of a fling's speed left after <paramref name="seconds"/>: it slows by a constant share each moment, to a stop within about a second.</summary>
+    internal static double FlingDecay(double seconds) => Math.Exp(-seconds / 0.35);
+
+    /// <summary>A finger's speed from its movement over a time, blended with the speed before it so one jittery sample does not throw a fling.</summary>
+    internal static double SmoothVelocity(double previous, double distance, double seconds) =>
+        seconds > 0 ? (0.6 * (distance / seconds)) + (0.4 * previous) : previous;
+
+    /// <summary>
+    /// The size of one side of a render target for a region that needs <paramref name="needed"/> (in DIPs) when the target in use has <paramref name="kept"/>: never
+    /// smaller than what is kept or 512, and rounded up to a multiple of 512, so a region that grows a little each frame makes a new texture once per step, not per frame.
+    /// </summary>
+    internal static float TargetExtent(float needed, float kept) => Math.Max(Math.Max(kept, 512f), (float)Math.Ceiling(needed / 512f) * 512f);
+
+    /// <summary>The regions the surface asked to have painted that lie together: their indexes, and the rectangle that covers them.</summary>
+    internal readonly record struct RegionCluster(PeachDrawing.Core.Rect Bounds, IReadOnlyList<int> Members);
+
+    /// <summary>
+    /// Groups <paramref name="regions"/> so that each group is painted from one pass over the document: a region joins a group while the rectangle covering
+    /// the group stays within twice the area of its members (plus a little slack for slivers), so a band split off a rectangle rejoins the rest of it and
+    /// two regions far apart do not drag everything between them into the paint.
+    /// </summary>
+    /// <param name="regions">the regions, in the surface's coordinates</param>
+    internal static List<RegionCluster> ClusterRegions(IReadOnlyList<PeachDrawing.Core.Rect> regions)
+    {
+        var groups = new List<(double Left, double Top, double Right, double Bottom, double Area, List<int> Members)>();
+        for (var i = 0; i < regions.Count; i++)
+        {
+            var r = regions[i];
+            var area = Math.Max(r.Width * r.Height, 1);
+            var placed = false;
+            for (var g = 0; g < groups.Count && !placed; g++)
+            {
+                var group = groups[g];
+                var left = Math.Min(group.Left, r.Left);
+                var top = Math.Min(group.Top, r.Top);
+                var right = Math.Max(group.Right, r.Right);
+                var bottom = Math.Max(group.Bottom, r.Bottom);
+                var covered = (right - left) * (bottom - top);
+                if (covered <= 2 * (group.Area + area) + 4096)
+                {
+                    group.Members.Add(i);
+                    groups[g] = (left, top, right, bottom, group.Area + area, group.Members);
+                    placed = true;
+                }
+            }
+
+            if (!placed)
+                groups.Add((r.Left, r.Top, r.Right, r.Bottom, area, [i]));
+        }
+
+        var clusters = new List<RegionCluster>(groups.Count);
+        foreach (var group in groups)
+            clusters.Add(new RegionCluster(new PeachDrawing.Core.Rect(group.Left, group.Top, group.Right - group.Left, group.Bottom - group.Top), group.Members));
+
+        return clusters;
+    }
+
+    /// <summary>Whether an animating view may move: the system has not asked for reduced motion.</summary>
+    /// <param name="systemAnimationsEnabled">the system's "animation effects" setting</param>
+    internal static bool SystemAllowsMotion(bool systemAnimationsEnabled) => systemAnimationsEnabled;
+
     /// <summary>The UI Automation control type a role is told to a screen reader as.</summary>
     public static AutomationControlType ToControlType(AccessibilityRole role) => role switch
     {

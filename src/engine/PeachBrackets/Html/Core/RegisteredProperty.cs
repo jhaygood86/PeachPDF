@@ -118,6 +118,21 @@ namespace PeachBrackets.Html
             "<length>", "<number>", "<integer>", "<percentage>", "<length-percentage>", "<color>", "<angle>", "<transform-function>", "<transform-list>"
         };
 
+        /// <summary>Whether any component of this property's <c>syntax</c> is a type that is mixed by interpolating, so an animation of it is not just a flip.</summary>
+        public bool CanInterpolate
+        {
+            get
+            {
+                if (Syntax == "*") return false;
+                foreach (var component in Syntax.Split('|'))
+                {
+                    if (InterpolableTypes.Contains(component.Trim())) return true;
+                }
+
+                return false;
+            }
+        }
+
         /// <summary>
         /// The data type of this property's <c>syntax</c> that both values match and that is mixed by interpolating (<c>&lt;length&gt;</c>,
         /// <c>&lt;color&gt;</c>, ...), or null when the pair is mixed discretely: a type that cannot interpolate (<c>&lt;custom-ident&gt;</c>, the
