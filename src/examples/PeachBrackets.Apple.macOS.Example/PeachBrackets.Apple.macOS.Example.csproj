@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A macOS app with one HtmlView: a pop-up of the screen showcases above the page. the smoke option loads the built-in sample page, checks what the
+    document and the view say at a few points, writes the report to the file and exits 0 or 1 (CI runs it); the screenshot option also writes what the
+    view shows. The macOS SDK builds it as an app bundle, so run it with run.sh.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net10.0-macos</TargetFrameworks>
+    <ApplicationId>net.peachpdf.brackets.macos.example</ApplicationId>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\engine\PeachBrackets.Apple\PeachBrackets.Apple.csproj" />
+    <!-- Rewrites a page fetched from the web (its root classes and base address) before the view loads it; see PageRewriter. Demo only, not shipped. -->
+    <PackageReference Include="AngleSharp" />
+    <Compile Include="..\PeachBrackets.Apple.Demo.Shared\*.cs" Link="Shared\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- The screen-only showcases shared with the Windows and Android demos. -->
+  <ItemGroup>
+    <None Include="..\ScreenShowcases\**\*" Link="screen\%(Filename)%(Extension)" PublishFolderType="Assembly">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
+    The documents of the demo, copied beside the program: the screen-only showcases shared with the other demos (above), and every showcase of the PDF harness as HTML only
+    (the harness option html-only), so the demo keeps no copy of them. The harness is run once into obj/showcases, and again when its Program.cs changes. Set
+    SkipShowcaseExport=true to build without the harness showcases.
+  -->
+  <PropertyGroup>
+    <ShowcaseExportDir>$(MSBuildProjectDirectory)/obj/showcases/</ShowcaseExportDir>
+  </PropertyGroup>
+  <Target Name="ExportHarnessShowcases" Condition="'$(SkipShowcaseExport)' != 'true'"
+          Inputs="..\..\harness\PeachPDF.TestHarness\Program.cs" Outputs="$(ShowcaseExportDir)showcases.json">
+    <Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)/../../harness/PeachPDF.TestHarness/PeachPDF.TestHarness.csproj&quot; -f net10.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('/'))&quot;" />
+  </Target>
+  <Target Name="StageHarnessShowcases" BeforeTargets="BeforeBuild" DependsOnTargets="ExportHarnessShowcases">
+    <ItemGroup>
+      <HarnessShowcaseFile Include="$(ShowcaseExportDir)**/*" />
+      <None Include="@(HarnessShowcaseFile)" Link="showcases/%(HarnessShowcaseFile.RecursiveDir)%(HarnessShowcaseFile.Filename)%(HarnessShowcaseFile.Extension)" PublishFolderType="Assembly" CopyToOutputDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

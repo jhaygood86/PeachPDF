@@ -1,0 +1,67 @@
+PeachBrackets.Apple.HtmlFormInvalidEventArgs : sealed class
+  property IReadOnlyList<ValidationProblem> Problems { get; }
+PeachBrackets.Apple.HtmlFormSubmittingEventArgs : sealed class
+  property FormSubmission Submission { get; }
+PeachBrackets.Apple.HtmlLinkActivatedEventArgs : sealed class
+  property Boolean Cancel { get; set; }
+  property String Destination { get; }
+  property String Uri { get; }
+PeachBrackets.Apple.HtmlLoadFailedEventArgs : sealed class
+  property Exception Exception { get; }
+PeachBrackets.Apple.HtmlTappedEventArgs : sealed class
+  property Double X { get; }
+  property Double Y { get; }
+  property Int32 PageIndex { get; }
+PeachBrackets.Apple.HtmlTouchStartedEventArgs : sealed class
+  property DocumentInteraction Interaction { get; }
+  property Double X { get; }
+  property Double Y { get; }
+  property Int32 PageIndex { get; }
+  property TouchActions Allowed { get; set; }
+PeachBrackets.Apple.HtmlView : sealed class
+  ctor()
+  ctor(CGRect frame)
+  event EventHandler DocumentLoaded
+  event EventHandler FocusChanged
+  event EventHandler ScrollChanged
+  event EventHandler ZoomChanged
+  event EventHandler<HtmlFormInvalidEventArgs> FormInvalid
+  event EventHandler<HtmlFormSubmittingEventArgs> FormSubmitting
+  event EventHandler<HtmlLinkActivatedEventArgs> LinkActivated
+  event EventHandler<HtmlLoadFailedEventArgs> DocumentFailed
+  event EventHandler<HtmlTappedEventArgs> LongPressed
+  event EventHandler<HtmlTappedEventArgs> Tapped
+  event EventHandler<HtmlTouchStartedEventArgs> TouchStarted
+  method Boolean ScrollToElement(String elementId)
+  method Void ApplyUpdate(UpdateResult result)
+  method Void CopySelection()
+  method Void SelectAll()
+  method virtual Boolean CanPerform(Selector action, NSObject withSender)
+  method virtual Void Copy(NSObject sender)
+  method virtual Void Cut(NSObject sender)
+  method virtual Void DeleteBackward()
+  method virtual Void InsertText(String text)
+  method virtual Void LayoutSubviews()
+  method virtual Void MovedToWindow()
+  method virtual Void Paste(NSObject sender)
+  method virtual Void SelectAll(NSObject sender)
+  method virtual Void TraitCollectionDidChange(UITraitCollection previousTraitCollection)
+  property AccessibilityNode FocusedNode { get; }
+  property Boolean AllowNetworkAccess { get; set; }
+  property Boolean CanBecomeFirstResponder { get; }
+  property Boolean HasText { get; }
+  property Boolean SecureTextEntry { get; }
+  property Boolean UseGpu { get; set; }
+  property CGColor PageBackground { get; set; }
+  property Double Zoom { get; }
+  property HtmlDocument Document { get; }
+  property InputCapabilities Input { get; set; }
+  property String Html { get; set; }
+  property String SelectedText { get; }
+  property UIKeyCommand[] KeyCommands { get; }
+  property UIKeyboardType KeyboardType { get; }
+  property UIReturnKeyType ReturnKeyType { get; }
+  property UITextAutocapitalizationType AutocapitalizationType { get; }
+  property UITextAutocorrectionType AutocorrectionType { get; }
+  property UIView InputView { get; }
+  property Uri DocumentBaseUri { get; set; }
