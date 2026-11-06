@@ -256,7 +256,7 @@ public sealed partial class HtmlDocument
             {
                 ComputedStyle? old = null;
                 StyleSnapshot snapshot = default;
-                var known = before is not null && before.Remove(tag.SourceOrdinal, out snapshot);
+                var known = before is not null && before.TryGetValue(tag.SourceOrdinal, out snapshot);
                 if (known) old = snapshot.Style;
                 if ((!known || snapshot.Hidden) && starting is not null && box.DerivedStyle.ActualDisplay != PeachBrackets.Css.Keywords.None
                     && starting.TryGetValue(tag.SourceOrdinal, out var startingStyle))
@@ -292,18 +292,6 @@ public sealed partial class HtmlDocument
         }
 
         Collect(root);
-        PeachBrackets.Html.CssData.WithStartingStyle(() => DomParser.RecascadeForState(_container, root));
-
-        var starting = new Dictionary<int, ComputedStyle>();
-        void Take(CssBox box)
-        {
-            if (box.HtmlTag is { SourceOrdinal: >= 0 } tag)
-                starting.TryAdd(tag.SourceOrdinal, box.ComputedStyle);
-
-            foreach (var child in box.Boxes) Take(child);
-        }
-
-        Take(root);
 
         void Restore(CssBox box)
         {
@@ -316,7 +304,27 @@ public sealed partial class HtmlDocument
             foreach (var child in box.Boxes) Restore(child);
         }
 
-        Restore(root);
+        var starting = new Dictionary<int, ComputedStyle>();
+        try
+        {
+            PeachBrackets.Html.CssData.WithStartingStyle(() => DomParser.RecascadeForState(_container, root));
+
+            void Take(CssBox box)
+            {
+                if (box.HtmlTag is { SourceOrdinal: >= 0 } tag)
+                    starting.TryAdd(tag.SourceOrdinal, box.ComputedStyle);
+
+                foreach (var child in box.Boxes) Take(child);
+            }
+
+            Take(root);
+        }
+        finally
+        {
+            // Every box gets its own style back, even when the cascade with the starting styles in it threw.
+            Restore(root);
+        }
+
         return starting;
     }
 

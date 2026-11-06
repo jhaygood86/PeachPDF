@@ -84,4 +84,25 @@ public class ShadowLayerCacheTests
         Assert.Equal(a.GetHashCode(), b.GetHashCode());
         Assert.NotEqual(a, new BorderRadii(4, 4, 4, 4, 4, 4, 4, 5));
     }
+
+    [Fact]
+    public void AShapeDroppedAndMadeAgain_IsNotEvictedBeforeOlderOnes()
+    {
+        using var cache = new ShadowLayerCache();
+        cache.Add(Key(1), new FakeLayer(canDraw: false));
+        Assert.False(cache.TryGet(Key(1), AnyCanvas(), out _));
+
+        var second = new FakeLayer();
+        cache.Add(Key(2), second);
+        for (var i = 3; i <= ShadowLayerCache.Capacity; i++) cache.Add(Key(i), new FakeLayer());
+
+        var again = new FakeLayer();
+        cache.Add(Key(1), again);
+        cache.Add(Key(ShadowLayerCache.Capacity + 1), new FakeLayer());
+
+        // The oldest live shadow goes; the one that was just made again stays (its first queue entry is stale).
+        Assert.True(second.Disposed);
+        Assert.False(again.Disposed);
+        Assert.True(cache.TryGet(Key(1), AnyCanvas(), out _));
+    }
 }

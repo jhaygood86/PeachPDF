@@ -1,3 +1,4 @@
+using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragments;
 using PeachBrackets.Html.Paint;
@@ -363,6 +364,10 @@ namespace PeachBrackets.Html.Updates
                 if (!PaintOnly.Contains(name))
                     return $"'{name}' changed on <{box.HtmlTag?.Name ?? "box"}>, which can change layout.";
 
+                // collapse removes a table row or column from the table's layout (CSS Tables 3 §3.3), unlike hidden, which only stops painting it.
+                if (IsCollapse(name, previous) || IsCollapse(name, value))
+                    return "visibility: collapse changes how a table is laid out.";
+
                 if (name.Equals("background-color", StringComparison.OrdinalIgnoreCase) && box.HtmlTag is { Name: "html" or "body" })
                     return "The background of html and body is the page's canvas background.";
 
@@ -415,9 +420,25 @@ namespace PeachBrackets.Html.Updates
             return changes;
         }
 
-        internal static bool PropertyFactoryHasNoTransition(CssBox box) => AnimationNone(box.TransitionProperty) || AnimationNone(box.TransitionDuration);
+        // No transition runs when nothing names a property, or when every entry lasts no time and waits none (CSS Transitions 1 §3: it starts only when
+        // the larger of the duration and zero, plus the delay, is positive - a zero duration with a delay still holds the old value through the delay).
+        internal static bool PropertyFactoryHasNoTransition(CssBox box) =>
+            AnimationNone(box.TransitionProperty) || (AnimationNone(box.TransitionDuration) && !AnyPositiveDelay(box.TransitionDelay));
+
+        private static bool AnyPositiveDelay(string? list)
+        {
+            foreach (var entry in AnimationApplier.SplitList(list))
+            {
+                if (AnimationApplier.LiveSeconds(entry) > 0) return true;
+            }
+
+            return false;
+        }
 
         private static bool AnimationNone(string? list) => string.IsNullOrWhiteSpace(list) || list.Trim().Equals("none", StringComparison.OrdinalIgnoreCase) || list.Trim() is "0s" or "0ms";
+
+        internal static bool IsCollapse(string property, string? value) =>
+            property.Equals("visibility", StringComparison.OrdinalIgnoreCase) && value is not null && value.Trim().Equals("collapse", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsNone(string? value) => string.IsNullOrEmpty(value) || value.Equals("none", StringComparison.OrdinalIgnoreCase);
 

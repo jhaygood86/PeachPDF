@@ -22,8 +22,11 @@ namespace PeachBrackets.Html.Paint
         /// <summary>How many shadows are kept.</summary>
         internal const int Capacity = 64;
 
-        private readonly Dictionary<ShadowKey, RetainedLayer> _layers = [];
-        private readonly Queue<ShadowKey> _order = new();
+        // Each layer carries the serial it was added with, and the queue the serial each entry stood for: a key that was dropped (by TryGet) and added again leaves
+        // its old queue entry behind, which must not evict the layer that replaced it.
+        private readonly Dictionary<ShadowKey, (RetainedLayer Layer, int Serial)> _layers = [];
+        private readonly Queue<(ShadowKey Key, int Serial)> _order = new();
+        private int _serial;
 
         /// <summary>How many shadows are held.</summary>
         internal int Count => _layers.Count;
@@ -31,16 +34,16 @@ namespace PeachBrackets.Html.Paint
         /// <summary>The layer for <paramref name="key"/> if one was made and <paramref name="canvas"/> can still draw it (a lost device or another surface drops it).</summary>
         internal bool TryGet(ShadowKey key, Canvas canvas, out RetainedLayer layer)
         {
-            if (_layers.TryGetValue(key, out var found))
+            if (_layers.TryGetValue(key, out var entry))
             {
-                if (found.CanDraw(canvas))
+                if (entry.Layer.CanDraw(canvas))
                 {
-                    layer = found;
+                    layer = entry.Layer;
                     return true;
                 }
 
                 _layers.Remove(key);
-                found.Dispose();
+                entry.Layer.Dispose();
             }
 
             layer = null!;
@@ -51,23 +54,26 @@ namespace PeachBrackets.Html.Paint
         internal void Add(ShadowKey key, RetainedLayer layer)
         {
             if (_layers.Remove(key, out var replaced))
-                replaced.Dispose();
-            else
-                _order.Enqueue(key);
+                replaced.Layer.Dispose();
 
-            _layers[key] = layer;
+            var serial = ++_serial;
+            _order.Enqueue((key, serial));
+            _layers[key] = (layer, serial);
 
             while (_layers.Count > Capacity && _order.TryDequeue(out var oldest))
             {
-                if (_layers.Remove(oldest, out var dropped))
-                    dropped.Dispose();
+                if (_layers.TryGetValue(oldest.Key, out var held) && held.Serial == oldest.Serial)
+                {
+                    _layers.Remove(oldest.Key);
+                    held.Layer.Dispose();
+                }
             }
         }
 
         public void Dispose()
         {
-            foreach (var layer in _layers.Values)
-                layer.Dispose();
+            foreach (var entry in _layers.Values)
+                entry.Layer.Dispose();
 
             _layers.Clear();
             _order.Clear();

@@ -184,4 +184,62 @@ public class MutationTests
         await Assert.ThrowsAsync<ArgumentException>(async () => await document.SetAttributeAsync(a, " ", "x", measuring));
         await Assert.ThrowsAsync<ArgumentNullException>(async () => await document.AddClassAsync(null!, "x", measuring));
     }
+
+    [Fact]
+    public async Task ATransitionWithNoDurationButADelay_HoldsTheOldValueThroughTheDelay()
+    {
+        var (context, document, measuring) = await LoadAsync(
+            "#a { width: 100pt; height: 100pt; background: rgb(255, 0, 0); opacity: 1; transition: opacity 0s 1s } #a.on { opacity: 0.2 }", "<div id=a></div>");
+        using var _ = measuring;
+
+        await document.AdvanceAnimationsAsync(TimeSpan.Zero, measuring);
+        await document.AddClassAsync(document.GetElement("a")!, "on", measuring);
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(0.1), measuring);
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(0.6), measuring);
+        Assert.Equal(0, (await PixelAtAsync(context, document, 50, 50)).G);
+
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(1.5), measuring);
+        Assert.InRange((await PixelAtAsync(context, document, 50, 50)).G, 190, 215);
+    }
+
+    [Fact]
+    public async Task AClassChangeBeforeTheFirstStep_StillRunsALayoutTransition_WhenTheHostThenLaysOut()
+    {
+        var (_, document, measuring) = await LoadAsync("#a { width: 100pt; height: 20pt; transition: width 1s linear } #a.wide { width: 300pt }", "<div id=a></div>");
+        using var _ = measuring;
+
+        await document.AddClassAsync(document.GetElement("a")!, "wide", measuring);
+        await document.AdvanceAnimationsAsync(TimeSpan.Zero, measuring);
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(0.5), measuring);
+
+        Assert.InRange(Bounds(document, "a").Width, 150, 250);
+    }
+
+    [Fact]
+    public async Task AClassChangeBeforeTheFirstStep_EndsAtOnce_WhenTheHostStepsWithNoCanvas()
+    {
+        var (_, document, measuring) = await LoadAsync("#a { width: 100pt; height: 20pt; transition: width 1s linear } #a.wide { width: 300pt }", "<div id=a></div>");
+        using var _ = measuring;
+
+        await document.AddClassAsync(document.GetElement("a")!, "wide", measuring);
+        document.AdvanceAnimations(TimeSpan.Zero);
+        var frame = document.AdvanceAnimations(TimeSpan.FromSeconds(0.1));
+
+        Assert.False(frame.IsRunning);
+        Assert.False(document.HasRunningAnimations);
+    }
+
+    [Fact]
+    public async Task VisibilityCollapseOnATableRow_LaysTheTableOutAgain()
+    {
+        var (_, document, measuring) = await LoadAsync(
+            "table { border-collapse: collapse } td { height: 30pt; padding: 0 } tr.c { visibility: collapse }",
+            "<table id=t><tr><td>a</td></tr><tr id=r><td>b</td></tr></table>", animate: false);
+        using var _ = measuring;
+        var before = Bounds(document, "t").Height;
+
+        await document.AddClassAsync(document.GetElement("r")!, "c", measuring);
+
+        Assert.True(Bounds(document, "t").Height < before - 10, $"{before} -> {Bounds(document, "t").Height}");
+    }
 }

@@ -207,12 +207,17 @@ namespace PeachBrackets.Html.Animation
             {
                 if (oldValue is null || newValue is null || oldValue == newValue) continue;
 
+                // A table row or column that collapses leaves the table's layout: that takes a layout pass, which a paint-only property does not get.
+                if (InteractionRestyler.IsCollapse(property, oldValue) || InteractionRestyler.IsCollapse(property, newValue)) continue;
+
                 // A property that moves or resizes boxes runs only when the host lays the document out for each frame, and one that boxes inherit
                 // would need the boxes under it cascaded again at the start, which a style change that is already settled cannot do.
                 // display is discrete and changes what is laid out, so it runs like a layout property.
                 var paintOnly = InteractionRestyler.IsPaintOnly(property);
                 var isDisplay = property.Equals("display", StringComparison.OrdinalIgnoreCase);
-                if (!paintOnly && !(_layoutCapable && (isDisplay || (InteractionRestyler.IsLiveAnimatable(property) && !InteractionRestyler.InheritsToDescendants(property))))) continue;
+                // Before the first step nothing says whether the host will lay out; a document that is one surface and has no size containers is assumed to.
+                var layoutCapable = _layoutCapable || (!_stepped && _container.Continuous && !_container.HasSizeContainers);
+                if (!paintOnly && !(layoutCapable && (isDisplay || (InteractionRestyler.IsLiveAnimatable(property) && !InteractionRestyler.InheritsToDescendants(property))))) continue;
 
                 // A running animation of the property decides its value, not a transition (CSS Transitions 1 §3).
                 if (ordinal >= 0 && AnimatesProperty(ordinal, property)) continue;
@@ -349,6 +354,9 @@ namespace PeachBrackets.Html.Animation
 
         // Whether the host that steps the clock lays the document out for each frame (it passed a canvas), as of the last step.
         private bool _layoutCapable;
+
+        // Whether a step has run: until one has, it is not known whether the host lays the document out for each frame.
+        private bool _stepped;
 
         // The events that happened since the last step reported them, in order.
         private readonly List<AnimationEventInfo> _events = [];
@@ -611,6 +619,7 @@ namespace PeachBrackets.Html.Animation
             // single surface to resize. Neither can follow a layout property frame by frame.
             allowLayout = allowLayout && !_container.HasSizeContainers && _container.Continuous;
             _layoutCapable = allowLayout;
+            _stepped = true;
 
             _changed.Clear();
             var stackingFlip = false;
@@ -662,7 +671,20 @@ namespace PeachBrackets.Html.Animation
                 foreach (var property in state.Properties)
                 {
                     var paintOnly = InteractionRestyler.IsPaintOnly(property);
-                    if (!paintOnly && !allowLayout) continue;
+                    if (!paintOnly && !allowLayout)
+                    {
+                        // A transition of a layout property that began on the assumption that the host would lay out (see BeginTransitions) has no way to show its steps:
+                        // it ends at once, on the value it was going to.
+                        foreach (var run in state.Transitions)
+                        {
+                            if (run.Finished || !run.Property.Equals(property, StringComparison.OrdinalIgnoreCase)) continue;
+                            if (WriteProperty(_parser, box, property, run.To)) box.ResetDerivedStyle();
+                            state.Written[property] = run.To;
+                            run.Elapsed = run.DelaySeconds + run.DurationSeconds;
+                        }
+
+                        continue;
+                    }
 
                     var value = state.Base.TryGetValue(property, out var baseValue) ? baseValue : null;
 
