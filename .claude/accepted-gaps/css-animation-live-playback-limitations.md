@@ -36,3 +36,9 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
 - **Only the Win2D backend keeps layers as textures and decodes animated images for the WinUI view**; `RasterRenderContext` decodes animated images and the default retained layer works
   on every canvas, but Skia, CoreGraphics and the PDF/SVG writers show the first frame of an animated image.
 - **The Android view does not play animations.** Only the WinUI view steps the document each frame (`AdvanceAnimations` on the display's frame clock) and raises the animation events; `PeachBrackets.Android.HtmlView` has no frame loop (a `Choreographer` callback calling `AdvanceAnimations`), so a document shown there is a still frame.
+- **Left from the review of the clock** (each is small and has no tracking issue yet):
+  - The control API (`DocumentAnimation.Play`, `Seek`, `Finish`, `Cancel`, `Reverse`) wakes the clock but not the WinUI frame loop: once the loop has stopped, the host (or the next scroll or paint) has to call for a frame before the change shows.
+  - CSS animations on the elements of an inline `<svg>` ignore `animation-play-state: paused`, and a SMIL `set`/`animate` of the `transform` attribute is ignored (only `animateTransform` and `animateMotion` give a transform).
+  - A transition with a `0s` duration and a positive delay snaps at once instead of after the delay, and a layout-property transition that starts before the first step with a canvas is not played.
+  - `visibility: collapse` on a table row is applied without a layout pass, so the row keeps its height.
+  - A second box of one element (a split inline) can take a spurious `@starting-style` transition, and `HtmlDocument.StartingStyles()` does not restore the styles if the recascade throws.

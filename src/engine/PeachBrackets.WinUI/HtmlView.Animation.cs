@@ -37,6 +37,12 @@ public sealed partial class HtmlView
     private bool _animating;
     private TimeSpan? _lastRendering;
 
+    // The display's clock keeps running while the loop is stopped, but the animations must not: the time the document is stepped to leaves out what was idle, so
+    // the first frame after a restart is one frame later than the last before the stop and not seconds.
+    private TimeSpan _idleTime;
+    private TimeSpan? _lastRealTime;
+    private bool _resuming;
+
     // Whether this view plays animations: the host asked, and the system does not ask for reduced motion.
     private bool PlaysAnimations => AnimationsEnabled && HtmlViewLogic.SystemAllowsMotion(SystemAnimationsEnabled());
 
@@ -62,6 +68,7 @@ public sealed partial class HtmlView
 
         _animating = true;
         _lastRendering = null;
+        _resuming = _lastRealTime is not null;
         CompositionTarget.Rendering += OnRendering;
     }
 
@@ -95,18 +102,26 @@ public sealed partial class HtmlView
             return;
 
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
+
+        var real = rendering.RenderingTime;
+        if (_resuming && _lastRealTime is { } stoppedAt)
+            _idleTime += real - stoppedAt;
+        _resuming = false;
+        _lastRealTime = real;
+        var documentTime = real - _idleTime;
+
         _animationMeasuring ??= new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
 
         // A property that moves or resizes boxes lays the document out again, which an asynchronous document may have to wait for: that frame finishes
         // when the layout does, with the painter leaving the surface alone until the new layout is in (see OnRegionsInvalidated).
-        var step = document.AdvanceAnimationsAsync(rendering.RenderingTime, _animationMeasuring.Canvas);
+        var step = document.AdvanceAnimationsAsync(documentTime, _animationMeasuring.Canvas);
         if (step.IsCompletedSuccessfully)
         {
-            CompleteAnimationFrame(document, step.Result, rendering.RenderingTime, started);
+            CompleteAnimationFrame(document, step.Result, documentTime, started);
             return;
         }
 
-        _ = FinishAnimationFrameAsync(document, step, rendering.RenderingTime, started);
+        _ = FinishAnimationFrameAsync(document, step, documentTime, started);
     }
 
     private async Task FinishAnimationFrameAsync(HtmlDocument document, ValueTask<AnimationFrame> step, TimeSpan time, long started)

@@ -165,7 +165,7 @@ namespace PeachBrackets.Svg
 
         private bool CssAnimationsPlay => _box.HtmlContainer is { } container && (container.AnimationProgress is not null || container.SvgAnimationSeconds is not null);
 
-        public bool IsAnimated => (CssAnimationsPlay && _box.GetSvgAnimationPlan() is not null) || SmilTime is not null && SmilAnimationSet!.Targets(_box);
+        public bool IsAnimated => (CssAnimationsPlay && _box.GetSvgAnimationPlan() is not null) || (SmilTime is not null && SmilAnimationSet!.Targets(_box));
 
         // SMIL: the animation elements of the <svg> this node is inside, and the time they are at. A running clock gives the time; a still frame takes its fraction of the
         // span the animations cover.

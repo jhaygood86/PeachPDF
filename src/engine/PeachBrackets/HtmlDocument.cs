@@ -2098,6 +2098,9 @@ public sealed partial class HtmlDocument : IDisposable
                 regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
         }
 
+        // What painted differently without moving (a fade, an animated image, an svg) is not in the layout diff: the frame's own regions are added to it.
+        regions.AddRange(frame.DirtyRegions);
+
         return frame with { DirtyRegions = regions };
     }
 

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Collections.Generic;
 using System.Numerics;
 using PeachBrackets.Css;
@@ -197,6 +198,9 @@ namespace PeachBrackets.Html.Animation
             var timings = AnimationApplier.SplitList(box.TransitionTimingFunction);
             var behaviors = AnimationApplier.SplitList(box.TransitionBehavior);
             var ordinal = box.HtmlTag?.SourceOrdinal ?? -1;
+
+            // A box with no source element (a pseudo-element, an anonymous box) has nothing to follow across a reload and no key of its own: its changes show at once.
+            if (ordinal < 0) return;
 
             var layoutWritten = false;
             foreach (var (property, oldValue, newValue) in changes)
@@ -408,6 +412,10 @@ namespace PeachBrackets.Html.Animation
             {
                 // The range is how far the document can scroll, unless the animation names a part of it.
                 var maxScroll = Math.Max(total - size, 0);
+
+                // A document with nothing to scroll has no scroll timeline to follow (Scroll-driven Animations 1 §3.1): the animation has no effect.
+                if (maxScroll <= 0 && track.RangeStart.IsNormal && track.RangeEnd.IsNormal) return null;
+
                 var scrollStart = track.RangeStart.IsNormal ? 0 : ScrollOffset(track.RangeStart, maxScroll, box);
                 var scrollEnd = track.RangeEnd.IsNormal ? maxScroll : ScrollOffset(track.RangeEnd, maxScroll, box);
                 return Fraction(position, scrollStart, scrollEnd);
@@ -608,6 +616,7 @@ namespace PeachBrackets.Html.Animation
             var stackingFlip = false;
             var running = false;
             var layoutBoxes = allowLayout ? new List<CssBox>() : null;
+            HashSet<BoxState>? laidOut = null;
             List<CssBox>? cascadeBoxes = null;
 
             foreach (var state in _states)
@@ -641,6 +650,7 @@ namespace PeachBrackets.Html.Animation
                     running |= svgRunning;
                     if (svgChanged)
                     {
+                        _contentGeneration++;
                         InteractionRestyler.InvalidatePaintCaches(box);
                         _changed.Add(state);
                     }
@@ -687,7 +697,11 @@ namespace PeachBrackets.Html.Animation
                     wrote = true;
                     if (!IsCompositorProperty(property)) state.BleedStale = true;
 
-                    if (!paintOnly) layoutBoxes!.Add(box);
+                    if (!paintOnly)
+                    {
+                        layoutBoxes!.Add(box);
+                        (laidOut ??= []).Add(state);
+                    }
 
                     // A property the boxes under this one inherit (font-size, but also color and visibility, which only paint) has to be cascaded down to them: they hold
                     // their own copy of it.
@@ -697,6 +711,8 @@ namespace PeachBrackets.Html.Animation
 
                 if (wrote)
                 {
+                    // What a promoted layer above this box holds changed, unless the write was only to the compositor's own properties.
+                    if (state.BleedStale) _contentGeneration++;
                     InteractionRestyler.InvalidatePaintCaches(box);
                     state.StyleAfterWrite = box.ComputedStyle;
                     _changed.Add(state);
@@ -704,6 +720,13 @@ namespace PeachBrackets.Html.Animation
 
                 foreach (var track in state.Tracks)
                 {
+                    // A track of layout properties alone is never sampled when the caller will not lay out, so nothing else would say it has ended.
+                    if (!allowLayout && !track.Finished && !track.IsScrollDriven && !double.IsInfinity(track.ActiveSeconds)
+                        && track.Elapsed >= track.DelaySeconds + track.ActiveSeconds && !track.Properties.Exists(InteractionRestyler.IsPaintOnly))
+                    {
+                        track.Finished = true;
+                    }
+
                     if (!track.IsScrollDriven && !track.Paused && !track.ControlPaused && !track.Cancelled && (!track.Finished || track.PlaybackRate < 0)) running = true;
                 }
             }
@@ -712,7 +735,7 @@ namespace PeachBrackets.Html.Animation
             List<(int, string)>? done = null;
             foreach (var (key, run) in _transitions)
             {
-                if (run.Elapsed >= run.DelaySeconds + run.DurationSeconds)
+                if (run.Elapsed >= run.DelaySeconds + run.DurationSeconds || (run.PlaybackRate < 0 && run.Elapsed <= 0))
                 {
                     run.Finished = true;
                     (done ??= []).Add(key);
@@ -757,7 +780,10 @@ namespace PeachBrackets.Html.Animation
             var dirty = new List<DirtyRegion>();
 
             // A layout pass moves things the old extents describe, and the caller repaints whole pages for it: nothing to work out per box.
-            if (_changed.Count > 0 && !layoutChanged) AddDirtyRegions(dirty);
+            // (On a layout frame the caller adds what the layout diff cannot see: a box that painted differently without moving.)
+            // (A box whose layout changed is covered by that diff, and what is known of where it was is out of date.)
+            if (layoutChanged && laidOut is not null) _changed.RemoveAll(laidOut.Contains);
+            if (_changed.Count > 0) AddDirtyRegions(dirty);
 
             running |= AdvanceImages(dt, fragmentainers, dirty);
 
@@ -1163,6 +1189,12 @@ namespace PeachBrackets.Html.Animation
                 foreach (var state in existing) Rebind(state);
                 // A box that gained an animation through the restyle (a hover rule that starts one) is found by walking again.
                 CollectBoxes(root, rebuilt: false, existing);
+
+                // A box that stopped being animated no longer needs the texture it was promoted to.
+                foreach (var state in existing)
+                {
+                    if (!_byBox.ContainsKey(state.Box)) state.Entry.Discard();
+                }
             }
 
             _generation = _container.StyleGeneration;
@@ -1547,6 +1579,15 @@ namespace PeachBrackets.Html.Animation
             }
 
             Walk(root);
+
+            // The time an image has played is kept only for the images the document still shows.
+            if (_imageElapsed.Count > _images.Count)
+            {
+                foreach (var image in _imageElapsed.Keys.ToArray())
+                {
+                    if (!_images.Contains(image)) _imageElapsed.Remove(image);
+                }
+            }
         }
 
         // Plays each animated image: the frame its clock says, shared by every box that shows it.
