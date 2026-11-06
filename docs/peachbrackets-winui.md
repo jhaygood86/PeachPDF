@@ -149,7 +149,7 @@ for what plays. A box that animates `transform` or `opacity` is kept as a textur
 [`PeachDrawing.Win2D`](peachdrawing-win2d.md)) and drawn again each frame, so it follows the display's refresh rate (120 fps and more on a fast display) without painting what is inside it;
 other properties that cannot change layout repaint the rectangle they cover, painted in one pass however the surface cuts it into regions. A property that moves or
 resizes boxes (`width`, `margin`, `top`, `font-size`, flex and grid sizing) plays by laying the document out again on each frame and repainting where something moved, so its
-cost follows the size of the document. Nothing plays when Windows' "Animation effects" setting is off, and `prefers-reduced-motion` then reports `reduce`. Changing
+cost follows the size of the document; text is positioned to an eighth of a pixel while it plays (`Win2dRenderContext.TextPositionSteps`), so text that moves each frame does not need a new bitmap on the device for every position. Nothing plays when Windows' "Animation effects" setting is off, and `prefers-reduced-motion` then reports `reduce`. Changing
 `AnimationsEnabled` loads the document again.
 
 Animations on a scroll or view timeline follow the view's own scrolling, and the view steps the document on every scroll step for them (the demo has a showcase). `AnimationEvents` reports the animation and transition events of each frame (see [Events and controlling the animations](peachbrackets.md#events-and-controlling-the-animations)), and `view.Document.GetAnimations()` lists what is running to pause, seek or cancel it.

@@ -149,6 +149,7 @@ PeachDrawing.Win2D.Win2dRenderContext : class
   property CanvasDevice Device { get; }
   property Double LayoutUnitsPerPoint { get; }
   property Double PixelsPerPoint { get; set; }
+  property Int32 TextPositionSteps { get; set; }
   property Win2dImageCodec ImageCodec { get; }
   property Win2dTextEngine TextEngine { get; }
   property Win2dTextRendering TextRendering { get; set; }

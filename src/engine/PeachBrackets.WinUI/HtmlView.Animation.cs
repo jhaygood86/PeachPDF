@@ -34,6 +34,9 @@ public sealed partial class HtmlView
     /// </summary>
     public event EventHandler<HtmlAnimationEventsEventArgs>? AnimationEvents;
 
+    // Text is positioned to an eighth of a pixel (4 steps: half a step is at most an eighth) while the document plays.
+    private const int AnimatingTextPositionSteps = 4;
+
     private bool _animating;
     private TimeSpan? _lastRendering;
 
@@ -68,6 +71,10 @@ public sealed partial class HtmlView
 
         _animating = true;
         _lastRendering = null;
+
+        // Text that moves a little each frame (layout animation) would need a mask and a device bitmap for every position it passes through; kept to coarser
+        // positions while the document plays, there are few to make, which is what keeps the garbage collector's memory-pressure collections away.
+        if (_context is not null) _context.TextPositionSteps = AnimatingTextPositionSteps;
         _resuming = _lastRealTime is not null;
         CompositionTarget.Rendering += OnRendering;
     }
@@ -91,6 +98,7 @@ public sealed partial class HtmlView
             return;
 
         _animating = false;
+        if (_context is not null) _context.TextPositionSteps = 64;
         CompositionTarget.Rendering -= OnRendering;
         _animationMeasuring?.Dispose();
         _animationMeasuring = null;
@@ -115,6 +123,7 @@ public sealed partial class HtmlView
             return;
 
         var started = System.Diagnostics.Stopwatch.GetTimestamp();
+        var allocatedBefore = HtmlViewDiagnostics.Recording ? GC.GetAllocatedBytesForCurrentThread() : 0;
 
         var real = rendering.RenderingTime;
         if (_resuming && _lastRealTime is { } stoppedAt)
@@ -130,14 +139,14 @@ public sealed partial class HtmlView
         var step = document.AdvanceAnimationsAsync(documentTime, _animationMeasuring.Canvas);
         if (step.IsCompletedSuccessfully)
         {
-            CompleteAnimationFrame(document, step.Result, documentTime, started);
+            CompleteAnimationFrame(document, step.Result, documentTime, started, allocatedBefore);
             return;
         }
 
-        _ = FinishAnimationFrameAsync(document, step, documentTime, started);
+        _ = FinishAnimationFrameAsync(document, step, documentTime, started, allocatedBefore);
     }
 
-    private async Task FinishAnimationFrameAsync(HtmlDocument document, ValueTask<AnimationFrame> step, TimeSpan time, long started)
+    private async Task FinishAnimationFrameAsync(HtmlDocument document, ValueTask<AnimationFrame> step, TimeSpan time, long started, long allocatedBefore)
     {
         _stepping = true;
         _restyling = true;
@@ -145,7 +154,7 @@ public sealed partial class HtmlView
         {
             var frame = await step;
             if (ReferenceEquals(document, _document))
-                CompleteAnimationFrame(document, frame, time, started);
+                CompleteAnimationFrame(document, frame, time, started, allocatedBefore);
         }
         catch (Exception exception) when (exception is not OutOfMemoryException)
         {
@@ -159,7 +168,7 @@ public sealed partial class HtmlView
         }
     }
 
-    private void CompleteAnimationFrame(HtmlDocument document, AnimationFrame frame, TimeSpan time, long started)
+    private void CompleteAnimationFrame(HtmlDocument document, AnimationFrame frame, TimeSpan time, long started, long allocatedBefore)
     {
         FrameCount++;
 
@@ -176,7 +185,7 @@ public sealed partial class HtmlView
         if (HtmlViewDiagnostics.Recording)
         {
             var interval = _lastRendering is { } last ? (time - last).TotalMilliseconds : 0;
-            HtmlViewDiagnostics.AddAnimationFrame(interval, HtmlViewDiagnostics.MillisecondsSince(started), frame.DirtyRegions.Count);
+            HtmlViewDiagnostics.AddAnimationFrame(interval, HtmlViewDiagnostics.MillisecondsSince(started), frame.DirtyRegions.Count, GC.GetAllocatedBytesForCurrentThread() - allocatedBefore);
         }
 
         _lastRendering = time;

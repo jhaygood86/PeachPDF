@@ -104,6 +104,8 @@ kind, so a font is never measured by one engine and drawn by the other.
 | `Grayscale` | The run is fitted to the pixel grid by the font's own hinting (the TrueType interpreter and CFF engine of the shared text engine; `RenderContext.TextHinting` picks the dialect, `Standard` when unset), rasterized to a coverage mask, corrected for the brightness of the text colour so light and dark text have the same apparent weight, and drawn as a bitmap on whole device pixels. Close to Windows' grayscale text. |
 | `Lcd` | As `Grayscale`, with a coverage per red, green and blue stripe (3x horizontal detail, a short filter across stripes, `LcdBgrStripes` for the opposite order) blended per channel. |
 
+`Win2dRenderContext.TextPositionSteps` (1 to 64, default 64) is how many steps of a pixel a run's position is kept at before its coverage is made. A run is drawn from a mask made for where it falls within a pixel, so text that moves a little every frame needs a new mask, and a new bitmap on the device, for each position it passes through; with 4 steps there are four to make, at the cost of drawing text up to an eighth of a pixel from where it belongs. `HtmlView` sets 4 while it plays animations. It has no effect in DirectWrite mode.
+
 `Grayscale` and `Lcd` draw a run as `Outline` when it is rotated or skewed, or in a colour font, and a run too large to rasterize over a host's session. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
 
 **What LCD text needs.** Blending each colour channel with its own coverage needs the pixels behind the text. There are two ways to get them.

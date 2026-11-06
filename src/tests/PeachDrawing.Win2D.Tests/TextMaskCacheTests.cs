@@ -111,4 +111,49 @@ public class TextMaskCacheTests
         context.TextMasks.Clear();
         Assert.Equal(0, context.TextMasks.Count);
     }
+
+    [Fact]
+    public async Task Fewer_position_steps_make_fewer_masks_for_text_that_moves()
+    {
+        using var fine = await ContextAsync();
+        using var coarse = await ContextAsync();
+        coarse.TextPositionSteps = 4;
+
+        // A run that slides by a thirteenth of a pixel each frame passes through many positions within a pixel.
+        for (var i = 0; i < 52; i++)
+        {
+            Paint(fine, 5 + (i / 13.0), 5);
+            Paint(coarse, 5 + (i / 13.0), 5);
+        }
+
+        Assert.True(coarse.TextMasks.Misses <= 5, $"{coarse.TextMasks.Misses} masks at 4 steps");
+        Assert.True(fine.TextMasks.Misses >= coarse.TextMasks.Misses * 2, $"{fine.TextMasks.Misses} masks at 64 steps against {coarse.TextMasks.Misses}");
+    }
+
+    [Fact]
+    public async Task The_number_of_steps_is_kept_within_one_and_sixty_four()
+    {
+        using var context = await ContextAsync();
+
+        context.TextPositionSteps = 0;
+        Assert.Equal(1, context.TextPositionSteps);
+        context.TextPositionSteps = 500;
+        Assert.Equal(64, context.TextPositionSteps);
+    }
+
+    [Fact]
+    public async Task A_mask_made_at_one_number_of_steps_is_not_used_for_another()
+    {
+        using var context = await ContextAsync();
+
+        var fine = Paint(context, 5.5, 5);
+        var misses = context.TextMasks.Misses;
+        context.TextPositionSteps = 2;
+        Paint(context, 5.5, 5);
+
+        // The same fraction of a pixel, but half a pixel is step 1 of 2 and step 32 of 64: a new mask, and the first one still draws as before.
+        Assert.True(context.TextMasks.Misses > misses);
+        context.TextPositionSteps = 64;
+        Assert.Equal(fine, Paint(context, 5.5, 5));
+    }
 }

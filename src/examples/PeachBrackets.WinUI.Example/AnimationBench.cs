@@ -42,6 +42,28 @@ internal static class AnimationBench
         }
     }
 
+    // What was allocated, by type, while a showcase played (the runtime samples one allocation in about every 100 KB). Only attached while PEACH_ANIM_ALLOC is set.
+    private sealed class AllocationTypes : System.Diagnostics.Tracing.EventListener
+    {
+        public readonly Dictionary<string, long> Bytes = [];
+
+        protected override void OnEventSourceCreated(System.Diagnostics.Tracing.EventSource source)
+        {
+            if (source.Name == "Microsoft-Windows-DotNETRuntime")
+                EnableEvents(source, System.Diagnostics.Tracing.EventLevel.Verbose, (System.Diagnostics.Tracing.EventKeywords)1);
+        }
+
+        protected override void OnEventWritten(System.Diagnostics.Tracing.EventWrittenEventArgs e)
+        {
+            if (e.EventName is not { } name || !name.StartsWith("GCAllocationTick", StringComparison.Ordinal) || e.Payload is null || e.PayloadNames is null)
+                return;
+
+            var type = e.PayloadNames.IndexOf("TypeName") is var t and >= 0 ? e.Payload[t] as string ?? "?" : "?";
+            var amount = e.PayloadNames.IndexOf("AllocationAmount64") is var a and >= 0 ? Convert.ToInt64(e.Payload[a]) : 0;
+            lock (Bytes) Bytes[type] = Bytes.GetValueOrDefault(type) + amount;
+        }
+    }
+
     private const double ViewWidth = 1200;
     private const double ViewHeight = 800;
     private const int SecondsPerShowcase = 6;
@@ -77,6 +99,7 @@ internal static class AnimationBench
                 if (Environment.GetEnvironmentVariable("PEACH_ANIM_LATENCY") is { Length: > 0 })
                     System.Runtime.GCSettings.LatencyMode = System.Runtime.GCLatencyMode.SustainedLowLatency;
 
+                using var allocationTypes = Environment.GetEnvironmentVariable("PEACH_ANIM_ALLOC") is { Length: > 0 } ? new AllocationTypes() : null;
                 using var gcReasons =Environment.GetEnvironmentVariable("PEACH_ANIM_GC") is { Length: > 0 } ? new GcReasons() : null;
                 var gen0 = GC.CollectionCount(0);
                 var gen2 = GC.CollectionCount(2);
@@ -95,8 +118,18 @@ internal static class AnimationBench
                 var fps = intervals.Length == 0 ? 0 : 1000.0 / intervals.Average();
                 report.AppendLine($"frames={frames.Count} fps={fps:F1} interval p50={Percentile(intervals, 0.5):F1} p95={Percentile(intervals, 0.95):F1} p99={Percentile(intervals, 0.99):F1} max={(intervals.Length == 0 ? 0 : intervals[^1]):F1} ms; slower than 60 fps: {intervals.Count(v => v > 17.5)}");
                 report.AppendLine($"advance (document step) p50={Percentile(advance, 0.5):F2} p95={Percentile(advance, 0.95):F2} max={(advance.Length == 0 ? 0 : advance[^1]):F2} ms; regions per frame avg={(frames.Count == 0 ? 0 : frames.Average(f => f.Regions)):F1}");
+                report.AppendLine($"allocated per frame: step avg={(frames.Count == 0 ? 0 : frames.Average(f => f.AllocatedBytes)) / 1024:F0} KB, repaint avg={(paints.Count == 0 ? 0 : paints.Average(p => p.AllocatedBytes)) / 1024:F0} KB");
                 report.AppendLine($"repaint events={paints.Count} p50={Percentile(paint, 0.5):F2} p95={Percentile(paint, 0.95):F2} max={(paint.Length == 0 ? 0 : paint[^1]):F2} ms");
                 report.AppendLine($"GC: gen0={GC.CollectionCount(0) - gen0} gen2={GC.CollectionCount(2) - gen2} pause={(GC.GetTotalPauseDuration() - pause).TotalMilliseconds:F0} ms, allocated={(GC.GetTotalAllocatedBytes() - allocated) / 1048576.0:F1} MB");
+
+                if (allocationTypes is not null)
+                {
+                    lock (allocationTypes.Bytes)
+                    {
+                        var total = Math.Max(1, allocationTypes.Bytes.Values.Sum());
+                        report.AppendLine("allocated by type: " + string.Join(", ", allocationTypes.Bytes.OrderByDescending(p => p.Value).Take(12).Select(p => $"{p.Key}={p.Value * 100 / total}%")));
+                    }
+                }
 
                 if (gcReasons is not null)
                 {

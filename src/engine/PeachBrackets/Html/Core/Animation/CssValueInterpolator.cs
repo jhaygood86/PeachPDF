@@ -933,7 +933,26 @@ namespace PeachBrackets.Html.Animation
                 _ => null
             };
 
+        // The keyframes of an animation are the same few strings every frame, and tokenizing them was most of what a frame of many animated boxes allocated. The
+        // lists are never changed by their readers (a substitution makes a new one), so one is kept for each text, for each parser (a colour is read through it).
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssValueParser, Dictionary<string, List<Token>>> ScanCache = new();
+        private const int ScanCacheCapacity = 1024;
+
         private static List<Token> Scan(CssValueParser valueParser, string text)
+        {
+            var cache = ScanCache.GetValue(valueParser, static _ => new Dictionary<string, List<Token>>(StringComparer.Ordinal));
+            lock (cache)
+            {
+                if (cache.TryGetValue(text, out var cached)) return cached;
+
+                var scanned = ScanText(valueParser, text);
+                if (cache.Count >= ScanCacheCapacity) cache.Clear();
+                cache[text] = scanned;
+                return scanned;
+            }
+        }
+
+        private static List<Token> ScanText(CssValueParser valueParser, string text)
         {
             var tokens = new List<Token>();
             var i = 0;

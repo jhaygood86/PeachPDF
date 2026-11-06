@@ -11,24 +11,24 @@ namespace PeachBrackets.WinUI;
 internal static class HtmlViewDiagnostics
 {
     private static readonly object Gate = new();
-    private static readonly List<(double Milliseconds, double Pixels, int Regions)> Events = [];
+    private static readonly List<(double Milliseconds, double Pixels, int Regions, long AllocatedBytes)> Events = [];
 
-    private static readonly List<(double IntervalMs, double AdvanceMs, int Regions)> AnimationFrames = [];
+    private static readonly List<(double IntervalMs, double AdvanceMs, int Regions, long AllocatedBytes)> AnimationFrames = [];
 
     internal static bool Recording { get; set; }
 
     /// <summary>One animation frame: the time since the previous one, what stepping the document cost, and how many regions it asked to repaint.</summary>
-    internal static void AddAnimationFrame(double intervalMilliseconds, double advanceMilliseconds, int regions)
+    internal static void AddAnimationFrame(double intervalMilliseconds, double advanceMilliseconds, int regions, long allocatedBytes)
     {
         lock (Gate)
-            AnimationFrames.Add((intervalMilliseconds, advanceMilliseconds, regions));
+            AnimationFrames.Add((intervalMilliseconds, advanceMilliseconds, regions, allocatedBytes));
     }
 
-    internal static List<(double IntervalMs, double AdvanceMs, int Regions)> TakeAnimationFrames()
+    internal static List<(double IntervalMs, double AdvanceMs, int Regions, long AllocatedBytes)> TakeAnimationFrames()
     {
         lock (Gate)
         {
-            var taken = new List<(double, double, int)>(AnimationFrames);
+            var taken = new List<(double IntervalMs, double AdvanceMs, int Regions, long AllocatedBytes)>(AnimationFrames);
             AnimationFrames.Clear();
             return taken;
         }
@@ -39,7 +39,17 @@ internal static class HtmlViewDiagnostics
 
     internal static double MillisecondsSince(long started) => (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
 
-    internal static long Start() => Recording ? Stopwatch.GetTimestamp() : 0;
+    // What the UI thread had allocated when the event began, so its end can say what the event cost in memory.
+    [ThreadStatic]
+    private static long _allocatedAtStart;
+
+    internal static long Start()
+    {
+        if (!Recording) return 0;
+
+        _allocatedAtStart = GC.GetAllocatedBytesForCurrentThread();
+        return Stopwatch.GetTimestamp();
+    }
 
     internal static void Stop(long started, double pixels, int regions)
     {
@@ -48,14 +58,14 @@ internal static class HtmlViewDiagnostics
 
         var milliseconds = (Stopwatch.GetTimestamp() - started) * 1000.0 / Stopwatch.Frequency;
         lock (Gate)
-            Events.Add((milliseconds, pixels, regions));
+            Events.Add((milliseconds, pixels, regions, GC.GetAllocatedBytesForCurrentThread() - _allocatedAtStart));
     }
 
-    internal static List<(double Milliseconds, double Pixels, int Regions)> Take()
+    internal static List<(double Milliseconds, double Pixels, int Regions, long AllocatedBytes)> Take()
     {
         lock (Gate)
         {
-            var taken = new List<(double, double, int)>(Events);
+            var taken = new List<(double Milliseconds, double Pixels, int Regions, long AllocatedBytes)>(Events);
             Events.Clear();
             return taken;
         }
