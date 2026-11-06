@@ -1,3 +1,5 @@
+PeachBrackets.Apple.HtmlAnimationEventsEventArgs : sealed class
+  property IReadOnlyList<AnimationEventInfo> Events { get; }
 PeachBrackets.Apple.HtmlFormInvalidEventArgs : sealed class
   property IReadOnlyList<ValidationProblem> Problems { get; }
 PeachBrackets.Apple.HtmlFormSubmittingEventArgs : sealed class
@@ -25,6 +27,7 @@ PeachBrackets.Apple.HtmlView : sealed class
   event EventHandler FocusChanged
   event EventHandler ScrollChanged
   event EventHandler ZoomChanged
+  event EventHandler<HtmlAnimationEventsEventArgs> AnimationEvents
   event EventHandler<HtmlFormInvalidEventArgs> FormInvalid
   event EventHandler<HtmlFormSubmittingEventArgs> FormSubmitting
   event EventHandler<HtmlLinkActivatedEventArgs> LinkActivated
@@ -48,6 +51,7 @@ PeachBrackets.Apple.HtmlView : sealed class
   method virtual Void TraitCollectionDidChange(UITraitCollection previousTraitCollection)
   property AccessibilityNode FocusedNode { get; }
   property Boolean AllowNetworkAccess { get; set; }
+  property Boolean AnimationsEnabled { get; set; }
   property Boolean CanBecomeFirstResponder { get; }
   property Boolean HasText { get; }
   property Boolean SecureTextEntry { get; }

@@ -301,6 +301,7 @@ internal sealed class DetailController : UIViewController
     private void Apply()
     {
         _view.AllowNetworkAccess = DemoSettings.AllowNetwork;
+        _view.AnimationsEnabled = true;
         _view.DocumentBaseUri = _showcase.IsWeb ? new Uri(_showcase.Path) : null;
         _view.Input = DemoSettings.Input switch
         {

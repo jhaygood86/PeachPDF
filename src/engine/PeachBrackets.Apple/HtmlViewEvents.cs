@@ -98,3 +98,12 @@ public sealed class HtmlTappedEventArgs : EventArgs
     /// <summary>The distance from the top edge of the page, in points.</summary>
     public double Y { get; }
 }
+
+/// <summary>The events <c>HtmlView.AnimationEvents</c> reports.</summary>
+public sealed class HtmlAnimationEventsEventArgs : EventArgs
+{
+    internal HtmlAnimationEventsEventArgs(IReadOnlyList<PeachBrackets.Updates.AnimationEventInfo> events) => Events = events;
+
+    /// <summary>The events (<c>animationstart</c>, <c>transitionend</c> and the rest), in the order they happened.</summary>
+    public IReadOnlyList<PeachBrackets.Updates.AnimationEventInfo> Events { get; }
+}

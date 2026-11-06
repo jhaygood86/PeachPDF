@@ -82,7 +82,10 @@ internal sealed class AppDelegate(Options options) : NSApplicationDelegate
         if (options.SmokeReport is null && options.Screenshot is null)
         {
             _window!.MakeKeyAndOrderFront(null);
+            // Activate() is macOS 14; the older call is what a Mac this example still supports (11) has.
+#pragma warning disable CA1422
             NSApplication.SharedApplication.ActivateIgnoringOtherApps(true);
+#pragma warning restore CA1422
             return;
         }
 
@@ -261,7 +264,7 @@ internal sealed class AppDelegate(Options options) : NSApplicationDelegate
             return;
 
         view.CacheDisplay(bounds, rep);
-        rep.RepresentationUsingTypeProperties(NSBitmapImageFileType.Png, new NSDictionary())?.Save(path, true);
+        rep.RepresentationUsingTypeProperties(NSBitmapImageFileType.Png, new NSDictionary())?.Save(NSUrl.FromFilename(path), true, out _);
     }
 
     private void Exit(bool ok, string report)

@@ -39,6 +39,7 @@ appearance (light or dark) changes. It is laid out as one continuous page; to pa
 | `Html` | What to show. |
 | `PageBackground`, `AllowNetworkAccess`, `UseGpu` | The colour behind the page; whether `http`/`https` resources may be loaded (off by default); whether effects run on the GPU. |
 | `DocumentBaseUri` | The address the document's relative references (style sheets, images, fonts) resolve against. Set it, with `AllowNetworkAccess`, when the HTML is a page you fetched yourself: a `<base href>` in the page does not reach its style sheets, which load while it is still being parsed. |
+| `AnimationsEnabled`, `AnimationEvents` | Whether the document plays its CSS animations, transitions and animated images (off by default; takes effect on the next load), and an event with the `animationstart`/`transitionend` family as they happen, on the main thread. The document is stepped on the display's clock (a display link on iOS, a 60 Hz timer in the common run-loop modes on macOS) only while something runs, and only the tiles a frame touches are painted again. Nothing plays, and `prefers-reduced-motion` reports it, when the system asks for reduced motion. A property that moves or resizes boxes lays the document out again each frame, so its cost follows the size of the document. |
 | `Input` | The pointing devices the `hover` and `pointer` media queries report. By default a Mac reports a mouse or trackpad (fine, can hover) and an iPhone or iPad reports touch (coarse, cannot hover); an iPad with a pointer attached reports both and follows the one used last. |
 | `Document`, `Zoom`, `SelectedText` | The loaded `HtmlDocument` (replaced whenever the view reloads), the zoom factor, and the selected text. |
 | `CopySelection()`, `SelectAll()`, `ScrollToElement(id)`, `ApplyUpdate(result)` | Pasteboard, selection, scrolling, and taking in a change the document made to itself. Cmd+C and Cmd+A work on a Mac and with a hardware keyboard on iOS. |
@@ -101,6 +102,7 @@ paints again with what loads.
 - A custom `url()` cursor is shown as its keyword.
 - Selection has no drag handles: on iOS a drag after a long press extends it.
 - A Mac with a touch display is reported as having a fine pointer and hover only; direct touch on a Mac is not handled separately.
+- Animated `transform` and `opacity` are not kept as textures on the graphics device as they are on Windows: a frame paints the tiles it touches again, so a large animated area costs more than there.
 - Zooming paints the page again at the new scale, which is slow on very large pages.
 
 ## The demo

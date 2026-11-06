@@ -38,7 +38,7 @@ internal sealed class DemoWindow
         _view = NewView();
         _stage.HostBox.AddSubview(_view);
 
-        Window = new NSWindow(new CGRect(60, 60, 1360, 860), NSWindowStyle.Titled | NSWindowStyle.Closable | NSWindowStyle.Miniaturizable | NSWindowStyle.Resizable,
+        Window = new UnconstrainedWindow(new CGRect(60, 60, 1360, 860), NSWindowStyle.Titled | NSWindowStyle.Closable | NSWindowStyle.Miniaturizable | NSWindowStyle.Resizable,
             NSBackingStore.Buffered, false)
         {
             Title = "PeachBrackets.Apple demo",
@@ -192,6 +192,8 @@ internal sealed class DemoWindow
             Popup(["White", "Transparent", "Light grey", "Dark"], 0, i => { _settings.Background = i; Apply(); }));
         _panel.Knob("AllowNetworkAccess", "Whether the document may load images, style sheets and fonts from the web. Off by default; data: URIs and files always load.",
             Check("Allow", _settings.AllowNetwork, v => { _settings.AllowNetwork = v; Apply(); Reload(); }));
+        _panel.Knob("AnimationsEnabled", "Whether the document plays its CSS animations, transitions and animated images. Nothing plays when the system asks for reduced motion. Takes a new load.",
+            Check("Play", _settings.Animations, v => { _settings.Animations = v; Apply(); Reload(); }));
         _panel.Knob("Appearance", "The appearance the view reports to prefers-color-scheme. Try the Light and dark showcase.",
             Popup(["System", "Light", "Dark"], 0, i => { _settings.Appearance = i; Apply(); }));
         _panel.Knob("Input", "The pointing devices the document is told about (hover, pointer and any-pointer media features). Detect reports a mouse.",
@@ -310,6 +312,7 @@ internal sealed class DemoWindow
         _loadTimer.Restart();
         _lastLink = string.Empty;
         _view.AllowNetworkAccess = _settings.AllowNetwork;
+        _view.AnimationsEnabled = _settings.Animations;
         _view.DocumentBaseUri = _current is { IsWeb: true } web ? new Uri(web.Path) : null;
         _view.Input = _settings.Input switch
         {
@@ -392,6 +395,7 @@ internal sealed class DemoWindow
         public int Background { get; set; }
 
         public bool AllowNetwork { get; set; }
+        public bool Animations { get; set; } = true;
 
         public int Appearance { get; set; }
 
@@ -519,4 +523,10 @@ internal sealed class DemoWindow
         public override void SelectionDidChange(NSNotification notification) =>
             selected((int)((NSTableView)notification.Object!).SelectedRow);
     }
+}
+
+/// <summary>A window that keeps the size it was given: a titled window is otherwise cut to the screen it opens on, and a small one (a build agent's virtual display) leaves the page too little room.</summary>
+internal sealed class UnconstrainedWindow(CGRect contentRect, NSWindowStyle style, NSBackingStore backing, bool defer) : NSWindow(contentRect, style, backing, defer)
+{
+    public override CGRect ConstrainFrameRect(CGRect frameRect, NSScreen? screen) => frameRect;
 }

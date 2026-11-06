@@ -52,7 +52,7 @@ internal sealed class ViewHarness
 
     public int Loads => _loads;
 
-    public static async Task<ViewHarness> LoadAsync(string html, double width = 800, double height = 600)
+    public static async Task<ViewHarness> LoadAsync(string html, double width = 800, double height = 600, Action<HtmlView>? configure = null)
     {
         var harness = await MainThread.Run(() =>
         {
@@ -60,6 +60,7 @@ internal sealed class ViewHarness
             var view = new HtmlView { Frame = new CGRect(0, 0, width, height), AutoresizingMask = NSViewResizingMask.WidthSizable | NSViewResizingMask.HeightSizable };
             window.ContentView = view;
             var created = new ViewHarness(window, view);
+            configure?.Invoke(view);
             view.Html = html;
             return created;
         });

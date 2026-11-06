@@ -28,6 +28,21 @@ internal interface IHtmlViewHost
 
     Uri? DocumentBaseUri { get; }
 
+    /// <summary>Whether the host asked for the document to play its animations.</summary>
+    bool AnimationsEnabled { get; }
+
+    /// <summary>Whether the system lets things move: false when it asks for reduced motion.</summary>
+    bool SystemAllowsMotion { get; }
+
+    /// <summary>Starts a clock that calls <paramref name="tick"/> on the main thread once a display frame, with the time in seconds from a fixed origin; disposing it stops it.</summary>
+    IDisposable StartFrameClock(Action<TimeSpan> tick);
+
+    /// <summary>The animation and transition events that happened since the last frame.</summary>
+    void AnimationEvents(IReadOnlyList<AnimationEventInfo> events);
+
+    /// <summary>The content got a new size (an animation laid the document out again): the host sizes what scrolls.</summary>
+    void ContentResized();
+
     InputCapabilities? Input { get; }
 
     bool UseGpu { get; }
@@ -147,6 +162,7 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
         _reflowTimer = null;
         _upgradeTimer?.Invalidate();
         _upgradeTimer = null;
+        StopAnimationLoop();
         _accessibilityTree = null;
         _imagesChosenForZoom = 1;
         ResetInteractionState();
@@ -236,11 +252,14 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
             RetireDocument(_document);
             _document = document;
             document.Selection.SelectionChanged += (_, e) => Invalidate(e.DirtyRegions);
+            StopAnimationLoop();
+            _lastRealTime = null;
             UpdateMetrics();
             Invalidate();
             // The accessibility tree first, so what a DocumentLoaded handler asks of the view already includes it.
             RefreshAccessibility();
             host.DocumentAdopted();
+            AdoptAnimations(document);
         }
         catch (Exception exception) when (version == _loadVersion)
         {
@@ -299,7 +318,7 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
     private HtmlDocumentOptions BuildOptions(double width)
     {
         _loadedViewport = host.ViewportHeight > 1 ? host.ViewportHeight : -1;
-        return new HtmlDocumentOptions
+        var options = new HtmlDocumentOptions
         {
             MediaType = MediaType.Screen,
             PageWidthPoints = width / PixelsPerPoint,
@@ -316,6 +335,8 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
             Input = host.Input ?? host.DetectInput(),
             DevicePixelRatio = ImageScale.DevicePixelRatio(host.BackingScale),
         };
+        ApplyAnimationOptions(options);
+        return options;
     }
 
     // A screen document is one surface, so there is a single "page" at the top and no gap around it.
@@ -733,7 +754,7 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
     // One state change at a time: a restyle lays the document out again, and only the pointer's latest position matters.
     private async Task PumpStateAsync()
     {
-        if (_pumping)
+        if (_pumping || _stepping)
             return;
 
         _pumping = true;

@@ -110,6 +110,20 @@ public sealed class HtmlView : UIScrollView, IHtmlViewHost, IUIKeyInput, IUIGest
     private volatile Uri? _documentBaseUri;
 
     /// <summary>
+    /// Whether the document plays its CSS animations, transitions and animated images (GIF, WebP). Off by default. A property that moves or resizes boxes
+    /// animates by laying the document out again each frame, so its cost follows the size of the document; the rest repaint only the tiles they touch. Nothing
+    /// plays when the system asks for reduced motion, and the document's <c>prefers-reduced-motion</c> reports it. Takes effect on the next load.
+    /// </summary>
+    // Named as on the other views; it hides UIView's static switch for UIKit's own view animations, which this property has nothing to do with.
+    public new bool AnimationsEnabled { get; set; }
+
+    /// <summary>
+    /// Raised, on the main thread, with the animation and transition events that happened since the last frame, in order. The animations themselves can be
+    /// looked at and controlled through <c>Document.GetAnimations()</c>.
+    /// </summary>
+    public event EventHandler<HtmlAnimationEventsEventArgs>? AnimationEvents;
+
+    /// <summary>
     /// Whether the page is composited and its effects (blur, shadow, filter, mask) run on the graphics hardware. On by default. Takes effect before the
     /// view is first shown.
     /// </summary>
@@ -628,6 +642,35 @@ public sealed class HtmlView : UIScrollView, IHtmlViewHost, IUIKeyInput, IUIGest
     bool IHtmlViewHost.AllowNetworkAccess => AllowNetworkAccess;
 
     Uri? IHtmlViewHost.DocumentBaseUri => _documentBaseUri;
+
+    bool IHtmlViewHost.AnimationsEnabled => AnimationsEnabled;
+
+    bool IHtmlViewHost.SystemAllowsMotion => !UIAccessibility.IsReduceMotionEnabled;
+
+    IDisposable IHtmlViewHost.StartFrameClock(Action<TimeSpan> tick)
+    {
+        // The display link fires with the screen's refresh (and ProMotion's variable one), in the common modes so a scroll does not pause it.
+        var link = CADisplayLink.Create(() => tick(FrameClock.Now));
+        link.AddToRunLoop(NSRunLoop.Main, NSRunLoopMode.Common);
+        return new DisplayLinkClock(link);
+    }
+
+    void IHtmlViewHost.AnimationEvents(IReadOnlyList<PeachBrackets.Updates.AnimationEventInfo> events) => AnimationEvents?.Invoke(this, new HtmlAnimationEventsEventArgs(events));
+
+    // A zoomed page keeps the size the zoom gave it; the next settle takes the new content size.
+    void IHtmlViewHost.ContentResized()
+    {
+        if (Math.Abs(ZoomScale - 1) > 0.001)
+            return;
+
+        _page.Frame = new CGRect(0, 0, Math.Max(_engine.ContentWidth, Bounds.Width), _engine.ContentHeight);
+        ContentSize = _page.Frame.Size;
+    }
+
+    private sealed class DisplayLinkClock(CADisplayLink link) : IDisposable
+    {
+        public void Dispose() => link.Invalidate();
+    }
 
     InputCapabilities? IHtmlViewHost.Input => Input;
 

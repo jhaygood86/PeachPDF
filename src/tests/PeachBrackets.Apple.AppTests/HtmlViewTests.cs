@@ -170,4 +170,66 @@ public class HtmlViewTests
         await MainThread.Run(() => harness.Window.ContentView = new NSView());
         await ViewHarness.Eventually(() => harness.View.Document is null);
     }
+
+    private const string AnimatedPage = """
+        <style>
+        body { margin: 0 }
+        @keyframes pulse { from { background: #ff0000 } to { background: #0000ff } }
+        #box { width: 100px; height: 100px; background: #ff0000; animation: pulse 1s linear infinite alternate }
+        </style>
+        <div id="box"></div>
+        """;
+
+    // A machine that has reduced motion on plays nothing, whatever the view is asked.
+    private static Task<bool> SystemAllowsMotionAsync() => MainThread.Run(() => !NSWorkspace.SharedWorkspace.AccessibilityDisplayShouldReduceMotion);
+
+    [Fact]
+    public async Task AnAnimatedColourChangesWhatIsPaintedWhenAnimationsAreOn()
+    {
+        if (!await SystemAllowsMotionAsync())
+            return;
+
+        var harness = await ViewHarness.LoadAsync(AnimatedPage, configure: view => view.AnimationsEnabled = true);
+        var box = harness.View.Document!.GetElementBounds("box")!.Value;
+        var x = (box.X + 40) * 96 / 72;
+        var y = (box.Y + 40) * 96 / 72;
+
+        // The box is red at the start and blue half a second later at the latest; the tiles are painted again as it goes.
+        var first = await ColorAtAsync(harness, x, y);
+        await ViewHarness.Eventually(() => harness.PixelAt(x, y) is { } c && Math.Abs(c.B - first.B) > 40, 5);
+        Assert.True(Math.Abs((await ColorAtAsync(harness, x, y)).B - first.B) > 40);
+    }
+
+    [Fact]
+    public async Task NothingPlaysWhenAnimationsAreOff()
+    {
+        var harness = await ViewHarness.LoadAsync(AnimatedPage);
+        var box = harness.View.Document!.GetElementBounds("box")!.Value;
+        var x = (box.X + 40) * 96 / 72;
+        var y = (box.Y + 40) * 96 / 72;
+
+        await Task.Delay(700);
+        AssertNear(await ColorAtAsync(harness, x, y), (255, 0, 0));
+    }
+
+    [Fact]
+    public async Task TheAnimationEventsAreRaisedOnTheMainThread()
+    {
+        if (!await SystemAllowsMotionAsync())
+            return;
+
+        var events = new List<(AnimationEventKind Kind, string Name, bool Main)>();
+        var harness = await ViewHarness.LoadAsync(AnimatedPage, configure: view =>
+        {
+            view.AnimationsEnabled = true;
+            view.AnimationEvents += (_, e) =>
+            {
+                foreach (var info in e.Events)
+                    events.Add((info.Kind, info.Name, NSThread.IsMain));
+            };
+        });
+
+        await ViewHarness.Eventually(() => events.Count > 0, 5);
+        Assert.Contains(events, e => e.Kind == AnimationEventKind.AnimationStart && e.Name == "pulse" && e.Main);
+    }
 }

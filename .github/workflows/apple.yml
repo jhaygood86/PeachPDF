@@ -58,7 +58,8 @@ jobs:
       run: src/tests/PeachBrackets.Apple.AppTests/run.sh
 
     - name: Smoke-test the macOS example
-      run: src/examples/PeachBrackets.Apple.macOS.Example/run.sh --smoke "$RUNNER_TEMP/macos-smoke.txt" --screenshot "$RUNNER_TEMP/macos-shot.png"
+      # The report says what failed, so it is read whatever the exit code was.
+      run: src/examples/PeachBrackets.Apple.macOS.Example/run.sh --smoke "$RUNNER_TEMP/macos-smoke.txt" --screenshot "$RUNNER_TEMP/macos-shot.png" || true
 
     - name: Check the macOS smoke report
       run: |
@@ -73,4 +74,6 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: apple-example
-        path: ${{ runner.temp }}/macos-shot.png
+        path: |
+          ${{ runner.temp }}/macos-shot.png
+          ${{ runner.temp }}/macos-smoke.txt

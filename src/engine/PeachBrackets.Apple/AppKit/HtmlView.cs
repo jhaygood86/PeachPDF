@@ -90,6 +90,19 @@ public sealed class HtmlView : NSScrollView, IHtmlViewHost
     private volatile Uri? _documentBaseUri;
 
     /// <summary>
+    /// Whether the document plays its CSS animations, transitions and animated images (GIF, WebP). Off by default. A property that moves or resizes boxes
+    /// animates by laying the document out again each frame, so its cost follows the size of the document; the rest repaint only the tiles they touch. Nothing
+    /// plays when the system asks for reduced motion, and the document's <c>prefers-reduced-motion</c> reports it. Takes effect on the next load.
+    /// </summary>
+    public bool AnimationsEnabled { get; set; }
+
+    /// <summary>
+    /// Raised, on the main thread, with the animation and transition events that happened since the last frame, in order. The animations themselves can be
+    /// looked at and controlled through <c>Document.GetAnimations()</c>.
+    /// </summary>
+    public event EventHandler<HtmlAnimationEventsEventArgs>? AnimationEvents;
+
+    /// <summary>
     /// Whether the page is composited and its effects (blur, shadow, filter, mask) run on the graphics hardware. On by default; turn it off on a machine
     /// without a working Metal driver. Takes effect before the view is first shown.
     /// </summary>
@@ -297,6 +310,28 @@ public sealed class HtmlView : NSScrollView, IHtmlViewHost
     bool IHtmlViewHost.AllowNetworkAccess => AllowNetworkAccess;
 
     Uri? IHtmlViewHost.DocumentBaseUri => _documentBaseUri;
+
+    bool IHtmlViewHost.AnimationsEnabled => AnimationsEnabled;
+
+    bool IHtmlViewHost.SystemAllowsMotion => !NSWorkspace.SharedWorkspace.AccessibilityDisplayShouldReduceMotion;
+
+    // The display's refresh is not exposed to a Mac view before macOS 14, so a timer at the usual rate in the common modes stands in (it keeps running while a
+    // scroll or a menu tracks); the time of a tick is the clock's own, so a late tick is a longer step and not a slower animation.
+    IDisposable IHtmlViewHost.StartFrameClock(Action<TimeSpan> tick)
+    {
+        var timer = NSTimer.CreateRepeatingTimer(1.0 / 60, _ => tick(FrameClock.Now));
+        NSRunLoop.Main.AddTimer(timer, NSRunLoopMode.Common);
+        return new TimerClock(timer);
+    }
+
+    void IHtmlViewHost.AnimationEvents(IReadOnlyList<PeachBrackets.Updates.AnimationEventInfo> events) => AnimationEvents?.Invoke(this, new HtmlAnimationEventsEventArgs(events));
+
+    void IHtmlViewHost.ContentResized() => _content.SetFrameSize(new CGSize(Math.Max(_engine.ContentWidth, ContentSize.Width / Math.Max(Magnification, 0.01)), _engine.ContentHeight));
+
+    private sealed class TimerClock(NSTimer timer) : IDisposable
+    {
+        public void Dispose() => timer.Invalidate();
+    }
 
     InputCapabilities? IHtmlViewHost.Input => Input;
 
