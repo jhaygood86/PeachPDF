@@ -3546,7 +3546,7 @@ namespace PeachBrackets.Html.Dom
             // it is left alone; the min/max-height clamps below then apply to the result either way, since
             // §10.6.7's increase is
             // part of computing the auto height rather than something that outranks §10.7.
-            if (!isDefiniteHeight && !isRootWithPageHeight && DomUtils.ContainsItsFloats(box))
+            if ((!isDefiniteHeight || box.DerivedStyle.ActualDisplay == Keywords.TableCell) && !isRootWithPageHeight && DomUtils.ContainsItsFloats(box))
             {
                 var lowestFloatBottom = DomUtils.LowestFloatBottomInOwnFormattingContext(box);
 

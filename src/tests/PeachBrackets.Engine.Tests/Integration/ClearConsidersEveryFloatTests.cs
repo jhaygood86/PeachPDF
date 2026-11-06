@@ -113,6 +113,34 @@ public class ClearConsidersEveryFloatTests
         Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
     }
 
+    // The `height` of a table cell is a minimum (CSS 2.1 section 17.5.3): a cell that holds a float taller than it is as tall as the float, and
+    // what follows goes below it, `clear` or not. An ordinary box with a definite height keeps it and the float overhangs.
+    [Theory]
+    [InlineData("<div style='display:table-cell;width:150pt;height:15pt'>{0}</div>", "clear:left;")]
+    [InlineData("<div style='display:table-cell;width:150pt;height:15pt'>{0}</div>", "")]
+    [InlineData("<div style='display:table'><div style='display:table-cell;width:150pt;height:15pt'>{0}</div></div>", "clear:left;")]
+    [InlineData("<div style='display:table-cell;width:150pt;height:15pt'><div><div>{0}</div></div></div>", "clear:left;")]
+    [InlineData("<table cellspacing=0 cellpadding=0><tr><td style='width:150pt;height:15pt;vertical-align:top'>{0}</td></tr></table>", "")]
+    [InlineData("<table cellspacing=0 cellpadding=0><tr><td style='width:150pt;height:15pt;vertical-align:top'>{0}</td></tr></table>", "clear:left;")]
+    public async Task TableCellWithAFixedHeightShorterThanItsFloat_GrowsToContainIt(string cell, string clear)
+    {
+        var floatInCell = "<div style='float:left;width:75pt;height:60pt'></div>";
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{string.Format(cell, floatInCell)}<div id='b' style='{clear}height:15pt'>af</div></div>");
+
+        Assert.Equal(c.Location.Y + 60, b.Location.Y, 1);
+    }
+
+    [Fact]
+    public async Task TableCellWithAFixedHeightTallerThanItsFloat_KeepsItsHeight()
+    {
+        var (c, b, _) = await LayoutAsync(
+            "<div id='c' style='width:300pt'><table cellspacing=0 cellpadding=0><tr><td style='width:150pt;height:75pt;vertical-align:top'>" +
+            "<div style='float:left;width:75pt;height:22.5pt'></div></td></tr></table><div id='b' style='height:15pt'>af</div></div>");
+
+        Assert.Equal(c.Location.Y + 75, b.Location.Y, 1);
+    }
+
     // A box that is only moved by relative positioning is cleared where it is in the flow (CSS 2.1 §9.4.3), not where it is drawn.
     [Theory]
     [InlineData("top:7.5pt")]
