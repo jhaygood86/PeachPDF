@@ -389,6 +389,54 @@ namespace PeachBrackets.Html.Dom
             ArgumentNullException.ThrowIfNull(g);
             ArgumentNullException.ThrowIfNull(blockBox);
 
+            var token = await CreateLineBoxesPass(g, blockBox, resume, 0);
+
+            if (token is null && resume is null && blockBox.TextWrapStyle.Value == TextWrapStyle.Balance
+                && blockBox.WhiteSpacePermitsWrapping)
+            {
+                await BalanceLines(g, blockBox);
+            }
+
+            return token;
+        }
+
+        /// <summary>
+        /// <c>text-wrap-style: balance</c> (css-text-4 section 5.3): after the greedy pass has fixed how many lines
+        /// the paragraph needs, narrows the wrap boundary as far as it can go without adding a line, so the lines
+        /// come out close to equal in length. Browsers balance only short paragraphs (six lines in Chromium), and so
+        /// does this; a paragraph that breaks across fragmentainers keeps its greedy lines.
+        /// </summary>
+        private static async ValueTask BalanceLines(Canvas g, CssBox blockBox)
+        {
+            const int MaxBalancedLines = 6;
+
+            var lineCount = blockBox.LineBoxes.Count;
+            if (lineCount < 2 || lineCount > MaxBalancedLines) return;
+
+            var full = LineContentRightOf(blockBox, blockBox.ClientTop) - blockBox.ClientLeft;
+            if (full <= 0) return;
+
+            // The largest narrowing that still fits the same number of lines. The greedy result (inset 0) is known
+            // good; each probe is a whole flow, restored by the next one's own undo.
+            double good = 0, bad = full;
+            for (var i = 0; i < 8 && bad - good > 0.5; i++)
+            {
+                var probe = (good + bad) / 2;
+                var token = await CreateLineBoxesPass(g, blockBox, null, probe);
+                if (token is null && blockBox.LineBoxes.Count == lineCount) good = probe; else bad = probe;
+            }
+
+            // Leave the layout of the best inset found (the last probe may have been a failing one).
+            var final = await CreateLineBoxesPass(g, blockBox, null, good);
+            if (final is not null || blockBox.LineBoxes.Count != lineCount)
+            {
+                await CreateLineBoxesPass(g, blockBox, null, 0);
+            }
+        }
+
+        private static async ValueTask<InlineBreakToken?> CreateLineBoxesPass(Canvas g, CssBox blockBox, InlineBreakToken? resume, double balanceInset)
+        {
+
             var context = blockBox.HtmlContainer?.CurrentFragmentainer;
             var fragmenting = context is { IsFragmenting: true };
 
@@ -492,6 +540,7 @@ namespace PeachBrackets.Html.Dom
                 MaxBottom = startY,
                 Fragmentainer = fragmenting ? context : null,
                 ResumeOrdinal = resume?.ResumeWordIndex ?? 0,
+                BalanceInset = balanceInset,
                 EmptyInlinesBeforeResume = lineBeforeResume?.EmptyInlines,
                 SuppressLeadingWrap = resume is not null,
                 // hyphenate-limit-lines (CSS Text 4 §6.3.5): a run of consecutive hyphenated lines that
@@ -1097,8 +1146,7 @@ namespace PeachBrackets.Html.Dom
             // is nowrap/pre, no line break is legal anywhere in its content, so the nested-nowrap-run
             // atomic-move check below (mirroring FlowBox's own wrapNoWrapBox) must never fire - it exists
             // only for a *nested* nowrap run inside otherwise-wrapping content.
-            var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
-                                       && blockBox.WhiteSpace.Value != Whitespace.Pre;
+            var blockBoxPermitsWrap = blockBox.WhiteSpacePermitsWrapping;
 
             var currentWordIndex = 0;
 
@@ -1182,9 +1230,8 @@ namespace PeachBrackets.Html.Dom
                 // was missing entirely, so nowrap had no effect at all on vertical column-breaking). A
                 // pre-wrap run doesn't wrap on its own trailing whitespace either, mirroring FlowBox's
                 // identical carve-out.
-                var permitsOverflowWrap = word.OwnerBox.WhiteSpace.Value != Whitespace.NoWrap
-                                           && word.OwnerBox.WhiteSpace.Value != Whitespace.Pre
-                                           && (word.OwnerBox.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
+                var permitsOverflowWrap = word.OwnerBox.WhiteSpacePermitsWrapping
+                                           && (!word.OwnerBox.PreservedSpacesHang || !word.IsSpaces);
 
                 // Whether word, placed at its current inlineOffset, fits this column's real usable extent
                 // (effectiveWrapLimit, narrowed from the box's own wrapLimit by a floated sibling, if any) -
@@ -1260,7 +1307,7 @@ namespace PeachBrackets.Html.Dom
                 // that nowrap and permitsOverflowWrap above already suppresses the ordinary wrap check for
                 // all of them, so forcing a break here too would reintroduce #841's bug on this axis.
                 var entersNewNoWrapRun = blockBoxPermitsWrap
-                                          && word.OwnerBox.WhiteSpace.Value == Whitespace.NoWrap
+                                          && word.OwnerBox.IsNoWrapRun
                                           && (i == 0 || words[i - 1].OwnerBox != word.OwnerBox);
 
                 var wrapsWholeNoWrapRun = false;
@@ -4513,7 +4560,7 @@ namespace PeachBrackets.Html.Dom
             CssLineBoxCoordinates coordinates, double lineSpacing, double lineStartX, double leftSpacing,
             double clonedTrailing, bool clonesDecorations, bool isRtl)
         {
-            var actualLimitRight = coordinates.Line.ContentRight;
+            var actualLimitRight = coordinates.Line.ContentRight - coordinates.BalanceInset;
             var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
@@ -4528,7 +4575,7 @@ namespace PeachBrackets.Html.Dom
 
             var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
             var outerRight = borderLeft + outerContentWidth + b.ActualMarginRight + clonedTrailing;
-            var blockPermitsWrap = blockBox.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
+            var blockPermitsWrap = blockBox.WhiteSpacePermitsWrapping;
 
             if (!blockPermitsWrap || IsAtLineStart(coordinates) || outerRight <= actualLimitRight + 0.01)
             {
@@ -6287,10 +6334,9 @@ namespace PeachBrackets.Html.Dom
                     // break is possible anywhere in its content - not before b, not within it - so creating
                     // one here just to relocate b is never correct: it produces a second line box despite
                     // white-space:nowrap forbidding wrapping altogether (issue #841).
-                    var blockBoxPermitsWrap = blockBox.WhiteSpace.Value != Whitespace.NoWrap
-                                               && blockBox.WhiteSpace.Value != Whitespace.Pre;
+                    var blockBoxPermitsWrap = blockBox.WhiteSpacePermitsWrapping;
 
-                    if (blockBoxPermitsWrap && b.WhiteSpace.Value == Whitespace.NoWrap && coordinates.CurrentX > lineStartX)
+                    if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX)
                     {
                         var boxRight = coordinates.CurrentX;
 
@@ -6343,14 +6389,14 @@ namespace PeachBrackets.Html.Dom
                         var bottomAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.BottomAlignedAtomicHeight;
                         GrowLineToItsExtent(word);
 
-                        if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre)
+                        if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpacePermitsWrapping
                             && IsAtLineStart(coordinates))
                         {
                             ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
                                 clonedTrailing, isRtl, GrowLineToItsExtent);
                         }
 
-                        var actualLimitRight = coordinates.Line.ContentRight;
+                        var actualLimitRight = coordinates.Line.ContentRight - coordinates.BalanceInset;
                         var lastRightIntersectingFloatBox = RightFloatAt(coordinates, box);
 
                         if (lastRightIntersectingFloatBox is not null)
@@ -6368,9 +6414,9 @@ namespace PeachBrackets.Html.Dom
                                 coordinates.Line.Equals(blockBox.LineBoxes[0]), coordinates.Line.FollowsForcedBreak);
                         }
 
-                        var overflows = b.WhiteSpace.Value != Whitespace.NoWrap && b.WhiteSpace.Value != Whitespace.Pre
+                        var overflows = b.WhiteSpacePermitsWrapping
                                          && coordinates.CurrentX + word.Width + rightSpacing + clonedTrailing > actualLimitRight + LineFitTolerance
-                                         && (b.WhiteSpace.Value != Whitespace.PreWrap || !word.IsSpaces);
+                                         && (!b.PreservedSpacesHang || !word.IsSpaces);
 
                         // hanging-punctuation: allow-end / force-end (CSS Text 3 §8.1): a stop or comma that
                         // ends the word is not measured when it is the last thing on its line, so a word that
@@ -6512,7 +6558,7 @@ namespace PeachBrackets.Html.Dom
 
                                 // The line the word wrapped onto may have no room beside that float, as when the float is wider
                                 // than the line; the word goes below it, as it would have had it been about to open the line.
-                                if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre))
+                                if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpacePermitsWrapping)
                                 {
                                     ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
                                         clonedTrailing, isRtl, GrowLineToItsExtent);

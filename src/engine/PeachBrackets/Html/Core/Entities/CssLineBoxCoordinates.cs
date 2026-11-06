@@ -37,6 +37,13 @@ namespace PeachBrackets.Html.Entities
         public int ResumeOrdinal { get; init; }
 
         /// <summary>
+        /// How far in from the line's content edge a word may extend, for <c>text-wrap-style: balance</c>
+        /// (css-text-4 section 5.3): the balancing search narrows the wrap boundary only, so text-align still
+        /// aligns within the full measure. Zero for every other flow.
+        /// </summary>
+        public double BalanceInset { get; init; }
+
+        /// <summary>
         /// Whether the content visited since <paramref name="fromOrdinal"/> is being placed by this
         /// pass rather than skipped past — true when it begins at or after the resume point, and true
         /// when the walk reached that point somewhere inside it (a box straddling the break).

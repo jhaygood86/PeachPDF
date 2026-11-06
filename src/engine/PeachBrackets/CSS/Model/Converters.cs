@@ -469,7 +469,26 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter TextOrientationConverter = Map.TextOrientations.ToConverter();
         public static readonly IValueConverter HorizontalAlignmentConverter = Map.HorizontalAlignments.ToConverter();
         public static readonly IValueConverter VerticalAlignmentConverter = Map.VerticalAlignments.ToConverter();
-        public static readonly IValueConverter WhitespaceConverter = Map.WhitespaceModes.ToConverter();
+        public static readonly IValueConverter WhiteSpaceCollapseConverter = Map.WhiteSpaceCollapses.ToConverter();
+        public static readonly IValueConverter TextWrapModeConverter = Map.TextWrapModes.ToConverter();
+        public static readonly IValueConverter TextWrapStyleConverter = Map.TextWrapStyles.ToConverter();
+
+        // text-wrap is "<'text-wrap-mode'> || <'text-wrap-style'>" (CSS Text 4 section 5.1).
+        public static readonly IValueConverter TextWrapConverter = Construct(() =>
+        {
+            var mode = TextWrapModeConverter.For(PropertyNames.TextWrapMode);
+            var style = TextWrapStyleConverter.For(PropertyNames.TextWrapStyle);
+            return mode.Or(style).Or(WithAny(mode, style));
+        });
+
+        // white-space is "normal | pre | pre-wrap | pre-line | nowrap" (each a fixed pair of longhands) or
+        // "<'white-space-collapse'> || <'text-wrap-mode'>" (CSS Text 4 section 4.1).
+        public static readonly IValueConverter WhiteSpaceConverter = Construct(() =>
+        {
+            var collapse = WhiteSpaceCollapseConverter.For(PropertyNames.WhiteSpaceCollapse);
+            var mode = TextWrapModeConverter.For(PropertyNames.TextWrapMode);
+            return new WhiteSpaceKeywordConverter().Or(WithAny(collapse, mode)).Or(collapse).Or(mode);
+        });
         public static readonly IValueConverter TextOverflowConverter = Map.TextOverflowModes.ToConverter();
         public static readonly IValueConverter TextDecorationSkipInkConverter = Map.TextDecorationSkipInkModes.ToConverter();
         public static readonly IValueConverter TextTransformConverter = Map.TextTransforms.ToConverter();

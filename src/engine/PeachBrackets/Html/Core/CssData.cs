@@ -1348,7 +1348,7 @@ namespace PeachBrackets.Html
                     continue;
 
                 if (name is "line-height" or "letter-spacing" or "word-spacing" or "box-sizing" or "box-shadow" or "width" or "height"
-                    or "vertical-align" or "white-space" or "opacity" or "cursor")
+                    or "vertical-align" or "white-space" or "white-space-collapse" or "text-wrap" or "text-wrap-mode" or "text-wrap-style" or "opacity" or "cursor")
                     continue;
 
                 return true;

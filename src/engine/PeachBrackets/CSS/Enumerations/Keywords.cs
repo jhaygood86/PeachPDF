@@ -146,6 +146,12 @@
         public const string Nowrap = "nowrap";
         public const string PreWrap = "pre-wrap";
         public const string PreLine = "pre-line";
+        public const string Preserve = "preserve";
+        public const string PreserveBreaks = "preserve-breaks";
+        public const string PreserveSpaces = "preserve-spaces";
+        public const string BreakSpaces = "break-spaces";
+        public const string Stable = "stable";
+        public const string Pretty = "pretty";
         public const string OpenQuote = "open-quote";
         public const string NoOpenQuote = "no-open-quote";
         public const string CloseQuote = "close-quote";

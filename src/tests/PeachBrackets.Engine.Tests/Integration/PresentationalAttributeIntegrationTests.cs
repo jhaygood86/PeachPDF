@@ -81,7 +81,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await BuildAndLayout(Wrap("<table><tr><td id='d' nowrap='nowrap'>x</td></tr></table>"));
             var td = FindById(root, "d")!;
 
-            Assert.Equal(Whitespace.NoWrap, td.WhiteSpace.Value);
+            Assert.Equal(TextWrapMode.NoWrap, td.TextWrapMode.Value);
         }
 
         [Fact]

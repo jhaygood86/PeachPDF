@@ -3138,21 +3138,60 @@
       }
     },
     {
-      "name": "white-space",
+      "name": "white-space-collapse",
+      "comment": "CSS Text 4 section 4.1. white-space is the shorthand of this and text-wrap-mode (a CSS-OM shorthand, so it has no entry here). break-spaces: preserved spaces do not hang and a line may end after each.",
       "inherited": true,
-      "cssom": {"converter": "Converters.WhitespaceConverter"},
-      "initialValue": "normal",
+      "cssom": {"converter": "Converters.WhiteSpaceCollapseConverter"},
+      "initialValue": "collapse",
       "cssDataType": {
         "type": "enum-keyword",
-        "enumType": "Whitespace",
-        "keywordMap": "Map.WhitespaceModes",
-        "fallback": "Whitespace.Normal"
+        "enumType": "WhiteSpaceCollapse",
+        "keywordMap": "Map.WhiteSpaceCollapses",
+        "fallback": "WhiteSpaceCollapse.Collapse"
       },
       "html": {
-        "propertyPath": "WhiteSpace",
-        "csharpDataType": "CssProperty<Whitespace>",
+        "propertyPath": "WhiteSpaceCollapse",
+        "csharpDataType": "CssProperty<WhiteSpaceCollapse>",
         "area": "TextArea",
-        "getterExpression": "{box}.WhiteSpace.ToString()"
+        "getterExpression": "{box}.WhiteSpaceCollapse.ToString()"
+      }
+    },
+    {
+      "name": "text-wrap-mode",
+      "comment": "CSS Text 4 section 5.2: wrap or nowrap.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextWrapModeConverter"},
+      "initialValue": "wrap",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextWrapMode",
+        "keywordMap": "Map.TextWrapModes",
+        "fallback": "TextWrapMode.Wrap"
+      },
+      "html": {
+        "propertyPath": "TextWrapMode",
+        "csharpDataType": "CssProperty<TextWrapMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextWrapMode.ToString()"
+      }
+    },
+    {
+      "name": "text-wrap-style",
+      "comment": "CSS Text 4 section 5.3. balance evens out the lines of a short paragraph (see CssLayoutEngine.BalanceLines); stable and pretty lay out as auto.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextWrapStyleConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextWrapStyle",
+        "keywordMap": "Map.TextWrapStyles",
+        "fallback": "TextWrapStyle.Auto"
+      },
+      "html": {
+        "propertyPath": "TextWrapStyle",
+        "csharpDataType": "CssProperty<TextWrapStyle>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextWrapStyle.ToString()"
       }
     },
     {
