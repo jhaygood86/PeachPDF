@@ -300,7 +300,7 @@ namespace PeachBrackets.Html.Annotations
             // Read per link, so the document base has to be memoized rather than re-walked - see HtmlContainerInt.DocumentBaseUri.
             var baseUri = container.DocumentBaseUri;
 
-            return href.StartsWith('#') || baseUri is null ? href : new RUri(baseUri, href).AbsoluteUri;
+            return href.StartsWith('#') || baseUri is null ? href : new Uri(baseUri, href).AbsoluteUri;
         }
 
         /// <summary>The rectangle of the element with id <paramref name="elementId"/> in points, or null when there is none.</summary>

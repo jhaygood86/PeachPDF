@@ -33,7 +33,7 @@ namespace PeachPDF.Network
         public FileUriNetworkLoader()
         {
             _primaryFilePath = null;
-            BaseUri = new RUri(new Uri(EnsureTrailingSeparator(Directory.GetCurrentDirectory())));
+            BaseUri = new Uri(EnsureTrailingSeparator(Directory.GetCurrentDirectory()));
         }
 
         /// <summary>
@@ -48,11 +48,11 @@ namespace PeachPDF.Network
             ArgumentNullException.ThrowIfNull(primaryFilePath);
 
             _primaryFilePath = Path.GetFullPath(primaryFilePath);
-            BaseUri = new RUri(new Uri(_primaryFilePath));
+            BaseUri = new Uri(_primaryFilePath);
         }
 
         /// <inheritdoc/>
-        public override RUri? BaseUri { get; }
+        public override Uri? BaseUri { get; }
 
         /// <inheritdoc/>
         public override async Task<string> GetPrimaryContents()
@@ -67,7 +67,7 @@ namespace PeachPDF.Network
         }
 
         /// <inheritdoc/>
-        public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
         {
             if (!uri.IsAbsoluteUri || uri.Scheme is not "file")
             {
@@ -76,7 +76,7 @@ namespace PeachPDF.Network
 
             try
             {
-                var path = uri.Uri.LocalPath;
+                var path = uri.LocalPath;
 
                 // A directory or a missing file resolves to "no such resource", matching the fail-soft
                 // behavior of the other loaders (a null response rather than an exception).

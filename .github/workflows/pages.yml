@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
-            8.0.x
             10.0.x
 
       - name: Read package version into site data
@@ -46,7 +45,7 @@ jobs:
           # docs/_data/tests.yml and consumed via {{ site.data.tests.total }} on the testing page.
           COUNT=0
           for PROJECT in PeachPDF.Tests PeachBrackets.Engine.Tests; do
-            N=$(dotnet test --project "src/tests/$PROJECT/$PROJECT.csproj" --framework net8.0 --list-tests \
+            N=$(dotnet test --project "src/tests/$PROJECT/$PROJECT.csproj" --framework net10.0 --list-tests \
               | grep -cE '^[[:space:]]+(PeachPDF|PeachBrackets\.Engine)\.Tests\.' || true)
             COUNT=$((COUNT + N))
           done

@@ -38,18 +38,10 @@
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" PrivateAssets="all" IncludeAssets="build" />
 		<PackageReference Include="MimeKit" />
-		<!--
-			System.IO.Pipelines ships as part of the net10.0+ shared-framework reference assemblies
-			(Microsoft.NETCore.App.Ref), but not net8.0's - only net8.0 needs the standalone package
-			to resolve PipeReader in CSS/Model/CssStreamLoader.cs.
-		-->
-		<PackageReference Include="System.IO.Pipelines" Condition="'$(TargetFramework)' == 'net8.0'" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PDF/Drawing/PeachImageSource.cs). Replaced
-		StbImageSharp/StbImageWriteSharp on both target frameworks once PeachImage 0.2.0 added a
-		net8.0 target alongside net10.0 (0.1.x was net10.0-only, which is why this port started out
-		net10.0-conditioned - see .claude/recent-fixes/2026-08-15-net10-image-codec-ported-to-peachimage.md).
+		StbImageSharp/StbImageWriteSharp. See .claude/recent-fixes/2026-08-15-net10-image-codec-ported-to-peachimage.md).
 	-->
 	<ItemGroup>
 		<PackageReference Include="PeachImage" />

@@ -9,5 +9,5 @@ namespace PeachBrackets.Android;
 /// <summary>The Skia context of a view, which also loads what the document refers to: images, style sheets and fonts by <c>data:</c> URI and file, and by web address when the host allows it.</summary>
 internal sealed class HtmlViewRenderContext(Func<bool> allowNetwork) : SkiaRenderContext
 {
-    public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
+    public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
 }

@@ -61,7 +61,7 @@ namespace PeachPDF.Tests.Integration
             var renderContext = new HtmlRenderContext
             {
                 AllowLocalFileAccess = false,
-                NetworkLoader = new StubLoader(new RUri("https://example.invalid/doc/"))
+                NetworkLoader = new StubLoader(new Uri("https://example.invalid/doc/"))
             };
 
             Assert.NotNull(renderContext.BaseUri);
@@ -80,7 +80,7 @@ namespace PeachPDF.Tests.Integration
 
                 var renderContext = new HtmlRenderContext { AllowLocalFileAccess = false };
 
-                Assert.Null(await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri)));
+                Assert.Null(await renderContext.GetResourceStream(new Uri(new Uri(path).AbsoluteUri)));
             }
             finally
             {
@@ -100,7 +100,7 @@ namespace PeachPDF.Tests.Integration
 
                 var renderContext = new HtmlRenderContext { AllowLocalFileAccess = true };
 
-                var response = await renderContext.GetResourceStream(new RUri(new Uri(path).AbsoluteUri));
+                var response = await renderContext.GetResourceStream(new Uri(new Uri(path).AbsoluteUri));
 
                 Assert.NotNull(response);
                 Assert.NotNull(response!.ResourceStream);
@@ -120,11 +120,11 @@ namespace PeachPDF.Tests.Integration
         {
             // Denying local file access is what makes BaseUri nullable, and a null base means a relative
             // reference survives resolution still relative. Every loader has only ever been handed absolute
-            // URIs - RUri.Scheme throws on a relative one, and DataUriNetworkLoader reads it unguarded - so
+            // URIs - Uri.Scheme throws on a relative one, and DataUriNetworkLoader reads it unguarded - so
             // the adapter has to answer for this case itself rather than passing it on.
             var renderContext = new HtmlRenderContext { AllowLocalFileAccess = false };
 
-            Assert.Null(await renderContext.GetResourceStream(new RUri("logo.png", UriKind.Relative)));
+            Assert.Null(await renderContext.GetResourceStream(new Uri("logo.png", UriKind.Relative)));
         }
 
         // ---- End to end ---------------------------------------------------------------------------
@@ -315,13 +315,13 @@ namespace PeachPDF.Tests.Integration
             }
         }
 
-        private sealed class StubLoader(RUri? baseUri) : RNetworkLoader
+        private sealed class StubLoader(Uri? baseUri) : RNetworkLoader
         {
-            public override RUri? BaseUri { get; } = baseUri;
+            public override Uri? BaseUri { get; } = baseUri;
 
             public override Task<string> GetPrimaryContents() => throw new NotSupportedException();
 
-            public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
+            public override Task<RNetworkResponse?> GetResourceStream(Uri uri) =>
                 Task.FromResult<RNetworkResponse?>(null);
         }
 

@@ -13,11 +13,11 @@ namespace PeachBrackets.Engine.Tests.Html.Core
     {
         private sealed class PrefetchingContext : PdfRenderContext, IResourcePrefetcher
         {
-            public override RUri? BaseUri => new RUri("https://example.test/dir/");
+            public override Uri? BaseUri => new Uri("https://example.test/dir/");
 
-            public List<IReadOnlyList<RUri>> Calls { get; } = [];
+            public List<IReadOnlyList<Uri>> Calls { get; } = [];
 
-            public ValueTask PrefetchAsync(IReadOnlyList<RUri> addresses)
+            public ValueTask PrefetchAsync(IReadOnlyList<Uri> addresses)
             {
                 Calls.Add(addresses);
                 return default;

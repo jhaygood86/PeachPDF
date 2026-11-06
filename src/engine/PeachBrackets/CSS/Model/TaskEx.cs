@@ -1,7 +1,5 @@
 ﻿using System.Collections.Generic;
 
-#if !NET40 && !SL50
-
 namespace System.Threading.Tasks
 {
     internal static class TaskEx
@@ -22,5 +20,3 @@ namespace System.Threading.Tasks
         }
     }
 }
-
-#endif

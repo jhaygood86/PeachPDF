@@ -72,7 +72,7 @@ namespace PeachDrawing.Core
         /// for a render context that doesn't need it, e.g. one driving a standalone raster surface with
         /// no document/network concept at all). A backend that renders a document overrides this.
         /// </summary>
-        public virtual RUri? BaseUri => null;
+        public virtual Uri? BaseUri => null;
 
         /// <summary>Discards every font this context has resolved and cached so far.</summary>
         public void ClearFontCache() => _fontsHandler.ClearCache();
@@ -285,13 +285,13 @@ namespace PeachDrawing.Core
         /// </param>
         /// <param name="descriptors">the <c>@font-face</c> rule's own <c>font-weight</c>, <c>font-style</c> and <c>font-stretch</c> descriptors, resolved to the ranges the face covers - authoritative over what the file itself declares; an unset member means the file's own value (a variable font then covers the range of its axes)</param>
         /// <param name="unicodeRanges">the <c>@font-face</c> rule's own <c>unicode-range</c> descriptor, parsed to codepoint ranges - restricts which characters this face is used for; null means no restriction</param>
-        public async ValueTask<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, RUri? baseUri = null, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
+        public async ValueTask<bool> AddFontFamilyFromUrl(string fontFamilyName, string url, string? format, Uri? baseUri = null, FontFaceDescriptors descriptors = default, IReadOnlyList<RuneInterval>? unicodeRanges = null)
         {
-            RUri resolvedUri;
+            Uri resolvedUri;
 
             try
             {
-                resolvedUri = baseUri is not null ? new RUri(baseUri, url) : new RUri(url, UriKind.RelativeOrAbsolute);
+                resolvedUri = baseUri is not null ? new Uri(baseUri, url) : new Uri(url, UriKind.RelativeOrAbsolute);
             }
             catch (UriFormatException)
             {
@@ -441,7 +441,7 @@ namespace PeachDrawing.Core
         /// </summary>
         /// <param name="uri">Uri to load</param>
         /// <returns>The stream of the contents</returns>
-        public virtual ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => default;
+        public virtual ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => default;
 
         #region Private/Protected methods
 

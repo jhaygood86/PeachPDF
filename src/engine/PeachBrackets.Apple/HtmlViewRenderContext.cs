@@ -8,7 +8,7 @@ internal sealed class HtmlViewRenderContext(Func<bool> allowNetwork, Func<Uri?> 
     : CoreGraphicsRenderContext(imageCodec: CoreGraphicsImageCodec.Auto, useGpu: useGpu)
 {
     // What a style sheet the parser meets resolves against, since the document's own <base> is not known until the parse is over.
-    public override RUri? BaseUri => baseUri() is { } address ? new RUri(address) : null;
+    public override Uri? BaseUri => baseUri();
 
-    public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
+    public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
 }

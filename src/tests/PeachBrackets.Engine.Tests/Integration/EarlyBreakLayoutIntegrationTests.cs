@@ -762,7 +762,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         // FragmentEmitter's own word-claim tracker) - only exist in a DEBUG build (see those types' own
         // remarks). CI's dedicated test job runs Release, where the property this fixture sets does not
         // exist at all, so the whole region is compiled out there rather than only skipped: a local
-        // `dotnet test --framework net8.0` (this repo's own prescribed daily-driver command, always
+        // `dotnet test --framework net10.0` (this repo's own prescribed daily-driver command, always
         // Debug) is what actually runs these.
 #if DEBUG
 

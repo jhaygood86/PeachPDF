@@ -1,4 +1,5 @@
-﻿using PeachDrawing.Core;
+﻿using System;
+using PeachDrawing.Core;
 using System.Threading.Tasks;
 
 namespace PeachPDF.Network
@@ -28,12 +29,12 @@ namespace PeachPDF.Network
         /// <c>null</c> if the resource cannot be resolved.
         /// </summary>
         /// <param name="uri">The resource URI, resolved against <see cref="BaseUri"/> or a <c>&lt;base href&gt;</c> element if relative.</param>
-        public abstract Task<RNetworkResponse?> GetResourceStream(RUri uri);
+        public abstract Task<RNetworkResponse?> GetResourceStream(Uri uri);
 
         /// <summary>
         /// The document's base URL, used to resolve relative <c>href</c>, <c>src</c>, and CSS <c>url()</c>
         /// references. If <c>null</c>, relative references are resolved against the local file system.
         /// </summary>
-        public abstract RUri? BaseUri { get; }
+        public abstract Uri? BaseUri { get; }
     }
 }

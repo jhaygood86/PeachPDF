@@ -304,30 +304,30 @@ PeachPDF.Layout.TextAlignment : enum Int32
   Start = 4
 PeachPDF.Network.DataUriNetworkLoader : class
   ctor()
-  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
-  property RUri BaseUri { get; }
+  property Uri BaseUri { get; }
 PeachPDF.Network.FileUriNetworkLoader : class
   ctor()
   ctor(String primaryFilePath)
-  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
-  property RUri BaseUri { get; }
+  property Uri BaseUri { get; }
 PeachPDF.Network.HttpClientNetworkLoader : class
   ctor(HttpClient httpClient, String primaryContentsUri)
   ctor(HttpClient httpClient, Uri primaryContentsUri)
-  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
-  property RUri BaseUri { get; }
+  property Uri BaseUri { get; }
 PeachPDF.Network.MimeKitNetworkLoader : class
   ctor(Stream stream)
-  method virtual Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual Task<RNetworkResponse> GetResourceStream(Uri uri)
   method virtual Task<String> GetPrimaryContents()
-  property RUri BaseUri { get; }
+  property Uri BaseUri { get; }
 PeachPDF.Network.RNetworkLoader : abstract class
-  method abstract Task<RNetworkResponse> GetResourceStream(RUri uri)
+  method abstract Task<RNetworkResponse> GetResourceStream(Uri uri)
   method abstract Task<String> GetPrimaryContents()
-  property RUri BaseUri { get; }
+  property Uri BaseUri { get; }
 PeachPDF.PageOrientation : enum Int32
   Landscape = 1
   Portrait = 0

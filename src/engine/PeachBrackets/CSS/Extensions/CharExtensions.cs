@@ -1,8 +1,5 @@
 ﻿namespace PeachBrackets.Css
 {
-#if !NET40
-#endif
-
     internal static class CharExtensions
     {
         public static int FromHex(this char c)

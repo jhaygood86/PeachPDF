@@ -95,23 +95,16 @@ namespace PeachDrawing.Text.Internal.Text
             values.Clear();
             var maxPatternLength = patternSet.MaxPatternLength;
             var patterns = patternSet.Patterns;
-#if NET9_0_OR_GREATER
             // Looks each (start, len) slice up as a span, so no substring is allocated per probe.
             var lookup = patterns.GetAlternateLookup<ReadOnlySpan<char>>();
-#endif
 
             for (var start = 0; start < wrappedLength; start++)
             {
                 var maxLen = Math.Min(maxPatternLength, wrappedLength - start);
                 for (var len = 1; len <= maxLen; len++)
                 {
-#if NET9_0_OR_GREATER
                     if (!lookup.TryGetValue(wrapped.Slice(start, len), out var digits))
                         continue;
-#else
-                    if (!patterns.TryGetValue(new string(wrapped.Slice(start, len)), out var digits))
-                        continue;
-#endif
 
                     for (var k = 0; k < digits.Length; k++)
                     {

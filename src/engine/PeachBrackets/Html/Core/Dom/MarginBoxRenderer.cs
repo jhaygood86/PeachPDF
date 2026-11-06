@@ -402,25 +402,19 @@ namespace PeachBrackets.Html.Dom
             HtmlContainerInt htmlContainer,
             Dictionary<string, CssImage?> imageCache)
         {
-            // A ref struct (PooledTokenList) local can't live in an async method's own body under this
-            // project's net8.0 C# 12 language version (CS9202 - relaxed only in C# 13+), so the pooled
-            // tokenization is isolated in this local function, which compiles as its own ordinary method
-            // rather than becoming part of the async state machine. An empty token list and a
-            // not-image-content first token both fall through to the same "return null" outcome below,
-            // so collapsing both into a single false is behavior-preserving.
-            static bool IsImageContent(string value)
+            // An empty token list and a not-image-content first token both fall through to the same
+            // "return null" outcome, so they collapse into a single false. The pooled ref-struct token
+            // list is scoped to this block so it does not live across an await.
+            bool isImageContent;
             {
-                using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(contentValue);
                 List<Token> tokens = pooledTokens;
-                if (tokens.Count == 0)
-                    return false;
-
-                var first = tokens[0];
-                return first.Type == TokenType.Url ||
-                    (first is { Type: TokenType.Function } ft && CssContentEngine.IsImageFunctionName(ft.Data));
+                isImageContent = tokens.Count != 0 &&
+                    (tokens[0].Type == TokenType.Url ||
+                     (tokens[0] is { Type: TokenType.Function } ft && CssContentEngine.IsImageFunctionName(ft.Data)));
             }
 
-            if (!IsImageContent(contentValue))
+            if (!isImageContent)
                 return null;
 
             if (imageCache.TryGetValue(contentValue, out var cached))

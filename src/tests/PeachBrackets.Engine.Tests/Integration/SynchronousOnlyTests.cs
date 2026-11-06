@@ -25,11 +25,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             public List<string> Requested { get; } = [];
 
-            public override RUri? BaseUri => new(Origin + "index.html");
+            public override Uri? BaseUri => new(Origin + "index.html");
 
             public override Task<string> GetPrimaryContents() => Task.FromResult(string.Empty);
 
-            public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+            public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
             {
                 Requested.Add(uri.AbsoluteUri);
                 if (!completed)

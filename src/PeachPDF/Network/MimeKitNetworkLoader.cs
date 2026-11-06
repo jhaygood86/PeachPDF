@@ -1,4 +1,5 @@
-﻿#nullable enable
+﻿using System;
+#nullable enable
 
 using MimeKit;
 using PeachDrawing.Core;
@@ -20,7 +21,7 @@ namespace PeachPDF.Network
         private MimeMessage? _message = null;
 
         /// <inheritdoc/>
-        public override RUri? BaseUri => null;
+        public override Uri? BaseUri => null;
 
         /// <summary>
         /// Creates a loader that reads the MHTML archive from <paramref name="stream"/>.
@@ -41,7 +42,7 @@ namespace PeachPDF.Network
         }
 
         /// <inheritdoc/>
-        public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override async Task<RNetworkResponse?> GetResourceStream(Uri uri)
         {
             _message ??= await _messageTask;
 
@@ -49,7 +50,7 @@ namespace PeachPDF.Network
 
             part = _message.BodyParts
                 .OfType<MimePart>()
-                .FirstOrDefault(x => x.ContentLocation == uri.Uri || x.Headers["Content-Location"] == uri.OriginalString);
+                .FirstOrDefault(x => x.ContentLocation == uri || x.Headers["Content-Location"] == uri.OriginalString);
 
             var stream = part?.Content?.Open();
             var headers = part?.Headers.ToDictionary(x => x.Field, x => new[] { x.Value });

@@ -8,7 +8,7 @@ public class WebFontTests
 {
     private static string FontPath => Path.Combine(AppContext.BaseDirectory, "SourceSans3-Regular.ttf");
 
-    private static async Task<(RasterRenderContext Context, HtmlDocument Document)> LoadAsync(string html, Func<RUri, ValueTask<RNetworkResponse?>>? loader)
+    private static async Task<(RasterRenderContext Context, HtmlDocument Document)> LoadAsync(string html, Func<Uri, ValueTask<RNetworkResponse?>>? loader)
     {
         var context = await TestDocument.NewContextAsync();
         context.ResourceLoader = loader;
@@ -24,7 +24,7 @@ public class WebFontTests
     public async Task AFontFetchedAsAStreamThatIsNotInMemory_IsRegisteredAndUsed()
     {
         // A response body that is neither a MemoryStream nor a FileStream is copied asynchronously.
-        ValueTask<RNetworkResponse?> Loader(RUri uri) => uri.AbsoluteUri.EndsWith("web.ttf", StringComparison.Ordinal)
+        ValueTask<RNetworkResponse?> Loader(Uri uri) => uri.AbsoluteUri.EndsWith("web.ttf", StringComparison.Ordinal)
             ? new ValueTask<RNetworkResponse?>(new RNetworkResponse(new BufferedStream(File.OpenRead(FontPath)), new Dictionary<string, string[]> { ["Content-Type"] = ["font/ttf"] }))
             : default;
 
@@ -52,7 +52,7 @@ public class WebFontTests
     [Fact]
     public async Task AFontInAFormatTheContextCannotRead_IsLeftOut_AndTheTextStillDraws()
     {
-        ValueTask<RNetworkResponse?> Loader(RUri uri) => new(new RNetworkResponse(new MemoryStream([1, 2, 3, 4]), new Dictionary<string, string[]> { ["Content-Type"] = ["font/otf"] }));
+        ValueTask<RNetworkResponse?> Loader(Uri uri) => new(new RNetworkResponse(new MemoryStream([1, 2, 3, 4]), new Dictionary<string, string[]> { ["Content-Type"] = ["font/otf"] }));
 
         var (context, document) = await LoadAsync(
             "<style>@font-face{font-family:Odd;src:url(https://fonts.test/odd.bin) format('embedded-opentype')} p{font-family:Odd,sans-serif;font-size:30pt;margin:0}</style><p>Hamburg</p>", Loader);

@@ -48,7 +48,7 @@ namespace PeachBrackets.Html.Handlers
         /// through <see cref="HtmlContainerInt.RenderError"/>; this method never returns null
         /// content, even though both callers are written as if it could.
         /// </returns>
-        public static async ValueTask<(string? Content, RUri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, RUri? importingBaseUri = null)
+        public static async ValueTask<(string? Content, Uri? ResolvedUri)> LoadStylesheet(HtmlContainerInt htmlContainer, string src, Uri? importingBaseUri = null)
         {
             try
             {

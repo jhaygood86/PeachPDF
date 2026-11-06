@@ -30,7 +30,7 @@
 	-->
 	<Target Name="ExportHarnessShowcases" Condition="'$(SkipShowcaseExport)' != 'true'"
 	        Inputs="..\..\harness\PeachPDF.TestHarness\Program.cs" Outputs="$(ShowcaseExportDir)showcases.json">
-		<Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\..\harness\PeachPDF.TestHarness\PeachPDF.TestHarness.csproj&quot; -f net8.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('\'))&quot;" />
+		<Exec Command="dotnet run --project &quot;$(MSBuildProjectDirectory)\..\..\harness\PeachPDF.TestHarness\PeachPDF.TestHarness.csproj&quot; -f net10.0 -- --html-only &quot;$(ShowcaseExportDir.TrimEnd('\'))&quot;" />
 	</Target>
 	<Target Name="StageDemoAssets" BeforeTargets="BeforeBuild" DependsOnTargets="ExportHarnessShowcases">
 		<ItemGroup>

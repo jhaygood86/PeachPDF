@@ -30,12 +30,12 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task Img_WithDataUriPastNet8UriLengthLimit_RendersAsImageXObject()
+        public async Task Img_WithDataUriPastLegacyUriLengthLimit_RendersAsImageXObject()
         {
             var dataUri = LargeDataUri();
 
-            // Guards the test's own premise: this is the exact ceiling RUri's data: bypass exists to
-            // avoid (see RUri.cs and RUriTests.cs) - a payload under it wouldn't reproduce issue #980.
+            // Guards the test's own premise: this is past the 65,519-character ceiling System.Uri had before .NET 10,
+            // so a regression to a length-limited URI path is caught - a payload under it wouldn't reproduce issue #980.
             Assert.True(dataUri.Length > 65_519, $"Fixture data URI was only {dataUri.Length} characters.");
 
             var html = $"<!DOCTYPE html><html><body><img src=\"{dataUri}\"></body></html>";
