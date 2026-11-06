@@ -3654,6 +3654,20 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            // The floats an earlier column could not hold were laid out at the top of this one, from before the child it starts at.
+            if (containingBox.CarriedFloatsInThisColumn is { } carried)
+            {
+                foreach (var carriedFloat in carried)
+                {
+                    var carriedEdge = LowestFloatBottomIn(carriedFloat, box.EffectiveClear, 0);
+
+                    if (double.IsNegativeInfinity(carriedEdge)) continue;
+
+                    floatEdge = Math.Max(floatEdge, carriedEdge);
+                    clearance = Math.Max(clearance, carriedEdge);
+                }
+            }
+
             // Clearance exists only when a float's margin edge is below where the box would have been (§9.5.2).
             // Not when the box merely sits above its containing block's content top, which `clearance` also
             // folds in: a multi-column child does, and the empty clearing div in it then stopped being
@@ -3680,6 +3694,15 @@ namespace PeachBrackets.Html.Dom
         /// moved by relative positioning; a float's static bottom is its bottom less those and its own (CSS 2.1 §9.4.3).</param>
         private static double LowestFloatBottomIn(CssBox box, ClearMode clearPropValue, double offsetAbove)
         {
+            // Not content of the flow at all (the same boxes DomUtils.LowestFloatBottomInOwnFormattingContext leaves out): a box that is not
+            // displayed is never laid out, and an absolutely positioned one computes to float: none (CSS 2.1 section 9.7).
+            if (box.DerivedStyle.ActualDisplay == Keywords.None
+                || box.Position.Value is PositionMode.Absolute or PositionMode.Fixed
+                || box.IsRunningPositioned)
+            {
+                return double.NegativeInfinity;
+            }
+
             var offset = offsetAbove + box.RelativeOffsetY;
 
             if (box.IsFloated)
@@ -3695,7 +3718,7 @@ namespace PeachBrackets.Html.Dom
                 return box.ActualBottom - offset + box.ActualMarginBottom;
             }
 
-            if (DomUtils.EstablishesIndependentFormattingContext(box)) return double.NegativeInfinity;
+            if (DomUtils.ContainsItsFloats(box)) return double.NegativeInfinity;
 
             var lowest = double.NegativeInfinity;
 

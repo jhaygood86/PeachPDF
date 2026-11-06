@@ -199,6 +199,20 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(r[Lime].Top - 22.5, r[Blue].Top, 1);
         }
 
+        // A float the first column could not hold is laid out at the top of the second: a box that clears goes below it.
+        [Fact]
+        public async Task FloatDeferredIntoAColumn_IsClearedByABlockInThatColumn()
+        {
+            var r = await RenderAsync(
+                "<div style='columns:2;column-gap:7.5pt;width:307.5pt;height:225pt;column-fill:auto;overflow:hidden'>" +
+                "<div style='height:187.5pt;background:#0f0'></div>" +
+                Float("left", "#f00", "width:75pt;height:75pt;break-inside:avoid") +
+                "<div style='clear:left;height:22.5pt;background:#00f'></div></div>");
+
+            Assert.True(r[Blue].X > r[Lime].X + 140, "the block is in the second column");
+            Assert.Equal(r[Red].Y, r[Blue].Top, 1);
+        }
+
         [Fact]
         public async Task RightFloatThatFitsBesideAnInlineBlock_StaysOnTheLine()
         {

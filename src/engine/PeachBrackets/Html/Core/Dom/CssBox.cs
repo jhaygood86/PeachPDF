@@ -2868,6 +2868,12 @@ namespace PeachBrackets.Html.Dom
         internal CssBox? CurrentColumnFirstChild { get => _rare?.CurrentColumnFirstChild; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.CurrentColumnFirstChild = value; } }
 
         /// <summary>
+        /// The floats an earlier column could not hold that were laid out at the top of the column being filled. They come before the child the
+        /// column starts at (<see cref="CurrentColumnFirstChild"/>) but are in this column, so what a <c>clear</c> in it looks at includes them.
+        /// </summary>
+        internal List<CssBox>? CarriedFloatsInThisColumn { get => _rare?.CarriedFloatsInThisColumn; set { if (_rare is null) { if (value is null) return; _rare = new BoxRareState(); } _rare.CarriedFloatsInThisColumn = value; } }
+
+        /// <summary>
         /// The floats placed while building the line this box's inline flow discarded at its last break. The resumed
         /// pass places them again, so the fragmentainer the flow stopped in must not claim them.
         /// </summary>
@@ -5159,10 +5165,14 @@ namespace PeachBrackets.Html.Dom
 
                 PassRewind.RollBackTo(null, carried);
 
+                var carriedHere = new List<CssBox>();
+                CarriedFloatsInThisColumn = carriedHere;
+
                 foreach (var floated in carried)
                 {
                     floated._resumeTopOverride = ContentTopOfTheContainingBlockIn(carriedColumn, floated.ContainingBlock);
                     await LayoutBlockChild(g, floated);
+                    carriedHere.Add(floated);
 
                     // One that still breaks continues in the column after this one, from the record it left.
                     if (floated.PendingBreakToken is { } floatToken)
@@ -10333,6 +10343,14 @@ namespace PeachBrackets.Html.Dom
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;
+            // So is any other root of a formatting context of its own (a table, a table cell, an inline-block, a flex or grid item): it contains
+            // its floats too, and a table that holds only a float is as tall as it. Looked at only when the document has floats at all.
+            if (HtmlContainer is { HasFloatedBoxes: true } && ParentBox is not null && DomUtils.EstablishesIndependentFormattingContext(this)
+                && !double.IsNegativeInfinity(DomUtils.LowestFloatBottomInOwnFormattingContext(this)))
+            {
+                return false;
+            }
+
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it

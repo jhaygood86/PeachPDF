@@ -79,6 +79,40 @@ public class ClearConsidersEveryFloatTests
         Assert.Equal(c.Location.Y + 7.5, b.Location.Y, 1);
     }
 
+    // What is not in the flow is not cleared: a box that is not displayed is never laid out (its floats keep the geometry of a layout that did
+    // not happen), an absolutely positioned one computes to float: none (CSS 2.1 section 9.7), and a multi-column container contains its own floats.
+    [Theory]
+    [InlineData("<div style='display:none'><div><div style='float:left;width:75pt;height:60pt'></div></div></div>")]
+    [InlineData("<div hidden><div><div style='float:left;width:75pt;height:60pt'></div></div></div>")]
+    [InlineData("<div style='display:none'><div style='float:left;width:75pt;height:60pt'></div></div>")]
+    [InlineData("<div style='position:relative'><div><div><div style='position:absolute;float:left;top:0;left:150pt;width:75pt;height:60pt'></div></div></div></div>")]
+    [InlineData("<div style='columns:2;height:11.25pt;column-fill:auto'><div><div style='float:left;width:37.5pt;height:52.5pt'></div></div></div>")]
+    public async Task FloatThatIsNotInTheFlow_IsNotCleared(string sibling)
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{sibling}<div style='height:7.5pt'></div><div id='b' style='clear:both;height:15pt'></div></div>");
+
+        // Only the 7.5pt block (and the multi-column container's own 11.25pt) is above the box.
+        var above = sibling.Contains("columns:2") ? 11.25 + 7.5 : 7.5;
+
+        Assert.Equal(c.Location.Y + above, b.Location.Y, 1);
+    }
+
+    // A table, a table cell or an inline-block that holds nothing but a float is as tall as the float (CSS 2.1 section 10.6.7), so it is not
+    // empty and what follows it goes below, with `clear` or without.
+    [Theory]
+    [InlineData("<div style='display:table'><div style='display:table-cell;width:112.5pt'>{0}</div></div>", "")]
+    [InlineData("<div style='display:table'><div style='display:table-cell;width:112.5pt'>{0}</div></div>", "clear:both;")]
+    [InlineData("<table cellspacing=0 cellpadding=0><tr><td>{0}</td></tr></table>", "clear:both;")]
+    [InlineData("<div style='display:inline-block;vertical-align:top;width:112.5pt'>{0}</div>", "clear:both;")]
+    public async Task ContainerHoldingOnlyAFloat_IsNotEmpty(string container, string clear)
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{string.Format(container, Float)}<div id='b' style='{clear}height:15pt'></div></div>");
+
+        Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
+    }
+
     // A box that is only moved by relative positioning is cleared where it is in the flow (CSS 2.1 §9.4.3), not where it is drawn.
     [Theory]
     [InlineData("top:7.5pt")]
@@ -134,6 +168,22 @@ public class ClearConsidersEveryFloatTests
 
         Assert.True(b.Location.X > c.Location.X + 140, "the float starts the second column");
         Assert.Equal(c.Location.Y + 7.5 + 15, b.Location.Y, 1);
+    }
+
+    // A float that did not fit at the foot of the first column is laid out at the top of the second, from before the child the column starts
+    // at, and is in the column: a box that clears goes below it. (The height is a column height only for a container that clips its content.)
+    [Theory]
+    [InlineData("")]
+    [InlineData("<div style='height:45pt'></div>")]
+    public async Task FloatDeferredIntoTheColumn_IsCleared(string inFlowBeforeTheClear)
+    {
+        var (c, b, _) = await LayoutAsync(
+            "<div id='c' style='columns:2;column-gap:7.5pt;width:307.5pt;height:225pt;column-fill:auto;overflow:hidden'>" +
+            "<div style='height:187.5pt'></div><div style='float:left;width:75pt;height:75pt;break-inside:avoid'></div>" +
+            inFlowBeforeTheClear + "<div id='b' style='clear:left;height:22.5pt'></div></div>");
+
+        Assert.True(b.Location.X > c.Location.X + 140, "the box is in the second column");
+        Assert.Equal(c.Location.Y + 75, b.Location.Y, 1);
     }
 
     // A float two levels down in the box's own column is found, and one in the column before is not.

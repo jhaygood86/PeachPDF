@@ -948,7 +948,11 @@ namespace PeachBrackets.Html.Dom
                 }
                 finally
                 {
-                    foreach (var marked in markedAtColumnStart) marked.CurrentColumnFirstChild = null;
+                    foreach (var marked in markedAtColumnStart)
+                    {
+                        marked.CurrentColumnFirstChild = null;
+                        marked.CarriedFloatsInThisColumn = null;
+                    }
 
                     htmlContainer.LeaveNestedFragmentainer(previousContext);
                     PlaceColumn(columnsBox, columnLeft, containerWidth);

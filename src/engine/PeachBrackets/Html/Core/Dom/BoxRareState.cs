@@ -98,6 +98,7 @@ namespace PeachBrackets.Html.Dom
         internal bool PlacedByForcedBreak;
         internal (double Left, double Width)? ColumnsBesideFloats;
         internal CssBox? CurrentColumnFirstChild;
+        internal List<CssBox>? CarriedFloatsInThisColumn;
         internal List<CssBox>? FloatsOfTheDiscardedLine;
         internal List<CssBox>? FloatsKeptAtTheStop;
         internal bool HasClearance;
