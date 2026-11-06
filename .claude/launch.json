@@ -2,18 +2,6 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "demo",
-      "runtimeExecutable": "dotnet",
-      "runtimeArgs": [
-        "run",
-        "--project",
-        "src/examples/PeachPDF.Demo.BlazorWasm/PeachPDF.Demo.BlazorWasm.csproj",
-        "--launch-profile",
-        "http"
-      ],
-      "port": 5068
-    },
-    {
       "name": "docs",
       "runtimeExecutable": "jekyll",
       "runtimeArgs": [

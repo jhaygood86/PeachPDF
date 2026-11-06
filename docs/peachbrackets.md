@@ -248,7 +248,7 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   assistive technology. Containers and runs of text are left out; the regions are flat.
 - **`GetCursorAt(pageIndex, x, y)`** gives the pointer the document asks for at a point (the CSS `cursor`, with `auto` resolved), and
   **`PaintCursors(pageIndex, canvas)`** puts the areas that ask for one of their own on a canvas as `Canvas.AddCursor` calls, for a canvas that
-  records them for a host (`SkiaLinkMap.CursorAt`, `Win2dLinkMap.CursorAt`) or writes them (SVG). `pointer-events: none` lets a point fall
+  records them for a host. `pointer-events: none` lets a point fall
   through, in these and in `GetElementAt`. See [Pointer Interaction](html-css-support.md#pointer-interaction).
 - **`PaintLinks(pageIndex, canvas)`** puts a page's links on a canvas as `Canvas.AddLink`/`AddDestinationLink`/`AddDestination` calls (see
   [Links and destinations](peachdrawing-core.md#links-and-destinations)), so a canvas for a format with hyperlinks - the PDF and SVG ones - writes
@@ -410,8 +410,8 @@ while (document.HasRunningAnimations)
   document, so it follows the document's size, not the animated box's. Only a `MediaType.Screen` document without container queries plays them; any other plays what
   does not change layout. Properties that change what boxes there are (`display`, `position`, `float`, `content`) and custom properties do not play.
 - **Retained layers.** A box that animates `transform` or `opacity`, and has no box inside it that does, is painted into a [`RetainedLayer`](peachdrawing-core.md#retained-layers)
-  once and drawn again each frame with the new matrix and opacity, so a canvas backed by a GPU (see [`PeachDrawing.Win2D`](peachdrawing-win2d.md)) composites a texture and does
-  not paint what is inside the box again (`PeachDrawing.Win2D` and [`PeachDrawing.Skia`](peachdrawing-skia.md) both keep a texture). What a layer holds is recorded again when anything else about the page changes (a restyle, a reload). On a canvas with no better way,
+  once and drawn again each frame with the new matrix and opacity, so a canvas backed by a GPU composites a texture and does
+  not paint what is inside the box again. What a layer holds is recorded again when anything else about the page changes (a restyle, a reload). On a canvas with no better way,
   a layer is a recording replayed each frame.
 - **The animated layer.** A host that keeps the page as a surface it does not repaint (a scroller, a set of tiles) paints `DocumentPaintLayer.Content` onto it and draws
   `DocumentPaintLayer.Animated` over it every frame, under `DocumentPaintLayer.ViewportAttached`. A promoted box is then not part of the surface at all: while it only moves or
@@ -430,8 +430,7 @@ while (document.HasRunningAnimations)
   `ElapsedTime`): `AnimationStart`, `AnimationIteration` (at the start of each iteration after the first), `AnimationEnd` and `AnimationCancel` (an animation that began and stopped before it
   ended because the element no longer names it, or it was cancelled), and for a transition `TransitionRun` (when it is created, even with a delay to wait), `TransitionStart`,
   `TransitionEnd` and `TransitionCancel` (replaced by a newer transition of the property, its element gone, or cancelled). `Name` is the `animation-name` or the property. An event
-  caused by a call (a transition that a class change created, an animation `Cancel()`ed) is reported by the next step, and `HasRunningAnimations` is true until it has been. A
-  WinUI `HtmlView` raises them as `AnimationEvents`.
+  caused by a call (a transition that a class change created, an animation `Cancel()`ed) is reported by the next step, and `HasRunningAnimations` is true until it has been.
 - **Control.** `HtmlDocument.GetAnimations()` (or `GetAnimations(element)`) lists the animations and transitions that are running as `DocumentAnimation` objects, which follow
   Web Animations 1 §4.4: `Name`, `IsTransition`, `Element`, `PlayState` (`Idle`, `Running`, `Paused`, `Finished`), `CurrentTime` (seek by setting it, paused or not), `PlaybackRate` and
   `UpdatePlaybackRate` (negative plays backwards), `Play()`, `Pause()`, `Finish()` (an animation that repeats for ever has no end and throws), `Reverse()`, `Cancel()` (the element has the value
@@ -445,7 +444,7 @@ An animation with `animation-timeline: scroll()` or `view()` (or a name from `sc
 the document is scrolled instead of from time, over the part of the scroll `animation-range` names (see [Animations](html-css-support.md#animations) for the grammar). The host says how it is scrolled
 with `SetViewport` (as it already does for fixed and sticky boxes, see [the viewport](#the-viewport-fixed-and-sticky-boxes)); that wakes the clock for one step, so `HasRunningAnimations` is true
 after a scroll and `AdvanceAnimations` (or `AdvanceAnimationsAsync`) then writes the new values and reports the regions to repaint. `AnimationFrame.IsRunning` is false afterwards: nothing runs on time,
-so a host's frame loop idles between scrolls. A WinUI `HtmlView` does this itself on every scroll.
+so a host's frame loop idles between scrolls.
 
 An animation on a scroll timeline plays over the distance the document can scroll; on a view timeline, over the part of the scroll where the element is in view (`cover`, or the named range). Animations on
 these timelines send no events and ignore `CurrentTime`, `PlaybackRate`, `Finish()` and `Reverse()` of the control API (`Pause()` holds the last value, `Cancel()` removes the effect). Only the document scrolls:
@@ -458,7 +457,7 @@ The clock starts them when the document loads, builds the graphic again at its t
 spins repaints that icon. `AnimationFrame.IsRunning` stays true while a graphic still has something to play (an animation that repeats for ever, or one yet to end) and is false once every
 animation of it has ended and is frozen or removed. A document loaded for a still frame (`AnimationProgress`) samples SMIL at that fraction of the span the animations cover instead.
 
-`HtmlDocument.AnimationsWoke` is raised when the control API (`Play`, `CurrentTime`, `Finish`, `Cancel`, `Reverse`...) makes a clock that had stopped run again, so a host that stopped its frame loop when `HasRunningAnimations` went false starts it again; it is not raised while the clock is running or from a step, and it may arrive on any thread. A WinUI `HtmlView` handles it itself.
+`HtmlDocument.AnimationsWoke` is raised when the control API (`Play`, `CurrentTime`, `Finish`, `Cancel`, `Reverse`...) makes a clock that had stopped run again, so a host that stopped its frame loop when `HasRunningAnimations` went false starts it again; it is not raised while the clock is running or from a step, and it may arrive on any thread.
 
 ## Changing classes, attributes and preferences
 
@@ -576,8 +575,7 @@ document.
 
 A document asks for its images and web fonts one at a time, as layout reaches them. A render context that implements `IResourcePrefetcher` is told
 their addresses first and can fetch them all at once; `HostResourceLoader.PrefetchAsync` does that (a few requests at a time) into the loader's response
-cache, so the requests that follow are answered from memory. `HtmlView` does this for you; a host with its own render context implements the interface
-the same way, or ignores it, and nothing changes.
+cache, so the requests that follow are answered from memory. A host with its own render context implements the interface, or ignores it, and nothing changes.
 
 ## Timing a load
 

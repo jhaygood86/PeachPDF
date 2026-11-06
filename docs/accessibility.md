@@ -1,8 +1,7 @@
 # Accessibility
 
 PeachBrackets describes a document to an assistive technology - a screen reader, a switch, a braille display - as an **accessibility tree**: the
-parts of the page that mean something to a reader, each with the role it has, the name it is called by, and what state it is in. A host such as the
-[WinUI](peachbrackets-winui.md) or [Android](peachbrackets-android.md) view builds the tree its platform wants (UI Automation, an accessibility node
+parts of the page that mean something to a reader, each with the role it has, the name it is called by, and what state it is in. A host that shows a document on a screen builds the tree its platform wants (UI Automation, an accessibility node
 provider) from this one.
 
 ```csharp
@@ -122,10 +121,8 @@ figure alternative text, and shows the title in the viewer. See [Generating PDF/
 
 `HtmlDocument.PaintAccessibility(pageIndex, canvas)` hands the tree to any `Canvas` as `AddSemanticRegion` calls: one unpainted region per part of a
 page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
-level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
-readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
-nesting). The Skia and Win2D canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`) beside the links, and
-`SemanticAt` finds the innermost one under a point, which is what a host's touch exploration or UI Automation hit test needs.
+level and states. A canvas that wants them records or writes them as it sees fit. The regions are flat (no
+nesting).
 
 ## Form controls
 
@@ -162,37 +159,6 @@ work in any style sheet; they always have the colours of `SystemColorPalette.Lig
 `HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a
 percentage or a keyword follows the reader's text size setting, and text sized in `px` or `pt` does not, as in a browser.
 
-## Checking with a screen reader
-
-The tests read the accessibility tree and the UI Automation and `AccessibilityNodeInfo` trees a host builds from it, but they cannot tell what a person
-hears. Before relying on a host for real readers, walk a page that has headings, landmarks, a link, a table with headers, a check box, a text field, a
-progress bar and an image with a description through it with the platform's screen reader. The list below says what to listen for.
-
-**Windows, [WinUI view](peachbrackets-winui.md) with Narrator** (Win+Ctrl+Enter starts it)
-
-- Caps Lock+Right Arrow reads the page in order; each heading is announced as a heading with its level, a landmark as its kind (main, navigation, search), and
-  an image by its description.
-- H and Shift+H jump by heading, D by landmark, K by link, T by table; Enter on a link follows it.
-- In a table, Ctrl+Alt+Arrow moves between cells and Narrator reads the column and row header with each cell, and "row 2 of 3, column 1 of 2".
-- Space on a check box toggles it and Narrator says the new state; Tab reaches it and a text field, and the focus ring is visible on both.
-- In a text field, typing, Backspace, the arrow keys and Ctrl+Arrow work and Narrator echoes the characters; Caps Lock+Tab reads the field's name and text.
-  An input method (the Japanese or Chinese keyboard) shows its candidate window next to the caret - the first thing to look at, because the position is
-  estimated.
-- Tab past the last stop and the focus leaves the page for the next control, and Shift+Tab returns to the last.
-
-**Android, [Android view](peachbrackets-android.md) with TalkBack** (volume keys held for three seconds, or Settings > Accessibility)
-
-- Swipe right and left reads the page in order, with headings, links, buttons and images announced as what they are.
-- Drag one finger over the page: TalkBack reads what is under it (touch exploration), and lifting the finger leaves the focus there.
-- The reading controls (swipe up then down) switch to character, word and paragraph: a text node is read by each in turn.
-- Double-tap a check box toggles it and TalkBack says "checked"; a progress bar or slider is announced with its percentage, and a slider adjusts with a
-  swipe up or down.
-- Double-tap a text field: the keyboard opens and the caret is where the tap was. Type, delete and compose (a keyboard that suggests words, and a
-  Chinese or Japanese one): composing text replaces the underlined text and does not add to it.
-- With a hardware keyboard: Tab and Shift+Tab step through the page's tab stops, and arrow keys move the caret in a field.
-
-Anything that is announced wrongly, silently or twice is worth recording with the page and the setting, since the tree it came from can then be dumped
-(`adb shell uiautomator dump` on Android, the Accessibility Insights tool on Windows) and compared with what the document means.
 
 ## Limits of this version
 

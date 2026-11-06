@@ -10,17 +10,6 @@
     <!-- 1.2.6 mangles the page name of a member with a tuple parameter (RasterSurfaceFactory.Create), breaking the API reference link check. -->
     <PackageVersion Include="DefaultDocumentation" Version="1.2.5" />
     <PackageVersion Include="HtmlAgilityPack" Version="1.13.1" />
-    <PackageVersion Include="HarfBuzzSharp.NativeAssets.Linux" Version="8.3.1.1" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="10.0.14" />
-    <PackageVersion Include="Microsoft.Graphics.Win2D" Version="1.4.0" />
-    <!-- The whole Windows App SDK, for applications: it pulls in the AI, ML, Search and Widgets components (over 100 MB), which a library has no use for. -->
-    <PackageVersion Include="Microsoft.WindowsAppSDK" Version="2.5.1" />
-    <!-- The parts of the Windows App SDK a library that draws WinUI controls compiles against, at the versions Windows App SDK 2.5.1 pins. -->
-    <PackageVersion Include="Microsoft.WindowsAppSDK.Base" Version="2.0.4" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK.Foundation" Version="2.3.12" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.1.9" />
-    <PackageVersion Include="Microsoft.WindowsAppSDK.WinUI" Version="2.3.9" />
     <PackageVersion Include="Microsoft.CodeAnalysis.Analyzers" Version="5.9.0" />
     <PackageVersion Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.5.2" />
@@ -28,17 +17,9 @@
     <PackageVersion Include="MimeKit" Version="4.18.2" />
     <PackageVersion Include="PeachImage" Version="0.7.3" />
     <PackageVersion Include="ScottPlot" Version="5.1.59" />
-    <PackageVersion Include="AngleSharp" Version="1.8.4" />
-    <PackageVersion Include="SkiaSharp" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Android" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.Views" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.HarfBuzz" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Linux" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.macOS" Version="3.119.0" />
-    <PackageVersion Include="SkiaSharp.NativeAssets.Win32" Version="3.119.0" />
     <PackageVersion Include="System.IO.Pipelines" Version="10.0.14" />
-    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.14" />
     <PackageVersion Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
+    <PackageVersion Include="System.Text.Encoding.CodePages" Version="10.0.14" />
     <PackageVersion Include="System.Text.Json" Version="10.0.14" />
     <PackageVersion Include="xunit.analyzers" Version="2.2.0" />
     <PackageVersion Include="xunit.v3" Version="4.0.2" />

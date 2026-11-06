@@ -23,19 +23,6 @@ jobs:
           8.0.x
           10.0.x
 
-    # A separate step because dotnet-quality applies to every entry in dotnet-version, and
-    # 8.0.x/10.0.x only have GA builds; net11.0 is still pre-GA (RC), which setup-dotnet
-    # classifies as "preview" quality. Drop this step (and the dotnet-quality knob) once
-    # .NET 11 ships its GA SDK. global.json's rollForward "latestMajor"/allowPrerelease
-    # automatically promotes to this SDK once it's installed, so the pack step below produces a
-    # nupkg containing net11.0 output alongside net8.0/net10.0 with no further wiring needed (see
-    # src/Directory.Build.props for how net11.0 opts in per resolved SDK).
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
-
     - name: Read package version
       id: version
       run: |
@@ -86,8 +73,6 @@ jobs:
         dotnet build src/drawing/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release
         dotnet build src/drawing/PeachDrawing/PeachDrawing.csproj --configuration Release
         dotnet build src/drawing/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release
-        dotnet build src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release
-        dotnet build src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release
         dotnet build src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release
         dotnet build src/PeachPDF/PeachPDF.csproj --configuration Release
 
@@ -98,8 +83,6 @@ jobs:
         dotnet pack src/drawing/PeachDrawing.Core/PeachDrawing.Core.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/drawing/PeachDrawing/PeachDrawing.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/drawing/PeachDrawing.PDF/PeachDrawing.PDF.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/drawing/PeachDrawing.Svg/PeachDrawing.Svg.csproj --configuration Release --no-build --output ./packages
-        dotnet pack src/drawing/PeachDrawing.Skia/PeachDrawing.Skia.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/engine/PeachBrackets/PeachBrackets.csproj --configuration Release --no-build --output ./packages
         dotnet pack src/PeachPDF/PeachPDF.csproj --configuration Release --no-build --output ./packages
 
@@ -114,8 +97,7 @@ jobs:
       # PeachDrawing.Text (PeachDrawing.Core depends on it at this same version), then
       # PeachDrawing.Core (PeachDrawing depends on it), then PeachDrawing (PeachDrawing.PDF depends on
       # it), then PeachDrawing.PDF (PeachPDF depends on it, alongside PeachDrawing and PeachDrawing.Core
-      # directly), then PeachDrawing.Svg (like PeachDrawing.PDF it depends on PeachDrawing and PeachDrawing.Core; nothing depends on
-      # it), then PeachDrawing.Skia (the same shape as PeachDrawing.Svg: PeachDrawing, PeachDrawing.Core and PeachImage; nothing depends on it), then PeachBrackets (PeachPDF depends on it too; it needs PeachDrawing, PeachDrawing.Core and
+      # directly), then PeachBrackets (PeachPDF depends on it too; it needs PeachDrawing, PeachDrawing.Core and
       # PeachDrawing.Text), then PeachPDF - each has to be on the feed
       # before anyone can restore the one that depends on it. --skip-duplicate makes this safe to re-run.
       # The exact version-pinned filenames (rather than a "PeachDrawing.Text.*"/"PeachDrawing.*" glob)
@@ -140,14 +122,6 @@ jobs:
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
         dotnet nuget push "./packages/PeachDrawing.PDF.${{ steps.version.outputs.value }}.nupkg"           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}"           --source https://api.nuget.org/v3/index.json           --skip-duplicate
-        dotnet nuget push "./packages/PeachDrawing.Svg.${{ steps.version.outputs.value }}.nupkg" \
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
-          --source https://api.nuget.org/v3/index.json \
-          --skip-duplicate
-        dotnet nuget push "./packages/PeachDrawing.Skia.${{ steps.version.outputs.value }}.nupkg" \
-          --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
-          --source https://api.nuget.org/v3/index.json \
-          --skip-duplicate
         dotnet nuget push "./packages/PeachBrackets.${{ steps.version.outputs.value }}.nupkg" \
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
@@ -156,214 +130,3 @@ jobs:
           --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" \
           --source https://api.nuget.org/v3/index.json \
           --skip-duplicate
-
-  # PeachBrackets.Android is a .NET for Android view: it needs the android workload, so it is built and pushed by its own job once the packages
-  # it depends on (PeachBrackets, PeachDrawing.Skia and what they need) are on the feed.
-  publish-android:
-    needs: publish
-    runs-on: ubuntu-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: Install the android workload
-      run: dotnet workload install android
-
-    - name: Read package version
-      id: version
-      run: |
-        VERSION=$(grep -oP '(?<=<PackageVersion>)[0-9][^<]*' src/Version.props | head -n 1)
-        echo "value=$VERSION" >> "$GITHUB_OUTPUT"
-        echo "Version: $VERSION"
-
-    - name: Build and pack
-      run: |
-        dotnet build src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Android/PeachBrackets.Android.csproj --configuration Release --no-build --output ./packages
-
-    - name: NuGet login
-      uses: NuGet/login@v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Push to NuGet.org
-      run: dotnet nuget push "./packages/PeachBrackets.Android.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-  # PeachBrackets.WinUI is a WinUI 3 control, so like PeachDrawing.Win2D it is built on Windows and pushed by its own job once the
-  # packages it depends on (PeachBrackets, PeachDrawing.Win2D and what they need) are on the feed.
-  publish-winui:
-    needs: publish-win2d
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
-
-    - name: Read package version
-      id: version
-      shell: pwsh
-      run: |
-        $version = [regex]::Match((Get-Content src/Version.props -Raw), '<PackageVersion>([0-9][^<]*)</PackageVersion>').Groups[1].Value
-        "value=$version" >> $env:GITHUB_OUTPUT
-        Write-Host "Version: $version"
-
-    - name: Build and pack
-      run: |
-        dotnet build src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.WinUI/PeachBrackets.WinUI.csproj --configuration Release --no-build --output ./packages
-
-    - name: NuGet login
-      uses: NuGet/login@v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Push to NuGet.org
-      run: dotnet nuget push "./packages/PeachBrackets.WinUI.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-  # PeachDrawing.CoreGraphics builds for the macOS and iOS target frameworks, which need a Mac and the macos and ios workloads, so it is packed and
-  # pushed by its own job once the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
-  publish-coregraphics:
-    needs: publish
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: Install the macos and ios workloads
-      run: dotnet workload install macos ios
-
-    - name: Read package version
-      id: version
-      shell: bash
-      run: |
-        version=$(grep -o '<PackageVersion>[0-9][^<]*</PackageVersion>' src/Version.props | head -1 | sed 's/<[^>]*>//g')
-        echo "value=$version" >> "$GITHUB_OUTPUT"
-        echo "Version: $version"
-
-    - name: Build and pack
-      run: |
-        dotnet build src/drawing/PeachDrawing.CoreGraphics/PeachDrawing.CoreGraphics.csproj --configuration Release
-        dotnet pack src/drawing/PeachDrawing.CoreGraphics/PeachDrawing.CoreGraphics.csproj --configuration Release --no-build --output ./packages
-
-    - name: NuGet login
-      uses: NuGet/login@v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Push to NuGet.org
-      run: dotnet nuget push "./packages/PeachDrawing.CoreGraphics.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-  # PeachBrackets.Apple builds for the macOS and iOS target frameworks, which need a Mac and the macos and ios workloads, so it is packed and pushed by
-  # its own job once PeachDrawing.CoreGraphics (and so everything it depends on) is on the feed.
-  publish-apple:
-    needs: publish-coregraphics
-    runs-on: macos-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: Install the macos and ios workloads
-      run: dotnet workload install macos ios
-
-    - name: Read package version
-      id: version
-      shell: bash
-      run: |
-        version=$(grep -o '<PackageVersion>[0-9][^<]*</PackageVersion>' src/Version.props | head -1 | sed 's/<[^>]*>//g')
-        echo "value=$version" >> "$GITHUB_OUTPUT"
-        echo "Version: $version"
-
-    - name: Build and pack
-      run: |
-        dotnet build src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release -p:ValidateXcodeVersion=false
-        dotnet test --project src/tests/PeachBrackets.Apple.Tests/PeachBrackets.Apple.Tests.csproj --configuration Release
-        dotnet pack src/engine/PeachBrackets.Apple/PeachBrackets.Apple.csproj --configuration Release --no-build --output ./packages
-
-    - name: NuGet login
-      uses: NuGet/login@v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Push to NuGet.org
-      run: dotnet nuget push "./packages/PeachBrackets.Apple.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-  # PeachDrawing.Win2D builds on Windows only (Win2D is a Windows App SDK component), so it is packed and pushed by its own job once
-  # the packages it depends on (PeachDrawing, PeachDrawing.Core, PeachDrawing.Text) are on the feed.
-  publish-win2d:
-    needs: publish
-    runs-on: windows-latest
-
-    steps:
-    - name: Checkout
-      uses: actions/checkout@v4
-
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: |
-          10.0.x
-
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
-
-    - name: Read package version
-      id: version
-      shell: pwsh
-      run: |
-        $version = [regex]::Match((Get-Content src/Version.props -Raw), '<PackageVersion>([0-9][^<]*)</PackageVersion>').Groups[1].Value
-        "value=$version" >> $env:GITHUB_OUTPUT
-        Write-Host "Version: $version"
-
-    - name: Build and pack
-      run: |
-        dotnet build src/drawing/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release
-        dotnet pack src/drawing/PeachDrawing.Win2D/PeachDrawing.Win2D.csproj --configuration Release --no-build --output ./packages
-
-    - name: NuGet login
-      uses: NuGet/login@v1
-      id: login
-      with:
-        user: ${{ secrets.NUGET_USER }}
-
-    - name: Push to NuGet.org
-      run: dotnet nuget push "./packages/PeachDrawing.Win2D.${{ steps.version.outputs.value }}.nupkg" --api-key "${{ steps.login.outputs.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

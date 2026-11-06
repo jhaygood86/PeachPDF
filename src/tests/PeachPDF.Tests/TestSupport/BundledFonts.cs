@@ -19,7 +19,7 @@ namespace PeachPDF.Tests.TestSupport
     /// would silently shadow the other.
     ///
     /// The files themselves live in the repository-root <c>assets/fonts/</c> directory, shared
-    /// with PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm; the csproj links each one into
+    /// with PeachPDF.TestHarness; the csproj links each one into
     /// the output root, which is what these <see cref="AppContext.BaseDirectory"/> lookups find.
     /// Each font's license notice sits beside it there as a <c>.LICENSE.txt</c>.
     /// </summary>

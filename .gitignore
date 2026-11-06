@@ -449,12 +449,6 @@ FodyWeavers.xsd
 # .woff2 files it produces are source
 /assets/fonts/.liberation-src/
 
-# The demo app's host page is source, despite the global *.html ignore above
-!/src/examples/PeachPDF.Demo.BlazorWasm/wwwroot/index.html
-
-# The screen-only showcases of the demo apps are source (the demos and their UI tests read them), despite the global *.html ignore above
-!/src/examples/ScreenShowcases/*.html
-
 # Jekyll layouts and the landing page are source, despite the global *.html ignore above
 !/docs/_layouts/*.html
 !/docs/index.html
@@ -464,10 +458,3 @@ FodyWeavers.xsd
 # The PDF/A conformance job renders this document with the CLI, so it is source too
 !/.github/conformance/*.html
 
-# Staged into the demo's wwwroot by its StageSharedFontAssets target; the source of truth is
-# assets/fonts/
-/src/examples/PeachPDF.Demo.BlazorWasm/wwwroot/fonts/
-
-# Staged into the demo's wwwroot by its StageSharedLicenseAssets target; the sources of truth are
-# FTL.TXT beside the ported FreeType code, LICENSE and THIRD-PARTY-LICENSES.md
-/src/examples/PeachPDF.Demo.BlazorWasm/wwwroot/licenses/

@@ -12,8 +12,8 @@ dotnet add package PeachDrawing.Core
 ```
 
 > **Status: pre-1.0.** Every type described below is the package's full public surface today - see
-> `PublicApi.txt` for the exact, machine-checked snapshot. Three concrete `Canvas`/`RenderContext`
-> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) and [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, drawing with SkiaSharp into a canvas you supply, on any platform) and [`PeachDrawing.CoreGraphics`](peachdrawing-coregraphics.md) (`CoreGraphicsCanvas`, drawing with Quartz 2D into a `CGContext` you supply, on macOS and iOS) join them as a fourth and fifth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
+> `PublicApi.txt` for the exact, machine-checked snapshot. Concrete `Canvas`/`RenderContext`
+> implementations are [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
 > renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
 > vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
 > with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
@@ -265,7 +265,7 @@ layer (a measure-only pass) or, for a layer with effects, cannot apply them - dr
 default implementation builds a layer from `CreateTile` and the `DrawImage…` methods, so every `Canvas` gets one; a
 canvas that can apply effects overrides `SupportsLayerEffects` and `ApplyLayerEffects` (the `PeachDrawing`
 package's `RasterLayerEffects.Apply` does the work on a `RasterSurface`). A canvas whose layers apply their effects itself, on the
-graphics hardware, says so with `HasNativeLayerEffects` (`Win2dCanvas`, `SkiaCanvas` and `CoreGraphicsCanvas` do), and a caller that can express a blurred
+graphics hardware, says so with `HasNativeLayerEffects` (a GPU-backed canvas does), and a caller that can express a blurred
 shadow, a filter or a blurred backdrop either way draws it as a layer with effects when that is true instead of rendering it into a bitmap.
 `BlurEffect.ClampEdges` asks for the layer's edge pixels to be held rather than faded, for content that continues past the layer's bounds.
 
@@ -287,8 +287,7 @@ canvas.PopTransform();
 
 `Draw` places the layer under the target's current transform and takes the opacity of that one draw; the content is not recorded again. `CanDraw(target)` says whether a canvas can
 still draw it (a lost graphics device or another document makes the answer no, and the layer is recorded anew). `CreateRetainedLayer` returns `null` for an empty region or a
-canvas that cannot make one. The default is built from `CreateTile`, so every `Canvas` gets one and a draw replays the tile; `Win2dCanvas` overrides it to keep a texture on the GPU,
-and so does `SkiaCanvas` (the group is drawn once into a bitmap and kept as an image, uploaded to the render context's `GpuContext` when it has one), so a draw is one textured quad.
+canvas that cannot make one. The default is built from `CreateTile`, so every `Canvas` gets one and a draw replays the tile; a GPU-backed canvas overrides it to keep a texture on the GPU, so a draw is one textured quad.
 
 
 ## Links and destinations
@@ -316,7 +315,7 @@ other.AddDestinationLink(new Rect(40, 200, 90, 14), "terms");           // ...an
   tagged document attaches to a structure element; the SVG canvas has nothing to hand back.
 
 All three do nothing by default, which is right for a canvas of pixels. [PeachDrawing.PDF](peachdrawing-pdf.md) writes link annotations
-and named destinations, and [PeachDrawing.Svg](peachdrawing-svg.md) writes `<a href>` elements. A tile or a measuring canvas, which belongs
+and named destinations. A tile or a measuring canvas, which belongs
 to no page, writes nothing.
 
 ## Tile and hatch brushes
@@ -368,7 +367,7 @@ needs. `FontFamily` is the family a font was matched from. `Image` (`Width`, `He
 RGBA8) for an image whose pixels a `Canvas` implementation needs to read directly, or `null` for one with
 none (a vector tile from `CreateTile`, say). An animated image (a GIF or WebP with more than one frame) reports `FrameCount`, `GetFrameDuration(index)` and `LoopCount` (0 is
 forever), and draws the frame `CurrentFrame` names, which whoever plays the animation sets (`PeachBrackets.HtmlDocument.AdvanceAnimations` does); every use of the image shows the same
-frame. A still image has one frame and ignores `CurrentFrame`. `RasterRenderContext` and `Win2dRenderContext` decode animated images this way; a backend that does not shows the first frame.
+frame. A still image has one frame and ignores `CurrentFrame`. `RasterRenderContext` decodes animated images this way; a backend that does not shows the first frame.
 
 ## Implementing your own `Canvas`
 
@@ -385,7 +384,7 @@ needs to:
    entirely.
 4. Derive from `Image`/`FontFamily`/`Font` as your backend's font/image loading needs.
 
-[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), [PeachDrawing.Svg](peachdrawing-svg.md)'s `SvgRenderContext`/`SvgCanvas` (writing vector SVG, and the smallest complete backend to read), [PeachDrawing.Win2D](peachdrawing-win2d.md)'s `Win2dRenderContext`/`Win2dCanvas` (a hardware-accelerated Windows backend, with the resource-lifetime rules a native-handle backend needs), [PeachDrawing.Skia](peachdrawing-skia.md)'s `SkiaRenderContext`/`SkiaCanvas` (the cross-platform one, drawing into a host-supplied surface), [PeachDrawing.CoreGraphics](peachdrawing-coregraphics.md)'s `CoreGraphicsRenderContext`/`CoreGraphicsCanvas` (the Apple one, drawing into a host-supplied `CGContext`), PeachPDF's use of `RasterCanvas`
+[PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfRenderContext`/`PdfCanvas` (writing vector PDF content), PeachPDF's use of `RasterCanvas`
 (rasterizing effects PDF can't express as vector content, such as `filter: blur()`), and `PeachDrawing`'s
 own standalone `RasterCanvas`/`RasterRenderContext` (see [docs/peachdrawing.md](peachdrawing.md)) are all
 independent, complete implementations of exactly this - reading their source is the closest thing to a
