@@ -68,5 +68,11 @@ namespace PeachBrackets.Svg
         /// behind the element, so the document's artwork cannot be painted once and shared as a cached form.
         /// </summary>
         public bool ReadsBackdrop { get; set; }
+
+        /// <summary>
+        /// True for a document built to be one moment of an animation (SMIL, or CSS animations of its elements, played by a clock): the next frame builds another, so
+        /// painting it as a reusable form would only fill the cache with artwork nobody paints again.
+        /// </summary>
+        public bool IsTimeVarying { get; set; }
     }
 }

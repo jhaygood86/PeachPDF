@@ -7,18 +7,20 @@ namespace PeachBrackets.Html.Dom
         /// <summary>
         /// The animations this box names, for an element of an inline <c>&lt;svg&gt;</c> (null when it names none in play). The elements of an SVG
         /// are not laid out, so no animated declaration is written onto the box; <c>SvgTreeBuilder</c> asks for each property it reads. Planned
-        /// on first use, once the cascade has computed the box's <c>animation-*</c> properties.
+        /// on first use, once the cascade has computed the box's <c>animation-*</c> properties; for a document a clock plays, planned again for each moment.
         /// </summary>
         internal AnimationApplier.ElementPlan? GetSvgAnimationPlan()
         {
             // Nearly every document has no @keyframes and nearly every element names no animation: answer that before the box grows any state.
             if (HtmlContainer is not { Keyframes.Count: > 0 } || AnimationApplier.IsNone(AnimationName)) return null;
 
+            var seconds = HtmlContainer.SvgAnimationSeconds;
             var rare = _rare ??= new BoxRareState();
 
-            if (!rare.SvgAnimationPlanBuilt)
+            if (!rare.SvgAnimationPlanBuilt || rare.SvgAnimationPlanSeconds != seconds)
             {
                 rare.SvgAnimationPlan = AnimationApplier.PlanElement(this);
+                rare.SvgAnimationPlanSeconds = seconds;
                 rare.SvgAnimationPlanBuilt = true;
             }
 

@@ -29,7 +29,10 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
   only paints (`color`, `visibility`) shows the new value on the boxes under the one that transitions for the first frame, until the clock cascades it down. `visibility: collapse`
   on a table row does not lay the table out again while it transitions.
 - **Scroll-driven timelines and `animation-range`** are not supported, as in the still frame.
-- **SVG animation (CSS in an inline `<svg>`, SMIL)** is not played by the clock.
+- **SVG animation is played, but the graphic is rebuilt for each frame.** CSS animations of the elements of an inline `<svg>` and its SMIL animations (see [the recent fix](../recent-fixes/2026-11-05-svg-animation-playback.md))
+  rebuild the whole scene graph at the clock's time and repaint the `<svg>`'s rectangle; a graphic with thousands of elements animating costs a rebuild of all of them. Only the `<svg>` as a whole is
+  a dirty region, not the changed element. A standalone SVG (`<img src="x.svg">`) is not played, and the box of the `<svg>` is laid out once: animating the root's `width`, `height` or `viewBox`
+  changes what is drawn inside, not the size of the box.
 - **Only the Win2D backend keeps layers as textures and decodes animated images for the WinUI view**; `RasterRenderContext` decodes animated images and the default retained layer works
   on every canvas, but Skia, CoreGraphics and the PDF/SVG writers show the first frame of an animated image.
 - **The Android view does not play animations.** Only the WinUI view steps the document each frame (`AdvanceAnimations` on the display's frame clock) and raises the animation events; `PeachBrackets.Android.HtmlView` has no frame loop (a `Choreographer` callback calling `AdvanceAnimations`), so a document shown there is a still frame.

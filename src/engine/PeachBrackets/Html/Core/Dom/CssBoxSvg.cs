@@ -11,7 +11,10 @@
 // "The Art of War"
 
 using PeachDrawing.Core;
+using PeachBrackets.Html.Animation;
+using PeachBrackets.Html.Parse;
 using PeachBrackets.Svg;
+using PeachBrackets.Svg.Smil;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -34,6 +37,13 @@ namespace PeachBrackets.Html.Dom
         private SvgDocument? _document;
         private IReadOnlyDictionary<string, SvgTreeBuilder.SvgImageResource>? _prefetchedImages;
         private Dictionary<CssBox, ISvgForeignContent>? _foreignContent;
+
+        // The graphic's children, kept when a clock plays it so the scene graph can be built again for each moment (they are dropped from Boxes in between).
+        private List<CssBox>? _retained;
+        private SmilSet? _smil;
+        private double? _cssAnimationEnd;
+        private double? _builtAt;
+        private CssValueParser? _smilParser;
 
         public CssBoxSvg(CssBox? parent, HtmlTag tag)
             : base(parent, tag)
@@ -134,8 +144,20 @@ namespace PeachBrackets.Html.Dom
 
             var source = new CssBoxSvgSourceNode(this);
             (AccessibleTitle, AccessibleDescription) = ReadAccessibleText(source);
-            _document = SvgTreeBuilder.Build(source, HtmlContainer!.RenderContext, ActualColor, _prefetchedImages,
+
+            // What animates in it: SMIL elements, and CSS animations on its elements (which need the document's keyframes). A document a clock plays keeps the
+            // children to build the graphic again for each moment; a still frame (or a document that is not animated) builds it once.
+            if (HtmlContainer!.AnimationsEnabled || HtmlContainer.AnimationProgress is not null)
+            {
+                _smil = SmilSet.Read(this);
+                _cssAnimationEnd = ReadCssAnimationEnd(this);
+                if (HtmlContainer.AnimationsEnabled && (_smil is not null || _cssAnimationEnd is not null)) _retained = [.. Boxes];
+            }
+
+            _builtAt = HtmlContainer.SvgAnimationSeconds;
+            _document = SvgTreeBuilder.Build(source, HtmlContainer.RenderContext, ActualColor, _prefetchedImages,
                 fontPaletteValues: HtmlContainer.FontPaletteValues, fontFeatureValues: HtmlContainer.FontFeatureValues);
+            _document.IsTimeVarying = _retained is not null;
 
             ForcedColorsAdjuster.RecolorSvg(this, _document);
 
@@ -147,6 +169,63 @@ namespace PeachBrackets.Html.Dom
             // background/border/content positioning. Clearing them makes this box a true leaf (one
             // phantom word, no children), exactly like CssBoxImage.
             Boxes.Clear();
+        }
+
+        /// <summary>The SMIL animation elements of this graphic, or null when it has none (or nothing plays it).</summary>
+        internal SmilSet? SmilAnimations => _smil;
+
+        /// <summary>The parser that settles colours and keywords while SMIL values are mixed.</summary>
+        internal CssValueParser SmilParser => _smilParser ??= new CssValueParser(HtmlContainer!.RenderContext);
+
+        /// <summary>Whether a clock plays this graphic: SMIL or CSS animations of its elements that its frames have to be built again for.</summary>
+        internal bool TimeVarying => _retained is not null;
+
+        private static double? ReadCssAnimationEnd(CssBox box)
+        {
+            double? end = null;
+            foreach (var child in box.Boxes)
+            {
+                if (child.HtmlTag is null) continue;
+                if (AnimationApplier.ElementAnimationEnd(child) is { } own) end = Math.Max(end ?? 0, own);
+                if (ReadCssAnimationEnd(child) is { } below) end = Math.Max(end ?? 0, below);
+            }
+
+            return end;
+        }
+
+        private bool PlayingAt(double seconds) => (_smil?.ChangesAfter(seconds) ?? false) || (_cssAnimationEnd is { } end && end > seconds);
+
+        /// <summary>
+        /// Builds the graphic as it looks at <paramref name="seconds"/> when that is a moment its animations change in (or the first one built for a clock),
+        /// and says whether it still has frames to play. Nothing is built for a moment that looks like the last.
+        /// </summary>
+        /// <returns>whether the graphic changed, and whether it plays on after this moment</returns>
+        internal (bool Changed, bool Running) StepAnimation(double seconds)
+        {
+            if (_retained is null || _document is null || HtmlContainer is not { } container) return (false, false);
+
+            var running = PlayingAt(seconds);
+            var changed = _builtAt is not { } built || (seconds != built && (running || PlayingAt(built)));
+            if (!changed) return (false, running);
+
+            container.SvgAnimationSeconds = seconds;
+            _builtAt = seconds;
+
+            Boxes.AddRange(_retained);
+            try
+            {
+                var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), container.RenderContext, ActualColor, _prefetchedImages,
+                    fontPaletteValues: container.FontPaletteValues, fontFeatureValues: container.FontFeatureValues);
+                document.IsTimeVarying = true;
+                ForcedColorsAdjuster.RecolorSvg(this, document);
+                _document = document;
+            }
+            finally
+            {
+                Boxes.Clear();
+            }
+
+            return (true, running);
         }
 
         // The first <title> and <desc> directly inside the <svg>, which is where SVG puts the name and the description of the graphic.

@@ -76,8 +76,7 @@ purpose; each is an addition to the sampler, not a rewrite. The genuine spec dev
   `@media (prefers-reduced-motion: reduce) { * { animation: none !important } }` reset switches every animation off even
   when a progress is set. That is the browser-faithful answer for the media feature; a caller who wants a frame despite such a
   reset has no option for it.
-- **SMIL** (`<animate>`, `<animateTransform>`) is separate and out of scope - see
-  [svg-features-out-of-scope](svg-features-out-of-scope.md).
+- **SMIL** is sampled in a still frame at `AnimationProgress` of the span the animations cover (see the SMIL section of the SVG guide), not at a time of the author's choosing.
 - **A registered custom property is mixed only for a single interpolable type** (`<length>`, `<number>`, `<integer>`,
   `<percentage>`, `<length-percentage>`, `<color>`, `<angle>`, `<transform-function>`, `<transform-list>`) that both keyframe values
   match. A list syntax (`<length>#`, `<length>+`), a pair that matches two different components of an alternation

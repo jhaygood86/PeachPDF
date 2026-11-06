@@ -15,6 +15,7 @@ using PeachBrackets.Html;
 using PeachBrackets.Html.Animation;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Parse;
+using PeachBrackets.Svg.Smil;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -75,7 +76,19 @@ namespace PeachBrackets.Svg
 
         public string Name => _box.HtmlTag?.Name ?? "";
 
-        public string? GetAttribute(string name) => _box.GetAttribute(name, null);
+        public string? GetAttribute(string name)
+        {
+            var declared = _box.GetAttribute(name, null);
+
+            // An attribute an animation element animates reads as what it is at the time (SMIL Animation §3.7).
+            if (SmilTime is { } time && SmilAnimationSet!.Targets(_box)
+                && SmilAnimationSet.Sample(_box, name, time, () => declared, ((CssBoxSvg)_svgRoot).SmilParser) is { } animated)
+            {
+                return animated;
+            }
+
+            return declared;
+        }
 
         public IEnumerable<ISvgSourceNode> Children =>
             _box.Boxes.Select(b => (ISvgSourceNode)new CssBoxSvgSourceNode(b, _svgRoot, _cssData, _media, _varContext, _instance));
@@ -141,13 +154,38 @@ namespace PeachBrackets.Svg
 
         public ISvgSourceNode AsInstanceUnder(ISvgSourceNode use) => new CssBoxSvgSourceNode(_box, _svgRoot, _cssData, _media, _varContext, (_box, use));
 
-        public bool IsAnimated => _box.HtmlContainer?.AnimationProgress is not null && _box.GetSvgAnimationPlan() is not null;
+        private bool CssAnimationsPlay => _box.HtmlContainer is { } container && (container.AnimationProgress is not null || container.SvgAnimationSeconds is not null);
+
+        public bool IsAnimated => (CssAnimationsPlay && _box.GetSvgAnimationPlan() is not null) || SmilTime is not null && SmilAnimationSet!.Targets(_box);
+
+        // SMIL: the animation elements of the <svg> this node is inside, and the time they are at. A running clock gives the time; a still frame takes its fraction of the
+        // span the animations cover.
+        private SmilSet? SmilAnimationSet => (_svgRoot as CssBoxSvg)?.SmilAnimations;
+
+        private double? SmilTime
+        {
+            get
+            {
+                if (SmilAnimationSet is not { } smil || _box.HtmlContainer is not { } container) return null;
+                if (container.SvgAnimationSeconds is { } seconds) return seconds;
+                return container.AnimationProgress is { } fraction ? fraction * smil.StillFrameLength : null;
+            }
+        }
 
         public string? GetAnimatedValue(string name, Func<string?> underlying, Func<string?> parent, Func<string?> initial, bool inherited)
         {
-            if (_box.HtmlContainer?.AnimationProgress is null || _box.GetSvgAnimationPlan() is not { } plan) return null;
+            string? css = null;
+            if (CssAnimationsPlay && _box.GetSvgAnimationPlan() is { } plan)
+                css = AnimationApplier.SampleElement(_box, plan, name, underlying, parent, initial, inherited);
 
-            return AnimationApplier.SampleElement(_box, plan, name, underlying, parent, initial, inherited);
+            // SMIL sits above CSS animations, over the value they give. A transform is read from the attribute, which is where its animation is applied.
+            if (SmilTime is { } time && !name.Equals("transform", StringComparison.Ordinal)
+                && SmilAnimationSet!.Sample(_box, name, time, () => css ?? underlying(), ((CssBoxSvg)_svgRoot).SmilParser) is { } smil)
+            {
+                return smil;
+            }
+
+            return css;
         }
 
         public string? ResolveVar(string value) =>

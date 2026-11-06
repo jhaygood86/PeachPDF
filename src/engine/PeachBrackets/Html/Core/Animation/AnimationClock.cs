@@ -134,6 +134,9 @@ namespace PeachBrackets.Html.Animation
             public Matrix3x2 LastMatrix { get; set; } = Matrix3x2.Identity;
             public bool LastHasTransform { get; set; }
             public bool BleedStale { get; set; }
+
+            /// <summary>Whether the box is an inline <c>&lt;svg&gt;</c> a clock plays: SMIL or CSS animations of its elements, built again for each frame.</summary>
+            public bool Svg => Box is CssBoxSvg { TimeVarying: true };
         }
 
         internal sealed class TransitionRun
@@ -588,6 +591,10 @@ namespace PeachBrackets.Html.Animation
             var dt = double.IsNaN(_last) ? 0 : Math.Max(0, nowSeconds - _last);
             _last = nowSeconds;
 
+            // The time the inline <svg>s are at: SMIL begins when the document does, and the CSS animations of their elements run on it too.
+            _svgClock += dt;
+            _container.SvgAnimationSeconds = _svgClock;
+
             Bind();
             EnsureExtents(fragmentainers);
             _scrollDirty = false;
@@ -626,6 +633,17 @@ namespace PeachBrackets.Html.Animation
                 {
                     if (!run.Finished && !run.ControlPaused) run.Elapsed = Math.Max(0, run.Elapsed + (dt * run.PlaybackRate));
                     EmitRunStart(run);
+                }
+
+                if (state.Svg)
+                {
+                    var (svgChanged, svgRunning) = ((CssBoxSvg)box).StepAnimation(_svgClock);
+                    running |= svgRunning;
+                    if (svgChanged)
+                    {
+                        InteractionRestyler.InvalidatePaintCaches(box);
+                        _changed.Add(state);
+                    }
                 }
 
                 if (state.Tracks.Count == 0 && state.Transitions.Count == 0) continue;
@@ -806,6 +824,7 @@ namespace PeachBrackets.Html.Animation
             }
         }
 
+        private double _svgClock;
         private readonly List<BoxState> _changed = [];
         private readonly List<Rect> _pageRects = [];
 
@@ -1193,14 +1212,14 @@ namespace PeachBrackets.Html.Animation
                 CaptureBase(state, onlyMissing: true);
             }
 
-            if (state.Tracks.Count > 0 || state.Transitions.Count > 0 || HasTransition(state.Box)) Register(state);
+            if (state.Tracks.Count > 0 || state.Transitions.Count > 0 || HasTransition(state.Box) || state.Svg) Register(state);
         }
 
         private void CollectBoxes(CssBox box, bool rebuilt, List<BoxState>? existing = null)
         {
             if (_byBox.ContainsKey(box)) goto children;
 
-            if (!AnimationApplier.IsNone(box.AnimationName) || HasTransition(box))
+            if (!AnimationApplier.IsNone(box.AnimationName) || HasTransition(box) || box is CssBoxSvg { TimeVarying: true })
             {
                 var ordinal = box.HtmlTag?.SourceOrdinal ?? -1;
                 var state = new BoxState { Box = box, Ordinal = ordinal };
@@ -1227,7 +1246,7 @@ namespace PeachBrackets.Html.Animation
                     }
                 }
 
-                if (tracks.Count > 0 || state.Transitions.Count > 0) Register(state);
+                if (tracks.Count > 0 || state.Transitions.Count > 0 || state.Svg) Register(state);
             }
 
         children:

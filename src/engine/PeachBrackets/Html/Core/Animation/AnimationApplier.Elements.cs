@@ -6,6 +6,7 @@ using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Svg;
+using PeachBrackets.Html.Utils;
 
 namespace PeachBrackets.Html.Animation
 {
@@ -43,11 +44,19 @@ namespace PeachBrackets.Html.Animation
         /// </summary>
         internal static ElementPlan? PlanElement(CssBox box)
         {
-            if (box.HtmlContainer is not { AnimationProgress: { } fraction, Keyframes: { Count: > 0 } keyframes } container) return null;
+            if (box.HtmlContainer is not { Keyframes: { Count: > 0 } keyframes } container) return null;
+
+            // A snapshot samples every animation at one fraction of its own run; a running clock gives the time, and each animation's delay, iterations and fill apply.
+            var fractionOrNull = container.AnimationProgress;
+            var seconds = container.SvgAnimationSeconds;
+            if (fractionOrNull is null && seconds is null) return null;
+            var fraction = fractionOrNull ?? 0;
+
             if (IsNone(box.AnimationName)) return null;
 
             var names = SplitList(box.AnimationName);
             var durations = SplitList(box.AnimationDuration);
+            var delays = fractionOrNull is null ? SplitList(CssUtils.GetPropertyValue(box, "animation-delay")) : null;
             var iterationCounts = SplitList(box.AnimationIterationCount);
             var directions = SplitList(box.AnimationDirection);
             var fillModes = SplitList(box.AnimationFillMode);
@@ -61,12 +70,23 @@ namespace PeachBrackets.Html.Animation
                 if (!keyframes.TryGetValue(Unquote(names[i]), out var set)) continue;
 
                 var fill = Cycle(fillModes, i);
-                var progress = AnimationTimeline.DirectedProgress(
-                    fraction,
-                    ParseSeconds(Cycle(durations, i)),
-                    ParseIterationCount(Cycle(iterationCounts, i)),
-                    ParseDirection(Cycle(directions, i)),
-                    fill.Equals("forwards", StringComparison.OrdinalIgnoreCase) || fill.Equals("both", StringComparison.OrdinalIgnoreCase));
+                var fillsForwards = fill.Equals("forwards", StringComparison.OrdinalIgnoreCase) || fill.Equals("both", StringComparison.OrdinalIgnoreCase);
+                var progress = fractionOrNull is not null
+                    ? AnimationTimeline.DirectedProgress(
+                        fraction,
+                        ParseSeconds(Cycle(durations, i)),
+                        ParseIterationCount(Cycle(iterationCounts, i)),
+                        ParseDirection(Cycle(directions, i)),
+                        fillsForwards)
+                    : AnimationTimeline.LiveProgress(
+                        seconds!.Value,
+                        ParseSeconds(Cycle(delays!, i)),
+                        ParseSeconds(Cycle(durations, i)),
+                        ParseIterationCount(Cycle(iterationCounts, i)),
+                        ParseDirection(Cycle(directions, i)),
+                        fill.Equals("backwards", StringComparison.OrdinalIgnoreCase) || fill.Equals("both", StringComparison.OrdinalIgnoreCase),
+                        fillsForwards,
+                        out _);
 
                 if (progress is not { } directed) continue;
 
@@ -75,6 +95,33 @@ namespace PeachBrackets.Html.Animation
             }
 
             return animations is null ? null : new ElementPlan(animations, new CssValueParser(container.RenderContext));
+        }
+
+        /// <summary>
+        /// When the last CSS animation <paramref name="box"/> names ends, in seconds (infinite when one repeats for ever), or null when it names none that exists.
+        /// What decides whether a playing <c>&lt;svg&gt;</c> still has frames to draw.
+        /// </summary>
+        internal static double? ElementAnimationEnd(CssBox box)
+        {
+            if (box.HtmlContainer is not { Keyframes: { Count: > 0 } keyframes } || IsNone(box.AnimationName)) return null;
+
+            var names = SplitList(box.AnimationName);
+            var durations = SplitList(box.AnimationDuration);
+            var delays = SplitList(CssUtils.GetPropertyValue(box, "animation-delay"));
+            var iterationCounts = SplitList(box.AnimationIterationCount);
+
+            double? end = null;
+            for (var i = 0; i < names.Count; i++)
+            {
+                if (names[i].Equals("none", StringComparison.OrdinalIgnoreCase) || !keyframes.ContainsKey(Unquote(names[i]))) continue;
+
+                var duration = ParseSeconds(Cycle(durations, i));
+                var count = ParseIterationCount(Cycle(iterationCounts, i));
+                var stop = ParseSeconds(Cycle(delays, i)) + (double.IsPositiveInfinity(count) ? double.PositiveInfinity : duration * count);
+                end = Math.Max(end ?? 0, stop);
+            }
+
+            return end;
         }
 
         /// <summary>

@@ -1022,6 +1022,12 @@ namespace PeachBrackets.Html
         /// </summary>
         internal double? AnimationProgress { get; set; }
 
+        /// <summary>
+        /// The time, in seconds, the animations of the inline <c>&lt;svg&gt;</c>s are at while a running clock plays them (CSS animations on their elements and SMIL);
+        /// null for a document that is not playing. A <c>&lt;svg&gt;</c> built while it is set is built as it looks at that time.
+        /// </summary>
+        internal double? SvgAnimationSeconds { get; set; }
+
         /// <summary>Whether the document plays its animations over time (see <c>HtmlDocumentOptions.AnimationsEnabled</c>); read while it is cascaded, to collect the keyframes.</summary>
         internal bool AnimationsEnabled { get; set; }
 

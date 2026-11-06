@@ -198,5 +198,15 @@
     "html": "screen_animation_images.html",
     "sourceKind": "html",
     "svg": null
+  },
+  {
+    "slug": "screen_animation_svg",
+    "category": "Screen only",
+    "title": "Animated SVG",
+    "description": "SMIL (animate, set, animateTransform, animateMotion) and CSS animations on the elements of an inline svg: only the svg's rectangle repaints each frame.",
+    "pdf": "",
+    "html": "screen_animation_svg.html",
+    "sourceKind": "html",
+    "svg": null
   }
 ]

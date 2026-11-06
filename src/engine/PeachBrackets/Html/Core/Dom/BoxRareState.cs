@@ -137,6 +137,9 @@ namespace PeachBrackets.Html.Dom
         /// <summary>The CSS animations of an element of an inline <c>&lt;svg&gt;</c>, planned once (see <see cref="CssBox.GetSvgAnimationPlan"/>).</summary>
         internal Animation.AnimationApplier.ElementPlan? SvgAnimationPlan;
         internal bool SvgAnimationPlanBuilt;
+
+        /// <summary>The time the plan was made for, in a document a clock plays (null for a still frame, whose one plan stands).</summary>
+        internal double? SvgAnimationPlanSeconds;
         internal List<CssBox>? DisplayContentsLiftedChildren;
         internal List<CssBox>? DisplayContentsAncestors;
         internal CssBox? OriginatingBox;
