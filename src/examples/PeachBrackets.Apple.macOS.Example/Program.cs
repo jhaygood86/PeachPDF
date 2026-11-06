@@ -39,20 +39,25 @@ internal sealed record Options(string? SmokeReport, string? Screenshot, string? 
 internal sealed class AppDelegate(Options options) : NSApplicationDelegate
 {
     private DemoWindow? _demo;
-    private NSWindow? _window => _demo?.Window;
-    private HtmlView? _view => _demo?.View;
+    private BareWindow? _bare;
+    private NSWindow? _window => _bare?.Window ?? _demo?.Window;
+    private HtmlView? _view => _bare?.View ?? _demo?.View;
 
     public override bool ApplicationShouldTerminateAfterLastWindowClosed(NSApplication sender) => true;
 
     public override void DidFinishLaunching(NSNotification notification)
     {
-        _demo = new DemoWindow(options.Cpu);
+        // The smoke run drives the view alone; the demo's panels are for people.
+        if (options.SmokeReport is not null && options.Showcase is null && options.ScrollBench is null)
+            _bare = new BareWindow();
+        else
+            _demo = new DemoWindow(options.Cpu);
 
         if (options.Showcase is not null && options.Screenshot is not null)
         {
             // One showcase, scrolled to a place, written out as a picture: for looking at what the view shows without driving it.
             _window!.OrderFrontRegardless();
-            if (!_demo.Show(options.Showcase))
+            if (!_demo!.Show(options.Showcase))
                 Exit(false, "FAILED: no showcase " + options.Showcase);
 
             _view!.DocumentLoaded += (_, _) => Later(800, () =>
@@ -73,7 +78,7 @@ internal sealed class AppDelegate(Options options) : NSApplicationDelegate
         {
             // A long page scrolled the way a trackpad would, step by step, timing what each step costs the main thread.
             _window!.OrderFrontRegardless();
-            _demo.Show("screen_long_page");
+            _demo!.Show("screen_long_page");
             _view!.DocumentLoaded += (_, _) => Later(1000, RunScrollBench);
             NSTimer.CreateScheduledTimer(120, _ => Exit(false, "FAILED: the benchmark did not finish in 120 s"));
             return;

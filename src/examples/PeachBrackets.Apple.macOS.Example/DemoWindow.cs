@@ -530,3 +530,22 @@ internal sealed class UnconstrainedWindow(CGRect contentRect, NSWindowStyle styl
 {
     public override CGRect ConstrainFrameRect(CGRect frameRect, NSScreen? screen) => frameRect;
 }
+
+/// <summary>
+/// A window with nothing in it but an <see cref="HtmlView"/> showing the sample page, at a size of its own: what the smoke run drives, so that what it clicks
+/// does not depend on how the demo's panels share the width of whatever display the run has.
+/// </summary>
+internal sealed class BareWindow
+{
+    public BareWindow()
+    {
+        View = new HtmlView { Frame = new CGRect(0, 0, 1000, 760), AutoresizingMask = NSViewResizingMask.WidthSizable | NSViewResizingMask.HeightSizable };
+        Window = new UnconstrainedWindow(new CGRect(60, 60, 1000, 760), NSWindowStyle.Titled | NSWindowStyle.Closable, NSBackingStore.Buffered, false) { Title = "PeachBrackets.Apple smoke" };
+        Window.ContentView = View;
+        View.Html = ShowcaseCatalog.Load(AppContext.BaseDirectory).First(s => s.Slug == "sample").ReadHtml();
+    }
+
+    public NSWindow Window { get; }
+
+    public HtmlView View { get; }
+}
