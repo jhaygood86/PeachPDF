@@ -8,7 +8,7 @@ Free support for **bug reports, feature requests, and other issues** is availabl
 
 ## Support policy
 
-This policy applies to every release before 1.0. A policy for 1.0 and later will replace it when 1.0 ships. It covers PeachPDF and the packages released with it: PeachDrawing, PeachImage, and PeachBrackets.
+This policy applies to every release before 1.0. A policy for 1.0 and later will replace it when 1.0 ships. It covers PeachPDF and the libraries it depends on. Which components are covered once a series is in maintenance is set out for 0.9 in [Supported components in 0.9.x maintenance](#supported-components-in-09x-maintenance).
 
 ### Terms
 
@@ -60,6 +60,59 @@ Key dates for 0.9:
 | Nov 14, 2028 | .NET 10 reaches end of support. The 0.9 series, including its .NET 8 support, ends. |
 
 If you are on 0.9 and want to keep receiving every kind of fix, move to 0.10 after Nov 13, 2026.
+
+### Supported components in 0.9.x maintenance
+
+While a series has full support, all of its libraries are fully supported, on their own or inside PeachPDF, provided you are on the current release series. The component limits below apply only once 0.9.x enters maintenance.
+
+Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also applies to every library PeachPDF depends on, **when that library is used inside PeachPDF**: PeachBrackets, PeachDrawing, PeachDrawing.PDF, PeachDrawing.Core, PeachDrawing.Text, and PeachImage.
+
+| Component | Used inside PeachPDF | Used on its own |
+|---|---|---|
+| PeachPDF | Supported | Supported |
+| PeachDrawing.PDF | Supported | **Supported** (a directly supported component) |
+| PeachBrackets | Supported | Not covered by the 0.9.x maintenance policy |
+| PeachDrawing, PeachDrawing.Core, PeachDrawing.Text | Supported | Not covered by the 0.9.x maintenance policy |
+| PeachBrackets HtmlView libraries | Not applicable | Not covered by the 0.9.x maintenance policy |
+| PeachImage | Supported | Covered only by the PeachImage project's own policies |
+
+- **Full support for the rest arrives in 0.10.x.** PeachBrackets, the PeachDrawing libraries (other than PeachDrawing.PDF) and the PeachBrackets HtmlView libraries are expected to receive full support when used on their own in the 0.10.x series. That full support is contingent on staying on the current release series: once a newer series is released, the older one is in maintenance and these libraries are no longer covered when used on their own.
+- **PeachImage is a separate project** with its own releases and support policy. Using it independently of PeachPDF is covered only by that project's policies.
+- **Problems that reach PeachPDF are included.** A security or crashing issue found in any of these libraries that also affects PeachPDF is covered, and is fixed in the 0.9.x series.
+
+### Supported operating systems in maintenance
+
+While a series has full support, it is supported on every operating system the series targets. Once a series is in maintenance, support is limited to **desktop and server operating systems** that the supported .NET versions for that series support, as listed on Microsoft's [.NET support policy page](https://dotnet.microsoft.com/platform/support/policy/dotnet-core). An operating system that a supported .NET version no longer supports is no longer supported by the series either.
+
+**For 0.9.x, mobile operating systems are not supported once it enters maintenance.** This includes Android and iOS, and the `PeachBrackets.Android` library, as well as other mobile platforms. To keep receiving fixes on a mobile operating system, use the 0.10.x series.
+
+#### Operating systems supported for 0.9.x in maintenance
+
+0.9.x in maintenance is supported on the desktop and server operating systems below. An operating system version must be supported by **both** a supported .NET version (.NET 8 or .NET 10, per Microsoft's published lists) **and** its own vendor. The table reflects both as of 2026-11-06.
+
+| Operating system | Versions | Architectures | Vendor support ends |
+|---|---|---|---|
+| Windows 11 | 26H1 (Enterprise/Education), 25H2 (Enterprise/Education), 24H2 (Enterprise/Education, Enterprise LTSC, IoT Enterprise LTSC) | Arm64, x64, x86 | 26H1: 2029-03-13; 25H2: 2028-10-10; 24H2: 2027-10-12 (LTSC 2029-10-09; IoT LTSC 2034-10-10) |
+| Windows 11 (Home and Pro) | 26H1, 25H2 | Arm64, x64, x86 | 26H1: 2028-03-14; 25H2: 2027-10-12 |
+| Windows 10 | 21H2 (Enterprise LTSC, IoT Enterprise LTSC), 1809 (Enterprise LTSC) | x64, x86 | 21H2: 2027-01-12 (IoT LTSC 2032-01-13); 1809: 2029-01-09 |
+| Windows Server | 2025, 2022, 2019, 2016 | x64 | 2025: 2034-11-14; 2022: 2031-10-14; 2019: 2029-01-09; 2016: 2027-01-12 |
+| Windows Server Core | 2025, 2022, 2019, 2016 | x64 | As Windows Server |
+| Nano Server | 2025, 2022, 2019 | x64 | As Windows Server |
+| macOS | 27, 26, 15 | Arm64, x64 | While Apple ships security updates for it |
+| Alpine Linux | 3.24, 3.23, 3.22 | Arm32, Arm64, x64 | 3.24: 2028-06-01; 3.23: 2027-11-01; 3.22: 2027-05-01 |
+| Azure Linux | 3.0 | Arm64, x64 | While Microsoft supports it |
+| CentOS Stream | 10, 9 | Arm64, ppc64le, s390x, x64 | 10: 2030-05-31; 9: 2027-05-31 |
+| Debian | 13; 12 (Debian LTS, while .NET 8 is supported) | Arm32, Arm64, x64 | 13: 2030-06-30; 12: 2028-06-30 |
+| Fedora | 44, 43 | Arm32, Arm64, x64 | 44: 2027-06-02; 43: 2026-12-01 |
+| openSUSE Leap | 16.0 | Arm64, x64 | 2027-10-31 |
+| Red Hat Enterprise Linux (and compatible derivatives) | 10, 9, 8 | Arm64, ppc64le, s390x, x64 | 10: 2035-05-31; 9: 2032-05-31; 8: 2029-05-31 |
+| SUSE Linux Enterprise | 16.0, 15.7 | Arm64, x64 | 16.0: 2027-11-30; 15.7: 2031-07-31 |
+| Ubuntu | 26.04, 24.04, 22.04 | Arm32, Arm64, x64 | 26.04: 2031-05-29; 24.04: 2029-05-31; 22.04: 2027-06-01 |
+
+- **Support ends with the vendor.** A version stops being supported for 0.9.x on the earlier of the vendor's end-of-support date above and the date its .NET version support ends, even if the table has not been updated yet. Dates are the vendor's standard or general support end, as published by [endoflife.date](https://endoflife.date); Debian 12 is covered by the Debian LTS team.
+- **Paid extended programs do not count.** Extended Security Updates (Windows), Extended Life Cycle Support (Red Hat), Long Term Service Pack Support (SUSE) and Ubuntu Pro/ESM extend a vendor's support only for paying customers, so they do not extend support for 0.9.x. This is why Windows 11 23H2, Windows 10 1607, Windows Server 2012 and 2012 R2, and Alpine 3.21, which .NET still lists, are not in the table.
+- **The list follows Microsoft's and each vendor's.** When Microsoft adds a version of one of these operating systems for .NET 8 or .NET 10, it becomes supported for 0.9.x once its vendor supports it. Check Microsoft's [.NET 8](https://github.com/dotnet/core/blob/main/release-notes/8.0/supported-os.md) and [.NET 10](https://github.com/dotnet/core/blob/main/release-notes/10.0/supported-os.md) lists for the current state.
+- **Operating systems not listed are not supported**, including Android, iOS, iPadOS, tvOS and other mobile or embedded platforms.
 
 ## Paid support
 
