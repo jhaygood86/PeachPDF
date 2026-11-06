@@ -61,5 +61,14 @@ namespace PeachBrackets.Html.Entities
         public bool LeftFloatsOnly { get; init; }
 
         public double FloatRightStartX => Right - ReferenceWidth;
+
+        /// <summary>
+        /// Set by the blocker search to how far the blocker it returned (and the boxes it lies in) has been moved by relative positioning,
+        /// which is visual only (CSS 2.1 §9.4.3): the blocker's static edges are its coordinates less these.
+        /// </summary>
+        public double BlockerOffsetX { get; set; }
+
+        /// <inheritdoc cref="BlockerOffsetX"/>
+        public double BlockerOffsetY { get; set; }
     }
 }
