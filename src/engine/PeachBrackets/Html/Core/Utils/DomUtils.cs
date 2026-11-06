@@ -1987,12 +1987,12 @@ namespace PeachBrackets.Html.Utils
         /// How far two floats' margin boxes may overlap and still count as fitting side by side. Widths such as 70% and 30% of the
         /// same container sum to it only up to rounding, which must not send the second float below the first. A used width is a
         /// single-precision value, so two such widths can be off by a few 1e-5 points. A browser floors each width to its 1/64 pixel layout
-        /// unit (0.0117pt), so a row of a few floats can be a few hundredths of a point over and still be one row there: 0.025pt (a thirtieth of a
-        /// pixel) is above that, and below the 0.03 pixel at which a browser starts to split rows. Every test of whether a float
+        /// unit (0.0117pt), so a row of a few floats can be a few hundredths of a point over and still be one row there: 0.02pt (0.027 pixel)
+        /// is above that, and a browser starts to split rows at about the same overlap (measured between 0.02 and 0.03 pixel). Every test of whether a float
         /// fits beside another has to use it (the blocker test below and the fit tests in <c>CssLayoutEngine.FloatBoxLeft</c> and
         /// <c>FloatBoxRight</c>), or the two disagree about a pair that is one rounding error too wide.
         /// </summary>
-        internal const double FloatFitTolerance = 0.025;
+        internal const double FloatFitTolerance = 0.02;
 
         /// <summary>An inline-block, inline-flex, inline-grid or inline-table box: atomic inline content that is a formatting context of its own.</summary>
         internal static bool IsInlineLevelFormattingContext(CssBox box) =>
@@ -2027,8 +2027,19 @@ namespace PeachBrackets.Html.Utils
         {
             if (!targetBox.IsFloated) return false;
 
-            // vertical conflict
-            if (!(coordinates.OuterTop < targetBox.ActualBottom - offsetY) || !(targetBox.Location.Y - offsetY <= coordinates.OuterTop)) return false;
+            // vertical conflict. Placing a float compares margin boxes (CSS 2.1 §9.5.1 rules 1-3): a blocker's margin-top starts it above its
+            // border box, and a negative margin-bottom ends it above its border box, where the next float may start. The line flow's lookup
+            // keeps the border box, which is what the lines beside a float have always been measured against.
+            var targetTop = targetBox.Location.Y - offsetY;
+            var targetBottom = targetBox.ActualBottom - offsetY;
+
+            if (!coordinates.LeftFloatsOnly)
+            {
+                targetTop -= targetBox.ActualMarginTop;
+                targetBottom += targetBox.ActualMarginBottom;
+            }
+
+            if (!(coordinates.OuterTop < targetBottom) || !(targetTop <= coordinates.OuterTop)) return false;
 
             var targetRight = targetBox.ActualRight - offsetX + targetBox.ActualMarginRight;
             var targetLeft = targetBox.Location.X - offsetX - targetBox.ActualMarginLeft;

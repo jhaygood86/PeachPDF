@@ -68,6 +68,42 @@ public class FloatClearanceMarginTests
         Assert.Equal(c.Location.Y + 6, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
     }
 
+    // Floats conflict by margin box (CSS 2.1 §9.5.1 rules 1-3). A margin-top starts the blocker above its border box...
+    [Fact]
+    public async Task FloatThatDoesNotFitBesideAFloatWithAMarginTop_GoesBelowItsMarginBox()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:300pt'><div style='float:right;width:187.5pt;height:22.5pt;margin-top:4.5pt'></div>" +
+            "<div id='b' style='float:right;width:187.5pt;height:22.5pt'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        Assert.Equal(LayoutHarness.FindById(root, "c")!.Location.Y + 27, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
+    // ...and a negative margin-bottom ends it above its border box, where the next float, here one that clears the other side, may start.
+    [Fact]
+    public async Task FloatAfterABlockerWithANegativeMarginBottom_StartsAtItsMarginEdge()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:450pt'><div style='float:right;width:300pt;height:22.5pt;margin-bottom:-7.5pt'></div>" +
+            "<div id='b' style='float:left;width:225pt;height:22.5pt;clear:right'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        Assert.Equal(LayoutHarness.FindById(root, "c")!.Location.Y + 15, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
+    // A float that clears the other side, with a negative margin-top, is not put over an earlier float whose margin-top starts it lower.
+    [Fact]
+    public async Task ClearedFloatWithANegativeMarginTop_IsNotPutOverAnEarlierFloatWithAMarginTop()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:450pt;padding-top:30pt'><div style='float:left;width:300pt;height:22.5pt;margin-top:6pt'></div>" +
+            "<div id='b' style='float:left;width:225pt;height:22.5pt;margin-top:-11.25pt;clear:right'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        Assert.Equal(LayoutHarness.FindById(root, "c")!.Location.Y + 47.25, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
     // The margin term is for floats. A block that clears a float gets §9.5.2's clearance, which puts its top border edge at the float's bottom
     // outer edge whatever its own margin-top is.
     [Fact]

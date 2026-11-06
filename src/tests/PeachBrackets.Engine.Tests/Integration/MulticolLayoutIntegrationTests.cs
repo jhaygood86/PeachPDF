@@ -2004,9 +2004,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Same(layout, await Task.WhenAny(layout, Task.Delay(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken)));
         }
 
-        // A blocker with a negative margin-bottom has a margin edge above its border box. The search tests for conflicts
+        // A blocker with a negative margin-bottom has a margin edge above its border box. The search once tested for conflicts
         // against the border box, so dropping the float to the margin edge put it back inside the blocker, and the same
-        // blocker was found again for ever.
+        // blocker was found again for ever. It tests the margin box now, like the drop, and the float may start above the border box.
         [Theory]
         [InlineData("width:600px; columns:2")]
         [InlineData("width:300px")]
@@ -2025,9 +2025,10 @@ namespace PeachBrackets.Engine.Tests.Integration
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
-            // B cannot sit beside A in a column that cannot hold both, so its margin edge is at or below A's border box.
-            Assert.True(b.Location.Y - b.ActualMarginTop >= a.ActualBottom - 0.01,
-                $"B's margin edge at {b.Location.Y - b.ActualMarginTop} is inside A, which ends at {a.ActualBottom}");
+            // B cannot sit beside A in a column that cannot hold both, so its margin edge is at or below A's margin edge.
+            var aMarginEdge = a.ActualBottom + a.ActualMarginBottom;
+            Assert.True(b.Location.Y - b.ActualMarginTop >= aMarginEdge - 0.01,
+                $"B's margin edge at {b.Location.Y - b.ActualMarginTop} is inside A, whose margin box ends at {aMarginEdge}");
         }
 
         // The first float's top is the position the layout gave it, with no margin taken out of it, so a second float

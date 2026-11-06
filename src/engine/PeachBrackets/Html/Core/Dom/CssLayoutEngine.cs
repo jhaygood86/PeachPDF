@@ -3771,9 +3771,8 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 // The blocker's static bottom, as a relative offset is visual only (CSS 2.1 §9.4.3), and its margin edge: the float goes below the
-                // blocker's margin box (rule 8). Never above the border box, as in FloatBoxRight.
-                var blockerStaticBottom = intersectingFloat.ActualBottom - coordinates.BlockerOffsetY;
-                blockerStaticBottom = Math.Max(blockerStaticBottom, blockerStaticBottom + intersectingFloat.ActualMarginBottom);
+                // blocker's margin box (rule 8), which the conflict test reads as well, so a blocker the float has been moved below is not found again.
+                var blockerStaticBottom = intersectingFloat.ActualBottom - coordinates.BlockerOffsetY + intersectingFloat.ActualMarginBottom;
                 if (blockerStaticBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerStaticBottom;
@@ -3862,11 +3861,10 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 // The next float goes below the blocker's margin box (CSS 2.1 §9.5.1 rule 8 puts it as high as
-                // possible, which is the margin edge, not the border edge). Never above its border box, though: that is
-                // the edge the conflict test reads, so a negative margin-bottom would put the drop back inside the
-                // blocker and the same blocker would be found again.
+                // possible, which is the margin edge, not the border edge), which is also the edge the conflict test
+                // reads, so the same blocker is not found again. An inline-level box on the line has no float margin.
                 var blockerStaticBottom = DomUtils.BlockerBottom(intersectingFloat) - coordinates.BlockerOffsetY;
-                var blockerBottom = Math.Max(blockerStaticBottom, blockerStaticBottom + intersectingFloat.ActualMarginBottom);
+                var blockerBottom = blockerStaticBottom + (intersectingFloat.IsFloated ? intersectingFloat.ActualMarginBottom : 0);
                 if (blockerBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerBottom;

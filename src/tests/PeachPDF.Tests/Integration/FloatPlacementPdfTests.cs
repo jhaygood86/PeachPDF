@@ -230,6 +230,27 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(15 - 4.5, r[Red].Y - r[Blue].Top, 1);
         }
 
+        // Floats conflict by margin box: a margin-top starts the blocker above its border box, a negative margin-bottom ends it above it.
+        [Fact]
+        public async Task FloatThatDoesNotFitBesideAFloatWithAMarginTop_GoesBelowItsMarginBox()
+        {
+            var r = await RenderAsync(
+                "<div style='width:300pt'>" + Float("right", "#f00", "width:187.5pt;height:22.5pt", "margin-top:4.5pt") +
+                Float("right", "#00f", "width:187.5pt;height:22.5pt") + "</div>");
+
+            Assert.Equal(r[Red].Y, r[Blue].Top, 1);
+        }
+
+        [Fact]
+        public async Task FloatAfterABlockerWithANegativeMarginBottom_StartsAtItsMarginEdge()
+        {
+            var r = await RenderAsync(
+                "<div style='width:450pt'>" + Float("right", "#f00", "width:300pt;height:22.5pt", "margin-bottom:-7.5pt") +
+                Float("left", "#00f", "width:225pt;height:22.5pt", "clear:right") + "</div>");
+
+            Assert.Equal(r[Red].Y + 7.5, r[Blue].Top, 1);
+        }
+
         // Rule 5: the third float fits beside the first at the top, but may not start above the second, which the first pushed down.
         [Fact]
         public async Task ThirdLeftFloat_SitsBesideTheSecondNotBesideTheFirst()

@@ -1160,8 +1160,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("right", "margin-bottom:-40pt")]
         public async Task Float_BelowABlockerWithANegativeMarginBottom_StillEndsItsSearch(string side, string blockerMargin)
         {
-            // The drop clears the blocker's border box (its margin box would end above it), so a negative margin-bottom
-            // on the blocker must not put the float back inside it.
+            // The drop clears the blocker's margin box, which the conflict test reads as well, so a negative margin-bottom
+            // on the blocker (a margin edge above its border box) must not put the float back inside it: the same blocker
+            // was found again for ever when the test read the border box.
             var html = Wrap($@"
                 <div style='width:150pt'>
                     <div id='a' style='float:{side}; width:112pt; height:75pt; {blockerMargin}'>a</div>
@@ -1176,7 +1177,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var a = FindById(root, "a")!;
             var b = FindById(root, "b")!;
 
-            Assert.True(b.Location.Y >= a.ActualBottom - 0.01);
+            Assert.True(b.Location.Y >= a.ActualBottom + a.ActualMarginBottom - 0.01);
         }
 
         [Fact]

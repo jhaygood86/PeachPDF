@@ -231,17 +231,17 @@ public class FloatAgainstRelativelyPositionedBlockersTests
     {
         var words = string.Join(" ", Enumerable.Repeat("word", 80));
 
-        async Task<(double Height, double Words)> Measure(string style)
+        async Task<double> Measure(string style)
         {
             var root = await LayoutAsync(
                 $"<div style='position:relative;height:7.5pt;{style}'><div style='float:left;width:75pt;height:45pt'></div></div><p id='p' style='margin:0'>{words}</p>");
             var p = Box(root, "p");
-            return (p.ActualBottom - p.Location.Y, p.Words.Count + p.Boxes.Sum(b => b.Words.Count));
+            return p.ActualBottom - p.Location.Y;
         }
 
         var without = await Measure("");
         var with = await Measure(offset);
 
-        Assert.Equal(without.Height, with.Height, 1);
+        Assert.Equal(without, with, 1);
     }
 }

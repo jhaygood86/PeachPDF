@@ -156,6 +156,24 @@ public class LeftFloatBesideRightFloatTests
         Assert.Equal(left.ActualRight, right.Location.X, 0.5);
     }
 
+    // Three floats of 233.34px in 700px are 0.02px over: a browser keeps them on one row, as the single-precision tolerance alone would not.
+    [Theory]
+    [InlineData("left", "left", "left")]
+    [InlineData("right", "right", "right")]
+    [InlineData("left", "right", "left")]
+    public async Task ThreeFloatsAFewHundredthsOfAPixelOver_StayOnOneRow(string a, string b, string d)
+    {
+        var html = LayoutHarness.Wrap(
+            $"<div id='c' style='width:700px'><div id='r' style='float:{a};width:233.34px;height:30px'></div>" +
+            $"<div id='m' style='float:{b};width:233.34px;height:30px'></div><div id='l' style='float:{d};width:233.34px;height:30px'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var top = LayoutHarness.FindById(root, "r")!.Location.Y;
+
+        Assert.Equal(top, LayoutHarness.FindById(root, "m")!.Location.Y, 1);
+        Assert.Equal(top, LayoutHarness.FindById(root, "l")!.Location.Y, 1);
+    }
+
     // The tolerance is a few hundredths of a point: floats that really overlap, by a tenth of a pixel or more, still go to two rows.
     [Theory]
     [InlineData("right", "left")]
