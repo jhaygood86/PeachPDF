@@ -151,6 +151,68 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(r[Blue].X, r[Lime].X, 1);
         }
 
+        // CSS 2.1 §9.5.2: a float with `clear` goes below the floats it clears whatever box they are in, at any depth.
+        [Theory]
+        [InlineData(1)]
+        [InlineData(2)]
+        [InlineData(3)]
+        [InlineData(4)]
+        public async Task FloatAtAnyDepthInAnEarlierSibling_IsClearedByAFloat(int depth)
+        {
+            var inner = Float("left", "#f00", "width:75pt;height:45pt");
+
+            for (var i = 0; i < depth; i++) inner = $"<div>{inner}</div>";
+
+            var r = await RenderAsync("<div style='width:300pt'>" + inner + Float("left", "#00f", "width:112.5pt;height:22.5pt", "clear:left") + "</div>");
+
+            Assert.Equal(r[Red].Y, r[Blue].Top, 1);
+        }
+
+        // ... but not a float inside a box that is a formatting context of its own (the 7.5pt box in the flow is all there is above the
+        // clearing float), and not one on the side it does not clear.
+        [Theory]
+        [InlineData("<div style='overflow:hidden;height:7.5pt'>{0}</div>", "left", 7.5)]
+        [InlineData("<div style='display:flow-root;height:7.5pt'><div>{0}</div></div>", "left", 7.5)]
+        [InlineData("<div><div>{0}</div></div>", "right", 0)]
+        public async Task FloatThatIsNotCleared_LeavesTheClearingFloatAtItsFlowPosition(string wrapper, string side, double below)
+        {
+            var r = await RenderAsync("<div style='width:300pt'>" +
+                                      string.Format(wrapper, Float(side, "#f00", "width:75pt;height:45pt")) +
+                                      Float("left", "#00f", "width:112.5pt;height:22.5pt", "clear:left") + "</div>");
+
+            Assert.Equal(r[Red].Top - below, r[Blue].Top, 1);
+        }
+
+        // In a multi-column container a float of an earlier column is not cleared by a box that starts the next one: it starts the column at
+        // the top (here the 7.5pt block before it and its own 15pt margin), where the float of the column before reaches further down.
+        [Fact]
+        public async Task FloatInAnEarlierColumn_IsNotClearedByAFloatStartingTheNextColumn()
+        {
+            var r = await RenderAsync(
+                "<div style='columns:2;column-gap:10pt;width:300pt;height:225pt;column-fill:auto'>" +
+                "<div style='height:7.5pt;background:#0f0'></div>" +
+                Float("left", "#f00", "width:75pt;height:67.5pt;margin:6pt 0") +
+                "<div style='break-before:column;height:7.5pt'></div>" +
+                Float("left", "#00f", "width:75pt;height:22.5pt;margin:15pt 0 3.75pt", "clear:left") + "</div>");
+
+            Assert.True(r[Blue].X > r[Red].X + 140, "the second float starts the second column");
+            Assert.Equal(r[Lime].Top - 22.5, r[Blue].Top, 1);
+        }
+
+        // A float the first column could not hold is laid out at the top of the second: a box that clears goes below it.
+        [Fact]
+        public async Task FloatDeferredIntoAColumn_IsClearedByABlockInThatColumn()
+        {
+            var r = await RenderAsync(
+                "<div style='columns:2;column-gap:7.5pt;width:307.5pt;height:225pt;column-fill:auto;overflow:hidden'>" +
+                "<div style='height:187.5pt;background:#0f0'></div>" +
+                Float("left", "#f00", "width:75pt;height:75pt;break-inside:avoid") +
+                "<div style='clear:left;height:22.5pt;background:#00f'></div></div>");
+
+            Assert.True(r[Blue].X > r[Lime].X + 140, "the block is in the second column");
+            Assert.Equal(r[Red].Y, r[Blue].Top, 1);
+        }
+
         [Fact]
         public async Task RightFloatThatFitsBesideAnInlineBlock_StaysOnTheLine()
         {

@@ -1,3 +1,0 @@
-# `clear` misses a float two levels down in an earlier sibling and counts the floats of other columns
-
-`CssLayoutEngine.GetClearance` examines a box's children and the children of its children's children, never the grandchild itself, so a float exactly two levels below the earlier sibling (`<div><div><div style="float:left">`) is not cleared; one and three levels work. `ClearBox` also scans every earlier sibling in a multi-column container, whose floats in other columns have a `Y` measured from their own column's top, where `GetLowestEarlierFloatTop` stops at the container for that reason (tracking issue #2228).

@@ -1,0 +1,8 @@
+# A box with `clear` goes below the floats it should, at any depth and in its own column
+
+- A float two or four levels down an earlier sibling (`<div><div><div style="float:left">`) is now cleared. A box with `clear` after such a wrapper used to start beside the float, over the box it was meant to go below; it now goes below it, as in a browser.
+- A float inside a box that is a formatting context of its own (a box whose `overflow` is not `visible`, `display: flow-root`, an inline-block, a table cell, another float) is no longer cleared by a later box: it does not reach out of that box. A page that relied on a `clear` after a fixed-height `overflow: hidden` card to go below the card's floats now starts right after the card.
+- In a multi-column container a box with `clear` only clears the floats of its own column. A float that starts the second column used to be pushed down by the first column's floats.
+- A table, a table cell or an inline-block that holds nothing but a float is no longer treated as empty: the block after it starts below the float, with `clear` or without (it used to start at the top of the table, over the float, unless a `clear` happened to reach the float).
+- Floats in a box that is not displayed (`display: none`, `hidden`) or that is absolutely positioned no longer hold a later `clear` down.
+- A table cell (`<td>`, `<th>`, `display: table-cell`) with a `height` shorter than a float it holds is now as tall as the float: the row and the table grow to it, and what follows goes below it. It used to stay at its `height` and let the float overhang (the content after the table started above the float's bottom; a `clear` after the table only went below it by reaching into the cell).
