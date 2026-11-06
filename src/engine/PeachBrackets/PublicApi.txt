@@ -488,7 +488,9 @@ PeachBrackets.HtmlDocument : sealed class
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
+  method DocumentElement GetElementOf(AccessibilityNode node)
   method DocumentElement GetScrollContainerAt(Int32 pageIndex, Double x, Double y, Double dx = 0, Double dy = 0)
+  method DocumentElement GetScrollContainerFor(DocumentElement element, Double dx = 0, Double dy = 0)
   method DocumentInteraction GetInteractionAt(Int32 pageIndex, Double x, Double y)
   method Double GetContentHeight(Int32 pageIndex)
   method Double? GetScrollOffset(String elementId)
@@ -499,7 +501,9 @@ PeachBrackets.HtmlDocument : sealed class
   method FormSubmission CreateFormSubmission(DocumentElement submitter, Int32 pageIndex, Double x, Double y)
   method FormSubmission CreateImplicitSubmission(DocumentElement field)
   method IReadOnlyList<DirtyRegion> ScrollBy(DocumentElement element, Double dx, Double dy)
+  method IReadOnlyList<DirtyRegion> ScrollByPage(DocumentElement element, ScrollbarAxis axis, Int32 direction)
   method IReadOnlyList<DirtyRegion> ScrollIntoView(DocumentElement element)
+  method IReadOnlyList<DirtyRegion> ScrollThumbTo(DocumentElement element, ScrollbarAxis axis, Double thumbStart)
   method IReadOnlyList<DirtyRegion> SetScrollPosition(DocumentElement element, Double x, Double y)
   method IReadOnlyList<DirtyRegion> SetViewport(Rect viewport)
   method IReadOnlyList<DocumentAnimation> GetAnimations()
@@ -515,6 +519,7 @@ PeachBrackets.HtmlDocument : sealed class
   method PaintColor? GetCaretColor(TextPosition position)
   method Rect? GetElementBounds(String elementId)
   method ScrollMetrics? GetScrollMetrics(DocumentElement element)
+  method ScrollbarHit GetScrollbarAt(Int32 pageIndex, Double x, Double y)
   method String GetAttribute(DocumentElement element, String name)
   method String GetText(TextPosition from, TextPosition to)
   method TextEditPlace? GetEditPlace(Canvas measuringCanvas, Int32 index = -1)
@@ -714,6 +719,28 @@ PeachBrackets.ScrollPositionChangedEventArgs : sealed class
   property DocumentElement Element { get; }
   property Double X { get; }
   property Double Y { get; }
+PeachBrackets.ScrollbarAxis : enum Int32
+  Horizontal = 1
+  Vertical = 0
+PeachBrackets.ScrollbarHit : sealed class
+  ctor(DocumentElement Element, ScrollbarAxis Axis, ScrollbarPart Part, Double TrackStart, Double TrackLength, Double ThumbStart, Double ThumbLength)
+  method ScrollbarHit <Clone>$()
+  method Void Deconstruct(out DocumentElement Element, out ScrollbarAxis Axis, out ScrollbarPart Part, out Double TrackStart, out Double TrackLength, out Double ThumbStart, out Double ThumbLength)
+  method virtual Boolean Equals(Object obj)
+  method virtual Boolean Equals(ScrollbarHit other)
+  method virtual Int32 GetHashCode()
+  method virtual String ToString()
+  property DocumentElement Element { get; init; }
+  property Double ThumbLength { get; init; }
+  property Double ThumbStart { get; init; }
+  property Double TrackLength { get; init; }
+  property Double TrackStart { get; init; }
+  property ScrollbarAxis Axis { get; init; }
+  property ScrollbarPart Part { get; init; }
+PeachBrackets.ScrollbarPart : enum Int32
+  Thumb = 0
+  TrackAfter = 2
+  TrackBefore = 1
 PeachBrackets.Selection.DocumentSelection : sealed class
   method Boolean ExtendTo(Int32 pageIndex, Double x, Double y)
   method Boolean Modify(Boolean extend, SelectionDirection direction, SelectionGranularity granularity)

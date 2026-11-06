@@ -109,6 +109,75 @@ namespace PeachBrackets.Html
         /// <summary>Every scroll container of the laid-out document, innermost last within each branch.</summary>
         internal IEnumerable<CssBox> ScrollContainers(HtmlContainerInt container) => IndexFor(container)?.Entries.Keys ?? (IEnumerable<CssBox>)[];
 
+        /// <summary>A scrollbar under a point: its container, which axis, the part of it, and its track and thumb as they are drawn (layout units).</summary>
+        internal readonly record struct ScrollbarTarget(CssBox Box, bool Vertical, int Part, Rect Track, Rect Thumb, double Max);
+
+        /// <summary>
+        /// The scrollbar under a point of the surface (layout units): a thumb, or the track before or after it (<c>Part</c> -1, 0 or 1 for before, thumb, after). The innermost
+        /// container whose scrollport holds the point is the one asked.
+        /// </summary>
+        internal ScrollbarTarget? ScrollbarAt(HtmlContainerInt container, double x, double y)
+        {
+            if (IndexFor(container) is not { Entries.Count: > 0 } index)
+                return null;
+
+            ScrollbarTarget? best = null;
+            var bestDepth = -1;
+            foreach (var (box, entry) in index.Entries)
+            {
+                if (!PortHolds(entry.Port, box, x, y) || !VisibleThroughScrollers(index, box, x, y)) continue;
+
+                var state = ScrollStateOf(container, box)!.Value;
+                var (shiftX, shiftY) = DisplacementOf(box);
+                var (vertical, horizontal) = ScrollbarGeometry.Of(box, state, container.RenderContext.LayoutUnitsPerPoint);
+                foreach (var (shape, isVertical) in new[] { (vertical, true), (horizontal, false) })
+                {
+                    if (shape is not { } bar) continue;
+
+                    var track = new Rect(bar.Track.X + shiftX, bar.Track.Y + shiftY, bar.Track.Width, bar.Track.Height);
+                    var thumb = new Rect(bar.Thumb.X + shiftX, bar.Thumb.Y + shiftY, bar.Thumb.Width, bar.Thumb.Height);
+                    if (!(x >= track.X && x < track.Right && y >= track.Y && y < track.Bottom)) continue;
+
+                    var along = isVertical ? y : x;
+                    var thumbStart = isVertical ? thumb.Y : thumb.X;
+                    var thumbEnd = isVertical ? thumb.Bottom : thumb.Right;
+                    var part = along < thumbStart ? -1 : along >= thumbEnd ? 1 : 0;
+
+                    var depth = 0;
+                    for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox) depth++;
+                    if (depth > bestDepth)
+                    {
+                        best = new ScrollbarTarget(box, isVertical, part, track, thumb, isVertical ? state.MaxY : state.MaxX);
+                        bestDepth = depth;
+                    }
+                }
+            }
+
+            return best;
+        }
+
+        /// <summary>
+        /// The scroll container that holds <paramref name="from"/> (the box itself first) and can scroll the way asked, nearest first; used to send a key to the container the
+        /// focus is in.
+        /// </summary>
+        internal CssBox? ScrollContainerFor(HtmlContainerInt container, CssBox from, double dx, double dy)
+        {
+            if (IndexFor(container) is not { Entries.Count: > 0 } index)
+                return null;
+
+            for (var current = from; current is not null; current = ScrollParentOf(current))
+            {
+                if (!index.Entries.TryGetValue(current, out var entry)) continue;
+
+                var offset = ScrollOffsetOf(current);
+                var scrollsX = dx != 0 && (dx > 0 ? offset.X < entry.MaxX : offset.X > 0);
+                var scrollsY = dy != 0 && (dy > 0 ? offset.Y < entry.MaxY : offset.Y > 0);
+                if ((dx == 0 && dy == 0) || scrollsX || scrollsY) return current;
+            }
+
+            return null;
+        }
+
         /// <summary>
         /// The scrollport of <paramref name="box"/> as it is drawn, when it is a scroll container: what its content is clipped to, so a point outside it is not on the content.
         /// </summary>

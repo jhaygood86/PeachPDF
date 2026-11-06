@@ -341,4 +341,91 @@ public class ScrollContainerTests
         document.AdvanceAnimations(TimeSpan.FromSeconds(2));
         Assert.InRange(await OpacityOfAsync(context, document, "v"), 0.0, 0.15);
     }
+
+    [Fact]
+    public async Task AScrollbarUnderAPoint_IsFound_ThumbAndTrack()
+    {
+        var (_, document) = await LoadAsync();
+        var scroller = document.GetElement("s")!;
+        var port = document.GetScrollMetrics(scroller)!.Value.Viewport;
+        var x = port.Right - 5;
+
+        var thumb = document.GetScrollbarAt(0, x, port.Y + 15)!;
+        Assert.Equal(ScrollbarPart.Thumb, thumb.Part);
+        Assert.Equal(ScrollbarAxis.Vertical, thumb.Axis);
+        Assert.Equal("s", thumb.Element.Id);
+        Assert.True(thumb.ThumbLength > 20 && thumb.ThumbLength < thumb.TrackLength);
+
+        Assert.Equal(ScrollbarPart.TrackAfter, document.GetScrollbarAt(0, x, port.Bottom - 8)!.Part);
+
+        // Not over a bar: the middle of the content, or somewhere else on the page.
+        Assert.Null(document.GetScrollbarAt(0, port.X + 30, port.Y + 30));
+        Assert.Null(document.GetScrollbarAt(0, 380, 280));
+
+        // Once scrolled to the end the track before the thumb is the long one.
+        document.SetScrollPosition(scroller, 0, 200);
+        Assert.Equal(ScrollbarPart.TrackBefore, document.GetScrollbarAt(0, x, port.Y + 12)!.Part);
+    }
+
+    [Fact]
+    public async Task DraggingTheThumb_ScrollsInProportion_AndStaysOnItsTrack()
+    {
+        var (_, document) = await LoadAsync();
+        var scroller = document.GetElement("s")!;
+        var thumb = document.GetScrollbarAt(0, document.GetScrollMetrics(scroller)!.Value.Viewport.Right - 5, document.GetScrollMetrics(scroller)!.Value.Viewport.Y + 15)!;
+        var travel = thumb.TrackLength - thumb.ThumbLength;
+
+        document.ScrollThumbTo(scroller, ScrollbarAxis.Vertical, thumb.TrackStart + (travel / 2));
+        Assert.Equal(100, document.GetScrollMetrics(scroller)!.Value.Y, 0);
+
+        document.ScrollThumbTo(scroller, ScrollbarAxis.Vertical, thumb.TrackStart + travel + 500);
+        Assert.Equal(200, document.GetScrollMetrics(scroller)!.Value.Y, 1);
+
+        document.ScrollThumbTo(scroller, ScrollbarAxis.Vertical, thumb.TrackStart - 500);
+        Assert.Equal(0, document.GetScrollMetrics(scroller)!.Value.Y, 1);
+
+        // A bar the container does not have drags nothing.
+        Assert.Empty(document.ScrollThumbTo(scroller, ScrollbarAxis.Horizontal, 10));
+    }
+
+    [Fact]
+    public async Task APressOnTheTrack_ScrollsAPage()
+    {
+        var (_, document) = await LoadAsync();
+        var scroller = document.GetElement("s")!;
+
+        document.ScrollByPage(scroller, ScrollbarAxis.Vertical, 1);
+        Assert.Equal(87.5, document.GetScrollMetrics(scroller)!.Value.Y, 1);
+
+        document.ScrollByPage(scroller, ScrollbarAxis.Vertical, -1);
+        Assert.Equal(0, document.GetScrollMetrics(scroller)!.Value.Y, 1);
+    }
+
+    [Fact]
+    public async Task AKeyGoesToTheNearestContainerThatCanScrollTheWayAsked()
+    {
+        var (_, document) = await LoadAsync(
+            "#outer { width: 150pt; height: 120pt; overflow: auto } #inner { width: 100pt; height: 60pt; overflow: auto } .t { height: 200pt } a { display: block }",
+            "<div id=outer><div id=inner><div class=t><a id=link href=\"#x\">link</a></div></div><div class=t></div></div>");
+        var link = document.GetElement("link")!;
+
+        Assert.Equal("inner", document.GetScrollContainerFor(link, 0, 1)!.Id);
+        Assert.Equal("inner", document.GetScrollContainerFor(document.GetElement("inner")!, 0, 1)!.Id);
+
+        // At the start of the inner one a turn toward the start goes to the one around it, which is at its start too: none.
+        Assert.Null(document.GetScrollContainerFor(link, 0, -1));
+
+        document.SetScrollPosition(document.GetElement("inner")!, 0, 1000);
+        Assert.Equal("outer", document.GetScrollContainerFor(link, 0, 1)!.Id);
+        Assert.Equal("inner", document.GetScrollContainerFor(link, 0, -1)!.Id);
+    }
+
+    [Fact]
+    public async Task ANodeOfTheAccessibilityTree_HasItsElement()
+    {
+        var (_, document) = await LoadAsync(Page, "<div id=s><a id=l href=\"#x\" style=\"display:block\">link</a><div class=a></div></div>");
+        var node = document.GetAccessibilityTree().Root.ReadingChildren.SelectMany(n => new[] { n }.Concat(n.ReadingChildren)).First(n => n.Role == PeachBrackets.Accessibility.AccessibilityRole.Link);
+
+        Assert.Equal("l", document.GetElementOf(node)!.Id);
+    }
 }

@@ -3,9 +3,11 @@
 A box with `overflow: auto | scroll | hidden` of a document shown on a screen clips and scrolls (see [the recent fix](../recent-fixes/2026-11-06-scroll-containers.md)). A paged document has
 none: print lets `auto` and `scroll` content run on past its box, which is the long-standing behaviour. These are left out.
 
-- **Input in the WinUI view is the mouse wheel only.** Touch panning, the keyboard (arrow keys, Page Up/Down, Home/End, Space), dragging a scrollbar thumb, and focus scrolling a container
-  to show the focused element are not routed to a container, and `IScrollProvider` is not exposed to UI Automation: a container scrolls by the wheel or by `SetScrollPosition`/`ScrollBy`/`ScrollIntoView`
-  from the host. The scrollbars are drawn but not interactive.
+- **Input in the WinUI view is the wheel, scrollbar presses and drags, the keys when the focus is inside a container, focus scrolling, a finger dragged over a container, and the UI Automation
+  scroll pattern.** What is left: a drag with a finger has no momentum (a fling stops when the finger does) and does not hand over to the page half way (a new gesture does); a touch in a view that
+  does not scroll itself (`HtmlViewScrollMode.Disabled`, a view in a list) scrolls the list, not a container; a key goes to a container only through the focused element, so a container with nothing
+  focusable in it is reached by the wheel, the bars or a finger; pressing and holding a track does not repeat; the pointer over a bar is the arrow; and UI Automation sees a container only when it has a node
+  in the accessibility tree (a list, a region, a table, a landmark), not a plain `div`.
 - **`scroll-behavior: smooth`, `overscroll-behavior`, `scroll-snap-*`, `scrollbar-gutter`, `scrollbar-width` and `scrollbar-color` do nothing.** A scroll is instant, chains to the container around it
   (and then the page) when the inner one cannot go that way, the bars are overlays of a fixed width and colour that take no room from the content, and a scroll does not settle on a snap point.
 - **Only `scroll-margin-top` and the root's `scroll-padding-top` exist as properties**, so `ScrollIntoView` keeps room at the top edge only and a scroll container's `scroll-padding` is not read.

@@ -61,6 +61,11 @@ public sealed partial class HtmlView
         }
 
         var document = _document!;
+
+        // A scrollbar thumb being dragged, or a finger dragging a scroll container, takes the movement.
+        if (DragScrollbar(x, y) || (e.Pointer.PointerDeviceType == PointerDeviceType.Touch && MoveTouchScroll(position)))
+            return;
+
         if (e.Pointer.PointerDeviceType != PointerDeviceType.Touch)
         {
             // The pointer the document asks for here, and the state that :hover and :active rules read.
@@ -93,12 +98,17 @@ public sealed partial class HtmlView
         if (e.Pointer.PointerDeviceType == PointerDeviceType.Touch)
         {
             ApplyTouchPolicy(document.GetInteractionAt(page, x, y));
+            BeginTouchScroll(page, x, y, point.Position);
             RequestState(page, x, y, pressed: true);
             return;
         }
 
         RequestState(page, x, y, pressed: true);
         if (!point.Properties.IsLeftButtonPressed)
+            return;
+
+        // A press on a scrollbar of a scroll container takes hold of the thumb or pages the container.
+        if (PressScrollbarAt(page, x, y))
             return;
 
         // A press on a text field puts the caret there at once, so a drag can select inside it.
@@ -115,7 +125,9 @@ public sealed partial class HtmlView
         var position = e.GetCurrentPoint(_canvas).Position;
         var wasClick = Math.Abs(position.X - _pressPoint.X) <= ClickSlop && Math.Abs(position.Y - _pressPoint.Y) <= ClickSlop;
         var wasSelecting = _dragSelecting;
-        var wasField = _fieldPressed || _rangeElement is not null;
+        var wasField = _fieldPressed || _rangeElement is not null || _scrollbarDrag is not null || _touchScrolling;
+        _scrollbarDrag = null;
+        EndTouchScroll();
         EndPress();
         _canvas.ReleasePointerCapture(e.Pointer);
 
@@ -197,13 +209,7 @@ public sealed partial class HtmlView
         if (_document is not { } document || document.GetScrollContainerAt(page, x, y, dx, dy) is not { } container)
             return false;
 
-        var regions = document.ScrollBy(container, dx, dy);
-        foreach (var region in regions)
-            InvalidateRegion(region.PageIndex, region.Bounds);
-
-        // An animation on the container's scroll timeline moves with it.
-        EnsureAnimationLoop();
-        return regions.Count > 0;
+        return ApplyScroll(document.ScrollBy(container, dx, dy));
     }
 
     private const double WheelNotchPoints = 42;
@@ -237,6 +243,12 @@ public sealed partial class HtmlView
         }
 
         if (HandleEditKey(e.Key))
+        {
+            e.Handled = true;
+            return;
+        }
+
+        if (HandleScrollKey(e.Key))
         {
             e.Handled = true;
             return;
