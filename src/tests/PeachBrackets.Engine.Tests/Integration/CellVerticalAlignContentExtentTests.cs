@@ -16,12 +16,12 @@ public class CellVerticalAlignContentExtentTests
     // No margin below: one that is followed by an empty block with a margin of its own is a margin-collapsing case this test is not about.
     private const string ParagraphWithoutBottomMargin = "<p id='p' style='margin:10pt 0 0;font-size:10pt;line-height:15pt'>Hello</p>";
 
-    private static string ParagraphBefore(string trailing) => trailing.Contains("margin-bottom") ? ParagraphWithoutBottomMargin : Paragraph;
+    private const string TrailingMargin = "<div style='height:0;margin-bottom:12pt'></div>";
 
     private static async Task<(CssBox Cell, CssBox P)> LayoutAsync(string content, string cellStyle, string otherCell = "")
     {
         var html = LayoutHarness.Wrap(
-            $"<table cellpadding='0' cellspacing='0'><tr><td id='c' style='{cellStyle};width:150pt'>{content}</td>{otherCell}</tr></table>");
+            $"<table cellpadding='0' cellspacing='0'><tr><td id='c' style='{cellStyle};width:150pt;font-size:10pt;line-height:15pt'>{content}</td>{otherCell}</tr></table>");
         var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
 
         return (LayoutHarness.FindById(root, "c")!, LayoutHarness.FindById(root, "p")!);
@@ -32,14 +32,14 @@ public class CellVerticalAlignContentExtentTests
     [InlineData("vertical-align:middle", "")]
     [InlineData("vertical-align:middle", "<br/>")]
     [InlineData("vertical-align:middle", "<br/><br/>")]
-    [InlineData("vertical-align:middle", "<div style='height:0;margin-bottom:12pt'></div>")]
+    [InlineData("vertical-align:middle", TrailingMargin)]
     [InlineData("vertical-align:bottom", "")]
     [InlineData("vertical-align:bottom", "<br/>")]
-    [InlineData("vertical-align:bottom", "<div style='height:0;margin-bottom:12pt'></div>")]
+    [InlineData("vertical-align:bottom", TrailingMargin)]
     [InlineData("vertical-align:middle;padding:6pt 4pt", "<br/>")]
     public async Task CellWithNoRoomToSpare_LeavesTheContentWhereItsMarginPutsIt(string cellStyle, string trailing)
     {
-        var (cell, p) = await LayoutAsync(ParagraphBefore(trailing) + trailing, cellStyle);
+        var (cell, p) = await LayoutAsync((trailing == TrailingMargin ? ParagraphWithoutBottomMargin : Paragraph) + trailing, cellStyle);
 
         Assert.Equal(cell.ClientTop + 10, p.Location.Y, 1);
     }
@@ -48,10 +48,10 @@ public class CellVerticalAlignContentExtentTests
     [Theory]
     [InlineData("", 100 - 10 - 15 - 10)]
     [InlineData("<br/>", 100 - 10 - 15 - 10 - 15)]
-    [InlineData("<div style='height:0;margin-bottom:12pt'></div>", 100 - 10 - 15 - 12)]
+    [InlineData(TrailingMargin, 100 - 10 - 15 - 12)]
     public async Task CellInATallerRow_CentresTheContentIncludingItsTrailingSpace(string trailing, double room)
     {
-        var (cell, p) = await LayoutAsync(ParagraphBefore(trailing) + trailing, "vertical-align:middle",
+        var (cell, p) = await LayoutAsync((trailing == TrailingMargin ? ParagraphWithoutBottomMargin : Paragraph) + trailing, "vertical-align:middle",
             "<td style='width:20pt;height:100pt;vertical-align:top'></td>");
 
         Assert.Equal(cell.ClientTop + room / 2 + 10, p.Location.Y, 1);
@@ -60,7 +60,7 @@ public class CellVerticalAlignContentExtentTests
     [Fact]
     public async Task BottomAlignedCellInATallerRow_PutsTheTrailingMarginAtTheBottom()
     {
-        var (cell, p) = await LayoutAsync(ParagraphWithoutBottomMargin + "<div style='height:0;margin-bottom:12pt'></div>", "vertical-align:bottom",
+        var (cell, p) = await LayoutAsync(ParagraphWithoutBottomMargin + TrailingMargin, "vertical-align:bottom",
             "<td style='width:20pt;height:100pt;vertical-align:top'></td>");
 
         // The 12pt margin ends at the cell's bottom edge.
@@ -83,6 +83,69 @@ public class CellVerticalAlignContentExtentTests
         var word = WordsOf(cell).Single();
 
         Assert.Equal(cell.ClientTop + 50, word.Top + word.Height / 2, 1);
+    }
+
+    // The `height` of a table cell is a minimum (CSS 2.1 section 17.5.3): the cell grows to hold its content, the margin below the last block
+    // included, so it has no room to spare and the content stays at its top. The engine let such a cell end above that margin, and a distance
+    // measured to the content's end then came out negative: the content moved up out of the cell, over what is above it (and off its page at a
+    // page break).
+    [Theory]
+    [InlineData("vertical-align:middle")]
+    [InlineData("vertical-align:bottom")]
+    public async Task CellWithADeclaredHeight_GrowsToHoldTheMarginBelowItsContent(string cellStyle)
+    {
+        var (cell, p) = await LayoutAsync("<p id='p' style='margin:0 0 40pt;font-size:10pt;line-height:15pt'>Hello</p>", $"{cellStyle};height:10pt");
+
+        Assert.Equal(cell.ClientTop, p.Location.Y, 1);
+        Assert.True(cell.ClientBottom >= p.Location.Y + 15 + 40 - 0.5, $"the cell ends at {cell.ClientBottom}, above the paragraph's margin edge");
+    }
+
+    // A `max-height` the engine applies to a cell (a browser ignores it on a cell) leaves it ending above its content, with no room to spare:
+    // the content's end is not taken past the cell's own bottom, so it is no further up than the words alone put it (two points here).
+    [Fact]
+    public async Task ContentOfACellThatEndsAboveIt_IsNotMovedFurtherUpThanItsWordsPutIt()
+    {
+        var (cell, p) = await LayoutAsync("<p id='p' style='margin:0 0 40pt;font-size:10pt;line-height:15pt'>Hello</p>", "vertical-align:middle;max-height:10pt");
+
+        Assert.True(p.Location.Y > cell.ClientTop - 3, $"the content is at {p.Location.Y}, above the cell's top at {cell.ClientTop}");
+    }
+
+    // Only the last in-flow child ends the content: the bottom margin of an earlier one that a later negative margin swallows is not inside it.
+    // The two lines are 30pt of content (their 50pt and -50pt margins cancel), centred in the 100pt row.
+    [Fact]
+    public async Task MarginSwallowedByANegativeMargin_IsNotContentOfTheCell()
+    {
+        var html = LayoutHarness.Wrap(
+            "<table cellpadding='0' cellspacing='0'><tr><td id='c' style='vertical-align:middle;width:150pt;font-size:10pt;line-height:15pt'>" +
+            "<div id='a' style='margin-bottom:50pt'>NegA</div><div style='margin-top:-50pt'>NegB</div></td>" +
+            "<td style='width:20pt;height:100pt;vertical-align:top'></td></tr></table>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+        var cell = LayoutHarness.FindById(root, "c")!;
+
+        Assert.Equal(cell.ClientTop + (100 - 30) / 2.0, LayoutHarness.FindById(root, "a")!.Location.Y, 1);
+    }
+
+    // A float the cell holds is inside it (CSS 2.1 section 10.6.7): the float's bottom margin edge, below the last in-flow line, ends the content.
+    [Fact]
+    public async Task FloatInACell_EndsTheContentWithItsMarginBox()
+    {
+        var (cell, p) = await LayoutAsync(
+            ParagraphWithoutBottomMargin + "<div style='float:left;width:30pt;height:10pt;margin-bottom:20pt'></div>", "vertical-align:middle",
+            "<td style='width:20pt;height:100pt;vertical-align:top'></td>");
+
+        // 10 + 15 of paragraph, then the float's 10pt and 20pt of margin: 55pt of content in the 100pt row.
+        Assert.Equal(cell.ClientTop + (100 - 55) / 2.0 + 10, p.Location.Y, 1);
+    }
+
+    // The margin that collapses through the last child counts: the paragraph's 24pt bottom margin passes through the div around it.
+    [Fact]
+    public async Task MarginCollapsingThroughTheLastChild_IsContentOfTheCell()
+    {
+        var (cell, p) = await LayoutAsync(
+            "<div><p id='p' style='margin:0 0 24pt;font-size:10pt;line-height:15pt'>Hello</p></div>", "vertical-align:middle",
+            "<td style='width:20pt;height:100pt;vertical-align:top'></td>");
+
+        Assert.Equal(cell.ClientTop + (100 - 15 - 24) / 2.0, p.Location.Y, 1);
     }
 
     // A box that is not content of the cell does not count: an absolutely positioned one hangs off it (CSS 2.1 section 10.6.3).
