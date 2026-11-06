@@ -1,3 +1,4 @@
+using System.Globalization;
 using PeachBrackets.Updates;
 using PeachDrawing;
 using PeachDrawing.Core;
@@ -18,7 +19,7 @@ public class AnimationEventAndControlTests
     private static double Width(HtmlDocument document) => document.GetElementBounds("a")!.Value.Width;
 
     private static string Describe(IEnumerable<AnimationEventInfo> events) =>
-        string.Join(", ", events.Select(e => $"{e.Kind}:{e.Name}@{e.ElapsedTime.TotalSeconds:0.##}"));
+        string.Join(", ", events.Select(e => string.Create(CultureInfo.InvariantCulture, $"{e.Kind}:{e.Name}@{e.ElapsedTime.TotalSeconds:0.##}")));
 
     private const string Fade = "@keyframes fade { from { opacity: 1 } to { opacity: 0 } } #a { width: 50pt; height: 10pt; background: red; ";
     private const string Grow = "@keyframes grow { from { width: 0pt } to { width: 100pt } } #a { height: 10pt; width: 50pt; ";
