@@ -12,7 +12,7 @@ public class HostResourceLoaderTests
     [Fact]
     public async Task ADataUri_IsLoadedWithItsMimeType()
     {
-        var response = await HostResourceLoader.LoadAsync(new RUri("data:image/png;base64," + RedPng));
+        var response = await HostResourceLoader.LoadAsync(new Uri("data:image/png;base64," + RedPng));
 
         Assert.NotNull(response?.ResourceStream);
         Assert.Equal("image/png", response!.ResponseHeaders!["Content-Type"][0]);
@@ -26,7 +26,7 @@ public class HostResourceLoaderTests
         await File.WriteAllTextAsync(path, "hello", TestContext.Current.CancellationToken);
         try
         {
-            using var response = (await HostResourceLoader.LoadAsync(new RUri(new Uri(path))))!.ResourceStream;
+            using var response = (await HostResourceLoader.LoadAsync(new Uri(path)))!.ResourceStream;
             Assert.Equal("hello", await new StreamReader(response!).ReadToEndAsync(TestContext.Current.CancellationToken));
         }
         finally
@@ -34,14 +34,14 @@ public class HostResourceLoaderTests
             File.Delete(path);
         }
 
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri(new Uri(path))));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri(path)));
     }
 
     [Fact]
     public async Task AWebAddress_IsNotFetchedUnlessTheHostAllowsIt()
     {
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri("https://example.invalid/a.png")));
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri(new Uri("file:///x.png")), allowLocalFiles: false));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri("https://example.invalid/a.png")));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri("file:///x.png"), allowLocalFiles: false));
     }
 
     // One request answered with a fixed response, on a port the operating system picks.
@@ -76,7 +76,7 @@ public class HostResourceLoaderTests
         var (address, served, stop) = Serve("200 OK", "text/css", "p { color: red }");
         using (stop)
         {
-            var response = await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true);
+            var response = await HostResourceLoader.LoadAsync(new Uri(address), allowNetwork: true);
             await served;
 
             Assert.NotNull(response?.ResourceStream);
@@ -91,12 +91,12 @@ public class HostResourceLoaderTests
         var (address, served, stop) = Serve("404 Not Found", "text/plain", "nothing here");
         using (stop)
         {
-            Assert.Null(await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true));
+            Assert.Null(await HostResourceLoader.LoadAsync(new Uri(address), allowNetwork: true));
             await served;
         }
 
         // Nothing listens there now.
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri(address), allowNetwork: true));
     }
 
     // A server that answers every request on a loopback port with the same response, counting them.
@@ -144,7 +144,7 @@ public class HostResourceLoaderTests
 
     private static async Task<string> BodyAsync(string address)
     {
-        var response = await HostResourceLoader.LoadAsync(new RUri(address), allowNetwork: true);
+        var response = await HostResourceLoader.LoadAsync(new Uri(address), allowNetwork: true);
         Assert.NotNull(response?.ResourceStream);
         return await new StreamReader(response!.ResourceStream!).ReadToEndAsync(TestContext.Current.CancellationToken);
     }
@@ -155,7 +155,7 @@ public class HostResourceLoaderTests
         using var server = new CountingServer("", System.Text.Encoding.UTF8.GetBytes("p { color: red }"));
 
         var first = await BodyAsync(server.Address);
-        var second = await HostResourceLoader.LoadAsync(new RUri(server.Address), allowNetwork: true);
+        var second = await HostResourceLoader.LoadAsync(new Uri(server.Address), allowNetwork: true);
 
         Assert.Equal("p { color: red }", first);
         Assert.Equal("p { color: red }", await new StreamReader(second!.ResourceStream!).ReadToEndAsync(TestContext.Current.CancellationToken));
@@ -233,8 +233,8 @@ public class HostResourceLoaderTests
     [Fact]
     public async Task ARelativeAddress_AndABrokenDataUri_AreNotLoaded()
     {
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri("images/a.png", UriKind.Relative)));
-        Assert.Null(await HostResourceLoader.LoadAsync(new RUri("data:image/png;base64,@@@@")));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri("images/a.png", UriKind.Relative)));
+        Assert.Null(await HostResourceLoader.LoadAsync(new Uri("data:image/png;base64,@@@@")));
     }
 
     [Fact]
@@ -246,7 +246,7 @@ public class HostResourceLoaderTests
         {
             // Another handle that allows no sharing: opening it for reading fails with an IOException, which the loader answers as nothing.
             using var holder = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
-            Assert.Null(await HostResourceLoader.LoadAsync(new RUri(new Uri(path))));
+            Assert.Null(await HostResourceLoader.LoadAsync(new Uri(path)));
         }
         finally
         {

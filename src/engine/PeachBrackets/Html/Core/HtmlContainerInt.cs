@@ -272,7 +272,7 @@ namespace PeachBrackets.Html
         /// re-parse produces a new tree, so this is memoized against the tree's topmost box identity in
         /// the same shape as <see cref="_idIndex"/>.
         /// </summary>
-        private RUri? _documentBase;
+        private Uri? _documentBase;
 
         private CssBox? _documentBaseRoot;
 
@@ -1146,7 +1146,7 @@ namespace PeachBrackets.Html
 
         /// <summary>
         /// Decoded image resources resolved by <see cref="Handlers.ImageLoadHandler"/>, keyed by resolved
-        /// absolute source URI (<see cref="RUri.AbsoluteUri"/>) - shared by every <c>ImageLoadHandler</c>
+        /// absolute source URI (<see cref="Uri.AbsoluteUri"/>) - shared by every <c>ImageLoadHandler</c>
         /// this render creates (<c>&lt;img&gt;</c>, <c>&lt;object&gt;</c>, <c>background-image</c>/
         /// <c>list-style-image</c>/<c>content: url()</c>) so the same source referenced more than once is
         /// only fetched and decoded once. Deliberately NOT cleared by <see cref="Clear"/>: the container-
@@ -1244,7 +1244,7 @@ namespace PeachBrackets.Html
         /// <see cref="Root"/> is still null mid-parse, this gives up on a null root: see below.
         /// </para>
         /// </summary>
-        internal RUri? DocumentBaseUri
+        internal Uri? DocumentBaseUri
         {
             get
             {
@@ -1262,7 +1262,7 @@ namespace PeachBrackets.Html
                     var href = DomUtils.GetBoxByTagName(Root, "base")?.HtmlTag?.TryGetAttribute("href", "");
                     // A malformed href still throws from exactly where it did before - and, since the key
                     // is only committed afterwards, from every later read too rather than just the first.
-                    _documentBase = string.IsNullOrWhiteSpace(href) ? null : new RUri(href);
+                    _documentBase = string.IsNullOrWhiteSpace(href) ? null : new Uri(href);
                     _documentBaseRoot = Root;
                 }
 
@@ -1994,7 +1994,7 @@ namespace PeachBrackets.Html
                 return;
 
             _imagesPrefetched = true;
-            var addresses = new List<RUri>();
+            var addresses = new List<Uri>();
             CollectImageAddresses(Root, addresses);
             if (addresses.Count < 2)
                 return;
@@ -2004,7 +2004,7 @@ namespace PeachBrackets.Html
             await prefetcher.PrefetchAsync(addresses);
         }
 
-        private void CollectImageAddresses(CssBox box, List<RUri> addresses)
+        private void CollectImageAddresses(CssBox box, List<Uri> addresses)
         {
             if (box.DerivedStyle.ActualDisplay == Keywords.None)
                 return;
@@ -2013,7 +2013,7 @@ namespace PeachBrackets.Html
             {
                 try
                 {
-                    addresses.Add(DocumentBaseUri is { } baseUri ? new RUri(baseUri, source) : new RUri(source, UriKind.RelativeOrAbsolute));
+                    addresses.Add(DocumentBaseUri is { } baseUri ? new Uri(baseUri, source) : new Uri(source, UriKind.RelativeOrAbsolute));
                 }
                 catch (Exception e) when (e is UriFormatException or ArgumentException)
                 {

@@ -714,18 +714,6 @@ PeachDrawing.Core.RNetworkResponse : class
   method virtual String ToString()
   property Dictionary<String, String[]> ResponseHeaders { get; init; }
   property Stream ResourceStream { get; init; }
-PeachDrawing.Core.RUri : class
-  ctor(RUri baseUri, RUri uri)
-  ctor(RUri baseUri, String uri)
-  ctor(String uriString)
-  ctor(String uriString, UriKind uriKind)
-  ctor(Uri uri)
-  property Boolean IsAbsoluteUri { get; }
-  property Boolean IsFile { get; }
-  property String AbsoluteUri { get; }
-  property String OriginalString { get; }
-  property String Scheme { get; }
-  property Uri Uri { get; }
 PeachDrawing.Core.RadialGradientBrush : sealed class
   ctor(PaintPoint center, PaintPoint focus, Double radiusX, Double radiusY, IReadOnlyList<GradientStop> stops, GradientSpread spread, Matrix3x2? transform = null)
   property Double FocusRadius { get; init; }
@@ -804,7 +792,7 @@ PeachDrawing.Core.RenderContext : abstract class
   method PaintColor GetColor(String colorName)
   method Pen GetPen(Brush brush)
   method Pen GetPen(PaintColor color)
-  method ValueTask<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, RUri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
+  method ValueTask<Boolean> AddFontFamilyFromUrl(String fontFamilyName, String url, String format, Uri baseUri = null, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method ValueTask<Boolean> AddFontFromBytes(String fontFamilyName, ReadOnlyMemory<Byte> data, FontFaceDescriptors descriptors = null)
   method ValueTask<Boolean> AddLocalFontFamily(String fontFamilyName, String localFontFaceName, FontFaceDescriptors descriptors = null, IReadOnlyList<RuneInterval> unicodeRanges = null)
   method Void AddFontFamily(FontFamily fontFamily)
@@ -813,14 +801,14 @@ PeachDrawing.Core.RenderContext : abstract class
   method abstract String GetCssMediaType(IEnumerable<String> mediaTypesAvailable)
   method virtual Boolean SupportsImageType(String mimeType)
   method virtual ISvgGlyphPainter CreateSvgGlyphPainter(Canvas host)
-  method virtual ValueTask<RNetworkResponse> GetResourceStream(RUri uri)
+  method virtual ValueTask<RNetworkResponse> GetResourceStream(Uri uri)
   property Boolean RasterAntiAliasing { get; set; }
   property Boolean TextStemDarkening { get; set; }
   property Double LayoutUnitsPerPoint { get; }
   property Double RasterizationDpi { get; set; }
   property Int64 MaxRasterPixels { get; set; }
-  property RUri BaseUri { get; }
   property TextHinting TextHinting { get; set; }
+  property Uri BaseUri { get; }
 PeachDrawing.Core.RetainedLayer : abstract class
   method abstract Boolean CanDraw(Canvas target)
   method abstract Void Dispose()

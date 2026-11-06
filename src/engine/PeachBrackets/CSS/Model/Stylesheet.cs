@@ -1,3 +1,4 @@
+using System;
 using PeachDrawing.Core;
 using System.Collections.Generic;
 using System.IO;
@@ -27,7 +28,7 @@ namespace PeachBrackets.Css
         /// <c>url()</c> references inside this stylesheet (nested <c>@import</c>, <c>@font-face src</c>)
         /// resolve against this, not the document's base URI, matching browser behavior for fetched CSS.
         /// </summary>
-        internal RUri? BaseUri { get; set; }
+        internal Uri? BaseUri { get; set; }
 
         public IEnumerable<ICharsetRule> CharacterSetRules => Rules.Where(r => r is CharsetRule).Cast<ICharsetRule>();
         public IEnumerable<IFontFaceRule> FontfaceSetRules => Rules.Where(r => r is FontFaceRule).Cast<IFontFaceRule>();

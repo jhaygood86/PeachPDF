@@ -1508,7 +1508,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private const string PngBase64 =
             "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
-        private static readonly RUri DocumentUri = new("https://example.test/page.html");
+        private static readonly Uri DocumentUri = new("https://example.test/page.html");
 
         private static string GetPdfText(PeachPdfDocument doc)
         {
@@ -1621,11 +1621,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.DoesNotContain("/Subtype /Image", pdfText);
         }
 
-        private sealed class ThrowingNetworkLoader(RUri baseUri) : RNetworkLoader
+        private sealed class ThrowingNetworkLoader(Uri baseUri) : RNetworkLoader
         {
-            public override RUri? BaseUri { get; } = baseUri;
+            public override Uri? BaseUri { get; } = baseUri;
             public override Task<string> GetPrimaryContents() => Task.FromResult(string.Empty);
-            public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
+            public override Task<RNetworkResponse?> GetResourceStream(Uri uri) =>
                 throw new HttpRequestException("simulated transport failure");
         }
 

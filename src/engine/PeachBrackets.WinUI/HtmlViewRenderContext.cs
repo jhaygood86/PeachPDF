@@ -12,9 +12,9 @@ namespace PeachBrackets.WinUI;
 /// <summary>The Win2D context of a view, which also loads what the document refers to: images, style sheets and fonts by <c>data:</c> URI and file, and by web address when the host allows it.</summary>
 internal sealed class HtmlViewRenderContext(Func<bool> allowNetwork, Func<Uri?> baseUri, CanvasDevice device, FontSet fontSet) : Win2dRenderContext(device, fontSet: fontSet), IResourcePrefetcher
 {
-    public override RUri? BaseUri => baseUri() is { } address ? new RUri(address) : null;
+    public override Uri? BaseUri => baseUri();
 
-    public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
+    public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => HostResourceLoader.LoadAsync(uri, allowNetwork());
 
-    public ValueTask PrefetchAsync(IReadOnlyList<RUri> addresses) => HostResourceLoader.PrefetchAsync(addresses, allowNetwork());
+    public ValueTask PrefetchAsync(IReadOnlyList<Uri> addresses) => HostResourceLoader.PrefetchAsync(addresses, allowNetwork());
 }

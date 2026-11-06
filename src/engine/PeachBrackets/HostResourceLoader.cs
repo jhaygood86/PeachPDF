@@ -16,7 +16,7 @@ namespace PeachBrackets;
 /// </summary>
 /// <example>
 /// <code>
-/// public override ValueTask&lt;RNetworkResponse?&gt; GetResourceStream(RUri uri) =&gt; HostResourceLoader.LoadAsync(uri, allowNetwork: false);
+/// public override ValueTask&lt;RNetworkResponse?&gt; GetResourceStream(Uri uri) =&gt; HostResourceLoader.LoadAsync(uri, allowNetwork: false);
 /// </code>
 /// </example>
 public static class HostResourceLoader
@@ -50,7 +50,7 @@ public static class HostResourceLoader
     /// <param name="allowNetwork">whether <c>http</c> and <c>https</c> addresses are fetched; off by default, so a document cannot make the host call out</param>
     /// <param name="allowLocalFiles">whether <c>file</c> addresses are read</param>
     /// <returns>the content, with a <c>Content-Type</c> header where the address declares one, or <see langword="null"/></returns>
-    public static ValueTask<RNetworkResponse?> LoadAsync(RUri uri, bool allowNetwork = false, bool allowLocalFiles = true)
+    public static ValueTask<RNetworkResponse?> LoadAsync(Uri uri, bool allowNetwork = false, bool allowLocalFiles = true)
     {
         ArgumentNullException.ThrowIfNull(uri);
         if (!uri.IsAbsoluteUri)
@@ -67,7 +67,7 @@ public static class HostResourceLoader
             case "file" when allowLocalFiles:
                 try
                 {
-                    var path = uri.Uri.LocalPath;
+                    var path = uri.LocalPath;
                     return File.Exists(path) ? new ValueTask<RNetworkResponse?>(new RNetworkResponse(File.OpenRead(path), null)) : default;
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -91,7 +91,7 @@ public static class HostResourceLoader
     /// <param name="allowNetwork">whether web addresses are fetched at all</param>
     /// <param name="concurrency">how many requests may be in flight at a time</param>
     /// <returns>a task that completes when every request has finished</returns>
-    public static async ValueTask PrefetchAsync(IEnumerable<RUri> addresses, bool allowNetwork, int concurrency = 8)
+    public static async ValueTask PrefetchAsync(IEnumerable<Uri> addresses, bool allowNetwork, int concurrency = 8)
     {
         ArgumentNullException.ThrowIfNull(addresses);
         ArgumentOutOfRangeException.ThrowIfLessThan(concurrency, 1);
@@ -197,7 +197,7 @@ public static class HostResourceLoader
         }
     }
 
-    private static async ValueTask<RNetworkResponse?> FetchAsync(RUri uri)
+    private static async ValueTask<RNetworkResponse?> FetchAsync(Uri uri)
     {
         using var activity = EngineTelemetry.Source.StartActivity("resource.fetch");
         activity?.SetTag("url", uri.AbsoluteUri);
@@ -211,7 +211,7 @@ public static class HostResourceLoader
 
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, uri.Uri);
+            using var request = new HttpRequestMessage(HttpMethod.Get, uri);
 
             // A browser's fetch cannot set it (the browser owns it), so there it is left alone.
             if (!OperatingSystem.IsBrowser())

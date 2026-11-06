@@ -2,7 +2,7 @@
 
   <!--
     The in-browser demo: PeachPDF renders HTML/MHTML/ZIP uploads to PDF entirely client-side, with no
-    server round-trip. Single-TFM net10.0, overriding the net8.0;net10.0 default from
+    server round-trip. Single-TFM net10.0, overriding the net10.0 default from
     src/Directory.Build.props (same pattern as PeachPDF.Cli.csproj) - a Blazor WebAssembly app targets one
     framework at a time.
   -->

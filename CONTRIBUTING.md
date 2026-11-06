@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This document covers how to build, tes
 
 ## Getting started
 
-- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 8 and .NET 10, plus .NET 11 (currently a release candidate) when the SDK you're building with supports it — see [net11.0 locally](#net110-locally) below. A plain `dotnet build`/`dotnet test` with only the .NET 10 SDK installed works exactly as it always has; nothing extra is required unless you specifically want to build or test against net11.0.
+- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 10, plus .NET 11 (currently a release candidate) when the SDK you're building with supports it — see [net11.0 locally](#net110-locally) below. A plain `dotnet build`/`dotnet test` with only the .NET 10 SDK installed works exactly as it always has; nothing extra is required unless you specifically want to build or test against net11.0.
 - All `dotnet` CLI commands below assume your working directory is `src/` — the projects (and their relative paths in this doc) are rooted there.
 
 ## Building and testing
@@ -12,13 +12,13 @@ Thanks for your interest in contributing. This document covers how to build, tes
 The test projects use xunit.v3 4.x on Microsoft.Testing.Platform (opted into by `global.json`), so `dotnet test` takes the project as `--project <csproj>`. Run the test suite with a single target framework:
 
 ```
-dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0
-dotnet test --project tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --framework net8.0
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net10.0
+dotnet test --project tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --framework net10.0
 ```
 
 The HTML/CSS/SVG/MathML engine's internals are tested by `PeachBrackets.Engine.Tests`; PDF output and the public API by `PeachPDF.Tests`.
 
-`PeachPDF.Tests` multi-targets net8.0 and net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which roughly doubles (or triples, with net11.0 active) local build/test time — always pass `--framework net8.0` for routine local runs. Only add an explicit net10.0 or net11.0 run if you suspect an issue specific to that target.
+`PeachPDF.Tests` targets net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which doubles local build/test time when net11.0 is active — always pass `--framework net10.0` for routine local runs. Only add an explicit net11.0 run if you suspect an issue specific to that target.
 
 ### net11.0 locally
 
@@ -39,13 +39,13 @@ dotnet test --project tests/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
 The font and text engine has its own test project too, `PeachDrawing.Text.Tests` (the font parsers and tables, shaping, bidi, script itemization, hyphenation, and the public API of `PeachDrawing.Text`; it must not reference PeachPDF):
 
 ```
-dotnet test --project tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net8.0
+dotnet test --project tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net10.0
 ```
 
 To run a subset of tests:
 
 ```
-dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --filter-class "*Svg*"
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net10.0 --filter-class "*Svg*"
 ```
 
 ## Code coverage
@@ -55,7 +55,7 @@ CI enforces **90% diff coverage** on pull requests — the coverage of lines you
 Reproduce this locally before opening or updating a PR:
 
 ```
-dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
+dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net10.0 --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --results-directory coverage
 ```
 
 If your changed lines fall short of 90%, add tests to close the gap rather than relying on CI to catch it — a red diff-coverage check is one of the more common reasons a PR stalls in review.
@@ -90,7 +90,7 @@ If a change gives PeachPDF a new visible rendering capability, add or update a s
 
 ## Pull requests
 
-- CI runs the test suite on `windows-latest`, `ubuntu-latest`, and `macos-latest` against .NET 8, .NET 10, and .NET 11, and enforces the 90% diff-coverage gate described above.
+- CI runs the test suite on `windows-latest`, `ubuntu-latest`, and `macos-latest` against .NET 10 and .NET 11, and enforces the 90% diff-coverage gate described above.
 - `@jhaygood86` is the default code owner for the entire repository and will be requested for review automatically.
 - Keep PRs scoped to one change; include tests and doc updates in the same PR rather than as follow-ups.
 
@@ -109,7 +109,7 @@ Report findings only.
 ## Ground rules
 - Read CLAUDE.md at the repo root first and apply all of it. Key rules: the whole solution must build with 0
   warnings (`dotnet build PeachPDF.slnx -t:Rebuild` from `src/`); run tests with
-  `dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net8.0` and never bare `dotnet test`; spec claims
+  `dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net10.0` and never bare `dotnet test`; spec claims
   are checked against real spec text fetched from w3.org/whatwg.org, not recalled; paint-affecting changes are
   rasterized through BOTH PDFium (pypdfium2) and MuPDF (PyMuPDF) and viewed; diff coverage must be >= 90%;
   no AI attribution in commits or PR text (a grep for "claude" false-positives on `.claude/` paths, so check
@@ -198,7 +198,7 @@ intended and judged against Chrome. If the change adds a visible capability ther
 through `SaveShowcaseAsync`, and its caption must be true against Chrome and the render.
 
 ## 7. Tests and mutation testing
-- Run the full net8.0 suite; run every new/changed test class individually.
+- Run the full net10.0 suite; run every new/changed test class individually.
 - Run the new tests against the BASELINE code and confirm they fail there. A test that passes on both is vacuous.
 - Tests must assert box/line geometry after layout, or an ordered Canvas call log (see CLAUDE.md Testing
   conventions), never only PDF content-stream substrings. Paint features need a test that fails if the feature
@@ -231,7 +231,7 @@ deviates from the spec and which the change follows. Check computed-value vs use
 - Recording a gap/fix/note should add exactly one new file and edit nothing else (no index files).
 
 ## 10. Coverage, merge check and CI
-- Diff coverage: run coverage on net8.0 with `--coverlet --coverlet-output-format cobertura`, `git add -A` new files in
+- Diff coverage: run coverage on net10.0 with `--coverlet --coverlet-output-format cobertura`, `git add -A` new files in
   your worktree so they are counted, and compute coverage of the changed lines (diff-cover, or Cobertura plus
   `git diff -U0`). Require >= 90%.
 - Trial-merge current `origin/main` in a scratch worktree (`git merge --no-commit --no-ff`); confirm no

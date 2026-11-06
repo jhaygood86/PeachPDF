@@ -631,7 +631,7 @@ namespace PeachBrackets.Html.Parse
             // below awaits them one at a time, and a page can declare dozens.
             if (!synchronousOnly && renderContext is IResourcePrefetcher prefetcher)
             {
-                var addresses = new List<RUri>();
+                var addresses = new List<Uri>();
                 foreach (var stylesheet in cssData.Stylesheets)
                 {
                     foreach (var fontRule in cssData.FlattenRules(stylesheet.Rules).OfType<IFontFaceRule>())
@@ -642,7 +642,7 @@ namespace PeachBrackets.Html.Parse
                         try
                         {
                             // The same resolution registering the face does; one that is still relative is not loaded at all, so it is not fetched ahead either.
-                            var address = stylesheet.BaseUri is not null ? new RUri(stylesheet.BaseUri, url) : new RUri(url, UriKind.RelativeOrAbsolute);
+                            var address = stylesheet.BaseUri is not null ? new Uri(stylesheet.BaseUri, url) : new Uri(url, UriKind.RelativeOrAbsolute);
                             if (address.IsAbsoluteUri)
                                 addresses.Add(address);
                         }
@@ -709,13 +709,13 @@ namespace PeachBrackets.Html.Parse
             if (htmlContainer.SynchronousOnly || htmlContainer.RenderContext is not IResourcePrefetcher prefetcher)
                 return;
 
-            var addresses = new List<RUri>();
+            var addresses = new List<Uri>();
             CollectStylesheetAddresses(root, htmlContainer, addresses);
             if (addresses.Count > 1)
                 await prefetcher.PrefetchAsync(addresses);
         }
 
-        private static void CollectStylesheetAddresses(CssBox box, HtmlContainerInt htmlContainer, List<RUri> addresses)
+        private static void CollectStylesheetAddresses(CssBox box, HtmlContainerInt htmlContainer, List<Uri> addresses)
         {
             if (box.HtmlTag is { } tag && tag.Name.Equals("link", StringComparison.OrdinalIgnoreCase)
                 && box.GetAttribute("rel", string.Empty).Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)

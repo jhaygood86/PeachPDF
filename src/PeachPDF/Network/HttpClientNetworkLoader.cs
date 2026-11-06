@@ -31,7 +31,7 @@ namespace PeachPDF.Network
         }
 
         /// <inheritdoc/>
-        public override RUri? BaseUri => primaryContentsUri != null ? new RUri(primaryContentsUri) : null;
+        public override Uri? BaseUri => primaryContentsUri;
 
         /// <inheritdoc/>
         public override async Task<string> GetPrimaryContents()
@@ -53,9 +53,9 @@ namespace PeachPDF.Network
         }
 
         /// <inheritdoc/>
-        public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override async Task<RNetworkResponse?> GetResourceStream(Uri uri)
         {
-            var response = await httpClient.GetAsync(uri.Uri);
+            var response = await httpClient.GetAsync(uri);
 
             if (!response.IsSuccessStatusCode)
             {

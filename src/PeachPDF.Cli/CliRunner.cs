@@ -308,14 +308,14 @@ internal static class CliRunner
         return await httpClient.GetStringAsync(url);
     }
 
-    internal static RUri DefaultBaseFor(CliInput input) => input.Kind switch
+    internal static Uri DefaultBaseFor(CliInput input) => input.Kind switch
     {
-        CliInputKind.File => new RUri(new Uri(Path.GetFullPath(input.Value))),
-        CliInputKind.Url => new RUri(new Uri(input.Value)),
-        _ => new RUri(new Uri(EnsureTrailingSeparator(Directory.GetCurrentDirectory()))),
+        CliInputKind.File => new Uri(Path.GetFullPath(input.Value)),
+        CliInputKind.Url => new Uri(input.Value),
+        _ => new Uri(EnsureTrailingSeparator(Directory.GetCurrentDirectory())),
     };
 
-    internal static RUri ResolveBaseUri(string baseUrl)
+    internal static Uri ResolveBaseUri(string baseUrl)
     {
         var absolute = Uri.TryCreate(baseUrl, UriKind.Absolute, out var parsed) ? parsed : null;
 
@@ -325,7 +325,7 @@ internal static class CliRunner
         // relative reference would drop the directory's own last segment (RFC 3986).
         if (absolute is { Scheme: "http" or "https" })
         {
-            return new RUri(absolute);
+            return absolute;
         }
 
         var path = absolute is { Scheme: "file" } ? absolute.LocalPath : baseUrl;
@@ -335,7 +335,7 @@ internal static class CliRunner
             fullPath = EnsureTrailingSeparator(fullPath);
         }
 
-        return new RUri(new Uri(fullPath));
+        return new Uri(fullPath);
     }
 
     private static async Task WriteOutputAsync(PeachPdfDocument document, CliOptions options, Stream stdout, CliLogger logger)

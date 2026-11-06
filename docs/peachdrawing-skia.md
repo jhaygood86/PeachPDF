@@ -9,7 +9,7 @@ bitmap in memory ([PeachDrawing](peachdrawing.md)) or a Windows [Win2D](peachdra
 dotnet add package PeachDrawing.Skia
 ```
 
-It is not tied to a platform: it targets the same frameworks as the rest of the family (`net8.0`, `net10.0` and, with the .NET 11 SDK,
+It is not tied to a platform: it targets the same frameworks as the rest of the family (`net10.0` and, with the .NET 11 SDK,
 `net11.0`) and uses SkiaSharp 3, so it runs wherever SkiaSharp does - Windows, Linux, macOS, iOS and .NET Android. The application that uses
 it picks the SkiaSharp native binaries for the platforms it ships to (`SkiaSharp.NativeAssets.*`, or the platform's own package) exactly as
 for any SkiaSharp app.

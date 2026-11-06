@@ -323,7 +323,7 @@ namespace PeachBrackets.Svg
         /// </param>
         /// <returns>A map of raw href → fetched resource, or null when nothing was fetched.</returns>
         public static ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchImageResourcesAsync(
-            ISvgSourceNode root, HtmlContainerInt container, RUri? baseUriOverride = null) =>
+            ISvgSourceNode root, HtmlContainerInt container, Uri? baseUriOverride = null) =>
             PrefetchTreeAsync(root, container, baseUriOverride, depth: 0);
 
         /// <summary>
@@ -334,7 +334,7 @@ namespace PeachBrackets.Svg
         /// different nested documents can't collide across their differing bases. Depth-guarded.
         /// </summary>
         private static async ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchTreeAsync(
-            ISvgSourceNode root, HtmlContainerInt container, RUri? baseUriOverride, int depth)
+            ISvgSourceNode root, HtmlContainerInt container, Uri? baseUriOverride, int depth)
         {
             if (depth > MaxImageNestingDepth)
                 return null;
@@ -360,7 +360,7 @@ namespace PeachBrackets.Svg
         /// nested <c>&lt;image&gt;</c> hrefs are recursively prefetched into the resource's child map.
         /// </summary>
         private static async ValueTask<SvgImageResource?> PrefetchImageAsync(
-            string href, HtmlContainerInt container, RUri? baseUriOverride, int depth)
+            string href, HtmlContainerInt container, Uri? baseUriOverride, int depth)
         {
             // A data: payload decodes in-memory in BuildImage - it needs a prefetch entry only when it is
             // an image/svg+xml document whose OWN nested <image>s must be fetched (issue #251).
@@ -423,7 +423,7 @@ namespace PeachBrackets.Svg
         /// image-less SVG payload from paying a parse.
         /// </summary>
         private static async ValueTask<IReadOnlyDictionary<string, SvgImageResource>?> PrefetchNestedSvgAsync(
-            byte[] bytes, HtmlContainerInt container, RUri? baseUriOverride, int depth)
+            byte[] bytes, HtmlContainerInt container, Uri? baseUriOverride, int depth)
         {
             if (depth + 1 > MaxImageNestingDepth)
                 return null;

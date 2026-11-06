@@ -171,9 +171,9 @@ internal sealed class ShowcaseSvgRenderContext : SvgRenderContext
 
     private FileUriNetworkLoader FileLoader => _fileLoader ??= new FileUriNetworkLoader();
 
-    public override RUri? BaseUri => NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? FileLoader.BaseUri : null);
+    public override Uri? BaseUri => NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? FileLoader.BaseUri : null);
 
-    public override async ValueTask<RNetworkResponse?> GetResourceStream(RUri uri)
+    public override async ValueTask<RNetworkResponse?> GetResourceStream(Uri uri)
     {
         if (!uri.IsAbsoluteUri)
             return null;

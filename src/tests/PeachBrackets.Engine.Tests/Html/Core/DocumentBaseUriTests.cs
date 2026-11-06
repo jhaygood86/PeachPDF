@@ -21,7 +21,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
     /// </summary>
     public class DocumentBaseUriTests
     {
-        private static readonly RUri LoaderBase = new("https://loader.test/docs/page.html");
+        private static readonly Uri LoaderBase = new("https://loader.test/docs/page.html");
 
         private static HtmlContainerInt NewContainer() =>
             new(new HtmlRenderContext

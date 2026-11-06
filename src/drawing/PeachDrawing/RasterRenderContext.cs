@@ -61,10 +61,10 @@ public sealed class RasterRenderContext : RenderContext
     /// Answers a document's requests for what it refers to (an image, a style sheet, a font) by address, or <see langword="null"/> (the default) to
     /// load nothing: a surface has no resource loading of its own.
     /// </summary>
-    public Func<RUri, ValueTask<RNetworkResponse?>>? ResourceLoader { get; set; }
+    public Func<Uri, ValueTask<RNetworkResponse?>>? ResourceLoader { get; set; }
 
     /// <inheritdoc/>
-    public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) => ResourceLoader is { } loader ? loader(uri) : default;
+    public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) => ResourceLoader is { } loader ? loader(uri) : default;
 
     /// <summary>Registers a font directly under <paramref name="fontFamilyName"/>, bypassing CSS <c>@font-face</c> entirely.</summary>
     public async ValueTask AddFont(Stream stream, string? fontFamilyName)

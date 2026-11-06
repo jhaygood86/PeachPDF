@@ -168,7 +168,7 @@ namespace PeachBrackets.Html.Handlers
             await SetImageFromUrl(uri);
         }
 
-        private async ValueTask LoadImageFromStream(Stream stream, bool isSvg, RUri source)
+        private async ValueTask LoadImageFromStream(Stream stream, bool isSvg, Uri source)
         {
             if (isSvg)
             {
@@ -192,7 +192,7 @@ namespace PeachBrackets.Html.Handlers
         /// (<see cref="XElementSvgSourceNode"/>) rather than the HTML tokenizer, since a fetched SVG
         /// resource is expected to be a standalone, well-formed XML document.
         /// </summary>
-        private async ValueTask LoadSvgFromStream(Stream stream, RUri source)
+        private async ValueTask LoadSvgFromStream(Stream stream, Uri source)
         {
             try
             {
@@ -261,7 +261,7 @@ namespace PeachBrackets.Html.Handlers
         /// render - see <see cref="HtmlContainerInt.CacheResolvedImageResource"/>. A cached resource is
         /// owned by the container, not this handler, so it is never disposed by <see cref="ReleaseObjects"/>.
         /// </remarks>
-        private async ValueTask SetImageFromUrl(RUri source)
+        private async ValueTask SetImageFromUrl(Uri source)
         {
             var cacheKey = source.AbsoluteUri;
             using var imageActivity = EngineTelemetry.Source.StartActivity("image.load");

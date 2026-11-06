@@ -16,7 +16,7 @@
     <!--
       BenchmarkDotNet builds a project of its own next to the benchmark assembly and, although it turns Directory.Build.props
       off inside that project, the props are imported before that setting is read: under src/ the generated project would
-      inherit the net8.0;net10.0 target list and fail to restore against this net10.0-only one. Building outside src/
+      inherit the net10.0 target list and fail to restore against this net10.0-only one. Building outside src/
       (artifacts/ is ignored by git) keeps the generated project clear of src/Directory.Build.props.
     -->
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

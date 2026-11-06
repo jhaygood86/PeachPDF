@@ -1,4 +1,5 @@
-﻿#nullable enable
+﻿using System;
+#nullable enable
 
 using PeachDrawing.Core;
 using PeachBrackets.Html.Utils;
@@ -17,7 +18,7 @@ namespace PeachPDF.Network
     public class DataUriNetworkLoader : RNetworkLoader
     {
         /// <inheritdoc/>
-        public override RUri? BaseUri => null;
+        public override Uri? BaseUri => null;
 
         /// <summary>
         /// Not supported by this loader — the HTML string must always be passed directly to
@@ -29,7 +30,7 @@ namespace PeachPDF.Network
         }
 
         /// <inheritdoc/>
-        public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
         {
             if (uri.Scheme is not "data") return Task.FromResult<RNetworkResponse?>(null);
 

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using PeachDrawing.Core;
@@ -14,5 +15,5 @@ public interface IResourcePrefetcher
     /// <summary>Fetches the resources in the background of the caller's wait; a failure is not an error, the document asks again when it needs one.</summary>
     /// <param name="addresses">the absolute addresses of the resources the document is about to load</param>
     /// <returns>a task that completes when every fetch has finished</returns>
-    ValueTask PrefetchAsync(IReadOnlyList<RUri> addresses);
+    ValueTask PrefetchAsync(IReadOnlyList<Uri> addresses);
 }

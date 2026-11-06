@@ -41,7 +41,7 @@ The core rendering engine originally derived from [HtmlRenderer](https://github.
 
 ## Resource Loading
 
-**Key types:** `RNetworkLoader` ([Network/RNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkLoader.cs)), `RNetworkResponse` ([Network/RNetworkResponse.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkResponse.cs)), `RUri` ([Network/RUri.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RUri.cs))
+**Key types:** `RNetworkLoader` ([Network/RNetworkLoader.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkLoader.cs)), `RNetworkResponse` ([Network/RNetworkResponse.cs](https://github.com/jhaygood86/PeachPDF/blob/main/src/PeachPDF/Network/RNetworkResponse.cs))
 
 Resource loading is a cross-cutting concern that spans multiple pipeline phases: the HTML document itself must be fetched before parsing begins, external stylesheets are fetched during stylesheet collection, and images are fetched during painting. All three use the same `RNetworkLoader` abstraction, which means the caller controls how every byte of external content enters the rendering pipeline.
 
@@ -51,20 +51,20 @@ Resource loading is a cross-cutting concern that spans multiple pipeline phases:
 public abstract class RNetworkLoader
 {
     public abstract Task<string> GetPrimaryContents();
-    public abstract Task<RNetworkResponse?> GetResourceStream(RUri uri);
-    public abstract RUri? BaseUri { get; }
+    public abstract Task<RNetworkResponse?> GetResourceStream(Uri uri);
+    public abstract Uri? BaseUri { get; }
 }
 ```
 
 | Member | Purpose |
 |---|---|
 | `GetPrimaryContents()` | Returns the root HTML string. Called once at the start of the pipeline when `null` is passed to `PdfGenerator.GeneratePdf`. |
-| `GetResourceStream(RUri)` | Returns a `RNetworkResponse` (stream + HTTP-style headers) for any external resource URI. Called for stylesheets and images. |
+| `GetResourceStream(Uri)` | Returns a `RNetworkResponse` (stream + HTTP-style headers) for any external resource URI. Called for stylesheets and images. |
 | `BaseUri` | The document's base URL. Used to resolve relative URIs in `href`, `src`, and `url()` values. If `null`, relative references resolve against the current working directory as a `file:` URI (the default working-directory base is supplied by `PdfRenderContext`) — unless [local file access is disabled](usage-examples.md#disabling-local-file-access), in which case there is no base to resolve against and the reference goes unresolved. |
 
 `RNetworkResponse` is a simple record: `(Stream? ResourceStream, Dictionary<string, string[]>? ResponseHeaders)`. The headers are inspected by `StylesheetLoadHandler` to validate the `Content-Type` is `text/css` before accepting the body as a stylesheet.
 
-`RUri` wraps `System.Uri` with special-case handling for `data:` URIs, which `System.Uri` can parse but not round-trip correctly through `AbsoluteUri`. It also supports constructing absolute URIs from a base+relative pair, which is how the `<base href>` element and `BaseUri` are applied to relative resource references.
+Resources are addressed with `System.Uri`, which has no length limit on .NET 10 and later, so a large `data:` URI is held as an ordinary `Uri`. A relative reference is resolved against the base with `new Uri(baseUri, relative)`, which is how the `<base href>` element and `BaseUri` are applied to relative resource references.
 
 ### How the pipeline uses it
 
@@ -105,12 +105,12 @@ To integrate PeachPDF into an environment with custom resource-resolution logic 
 ```csharp
 public class MyLoader : RNetworkLoader
 {
-    public override RUri? BaseUri => null;
+    public override Uri? BaseUri => null;
 
     public override Task<string> GetPrimaryContents() =>
         Task.FromResult("<html>…</html>");
 
-    public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+    public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
     {
         var bytes = MyAssetStore.Load(uri.OriginalString);
         if (bytes is null) return Task.FromResult<RNetworkResponse?>(null);
@@ -718,7 +718,7 @@ Every image arrives through PeachImage (see [Image loading and decoding](#image-
 3. Runs the full HTML→DOM→CSS→Layout→Paint pipeline against the document's pages.
 4. Returns the completed `PeachPdfDocument`, which wraps the composer and which the caller saves to any `Stream`.
 
-The engine keeps only what writing needs (no reader, no WPF/GDI rendering targets, no XPS output), keeping the dependency surface small and compatible with .NET 8 trimming and AOT compilation.
+The engine keeps only what writing needs (no reader, no WPF/GDI rendering targets, no XPS output), keeping the dependency surface small and compatible with trimming and AOT compilation.
 
 ### Tagged PDF (PDF/UA) structure tree
 

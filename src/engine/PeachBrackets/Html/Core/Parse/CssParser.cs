@@ -127,7 +127,7 @@ namespace PeachBrackets.Html.Parse
         /// its own location rather than the document's base. Null for inline &lt;style&gt; content or
         /// caller-supplied CSS text, which resolve against the document base as before.
         /// </param>
-        public async ValueTask ParseStyleSheet(CssData cssData, string stylesheet, RUri? baseUri = null)
+        public async ValueTask ParseStyleSheet(CssData cssData, string stylesheet, Uri? baseUri = null)
         {
             if (!string.IsNullOrEmpty(stylesheet))
             {
@@ -135,8 +135,8 @@ namespace PeachBrackets.Html.Parse
             }
         }
 
-        /// <summary>Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(CssData, string, RUri?)"/>.</summary>
-        public async ValueTask ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, RUri? baseUri = null)
+        /// <summary>Genuinely zero-copy counterpart of <see cref="ParseStyleSheet(CssData, string, Uri?)"/>.</summary>
+        public async ValueTask ParseStyleSheet(CssData cssData, ReadOnlyMemory<char> stylesheet, Uri? baseUri = null)
         {
             if (!stylesheet.IsEmpty)
             {
@@ -167,12 +167,12 @@ namespace PeachBrackets.Html.Parse
 
         /// <summary>
         /// <paramref name="stylesheetText"/> is <see cref="ReadOnlyMemory{T}"/>, not <see cref="string"/>, so
-        /// that <see cref="ParseStyleSheet(CssData, ReadOnlyMemory{char}, RUri?)"/>'s caller-supplied text
+        /// that <see cref="ParseStyleSheet(CssData, ReadOnlyMemory{char}, Uri?)"/>'s caller-supplied text
         /// flows through with zero copies - a <see cref="string"/> caller wraps its text with
         /// <see cref="MemoryExtensions.AsMemory(string?)"/> (itself a zero-copy view over the same string),
         /// so this is a strict widening: every existing <see cref="string"/>-based call site is unaffected.
         /// </summary>
-        private async ValueTask ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, RUri? baseUri, HashSet<string> visitedImportUris)
+        private async ValueTask ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, Uri? baseUri, HashSet<string> visitedImportUris)
         {
             var stylesheet = ParseStyleSheet(stylesheetText);
             stylesheet.BaseUri = baseUri;

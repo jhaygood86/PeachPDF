@@ -96,20 +96,20 @@ namespace PeachPDF.Tests.Integration
         // A minimal RNetworkLoader wrapping an in-memory URL -> bytes map, counting each distinct URI's
         // GetResourceStream calls - proves the resolved-source cache skips the fetch itself on a repeat
         // reference, not just that the PDF happens to dedup the resulting XObject.
-        private sealed class CountingNetworkLoader(RUri baseUri, string primaryHtml) : RNetworkLoader
+        private sealed class CountingNetworkLoader(Uri baseUri, string primaryHtml) : RNetworkLoader
         {
             private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = new();
 
             public readonly Dictionary<string, int> RequestCounts = new();
 
-            public override RUri? BaseUri { get; } = baseUri;
+            public override Uri? BaseUri { get; } = baseUri;
 
             public void AddResource(string absoluteUrl, byte[] bytes, string contentType) =>
                 _resources[absoluteUrl] = (bytes, contentType);
 
             public override Task<string> GetPrimaryContents() => Task.FromResult(primaryHtml);
 
-            public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+            public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
             {
                 RequestCounts[uri.AbsoluteUri] = RequestCounts.GetValueOrDefault(uri.AbsoluteUri) + 1;
 
@@ -127,7 +127,7 @@ namespace PeachPDF.Tests.Integration
         public async Task TwoImgTags_SameNetworkUrl_FetchesResourceOnlyOnce()
         {
             var pngBytes = RasterPngFixture.MakeInterlacedPngBytes(20, 20, 128, 64, 200, interlace: false);
-            var loader = new CountingNetworkLoader(new RUri("https://example.test/page.html"), """
+            var loader = new CountingNetworkLoader(new Uri("https://example.test/page.html"), """
                 <!DOCTYPE html><html><body>
                 <p><img src="https://example.test/pic.png" width="160" height="160"></p>
                 <p><img src="https://example.test/pic.png" width="160" height="160"></p>

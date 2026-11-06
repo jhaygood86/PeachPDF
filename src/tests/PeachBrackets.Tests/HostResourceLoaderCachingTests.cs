@@ -104,7 +104,7 @@ public class HostResourceLoaderCachingTests
 
     private static async Task<byte[]> LoadAsync(string url)
     {
-        using var response = (await HostResourceLoader.LoadAsync(new RUri(url), allowNetwork: true))?.ResourceStream;
+        using var response = (await HostResourceLoader.LoadAsync(new Uri(url), allowNetwork: true))?.ResourceStream;
         Assert.NotNull(response);
         using var copy = new MemoryStream();
         await response!.CopyToAsync(copy, TestContext.Current.CancellationToken);
@@ -128,7 +128,7 @@ public class HostResourceLoaderCachingTests
     {
         var body = Encoding.UTF8.GetBytes(new string('p', 3000));
         using var server = new TinyServer(() => Chunked(body));
-        var addresses = new[] { server.Url("/a"), server.Url("/b"), server.Url("/a"), server.Url("/c") }.Select(a => new RUri(a)).ToList();
+        var addresses = new[] { server.Url("/a"), server.Url("/b"), server.Url("/a"), server.Url("/c") }.Select(a => new Uri(a)).ToList();
 
         await HostResourceLoader.PrefetchAsync(addresses, allowNetwork: true, concurrency: 2);
 
@@ -142,8 +142,8 @@ public class HostResourceLoaderCachingTests
     {
         using var server = new TinyServer(() => Chunked([1, 2, 3]));
 
-        await HostResourceLoader.PrefetchAsync([new RUri(server.Url("/a"))], allowNetwork: false);
-        await HostResourceLoader.PrefetchAsync([new RUri("data:text/plain,hi"), new RUri("file:///nowhere")], allowNetwork: true);
+        await HostResourceLoader.PrefetchAsync([new Uri(server.Url("/a"))], allowNetwork: false);
+        await HostResourceLoader.PrefetchAsync([new Uri("data:text/plain,hi"), new Uri("file:///nowhere")], allowNetwork: true);
 
         Assert.Equal(0, server.Requests);
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await HostResourceLoader.PrefetchAsync([], true, 0));
@@ -153,7 +153,7 @@ public class HostResourceLoaderCachingTests
     public async Task APrefetchOfAnAddressThatFails_IsNotAnError()
     {
 
-        await HostResourceLoader.PrefetchAsync([new RUri("http://127.0.0.1:1/unreachable")], allowNetwork: true);
+        await HostResourceLoader.PrefetchAsync([new Uri("http://127.0.0.1:1/unreachable")], allowNetwork: true);
     }
 
     [Fact]

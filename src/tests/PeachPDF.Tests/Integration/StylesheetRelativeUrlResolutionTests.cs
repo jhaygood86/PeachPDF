@@ -12,14 +12,14 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Regression tests for relative <c>url()</c> resolution inside fetched (non-inline) stylesheets —
     /// both a directly linked stylesheet and one reached via <c>@import</c>. Before this fix,
-    /// <c>RenderContext.AddFontFamilyFromUrl</c> constructed a bare <c>new RUri(url)</c> from a relative
+    /// <c>RenderContext.AddFontFamilyFromUrl</c> constructed a bare <c>new Uri(url)</c> from a relative
     /// <c>@font-face src</c> with no base at all, which throws <see cref="UriFormatException"/> and
     /// crashes the whole render — the exact scenario a real page (css4.pub's Icelandic dictionary,
     /// whose custom fonts are declared inside an <c>@import</c>ed stylesheet) hits in practice.
     /// </summary>
     public class StylesheetRelativeUrlResolutionTests
     {
-        private static readonly RUri DocumentUri = new("https://example.test/docs/page.html");
+        private static readonly Uri DocumentUri = new("https://example.test/docs/page.html");
 
         [Fact]
         public async Task FontFaceInLinkedStylesheet_RelativeUrl_ResolvesAgainstStylesheetLocation()

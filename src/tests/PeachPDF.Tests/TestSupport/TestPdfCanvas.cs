@@ -28,7 +28,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal class TestPdfCanvas : RenderContext
     {
-        public override RUri? BaseUri => null;
+        public override Uri? BaseUri => null;
 
         public override string GetCssMediaType(IEnumerable<string> mediaTypesAvailable) => "print";
 
@@ -36,7 +36,7 @@ namespace PeachPDF.Tests.TestSupport
         // need a replaced element (img/svg) to actually resolve an Image can use one; every other
         // scheme still resolves to null, preserving the existing "no real network access" behavior
         // other tests rely on.
-        public override ValueTask<RNetworkResponse?> GetResourceStream(RUri uri) =>
+        public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) =>
             new ValueTask<RNetworkResponse?>(uri.Scheme == "data" ? new RNetworkResponse(new MemoryStream([0]), null) : null);
 
         protected override PaintColor GetColorInt(string colorName) => PaintColor.Black;

@@ -1,5 +1,3 @@
-#if !NET40 && !SL50
-
 namespace PeachBrackets.Css
 {
     internal static class PortableExtensions
@@ -10,5 +8,3 @@ namespace PeachBrackets.Css
         }
     }
 }
-
-#endif

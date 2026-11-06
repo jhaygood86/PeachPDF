@@ -84,7 +84,7 @@ public partial class HostUserAgentTests
         HostResourceLoader.CacheLifetime = TimeSpan.Zero;
         try
         {
-            using var response = (await HostResourceLoader.LoadAsync(new RUri($"http://127.0.0.1:{port}/page"), allowNetwork: true))?.ResourceStream;
+            using var response = (await HostResourceLoader.LoadAsync(new Uri($"http://127.0.0.1:{port}/page"), allowNetwork: true))?.ResourceStream;
             Assert.NotNull(response);
         }
         finally

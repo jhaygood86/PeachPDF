@@ -199,20 +199,14 @@ namespace PeachBrackets.Html.Dom
             var colLineNames = BuildLineNames(colTemplate);
             var rowLineNames = BuildLineNames(rowTemplate);
 
-            // A ref struct (PooledTokenList) local can't live in an async method's own body under this
-            // project's net8.0 C# 12 language version (CS9202 - relaxed only in C# 13+), so the pooled
-            // tokenization is isolated in this local function, which compiles as its own ordinary method
-            // rather than becoming part of the async state machine.
-            static GridAreas ParseAreas(string gridTemplateAreas)
+            GridAreas? areas = null;
+            if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None))
             {
-                using var pooledTokens = CssValueParser.GetCssTokensPooled(gridTemplateAreas);
+                // Scoped to this block: the pooled ref-struct token list must not live across an await.
+                using var pooledTokens = CssValueParser.GetCssTokensPooled(_gridBox.GridTemplateAreas);
                 List<Token> tokens = pooledTokens;
-                return GridTemplateAreasGrammar.TryParse(tokens);
+                areas = GridTemplateAreasGrammar.TryParse(tokens);
             }
-
-            var areas = string.IsNullOrEmpty(_gridBox.GridTemplateAreas) || _gridBox.GridTemplateAreas.Isi(Keywords.None)
-                ? null
-                : ParseAreas(_gridBox.GridTemplateAreas);
             if (areas is not null)
             {
                 foreach (var (name, b) in areas.Areas)

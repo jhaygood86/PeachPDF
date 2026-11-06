@@ -1912,16 +1912,12 @@ namespace PeachBrackets.Html
 
         /// <summary>
         /// Looks a class token up in an index keyed with <see cref="StringComparer.OrdinalIgnoreCase"/> without making a string
-        /// of it, where the runtime can (a span alternate lookup from .NET 9).
+        /// of it (a span alternate lookup).
         /// </summary>
         private static bool TryGetByToken<T>(Dictionary<string, List<T>> index, ReadOnlySpan<char> token,
             [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out List<T>? rules)
         {
-#if NET9_0_OR_GREATER
             return index.GetAlternateLookup<ReadOnlySpan<char>>().TryGetValue(token, out rules);
-#else
-            return index.TryGetValue(token.ToString(), out rules);
-#endif
         }
 
         private static bool DoesSelectorMatch(IdSelector idSelector, ICssDomNode? node)

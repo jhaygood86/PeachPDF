@@ -77,7 +77,7 @@ namespace PeachPDF.Tests.Network
             try
             {
                 var loader = new FileUriNetworkLoader();
-                var response = await loader.GetResourceStream(new RUri(new Uri(path)));
+                var response = await loader.GetResourceStream(new Uri(path));
 
                 Assert.NotNull(response);
                 Assert.NotNull(response!.ResourceStream);
@@ -107,7 +107,7 @@ namespace PeachPDF.Tests.Network
                 using (new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None))
                 {
                     var loader = new FileUriNetworkLoader();
-                    var response = await loader.GetResourceStream(new RUri(new Uri(path)));
+                    var response = await loader.GetResourceStream(new Uri(path));
 
                     Assert.Null(response);
                 }
@@ -124,7 +124,7 @@ namespace PeachPDF.Tests.Network
             var path = Path.Combine(Path.GetTempPath(), "peachpdf-does-not-exist-" + Guid.NewGuid().ToString("N") + ".png");
 
             var loader = new FileUriNetworkLoader();
-            var response = await loader.GetResourceStream(new RUri(new Uri(path)));
+            var response = await loader.GetResourceStream(new Uri(path));
 
             Assert.Null(response);
         }
@@ -135,7 +135,7 @@ namespace PeachPDF.Tests.Network
             var dir = EnsureTrailingSeparator(Path.GetTempPath());
 
             var loader = new FileUriNetworkLoader();
-            var response = await loader.GetResourceStream(new RUri(new Uri(dir)));
+            var response = await loader.GetResourceStream(new Uri(dir));
 
             Assert.Null(response);
         }
@@ -145,7 +145,7 @@ namespace PeachPDF.Tests.Network
         {
             var loader = new FileUriNetworkLoader();
 
-            var response = await loader.GetResourceStream(new RUri("https://example.com/photo.png"));
+            var response = await loader.GetResourceStream(new Uri("https://example.com/photo.png"));
 
             Assert.Null(response);
         }
@@ -155,7 +155,7 @@ namespace PeachPDF.Tests.Network
         {
             var loader = new FileUriNetworkLoader();
 
-            var response = await loader.GetResourceStream(new RUri("photo.png", UriKind.Relative));
+            var response = await loader.GetResourceStream(new Uri("photo.png", UriKind.Relative));
 
             Assert.Null(response);
         }

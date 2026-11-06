@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 	<Import Project="..\..\Version.props" />
 	<PropertyGroup>
-		<!-- Apple-only (AppKit on macOS, UIKit on iOS). The repo-wide net8.0 target is dropped on purpose, as for PeachDrawing.CoreGraphics. -->
+		<!-- Apple-only (AppKit on macOS, UIKit on iOS). -->
 		<TargetFrameworks>net10.0-macos;net10.0-ios</TargetFrameworks>
 		<TargetFrameworks Condition="'$(ResolvedNETCoreSdkVersionLooksVersioned)' == 'true' AND $([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0-macos;net11.0-ios</TargetFrameworks>
 		<!-- The oldest systems the view works on: the colour picker, the document picker and uniform types need iOS 14, the sheet detents iOS 15; macOS 11 has uniform types. The iOS 16 edit menu is used only where it exists. -->

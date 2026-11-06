@@ -124,14 +124,6 @@ jobs:
           }
         }
 
-    - name: Test (net8.0)
-      if: matrix.suite == 'main'
-      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename test-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net8.0 --results-directory coverage
-
-    - name: Test HTML engine (net8.0)
-      if: matrix.suite == 'main'
-      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename engine-tests-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net8.0 --results-directory coverage
-
     - name: Test (net10.0)
       if: matrix.suite == 'main'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename test-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net10.0 --results-directory coverage
@@ -157,10 +149,6 @@ jobs:
     - name: Test engine (net10.0)
       if: matrix.suite == 'engine'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename engine-test-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-test-results-net10.0 --results-directory coverage
-
-    - name: Test engine (net8.0)
-      if: matrix.suite == 'engine' && runner.os == 'Linux'
-      run: dotnet test --project ${{ github.workspace }}/src/tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --no-build --configuration Release --framework net8.0 --report-trx --report-trx-filename engine-test-results-net8.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-test-results-net8.0 --results-directory coverage
 
     - name: Test engine (net11.0)
       if: matrix.suite == 'engine' && runner.os == 'Linux'

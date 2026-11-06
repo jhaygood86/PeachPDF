@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- Single-TFM net8.0 - this project only exercises the generator's own logic (JSON reader,
+  <!-- Single-TFM net10.0 - this project only exercises the generator's own logic (JSON reader,
        model parser, IIncrementalGenerator pipeline via CSharpGeneratorDriver), never PeachPDF's
        AOT/WASM-relevant surface, so there's nothing net10.0-specific worth double-running for. -->
   <PropertyGroup>
     <TargetFrameworks></TargetFrameworks>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>

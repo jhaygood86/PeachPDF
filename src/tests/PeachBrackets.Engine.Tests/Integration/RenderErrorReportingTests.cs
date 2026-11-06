@@ -57,11 +57,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             internal const string Marker = "fetch blew up";
 
-            public override RUri? BaseUri => new("https://example.test/index.html");
+            public override Uri? BaseUri => new("https://example.test/index.html");
 
             public override Task<string> GetPrimaryContents() => Task.FromResult(primaryHtml);
 
-            public override Task<RNetworkResponse?> GetResourceStream(RUri uri) =>
+            public override Task<RNetworkResponse?> GetResourceStream(Uri uri) =>
                 throw new InvalidOperationException(Marker);
         }
 
@@ -161,7 +161,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task AMissingStylesheet_StillRendersTheDocument()
         {
-            var loader = new InMemoryNetworkLoader(new RUri("https://example.test/index.html"),
+            var loader = new InMemoryNetworkLoader(new Uri("https://example.test/index.html"),
                 """<!DOCTYPE html><html><head><link rel="stylesheet" href="site.css"></head><body>x</body></html>""");
 
             var document = await new PdfGenerator().GeneratePdf(null, new PdfGenerateConfig { NetworkLoader = loader, PageSize = PageSize.A4 });

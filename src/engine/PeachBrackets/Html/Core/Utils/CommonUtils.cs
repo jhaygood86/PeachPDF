@@ -388,17 +388,17 @@ namespace PeachBrackets.Html.Utils
         /// <param name="htmlContainer">the container whose document base and adapter to resolve against</param>
         /// <param name="src">the (possibly relative) reference to resolve</param>
         /// <param name="overrideBaseUri">a base URI that takes precedence over the document's own base, if any</param>
-        public static RUri? ResolveAgainstDocumentBase(HtmlContainerInt htmlContainer, string src, RUri? overrideBaseUri = null)
+        public static Uri? ResolveAgainstDocumentBase(HtmlContainerInt htmlContainer, string src, Uri? overrideBaseUri = null)
         {
             var baseUri = overrideBaseUri ?? htmlContainer.DocumentBaseUri;
 
             try
             {
                 // Deliberately not pre-filtered with Uri.IsWellFormedUriString: it applies stricter
-                // generic-syntax rules than Uri's own parser and rejects some URIs Uri/RUri parse
+                // generic-syntax rules than Uri's own parser and rejects some URIs Uri/Uri parse
                 // correctly (e.g. certain percent-encoded `data:` URIs). new Uri(base, src) resolves an
                 // absolute src as-is, so this handles absolute and relative references uniformly.
-                return baseUri is null ? new RUri(src, UriKind.RelativeOrAbsolute) : new RUri(baseUri, src);
+                return baseUri is null ? new Uri(src, UriKind.RelativeOrAbsolute) : new Uri(baseUri, src);
             }
             catch (UriFormatException)
             {

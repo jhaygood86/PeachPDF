@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <TargetFrameworks>net8.0;net10.0</TargetFrameworks>
+    <TargetFrameworks>net10.0</TargetFrameworks>
     <Nullable>enable</Nullable>
     <!-- net11.0 is opt-in based on the resolved SDK, not unconditional: global.json pins the
          floor at a stable .NET 10 SDK with rollForward "latestMajor" and allowPrerelease true,
@@ -22,7 +22,7 @@
          condition), which blocked VS2026 from loading the project at all (issue #1130). The
          regex guard below only invokes VersionGreaterThanOrEquals when the resolved segment
          actually looks like a version, so an unrecognized host value (this one, or a future
-         one from some other IDE/MSBuild) just leaves TargetFrameworks at the net8.0;net10.0
+         one from some other IDE/MSBuild) just leaves TargetFrameworks at the net10.0
          default instead of crashing. -->
     <NormalizedSdkPath>$(MSBuildExtensionsPath.TrimEnd('\').TrimEnd('/'))</NormalizedSdkPath>
     <ResolvedNETCoreSdkVersion>$([System.IO.Path]::GetFileName($(NormalizedSdkPath)))</ResolvedNETCoreSdkVersion>

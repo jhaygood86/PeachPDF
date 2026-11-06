@@ -18,9 +18,9 @@ public class CliNetworkLoaderTests
         try
         {
             File.WriteAllText(path, "body { color: red; }");
-            var loader = new CliNetworkLoader(new RUri(new Uri(path)), httpClient: null);
+            var loader = new CliNetworkLoader(new Uri(path), httpClient: null);
 
-            var response = await loader.GetResourceStream(new RUri(new Uri(path)));
+            var response = await loader.GetResourceStream(new Uri(path));
 
             Assert.Null(response);
         }
@@ -34,7 +34,7 @@ public class CliNetworkLoaderTests
     public async Task HttpResource_NullWhenNetworkDisabled()
     {
         var loader = new CliNetworkLoader(baseUri: null, httpClient: null);
-        var response = await loader.GetResourceStream(new RUri(new Uri("https://example.com/style.css")));
+        var response = await loader.GetResourceStream(new Uri("https://example.com/style.css"));
         Assert.Null(response);
     }
 
@@ -43,14 +43,14 @@ public class CliNetworkLoaderTests
     {
         // data: URIs are resolved by the adapter itself, so the loader returns null for them.
         var loader = new CliNetworkLoader(baseUri: null, httpClient: null);
-        var response = await loader.GetResourceStream(new RUri("data:text/css,body{}"));
+        var response = await loader.GetResourceStream(new Uri("data:text/css,body{}"));
         Assert.Null(response);
     }
 
     [Fact]
     public void BaseUri_ReflectsProvidedValue()
     {
-        var baseUri = new RUri(new Uri("https://example.com/docs/"));
+        var baseUri = new Uri("https://example.com/docs/");
         var loader = new CliNetworkLoader(baseUri, httpClient: null);
         Assert.Equal("https://example.com/docs/", loader.BaseUri!.AbsoluteUri);
     }

@@ -1,3 +1,4 @@
+using System;
 #nullable enable
 
 using PeachDrawing.Core;
@@ -114,13 +115,13 @@ namespace PeachPDF.Rendering
         // implicit "load relative paths from disk" behavior now that it flows through FileUriNetworkLoader.
         // With local file access denied there is nothing to resolve them against, so this reports null and
         // relative references stay relative (see GetResourceStream's guard).
-        public override RUri? BaseUri =>
+        public override Uri? BaseUri =>
             NetworkLoader.BaseUri ?? (AllowLocalFileAccess ? InternalFileLoader.BaseUri : null);
 
-        public override async ValueTask<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override async ValueTask<RNetworkResponse?> GetResourceStream(Uri uri)
         {
             // BaseUri is normally never null, so every reference resolves to an absolute URI and loaders have
-            // only ever been handed those - RUri.Scheme throws on a relative URI, and neither
+            // only ever been handed those - Uri.Scheme throws on a relative URI, and neither
             // DataUriNetworkLoader nor HttpClientNetworkLoader checks. Denying local file access is what makes
             // BaseUri nullable, so a relative reference can now survive resolution; answer "unresolved" for it
             // here rather than handing a loader a URI it cannot inspect.

@@ -22,7 +22,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
             var container = new HtmlContainerInt(new HtmlRenderContext
             {
                 PixelsPerPoint = 1.0,
-                NetworkLoader = new InMemoryNetworkLoader(new RUri("https://t.test/"), string.Empty)
+                NetworkLoader = new InMemoryNetworkLoader(new Uri("https://t.test/"), string.Empty)
             });
             await container.SetHtml(html, null);
             return container;

@@ -14,9 +14,9 @@ namespace PeachPDF.Cli;
 /// is enforced. The document's base URL comes from <see cref="BaseUri"/> (from <c>--baseurl</c> or the
 /// input's own location).
 /// </summary>
-internal sealed class CliNetworkLoader(RUri? baseUri, HttpClient? httpClient) : RNetworkLoader
+internal sealed class CliNetworkLoader(Uri? baseUri, HttpClient? httpClient) : RNetworkLoader
 {
-    public override RUri? BaseUri => baseUri;
+    public override Uri? BaseUri => baseUri;
 
     /// <summary>
     /// Not supported: the CLI reads the root document itself (from a file, a URL, or stdin) and passes it
@@ -25,7 +25,7 @@ internal sealed class CliNetworkLoader(RUri? baseUri, HttpClient? httpClient) : 
     public override Task<string> GetPrimaryContents() =>
         throw new NotSupportedException("The CLI supplies the root document directly.");
 
-    public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+    public override async Task<RNetworkResponse?> GetResourceStream(Uri uri)
     {
         if (uri.IsAbsoluteUri && uri.Scheme is "http" or "https")
         {
@@ -36,7 +36,7 @@ internal sealed class CliNetworkLoader(RUri? baseUri, HttpClient? httpClient) : 
 
             try
             {
-                var response = await httpClient.GetAsync(uri.Uri);
+                var response = await httpClient.GetAsync(uri);
                 if (!response.IsSuccessStatusCode)
                 {
                     return null;

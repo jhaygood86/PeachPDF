@@ -62,7 +62,7 @@ internal sealed class ZipFileNetworkLoader : RNetworkLoader
     /// <c>index.html</c> nested inside a folder still resolves its siblings correctly, and a
     /// <c>&lt;base href&gt;</c> in the document composes with it as it would anywhere else.
     /// </summary>
-    public override RUri? BaseUri => new(_baseUri);
+    public override Uri? BaseUri => new(_baseUri);
 
     /// <summary>
     /// Percent-encodes each segment of an entry path so it can be interpolated into a URI.
@@ -152,22 +152,22 @@ internal sealed class ZipFileNetworkLoader : RNetworkLoader
     }
 
     /// <inheritdoc/>
-    public override async Task<RNetworkResponse?> GetResourceStream(RUri uri)
+    public override async Task<RNetworkResponse?> GetResourceStream(Uri uri)
     {
         // Yields to the browser's event loop. Blazor WebAssembly is single-threaded, so this is one of the
         // few points during a render where the page can actually repaint.
         await Task.Yield();
 
         if (!uri.IsAbsoluteUri
-            || !string.Equals(uri.Uri.Scheme, SyntheticScheme, StringComparison.OrdinalIgnoreCase)
-            || !string.Equals(uri.Uri.Host, SyntheticHost, StringComparison.OrdinalIgnoreCase))
+            || !string.Equals(uri.Scheme, SyntheticScheme, StringComparison.OrdinalIgnoreCase)
+            || !string.Equals(uri.Host, SyntheticHost, StringComparison.OrdinalIgnoreCase))
         {
             // Anything not inside this archive - including a real http(s) URL the document happens to
             // reference - is simply unresolvable. That is what makes "no network access" structural.
             return null;
         }
 
-        var key = NormalizePath(Uri.UnescapeDataString(uri.Uri.AbsolutePath));
+        var key = NormalizePath(Uri.UnescapeDataString(uri.AbsolutePath));
 
         if (!_entries.TryGetValue(key, out var bytes) && !_entriesIgnoringCase.TryGetValue(key, out bytes))
         {

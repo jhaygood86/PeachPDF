@@ -12,11 +12,11 @@ namespace PeachPDF.Tests.TestSupport
     /// to verify relative-URL resolution across multiple fetched documents (nested stylesheets, @font-face
     /// inside an @import, etc.) without touching the network or the file system.
     /// </summary>
-    internal sealed class InMemoryNetworkLoader(RUri baseUri, string primaryHtml) : RNetworkLoader
+    internal sealed class InMemoryNetworkLoader(Uri baseUri, string primaryHtml) : RNetworkLoader
     {
         private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = new();
 
-        public override RUri? BaseUri { get; } = baseUri;
+        public override Uri? BaseUri { get; } = baseUri;
 
         public void AddResource(string absoluteUrl, byte[] bytes, string contentType) =>
             _resources[absoluteUrl] = (bytes, contentType);
@@ -26,7 +26,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public override Task<string> GetPrimaryContents() => Task.FromResult(primaryHtml);
 
-        public override Task<RNetworkResponse?> GetResourceStream(RUri uri)
+        public override Task<RNetworkResponse?> GetResourceStream(Uri uri)
         {
             if (_resources.TryGetValue(uri.AbsoluteUri, out var resource))
             {

@@ -5,7 +5,7 @@ namespace PeachPDF.Tests.Integration
     /// <summary>
     /// Defines an xUnit collection for tests that depend on the process's current working directory (CWD).
     /// Tests in this collection are serialized (never run in parallel) to prevent race conditions when
-    /// multiple target frameworks (e.g., net8.0 and net10.0) execute concurrently and both manipulate
+    /// multiple target frameworks (e.g., net10.0 and net11.0) execute concurrently and both manipulate
     /// directories under the shared CWD.
     /// </summary>
     [CollectionDefinition("CWD-Dependent")]
