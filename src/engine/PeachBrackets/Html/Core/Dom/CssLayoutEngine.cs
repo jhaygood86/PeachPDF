@@ -3627,6 +3627,7 @@ namespace PeachBrackets.Html.Dom
         private static void ClearBox(CssBox box, int currentBoxIdx, CssBox containingBox)
         {
             var clearance = Math.Max(containingBox.ClientTop, box.Location.Y);
+            var floor = clearance;
 
             // The lowest float edge the box clears, apart from the containing block's own content top that
             // `clearance` is seeded with: only a float's edge is clearance (§9.5.2).
@@ -3638,7 +3639,7 @@ namespace PeachBrackets.Html.Dom
 
                 var clears = box.EffectiveClear;
 
-                var nestedClearance = GetClearance(siblingBox, clears);
+                var nestedClearance = GetClearance(siblingBox, clears, siblingBox.RelativeOffsetY);
                 if (nestedClearance > 0) floatEdge = Math.Max(floatEdge, nestedClearance);
                 clearance = Math.Max(clearance, nestedClearance);
 
@@ -3667,18 +3668,29 @@ namespace PeachBrackets.Html.Dom
             // collapsed through although no float had cleared it.
             box.HasClearance = floatEdge > box.Location.Y + 0.01;
 
+            // A float's margin box, not its border box, goes below the floats it clears (§9.5.1 rules 1-3 keep the outer edges of floats from
+            // overlapping), so its own margin-top sits between the lowest float's bottom outer edge and its border box, and a negative one
+            // reaches back above it. The §9.5.2 rule that puts the top BORDER edge at that bottom outer edge is for a block-level box.
+            if (box.IsFloated && !double.IsNegativeInfinity(floatEdge)) clearance = Math.Max(floor, floatEdge + box.ActualMarginTop);
+
             box.Location = new PaintPoint(box.ClientLeft, clearance);
         }
 
-        private static double GetClearance(CssBox box, ClearMode clearPropValue)
+        /// <param name="box">The box whose descendants' floats are looked for.</param>
+        /// <param name="clearPropValue">The <c>clear</c> value of the box that is clearing, which says which sides' floats count.</param>
+        /// <param name="offsetY">How far <paramref name="box"/> and the boxes above it, down from the sibling the clearing box looks into, have been
+        /// moved by relative positioning; a float's static bottom is its bottom less those and its own (CSS 2.1 §9.4.3).</param>
+        private static double GetClearance(CssBox box, ClearMode clearPropValue, double offsetY)
         {
             var clearance = 0d;
 
             foreach (var childBox in box.Boxes)
             {
+                var childOffsetY = offsetY + childBox.RelativeOffsetY;
+
                 foreach (var childChildBox in childBox.Boxes)
                 {
-                    clearance = Math.Max(clearance, GetClearance(childChildBox, clearPropValue));
+                    clearance = Math.Max(clearance, GetClearance(childChildBox, clearPropValue, childOffsetY + childChildBox.RelativeOffsetY));
                 }
 
                 if (!childBox.IsFloated)
@@ -3698,7 +3710,7 @@ namespace PeachBrackets.Html.Dom
 
                 // Bottom outer (margin) edge at the static position, same as ClearBox above
                 // (CSS 2.1 §9.5.2 / §9.4.3).
-                clearance = Math.Max(clearance, childBox.StaticBottom + childBox.ActualMarginBottom);
+                clearance = Math.Max(clearance, childBox.ActualBottom - childOffsetY + childBox.ActualMarginBottom);
             }
 
             return clearance;
@@ -3746,10 +3758,10 @@ namespace PeachBrackets.Html.Dom
                 switch (intersectingFloat.EffectiveFloatSide)
                 {
                     case Floating.Left:
-                        coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight + box.ActualMarginLeft;
+                        coordinates.Left = intersectingFloat.ActualRight - coordinates.BlockerOffsetX + intersectingFloat.ActualMarginRight + box.ActualMarginLeft;
                         break;
                     case Floating.Right:
-                        coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft;
+                        coordinates.Right = intersectingFloat.Location.X - coordinates.BlockerOffsetX - intersectingFloat.ActualMarginLeft;
                         // The blocker was found by its margin box reaching into this float's, so the float's margin-right has to
                         // clear it as well. Without this the float would be judged to fit once and sent down only when the same
                         // state is found again.
@@ -3757,13 +3769,15 @@ namespace PeachBrackets.Html.Dom
                         break;
                 }
 
-                if (intersectingFloat.ActualBottom > coordinates.MaxBottom)
+                // The blocker's static bottom, as a relative offset is visual only (CSS 2.1 §9.4.3).
+                var blockerStaticBottom = intersectingFloat.ActualBottom - coordinates.BlockerOffsetY;
+                if (blockerStaticBottom > coordinates.MaxBottom)
                 {
-                    coordinates.MaxBottom = intersectingFloat.ActualBottom;
+                    coordinates.MaxBottom = blockerStaticBottom;
                 }
 
-                if (coordinates.Left + box.ActualWidth + rightMargin > coordinates.Right
-                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
+                if (coordinates.Left + box.ActualWidth + rightMargin > coordinates.Right + DomUtils.FloatFitTolerance
+                    ||!triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
@@ -3828,17 +3842,18 @@ namespace PeachBrackets.Html.Dom
                 // Same backstop as FloatBoxLeft.
                 if (++attempts > MaxFloatPlacementAttempts) break;
 
-                switch (intersectingFloat.EffectiveFloatSide)
+                // A blocker that is not a float is an inline-level box on the line, which sits at its start (the left, here).
+                switch (intersectingFloat.IsFloated ? intersectingFloat.EffectiveFloatSide : Floating.Left)
                 {
                     case Floating.Left:
-                        coordinates.Left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
+                        coordinates.Left = DomUtils.BlockerRight(intersectingFloat) - coordinates.BlockerOffsetX + intersectingFloat.ActualMarginRight;
                         break;
                     case Floating.Right:
                         // The margin edges meet: this float's border box ends its own margin-right short of
                         // the blocker's margin box. A negative margin-right puts that edge inside the border
                         // box, so the border box ends that far past the blocker; otherwise the same blocker is
                         // found again and the loop never ends.
-                        coordinates.Right = intersectingFloat.Location.X - intersectingFloat.ActualMarginLeft
+                        coordinates.Right = intersectingFloat.Location.X - coordinates.BlockerOffsetX - intersectingFloat.ActualMarginLeft
                                             - box.ActualMarginRight;
                         break;
                 }
@@ -3847,15 +3862,15 @@ namespace PeachBrackets.Html.Dom
                 // possible, which is the margin edge, not the border edge). Never above its border box, though: that is
                 // the edge the conflict test reads, so a negative margin-bottom would put the drop back inside the
                 // blocker and the same blocker would be found again.
-                var blockerBottom = Math.Max(intersectingFloat.ActualBottom,
-                    intersectingFloat.ActualBottom + intersectingFloat.ActualMarginBottom);
+                var blockerStaticBottom = DomUtils.BlockerBottom(intersectingFloat) - coordinates.BlockerOffsetY;
+                var blockerBottom = Math.Max(blockerStaticBottom, blockerStaticBottom + intersectingFloat.ActualMarginBottom);
                 if (blockerBottom > coordinates.MaxBottom)
                 {
                     coordinates.MaxBottom = blockerBottom;
                 }
 
-                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft
-                    || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
+                if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft + DomUtils.FloatFitTolerance
+                    ||!triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
@@ -4302,10 +4317,16 @@ namespace PeachBrackets.Html.Dom
                 coordinates.CurrentX = startX + contentWidth;
             }
 
-            if (coordinates.WordOrdinal != startOrdinal) return;
-
             var leadingSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
             var trailingSpacing = box.ActualBorderRightWidth + box.ActualPaddingRight;
+
+            if (DomUtils.IsInlineLevelFormattingContext(box))
+            {
+                coordinates.Line.AtomicInlineRight = Math.Max(coordinates.Line.AtomicInlineRight,
+                    startX + Math.Max(usedContentWidth, contentWidth) + trailingSpacing + box.ActualMarginRight);
+            }
+
+            if (coordinates.WordOrdinal != startOrdinal) return;
 
             coordinates.Line.Rectangles[box] = new Rect(
                 startX - leadingSpacing,
@@ -4931,9 +4952,10 @@ namespace PeachBrackets.Html.Dom
             // A line that cannot wrap (white-space: nowrap or pre) stays one line, as in a browser: it may be wider
             // than the column, and moving it or opening a line after it draws its words twice or on top of each other.
             if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
-                && FloatOverlapsLineWords(b, coordinates.Line))
+                && (FloatOverlapsLineWords(b, coordinates.Line) || FloatOverlapsLineBox(b, coordinates.Line)))
             {
-                if (ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
+                // A box already placed on the line cannot be moved beside the float as its words can, so a right float over one goes below.
+                if (!FloatOverlapsLineBox(b, coordinates.Line) && ShiftLineBesideFloat(blockBox, b, coordinates) is { } shift)
                 {
                     foreach (var word in coordinates.Line.Words)
                     {
@@ -4973,6 +4995,15 @@ namespace PeachBrackets.Html.Dom
 
             (coordinates.InlineFloats ??= []).Add(b);
         }
+
+        /// <summary>
+        /// Whether the right float <paramref name="floated"/>, placed at the top of <paramref name="line"/>, overlaps an inline-block (or
+        /// inline-flex, -grid, -table) already on it. Such a box is placed with its own content, which the words' shift beside a float does not
+        /// move, so a float over one goes below the line, as it does when the box does not fit beside it. A left float is left as it was.
+        /// </summary>
+        private static bool FloatOverlapsLineBox(CssBox floated, CssLineBox line) =>
+            floated.EffectiveFloatSide == Floating.Right
+            && line.AtomicInlineRight > floated.Location.X - floated.ActualMarginLeft + DomUtils.FloatFitTolerance;
 
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {

@@ -1,0 +1,69 @@
+using PeachBrackets.Html.Dom;
+using PeachPDF.Tests.TestSupport;
+
+namespace PeachBrackets.Engine.Tests.Integration;
+
+/// <summary>
+/// A float that clears earlier floats goes below their bottom outer edges by its own outer edge: its margin-top sits between the two, so
+/// two floats with `margin: 6pt 0` and `clear: both` are 12pt apart, not 6pt (CSS 2.1 §9.5.1 rules 1-3 keep the outer edges of floats from
+/// overlapping). The §9.5.2 rule that puts a block-level box's top border edge at the bottom outer edge is not for floats.
+/// </summary>
+public class FloatClearanceMarginTests
+{
+    private const string Chat = "float:{0};width:300pt;height:30pt;padding:6pt 9pt;margin:6pt 0;clear:both";
+
+    private static async Task<(CssBox C, CssBox A, CssBox B, CssBox D)> LayoutAsync(string a, string b, string d)
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:750pt'>" +
+            $"<div id='a' style='{string.Format(Chat, a)}'></div><div id='b' style='{string.Format(Chat, b)}'></div>" +
+            $"<div id='d' style='{string.Format(Chat, d)}'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        return (LayoutHarness.FindById(root, "c")!, LayoutHarness.FindById(root, "a")!, LayoutHarness.FindById(root, "b")!, LayoutHarness.FindById(root, "d")!);
+    }
+
+    // The 42pt tall boxes (30pt and 12pt of padding) start at 6, 60 and 114: each is 6pt of margin, 42pt of box and 6pt of margin below the
+    // one before it, and then its own 6pt of margin-top.
+    [Theory]
+    [InlineData("left", "left", "right")]
+    [InlineData("left", "right", "left")]
+    [InlineData("right", "right", "right")]
+    public async Task ClearedFloatsWithMargins_AreAFullMarginBoxApart(string a, string b, string d)
+    {
+        var (c, boxA, boxB, boxD) = await LayoutAsync(a, b, d);
+
+        Assert.Equal(c.Location.Y + 6, boxA.Location.Y, 1);
+        Assert.Equal(c.Location.Y + 60, boxB.Location.Y, 1);
+        Assert.Equal(c.Location.Y + 114, boxD.Location.Y, 1);
+    }
+
+    [Fact]
+    public async Task ClearedFloatWithANegativeMarginTop_ReachesBackAboveTheFloatItClears()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:750pt'><div id='a' style='float:left;width:300pt;height:30pt;margin:6pt 0 15pt'></div>" +
+            "<div id='b' style='float:left;width:300pt;height:30pt;margin:-4.5pt 0 3pt;clear:left'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var c = LayoutHarness.FindById(root, "c")!;
+
+        // `a` ends 51pt down with its margin; the margin box of `b` starts there, so its border box starts 4.5pt above.
+        Assert.Equal(c.Location.Y + 46.5, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+
+    // A cleared float is still never above the float it does not clear, and clearing one side leaves the other alone.
+    [Fact]
+    public async Task ClearRightOfAFloatOnTheLeft_ClearsNothingAndKeepsRuleFive()
+    {
+        var html = LayoutHarness.Wrap(
+            "<div id='c' style='width:750pt'><div id='a' style='float:left;width:300pt;height:30pt;margin:6pt 0'></div>" +
+            "<div id='b' style='float:right;width:150pt;height:30pt;margin:9pt 0;clear:right'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        var c = LayoutHarness.FindById(root, "c")!;
+
+        // Nothing on the right to clear, but the float's outer top (0pt) may not be above `a`'s (0pt): its border box is its margin-top down.
+        Assert.Equal(c.Location.Y + 9, LayoutHarness.FindById(root, "b")!.Location.Y, 1);
+    }
+}

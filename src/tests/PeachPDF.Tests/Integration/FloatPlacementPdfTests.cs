@@ -106,6 +106,107 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(r[Red].Y, r[Blue].Top, 1);
         }
 
+        // Widths that are rounded percentages of the container add up to it only to within a rounding error, whichever sides the floats are on.
+        [Theory]
+        [InlineData("right", "left", "66.6667%", "33.3333%")]
+        [InlineData("left", "left", "66.6667%", "33.3333%")]
+        [InlineData("right", "right", "66.6667%", "33.3333%")]
+        [InlineData("left", "right", "14.2857%", "85.7143%")]
+        public async Task FloatsWhoseWidthsAreRoundedPercentages_StayOnOneRow(string firstSide, string secondSide, string firstWidth, string secondWidth)
+        {
+            var r = await RenderAsync(
+                "<div style='width:525pt'>" + Float(firstSide, "#f00", $"width:{firstWidth};height:30pt") +
+                Float(secondSide, "#00f", $"width:{secondWidth};height:30pt") + "</div>");
+
+            Assert.Equal(r[Red].Top, r[Blue].Top, 1);
+        }
+
+        // An inline-block already on the line is content a right float may not overlap: one that does not fit beside it goes below the line.
+        [Theory]
+        [InlineData("")]
+        [InlineData("text")]
+        [InlineData("<p style='margin:0;height:60pt'>text</p>")]
+        public async Task RightFloatThatDoesNotFitBesideAnInlineBlock_GoesBelowTheLine(string content)
+        {
+            var height = content.StartsWith("<p", StringComparison.Ordinal) ? "" : "height:60pt;";
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='display:inline-block;vertical-align:top;width:225pt;" + height + "background:#0f0'>" + content + "</div>" +
+                Float("right", "#f00", "width:225pt;height:30pt") + Float("left", "#00f", "width:150pt;height:30pt") + "</div>");
+
+            Assert.Equal(r[Lime].Y, r[Red].Top, 1);
+            Assert.Equal(r[Lime].Y, r[Blue].Top, 1);
+        }
+
+        [Fact]
+        public async Task RightFloatThatFitsBesideAnInlineBlock_StaysOnTheLine()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='display:inline-block;vertical-align:top;width:225pt;height:60pt;background:#0f0'></div>" +
+                Float("right", "#f00", "width:150pt;height:30pt") + "</div>");
+
+            Assert.Equal(r[Lime].Top, r[Red].Top, 1);
+        }
+
+        // Relative positioning is visual only: the float in the offset box is drawn 3.75pt lower, and the floats after it are placed against
+        // where it is in the flow.
+        [Fact]
+        public async Task FloatsAfterARelativelyPositionedBoxOfFloats_AreAgainstTheirStaticPositions()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='width:225pt;position:relative;top:3.75pt;left:5pt'>" +
+                Float("right", "#0f0", "width:112.5pt;height:60pt") + Float("left", "#ff0", "width:75pt;height:15pt") + "<div style='clear:both'></div></div>" +
+                Float("left", "#f00", "width:150pt;height:30pt") + Float("left", "#00f", "width:187.5pt;height:15pt") + "</div>");
+
+            Assert.Equal(r[Lime].Y + 3.75, r[Red].Top, 1);
+            Assert.Equal(r[Red].Top, r[Blue].Top, 1);
+            Assert.Equal(r[Red].X + r[Red].W, r[Blue].X, 1);
+        }
+
+        [Fact]
+        public async Task ClearAfterAFloatInARelativelyPositionedBox_ClearsItsStaticBottom()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='width:225pt;position:relative;top:3.75pt'>" + Float("left", "#0f0", "width:75pt;height:45pt") + "</div>" +
+                Float("left", "#f00", "width:150pt;height:30pt", "clear:left") + "</div>");
+
+            Assert.Equal(r[Lime].Y + 3.75, r[Red].Top, 1);
+        }
+
+        [Fact]
+        public async Task LaterFloat_IsNotHeldBelowAnEarlierFloatByAnAncestorsRelativeOffset()
+        {
+            var r = await RenderAsync(
+                "<div style='width:375pt'><div style='width:150pt;position:relative;top:30pt'>" + Float("left", "#0f0", "width:75pt;height:10pt") + "</div>" +
+                Float("left", "#f00", "width:75pt;height:10pt") + "</div>");
+
+            Assert.Equal(r[Lime].Top + 30, r[Red].Top, 1);
+        }
+
+        // A float that clears an earlier one goes below its margin box by its own margin-top, so two floats with 6pt margins are 12pt apart.
+        [Theory]
+        [InlineData("left", "left", "right")]
+        [InlineData("right", "right", "left")]
+        public async Task ClearedFloatsWithMargins_AreAFullMarginBoxApart(string a, string b, string d)
+        {
+            const string style = "width:300pt;height:42pt;margin:6pt 0;clear:both";
+            var r = await RenderAsync(
+                "<div style='width:750pt'>" + Float(a, "#f00", style) + Float(b, "#00f", style) + Float(d, "#0f0", style) + "</div>");
+
+            Assert.Equal(12, r[Red].Y - r[Blue].Top, 1);
+            Assert.Equal(12, r[Blue].Y - r[Lime].Top, 1);
+        }
+
+        [Fact]
+        public async Task ClearedFloatWithANegativeMarginTop_ReachesBackAboveTheFloatItClears()
+        {
+            var r = await RenderAsync(
+                "<div style='width:750pt'>" + Float("left", "#f00", "width:300pt;height:30pt", "margin:6pt 0 15pt") +
+                Float("left", "#00f", "width:300pt;height:30pt", "margin:-4.5pt 0 3pt;clear:left") + "</div>");
+
+            // `#f00` ends with a 15pt margin below it; the margin box of the next starts there, and its border box 4.5pt above.
+            Assert.Equal(15 - 4.5, r[Red].Y - r[Blue].Top, 1);
+        }
+
         // Rule 5: the third float fits beside the first at the top, but may not start above the second, which the first pushed down.
         [Fact]
         public async Task ThirdLeftFloat_SitsBesideTheSecondNotBesideTheFirst()

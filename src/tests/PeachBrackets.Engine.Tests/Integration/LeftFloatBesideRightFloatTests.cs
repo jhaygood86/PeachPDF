@@ -119,6 +119,36 @@ public class LeftFloatBesideRightFloatTests
         Assert.Equal(LayoutHarness.FindById(root, "r")!.Location.Y, LayoutHarness.FindById(root, "l")!.Location.Y, 1);
     }
 
+    // Percentages that are not exact in binary (a third and two thirds, rounded to four decimals) add up to the container to within a
+    // rounding error that can go either way, whichever sides the two floats are on. The pairs on one side are the ones that reach the fit
+    // tests in FloatBoxLeft and FloatBoxRight (the first float is a blocker there, the second then only just fits); the pairs on opposite
+    // sides reach the blocker test.
+    [Theory]
+    [InlineData("right", "left", "66.6667%", "33.3333%", "700px")]
+    [InlineData("left", "right", "33.3333%", "66.6667%", "700px")]
+    [InlineData("right", "left", "33.3333%", "66.6667%", "700px")]
+    [InlineData("right", "left", "14.2857%", "85.7143%", "1000px")]
+    [InlineData("left", "right", "14.2857%", "85.7143%", "1000px")]
+    [InlineData("left", "left", "66.6667%", "33.3333%", "700px")]
+    [InlineData("left", "left", "33.3333%", "66.6667%", "700px")]
+    [InlineData("left", "left", "14.2857%", "85.7143%", "1000px")]
+    [InlineData("left", "left", "85.7143%", "14.2857%", "1000px")]
+    [InlineData("left", "left", "66.6667%", "33.3333%", "333px")]
+    [InlineData("right", "right", "66.6667%", "33.3333%", "700px")]
+    [InlineData("right", "right", "33.3333%", "66.6667%", "700px")]
+    [InlineData("right", "right", "14.2857%", "85.7143%", "1000px")]
+    [InlineData("right", "right", "85.7143%", "14.2857%", "1000px")]
+    [InlineData("right", "right", "66.6667%", "33.3333%", "333px")]
+    public async Task FloatsWhoseWidthsAreRoundedPercentagesOfTheContainer_StayOnOneRow(string firstSide, string secondSide, string firstWidth, string secondWidth, string container)
+    {
+        var html = LayoutHarness.Wrap(
+            $"<div id='c' style='width:{container}'><div id='r' style='float:{firstSide};width:{firstWidth};height:30px'></div>" +
+            $"<div id='l' style='float:{secondSide};width:{secondWidth};height:30px'></div></div>");
+        var (root, _) = await LayoutHarness.LayoutAsync(html, pageHeight: 600);
+
+        Assert.Equal(LayoutHarness.FindById(root, "r")!.Location.Y, LayoutHarness.FindById(root, "l")!.Location.Y, 1);
+    }
+
     // `clear: left` only has to clear the left float; once it has, the right float does not stop this one sitting beside it.
     [Fact]
     public async Task ClearLeftAfterARightFloat_ClearsTheLeftFloatsBottomOnly()

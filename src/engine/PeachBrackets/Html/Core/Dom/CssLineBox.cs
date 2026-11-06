@@ -179,6 +179,12 @@ namespace PeachBrackets.Html.Dom
         public Dictionary<CssBox, Rect> Rectangles { get; }
 
         /// <summary>
+        /// The right margin edge of the furthest inline-block (or inline-flex, -grid, -table) placed on this line so far, or negative infinity
+        /// when there is none. A float placed after it cannot move it aside as it moves the line's words, so it has to know it is there.
+        /// </summary>
+        public double AtomicInlineRight { get; set; } = double.NegativeInfinity;
+
+        /// <summary>
         /// Get the height of this box line (the max height of all the words)
         /// </summary>
         public double LineHeight
