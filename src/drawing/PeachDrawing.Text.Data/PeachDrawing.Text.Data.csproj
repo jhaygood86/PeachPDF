@@ -2,10 +2,10 @@
 	<Import Project="..\..\Version.props" />
 	<!--
 		The Unicode/hyphenation/dictionary data PeachDrawing.Text reads at runtime, split into its own single-target package so a
-		multi-targeted PeachDrawing.Text (net8.0;net10.0;net11.0) does not pay for the data three times: NuGet never merges a
-		resource across lib/<tfm> folders within one package, so embedding it directly in PeachDrawing.Text tripled it. netstandard2.0
-		is every target framework's floor, so one build of this project's assembly serves all three - overriding
-		src/Directory.Build.props's net8.0;net10.0(;net11.0) default. It carries no logic beyond a resource reader and the Brotli
+		multi-targeted PeachDrawing.Text (net8.0;net10.0) does not pay for the data twice: NuGet never merges a
+		resource across lib/<tfm> folders within one package, so embedding it directly in PeachDrawing.Text doubled it. netstandard2.0
+		is every target framework's floor, so one build of this project's assembly serves both - overriding
+		src/Directory.Build.props's net8.0;net10.0 default. It carries no logic beyond a resource reader and the Brotli
 		decoder registry PeachDrawing.Text.Compression.BrotliDecompression forwards to (see PeachDrawing.Text.csproj's
 		ProjectReference below and .claude/invariants/text-data-package-avoids-lib-tfm-triplication.md), so it is trivially
 		AOT/trim-compatible on every consumer's target framework without needing one of its own.
@@ -40,7 +40,7 @@
 		<!--
 			netstandard2.0 doesn't support IsTrimmable/EnableTrimAnalyzer/IsAotCompatible (NETSDK1210) - this project has nothing for
 			either analyzer to check anyway (no reflection beyond typeof().Assembly and GetManifestResourceStream/Names, both
-			trim/AOT-safe), so the consuming net8.0/net10.0/net11.0 projects' own analyzer passes are what actually matter.
+			trim/AOT-safe), so the consuming net8.0/net10.0 projects' own analyzer passes are what actually matter.
 		-->
 		<!--
 			PeachPDF.Cli's AOT smoke test (`dotnet publish -p:PublishAot=true`) reaches this project's own restore/evaluation through

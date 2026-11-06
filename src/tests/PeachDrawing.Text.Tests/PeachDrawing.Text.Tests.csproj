@@ -15,7 +15,7 @@
 
   <!--
     Font assets live in the repository-root assets/fonts/ directory, shared with
-    PeachPDF.TestHarness and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several
+    PeachPDF.TestHarness so the same file isn't checked in several
     times. Each is <Link>ed to the output root, so BundledFonts' AppContext.BaseDirectory lookups
     are unchanged. Listed one by one rather than globbed, so this project still declares exactly
     which fonts it needs and an unrelated asset can't silently bloat the test output.

@@ -19,14 +19,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\PeachPDF\PeachPDF.csproj" />
-    <!-- The SVG backend, for the svg flag: every HTML showcase is also rendered onto an SvgCanvas (see Showcases/SvgShowcaseRenderer.cs). -->
-    <ProjectReference Include="..\..\drawing\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
     <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
   </ItemGroup>
 
   <!--
     Font assets live in the repository-root assets/fonts/ directory, shared with PeachPDF.Tests
-    and PeachPDF.Demo.BlazorWasm so the same file isn't checked in several times. Each is
+    so the same file isn't checked in several times. Each is
     <Link>ed to the output root, so the showcases' AppContext.BaseDirectory lookups are
     unchanged. Listed one by one rather than globbed, so this project still declares exactly
     which fonts it needs.

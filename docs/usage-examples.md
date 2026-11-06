@@ -16,7 +16,6 @@ using PeachPDF.Network;
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
 - [Disabling local file access](#disabling-local-file-access)
-- [Rendering in the browser (Blazor WebAssembly)](#rendering-in-the-browser-blazor-webassembly)
 - [Sharing a parsed CSS context across renders](#sharing-a-parsed-css-context-across-renders)
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
@@ -187,48 +186,6 @@ var document = await new PdfGenerator().GeneratePdf(untrustedHtml, config);
 Two things change. Every `file:` resource request — `<img>`, `<link rel="stylesheet">`, CSS `url()`, an SVG `<image href>`, an `@font-face src` — resolves to "not found". And a loader that supplies no `BaseUri` of its own (`DataUriNetworkLoader` and `MimeKitNetworkLoader` are both in that category) no longer inherits the working directory as a base, so a relative reference goes unresolved rather than being turned into a `file:` URI. A deny wins even over an explicitly configured `FileUriNetworkLoader`.
 
 The document you pass in is unaffected: it's an input, not something the document asked for. The same goes for a file a `FileUriNetworkLoader` was explicitly constructed with — that root document is still read; only the resources it references are refused.
-
-## Rendering in the browser (Blazor WebAssembly)
-
-PeachPDF is pure managed code, so it runs unmodified in a browser under WebAssembly — the whole pipeline, from HTML parsing through font subsetting to PDF output, with no server round-trip. [PeachPDF's own demo](https://peachpdf.net/demo/) does exactly this; its source is in `src/examples/PeachPDF.Demo.BlazorWasm/`.
-
-Three things differ from a server or desktop host:
-
-**You must supply the fonts.** A browser exposes no system fonts to WebAssembly, so PeachPDF discovers none. Register your own before rendering, or nothing can be measured, let alone drawn:
-
-```csharp
-var generator = new PdfGenerator();
-
-foreach (var file in new[] { "LiberationSans-Regular.woff", "LiberationSerif-Regular.woff" })
-{
-    using var stream = new MemoryStream(await httpClient.GetByteArrayAsync($"fonts/{file}"));
-    await generator.AddFontFromStream(stream);
-}
-
-// The generic families were resolved before any of these existed, so re-point them.
-generator.AddFontFamilyMapping("sans-serif", "Liberation Sans");
-generator.AddFontFamilyMapping("serif", "Liberation Serif");
-```
-
-The default font on a browser host is Liberation Sans; register a family under that name and it is used directly. Register something else and PeachPDF adopts the first family you register as the default, so text still renders. Note that font-family mapping is consulted only when the requested family isn't registered, and it is single-hop — every mapping has to name a real registered family.
-
-**WOFF2 and `hyphens: auto` need a registered Brotli decoder.** `System.IO.Compression.BrotliStream` throws `PlatformNotSupportedException` in a browser, and WOFF2's font tables and PeachPDF's hyphenation patterns are both Brotli-compressed — without a decoder, a WOFF2 font fails to load and `hyphens: auto` lays out text unhyphenated rather than failing the render. Register [`PeachDrawing.Text.Brotli`](peachdrawing-text.md#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam), a pure-managed decoder built for exactly this seam, once at startup:
-
-```csharp
-using PeachDrawing.Text.Brotli;
-
-if (OperatingSystem.IsBrowser())
-{
-    ManagedBrotliDecompressor.Register();
-    ManagedBrotliCompressor.Register(); // only needed for the opt-in BrotliCompression PDF streams
-}
-```
-
-WOFF 1.0 or plain TrueType/OpenType fonts need no decoder at all, so they remain the simpler choice when you don't otherwise need WOFF2's smaller download.
-
-**Pin the culture.** A Blazor WebAssembly app adopts the browser's locale, and CSS is invariant by definition — a visitor whose browser is set to a comma-decimal locale would otherwise have lengths misparsed. Set `<InvariantGlobalization>true</InvariantGlobalization>` in the project file, which also drops the ICU data from the download.
-
-Rendering is synchronous once it starts, and WebAssembly in the browser is single-threaded, so a long document will make the tab unresponsive for the duration. Say so in your UI.
 
 ## Sharing a parsed CSS context across renders
 

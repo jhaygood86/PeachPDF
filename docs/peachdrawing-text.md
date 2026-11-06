@@ -647,33 +647,6 @@ data moved packages. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecom
 decoder of its own instead, to recover that data there; call it once, before using any feature backed by this data, since each table
 is read once and cached for the life of the process.
 
-`PeachDrawing.Text.Brotli` is a ready-made decoder for that seam: a pure-managed port of
-[google/brotli](https://github.com/google/brotli)'s own C# decoder, with no dependency beyond `PeachDrawing.Text` itself, kept as a
-separate opt-in project rather than folded into `PeachDrawing.Text` so a host that never needs it never pays for it. Call
-`PeachDrawing.Text.Brotli.ManagedBrotliDecompressor.Register()` once at startup:
-
-```csharp
-using PeachDrawing.Text.Brotli;
-
-if (OperatingSystem.IsBrowser())
-{
-    ManagedBrotliDecompressor.Register();
-}
-```
-
-`PeachPDF.Demo.BlazorWasm`'s `Program.cs` does exactly this, which is how its own WOFF2 fonts, `hyphens: auto` and Thai/Lao/Khmer/
-Burmese dictionary line breaking all work in the browser.
-
-The same package carries a managed **encoder** for the compression side of the seam, `PeachDrawing.Text.Brotli.ManagedBrotliCompressor`
-(`Compress(data, quality)`, a stream overload, and `Register()`, which calls `BrotliCompression.SetCompressor`). Unlike the decoder it is
-not a port: it is written for this repository, and every stream it produces is ordinary Brotli that .NET's decoder and the managed
-decoder both read. It matches data with a hash chain (lazy matching from quality 5) and codes it with one prefix code each for
-literals, commands and distances per megabyte, falling back to a stored block for data that does not shrink. It uses neither the
-static dictionary nor context modeling nor block splitting, so at the same quality it compresses a few percent worse than the
-reference encoder on text and about 7% worse on fonts (and at quality 11 about 10-15% worse, since the reference encoder does far more
-work there), and it beats Flate on fonts and prose from quality 3 up (on source code it only draws level with Flate at quality 6, and wins from 9). Quality 6 is a good default; 0-3 are fastest.
-
-
 ### Brotli compression
 
 `PeachDrawing.Text.Compression.BrotliCompression` is the encoding counterpart of `BrotliDecompression`: `TryCompress(data, quality, out compressed)` compresses with .NET's own encoder, `IsAvailable` reports whether any encoder works on this host, and `SetCompressor` registers a replacement (it receives the destination stream and the quality, 0 to 11, and returns a writable stream that finishes the Brotli data when disposed and leaves the destination open). PeachPDF uses it for PDF 2.0's `/BrotliDecode` streams. On a host with no encoder of its own, register `ManagedBrotliCompressor` (above).
