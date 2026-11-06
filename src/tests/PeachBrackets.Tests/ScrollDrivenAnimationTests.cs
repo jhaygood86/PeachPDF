@@ -68,7 +68,7 @@ public class ScrollDrivenAnimationTests
         Assert.True(document.HasRunningAnimations);
 
         var frame = document.AdvanceAnimations(TimeSpan.FromSeconds(1));
-        Assert.NotEmpty(frame.DirtyRegions);
+        Assert.True(frame.OverlayChanged || frame.DirtyRegions.Count > 0);
         Assert.False(document.HasRunningAnimations);
         Assert.Empty(frame.Events);
     }

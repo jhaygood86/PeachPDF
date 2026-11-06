@@ -411,8 +411,15 @@ while (document.HasRunningAnimations)
   does not change layout. Properties that change what boxes there are (`display`, `position`, `float`, `content`) and custom properties do not play.
 - **Retained layers.** A box that animates `transform` or `opacity`, and has no box inside it that does, is painted into a [`RetainedLayer`](peachdrawing-core.md#retained-layers)
   once and drawn again each frame with the new matrix and opacity, so a canvas backed by a GPU (see [`PeachDrawing.Win2D`](peachdrawing-win2d.md)) composites a texture and does
-  not paint what is inside the box again. What a layer holds is recorded again when anything else about the page changes (a restyle, a reload). On a canvas with no better way,
+  not paint what is inside the box again (`PeachDrawing.Win2D` and [`PeachDrawing.Skia`](peachdrawing-skia.md) both keep a texture). What a layer holds is recorded again when anything else about the page changes (a restyle, a reload). On a canvas with no better way,
   a layer is a recording replayed each frame.
+- **The animated layer.** A host that keeps the page as a surface it does not repaint (a scroller, a set of tiles) paints `DocumentPaintLayer.Content` onto it and draws
+  `DocumentPaintLayer.Animated` over it every frame, under `DocumentPaintLayer.ViewportAttached`. A promoted box is then not part of the surface at all: while it only moves or
+  fades, `AnimationFrame.DirtyRegions` is empty for it and `AnimationFrame.OverlayChanged` says to draw the animated layer again. A box is drawn apart only when that cannot change
+  what covers what: nothing above it clips, transforms or composites it (an `overflow` other than `visible`, a stacking context), and no other positioned box that is drawn over
+  it, and no fixed or sticky box, overlaps where it is right now. A box that stops qualifying (another box moves over it) goes back to the content layer, and the frame says to
+  repaint where it is; one that never qualifies behaves as it always did. `DocumentPaintLayer.All` still draws every box in place, so a document that is painted in one pass,
+  or written to a PDF, is the same as before. The layer only exists on a `MediaType.Screen` document.
 - **Reduced motion.** The default `Preferences` report `prefers-reduced-motion: reduce`, so a style sheet that switches animation off for it does; pass
   `new UserPreferences { ReducedMotion = false }` along with `AnimationsEnabled` to let them play, and leave `AnimationsEnabled` off when the system asks for no motion.
 - **A PDF.** `AnimationProgress` (a still frame, see [Animations](html-css-support.md#animations)) takes precedence and turns the clock off.

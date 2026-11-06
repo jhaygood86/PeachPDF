@@ -1,3 +1,5 @@
+PeachBrackets.Android.HtmlAnimationEventsEventArgs : sealed class
+  property IReadOnlyList<AnimationEventInfo> Events { get; }
 PeachBrackets.Android.HtmlFormInvalidEventArgs : sealed class
   property IReadOnlyList<ValidationProblem> Problems { get; }
 PeachBrackets.Android.HtmlFormSubmittingEventArgs : sealed class
@@ -26,6 +28,7 @@ PeachBrackets.Android.HtmlView : sealed class
   event EventHandler FocusChanged
   event EventHandler ScrollChanged
   event EventHandler ZoomChanged
+  event EventHandler<HtmlAnimationEventsEventArgs> AnimationEvents
   event EventHandler<HtmlFormInvalidEventArgs> FormInvalid
   event EventHandler<HtmlFormSubmittingEventArgs> FormSubmitting
   event EventHandler<HtmlLinkTappedEventArgs> LinkTapped
@@ -52,9 +55,11 @@ PeachBrackets.Android.HtmlView : sealed class
   method virtual Void OnDetachedFromWindow()
   method virtual Void OnFocusChanged(Boolean gainFocus, FocusSearchDirection direction, Rect previouslyFocusedRect)
   method virtual Void OnSizeChanged(Int32 w, Int32 h, Int32 oldw, Int32 oldh)
+  method virtual Void OnWindowVisibilityChanged(ViewStates visibility)
   property AccessibilityNode FocusedNode { get; }
   property AccessibilityNodeProvider AccessibilityNodeProvider { get; }
   property Boolean AllowNetworkAccess { get; set; }
+  property Boolean AnimationsEnabled { get; set; }
   property Double Zoom { get; }
   property HtmlDocument Document { get; }
   property InputCapabilities Input { get; set; }

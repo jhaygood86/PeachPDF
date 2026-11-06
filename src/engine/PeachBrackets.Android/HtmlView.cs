@@ -255,9 +255,14 @@ public sealed partial class HtmlView : FrameLayout
         if (_reflow is not null)
             _handler.RemoveCallbacks(_reflow);
 
-        ResetTiles();
-        _document?.Dispose();
-        _document = null;
+        StopAnimationLoop();
+        lock (_documentLock)
+        {
+            ResetTiles();
+            _document?.Dispose();
+            _document = null;
+        }
+
         RetireContext(_context);
         _context = null;
         base.OnDetachedFromWindow();
@@ -313,10 +318,16 @@ public sealed partial class HtmlView : FrameLayout
                 return;
             }
 
-            _document?.Dispose();
-            _document = document;
+            StopAnimationLoop();
+            lock (_documentLock)
+            {
+                _document?.Dispose();
+                _document = document;
+            }
+
             _loadedWidth = widthDp;
             document.Selection.SelectionChanged += (_, _) => InvalidateContent();
+            document.AnimationsWoke += OnAnimationsWoke;
             UpdateMetrics();
             UpdateViewport();
             RefreshAccessibility(document);
@@ -397,6 +408,8 @@ public sealed partial class HtmlView : FrameLayout
         ColorScheme = IsNightMode() ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
         Input = Input ?? DetectInput(),
         DevicePixelRatio = Logic.ImageScale.DevicePixelRatio(_density),
+        AnimationsEnabled = PlaysAnimations,
+        Preferences = PlaysAnimations ? new UserPreferences { ReducedMotion = false } : null,
     };
 
     private bool IsNightMode() =>
@@ -487,6 +500,9 @@ public sealed partial class HtmlView : FrameLayout
 
         var perPoint = Scale * PixelsPerPoint;
         document.SetViewport(new PeachDrawing.Core.Rect(_scrollX / perPoint, _scrollY / perPoint, Width / perPoint, Height / perPoint));
+
+        // A scroll moves what an animation on a scroll or view timeline plays at.
+        EnsureAnimationLoop();
     }
 
     private void ScrollTo(double x, double y)

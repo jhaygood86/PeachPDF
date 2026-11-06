@@ -36,7 +36,9 @@ public class AnimationPlaybackTests
 
         frame = document.AdvanceAnimations(TimeSpan.FromSeconds(0.5));
         Assert.True(frame.IsRunning);
-        Assert.NotEmpty(frame.DirtyRegions);
+
+        // The faded box is drawn apart from the page (DocumentPaintLayer.Animated), so the surface under it has nothing to repaint.
+        Assert.True(frame.OverlayChanged);
         var half = await PixelAtAsync(context, document, 50, 50);
         Assert.InRange(half.G, 100, 160);
 

@@ -35,7 +35,7 @@ namespace PeachBrackets.Html.Animation
     /// it takes the values a box was given back from the cascade and writes the running ones over them again.
     /// </para>
     /// </remarks>
-    internal sealed class AnimationClock : IDisposable
+    internal sealed partial class AnimationClock : IDisposable
     {
         private readonly HtmlContainerInt _container;
         private readonly CssValueParser _parser;
@@ -625,6 +625,7 @@ namespace PeachBrackets.Html.Animation
         public AnimationFrame Advance(double nowSeconds, IReadOnlyList<FragmentainerFragment> fragmentainers, bool allowLayout = false)
         {
             ObjectDisposedException.ThrowIf(_disposed, this);
+            _frame++;
 
             var dt = double.IsNaN(_last) ? 0 : Math.Max(0, nowSeconds - _last);
             _last = nowSeconds;
@@ -836,11 +837,18 @@ namespace PeachBrackets.Html.Animation
 
             var dirty = new List<DirtyRegion>();
 
+            // The boxes drawn apart from the page this frame, against those drawn apart when the host last painted: a box that changed layers is repainted
+            // where it is, and one that stays in the animated layer is not in the regions at all.
+            var overlayBefore = _plan?.Boxes;
+            if (_container.Continuous && fragmentainers.Count == 1) BuildPlan(fragmentainers);
+            var overlayNow = _planFor is not null && ReferenceEquals(_planFor, fragmentainers) ? _plan?.Boxes : null;
+
             // A layout pass moves things the old extents describe, and the caller repaints whole pages for it: nothing to work out per box.
             // (On a layout frame the caller adds what the layout diff cannot see: a box that painted differently without moving.)
             // (A box whose layout changed is covered by that diff, and what is known of where it was is out of date.)
             if (layoutChanged && laidOut is not null) _changed.RemoveAll(laidOut.Contains);
-            if (_changed.Count > 0) AddDirtyRegions(dirty);
+            var overlayChanged = false;
+            if (_changed.Count > 0 || overlayBefore?.Count > 0 || overlayNow?.Count > 0) overlayChanged = AddDirtyRegions(dirty, overlayBefore, overlayNow);
 
             running |= AdvanceImages(dt, fragmentainers, dirty);
 
@@ -848,7 +856,7 @@ namespace PeachBrackets.Html.Animation
 
             var events = _events.Count == 0 ? (IReadOnlyList<AnimationEventInfo>)[] : _events.ToArray();
             _events.Clear();
-            return new AnimationFrame(running, dirty, layoutChanged) { Events = events };
+            return new AnimationFrame(running, dirty, layoutChanged) { Events = events, OverlayChanged = overlayChanged };
         }
 
         // The boxes were written to in place; what is worked out from their style, and the styles of the boxes that inherit from them, is made again by
@@ -924,9 +932,28 @@ namespace PeachBrackets.Html.Animation
 
         // What a changed box covers, on each page it is split across: where it was drawn before this frame and where it is now, with what it paints around
         // itself. Worked out from the box's own matrix and its subtree's extent, which stay the same while only transform and opacity change.
-        private void AddDirtyRegions(List<DirtyRegion> dirty)
+        // Returns whether a box drawn apart from the page changed (so the animated layer is to be drawn again).
+        private bool AddDirtyRegions(List<DirtyRegion> dirty, IReadOnlySet<CssBox>? overlayBefore, IReadOnlySet<CssBox>? overlayNow)
         {
             var perPage = new Dictionary<int, List<Rect>>();
+            var overlayChanged = false;
+
+            // A box that is drawn apart both before and now is not in the surface under it, so the surface has nothing to repaint for it. One that changed layers
+            // is repainted where it is even when it did not change itself.
+            var processed = new List<BoxState>(_changed);
+            if (overlayBefore is not null || overlayNow is not null)
+            {
+                foreach (var state in _states)
+                {
+                    var was = overlayBefore?.Contains(state.Box) == true;
+                    var now = overlayNow?.Contains(state.Box) == true;
+                    if (was != now)
+                    {
+                        overlayChanged = true;
+                        if (!processed.Contains(state)) processed.Add(state);
+                    }
+                }
+            }
 
             var anyStale = false;
             foreach (var changedState in _changed) anyStale |= changedState.BleedStale;
@@ -936,12 +963,21 @@ namespace PeachBrackets.Html.Animation
                 EnsureExtents(current, resetMatrices: false);
             }
 
-            foreach (var state in _changed)
+            foreach (var state in processed)
             {
                 var after = state.Box.HasTransform ? state.Box.ActualTransformMatrix : Matrix3x2.Identity;
                 var afterHas = state.Box.HasTransform;
 
                 state.BleedStale = false;
+
+                var apart = overlayBefore?.Contains(state.Box) == true && overlayNow?.Contains(state.Box) == true;
+                if (apart)
+                {
+                    overlayChanged = true;
+                    state.LastMatrix = after;
+                    state.LastHasTransform = afterHas;
+                    continue;
+                }
 
                 foreach (var part in state.Fragments)
                 {
@@ -968,6 +1004,8 @@ namespace PeachBrackets.Html.Animation
                 foreach (var rect in Merge(rects))
                     dirty.Add(new DirtyRegion(page, rect));
             }
+
+            return overlayChanged;
         }
 
         private const double Inflate = 2;
@@ -1270,6 +1308,7 @@ namespace PeachBrackets.Html.Animation
             foreach (var state in _states) state.Properties = [.. PropertiesOf(state)];
             _extentsStale = true;
             DropOrphanedTransitions();
+            _promotionRevision++;
             SelectPromoted();
             CollectImages(root);
         }
@@ -1639,6 +1678,7 @@ namespace PeachBrackets.Html.Animation
             {
                 var promote = state.Compositor && !animatedInside.Contains(state.Box);
                 if (state.Promoted && !promote) state.Entry.Discard();
+                if (state.Promoted != promote) _promotionRevision++;
                 state.Promoted = promote;
             }
         }

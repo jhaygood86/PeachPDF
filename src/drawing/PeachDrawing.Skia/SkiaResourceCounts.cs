@@ -12,6 +12,7 @@ internal sealed class SkiaResourceCounts
     private int _tiles;
     private int _recorders;
     private int _surfaces;
+    private int _retained;
 
     /// <summary>Isolated groups (<c>SaveLayer</c>) begun and not yet finished.</summary>
     public int Layers => Volatile.Read(ref _layers);
@@ -25,6 +26,11 @@ internal sealed class SkiaResourceCounts
     /// <summary>Images and bitmaps this backend allocated itself (never the caller's) and has not yet released.</summary>
     public int Surfaces => Volatile.Read(ref _surfaces);
 
+    /// <summary>Retained layers (textures kept to draw a group again) created and not yet disposed.</summary>
+    public int RetainedLayers => Volatile.Read(ref _retained);
+
+    public void RetainedLayer(int delta) => Interlocked.Add(ref _retained, delta);
+
     public void Layer(int delta) => Interlocked.Add(ref _layers, delta);
 
     public void Tile(int delta) => Interlocked.Add(ref _tiles, delta);
@@ -34,5 +40,5 @@ internal sealed class SkiaResourceCounts
     public void Surface(int delta) => Interlocked.Add(ref _surfaces, delta);
 
     /// <summary>The sum of everything still alive.</summary>
-    public int Total => Layers + Tiles + Recorders + Surfaces;
+    public int Total => Layers + Tiles + Recorders + Surfaces + RetainedLayers;
 }

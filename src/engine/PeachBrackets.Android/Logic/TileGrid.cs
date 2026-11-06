@@ -125,6 +125,19 @@ internal sealed class TileCache<T>(int capacity, Action<T> release) where T : cl
         }
     }
 
+    /// <summary>Lets go of one tile, so it is painted again the next time it is needed. Nothing happens when it is not kept.</summary>
+    /// <param name="key">the tile</param>
+    /// <returns>whether the tile was kept</returns>
+    public bool Remove(TileKey key)
+    {
+        if (!_index.Remove(key, out var node))
+            return false;
+
+        _order.Remove(node);
+        release(node.Value.Value);
+        return true;
+    }
+
     /// <summary>Lets go of every tile.</summary>
     public void Clear()
     {

@@ -185,6 +185,10 @@ public sealed partial class HtmlView
 
         InvalidateAnimated(frame.DirtyRegions);
 
+        // The boxes drawn apart from the page changed where they are or how they look: the layer over the scroller is drawn again, and the surface under it is not.
+        if (frame.OverlayChanged)
+            _overlay.Invalidate();
+
         if (frame.Events.Count > 0)
             AnimationEvents?.Invoke(this, new HtmlAnimationEventsEventArgs(frame.Events));
 

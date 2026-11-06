@@ -1324,6 +1324,12 @@ namespace PeachBrackets.Html
         internal ViewportState View { get; } = new();
 
         /// <summary>
+        /// The boxes the <see cref="DocumentPaintLayer.Content"/> pass leaves out because the <see cref="DocumentPaintLayer.Animated"/> pass draws them (see
+        /// <c>AnimationClock.OverlayFor</c>); set around a paint of the content layer, null otherwise.
+        /// </summary>
+        internal IReadOnlySet<CssBox>? OverlayBoxes { get; set; }
+
+        /// <summary>
         /// The viewport of a continuous document in the space its boxes are laid out in, which a <c>background-attachment: fixed</c> image is positioned
         /// against; null for a paged document and for one whose host has not said where the viewport is.
         /// </summary>
@@ -5789,6 +5795,17 @@ namespace PeachBrackets.Html
         /// relocation uses. Same sentinel caveat as <see cref="PageIndexOf"/>.
         /// </summary>
         internal double NextPageTopOf(double y) => PageTopOf(PageIndexOf(y) + 1);
+
+        /// <summary>Paints only the animated boxes that are drawn apart from the page (<see cref="DocumentPaintLayer.Animated"/>), each with everything under it.</summary>
+        /// <param name="g">the device to use</param>
+        /// <param name="fragmentainer">the page to paint</param>
+        /// <param name="roots">the fragments of the boxes to draw, in paint order</param>
+        public void PerformPaintAnimated(Canvas g, FragmentainerFragment fragmentainer, IReadOnlyList<BoxFragment> roots)
+        {
+            ArgumentNullException.ThrowIfNull(g);
+            ArgumentNullException.ThrowIfNull(fragmentainer);
+            new FragmentPainter(this).PaintAnimated(g, fragmentainer, roots);
+        }
 
         /// <summary>Paints only the boxes the viewport of a continuous document holds in place, where they are on the surface.</summary>
         /// <param name="g">the device to use</param>

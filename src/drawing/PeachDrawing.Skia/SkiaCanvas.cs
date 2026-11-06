@@ -70,6 +70,7 @@ public sealed partial class SkiaCanvas : Canvas
         var m = canvas.TotalMatrix;
         var scale = Math.Sqrt(Math.Abs((double)m.ScaleX * m.ScaleY - (double)m.SkewX * m.SkewY));
         Links = new SkiaLinkMap(linkOptions, scale > 1e-9 ? 1.0 / scale : 1.0);
+        _deviceScale = scale > 1e-9 ? scale : 1.0;
     }
 
     /// <summary>

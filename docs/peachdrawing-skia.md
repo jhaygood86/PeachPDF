@@ -67,6 +67,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 | Conic gradient | A native sweep gradient |
 | `TileBrush`, hatch brush | A picture or image shader that repeats; a hatch is a tile made for the call |
 | `PushClip` (rectangle, path), `PushClipExclude` | `Save` + `ClipRect` / `ClipPath` (intersect) or `ClipRect` (difference) |
+| `CreateRetainedLayer` + `Draw` | The group is drawn once into a bitmap at the density of the host's matrix (up to 8192 pixels a side; larger returns `null`) and kept as an `SKImage`, uploaded to the `GpuContext`; each draw is one `DrawImage` under the current matrix with the opacity as the paint's alpha |
 | `PushTransform` / `PopTransform` | `Save` + `Concat` |
 | `PushBlendMode` | `SKPaint.BlendMode` on every draw: all sixteen blend modes, including the non-separable ones |
 | `PushAntiAlias` | `SKPaint.IsAntialias` and the clip's anti-aliasing |
@@ -206,6 +207,7 @@ Every native Skia object the backend creates has one owner and is released deter
 | A pushed clip, transform or blend (a save level) | The canvas that pushed it | The matching pop, or `SkiaCanvas.Dispose()` for any still pushed |
 | Paints, shaders, path effects, paths, filters | The one draw call that needs them | The end of that call, even when it throws |
 | A tile (`CreateTile`) | The caller, through the canvas and image it returned | Disposing them; disposing the image also ends a tile canvas still open |
+| A retained layer (`CreateRetainedLayer`) | The `RetainedLayer` returned | `Dispose()`; it holds one image (a texture on the render context's `GpuContext` when it has one) and is only drawable on a canvas of that same context |
 | A layer (`BeginLayer`) | The `CanvasLayer` returned | Disposing it composites and releases; a canvas disposed first ends it as it stands |
 | Decoded image | The `Image` | `Dispose()`; the texture is made per GPU context on first draw and rebuilt for another |
 | Native font faces and shapers | `SkiaRenderContext` | `Dispose()` |

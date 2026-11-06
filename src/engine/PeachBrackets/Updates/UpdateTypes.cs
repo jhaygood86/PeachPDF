@@ -70,6 +70,13 @@ public readonly record struct TextEditResult(
 public readonly record struct AnimationFrame(bool IsRunning, IReadOnlyList<DirtyRegion> DirtyRegions, bool LayoutChanged = false)
 {
     /// <summary>
+    /// Whether the boxes drawn by <see cref="DocumentPaintLayer.Animated"/> look different now (they moved, faded or changed inside). Their old and new places are
+    /// not in <see cref="DirtyRegions"/>, since the surface under them did not change: a host that draws that layer over a cached surface draws it again, and
+    /// repaints only <see cref="DirtyRegions"/> of the surface.
+    /// </summary>
+    public bool OverlayChanged { get; init; }
+
+    /// <summary>
     /// The animation and transition events that happened since the last step (<c>animationstart</c>, <c>transitionend</c> and the rest), in order. Events made by a
     /// change to the document (a transition that was created or replaced, an animation that was cancelled) are reported by the next step.
     /// </summary>

@@ -14,10 +14,14 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
   transitions, with `allow-discrete`, as a step that keeps the box for the whole interval), and an unregistered custom property or one whose syntax does not mix (a step).
 - **A `transform`, `filter` or `perspective` that appears on a box with positioned descendants** makes the box their containing block, which moves them; the in-place restyle
   refuses that change and reloads the document, the live clock does not and the descendants stay where they were laid out.
-- **Retained layers are drawn in place, not on a layer above the page.** A box animating `transform` or `opacity` is recorded once and drawn again each frame, but the rectangle
-  it covers (old and new place) is still repainted from the page behind it, so the cost per frame follows what is under the box (text, blurred `box-shadow`s). On a page of many
-  shadowed cards that is a few milliseconds a frame (the animation bench's keyframes showcase). Painting the animated boxes on a surface above the page would not repaint the page
-  at all, but it puts them over everything that should cover them, which needs overlap testing the way browsers do before it can be turned on.
+- **A promoted box is only drawn apart from the page when that cannot change what covers what.** `DocumentPaintLayer.Animated` (see [the recent fix](../recent-fixes/2026-11-06-animated-layer-and-android-animation.md))
+  takes a box animating `transform` or `opacity` out of the surface a host keeps, so such a frame repaints none of it. It is conservative: a box under an ancestor that clips
+  (`overflow` other than `visible`) or establishes a stacking context (so a card inside a scrolling carousel, or inside an `opacity` group), a box overlapped right now by a later
+  positioned box, and any box when a fixed or sticky box overlaps it, stay in the content layer and repaint the rectangle they cover (old and new place) from the page behind them as
+  before. Outlines and collapsed table borders of an ancestor paint after its positioned children, so a box that moves under one of those edges is drawn over it. The placements,
+  links and text runs a paint records are written for a box when the animated layer draws it, not when the content layer is painted. The overlap test is made at the time of each step:
+  a box that crosses another one in between two steps is placed by where it is at each. Handling an ancestor's clip or transform in the animated layer (the participant hoisting in
+  `StackingOrder` already re-applies clips) would take more of these boxes off the page.
 - **A retained layer is recorded at the density it was first drawn at.** A box that scales up a lot is resampled, not re-recorded.
 - **A `background-image` GIF or WebP shows its first frame**; only `<img>` plays. (The image cache keys by address, not by the box that shows it.)
 - **A transition starts from every restyle that loads the document again** (the host's class, attribute and preference changes, a state rule that moves something) by comparing each
@@ -36,7 +40,8 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
   inline `<svg>` are not restyled while it plays (they are detached from the cascade), so a `:hover` rule on one of them, or a change to its `animation-play-state`, does not take effect.
   **The repaint is the whole rectangle of the `<svg>` or image, not the changed element:** a bounding box that is safe to repaint needs the painted extent of every kind of element (stroke, miter, markers, filters, masks, clips, `<use>`, text, transforms),
   and one that is too small leaves stale pixels, so it was not attempted; a frame costs about a millisecond on the animated SVG showcase.
-- **Only the Win2D backend keeps layers as textures and decodes animated images for the WinUI view**; `RasterRenderContext` decodes animated images and the default retained layer works
-  on every canvas, but Skia, CoreGraphics and the PDF/SVG writers show the first frame of an animated image.
-- **The Android view does not play animations.** Only the WinUI view steps the document each frame (`AdvanceAnimations` on the display's frame clock) and raises the animation events; `PeachBrackets.Android.HtmlView` has no frame loop (a `Choreographer` callback calling `AdvanceAnimations`), so a document shown there is a still frame.
+- **Only the Win2D backend decodes animated images for the WinUI view**; `RasterRenderContext` decodes animated images and the default retained layer works
+  on every canvas, but Skia, CoreGraphics and the PDF/SVG writers show the first frame of an animated image. Win2D and Skia keep a retained layer as a texture (Skia records it on the CPU
+  and uploads it once; drawing it into a GPU render target mid-frame blanked the frame on the Android emulator, so it does not).
+- **The Android view's text positions are not coarsened while it plays**, as the WinUI view's are (`Win2dRenderContext.TextPositionSteps` has no Skia counterpart: Skia has no text mask cache to keep small).
 - **Left from the review of the clock** (each is small and has no tracking issue yet):
