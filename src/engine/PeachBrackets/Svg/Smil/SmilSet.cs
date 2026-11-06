@@ -365,6 +365,13 @@ namespace PeachBrackets.Svg.Smil
                 return true;
             }
 
+            // Without a repeat the simple duration plays once; a min that stretches the active duration past it holds the last value (SMIL Animation §3.6.5).
+            if (double.IsNaN(animation.RepeatCount) && double.IsNaN(animation.RepeatDuration) && local >= duration)
+            {
+                progress = 1;
+                return true;
+            }
+
             var whole = (int)Math.Floor(local / duration);
             var remainder = local - (whole * duration);
 

@@ -229,4 +229,85 @@ public class SvgAnimationPlaybackTests
         Assert.True(IsRed(await PixelAsync(context, document, 10, 10)));
         Assert.False(document.HasRunningAnimations);
     }
+
+    // A red rect that covers the svg at opacity 0.2: the green channel of a pixel reads back the opacity, 1 - G / 255.
+    private static async Task<double> OpacityAsync(string animation, double seconds, string extra = "")
+    {
+        var (context, document) = await LoadAsync($"<rect id=r width=200 height=100 fill=\"rgb(255,0,0)\" opacity=\"0.2\">{animation}</rect>{extra}");
+        At(document, 0);
+        At(document, seconds);
+        return 1 - ((await PixelAsync(context, document, 10, 10)).G / 255.0);
+    }
+
+    [Theory]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=2s fill=freeze />", 1, 0.5)]
+    [InlineData("<animate attributeName=opacity values=\"0;1;0\" dur=2s />", 0.5, 0.5)]
+    [InlineData("<animate attributeName=opacity values=\"0;1;0\" dur=2s />", 1.5, 0.5)]
+    [InlineData("<animate attributeName=opacity values=\"0;0.5;1\" calcMode=discrete dur=3s />", 1.5, 0.5)]
+    [InlineData("<animate attributeName=opacity values=\"0;1;1\" keyTimes=\"0;0.25;1\" dur=4s />", 0.5, 0.5)]
+    [InlineData("<animate attributeName=opacity values=\"0;0.1;1\" calcMode=paced dur=10s />", 1, 0.1)]
+    [InlineData("<animate attributeName=opacity from=0 to=0.5 dur=2s additive=sum fill=freeze />", 1, 0.45)]
+    [InlineData("<animate attributeName=opacity by=0.5 dur=2s fill=freeze />", 1, 0.45)]
+    [InlineData("<animate attributeName=opacity to=1 dur=2s fill=freeze />", 1, 0.6)]
+    [InlineData("<animate attributeName=opacity from=0 to=0.3 dur=1s repeatCount=2 accumulate=sum fill=freeze />", 1.5, 0.45)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=1s repeatDur=1.5s fill=freeze />", 3, 0.5)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 begin=\"0s;3s\" dur=1s restart=never />", 3.5, 0.2)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=4s end=1s />", 2, 0.2)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=1s min=3s fill=freeze />", 2, 1)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=2s max=1s fill=freeze />", 3, 0.5)]
+    [InlineData("<set attributeName=opacity to=0.9 begin=1s />", 2, 0.9)]
+    [InlineData("<set attributeName=opacity to=0.5 begin=0s /><set attributeName=opacity to=0.9 begin=1s />", 2, 0.9)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 begin=\"a.end\" dur=1s id=b /><animate attributeName=opacity from=0 to=1 begin=\"b.end\" dur=1s id=a />", 1, 0.2)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 begin=\"-1s\" dur=2s fill=freeze />", 0.5, 0.75)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 begin=\"1s\" dur=2s />", 0.5, 0.2)]
+    [InlineData("<animate attributeName=opacity from=0 to=1 dur=2s calcMode=spline keyTimes=\"0;1\" keySplines=\"0 0 1 1\" fill=freeze />", 1, 0.5)]
+    [InlineData("<animate attributeName=opacity from=\"0\" to=\"1\" dur=\"00:00:02\" fill=freeze />", 1, 0.5)]
+    public async Task AnAnimationOfOpacity_GivesTheValueItsTimingAndValuesSay(string animation, double seconds, double expected) =>
+        Assert.InRange(await OpacityAsync(animation, seconds), expected - 0.03, expected + 0.03);
+
+    [Fact]
+    public async Task AnAnimationWithAnHrefAndNoParent_AnimatesTheElementItNames()
+    {
+        var opacity = await OpacityAsync(string.Empty, 2, "<set href=\"#r\" attributeName=opacity to=0.9 begin=1s />");
+        Assert.InRange(opacity, 0.87, 0.93);
+    }
+
+    [Theory]
+    [InlineData("<animateMotion path=\"M0,0 L100,0\" dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion values=\"0,0;100,0\" dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion from=\"0,0\" to=\"100,0\" dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion by=\"100,0\" dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion path=\"M0,0 L100,0\" keyPoints=\"0;1\" keyTimes=\"0;1\" calcMode=linear dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion path=\"M0,0 L100,0\" rotate=auto dur=2s fill=freeze />", 1, 50, 10)]
+    [InlineData("<animateMotion path=\"M0,0 L100,0\" rotate=0 dur=2s fill=freeze />", 1, 50, 10)]
+    public async Task AnAnimateMotion_PlacesTheElementOnItsPath(string animation, double seconds, double userX, double y)
+    {
+        var (context, document) = await LoadAsync($"<rect width=40 height=40 fill=\"rgb(255,0,0)\">{animation}</rect>");
+        At(document, 0);
+        At(document, seconds);
+        Assert.True(IsWhite(await PixelAsync(context, document, 3, y)));
+        Assert.True(IsRed(await PixelAsync(context, document, (userX + 20) * 0.75, 15)) || IsRed(await PixelAsync(context, document, (userX + 20) * 0.75, 25)));
+    }
+
+    [Fact]
+    public async Task AnMPathAndASkewAndScaleTransform_ArePlayed()
+    {
+        var (context, document) = await LoadAsync(
+            "<path id=track d=\"M0,0 L100,0\"/><rect width=40 height=40 fill=\"rgb(255,0,0)\"><animateMotion dur=2s fill=freeze><mpath href=\"#track\"/></animateMotion></rect>");
+        At(document, 0);
+        At(document, 3);
+        Assert.True(IsRed(await PixelAsync(context, document, 90, 15)));
+
+        var (scaleContext, scale) = await LoadAsync(
+            "<rect width=40 height=40 fill=\"rgb(255,0,0)\"><animateTransform attributeName=transform type=scale values=\"1;2\" dur=2s fill=freeze /></rect>");
+        At(scale, 0);
+        At(scale, 3);
+        Assert.True(IsRed(await PixelAsync(scaleContext, scale, 50, 50)));
+
+        var (skewContext, skew) = await LoadAsync(
+            "<rect width=40 height=40 fill=\"rgb(255,0,0)\"><animateTransform attributeName=transform type=skewX from=0 to=45 dur=2s fill=freeze /></rect>");
+        At(skew, 0);
+        At(skew, 3);
+        Assert.True(IsRed(await PixelAsync(skewContext, skew, 35, 20)));
+    }
 }

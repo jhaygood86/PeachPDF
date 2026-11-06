@@ -23,3 +23,7 @@
 
 **Not done.** See the SMIL section of [the SVG guide](../../docs/supported-svg-features.md#smil-animation) and [the live playback gaps](../accepted-gaps/css-animation-live-playback-limitations.md):
 events and access keys in `begin`/`end`, a standalone SVG, the root's own size, changed-element dirty regions.
+
+**Found by widening the tests.** A presentation property (`opacity`, `fill`...) was animated twice: `GetAttribute` returned the animated value, which the builder then took as the
+declared value and gave to `GetAnimatedValue` as the underlying one (an additive `0.2 + 0.25` read `0.7`). `CssBoxSvgSourceNode.PresentationProperties` now splits them: those are animated only
+in `GetAnimatedValue` (over the cascade), every other attribute only in `GetAttribute`. And a `min` longer than the simple duration, with no repeat, now holds the last value instead of repeating.
