@@ -10099,7 +10099,7 @@ namespace PeachBrackets.Html.Dom
         /// case every margin adjoining through it first collapses into one pass-through value
         /// (CSS2.1 8.3.1) - see <see cref="FoldSelfCollapsingMargins"/>.
         /// </summary>
-        private double GetEffectiveBottomMargin()
+        internal double GetEffectiveBottomMargin()
         {
             var margins = new AdjoiningMarginSet();
 
@@ -10451,8 +10451,9 @@ namespace PeachBrackets.Html.Dom
             {
                 // A non-auto height is the one blocking reason that does not hand the child's margin to
                 // this box's height: the declared height IS the height, and content - the margin
-                // included - overflows it rather than growing it.
-                containedChildMargin = HasAutoBlockEndHeight()
+                // included - overflows it rather than growing it. Not for a table cell, whose height is
+                // only a minimum (CSS 2.1 §17.5.3): it grows to hold its content, margins included.
+                containedChildMargin = HasAutoBlockEndHeight() || DerivedStyle.ActualDisplay == Keywords.TableCell
                     ? lastNonFloatingBox.GetEffectiveBottomMargin()
                     : 0;
             }

@@ -1,0 +1,3 @@
+# `max-height` on a table cell is applied, where a browser ignores it
+
+A cell with `max-height: 10px` is capped at 10px and its content, centred in room it does not have, sits above the cell's top (y=-4.7 where Chrome has 0, the cell growing to its 30px of content; tracking issue #2258). The `height` of a cell is a minimum (CSS 2.1 section 17.5.3) and the effect of `max-height` on table cells is undefined (section 10.7), which browsers resolve by ignoring it. The cell alignment's clamp keeps the content from moving further than before; a cell with a declared `height` now grows to hold its content, so only `max-height` still lets one end above it.
