@@ -8694,7 +8694,22 @@ namespace PeachBrackets.Html.Dom
         StringComparison ICssDomNode.NameComparison =>
             IsWithinForeignContent ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
 
-        ICssDomNode? ICssDomNode.Parent => ParentBox;
+        /// <summary>
+        /// The DOM parent: the nearest ancestor that is an element. Layout wraps inline content that sits beside blocks in anonymous boxes,
+        /// which are not in the DOM, so a selector - the sibling combinators after layout, an inline SVG's rules - must not stop at one.
+        /// </summary>
+        ICssDomNode? ICssDomNode.Parent
+        {
+            get
+            {
+                var parent = ParentBox;
+                while (parent is not null && parent.IsAnonymousWrapper) parent = parent.ParentBox;
+                return parent;
+            }
+        }
+
+        /// <summary>An anonymous box layout generated to hold content: no element, not a generated pseudo-element, not a text run, and holding boxes.</summary>
+        private bool IsAnonymousWrapper => HtmlTag is null && !IsPseudoElement && Text is null && Boxes.Count > 0;
 
         IReadOnlyList<ICssDomNode> ICssDomNode.Children => SelectorChildren;
 
@@ -8702,7 +8717,31 @@ namespace PeachBrackets.Html.Dom
         /// The children a selector sees. The boxes, except for an inline <c>&lt;math&gt;</c> still holding its markup as
         /// <see cref="MathML.MathSourceElement"/>s, which answers those.
         /// </summary>
-        internal virtual IReadOnlyList<ICssDomNode> SelectorChildren => Boxes;
+        internal virtual IReadOnlyList<ICssDomNode> SelectorChildren => HasAnonymousWrapperChild() ? FlattenAnonymousChildren() : Boxes;
+
+        private bool HasAnonymousWrapperChild()
+        {
+            foreach (var child in Boxes)
+                if (child.IsAnonymousWrapper) return true;
+            return false;
+        }
+
+        /// <summary>The children with each anonymous wrapper replaced by what it holds, so elements that layout moved into a wrapper are siblings of the ones beside it again.</summary>
+        private List<ICssDomNode> FlattenAnonymousChildren()
+        {
+            var list = new List<ICssDomNode>();
+            Collect(this);
+            return list;
+
+            void Collect(CssBox container)
+            {
+                foreach (var child in container.Boxes)
+                {
+                    if (child.IsAnonymousWrapper) Collect(child);
+                    else list.Add(child);
+                }
+            }
+        }
 
         bool ICssDomNode.IsRoot => IsRoot;
 

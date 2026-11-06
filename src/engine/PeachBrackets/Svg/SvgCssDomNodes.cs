@@ -58,7 +58,7 @@ namespace PeachBrackets.Svg
 
         public ICssDomNode? Parent =>
             ReferenceEquals(box, svgRoot)
-                ? box.ParentBox // crossing out of the SVG fragment into HTML: raw CssBox (case-insensitive)
+                ? ((ICssDomNode)box).Parent // crossing out of the SVG fragment into HTML: the raw CssBox's view (case-insensitive), through anonymous wrappers
                 : box.ParentBox is null ? null
                 // The <svg> element itself is a child of the HTML tree: handed out as the raw CssBox, it is found among its parent's children, which the
                 // sibling combinators (`a:hover + svg .x`) look it up in. A wrapper would never equal the box in that list.
