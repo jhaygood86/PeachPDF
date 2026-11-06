@@ -448,10 +448,11 @@ namespace PeachBrackets.Html.Paint
                 // It is not entered in the placement map: that is written once per box and read much later, and the displacement changes with every scroll, so
                 // what is written over the box (links, form widgets) adds the viewport's displacement itself.
                 var viewShifted = false;
-                if (!container.View.IsEmpty && container.View.TryGetOwn(box, out var viewShift))
+                if (!container.View.IsEmpty && container.View.TryGetEntryShift(box, out var viewShift))
                 {
                     g.PushTransform(Matrix3x2.CreateTranslation((float)viewShift.Dx, (float)viewShift.Dy));
                     viewShifted = true;
+                    if (container.View.HasScroll) _scrollFrames++;
                 }
 
                 // A fragment only exists where its box has something in this fragmentainer, so the
@@ -460,7 +461,7 @@ namespace PeachBrackets.Html.Paint
                 // A fragment that carries only descendants (no decoration rectangles of its own) must
                 // always be entered: a hoisted out-of-flow descendant can paint well outside this
                 // fragment's own rectangle and is only reached through this call.
-                var visible = fragment.Lines.Count == 0 || IsAnyRectVisible(fragment, g.GetClip());
+                var visible = fragment.Lines.Count == 0 || IsAnyRectVisible(fragment, ClipForCulling(g));
 
                 // A 3D rendering context (transform-style: preserve-3d) is composed as a whole, planes depth-tested against each other.
                 var paintedAsContext = visible && !_textOnly && TryPaintContext3D(g, fragment);
@@ -529,7 +530,10 @@ namespace PeachBrackets.Html.Paint
                 }
 
                 if (viewShifted)
+                {
                     g.PopTransform();
+                    if (container.View.HasScroll) _scrollFrames--;
+                }
 
                 // Restore clips
                 if (box.Position.Value == PositionMode.Fixed)
@@ -950,7 +954,7 @@ namespace PeachBrackets.Html.Paint
             // This fragment's own decoration rectangles - one per line box it spans on this page, or a
             // single whole-border-box rectangle for a block-level box. Already fragmentainer-local.
             var lines = fragment.Lines;
-            var clip = g.GetClip();
+            var clip = ClipForCulling(g);
 
             // Outline is drawn last - CSS Basic User Interface 4 §3.1: "the outline ... is drawn 'over' a
             // box, i.e., the outline is always on top" of that box's own content. So the per-line
@@ -1245,6 +1249,10 @@ namespace PeachBrackets.Html.Paint
                 AddOutlineDescendantRects(fragment, outlinePaints);
                 PaintOrDeferOutline(g, box, outlinePaints);
             }
+
+            // A scroll container shows how far it is scrolled over its content, inside whatever clips the container itself.
+            if (!_textOnly && !_stopped && box.Overflow.Value is Overflow.Auto or Overflow.Scroll && container.Continuous)
+                PaintScrollbars(g, fragment);
 
             PopClips(g, clipScope);
 

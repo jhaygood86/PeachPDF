@@ -18,6 +18,22 @@ namespace PeachBrackets.Html.Paint
     /// </summary>
     internal sealed partial class FragmentPainter
     {
+        /// <summary>How many scroll containers' carried frames the paint in progress is inside: while it is above zero the canvas's clip rectangle cannot be compared with a fragment's.</summary>
+        // Static because the helpers that cull are: the paint walk is synchronous, so one thread paints one thing at a time.
+        [System.ThreadStatic]
+        private static int _scrollFrames;
+
+        private static readonly Rect Unbounded = new(-1e9, -1e9, 2e9, 2e9);
+
+        /// <summary>
+        /// The clip to cull against. <see cref="Canvas.GetClip"/> is the latest rectangle pushed, in the frame it was pushed in, so after a scroll container
+        /// has carried its content back by how far it is scrolled it is no longer in the frame the fragments are in: inside such a frame nothing is culled
+        /// (the clip the canvas applies still cuts it off).
+        /// </summary>
+        internal static bool InScrolledFrame => _scrollFrames > 0;
+
+        private static Rect ClipForCulling(Canvas g) => _scrollFrames > 0 ? Unbounded : g.GetClip();
+
         /// <summary>One clip held back from the canvas: the box whose padding edge it is, and how to push it.</summary>
         private readonly record struct ClipEntry(CssBox Clipper, Rect Rect, OverflowClipCurve? Curve);
 
@@ -48,6 +64,16 @@ namespace PeachBrackets.Html.Paint
         private ClipScope PushClipsFor(Canvas g, BoxFragment fragment)
         {
             var (rect, curve) = OverflowClipOf(g, fragment);
+
+            // The clip is its clipper's padding box, in the clipper's own frame; this fragment is painted in the frame the scrolling of every container from the
+            // clipper down to it has carried back, so the clip is moved the same way to stay where the clipper's padding box is.
+            if (rect is { } clipRect && container.View.HasScroll && DomUtils.ClippingBoxOf(fragment.Box) is { } scrollClipper
+                && container.View.ClipShiftFor(fragment.Box, scrollClipper) is var (scrollDx, scrollDy) && (scrollDx != 0 || scrollDy != 0))
+            {
+                rect = new Rect(clipRect.X + scrollDx, clipRect.Y + scrollDy, clipRect.Width, clipRect.Height);
+                if (curve is not null) curve = curve with { Rect = new Rect(curve.Rect.X + scrollDx, curve.Rect.Y + scrollDy, curve.Rect.Width, curve.Rect.Height) };
+            }
+
             var canvasClips = RenderUtils.ClipGraphicsByOverflow(g, rect, curve);
             var recorded = PushOverflowClip(rect, curve) ? 1 : 0;
 
@@ -64,8 +90,15 @@ namespace PeachBrackets.Html.Paint
                         continue;
                     }
 
-                    canvasClips += RenderUtils.ClipGraphicsByOverflow(g, entry.Rect, entry.Curve);
-                    if (PushOverflowClip(entry.Rect, entry.Curve)) recorded++;
+                    var (entryRect, entryCurve) = (entry.Rect, entry.Curve);
+                    if (container.View.HasScroll && container.View.ClipShiftFor(fragment.Box, entry.Clipper) is var (entryDx, entryDy) && (entryDx != 0 || entryDy != 0))
+                    {
+                        entryRect = new Rect(entryRect.X + entryDx, entryRect.Y + entryDy, entryRect.Width, entryRect.Height);
+                        if (entryCurve is not null) entryCurve = entryCurve with { Rect = new Rect(entryCurve.Rect.X + entryDx, entryCurve.Rect.Y + entryDy, entryCurve.Rect.Width, entryCurve.Rect.Height) };
+                    }
+
+                    canvasClips += RenderUtils.ClipGraphicsByOverflow(g, entryRect, entryCurve);
+                    if (PushOverflowClip(entryRect, entryCurve)) recorded++;
                     (deferred ??= []).Add(entry);
                 }
             }

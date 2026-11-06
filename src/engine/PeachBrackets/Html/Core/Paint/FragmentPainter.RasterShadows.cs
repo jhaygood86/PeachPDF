@@ -29,7 +29,7 @@ namespace PeachBrackets.Html.Paint
             BorderRadii shadowRadii, double blur, PaintColor color)
         {
             var margin = 1.5 * blur;
-            var bounds = Intersect(Inflate(shadowRect, margin), Inflate(g.GetClip(), margin));
+            var bounds = Intersect(Inflate(shadowRect, margin), Inflate(ClipForCulling(g), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 
@@ -218,7 +218,7 @@ namespace PeachBrackets.Html.Paint
             Rect inner, double blur, double spread, PaintColor color)
         {
             var margin = 1.5 * blur;
-            var bounds = Intersect(Inflate(paddingBox, margin), Inflate(g.GetClip(), margin));
+            var bounds = Intersect(Inflate(paddingBox, margin), Inflate(ClipForCulling(g), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return true;
 

@@ -171,15 +171,39 @@ public sealed partial class HtmlView
         }
     }
 
-    // The wheel over a text area that has more lines than show scrolls the text area; at its first or last line, or anywhere else, the page scrolls.
+    // The wheel over a scroll container (an element with overflow auto, scroll or hidden) scrolls it, and passes on to the container around it, then to the page, at the
+    // end of its content (scroll chaining); over a text area that has more lines than show it scrolls the text area; anywhere else the page scrolls.
     private void OnPointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
         var point = e.GetCurrentPoint(_canvas);
-        if (point.Properties.IsHorizontalMouseWheel || !TryLocate(point.Position, out var page, out var x, out var y))
+        if (!TryLocate(point.Position, out var page, out var x, out var y))
             return;
 
-        if (ScrollTextAreaAt(page, x, y, -point.Properties.MouseWheelDelta / 120.0 * WheelNotchPoints))
+        var notches = point.Properties.MouseWheelDelta / 120.0 * WheelNotchPoints;
+        var horizontal = point.Properties.IsHorizontalMouseWheel;
+        if (ScrollContainerAt(page, x, y, horizontal ? notches : 0, horizontal ? 0 : -notches))
+        {
             e.Handled = true;
+            return;
+        }
+
+        if (!horizontal && ScrollTextAreaAt(page, x, y, -notches))
+            e.Handled = true;
+    }
+
+    // Scrolls the innermost scroll container under a point that can go the way asked, by an amount in points; false when there is none, and the page scrolls instead.
+    internal bool ScrollContainerAt(int page, double x, double y, double dx, double dy)
+    {
+        if (_document is not { } document || document.GetScrollContainerAt(page, x, y, dx, dy) is not { } container)
+            return false;
+
+        var regions = document.ScrollBy(container, dx, dy);
+        foreach (var region in regions)
+            InvalidateRegion(region.PageIndex, region.Bounds);
+
+        // An animation on the container's scroll timeline moves with it.
+        EnsureAnimationLoop();
+        return regions.Count > 0;
     }
 
     private const double WheelNotchPoints = 42;

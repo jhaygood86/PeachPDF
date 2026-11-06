@@ -415,6 +415,22 @@ namespace PeachBrackets.Html.Animation
             var position = vertical ? _viewport.Y : _viewport.X;
             var size = vertical ? _viewport.Height : _viewport.Width;
             var total = vertical ? _surfaceHeight : _surfaceWidth;
+
+            // A scroll container's own scrolling: where its content is scrolled to, over how much of it its scrollport shows, in points.
+            var portStart = 0d;
+            if (timeline.Scroller is { } scroller)
+            {
+                if (_container.View.ScrollStateOf(_container, scroller) is not { } state || SubjectRect(scroller, fragmentainers) is not { } scrollerRect) return null;
+
+                var ppp = _container.RenderContext.LayoutUnitsPerPoint;
+                position = (vertical ? state.Y : state.X) / ppp;
+                size = (vertical ? state.Port.Height : state.Port.Width) / ppp;
+                total = size + ((vertical ? state.MaxY : state.MaxX) / ppp);
+
+                // Where the content starts: the scrollport's edge (the border box less the border), which a view timeline measures its subject from.
+                portStart = vertical ? scrollerRect.Y + (scroller.ActualBorderTopWidth / ppp) : scrollerRect.X + (scroller.ActualBorderLeftWidth / ppp);
+            }
+
             if (!(size > 0)) return null;
 
             if (!timeline.IsView)
@@ -432,7 +448,7 @@ namespace PeachBrackets.Html.Animation
 
             if (timeline.Subject is not { } subject || SubjectRect(subject, fragmentainers) is not { } rect) return null;
 
-            var s = vertical ? rect.Y : rect.X;
+            var s = (vertical ? rect.Y : rect.X) - portStart;
             var length = vertical ? rect.Height : rect.Width;
 
             // The scrollport is shrunk by the inset at each end (view-timeline-inset); a percentage is of the scrollport.

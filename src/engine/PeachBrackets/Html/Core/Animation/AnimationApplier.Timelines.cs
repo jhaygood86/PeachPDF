@@ -2,19 +2,20 @@ using System;
 using System.Collections.Generic;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
-using PeachBrackets.Html.Fragmentation;
+using PeachBrackets.Html.Utils;
 
 namespace PeachBrackets.Html.Animation
 {
     /// <summary>
-    /// A scroll or view timeline an animation runs on, once its name or function has been looked up on the element: what scrolls (always the document, see
-    /// <c>.claude/accepted-gaps</c>: no other box has a scroll position here), along which axis, and for a view timeline the box whose visibility it follows.
+    /// A scroll or view timeline an animation runs on, once its name or function has been looked up on the element: what scrolls (the document, or a scroll container of a
+    /// document shown on a screen), along which axis, and for a view timeline the box whose visibility it follows.
     /// </summary>
     /// <param name="IsView">a view timeline (the visibility of <paramref name="Subject"/>) and not a scroll timeline (the scroll position)</param>
     /// <param name="Subject">the box a view timeline follows</param>
     /// <param name="Axis"><c>block</c>, <c>inline</c>, <c>x</c> or <c>y</c></param>
     /// <param name="Inset">the view timeline's inset as written, or null for <c>auto</c></param>
-    internal sealed record ResolvedTimeline(bool IsView, CssBox? Subject, string Axis, string? Inset);
+    /// <param name="Scroller">the scroll container the timeline follows, or null for the document's own scrolling</param>
+    internal sealed record ResolvedTimeline(bool IsView, CssBox? Subject, string Axis, string? Inset, CssBox? Scroller = null);
 
     internal static partial class AnimationApplier
     {
@@ -33,31 +34,31 @@ namespace PeachBrackets.Html.Animation
                     return (null, true);
 
                 case TimelineKind.Scroll:
-                    // Only the document scrolls here: the nearest scroller is the document unless a scroll container is in the way, which has no scroll position (it would
-                    // not be scrollable), and `self` is not one.
-                    if (reference.Scroller == "self") return (null, true);
-                    if (reference.Scroller == "nearest" && HasScrollContainerAbove(box)) return (null, true);
-                    return (new ResolvedTimeline(false, null, reference.Axis ?? "block", null), false);
+                    // The scroller is the document (root), the nearest scroll container above the element (the document when there is none), or the element itself, which
+                    // has no timeline when it does not scroll.
+                    if (reference.Scroller == "self")
+                        return DomUtils.IsScrollerOnScreen(box) ? (new ResolvedTimeline(false, null, reference.Axis ?? "block", null, box), false) : (null, true);
+
+                    var scroller = reference.Scroller == "root" ? null : NearestScroller(box);
+                    return (new ResolvedTimeline(false, null, reference.Axis ?? "block", null, scroller), false);
 
                 case TimelineKind.View:
-                    return HasScrollContainerAbove(box)
-                        ? (null, true)
-                        : (new ResolvedTimeline(true, box, reference.Axis ?? "block", reference.Inset), false);
+                    return (new ResolvedTimeline(true, box, reference.Axis ?? "block", reference.Inset, NearestScroller(box)), false);
 
                 default:
                     return ResolveNamed(box, reference.Name!);
             }
         }
 
-        // Whether a box between this one and the document scrolls by itself: it clips its content to a scroll position the engine does not model.
-        private static bool HasScrollContainerAbove(CssBox box)
+        // The nearest scroll container above a box in a document shown on a screen, which is what scrolls it; null when the document itself does.
+        private static CssBox? NearestScroller(CssBox box)
         {
             for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
             {
-                if (MonolithicContent.IsScrollContainer(ancestor)) return true;
+                if (DomUtils.IsScrollerOnScreen(ancestor)) return ancestor;
             }
 
-            return false;
+            return null;
         }
 
         private static (ResolvedTimeline? Timeline, bool Inactive) ResolveNamed(CssBox box, string name)
@@ -83,17 +84,18 @@ namespace PeachBrackets.Html.Animation
                 var (declarer, isView, index) = found;
                 if (isView)
                 {
-                    if (HasScrollContainerAbove(declarer)) return (null, true);
                     var axis = Cycle(SplitList(declarer.ViewTimelineAxis), index).Trim().ToLowerInvariant();
                     var inset = Cycle(SplitList(declarer.ViewTimelineInset), index).Trim();
-                    return (new ResolvedTimeline(true, declarer, axis.Length > 0 ? axis : "block", inset.Length > 0 && !inset.Equals("auto", StringComparison.OrdinalIgnoreCase) ? inset : null), false);
+                    return (new ResolvedTimeline(true, declarer, axis.Length > 0 ? axis : "block", inset.Length > 0 && !inset.Equals("auto", StringComparison.OrdinalIgnoreCase) ? inset : null,
+                        NearestScroller(declarer)), false);
                 }
 
-                // A scroll timeline of the root is the document's own scrolling; of any other box there is no scroll position here.
-                if (declarer.ParentBox is not null && declarer.HtmlTag is not { Name: "html" or "body" }) return (null, true);
+                // A scroll timeline of the root is the document's own scrolling; of a scroll container it is that container's; any other box has no scroll position.
+                var onScroller = DomUtils.IsScrollerOnScreen(declarer);
+                if (!onScroller && declarer.ParentBox is not null && declarer.HtmlTag is not { Name: "html" or "body" }) return (null, true);
 
                 var scrollAxis = Cycle(SplitList(declarer.ScrollTimelineAxis), index).Trim().ToLowerInvariant();
-                return (new ResolvedTimeline(false, null, scrollAxis.Length > 0 ? scrollAxis : "block", null), false);
+                return (new ResolvedTimeline(false, null, scrollAxis.Length > 0 ? scrollAxis : "block", null, onScroller ? declarer : null), false);
             }
         }
 

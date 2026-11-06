@@ -242,7 +242,7 @@ namespace PeachBrackets.Html.Paint
             if (!any)
                 return true; // everything is turned away or behind the viewer: nothing is drawn
 
-            var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), g.GetClip());
+            var destination = Intersect(new Rect(minX, minY, maxX - minX, maxY - minY), ClipForCulling(g));
             if (destination.Width <= 0 || destination.Height <= 0)
             {
                 // Outside the clip, so nothing of these planes is drawn here: see PaintProjective.

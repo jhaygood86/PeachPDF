@@ -159,6 +159,22 @@ What does not apply on a screen, as in a browser: `@page` (size, margins, border
 
 The media features describe the widget: `width` and `height` are the viewport, `orientation` is `portrait` when the height is at least the width, `scan` is `progressive` and `display-mode` is `browser`.
 
+### Scroll containers
+
+On a screen, a box whose `overflow` is `auto`, `scroll` or `hidden` is a scroll container ([CSS Overflow 3 §2](https://www.w3.org/TR/css-overflow-3/#scroll-container)): its content is clipped to its padding box and moves as the container is scrolled. A paged document has none (print shows the whole of the content), and the root and the body, whose `overflow` belongs to the viewport, are not scroll containers: the host scrolls the surface itself. A `<textarea>`, `<select>` and `<input>` are never one; they scroll their own text.
+
+```csharp
+var list = document.GetElement("list")!;
+var metrics = document.GetScrollMetrics(list);            // null when it is not a scroll container: X, Y, MaxX, MaxY, Viewport, ContentWidth, ContentHeight (points)
+foreach (var region in document.SetScrollPosition(list, 0, 120))   // scrollTo; NaN leaves an axis, a position past the end is clamped
+    Invalidate(region);                                     // the scrollport, and only that: nothing is laid out again
+document.ScrollBy(list, 0, 40);                             // scrollBy
+document.ScrollIntoView(someItem);                          // every container that holds it, outermost first, by the least that brings it into view
+document.ScrollPositionChanged += (_, e) => Log(e.Element.Id, e.X, e.Y);
+```
+
+Scrolling moves what is drawn, not the layout, so it costs a repaint of the scrollport. `GetElementBounds`, hit testing (`GetCursorAt`, `GetInteractionAt`), text runs, links and form controls follow the scrolled position, and a point outside a container's scrollport is not on what it clips. A host that routes a wheel turn or a touch drag asks which container is under the pointer with `GetScrollContainerAt(page, x, y, dx, dy)`: the innermost one that can scroll the way asked, so a container at the end of its content passes the turn on to the one around it (scroll chaining), and `null` means the host scrolls the surface. The scrollable overflow area is what the container holds, plus the padding at its end; a nested scroll container counts as its own box. A container drawn with `overflow: auto` or `scroll` shows overlay scrollbars (a thumb on the right and bottom edges, over the content); `hidden` scrolls by these calls only and shows none. The scroll offsets are kept while the document is laid out again and are dropped when a container goes away. Scroll and view timelines (`animation-timeline: scroll(self)`, `scroll(nearest)`, `scroll-timeline`, `view()`) follow the container that scrolls them, see [Scroll-driven animations](#scroll-driven-animations).
+
 ### The viewport, fixed and sticky boxes
 
 `vh`, `vi`/`vb` and a percentage `height` on the root resolve against `ViewportHeightPoints`, which the host pins: a value that followed the content would never settle for `100vh` content. With none set, viewport-height units behave as `auto`. The root is not stretched to the viewport, but the canvas background fills it.

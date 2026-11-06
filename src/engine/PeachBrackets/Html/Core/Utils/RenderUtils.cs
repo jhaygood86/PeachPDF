@@ -57,7 +57,8 @@ namespace PeachBrackets.Html.Utils
 
             // Intersecting with what is already on the stack is the one part that cannot be precomputed:
             // it depends on where in the paint walk this fragment is reached.
-            clip.Intersect(g.GetClip());
+            // (Inside a frame a scroll container has carried back, the rectangle on the stack is in another frame: the canvas does the intersecting there.)
+            if (!Paint.FragmentPainter.InScrolledFrame) clip.Intersect(g.GetClip());
             g.PushClip(clip);
             var pushed = 1;
 
@@ -92,7 +93,7 @@ namespace PeachBrackets.Html.Utils
         internal static (Rect Rect, OverflowClipCurve? Curve)? ResolveOverflowClip(Canvas g, BoxFragment ancestor, bool snapToCssPixels)
         {
             var overflowBox = ancestor.Box;
-            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling) return null;
+            if (overflowBox.Overflow.Value != Overflow.Hidden && !overflowBox.ClipsWithoutScrolling && !DomUtils.IsScrollerOnScreen(overflowBox)) return null;
 
             // Snapped like the ancestor's own decorations, on the edges they snap (the fragment may be a cut
             // of it, and box-decoration-break decides which edges count), so a hoisted descendant is clipped

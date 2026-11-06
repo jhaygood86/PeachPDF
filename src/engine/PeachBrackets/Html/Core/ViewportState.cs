@@ -17,7 +17,7 @@ namespace PeachBrackets.Html
     /// Coordinates are layout units in the surface's own space: the origin is the top-left of the content area, the way every fragment
     /// rectangle of the one fragmentainer is. Only a continuous document has a viewport that moves; a paged document is always as it was laid out.
     /// </remarks>
-    internal sealed class ViewportState
+    internal sealed partial class ViewportState
     {
         private Dictionary<CssBox, (double Dx, double Dy)> _displacements = new(ReferenceEqualityComparer.Instance);
         private ViewportIndex? _index;
@@ -41,7 +41,7 @@ namespace PeachBrackets.Html
         internal Rect Viewport { get; private set; }
 
         /// <summary>Whether no box is displaced, which is the common case and lets every caller skip its walk.</summary>
-        internal bool IsEmpty => _displacements.Count == 0;
+        internal bool IsEmpty => _displacements.Count == 0 && _scroll.Count == 0;
 
         /// <summary>How far the box itself (not what it sits inside) is displaced.</summary>
         internal bool TryGetOwn(CssBox box, out (double Dx, double Dy) displacement) => _displacements.TryGetValue(box, out displacement);
@@ -59,6 +59,13 @@ namespace PeachBrackets.Html
                 {
                     dx += own.Dx;
                     dy += own.Dy;
+                }
+
+                // What a scroll container's content is moved by: each box it holds is carried back by how far the container is scrolled.
+                if (_scroll.Count > 0 && ScrollParentOf(current) is { } scroller && _scroll.TryGetValue(scroller, out var scrolled))
+                {
+                    dx -= scrolled.X;
+                    dy -= scrolled.Y;
                 }
             }
 

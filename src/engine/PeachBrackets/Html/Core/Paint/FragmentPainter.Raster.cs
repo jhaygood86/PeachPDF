@@ -57,7 +57,7 @@ namespace PeachBrackets.Html.Paint
             var bounds = Inflate(ink, margin + bleed);
 
             // Ink outside the clip is invisible, except that a blur pulls in content from up to `margin` away.
-            bounds = Intersect(bounds, Inflate(g.GetClip(), margin));
+            bounds = Intersect(bounds, Inflate(ClipForCulling(g), margin));
             if (bounds.Width <= 0 || bounds.Height <= 0)
                 return false;
 
