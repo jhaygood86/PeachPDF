@@ -21,7 +21,7 @@ design is in [the recent fix](../recent-fixes/2026-11-05-live-animation-clock-an
   before. Outlines and collapsed table borders of an ancestor paint after its positioned children, so a box that moves under one of those edges is drawn over it. The placements,
   links and text runs a paint records are written for a box when the animated layer draws it, not when the content layer is painted. The overlap test is made at the time of each step:
   a box that crosses another one in between two steps is placed by where it is at each. Handling an ancestor's clip or transform in the animated layer (the participant hoisting in
-  `StackingOrder` already re-applies clips) would take more of these boxes off the page.
+  `StackingOrder` already re-applies clips) would take more of these boxes off the page. Tracked in #2236.
 - **A retained layer is recorded at the density it was first drawn at.** A box that scales up a lot is resampled, not re-recorded.
 - **A `background-image` GIF or WebP shows its first frame**; only `<img>` plays. (The image cache keys by address, not by the box that shows it.)
 - **A transition starts from every restyle that loads the document again** (the host's class, attribute and preference changes, a state rule that moves something) by comparing each
