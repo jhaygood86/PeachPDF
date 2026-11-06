@@ -72,6 +72,19 @@ public sealed partial class HtmlView
         CompositionTarget.Rendering += OnRendering;
     }
 
+    // The control API (play, seek, finish...) started a clock that had stopped, from any thread: the loop that steps it starts again on this one.
+    private void OnAnimationsWoke(object? sender, EventArgs e)
+    {
+        if (!ReferenceEquals(sender, _document))
+            return;
+
+        var queue = DispatcherQueue;
+        if (queue is null || queue.HasThreadAccess)
+            EnsureAnimationLoop();
+        else
+            queue.TryEnqueue(EnsureAnimationLoop);
+    }
+
     private void StopAnimationLoop()
     {
         if (!_animating)

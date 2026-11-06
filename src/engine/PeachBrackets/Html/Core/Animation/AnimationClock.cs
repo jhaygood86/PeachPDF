@@ -1396,7 +1396,14 @@ namespace PeachBrackets.Html.Animation
         }
 
         /// <summary>Asks for a step: something about an animation changed that the next one has to show, though nothing may be running.</summary>
-        internal void Wake() => IsRunning = true;
+        internal void Wake()
+        {
+            var wasIdle = !IsRunning;
+            IsRunning = true;
+
+            // A host that stopped its frame loop when nothing ran has to be told to start it again.
+            if (wasIdle) _container.AnimationWakeRequested?.Invoke();
+        }
 
         // The flags that say what has been reported follow the position, without reporting: a seek is not a run through the animation.
         internal void Seek(AnimationApplier.LiveTrack track, double seconds)

@@ -435,6 +435,8 @@ The clock starts them when the document loads, builds the graphic again at its t
 spins repaints that icon. `AnimationFrame.IsRunning` stays true while a graphic still has something to play (an animation that repeats for ever, or one yet to end) and is false once every
 animation of it has ended and is frozen or removed. A document loaded for a still frame (`AnimationProgress`) samples SMIL at that fraction of the span the animations cover instead.
 
+`HtmlDocument.AnimationsWoke` is raised when the control API (`Play`, `CurrentTime`, `Finish`, `Cancel`, `Reverse`...) makes a clock that had stopped run again, so a host that stopped its frame loop when `HasRunningAnimations` went false starts it again; it is not raised while the clock is running or from a step, and it may arrive on any thread. A WinUI `HtmlView` handles it itself.
+
 ## Changing classes, attributes and preferences
 
 A host that has no script engine changes what a loaded document looks like by changing the elements, as a page's script would, and the document is styled again:

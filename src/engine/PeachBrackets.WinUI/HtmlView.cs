@@ -478,6 +478,7 @@ public sealed partial class HtmlView : UserControl
         _document?.Dispose();
         _document = document;
         _loadedWidth = width;
+        document.AnimationsWoke += OnAnimationsWoke;
         document.Selection.SelectionChanged += (_, args) =>
         {
             foreach (var region in args.DirtyRegions)

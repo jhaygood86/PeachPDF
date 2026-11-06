@@ -250,4 +250,49 @@ public class AnimationEventAndControlTests
         Assert.Same(animation, document.GetAnimations()[0]);
         Assert.Equal("a", animation.Element.Id);
     }
+
+    [Fact]
+    public async Task TheControlApi_WakesAClockThatHadStopped_AndOnlyThen()
+    {
+        var (_, document, measuring) = await LoadAsync(Grow + "animation: grow 1s linear forwards }");
+        using var _ = measuring;
+        var woke = 0;
+        document.AnimationsWoke += (_, _) => woke++;
+
+        await document.AdvanceAnimationsAsync(TimeSpan.Zero, measuring);
+        var animation = document.GetAnimations()[0];
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(2), measuring);
+        Assert.False(document.HasRunningAnimations);
+
+        // Running: nothing to tell the host.
+        animation.Pause();
+        Assert.Equal(0, woke);
+
+        animation.Play();
+        Assert.Equal(1, woke);
+        Assert.True(document.HasRunningAnimations);
+
+        // Already running: no second call.
+        animation.PlaybackRate = 2;
+        Assert.Equal(1, woke);
+    }
+
+    [Fact]
+    public async Task SeekingAFinishedAnimation_WakesTheHostToo()
+    {
+        var (_, document, measuring) = await LoadAsync(Grow + "animation: grow 1s linear forwards }");
+        using var _ = measuring;
+        var woke = 0;
+        document.AnimationsWoke += (_, _) => woke++;
+
+        await document.AdvanceAnimationsAsync(TimeSpan.Zero, measuring);
+        var animation = document.GetAnimations()[0];
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(2), measuring);
+
+        animation.CurrentTime = TimeSpan.FromSeconds(0.25);
+        Assert.Equal(1, woke);
+
+        await document.AdvanceAnimationsAsync(TimeSpan.FromSeconds(2.1), measuring);
+        Assert.True(Width(document) > 25);
+    }
 }

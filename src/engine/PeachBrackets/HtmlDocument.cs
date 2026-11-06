@@ -94,6 +94,7 @@ public sealed partial class HtmlDocument : IDisposable
 
         var container = new HtmlContainerInt(renderContext);
         var document = new HtmlDocument(container, renderContext);
+        container.AnimationWakeRequested = () => document.AnimationsWoke?.Invoke(document, EventArgs.Empty);
 
         try
         {
@@ -2116,6 +2117,13 @@ public sealed partial class HtmlDocument : IDisposable
 
     /// <summary>How many retained layers the painter has recorded for animated boxes so far. For tests.</summary>
     internal int RetainedLayersRecorded => _container.AnimationClock?.RecordedLayers ?? 0;
+
+    /// <summary>
+    /// Raised when the animation control API (<see cref="DocumentAnimation"/>: play, seek, finish, cancel, reverse) makes a clock that had stopped run again, so a host that
+    /// stopped stepping the document when <see cref="HasRunningAnimations"/> went false knows to start again. Not raised while the clock is running, or from a step.
+    /// It may be raised on whichever thread made the call.
+    /// </summary>
+    public event EventHandler? AnimationsWoke;
 
     /// <summary>
     /// Whether an animation, a transition or an animated image is playing, so <see cref="AdvanceAnimations(TimeSpan)"/> should be called on the next frame.

@@ -1034,6 +1034,9 @@ namespace PeachBrackets.Html
         /// <summary>The running clock, created with the first step of the animations; null for a document that is not played.</summary>
         internal PeachBrackets.Html.Animation.AnimationClock? AnimationClock { get; set; }
 
+        /// <summary>Raised when something outside a frame step (the control API) makes an idle clock run again; the document turns it into <c>HtmlDocument.AnimationsWoke</c>.</summary>
+        internal Action? AnimationWakeRequested { get; set; }
+
         private PeachBrackets.Html.Paint.ShadowLayerCache? _shadowLayers;
 
         /// <summary>The blurred box shadows this document has painted, kept as layers a canvas that can draws again instead of blurring them anew.</summary>
