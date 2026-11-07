@@ -2252,6 +2252,15 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>
+        /// <c>line-height-step</c> (CSS Rhythmic Sizing 1 §3.1) in layout units: the multiple every line box of this block is rounded up
+        /// to, or 0 for <c>none</c>.
+        /// </summary>
+        public double ActualLineHeightStep =>
+            Style.Text.LineHeightStep is { Length: > 0 } text && !text.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(0, CssValueParser.ParseLength(text, 0, Owner))
+                : 0;
+
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight
         {

@@ -387,6 +387,13 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter HyphenateCharacterConverter = StringConverter.OrAuto();
         public static readonly IValueConverter HyphenateLimitCharsConverter = new HyphenateLimitCharsValueConverter();
         public static readonly IValueConverter HangingPunctuationConverter = new HangingPunctuationValueConverter();
+        public static readonly IValueConverter LineHeightStepConverter = new TokenGrammarValueConverter(RhythmGrammar.TryParseNoneOrLength);
+        public static readonly IValueConverter BlockStepSizeConverter = new TokenGrammarValueConverter(RhythmGrammar.TryParseNoneOrLength);
+        public static readonly IValueConverter BlockStepInsertConverter = new TokenGrammarValueConverter(RhythmGrammar.OneOf("margin-box", "padding-box", "content-box"));
+        public static readonly IValueConverter BlockStepAlignConverter = new TokenGrammarValueConverter(RhythmGrammar.OneOf(Keywords.Auto, "center", "start", "end"));
+        public static readonly IValueConverter BlockStepRoundConverter = new TokenGrammarValueConverter(RhythmGrammar.OneOf("up", "down", "nearest"));
+        public static readonly IValueConverter TextBoxTrimConverter = new TokenGrammarValueConverter(RhythmGrammar.TrimGrammar);
+        public static readonly IValueConverter TextBoxEdgeConverter = new TokenGrammarValueConverter(RhythmGrammar.TryParseEdge);
         public static readonly IValueConverter TextEmphasisStyleConverter = new TokenGrammarValueConverter(t => TextEmphasisGrammar.TryParseStyle(t, out _));
         public static readonly IValueConverter TextEmphasisPositionConverter = new TokenGrammarValueConverter(t => TextEmphasisGrammar.TryParsePosition(t, out _, out _));
         public static readonly IValueConverter TextDecorationSkipConverter = new TokenGrammarValueConverter(TextEmphasisGrammar.TryParseSkip);

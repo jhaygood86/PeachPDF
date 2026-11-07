@@ -1365,8 +1365,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         public double ActualMarginTop =>
             MarginTop.Value is { IsValue: true, Value: { } marginTop }
-                ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this)
-                : 0;
+                ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this) + _blockStepMarginTop
+                : _blockStepMarginTop;
 
         /// <summary>
         /// Gets the actual Margin on the left
@@ -1384,8 +1384,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         public double ActualMarginBottom =>
             MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
-                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this)
-                : 0;
+                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this) + _blockStepMarginBottom
+                : _blockStepMarginBottom;
 
         /// <summary>
         /// Gets the actual Margin on the right
@@ -7871,6 +7871,7 @@ namespace PeachBrackets.Html.Dom
         private async ValueTask PerformLayoutEpilogue(Canvas g)
         {
             CssLayoutEngine.ApplyHeight(this);
+            ApplyBlockStep();
 
             if (_pendingCrossAxisRtlReflection is { Count: > 0 } stackedChildren)
             {

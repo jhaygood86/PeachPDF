@@ -1172,6 +1172,11 @@ namespace PeachBrackets.Html.Dom
             double inlineOffset = 0;
             double blockOffset = 0;
             double lineThickness = 0;
+
+            // line-height-step (CSS Rhythmic Sizing 1 section 3.1) rounds a column's block-axis thickness up to a multiple of the step.
+            var lineHeightStep = blockBox.DerivedStyle.ActualLineHeightStep;
+            double SteppedThickness(double thickness) =>
+                lineHeightStep > 0 && thickness > 0 ? Math.Ceiling(thickness / lineHeightStep - 1e-9) * lineHeightStep : thickness;
             double maxInlineExtentUsed = 0;
             var consecutiveHyphenatedColumns = 0;
             var currentColumnHyphenated = false;
@@ -1212,7 +1217,7 @@ namespace PeachBrackets.Html.Dom
                 currentColumnHyphenated = false;
 
                 maxInlineExtentUsed = Math.Max(maxInlineExtentUsed, inlineOffset);
-                blockOffset += lineThickness;
+                blockOffset += SteppedThickness(lineThickness);
                 lineThickness = 0;
                 trailingRegionalIndicatorCount = 0;
                 trailingGraphemeContext = string.Empty;
@@ -1455,7 +1460,7 @@ namespace PeachBrackets.Html.Dom
             // Floats after the last word, and the ones pinned to the bottom edge, which
             // CssBox.PerformLayoutEpilogue moves there once that edge is final. Placed before the auto width
             // settles, as the ones in the loop above were, so shrinking moves them all together.
-            await PlaceFloatsUpTo(int.MaxValue, blockOffset + lineThickness);
+            await PlaceFloatsUpTo(int.MaxValue, blockOffset + SteppedThickness(lineThickness));
             blockBox.SetPendingBottomFloats(bottomFloats);
 
             // Auto height/width must settle before text-align/bidi below - both read the box's own final
@@ -1472,7 +1477,7 @@ namespace PeachBrackets.Html.Dom
             {
                 // blockOffset only folds in a *finished* line's own thickness (StartNewLine's job) - the
                 // last line's is still sitting in lineThickness, unmoved, when the loop above ends.
-                var contentBlockExtent = blockOffset + lineThickness;
+                var contentBlockExtent = blockOffset + SteppedThickness(lineThickness);
                 ShrinkAutoWidthTo(blockBox, frame, contentBlockExtent);
             }
 
@@ -5972,6 +5977,23 @@ namespace PeachBrackets.Html.Dom
             FontMetricMeasurement.Ratio(font, FontMetric.Ex) * font.Size;
 
         /// <summary>
+        /// <c>line-height-step</c> (CSS Rhythmic Sizing 1 §3.1): rounds the line box's height up to a multiple of the block's step, the
+        /// added space split equally above and below the content so the glyphs sit centred in the stepped line.
+        /// </summary>
+        /// <param name="blockBox">the block container whose <c>line-height-step</c> applies</param>
+        /// <param name="extent">the line's extent before stepping</param>
+        private static LineBoxExtent StepExtent(CssBox blockBox, LineBoxExtent extent)
+        {
+            var step = blockBox.DerivedStyle.ActualLineHeightStep;
+            if (step <= 0) return extent;
+
+            var height = extent.Height;
+            // The epsilon keeps a height that is a multiple of the step, give or take float noise, from jumping a whole step.
+            var extra = Math.Ceiling(height / step - 1e-9) * step - height;
+            return extra <= 0 ? extent : new LineBoxExtent(extent.AboveBaseline + extra / 2, extent.BelowBaseline + extra / 2);
+        }
+
+        /// <summary>
         /// Makes <paramref name="baselineExtent"/> the baseline-aligned extent of the line
         /// <paramref name="coordinates"/> is on, and grows the flow's <c>MaxBottom</c> to hold the line.
         /// </summary>
@@ -5981,8 +6003,8 @@ namespace PeachBrackets.Html.Dom
         {
             var line = coordinates.Line;
             line.BaselineAlignedExtent = baselineExtent;
-            var extent = IncludeEdgeAlignedAtomicHeights(
-                baselineExtent, line.TopAlignedAtomicHeight, line.BottomAlignedAtomicHeight);
+            var extent = StepExtent(line.OwnerBox, IncludeEdgeAlignedAtomicHeights(
+                baselineExtent, line.TopAlignedAtomicHeight, line.BottomAlignedAtomicHeight));
             line.BaselineExtent = extent;
 
             // The line box's own top, stated while the cursor still names it. Every question about
@@ -9468,8 +9490,8 @@ namespace PeachBrackets.Html.Dom
             if (baselineExtent is { } alignedExtent)
             {
                 lineBox.BaselineAlignedExtent = alignedExtent;
-                baselineExtent = IncludeEdgeAlignedAtomicHeights(
-                    alignedExtent, lineBox.TopAlignedAtomicHeight, lineBox.BottomAlignedAtomicHeight);
+                baselineExtent = StepExtent(lineBox.OwnerBox, IncludeEdgeAlignedAtomicHeights(
+                    alignedExtent, lineBox.TopAlignedAtomicHeight, lineBox.BottomAlignedAtomicHeight));
             }
 
             lineBox.BaselineExtent = baselineExtent;

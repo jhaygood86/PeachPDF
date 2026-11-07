@@ -253,6 +253,16 @@ namespace PeachBrackets.Css
             AddShorthand(PropertyNames.WebkitTextStroke, () => new WebkitTextStrokeProperty(),
                 PropertyNames.WebkitTextStrokeWidth,
                 PropertyNames.WebkitTextStrokeColor);
+            AddShorthand(PropertyNames.BlockStep, () => new BlockStepProperty(),
+                PropertyNames.BlockStepSize,
+                PropertyNames.BlockStepInsert,
+                PropertyNames.BlockStepAlign,
+                PropertyNames.BlockStepRound);
+
+            AddShorthand(PropertyNames.TextBox, () => new TextBoxProperty(),
+                PropertyNames.TextBoxTrim,
+                PropertyNames.TextBoxEdge);
+
             AddShorthand(PropertyNames.TextEmphasis, () => new TextEmphasisProperty(),
                 PropertyNames.TextEmphasisStyle,
                 PropertyNames.TextEmphasisColor);

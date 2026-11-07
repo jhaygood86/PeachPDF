@@ -3580,6 +3580,97 @@
       }
     },
     {
+      "name": "line-height-step",
+      "comment": "CSS Rhythmic Sizing 1 section 3.1: none | <length [0,inf)>. Inherited. Each line box of the block is rounded up to a multiple of the step, the extra space split above and below (CssLayoutEngine.StepExtent).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.LineHeightStepConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.LineHeightStepConverter.Convert" },
+      "html": {
+        "propertyPath": "LineHeightStep",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "block-step-size",
+      "comment": "CSS Rhythmic Sizing 1 section 4.1: none | <length [0,inf)>. Rounds a block container height to a multiple of the size (CssBox.ApplyBlockStep).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepSizeConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepSizeConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-insert",
+      "comment": "CSS Rhythmic Sizing 1 section 4.2: margin-box | padding-box | content-box. Where the space rounding adds goes.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepInsertConverter"},
+      "initialValue": "margin-box",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepInsertConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepInsert",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-align",
+      "comment": "CSS Rhythmic Sizing 1 section 4.3: auto | center | start | end. Where the content sits in the added space.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepAlignConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepAlignConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepAlign",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-round",
+      "comment": "CSS Rhythmic Sizing 1 section 4.4: up | down | nearest.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepRoundConverter"},
+      "initialValue": "up",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepRoundConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepRound",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "text-box-trim",
+      "comment": "CSS Inline 3 section 5.1: none | trim-start | trim-end | trim-both. Trims the first/last formatted line of a block container to text-box-edge.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TextBoxTrimConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextBoxTrimConverter.Convert" },
+      "html": {
+        "propertyPath": "TextBoxTrim",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-box-edge",
+      "comment": "CSS Inline 3 section 5.2: auto | text-edge. Inherited. The metrics text-box-trim trims to.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextBoxEdgeConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextBoxEdgeConverter.Convert" },
+      "html": {
+        "propertyPath": "TextBoxEdge",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "vertical-align",
       "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see Keywords.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
       "inherited": false,
