@@ -1907,8 +1907,8 @@ namespace PeachBrackets.Html.Dom
         {
             var text = TextSecurityMasker.Apply(ApplyTextTransform(sourceText, TextTransform), TextSecurity.Value);
             var startIdx = 0;
-            var preserveSpaces = WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap;
-            var respectNewLines = preserveSpaces || WhiteSpace.Value == Whitespace.PreLine || IsBrElement;
+            var preserveSpaces = PreservesSpaces;
+            var respectNewLines = PreservesBreaks || IsBrElement;
 
             // Only ever null for text set after CssBidiParagraphResolver.AssignBidiLevels already ran
             // (e.g. DomParser.CorrectLineBreaksBlocks' synthetic "\n" for a standalone <br>) - one level
@@ -2085,6 +2085,15 @@ namespace PeachBrackets.Html.Dom
                         endIdx++;
                         if (respectNewLines)
                             Words.Add(new CssRectWord(this, "\n", false, false)
+                            {
+                                BidiLevel = newlineBidiLevel,
+                                SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
+                                SourceLength = 1,
+                            });
+                        else if (preserveSpaces)
+                            // css-text-4 4.1: a segment break is converted to a space where it is not kept
+                            // (preserve-spaces), and that space is preserved like the rest.
+                            Words.Add(new CssRectWord(this, " ", false, false)
                             {
                                 BidiLevel = newlineBidiLevel,
                                 SourceStart = ReferenceEquals(sourceText, _text) ? endIdx - 1 : -1,
@@ -9009,8 +9018,29 @@ namespace PeachBrackets.Html.Dom
         /// sites (here, the min-content word loop, and the line breaker) read it from this one place.
         /// </para>
         /// </summary>
-        internal bool WhiteSpacePermitsWrapping =>
-            WhiteSpace.Value is not (Whitespace.NoWrap or Whitespace.Pre);
+        internal bool WhiteSpacePermitsWrapping => TextWrapMode.Value == PeachBrackets.Css.TextWrapMode.Wrap;
+
+        /// <summary>white-space-collapse keeps runs of spaces (preserve, preserve-spaces, break-spaces).</summary>
+        internal bool PreservesSpaces =>
+            WhiteSpaceCollapse.Value is PeachBrackets.Css.WhiteSpaceCollapse.Preserve or PeachBrackets.Css.WhiteSpaceCollapse.PreserveSpaces or PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces;
+
+        /// <summary>white-space-collapse keeps segment breaks as forced line breaks (preserve, preserve-breaks, break-spaces).</summary>
+        internal bool PreservesBreaks =>
+            WhiteSpaceCollapse.Value is PeachBrackets.Css.WhiteSpaceCollapse.Preserve or PeachBrackets.Css.WhiteSpaceCollapse.PreserveBreaks or PeachBrackets.Css.WhiteSpaceCollapse.BreakSpaces;
+
+        /// <summary>
+        /// A preserved space that would overflow the line hangs instead of wrapping (css-text-4 section 4.1.3);
+        /// <c>break-spaces</c> is the one preserving mode where it does not.
+        /// </summary>
+        internal bool PreservedSpacesHang =>
+            WhiteSpaceCollapse.Value is PeachBrackets.Css.WhiteSpaceCollapse.Preserve or PeachBrackets.Css.WhiteSpaceCollapse.PreserveSpaces;
+
+        /// <summary>
+        /// A <c>nowrap</c> run that is not <c>pre</c>-like: the nested unbreakable run which moves whole to a new line
+        /// (a <c>pre</c> box never has).
+        /// </summary>
+        internal bool IsNoWrapRun =>
+            TextWrapMode.Value == PeachBrackets.Css.TextWrapMode.NoWrap && WhiteSpaceCollapse.Value != PeachBrackets.Css.WhiteSpaceCollapse.Preserve;
 
         /// <summary>
         /// Whether this box begins a line of its own in the intrinsic walk, and so

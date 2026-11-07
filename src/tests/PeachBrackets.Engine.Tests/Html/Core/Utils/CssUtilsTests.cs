@@ -564,7 +564,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
             ["color", "rgb(7, 8, 9)"], ["content", "normal"], ["display", "block"], ["direction", "rtl"], ["empty-cells", "hide"], ["caption-side", "bottom"],
             ["clear", "both"], ["position", "absolute"], ["line-height", "1.5"], ["vertical-align", "middle"], ["text-indent", "20px"],
             ["text-align-all", "center"], ["text-decoration-color", "rgb(1, 2, 3)"], ["text-decoration-line", "underline"], ["text-decoration-style", "solid"],
-            ["text-transform", "uppercase"], ["white-space", "nowrap"], ["word-break", "break-all"], ["overflow-wrap", "anywhere"], ["word-wrap", "break-word"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
+            ["text-transform", "uppercase"], ["text-wrap-mode", "nowrap"], ["white-space-collapse", "preserve"], ["word-break", "break-all"], ["overflow-wrap", "anywhere"], ["word-wrap", "break-word"], ["visibility", "hidden"], ["word-spacing", "2px"], ["letter-spacing", "1px"], ["tab-size", "4"], ["tab-size", "2em"],
             ["font-style", "italic"], ["font-variant-caps", "small-caps"], ["font-weight", "bold"], ["font-stretch", "condensed"],
             ["list-style-position", "inside"], ["list-style-type", "square"], ["overflow-x", "hidden"], ["overflow-y", "scroll"], ["z-index", "5"],
             ["flex-direction", "column"], ["flex-wrap", "wrap"], ["justify-content", "center"], ["align-items", "stretch"], ["align-content", "center"],

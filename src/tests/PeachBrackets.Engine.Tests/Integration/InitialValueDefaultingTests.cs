@@ -60,7 +60,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("overflow-x", "visible")]
         [InlineData("letter-spacing", "normal")]
         [InlineData("word-break", "normal")]
-        [InlineData("white-space", "normal")]
+        [InlineData("white-space-collapse", "collapse")]
+        [InlineData("text-wrap-mode", "wrap")]
+        [InlineData("text-wrap-style", "auto")]
         public async Task BareElement_UnsetProperty_ResolvesToStoreInitial(string property, string expected)
         {
             // A <div> with no author/UA declaration for these properties must expose their store initial —

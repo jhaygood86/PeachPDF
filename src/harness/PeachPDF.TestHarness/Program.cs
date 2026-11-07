@@ -7376,6 +7376,42 @@ await SaveShowcaseAsync("hyphenate_limit_last", "Typography & Text", "hyphenate-
     + "following page instead.",
     hyphenateLimitLastHtml, pdfConfig);
 
+// --- text-wrap / white-space-collapse (CSS Text 4) ---
+const string textWrapHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 12pt Arial, sans-serif }
+    h2 { font-size: 14pt; margin: 14pt 0 4pt }
+    .box { width: 300pt; border: 1pt solid #888; padding: 6pt; font-size: 20pt; font-weight: bold }
+    .pre { font: 10pt monospace; border: 1pt solid #888; padding: 4pt; width: 300pt }
+    </style></head><body>
+    <h1>text-wrap and white-space-collapse</h1>
+    <h2>text-wrap: wrap (greedy)</h2>
+    <div class="box">A short heading that wraps just barely</div>
+    <h2>text-wrap: balance</h2>
+    <div class="box" style="text-wrap: balance">A short heading that wraps just barely</div>
+    <h2>text-wrap: balance with text-align: center</h2>
+    <div class="box" style="text-wrap: balance; text-align: center">A short heading that wraps just barely</div>
+    <h2>text-wrap: nowrap</h2>
+    <div class="box" style="text-wrap: nowrap; overflow: hidden">A short heading that wraps just barely</div>
+    <h2>white-space-collapse: preserve-breaks</h2>
+    <div class="pre" style="white-space-collapse: preserve-breaks">a    b
+    c    d</div>
+    <h2>white-space-collapse: preserve-spaces</h2>
+    <div class="pre" style="white-space-collapse: preserve-spaces">a    b
+    c    d</div>
+    <h2>white-space: break-spaces</h2>
+    <div class="pre" style="white-space: break-spaces; width: 90pt">aaaaaaaaaa          bbbbbbbbbb</div>
+    <h2>white-space: pre-wrap (spaces hang)</h2>
+    <div class="pre" style="white-space: pre-wrap; width: 90pt">aaaaaaaaaa          bbbbbbbbbb</div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("text_wrap", "Typography & Text", "text-wrap and white-space-collapse",
+    "CSS Text 4: text-wrap: balance evens out the lines of a short heading (and keeps text-align: center centred in the full measure), "
+    + "text-wrap: nowrap, and the white-space-collapse keywords preserve-breaks, preserve-spaces and break-spaces beside pre-wrap.",
+    textWrapHtml, pdfConfig);
+
 // --- Tagged PDF (PDF/UA) showcase ---
 // Tags are invisible in a normal page render, so this showcase's value is manual inspection of
 // the structure tree (e.g. Acrobat's Tags panel, or another PDF/UA-aware checker) rather than

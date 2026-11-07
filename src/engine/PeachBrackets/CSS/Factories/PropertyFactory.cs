@@ -317,6 +317,10 @@ namespace PeachBrackets.Css
             AddLonghand(PropertyNames.D, () => new SvgOnlyProperty(PropertyNames.D, Converters.Any), true);
             AddShorthand(PropertyNames.PrincePdfFormFieldSettings, () => new PrincePdfFormFieldSettingsProperty(),
                 PropertyNames.PdfFormField, PropertyNames.PdfFormFieldAutoFontSize, PropertyNames.PdfFormFieldComb, PropertyNames.PdfFormFieldDoNotScroll);
+            AddShorthand(PropertyNames.WhiteSpace, () => new WhiteSpaceProperty(),
+                PropertyNames.WhiteSpaceCollapse, PropertyNames.TextWrapMode);
+            AddShorthand(PropertyNames.TextWrap, () => new TextWrapProperty(),
+                PropertyNames.TextWrapMode, PropertyNames.TextWrapStyle);
             AddShorthand(PropertyNames.TextAlign, () => new TextAlignProperty(),
                 PropertyNames.TextAlignAll, PropertyNames.TextAlignLast);
 

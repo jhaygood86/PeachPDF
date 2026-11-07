@@ -3279,7 +3279,7 @@ namespace PeachBrackets.Html.Parse
                             TranslateLength(value), Map.AutoKeywords, CssValueParser.TryParseLengthOrCalc, AutoKeyword.Auto);
                         break;
                     case HtmlConstants.Nowrap:
-                        box.WhiteSpace = CssProperty<Whitespace>.FromValue(Keywords.Nowrap, Whitespace.NoWrap);
+                        box.TextWrapMode = CssProperty<TextWrapMode>.FromValue(Keywords.Nowrap, TextWrapMode.NoWrap);
                         break;
                     case HtmlConstants.Size:
                         TranslateSize(tag, box, value);
@@ -3734,7 +3734,7 @@ namespace PeachBrackets.Html.Parse
                     keepBox = keepBox || childBox.IsBrElement;
 
                     // is the box is pre-formatted
-                    keepBox = keepBox || childBox.WhiteSpace.Value == Whitespace.Pre || childBox.WhiteSpace.Value == Whitespace.PreWrap;
+                    keepBox = keepBox || childBox.PreservesSpaces;
 
                     // is the box is only one in the parent
                     keepBox = keepBox || liveCount == 1;
@@ -4451,7 +4451,7 @@ namespace PeachBrackets.Html.Parse
                 // white-space: pre/pre-wrap text is never collapsible, in either direction: it neither
                 // continues a run arriving from an earlier sibling (a pending run is simply dropped, not
                 // carried through unaltered content) nor opens one for the next.
-                if (box.WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap) return false;
+                if (box.PreservesSpaces) return false;
 
                 if (pending && StripLeadingCollapsibleWhitespace(box))
                 {

@@ -423,6 +423,10 @@ namespace PeachBrackets.Css
         public static readonly string VerticalAlign = "vertical-align";
         public static readonly string Visibility = "visibility";
         public static readonly string WhiteSpace = "white-space";
+        public static readonly string WhiteSpaceCollapse = "white-space-collapse";
+        public static readonly string TextWrap = "text-wrap";
+        public static readonly string TextWrapMode = "text-wrap-mode";
+        public static readonly string TextWrapStyle = "text-wrap-style";
         public static readonly string LineBreak = "line-break";
         public static readonly string Widows = "widows";
         public static readonly string Width = "width";

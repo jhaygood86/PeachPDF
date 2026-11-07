@@ -5,14 +5,28 @@ namespace PeachBrackets.Css
 {
     internal static class Map
     {
-        public static readonly KeywordMap<Whitespace> WhitespaceModes =
-            new KeywordMap<Whitespace>(StringComparer.OrdinalIgnoreCase)
+        public static readonly KeywordMap<WhiteSpaceCollapse> WhiteSpaceCollapses =
+            new KeywordMap<WhiteSpaceCollapse>(StringComparer.OrdinalIgnoreCase)
             {
-                {Keywords.Normal, Whitespace.Normal},
-                {Keywords.Pre, Whitespace.Pre},
-                {Keywords.Nowrap, Whitespace.NoWrap},
-                {Keywords.PreWrap, Whitespace.PreWrap},
-                {Keywords.PreLine, Whitespace.PreLine}
+                {Keywords.Collapse, WhiteSpaceCollapse.Collapse},
+                {Keywords.Preserve, WhiteSpaceCollapse.Preserve},
+                {Keywords.PreserveBreaks, WhiteSpaceCollapse.PreserveBreaks},
+                {Keywords.PreserveSpaces, WhiteSpaceCollapse.PreserveSpaces},
+                {Keywords.BreakSpaces, WhiteSpaceCollapse.BreakSpaces}
+            }.Freeze();
+        public static readonly KeywordMap<TextWrapMode> TextWrapModes =
+            new KeywordMap<TextWrapMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Wrap, TextWrapMode.Wrap},
+                {Keywords.Nowrap, TextWrapMode.NoWrap}
+            }.Freeze();
+        public static readonly KeywordMap<TextWrapStyle> TextWrapStyles =
+            new KeywordMap<TextWrapStyle>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, TextWrapStyle.Auto},
+                {Keywords.Balance, TextWrapStyle.Balance},
+                {Keywords.Stable, TextWrapStyle.Stable},
+                {Keywords.Pretty, TextWrapStyle.Pretty}
             }.Freeze();
         public static readonly KeywordMap<TextOverflow> TextOverflowModes =
             new KeywordMap<TextOverflow>(StringComparer.OrdinalIgnoreCase)
