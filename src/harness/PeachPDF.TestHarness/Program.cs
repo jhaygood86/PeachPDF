@@ -843,6 +843,26 @@ await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Met
     </body></html>
     """, pdfConfig);
 
+await SaveShowcaseAsync("svg_vector_effect_math_depth", "SVG", "vector-effect and math-depth",
+    "Three lines under a viewBox that scales 10x: the plain stroke grows with the scale, vector-effect: non-scaling-stroke keeps the width it declares. Beside them, a formula whose math-depth makes one term a script-sized one.",
+    """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; font-size: 12pt; margin: 24pt }
+      svg { border: 1pt solid #999; margin: 6pt 0 }
+      math { font-size: 28pt }
+    </style></head><body>
+      <h2>vector-effect</h2>
+      <p>scaling stroke (3 user units = 30 px), non-scaling-stroke (3 px), none:</p>
+      <svg width="200" height="60" viewBox="0 0 20 6">
+        <line x1="1" y1="1" x2="19" y2="1" stroke="#2c3e50" stroke-width="3"/>
+        <line x1="1" y1="3" x2="19" y2="3" stroke="#c0392b" stroke-width="3" vector-effect="non-scaling-stroke"/>
+        <line x1="1" y1="5" x2="19" y2="5" stroke="#2980b9" stroke-width="0.3" vector-effect="none"/>
+      </svg>
+      <h2>math-depth</h2>
+      <p><math><mi>x</mi><mo>+</mo><mstyle style="math-depth: add(1)"><mi>y</mi></mstyle><mo>+</mo><mstyle style="math-depth: 2"><mi>z</mi></mstyle></math></p>
+    </body></html>
+    """, pdfConfig);
+
 await SaveShowcaseAsync("pointer_interaction", "Interaction", "Pointer Interaction",
     "cursor and pointer-events: the cursor a screen host shows is read from the document, while in the PDF a link under pointer-events: none is not written as an annotation.",
     pointerHtml, pdfConfig);

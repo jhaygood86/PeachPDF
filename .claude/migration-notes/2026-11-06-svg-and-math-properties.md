@@ -1,0 +1,3 @@
+# `shape-rendering`, `vector-effect: non-scaling-stroke`, `math-style` and `math-depth` now act
+
+Before: all six properties (`shape-rendering`, `vector-effect`, `buffered-rendering`, `math-style`, `math-depth`, `math-shift`) were dropped as unknown. Now `crispEdges`/`optimizeSpeed` draw SVG shapes without antialiasing on pixel canvases (no change in a PDF), `non-scaling-stroke` keeps the stroke width in the host's space (it used to scale with the `viewBox`), and `math-style`/`math-depth` replace `displaystyle`/`scriptlevel`. `buffered-rendering` and `math-shift` are accepted and change nothing.

@@ -61,8 +61,18 @@ namespace PeachBrackets.MathML
             var displayStyle = MathAttributeParser.ParseDisplayStyle(node.GetAttribute("displaystyle"), context.DisplayStyle);
             var scriptLevel = MathAttributeParser.ParseScriptLevel(node.GetAttribute("scriptlevel"), context.ScriptLevel);
             var fontSizePt = MathAttributeParser.ParseMathSize(node.GetAttribute("mathsize"), context.FontSizePt);
-            return context with { DisplayStyle = displayStyle, ScriptLevel = scriptLevel, FontSizePt = fontSizePt };
+
+            return ApplyCssStyle(node, context with { DisplayStyle = displayStyle, ScriptLevel = scriptLevel, FontSizePt = fontSizePt });
         }
+
+        /// <summary>Applies an author's <c>math-style</c>/<c>math-depth</c> on <paramref name="node"/>, which win over the <c>displaystyle</c>/<c>scriptlevel</c>
+        /// attributes: those are presentational hints for the properties (MathML Core section 3.3).</summary>
+        static MathBuildContext ApplyCssStyle(IMathSourceNode node, MathBuildContext context) =>
+            context with
+            {
+                DisplayStyle = node.CssDisplayStyle ?? context.DisplayStyle,
+                ScriptLevel = MathAttributeParser.ParseMathDepth(node.CssMathDepth, context.ScriptLevel),
+            };
 
         /// <summary>This node's own effective color: its <c>mathcolor</c> attribute if present,
         /// otherwise its already-CSS-cascaded <see cref="IMathSourceNode.PaintColor"/>.</summary>
@@ -89,6 +99,9 @@ namespace PeachBrackets.MathML
 
         static MathNode BuildNode(IMathSourceNode node, MathBuildContext context)
         {
+            // mstyle applies the same through its attributes in BuildStyle; any other element only has the CSS properties.
+            if (node.Name != "mstyle") context = ApplyCssStyle(node, context);
+
             return node.Name switch
             {
                 "mrow" => BuildRow(node, context),

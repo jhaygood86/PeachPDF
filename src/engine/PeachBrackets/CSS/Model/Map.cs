@@ -1200,6 +1200,42 @@ namespace PeachBrackets.Css
                 {Keywords.SmallCaption, SystemFont.SmallCaption},
                 {Keywords.StatusBar, SystemFont.StatusBar}
             }.Freeze();
+        public static readonly KeywordMap<ShapeRenderingMode> ShapeRenderingModes =
+            new KeywordMap<ShapeRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, ShapeRenderingMode.Auto},
+                {"optimizeSpeed", ShapeRenderingMode.OptimizeSpeed},
+                {"crispEdges", ShapeRenderingMode.CrispEdges},
+                {"geometricPrecision", ShapeRenderingMode.GeometricPrecision}
+            }.Freeze();
+        public static readonly KeywordMap<VectorEffectMode> VectorEffectModes =
+            new KeywordMap<VectorEffectMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, VectorEffectMode.None},
+                {"non-scaling-stroke", VectorEffectMode.NonScalingStroke},
+                {"non-scaling-size", VectorEffectMode.NonScalingSize},
+                {"non-rotation", VectorEffectMode.NonRotation},
+                {"fixed-position", VectorEffectMode.FixedPosition}
+            }.Freeze();
+        public static readonly KeywordMap<BufferedRenderingMode> BufferedRenderingModes =
+            new KeywordMap<BufferedRenderingMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, BufferedRenderingMode.Auto},
+                {"dynamic", BufferedRenderingMode.Dynamic},
+                {"static", BufferedRenderingMode.Static}
+            }.Freeze();
+        public static readonly KeywordMap<MathStyleMode> MathStyleModes =
+            new KeywordMap<MathStyleMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"normal", MathStyleMode.Normal},
+                {"compact", MathStyleMode.Compact}
+            }.Freeze();
+        public static readonly KeywordMap<MathShiftMode> MathShiftModes =
+            new KeywordMap<MathShiftMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"normal", MathShiftMode.Normal},
+                {"compact", MathShiftMode.Compact}
+            }.Freeze();
         public static readonly KeywordMap<StrokeLinecap> StrokeLinecaps =
             new KeywordMap<StrokeLinecap>(StringComparer.OrdinalIgnoreCase)
             {

@@ -518,6 +518,14 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter FontWeightConverter = Map.FontWeights.ToConverter();
         public static readonly IValueConverter SystemFontConverter = Map.SystemFonts.ToConverter();
         public static readonly IValueConverter StrokeLinecapConverter = Map.StrokeLinecaps.ToConverter();
+        public static readonly IValueConverter ShapeRenderingModeConverter = Map.ShapeRenderingModes.ToConverter();
+        public static readonly IValueConverter VectorEffectModeConverter = Map.VectorEffectModes.ToConverter();
+        public static readonly IValueConverter BufferedRenderingModeConverter = Map.BufferedRenderingModes.ToConverter();
+        public static readonly IValueConverter MathStyleModeConverter = Map.MathStyleModes.ToConverter();
+        public static readonly IValueConverter MathShiftModeConverter = Map.MathShiftModes.ToConverter();
+        // https://www.w3.org/TR/mathml-core/#the-math-depth-property - auto-add | add(<integer>) | <integer>
+        public static readonly IValueConverter MathDepthConverter =
+            new FunctionValueConverter(FunctionNames.Add, IntegerConverter).Or("auto-add").Or(IntegerConverter);
         public static readonly IValueConverter StrokeLinejoinConverter = Map.StrokeLinejoins.ToConverter();
         public static readonly IValueConverter WordBreakConverter = Map.WordBreaks.ToConverter();
         public static readonly IValueConverter LineBreakConverter = Map.LineBreaks.ToConverter();

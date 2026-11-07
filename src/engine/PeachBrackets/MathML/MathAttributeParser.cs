@@ -11,6 +11,7 @@
 //
 #endregion
 
+using System;
 using System.Globalization;
 using PeachDrawing.Core;
 
@@ -131,6 +132,24 @@ namespace PeachBrackets.MathML
             return int.TryParse(trimmed, NumberStyles.None, CultureInfo.InvariantCulture, out var absolute)
                 ? absolute
                 : inherited;
+        }
+
+        /// <summary>
+        /// Parses a CSS <c>math-depth</c> value (MathML Core section 3.3.3) against <paramref name="inherited"/>: <c>add(n)</c> is a change
+        /// to it, a plain integer the depth itself, <c>auto-add</c> (which the script elements do structurally already) and anything
+        /// else leave it unchanged.
+        /// </summary>
+        public static int ParseMathDepth(string? value, int inherited)
+        {
+            var trimmed = value?.Trim();
+            if (string.IsNullOrEmpty(trimmed)) return inherited;
+
+            if (trimmed.StartsWith("add(", StringComparison.OrdinalIgnoreCase) && trimmed.EndsWith(')'))
+                return int.TryParse(trimmed.AsSpan(4, trimmed.Length - 5).Trim(), NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var delta)
+                    ? inherited + delta
+                    : inherited;
+
+            return int.TryParse(trimmed, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var absolute) ? absolute : inherited;
         }
 
         /// <summary>Parses <c>displaystyle</c>/the effective display mode from <c>&lt;math display="..."&gt;</c>,
