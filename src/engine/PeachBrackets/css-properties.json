@@ -4250,6 +4250,84 @@
       }
     },
     {
+      "name": "text-emphasis-style",
+      "comment": "CSS Text Decoration 4 §4.1: none | [ [ filled | open ] || [ dot | circle | double-circle | triangle | sesame ] ] | <string>. cssDataType 'cssom-grammar' calls the shared TextEmphasisGrammar through its converter; the painter re-parses the raw stored text (TextEmphasisGrammar.TryParseStyle). Inherited, so it lives in TextArea.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextEmphasisStyleConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextEmphasisStyleConverter.Convert" },
+      "html": {
+        "propertyPath": "TextEmphasisStyle",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-emphasis-color",
+      "comment": "CSS Text Decoration 4 §4.2, <color>. Inherited; currentcolor (the initial value) is the element's own colour. Read by DerivedStyle.ActualTextEmphasisColor.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": "currentcolor",
+      "cssDataType": ["color", "current-color"],
+      "html": {
+        "propertyPath": "TextEmphasisColor",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-emphasis-position",
+      "comment": "CSS Text Decoration 4 §4.3: [ over | under ] && [ right | left ]?. cssDataType 'cssom-grammar' calls the shared TextEmphasisGrammar through its converter; the painter re-parses the raw stored text. Inherited.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextEmphasisPositionConverter"},
+      "initialValue": "over right",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextEmphasisPositionConverter.Convert" },
+      "html": {
+        "propertyPath": "TextEmphasisPosition",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "text-decoration-skip",
+      "comment": "CSS Text Decoration 3 §2.4 (level 4 makes it a shorthand): none | auto | [ objects || [ spaces | [ leading-spaces || trailing-spaces ] ] || edges || box-decoration ], plus the level 4 'ink'. Parsed and stored only: its initial 'objects' is what the painter already does (atomic inlines are skipped, DecorationContent.ExclusionsFor), and ink skipping is text-decoration-skip-ink. The other keywords change nothing yet. Not inherited.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TextDecorationSkipConverter"},
+      "initialValue": "objects",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextDecorationSkipConverter.Convert" },
+      "html": {
+        "propertyPath": "TextDecorationSkip",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "text-decoration-inset",
+      "comment": "CSS Text Decoration 4 §2.7: auto | <length>{1,2}. Pulls the start (and, with two values, the end) of every decoration line in by that length; one value insets both ends. Applied by FragmentPainter.PaintDecoration after the edge and ellipsis trim. Not inherited.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TextDecorationInsetConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextDecorationInsetConverter.Convert" },
+      "html": {
+        "propertyPath": "TextDecorationInset",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "text-combine-upright",
+      "comment": "css-writing-modes-4 §9.1: none | all | digits <integer [2,4]>?. Parsed and stored only: composing characters into one upright cell needs vertical-text layout this engine does not have (.claude/accepted-gaps/text-combine-upright-has-no-layout-effect.md). Not inherited, so it sits in TextDecorationArea (the non-inherited text area) - TextArea is adopted whole from the parent.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TextCombineUprightConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextCombineUprightConverter.Convert" },
+      "html": {
+        "propertyPath": "TextCombineUpright",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
       "name": "font-size",
       "comment": "CssKeywordOrValue<FontSizeKeyword, LengthOrCalc>-backed (issue #598's follow-up: typed union storage instead of a raw string) — see CssKeywordOrValueParser.FromCssText. supportedValues (via FontSizeKeyword/Map.FontSizeKeywords) deliberately excludes CSS Fonts 4's xxx-large - FontSizeResolver.Resolve's switch has no case for it, so an accepted 'font-size: xxx-large' would fall through to the length/calc() value path (which can't parse the bare keyword), Math.Max(0, ...)-clamp to 0, and silently render invisible text rather than being rejected. RegistryEmitter.BuildHtmlAssignment runs CssBox.ResolveFontSizeValueComputation(value) (the html.valueComputation \"font-size\" case) against the raw authored text before FromCssText parses it - see that method's own doc comment for the eager em/ex/percent/smaller/larger-to-points resolution it performs (calc() and rem stay lazy, resolved later by FontSizeResolver.Resolve/DerivedStyle.ActualFont via LengthOrCalc's deferred-calc mechanism).",
       "inherited": true,

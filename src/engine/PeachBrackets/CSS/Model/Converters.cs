@@ -387,6 +387,11 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter HyphenateCharacterConverter = StringConverter.OrAuto();
         public static readonly IValueConverter HyphenateLimitCharsConverter = new HyphenateLimitCharsValueConverter();
         public static readonly IValueConverter HangingPunctuationConverter = new HangingPunctuationValueConverter();
+        public static readonly IValueConverter TextEmphasisStyleConverter = new TokenGrammarValueConverter(t => TextEmphasisGrammar.TryParseStyle(t, out _));
+        public static readonly IValueConverter TextEmphasisPositionConverter = new TokenGrammarValueConverter(t => TextEmphasisGrammar.TryParsePosition(t, out _, out _));
+        public static readonly IValueConverter TextDecorationSkipConverter = new TokenGrammarValueConverter(TextEmphasisGrammar.TryParseSkip);
+        public static readonly IValueConverter TextDecorationInsetConverter = new TokenGrammarValueConverter(TextEmphasisGrammar.TryParseInset);
+        public static readonly IValueConverter TextCombineUprightConverter = new TokenGrammarValueConverter(TextEmphasisGrammar.TryParseCombineUpright);
         public static readonly IValueConverter HyphenateLimitLinesConverter = NaturalIntegerConverter.Or(Keywords.NoLimit);
         public static readonly IValueConverter HyphenateLimitLastConverter = Map.HyphenateLimitLastModes.ToConverter();
         public static readonly IValueConverter HyphenateBeforeAfterConverter = NaturalIntegerConverter;

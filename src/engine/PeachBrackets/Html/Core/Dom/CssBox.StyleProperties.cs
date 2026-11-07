@@ -475,6 +475,9 @@ namespace PeachBrackets.Html.Dom
         public PaintColor ActualTextFillColor => DerivedStyle.ActualTextFillColor;
         public PaintColor ActualTextStrokeColor => DerivedStyle.ActualTextStrokeColor;
 
+        /// <summary>Gets the colour of the emphasis marks (<c>text-emphasis-color</c>).</summary>
+        public PaintColor ActualTextEmphasisColor => DerivedStyle.ActualTextEmphasisColor;
+
         /// <summary>Gets the actual background color of the box.</summary>
         public PaintColor ActualBackgroundColor => DerivedStyle.ActualBackgroundColor;
 

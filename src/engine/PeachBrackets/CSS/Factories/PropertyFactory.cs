@@ -245,6 +245,9 @@ namespace PeachBrackets.Css
             AddShorthand(PropertyNames.WebkitTextStroke, () => new WebkitTextStrokeProperty(),
                 PropertyNames.WebkitTextStrokeWidth,
                 PropertyNames.WebkitTextStrokeColor);
+            AddShorthand(PropertyNames.TextEmphasis, () => new TextEmphasisProperty(),
+                PropertyNames.TextEmphasisStyle,
+                PropertyNames.TextEmphasisColor);
 
             AddShorthand(PropertyNames.Gap, () => new GapProperty(),
                 PropertyNames.RowGap,
