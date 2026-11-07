@@ -1267,7 +1267,7 @@ namespace PeachBrackets.Html.Utils
                     break;
                 }
 
-                left = intersectingFloat.ActualRight + intersectingFloat.ActualMarginRight;
+                left = intersectingFloat.FlowRightEdge + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
             }
 
@@ -1550,8 +1550,8 @@ namespace PeachBrackets.Html.Utils
         internal static bool VerticalFloatCoversBlockPoint(CssBox floated, double columnBlockAxisPoint, bool blockStartIsRight,
             double columnBlockExtent = 0)
         {
-            var left = floated.Location.X - floated.ActualMarginLeft;
-            var right = floated.ActualRight + floated.ActualMarginRight;
+            var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
+            var right = floated.FlowRightEdge + floated.ActualMarginRight;
 
             if (columnBlockExtent > 0)
             {
@@ -1983,6 +1983,13 @@ namespace PeachBrackets.Html.Utils
             // everything inside a relatively positioned box moves with it, so the offsets of the boxes a blocker lies in have to come off too.
             if (!coordinates.LeftFloatsOnly)
             {
+                offsetX += box.RelativeOffsetX;
+                offsetY += box.RelativeOffsetY;
+            }
+            else if (box.IsFloated)
+            {
+                // The line flow's lookup does not take the offsets of the boxes a float lies in (its callers measure against the border boxes as laid
+                // out), but a float's own offset is its own, and the text beside it goes by where it is in flow, not by where it is drawn.
                 offsetX += box.RelativeOffsetX;
                 offsetY += box.RelativeOffsetY;
             }

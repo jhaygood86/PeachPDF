@@ -1041,6 +1041,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 count = _fontData.ReadUShort();
                 stringOffset = _fontData.ReadUShort();
 
+                // The names of a font that does not give them in US English (or only as the typographic family, name ID 16, or the full or PostScript name)
+                // are kept as fallbacks: a font like that is valid, and it must not be left without a name.
+                string? anyLanguageFamily = null, anyLanguageStyle = null, anyLanguageFullName = null, typographicFamily = null, postScriptName = null;
+
                 for (int idx = 0; idx < count; idx++)
                 {
                     NameRecord nrec = ReadNameRecord();
@@ -1066,6 +1070,16 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                             if (String.IsNullOrEmpty(FullFontName))
                                 FullFontName = Encoding.UTF8.GetString(value, 0, value.Length);
                         }
+                    }
+
+                    if (nrec.platformID == 0 || nrec.platformID == 3)
+                    {
+                        var anyLanguage = Encoding.BigEndianUnicode.GetString(value, 0, value.Length);
+                        if (nrec.nameID == 1) anyLanguageFamily ??= anyLanguage;
+                        if (nrec.nameID == 2) anyLanguageStyle ??= anyLanguage;
+                        if (nrec.nameID == 4) anyLanguageFullName ??= anyLanguage;
+                        if (nrec.nameID == 16) typographicFamily ??= anyLanguage;
+                        if (nrec.nameID == 6) postScriptName ??= anyLanguage;
                     }
 
                     // Read font name and style in US english.
@@ -1101,7 +1115,9 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                         }
                     }
                 }
-                Debug.Assert(!String.IsNullOrEmpty(Name));
+                if (String.IsNullOrEmpty(Name)) Name = anyLanguageFamily ?? typographicFamily ?? anyLanguageFullName ?? FullFontName ?? postScriptName ?? string.Empty;
+                if (String.IsNullOrEmpty(Style)) Style = anyLanguageStyle ?? "Regular";
+                if (String.IsNullOrEmpty(FullFontName)) FullFontName = anyLanguageFullName ?? Name;
             }
             catch (Exception ex)
             {

@@ -1680,7 +1680,7 @@ namespace PeachBrackets.Html.Dom
             return new ReplacedNaturalSize(
                 SvgIntrinsicSize.HasNaturalSize(document, horizontal: true),
                 SvgIntrinsicSize.HasNaturalSize(document, horizontal: false),
-                hasRatio && width is > 0 && height is > 0 ? width / height : null);
+                hasRatio && width is > 0 && height is > 0 ? width / height : SvgIntrinsicSize.RatioOnly(document));
         }
 
         /// <summary>Replaces an item's percentage <c>width</c>, <c>min-width</c> and <c>max-width</c> with the

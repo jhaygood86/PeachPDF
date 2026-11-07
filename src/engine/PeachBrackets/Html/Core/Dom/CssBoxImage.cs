@@ -275,7 +275,7 @@ namespace PeachBrackets.Html.Dom
             if (_svgDocument is not null)
             {
                 var (intrinsicWidth, intrinsicHeight, hasRatio) = SvgIntrinsicSize.ResolveForBox(_svgDocument);
-                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, intrinsicWidth, intrinsicHeight, hasRatio);
+                CssLayoutEngine.MeasureIntrinsicSize(_imageWord, intrinsicWidth, intrinsicHeight, hasRatio, SvgIntrinsicSize.RatioOnly(_svgDocument));
             }
             else
             {

@@ -90,6 +90,28 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
             Assert.False(HtmlContainerInt.IsSameProgress(Table(5, 0, 3), Table(4, 0, 2)));
         }
 
+        // A table cell that spans rows past the last one, in a table with a repeating header (its height pinned, so the float is a few points too tall for the room under it whatever the font), holding a float that fits no band: no pass
+        // places it, and every pass resumes at the same point. The table token carries the row-span bookkeeping, and a cell placed again on
+        // each pass was listed once more every time, so the token was never equal to the one before and the stall went undetected for the
+        // whole pass cap (a hang, as far as the caller could tell: a document of this shape ran for minutes).
+        [Theory]
+        [InlineData("<td rowspan='4'><table><tbody><tr><td rowspan='3'>")]
+        [InlineData("<td rowspan='4'><table><tbody><tr><td>")]
+        [InlineData("<td><table><tbody><tr><td rowspan='3'>")]
+        public async Task ACellSpanningRowsThatHoldsAFloatNoBandCanHold_IsRecoveredFromWithinAFewPasses(string openCells)
+        {
+            var html = "<style>body { margin: 0; font: 12pt Pinned } th { padding: 0; line-height: 20pt } table { border-spacing: 0 }</style><table><thead><tr><th>w1</th></tr></thead><tbody><tr>" +
+                       openCells + "<div style='float:right;width:60%;margin:0 0 6pt 0;height:86pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table>";
+
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 160, margin: 20,
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"),
+                configureContainer: c => c.MaxFragmentainersOverride = 300);
+
+            Assert.True(container.FragmentainerPasses < 40, $"{container.FragmentainerPasses} passes");
+            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.Contains("w2", string.Join(" ", AllText(root)));
+        }
+
         private static BreakToken Chain(CssBox html, CssBox body, int slot, int word) =>
             new BlockBreakToken(html, slot, 1,
                 new InlineBreakToken(body, slot, [0], word, 1, 0, true), false, null);

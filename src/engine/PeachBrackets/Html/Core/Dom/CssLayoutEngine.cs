@@ -77,9 +77,13 @@ namespace PeachBrackets.Html.Dom
         /// <see cref="Image"/>'s pixel size) and <c>CssBoxSvg</c>/<c>CssBoxImage</c>'s SVG-source
         /// sizing (backed by an <c>SvgDocument</c>'s viewBox/width/height). A size with no ratio
         /// (<paramref name="hasIntrinsicRatio"/> false - the 300x150px default of an iframe) leaves the other axis alone
-        /// when only one is set.
+        /// when only one is set.<br/>
+        /// <paramref name="ratioOnly"/> is the aspect ratio of content that has one but no size (an svg with a <c>viewBox</c> and no <c>width</c> or
+        /// <c>height</c>): with no width or height of the box's own set, it takes the width its containing block has available, as a block-level replaced
+        /// element does (CSS 2.1 section 10.3.2), and its height follows the ratio; in a box that is sized to its content it has no width to contribute
+        /// (as in Chromium and WebKit), see <see cref="RatioOnlyWidth"/>.
         /// </summary>
-        public static void MeasureIntrinsicSize(CssRect word, double? intrinsicWidth, double? intrinsicHeight, bool hasIntrinsicRatio = true)
+        public static void MeasureIntrinsicSize(CssRect word, double? intrinsicWidth, double? intrinsicHeight, bool hasIntrinsicRatio = true, double? ratioOnly = null)
         {
             ArgumentNullException.ThrowIfNull(word);
             ArgumentNullException.ThrowIfNull(word.OwnerBox);
@@ -99,9 +103,18 @@ namespace PeachBrackets.Html.Dom
             var width = new CssLength(word.OwnerBox.Width);
             var height = new CssLength(word.OwnerBox.Height);
 
-            var hasImageTagWidth = TryResolveLength(width, word.OwnerBox, pixelsPerPoint, out var widthUnits);
-            var hasImageTagHeight = TryResolveLength(height, word.OwnerBox, pixelsPerPoint, out var heightUnits);
+            var hasImageTagWidth = TryResolveLength(width, word.OwnerBox, pixelsPerPoint, out var widthUnits) || IsWrittenZero(width);
+            var hasImageTagHeight = TryResolveLength(height, word.OwnerBox, pixelsPerPoint, out var heightUnits) || IsWrittenZero(height);
             var scaleImageHeight = false;
+            var widthIsPercentage = false;
+
+            // A percentage height refers to the containing block's height, and only where that is definite (CSS 2.1 section 10.5; otherwise it computes to auto).
+            // A flex item sized by its container is definite once the algorithm has run, so a photo set to `height: 100%` fills its figure.
+            if (!hasImageTagHeight && height is { IsPercentage: true, Number: > 0 } && IsHeightDefinite(word.OwnerBox.ContainingBlock))
+            {
+                heightUnits = height.Number * (ResolveDefiniteHeightValue(word.OwnerBox.ContainingBlock) ?? word.OwnerBox.ContainingBlock.Size.Height);
+                hasImageTagHeight = true;
+            }
 
             // The element's natural (intrinsic) width/height ratio, if it has one, combined with any CSS
             // `aspect-ratio` into the effective ratio used to size the missing axis (CSS Box Sizing 4 §5): a
@@ -110,7 +123,7 @@ namespace PeachBrackets.Html.Dom
             // there is neither a natural ratio nor a usable specified one (the pre-existing behavior).
             double? intrinsicRatio = hasIntrinsicRatio && intrinsicWidth is > 0 && intrinsicHeight is > 0
                 ? intrinsicWidth.Value / intrinsicHeight.Value
-                : null;
+                : ratioOnly is > 0 && intrinsicWidth is not > 0 && intrinsicHeight is not > 0 ? ratioOnly : null;
             var effectiveRatio = ResolveReplacedRatio(word.OwnerBox.AspectRatio, intrinsicRatio);
 
             if (hasImageTagWidth)
@@ -121,10 +134,17 @@ namespace PeachBrackets.Html.Dom
             {
                 word.Width = width.Number * PercentageBasisWidth(word.OwnerBox);
                 scaleImageHeight = true;
+                widthIsPercentage = true;
             }
             else if (intrinsicWidth is > 0)
             {
                 word.Width = intrinsicWidth.Value;
+            }
+            else if (intrinsicRatio is > 0 && ratioOnly is > 0 && !hasImageTagHeight)
+            {
+                // A ratio and no size: the width the containing block has available, the height following from it below.
+                word.Width = RatioOnlyWidth(word.OwnerBox);
+                scaleImageHeight = true;
             }
             else
             {
@@ -192,12 +212,12 @@ namespace PeachBrackets.Html.Dom
             {
                 // If only the width was set (or width was resolved from a percentage / clamped), ratio the
                 // height from it via the effective width/height ratio.
-                if ((hasImageTagWidth && !hasImageTagHeight) || scaleImageHeight)
+                if (!hasImageTagHeight && (hasImageTagWidth || scaleImageHeight))
                 {
                     word.Height = word.Width / effectiveRatio.Value;
                 }
                 // If only the height was set, ratio the width from it.
-                else if (hasImageTagHeight && !hasImageTagWidth)
+                else if (hasImageTagHeight && !hasImageTagWidth && !widthIsPercentage)
                 {
                     word.Width = word.Height * effectiveRatio.Value;
                 }
@@ -279,6 +299,36 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The width of a replaced element that has an aspect ratio and no natural size and whose <c>width</c> is <c>auto</c>: the width its containing
+        /// block has available for its content less the element's own margins, borders and padding, the block-level equation CSS 2.1 section 10.3.2
+        /// suggests for it, and what Chromium and WebKit use (an inline <c>&lt;svg viewBox="0 0 2 1"&gt;</c> in a 200px block is 200px wide).
+        /// A containing block that is itself sized to its content (a float, an absolutely positioned box, an inline-block, a table cell, a flex or grid
+        /// item with an automatic width) has no width to give: the element contributes nothing to it, and is 0 wide in those browsers.
+        /// </summary>
+        private static double RatioOnlyWidth(CssBox box)
+        {
+            var containingBlock = box.ContainingBlock;
+            if (IsSizedToContent(containingBlock))
+                return 0;
+
+            return Math.Max(0, containingBlock.AvailableWidth - box.ActualBoxSizeIncludedWidth);
+        }
+
+        private static bool IsSizedToContent(CssBox block)
+        {
+            if (!(block.Width == Keywords.Auto || string.IsNullOrEmpty(block.Width)))
+                return false;
+
+            if (block.IsFloated || block.IsAbsolutelyPositioned)
+                return true;
+
+            if (block.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable or Keywords.TableCell)
+                return true;
+
+            return block.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid;
+        }
+
+        /// <summary>
         /// The width a percentage width, <c>min-width</c> or <c>max-width</c> of a replaced element refers to: for an absolutely positioned one, its
         /// containing block, the padding box of its nearest positioned ancestor (CSS 2.1 section 10.1; the same measure the box's <c>left</c>/<c>right</c> and
         /// its auto-width fill use), and for any other the width of its parent block.
@@ -331,6 +381,10 @@ namespace PeachBrackets.Html.Dom
             // `auto <ratio>` prefers the natural ratio; a bare `<ratio>` overrides it.
             return hasAuto ? intrinsicRatio ?? ratio.Value : ratio.Value;
         }
+
+        /// <summary>Whether <paramref name="length"/> is a zero that was written (<c>0</c>, <c>0px</c>): a size of nothing, which a replaced element is drawn at, not an absent size that falls back to its intrinsic one.</summary>
+        private static bool IsWrittenZero(CssLength length) =>
+            !length.HasError && !length.IsPercentage && length.Number == 0 && !string.IsNullOrEmpty(length.Length);
 
         /// <summary>
         /// Resolves an explicit absolute width/height/min/max on a replaced element to layout units
@@ -1941,8 +1995,78 @@ namespace PeachBrackets.Html.Dom
                 ApplyVerticalAlignment(lineBox);
                 HeightenAtomicInlineRectangles(lineBox);
                 ExtendInlineBlockRectanglesToLineHeight(lineBox);
+                ApplyInlineRelativeOffsets(blockBox, lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
+        }
+
+        /// <summary>
+        /// Moves what an inline-level box with <c>position: relative</c> holds by its <c>left</c>/<c>top</c>/<c>right</c>/<c>bottom</c> offsets (CSS 2.1 section 9.4.3: a
+        /// relatively positioned box is laid out in flow and then shifted, and what follows it is not affected, so the line is left as it was). Run once the line is final:
+        /// its words, and the rectangles of the inline boxes and atomic inlines on it, move; an atomic inline with block-level content (laid out as a box of its own) is
+        /// moved with everything in it. A block-level relatively positioned box is offset where it is placed instead (<c>CssBox.ApplyRelativeOffset</c>).
+        /// </summary>
+        private static void ApplyInlineRelativeOffsets(CssBox blockBox, CssLineBox line)
+        {
+            if (!HasInlineRelativeBox(blockBox)) return;
+
+            var offsets = new Dictionary<CssBox, (double X, double Y)>();
+
+            (double X, double Y) OffsetOf(CssBox box)
+            {
+                if (offsets.TryGetValue(box, out var known)) return known;
+
+                (double X, double Y) total = (0, 0);
+                for (var current = box; current is not null && !ReferenceEquals(current, blockBox); current = current.ParentBox)
+                {
+                    if (current.Position.Value is PositionMode.Relative && current.IsInline && !current.IsFloated)
+                    {
+                        var own = CssBox.ComputeRelativeOffset(current);
+                        total = (total.X + own.X, total.Y + own.Y);
+                    }
+                }
+
+                offsets[box] = total;
+                return total;
+            }
+
+            foreach (var word in line.Words)
+            {
+                var (wx, wy) = OffsetOf(word.OwnerBox);
+                if (wx == 0 && wy == 0) continue;
+
+                word.Left += wx;
+                word.Top += wy;
+            }
+
+            foreach (var box in line.Rectangles.Keys.ToList())
+            {
+                var (dx, dy) = OffsetOf(box);
+                if (dx == 0 && dy == 0) continue;
+
+                // An atomic inline laid out as a box of its own has its content in lines of its own, which the words above do not reach.
+                if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid && HasBlockLevelDescendant(box))
+                {
+                    box.OffsetLeft(dx);
+                    box.OffsetTop(dy);
+                }
+
+                var rect = line.Rectangles[box];
+                line.Rectangles[box] = new Rect(rect.X + dx, rect.Y + dy, rect.Width, rect.Height);
+            }
+        }
+
+        /// <summary>Whether an inline-level box under <paramref name="blockBox"/>'s own inline content, or the content of one that is laid out in the same lines, has <c>position: relative</c>.</summary>
+        private static bool HasInlineRelativeBox(CssBox blockBox)
+        {
+            foreach (var child in blockBox.Boxes)
+            {
+                if (!child.IsInline || child.IsFloated) continue;
+                if (child.Position.Value is PositionMode.Relative) return true;
+                if (HasInlineRelativeBox(child)) return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -2879,7 +3003,7 @@ namespace PeachBrackets.Html.Dom
         private static bool FillsContainingBlockWidth(CssBox blockBox)
         {
             if (blockBox.DerivedStyle.ActualDisplay is Keywords.TableCell or Keywords.Table
-                or Keywords.InlineTable or Keywords.TableCaption)
+                or Keywords.InlineTable or Keywords.TableCaption or Keywords.InlineBlock)
             {
                 return false;
             }
@@ -3609,6 +3733,7 @@ namespace PeachBrackets.Html.Dom
                 || box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
                 || (box.ItemContentSizeEverPinned
                     && !(box.HeightBeforeItemPin is { } authoredHeight && CssValueParser.IsValidLength(authoredHeight))
+                    && !box.ShrunkByFlexBelowContent
                     && Fragmentation.MonolithicContent.IsScrollContainer(box)
                     && !Fragmentation.MonolithicContent.IsMonolithic(box));
 
@@ -4570,6 +4695,24 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The left float that narrows the line at its own start. Asked from there: the lookup is a point test, and by the time an atomic inline is
+        /// being fitted the cursor has already been pushed past the float, which would then report nothing.
+        /// </summary>
+        private static CssBox? LeftFloatAtTheLineStart(Canvas g, CssBox box, CssLineBoxCoordinates coordinates)
+        {
+            var arrivedAtX = coordinates.CurrentX;
+            coordinates.CurrentX = coordinates.Line.ContentLeft;
+            try
+            {
+                return LeftFloatAt(coordinates, box, g);
+            }
+            finally
+            {
+                coordinates.CurrentX = arrivedAtX;
+            }
+        }
+
+        /// <summary>
         /// Preflights an atomic inline-level box's estimated outer (margin-box) width against what is
         /// left of the current line and, if it does not fit, closes the line for it (CSS 2.1 §9.4.2) -
         /// shared by inline-block (issue #1103) and, since issue #1105, by inline-table/inline-grid/
@@ -4629,6 +4772,19 @@ namespace PeachBrackets.Html.Dom
             var borderLeft = coordinates.CurrentX - b.ActualPaddingLeft - b.ActualBorderLeftWidth;
             var outerRight = borderLeft + outerContentWidth + b.ActualMarginRight + clonedTrailing;
             var blockPermitsWrap = blockBox.WhiteSpacePermitsWrapping;
+
+            if (blockPermitsWrap && IsAtLineStart(coordinates) && outerRight > actualLimitRight + 0.01
+                && (rightFloat is not null || LeftFloatAtTheLineStart(g, box, coordinates) is not null))
+            {
+                // CSS 2.1 section 9.5: a line box shortened by floats that is too small for what it has to hold is shifted down until the content fits or no
+                // float is beside it. An atomic inline has nothing to wrap away from on an empty line, so without this it sat beside the float, past the
+                // edge (an inline-block with side margins after a full-width float went off to the right of it).
+                var originalY = coordinates.CurrentY;
+                var itemWidth = outerContentWidth - b.ActualPaddingLeft - b.ActualBorderLeftWidth + b.ActualMarginRight;
+                ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, itemWidth, 0, 0, clonedTrailing, isRtl, static () => { });
+
+                return coordinates.CurrentY > originalY + 0.01 ? AtomicInlineLineFit.Wrapped : AtomicInlineLineFit.Fits;
+            }
 
             if (!blockPermitsWrap || IsAtLineStart(coordinates) || outerRight <= actualLimitRight + 0.01)
             {
@@ -4744,6 +4900,16 @@ namespace PeachBrackets.Html.Dom
             coordinates.MaxBottom = Math.Max(coordinates.MaxBottom,
                 b.Location.Y + b.ActualBoxSizingHeight + b.ActualMarginBottom);
 
+            // A box whose baseline is its bottom margin edge (no in-flow line box inside it, or overflow other than visible) sits that edge on the line's
+            // baseline, and the line's strut hangs its descent below the baseline: a 30px box alone on a line at 13px Arial is a 33px line (CSS 2.1 section
+            // 10.8.1), where the line ended at the box's own bottom.
+            if (BaselineIsBottomMarginEdge(b, coordinates.Line) && b.VerticalAlign.Value is { IsValue: false, Keyword: VerticalAlignment.Baseline }
+                && coordinates.Line.OwnerBox is { IsReplacedBlockWrapper: false } lineOwner && lineOwner is not (CssBoxImage or CssBoxSvg or CssBoxFrame))
+            {
+                coordinates.MaxBottom = Math.Max(coordinates.MaxBottom,
+                    b.Location.Y + b.ActualBoxSizingHeight + b.ActualMarginBottom + HalfLeadingExtentOf(lineOwner.ActualFont, lineOwner.ActualLineHeight).BelowBaseline);
+            }
+
             // Register the box in the parent line so its border/background is painted.
             coordinates.Line.Rectangles[b] = new Rect(
                 b.Location.X, b.Location.Y, b.ActualBoxSizingWidth, b.ActualBoxSizingHeight);
@@ -4765,7 +4931,15 @@ namespace PeachBrackets.Html.Dom
 
         private static void ShiftEmptyLineBelowCrowdingFloats(CssBox blockBox, CssBox box,
             CssLineBoxCoordinates coordinates, CssRect word, double rightSpacing, double clonedTrailing, bool isRtl,
-            Action<CssRect> growLineToItsExtent)
+            Action<CssRect> growLineToItsExtent) =>
+            ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word.Width, word.Height, rightSpacing, clonedTrailing, isRtl,
+                () => growLineToItsExtent(word));
+
+        // itemWidth: what the line has to hold from its start to the end of the item (a word's width, or an atomic inline's content edge to its margin edge).
+        // itemHeight: how tall the item is, for the check that it would fit below the floats on a fresh page.
+        private static void ShiftEmptyLineBelowCrowdingFloats(CssBox blockBox, CssBox box,
+            CssLineBoxCoordinates coordinates, double itemWidth, double itemHeight, double rightSpacing, double clonedTrailing, bool isRtl,
+            Action growLineToItsExtent)
         {
             // Inside a column only a float that reaches into this column crowds the line: one in another column
             // does not narrow it (css-multicol-1 §2), and heeding it made every column shift its first line past a
@@ -4778,8 +4952,8 @@ namespace PeachBrackets.Html.Dom
 
             CssBox? InThisColumn(CssBox? floated) =>
                 !inColumn || floated is null
-                || (floated.Location.X - floated.ActualMarginLeft < columnRight
-                    && floated.ActualRight + floated.ActualMarginRight > columnLeft)
+                || (floated.FlowLeftEdge - floated.ActualMarginLeft < columnRight
+                    && floated.FlowRightEdge + floated.ActualMarginRight > columnLeft)
                     ? floated
                     : null;
 
@@ -4818,17 +4992,17 @@ namespace PeachBrackets.Html.Dom
                 var leftFloat = InThisColumn(LeftFloatAt(coordinates, box));
                 var rightFloat = InThisColumn(RightFloatAt(coordinates, box));
 
-                var startX = (leftFloat is null ? baseX : leftFloat.ActualRight + leftFloat.ActualMarginRight) + inset;
+                var startX = (leftFloat is null ? baseX : leftFloat.FlowRightEdge + leftFloat.ActualMarginRight) + inset;
                 var limitRight = rightFloat is null
                     ? coordinates.Line.ContentRight
-                    : rightFloat.Location.X - rightFloat.ActualMarginLeft - rightSpacing;
+                    : rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft - rightSpacing;
                 if (isRtl)
                 {
                     limitRight -= GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]),
                         coordinates.Line.FollowsForcedBreak);
                 }
 
-                var fits = startX + word.Width + rightSpacing + clonedTrailing <= limitRight + LineFitTolerance;
+                var fits = startX + itemWidth + rightSpacing + clonedTrailing <= limitRight + LineFitTolerance;
                 // Only floats of this container's own columns make the page's foot the bound: one from a container nested
                 // in a column of it is that container's to place, and shifting the lines past it doubled words there.
                 var ownFloatsOnly = (leftFloat is null || ColumnsContainerOf(leftFloat) == ColumnsContainerOf(blockBox))
@@ -4838,9 +5012,9 @@ namespace PeachBrackets.Html.Dom
                 // margin-bottom would leave the line below the margin edge and still beside the float.
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(leftFloat.ActualBottom, leftFloat.ActualBottom + leftFloat.ActualMarginBottom));
+                    nextY = Math.Min(nextY, Math.Max(leftFloat.FlowBottomEdge, leftFloat.FlowBottomEdge + leftFloat.ActualMarginBottom));
                 if (rightFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(rightFloat.ActualBottom, rightFloat.ActualBottom + rightFloat.ActualMarginBottom));
+                    nextY = Math.Min(nextY, Math.Max(rightFloat.FlowBottomEdge, rightFloat.FlowBottomEdge + rightFloat.ActualMarginBottom));
 
                 // The cursor stays where the first lookup left it unless the line really moves down.
                 if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
@@ -4868,13 +5042,13 @@ namespace PeachBrackets.Html.Dom
 
                 if (!floatsEndInALaterFragmentainer
                     && (nextY >= (ownFloatsOnly || startX >= limitRight - LineFitTolerance ? pageFoot : bandBottom) || shifts >= 1000
-                        || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, word.Height)))
+                        || CannotFitBelowTheFloatsEvenOnAFreshPage(blockBox, originalY, nextY, itemHeight)))
                 {                    coordinates.CurrentY = originalY;
                     coordinates.MaxBottom = originalMaxBottom;
                     coordinates.Line.FlowTop = originalFlowTop;
                     coordinates.Line.ContentRight = originalContentRight;
                     coordinates.CurrentX = arrivedAtX;
-                    growLineToItsExtent(word);
+                    growLineToItsExtent();
                     return;
                 }
 
@@ -4884,7 +5058,7 @@ namespace PeachBrackets.Html.Dom
                 coordinates.Line.FlowTop = null;
                 coordinates.Line.ContentRight = LineContentRightOf(blockBox, nextY);
                 coordinates.Line.FloatLimitRight = null;
-                growLineToItsExtent(word);
+                growLineToItsExtent();
             }
         }
 
@@ -5107,6 +5281,8 @@ namespace PeachBrackets.Html.Dom
         {
             // The float's margin box starts at the line top (CSS 2.1 section 9.5.1 rule 6) and its margins never
             // collapse (section 8.3.1), so the border box sits margin-top below it, a negative one above.
+            b.RelativeOffsetX = 0;
+            b.RelativeOffsetY = 0;
             b.Location = new PaintPoint(
                 blockBox.ClientLeft + b.ActualMarginLeft,
                 (top ?? coordinates.Line.FlowTop ?? coordinates.CurrentY) + b.ActualMarginTop);
@@ -5120,6 +5296,10 @@ namespace PeachBrackets.Html.Dom
             // CssBox.CommitBlockChildOffset.
             FloatBox(b);
 
+            // A float flowed with inline content is placed here rather than as a block-level child, so the relative offset that ends that placement is applied here too.
+            if (b.Position.Value is PositionMode.Relative)
+                CssBox.ApplyRelativeOffset(b);
+
             (coordinates.InlineFloats ??= []).Add(b);
         }
 
@@ -5128,14 +5308,32 @@ namespace PeachBrackets.Html.Dom
         /// whose content flows into the line. Such a box is placed with its own content, which the words' shift beside a float does not move,
         /// so a float over one goes below the line, as it does when the box does not fit beside it. A left float is left as it was.
         /// </summary>
-        private static bool FloatOverlapsLineBox(CssBox floated, CssLineBoxCoordinates coordinates) =>
-            floated.EffectiveFloatSide == Floating.Right
-            && coordinates.Line.AtomicInlineRight > floated.Location.X - floated.ActualMarginLeft + DomUtils.FloatFitTolerance;
+        private static bool FloatOverlapsLineBox(CssBox floated, CssLineBoxCoordinates coordinates)
+        {
+            if (floated.EffectiveFloatSide == Floating.Right)
+                return coordinates.Line.AtomicInlineRight > floated.FlowLeftEdge - floated.ActualMarginLeft + DomUtils.FloatFitTolerance;
+
+            // A left float moves the words of the line aside, but not an atomic inline that is laid out as a box of its own (an inline-block with block-level
+            // content, an inline-table, -flex or -grid): a float over one of those that does not fit beside it goes below the line, as in a browser (CSS 2.1
+            // section 9.5.1 rule 6 puts it below the line when it does not fit; a footer wider than the room left beside a quote did not, and sat on it).
+            var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
+            var right = floated.FlowRightEdge + floated.ActualMarginRight;
+            foreach (var (box, rect) in coordinates.Line.Rectangles)
+            {
+                if (box.DerivedStyle.ActualDisplay is not (Keywords.InlineBlock or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid)) continue;
+                if (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock && !HasBlockLevelDescendant(box)) continue;
+
+                if (rect.X < right - DomUtils.FloatFitTolerance && rect.X + rect.Width > left + DomUtils.FloatFitTolerance)
+                    return true;
+            }
+
+            return false;
+        }
 
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {
-            var left = floated.Location.X - floated.ActualMarginLeft;
-            var right = floated.ActualRight + floated.ActualMarginRight;
+            var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
+            var right = floated.FlowRightEdge + floated.ActualMarginRight;
 
             return line.Words.Any(w => w.Left < right && w.Right > left);
         }
@@ -5150,16 +5348,16 @@ namespace PeachBrackets.Html.Dom
 
             if (floated.EffectiveFloatSide == Floating.Right)
             {
-                var move = floated.Location.X - floated.ActualMarginLeft - lastRight;
+                var move = floated.FlowLeftEdge - floated.ActualMarginLeft - lastRight;
                 var leftFloat = LeftFloatAt(coordinates, blockBox);
-                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.ActualRight + leftFloat.ActualMarginRight;
+                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.FlowRightEdge + leftFloat.ActualMarginRight;
 
                 return firstLeft + move >= leftLimit - LineFitTolerance ? move : null;
             }
 
-            var shift = floated.ActualRight + floated.ActualMarginRight - firstLeft;
+            var shift = floated.FlowRightEdge + floated.ActualMarginRight - firstLeft;
             var rightFloat = RightFloatAt(coordinates, blockBox);
-            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.Location.X - rightFloat.ActualMarginLeft;
+            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft;
 
             return lastRight + shift <= rightLimit + LineFitTolerance ? shift : null;
         }
@@ -5272,14 +5470,14 @@ namespace PeachBrackets.Html.Dom
                 // placed among inline content is a left or a right one depending on its page.
                 if (floatBox.EffectiveFloatSide != side) continue;
 
-                var top = floatBox.Location.Y;
-                var bottom = floatBox.ActualBottom + floatBox.ActualMarginBottom;
+                var top = floatBox.FlowTopEdge;
+                var bottom = floatBox.FlowBottomEdge + floatBox.ActualMarginBottom;
 
                 if (coordinates.CurrentY < top || coordinates.CurrentY >= bottom) continue;
 
                 if (side == Floating.Left)
                 {
-                    var rightEdge = floatBox.ActualRight + floatBox.ActualMarginRight;
+                    var rightEdge = floatBox.FlowRightEdge + floatBox.ActualMarginRight;
 
                     // The cursor has already moved past this float's right edge (earlier words on this
                     // line advanced it there) - it no longer constrains anything further along the line.
@@ -5290,8 +5488,8 @@ namespace PeachBrackets.Html.Dom
                         best = floatBox;
                     }
                 }
-                else if (floatBox.ActualRight + floatBox.ActualMarginRight > coordinates.Line.ContentLeft
-                         && (best is null || floatBox.Location.X - floatBox.ActualMarginLeft
+                else if (floatBox.FlowRightEdge + floatBox.ActualMarginRight > coordinates.Line.ContentLeft
+                         && (best is null || floatBox.FlowLeftEdge - floatBox.ActualMarginLeft
                              < best.Location.X - best.ActualMarginLeft))
                 {
                     // Not one lying wholly left of the line: a float in an earlier column of a multi-column
@@ -5336,8 +5534,8 @@ namespace PeachBrackets.Html.Dom
                 var leftFloat = LeftFloatAt(coordinates, block);
                 var rightFloat = RightFloatAt(coordinates, block);
 
-                return (leftFloat is null ? left : Math.Max(left, leftFloat.ActualRight + leftFloat.ActualMarginRight),
-                    rightFloat is null ? right : Math.Min(right, rightFloat.Location.X - rightFloat.ActualMarginLeft));
+                return (leftFloat is null ? left : Math.Max(left, leftFloat.FlowRightEdge + leftFloat.ActualMarginRight),
+                    rightFloat is null ? right : Math.Min(right, rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft));
             }
             finally
             {
@@ -5394,8 +5592,8 @@ namespace PeachBrackets.Html.Dom
             if (ancestorFloat is null) return inlineFloat;
             if (inlineFloat is null) return ancestorFloat;
 
-            return inlineFloat.ActualRight + inlineFloat.ActualMarginRight
-                   > ancestorFloat.ActualRight + ancestorFloat.ActualMarginRight
+            return inlineFloat.FlowRightEdge + inlineFloat.ActualMarginRight
+                   > ancestorFloat.FlowRightEdge + ancestorFloat.ActualMarginRight
                 ? inlineFloat
                 : ancestorFloat;
         }
@@ -5447,8 +5645,8 @@ namespace PeachBrackets.Html.Dom
             if (ancestorFloat is null) return inlineFloat;
             if (inlineFloat is null) return ancestorFloat;
 
-            return inlineFloat.Location.X - inlineFloat.ActualMarginLeft
-                   < ancestorFloat.Location.X - ancestorFloat.ActualMarginLeft
+            return inlineFloat.FlowLeftEdge - inlineFloat.ActualMarginLeft
+                   < ancestorFloat.FlowLeftEdge - ancestorFloat.ActualMarginLeft
                 ? inlineFloat
                 : ancestorFloat;
         }
@@ -6709,7 +6907,7 @@ namespace PeachBrackets.Html.Dom
                             var emergencyRightFloat = RightFloatAt(coordinates, box);
                             if (emergencyRightFloat is not null)
                             {
-                                emergencyLimitRight = emergencyRightFloat.Location.X
+                                emergencyLimitRight = emergencyRightFloat.FlowLeftEdge
                                                       - emergencyRightFloat.ActualMarginLeft - rightSpacing;
                             }
 
@@ -8129,8 +8327,20 @@ namespace PeachBrackets.Html.Dom
         /// <see cref="CssBox.FirstHostingLineBox"/> when this box's own first word wraps to a new line)
         /// and, historically, <see cref="BubbleRectangles"/>'s own compensation for the same case.
         /// </summary>
-        private static bool IsFirstChildOfItsParent(CssBox box) =>
-            box.ParentBox is { } parent && parent.Boxes.Count > 0 && ReferenceEquals(parent.Boxes[0], box);
+        private static bool IsFirstChildOfItsParent(CssBox box)
+        {
+            if (box.ParentBox is not { } parent) return false;
+
+            // A tag-less inline box holding no words and nothing else (what the collapsed white space of the markup around an element can leave) is in front of
+            // the box without being content, so it does not stop the parent's content from beginning with it.
+            foreach (var sibling in parent.Boxes)
+            {
+                if (ReferenceEquals(sibling, box)) return true;
+                if (sibling.HtmlTag is not null || sibling.Words.Count > 0 || sibling.Boxes.Count > 0) return false;
+            }
+
+            return false;
+        }
 
         /// <summary>
         /// Widens each atomic inline-level box on <paramref name="line"/> from the rectangle its own
@@ -8333,6 +8543,12 @@ namespace PeachBrackets.Html.Dom
                 new LineBoxExtent(declaredHeight + box.ActualMarginTop, box.ActualMarginBottom),
                 CumulativeRaiseOf(box, blockBox));
             var held = line.BaselineAlignedExtent ?? line.BaselineExtent;
+
+            // A line holding nothing but this box still has its strut (CSS 2.1 section 10.8.1: every line box starts with a zero-width inline box with the
+            // block's own font and line-height), whose descent hangs below the baseline the box sits on: an inline-block of 30px with nothing else on its line
+            // is a 33px line at 13px Arial, as in a browser. Words on the line bring their own strut, so it is only added where there is none.
+            if (held is null && !blockBox.IsReplacedBlockWrapper && blockBox is not (CssBoxImage or CssBoxSvg or CssBoxFrame))
+                held = HalfLeadingExtentOf(blockBox.ActualFont, blockBox.ActualLineHeight);
 
             CommitLineExtent(coordinates, held is { } known ? known.Union(extent) : extent);
             return true;
@@ -10126,11 +10342,14 @@ namespace PeachBrackets.Html.Dom
         /// <summary>
         /// Whether <paramref name="box"/> is an atomic inline-level box that keeps its content in line boxes
         /// of its own - an <c>inline-flex</c>, <c>inline-grid</c> or <c>inline-table</c> - rather than as
-        /// words on <paramref name="line"/>, so alignment has to measure and move it as a unit.
+        /// words on <paramref name="line"/>, so alignment has to measure and move it as a unit. An <c>inline-block</c> is one too when it
+        /// was laid out atomically (<see cref="FlowAtomicBlockContentChild"/>: it holds a block-level child, which an absolutely
+        /// positioned one is), which shows as line boxes of its own; one whose inline content was flowed into this line is not.
         /// </summary>
         private static bool IsAtomicLineUnit(CssLineBox line, CssBox box) =>
             !ReferenceEquals(box, line.OwnerBox)
-            && box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable;
+            && (box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable
+                || (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock && LastOwnLineBaselineOf(box) is not null));
 
         private static bool HasAtomicLineUnit(CssLineBox line)
         {
@@ -10166,14 +10385,33 @@ namespace PeachBrackets.Html.Dom
             return end;
         }
 
+        private static bool IsWithinAny(CssBox? box, List<CssBox> units)
+        {
+            for (; box is not null; box = box.ParentBox)
+            {
+                if (units.Contains(box)) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Moves everything on <paramref name="line"/> right by <paramref name="diff"/>: its words, its
         /// rectangles and each atomic unit's whole subtree, which lives in line boxes of its own.
         /// </summary>
         private static void ShiftLineContentLeft(CssLineBox line, double diff)
         {
+            List<CssBox>? units = null;
+            foreach (var b in line.Rectangles.Keys)
+            {
+                if (IsAtomicLineUnit(line, b)) (units ??= []).Add(b);
+            }
+
             foreach (var word in line.Words)
             {
+                // The words of an atomic unit that this line lists travel with the unit's subtree below; moving them here too would shift them twice.
+                if (units is not null && IsWithinAny(word.OwnerBox, units)) continue;
+
                 word.Left += diff;
             }
 
@@ -10181,7 +10419,7 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var b in line.Rectangles.Keys.ToList())
             {
-                if (IsAtomicLineUnit(line, b))
+                if (units is not null && units.Contains(b))
                 {
                     b.OffsetLeft(diff);
                     MoveStaticallyPlacedDescendants(b, b, diff, isVertical: true);

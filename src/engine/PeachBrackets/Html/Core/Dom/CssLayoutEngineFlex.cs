@@ -943,7 +943,11 @@ namespace PeachBrackets.Html.Dom
                 // can resolve against it (CssLayoutEngine.IsHeightDefinite/ResolveDefiniteHeightValue,
                 // issue #1167) - Height's own CSS string only ever reflects this transiently, inside
                 // ResizeItem's own temporary set/relayout/revert below.
-                if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
+                if (!_mainAxisIsPhysicalX)
+                {
+                    item.Box.AlgorithmicDefiniteHeight = final;
+                    item.Box.ShrunkByFlexBelowContent = final < item.NaturalMainSize - 0.5;
+                }
             }
         }
 

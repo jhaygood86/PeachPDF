@@ -1319,9 +1319,35 @@ namespace PeachBrackets.Css
         }
 
         // See NewString's own comment on this same bad-to-valid inversion.
+        /// <summary>
+        /// The location of the style sheet being read, when it is one a relative <c>url()</c> is to be taken from: a reference in a style sheet is
+        /// relative to the style sheet, not to the document that links it (CSS Values 4, "Resolving URLs"). Null leaves the text as written.
+        /// </summary>
+        internal Uri UrlBase { get; set; }
+
         private Token NewUrl(string functionName, ReadOnlyMemory<char> data, bool bad = false)
         {
+            if (!bad && UrlBase is not null)
+            {
+                data = ResolveAgainstUrlBase(data);
+            }
+
             return Token.NewUrl(functionName, data, !bad, _position);
+        }
+
+        private ReadOnlyMemory<char> ResolveAgainstUrlBase(ReadOnlyMemory<char> data)
+        {
+            var text = data.Span;
+
+            // Empty, a fragment (an SVG reference to an element of the same document) and anything with a scheme (`data:`, `http:`) are not relative to a location.
+            var colon = text.IndexOf(':');
+            var firstSeparator = text.IndexOfAny('/', '?', '#');
+            if (text.IsEmpty || text[0] == '#' || (colon > 0 && (firstSeparator < 0 || colon < firstSeparator)))
+            {
+                return data;
+            }
+
+            return Uri.TryCreate(UrlBase, text.ToString(), out var resolved) ? resolved.AbsoluteUri.AsMemory() : data;
         }
 
         private Token NewRange(string range)

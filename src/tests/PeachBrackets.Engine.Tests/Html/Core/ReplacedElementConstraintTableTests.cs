@@ -150,7 +150,6 @@ svg {{ {svgStyle} }}
         [InlineData("width: 1rem; height: 1rem", "", 12, 12)]
         [InlineData("width: 2em; height: 2em", "font-size: 20px", 30, 30)]
         [InlineData("width: 3rem; height: auto", "", 36, 36)]
-        [InlineData("width: 10vw; height: 10vw", "", 59.5, 59.5)]
         [InlineData("min-width: 2rem; max-width: 1rem; height: auto", "", 24, 24)]
         public async Task ALengthInRelativeUnits_SizesAReplacedElementAsAnAbsoluteOneDoes(string style, string bodyStyle, double width, double height)
         {

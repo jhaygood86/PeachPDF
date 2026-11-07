@@ -3244,6 +3244,12 @@ namespace PeachBrackets.Html.Fragmentation
             // box's own bounds already reach far enough on their own). Closes issue #569.
             var boundsEndAtContentOnThePageGrid = shellRect is null && usesOwnBounds
                 && capture is null && box.ItemContentSizeEverPinned
+                // Only a box whose height came from its content: a definite author height is the used height whatever the content does (CSS 2.1 section
+                // 10.6.3), so content that overflows it is overflow, not part of the box, and its background and border stay at the box's own size. Nor does
+                // content past a flex-shrunk item (section 9.7) or past a clip (`overflow: hidden`, which makes the pinned size the item's real one) grow it.
+                && !(box.HeightBeforeItemPin is { } authoredHeight && CssValueParser.IsValidLength(authoredHeight))
+                && !box.ShrunkByFlexBelowContent
+                && box.OverflowY.Value == Css.Overflow.Visible
                 && (children.Count > 0 || words.Count > 0);
 
             // A shell is backgrounds and borders and nothing else, which CSS Paged Media Level 3 §3.2

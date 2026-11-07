@@ -38,6 +38,9 @@ namespace PeachBrackets.Css
 
         internal ParserOptions Options { get; }
 
+        /// <summary>Where the style sheet being parsed lives, so its relative <c>url()</c>s can be made absolute; null for one with no location of its own.</summary>
+        internal Uri UrlBase { get; set; }
+
         public Stylesheet Parse(string content)
         {
             var source = new TextSource(content);
@@ -121,7 +124,7 @@ namespace PeachBrackets.Css
             // that needs disposing (it's an already-decoded ReadOnlyMemory<char> cursor), so there is no
             // lifetime hazard here to guard against the way there was when it could be stream-backed.
             var sheet = new Stylesheet(this);
-            var tokenizer = new Lexer(source);
+            var tokenizer = new Lexer(source) { UrlBase = UrlBase };
             var start = tokenizer.GetCurrentPosition();
             var builder = new StylesheetComposer(tokenizer, this);
             var end = builder.CreateRules(sheet);

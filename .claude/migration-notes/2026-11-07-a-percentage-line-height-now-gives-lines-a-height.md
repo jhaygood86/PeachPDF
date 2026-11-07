@@ -1,0 +1,3 @@
+# A percentage `line-height` now gives lines a height
+
+`line-height: 150%` (or any percentage, or a `calc()` containing one) used to make every line 0 tall: text of consecutive blocks was drawn at the same position and the blocks had no height or background. It is now that share of the element's own `font-size` (150% of 14px is 21px), as in a browser for the element that sets it (a descendant with a different font size still resolves the percentage against its own, see the `em` accepted gap). A document that used a percentage `line-height` and looked broken now lays out normally and is taller; a document that only used a unit-less number or `em` is unchanged.
