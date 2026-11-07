@@ -5787,6 +5787,32 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// CSS Text Decoration 4 section 4.4: the line box makes room for <c>text-emphasis</c> marks that would overflow it. A mark is a half-size
+        /// glyph set just beyond the text's em box, so the side it is on has to reach the em box's edge plus the mark's height; the leading the
+        /// line already has there counts towards that rather than adding to it. In a vertical writing mode the marks are beside the column on the
+        /// side <c>right</c>/<c>left</c> names; either way it is one side's reach, which is all a column's thickness reads.
+        /// </summary>
+        private static LineBoxExtent WithEmphasisReach(CssBox box, LineBoxExtent extent)
+        {
+            var style = box.TextEmphasisStyle;
+            if (string.IsNullOrEmpty(style) || style.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)) return extent;
+            if (!TextEmphasisGrammar.TryParseStyle(style, out var mark) || mark.Glyph() is not { } glyph) return extent;
+
+            var over = true;
+            var right = true;
+            if (box.TextEmphasisPosition is { Length: > 0 } position)
+                TextEmphasisGrammar.TryParsePosition(position, out over, out right);
+            if (box.WritingMode.Value.IsVertical()) over = right;
+
+            var font = box.ActualFont;
+            var markHeight = box.ActualFontForCodepoint(System.Text.Rune.GetRuneAt(glyph, 0), 0.5).Height;
+
+            return over
+                ? extent with { AboveBaseline = Math.Max(extent.AboveBaseline, font.Ascent + markHeight) }
+                : extent with { BelowBaseline = Math.Max(extent.BelowBaseline, font.Height - font.Ascent + markHeight) };
+        }
+
+        /// <summary>
         /// How far a line box holding <paramref name="word"/> is obliged to reach on each side of its
         /// baseline, per <see href="https://www.w3.org/TR/CSS21/visudet.html#line-height">CSS 2.1
         /// §10.8.1</see>: the per-side largest <see cref="HalfLeadingExtentOf"/> among every inline box
@@ -5836,9 +5862,9 @@ namespace PeachBrackets.Html.Dom
             // The strut is the block's own first-line style; the word's is its inline's (CssBox.FirstLineInlineStyle), which can differ.
             var strutStyle = word.FirstLineStyle is null ? blockBox : blockBox.ResolvedFirstLineStyle ?? word.FirstLineStyle;
 
-            LineBoxExtent ExtentOf(CssBox box) => reserveDoubleOverlineReach
+            LineBoxExtent ExtentOf(CssBox box) => WithEmphasisReach(box, reserveDoubleOverlineReach
                 ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
-                : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
+                : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight));
 
             // A replaced flex/grid item is its own block container (the cascade blockifies it and
             // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and

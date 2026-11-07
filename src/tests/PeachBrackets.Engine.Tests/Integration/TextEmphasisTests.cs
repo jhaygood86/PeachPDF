@@ -177,5 +177,70 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
         }
+
+        [Fact]
+        public async Task AnOverMarkMakesRoomOnATightLine()
+        {
+            // line-height 1: no leading to hold a mark, so the line has to grow above the baseline by the mark's height.
+            var (plain, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1'>ab</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1;text-emphasis-style:dot'>ab</div>", "d");
+            var (under, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1;text-emphasis-style:dot;text-emphasis-position:under right'>ab</div>", "d");
+
+            Assert.True(marked.ActualBottom - marked.Location.Y > plain.ActualBottom - plain.Location.Y + 1);
+            Assert.True(under.ActualBottom - under.Location.Y > plain.ActualBottom - plain.Location.Y + 1);
+            Assert.True(marked.LineBoxes[0].BaselineExtent!.Value.AboveBaseline > plain.LineBoxes[0].BaselineExtent!.Value.AboveBaseline);
+            Assert.Equal(plain.LineBoxes[0].BaselineExtent!.Value.BelowBaseline, marked.LineBoxes[0].BaselineExtent!.Value.BelowBaseline, 3);
+        }
+
+        [Fact]
+        public async Task LeadingThatAlreadyHoldsTheMarkIsNotAddedTo()
+        {
+            var (plain, _) = await PaintAsync("<div id='d' style='font-size:10pt;line-height:4'>ab</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='font-size:10pt;line-height:4;text-emphasis-style:dot'>ab</div>", "d");
+
+            Assert.Equal(plain.ActualBottom - plain.Location.Y, marked.ActualBottom - marked.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task VerticalText_DrawsTheMarksBesideEachCharacter_OnTheRightByDefault()
+        {
+            var (_, g) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle'>abc</div>", "d");
+
+            var marks = g.DrawStringCalls.Where(c => c.Text == "●").ToList();
+            var letters = g.DrawStringCalls.Where(c => c.Text is "a" or "b" or "c").ToList();
+
+            Assert.Equal(3, marks.Count);
+            Assert.All(marks, m => Assert.True(m.PaintPoint.X >= letters[0].PaintPoint.X + letters[0].Font.Size / 4));
+        }
+
+        [Fact]
+        public async Task VerticalText_LeftPutsTheMarksOnTheOtherSide()
+        {
+            var (_, right) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle'>abc</div>", "d");
+            var (_, left) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle;text-emphasis-position:over left'>abc</div>", "d");
+
+            Assert.True(left.DrawStringCalls.First(c => c.Text == "●").PaintPoint.X < right.DrawStringCalls.First(c => c.Text == "●").PaintPoint.X);
+        }
+
+        [Fact]
+        public async Task VerticalText_AMarkReservesRoomInTheColumn()
+        {
+            var (plain, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;font-size:20pt;line-height:1'>abc</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;font-size:20pt;line-height:1;text-emphasis-style:circle'>abc</div>", "d");
+
+            Assert.True(marked.ActualRight - marked.Location.X > plain.ActualRight - plain.Location.X + 1);
+        }
+
+        [Fact]
+        public async Task TextShadow_AppliesToTheMarksToo()
+        {
+            var (_, plain) = await PaintAsync("<div id='d' style='text-emphasis-style:circle'>a</div>", "d");
+            var (_, shadowed) = await PaintAsync("<div id='d' style='text-emphasis-style:circle;text-shadow:2pt 2pt 0 #00f'>a</div>", "d");
+
+            Assert.True(shadowed.DrawStringCalls.Count(c => c.Text == "●") > plain.DrawStringCalls.Count(c => c.Text == "●"));
+        }
     }
 }

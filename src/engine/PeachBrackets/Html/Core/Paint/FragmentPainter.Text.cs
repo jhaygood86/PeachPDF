@@ -340,6 +340,7 @@ namespace PeachBrackets.Html.Paint
                     g.DrawString(text, font, colorOverride ?? styleSource.ActualTextFillColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     PaintTextStroke(g, effectsStyle ?? styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
+                    PaintTextEmphasis(g, styleSource, text, new PaintPoint(0, baselineAdjust), naturalSize, wordFeatures, font, vertical: true);
                     g.PopTransform();
                 }
             }
@@ -562,7 +563,9 @@ namespace PeachBrackets.Html.Paint
                 : null;
 
             var index = 0;
-            foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, wordFeatures))
+            var uprightPlacements = EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, wordFeatures).ToList();
+            PaintUprightTextEmphasis(g, styleSource, uprightPlacements);
+            foreach (var placement in uprightPlacements)
             {
                 var charLogicalText = logicalRunes != null ? logicalRunes[index].ToString() : null;
 

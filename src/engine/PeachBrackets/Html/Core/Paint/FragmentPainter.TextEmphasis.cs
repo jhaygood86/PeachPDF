@@ -22,7 +22,8 @@ namespace PeachBrackets.Html.Paint
         /// Spaces and control characters get none. Layout reserves no room for the marks: a mark over the first line of a
         /// box with a tight <c>line-height</c> can overlap what is above it. Vertical text draws none yet.
         /// </remarks>
-        private static void PaintTextEmphasis(Canvas g, CssBox styleSource, string text, PaintPoint point, Size size, ShapeSettings features, Font font)
+        private static void PaintTextEmphasis(Canvas g, CssBox styleSource, string text, PaintPoint point, Size size, ShapeSettings features, Font font,
+            bool vertical = false)
         {
             var style = styleSource.TextEmphasisStyle;
             if (string.IsNullOrEmpty(style) || g.InvisibleText || text.Length == 0)
@@ -32,9 +33,15 @@ namespace PeachBrackets.Html.Paint
                 return;
 
             var over = true;
+            var right = true;
             var position = styleSource.TextEmphasisPosition;
             if (!string.IsNullOrEmpty(position))
-                TextEmphasisGrammar.TryParsePosition(position, out over, out _);
+                TextEmphasisGrammar.TryParsePosition(position, out over, out right);
+
+            // In a vertical writing mode the side is named by right/left, not over/under (CSS Text Decoration 4 section 4.3). A sideways run
+            // is painted in its own rotated frame, whose over side faces the physical right.
+            if (vertical)
+                over = right;
 
             var markFont = styleSource.ActualFontForCodepoint(Rune.GetRuneAt(glyph, 0), 0.5);
             var markSize = g.MeasureString(glyph, markFont);
@@ -68,6 +75,44 @@ namespace PeachBrackets.Html.Paint
                     continue;
 
                 var x = point.X + start + (width - start - markSize.Width) / 2;
+                // text-shadow applies to the marks too (CSS Text Decoration 4 section 4: they are text).
+                PaintTextShadows(g, styleSource, markFont, glyph, new PaintPoint(x, y), markSize, default, null);
+                g.DrawString(glyph, markFont, color, new PaintPoint(x, y), markSize, 0, palette, null);
+            }
+        }
+
+        /// <summary>
+        /// Draws the marks of an upright vertical run: one per character, centred on the character's cell down the column and set beside the
+        /// glyph on the side <c>text-emphasis-position</c> names (<c>right</c> by default).
+        /// </summary>
+        private static void PaintUprightTextEmphasis(Canvas g, CssBox styleSource, IEnumerable<UprightGlyphPlacement> placements)
+        {
+            var style = styleSource.TextEmphasisStyle;
+            if (string.IsNullOrEmpty(style) || g.InvisibleText)
+                return;
+
+            if (!TextEmphasisGrammar.TryParseStyle(style, out var mark) || mark.Glyph() is not { } glyph)
+                return;
+
+            var right = true;
+            var position = styleSource.TextEmphasisPosition;
+            if (!string.IsNullOrEmpty(position))
+                TextEmphasisGrammar.TryParsePosition(position, out _, out right);
+
+            var markFont = styleSource.ActualFontForCodepoint(Rune.GetRuneAt(glyph, 0), 0.5);
+            var markSize = g.MeasureString(glyph, markFont);
+            var color = styleSource.ActualTextEmphasisColor;
+            var palette = styleSource.ActualFontPalette;
+
+            foreach (var placement in placements)
+            {
+                if (placement.CharText.AsSpan().IsWhiteSpace() || IsControlOnly(placement.CharText))
+                    continue;
+
+                var x = right ? placement.X + placement.CharSize.Width : placement.X - markSize.Width;
+                var y = placement.CellTop + (placement.Advance - markSize.Height) / 2;
+                // text-shadow applies to the marks too (CSS Text Decoration 4 section 4: they are text).
+                PaintTextShadows(g, styleSource, markFont, glyph, new PaintPoint(x, y), markSize, default, null);
                 g.DrawString(glyph, markFont, color, new PaintPoint(x, y), markSize, 0, palette, null);
             }
         }
