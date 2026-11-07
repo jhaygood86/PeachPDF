@@ -58,7 +58,7 @@ uses DirectWrite instead, so text looks like the rest of Windows; that mode is n
 
 Images decode with `Win2dImageCodec.Auto` (the default: the Windows Imaging Component where Windows has a codec, PeachImage otherwise), `PeachImage` (identical pixels everywhere)
 or `Native`. Animated GIFs and WebP images keep every frame. `canvas.BeginLayer(new LayerOptions(...))` composites a group with opacity, a blend mode and blur,
-drop-shadow and colour-matrix effects, on the GPU. Direct2D blends natively by add and minimum only, so other blend modes draw as normal (the guide lists the limits).
+drop-shadow and color-matrix effects, on the GPU. Direct2D blends natively by add and minimum only, so other blend modes draw as normal (the guide lists the limits).
 
 ## Links, cursors and semantics
 
@@ -89,6 +89,6 @@ device is lost, `Win2dRenderContext.DeviceLost` is raised and a device the conte
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

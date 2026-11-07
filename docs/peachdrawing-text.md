@@ -11,7 +11,7 @@ dotnet add package PeachDrawing.Text
 
 > **Status: pre-1.0.** The public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
-> shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
+> shaping, glyph outlines and color glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
 > below. Font subsetting for embedding, and paragraph layout (`PeachDrawing.Text.Layout`), described below, are public too.
 > Until 1.0, the public API may change between releases.
 
@@ -23,7 +23,7 @@ dotnet add package PeachDrawing.Text
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the
   Universal Shaping Engine for Devanagari, Bengali, Gujarati and Tamil, Khmer's own separate coeng/subjoined-consonant
   shaping, default-ignorable handling, and `cmap` format 14 variation sequences.
-- **Outlines and colour:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
+- **Outlines and color:** glyph outlines for `glyf`, CFF and CFF2, COLR v0 and v1 with CPAL, CBDT/CBLC and sbix bitmaps, and the SVG documents of the `SVG ` table.
 - **Variable fonts:** the axes of a font and reading it at a location (`Typeface.WithAxes`): TrueType and CFF2 outlines, advance widths and font-wide metrics follow the axes.
 - **Mathematics:** the `MATH` table: layout constants, per-glyph italics corrections and accent attachment, and the
   variants and assemblies of stretchy glyphs.
@@ -46,7 +46,7 @@ using PeachDrawing.Text;
 
 var fonts = new FontSet();
 
-// TrueType, OpenType (glyf and CFF), WOFF and WOFF2 are recognised by their content.
+// TrueType, OpenType (glyf and CFF), WOFF and WOFF2 are recognized by their content.
 TypefaceFamily brand = fonts.AddFile("Brand-Regular.otf", new AddOptions { FamilyName = "Brand" });
 fonts.AddFile("Brand-Bold.otf", new AddOptions { FamilyName = "Brand", Weight = 700 });
 
@@ -100,7 +100,7 @@ if (face.TryMapRune(new Rune('A'), out ushort glyph))
 - `HasVerticalMetrics`, `GetVerticalAdvance`, `HasVerticalOrigin` and `GetVerticalOrigin` are what vertical text needs. A font
   with no vertical metrics answers one em for every advance, which the OpenType specification allows.
 - `TryGetScriptPosition` gives the size and offset the font's designer recommends for subscripts and superscripts.
-- `HasColorGlyphs` says whether the face draws colour glyphs as vector fills, `SupportsFeatures` whether its `GSUB` table has
+- `HasColorGlyphs` says whether the face draws color glyphs as vector fills, `SupportsFeatures` whether its `GSUB` table has
   an active lookup for every one of a set of OpenType feature tags, and `MatchesEmojiPresentation` whether it is a face to
   prefer for a character drawn as text or as emoji.
 
@@ -158,7 +158,7 @@ foreach (PlacedGlyph glyph in run.Glyphs)
 - `Shaper.GetFeatureTags` names the `GSUB` tags behind a caps or position mode. With `Typeface.SupportsFeatures` it says whether a
   face has a feature for real, or a caller has to fall back to something synthesized.
 
-## Outlines and colour glyphs: `PeachDrawing.Text.Outlines`
+## Outlines and color glyphs: `PeachDrawing.Text.Outlines`
 
 `Typeface.TryGetOutline` reads the shape of a glyph as data: a `GlyphOutline` of closed contours, each a start point and a list
 of segments that are straight lines or cubic curves, in design units with the y axis up. A glyph is filled by the nonzero
@@ -180,24 +180,24 @@ if (face.TryMapRune(new Rune('g'), out ushort glyph) && face.TryGetOutline(glyph
 }
 ```
 
-- **Colour glyphs from outlines.** `HasColorGlyphs` says a face has them, and `ColorPalette` gives its palettes: `TryGetColor`
+- **Color glyphs from outlines.** `HasColorGlyphs` says a face has them, and `ColorPalette` gives its palettes: `TryGetColor`
   returns a `System.Drawing.Color`, and `FirstLightPalette` and `FirstDarkPalette` are what CSS `font-palette: light` and `dark`
-  ask for. A version 0 `COLR` glyph is a list of layers from `TryGetColorLayers`, each a glyph filled with one palette colour.
+  ask for. A version 0 `COLR` glyph is a list of layers from `TryGetColorLayers`, each a glyph filled with one palette color.
   A version 1 glyph is a paint graph: `GetColorPaint` returns the root `ColorPaint`, and the sealed types that derive from it are
   named as the `COLR` specification names its paint formats (`PaintSolid`, `PaintLinearGradient`, `PaintRadialGradient`,
   `PaintSweepGradient`, `PaintGlyph`, `PaintTransform`, `PaintComposite`, `PaintColrGlyph`, and `PaintColrLayers`, whose layers
   are read with `GetColorLayerPaint`). At a location of a variable font (`WithAxes`) the paints are read there: the variable formats
-  (`PaintVarSolid`, the gradients, `PaintVarTransform` and the translate, scale, rotate and skew variants), their colour lines and the
+  (`PaintVarSolid`, the gradients, `PaintVarTransform` and the translate, scale, rotate and skew variants), their color lines and the
   clip boxes have the deltas of the font's `COLR` variation store added, so the nodes carry the numbers that apply at the location (an
-  opacity that a delta pushes outside 0 to 1 is kept inside it, and colour stops a delta moves out of order are put back in order). Nodes are
+  opacity that a delta pushes outside 0 to 1 is kept inside it, and color stops a delta moves out of order are put back in order). Nodes are
   made for each location, and a caller needs to know nothing about variations. `TryGetColorClipBox` gives the rectangle that holds everything a
   glyph paints (the font's `ClipList`), when the font has one for it. The angles of a sweep gradient are counter-clockwise from the
   positive x axis, as the specification's half-turn bias is undone.
-- **Colour glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
+- **Color glyphs from SVG.** A font with an `SVG ` table reports `HasSvgGlyphs`, and `TryGetSvgGlyph` gives the SVG document that draws a glyph (gzip-compressed
   documents are inflated, up to 4 MiB), the id of the element in it that is the glyph (`glyph` and the glyph's number), and the range of glyphs the document covers.
   The library does not render SVG: a caller draws the document with the glyph's origin at (0, 0), y pointing down and one design unit as one unit, with the font's
-  palette colours for `var(--color0)` and the text's fill for `context-fill`. The document comes from the font file and is untrusted.
-- **Colour glyphs from pictures.** A font whose colour glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
+  palette colors for `var(--color0)` and the text's fill for `context-fill`. The document comes from the font file and is untrusted.
+- **Color glyphs from pictures.** A font whose color glyphs are bitmaps (`CBDT`/`CBLC` or `sbix`) reports
   `HasBitmapGlyphs`, and `TryGetBitmap` gives the picture of a glyph from the strike best suited to a size, with its bearings.
 
 ### Grid fitting (hinting)
@@ -232,7 +232,7 @@ if (face.TryGetOutline(glyph, request, out GlyphOutline fitted))
   computes both axes from the device transform it is drawing into, so a page rendered at a non-square DPI, or under a CSS transform
   that scales the two axes differently, reaches this on its own.
 - **`GridFitting.None`** is the default and gives exactly the design-unit outline of the overload without a request.
-- **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behaviour). It fits the
+- **`GridFitting.Standard`** runs the font's instructions in the interpreter FreeType uses by default (its "v40" behavior). It fits the
   vertical direction only, so glyphs keep the horizontal positions and widths of the design, which is what anti-aliased text wants. It
   applies the compatibility adjustments that modern fonts, built for that interpreter, rely on.
 - **`GridFitting.Monochrome`** runs them in the original interpreter (FreeType's "v35"), which fits both directions, as for text drawn
@@ -290,7 +290,7 @@ var request = new OutlineRequest { PixelsPerEm = 9, GridFitting = GridFitting.St
   either). When the two axes differ, the size compared against the table is the larger of the two, in pixels per em.
 
 The instruction interpreter and the CFF engine are ports of FreeType's (the CFF engine is the one Adobe contributed to FreeType), which
-is why the package carries the FreeType Project License notices and Adobe's (see [Licences](#licences)). They give the same fitted
+is why the package carries the FreeType Project License notices and Adobe's (see [Licenses](#licenses)). They give the same fitted
 points as FreeType 2.14.3, in 26.6 fixed point, for every font the test suite checks them with, including fonts made of random
 programs and charstrings, and variable fonts at many locations of their design spaces, that FreeType is compared with point for point.
 
@@ -345,7 +345,7 @@ if (face.IsVariable)
   `blend` resolved at the location (the `vsindex` operator and the `vsindex` of each Font DICT's Private DICT choose the regions), so the
   coordinates of an outline at a location between the masters are not whole numbers. The layout tables and the advances (`HVAR`) follow the
   location as they do for TrueType outlines. CFF2 outlines are [grid-fitted](#grid-fitting-hinting) at the location, and a font with only
-  `COLR` colour glyphs over CFF2 outlines is not reported as a colour font, as for CFF.
+  `COLR` color glyphs over CFF2 outlines is not reported as a color font, as for CFF.
 - `TypefaceExporter.ExportSubset` (see Embedding below) writes an instance as a static font, with the location's variations applied
   to the outlines and metrics of the glyphs you ask for and no hinting instructions, because a PDF cannot embed a variable font.
 
@@ -374,7 +374,7 @@ if (face.MathData is MathTable math && face.TryMapRune(new Rune('('), out ushort
     if (tall?.Assembly is MathGlyphAssembly assembly)
     {
         // bottom to top: repeat the parts that IsExtender until the target height is reached,
-        // overlapping neighbours by at most their connector lengths and at least Variants.MinConnectorOverlap
+        // overlapping neighbors by at most their connector lengths and at least Variants.MinConnectorOverlap
     }
 }
 ```
@@ -396,7 +396,7 @@ byte[] fontFile = subset.Data.ToArray();
 
 - The glyphs keep their indices, so text already encoded as glyph indices stays valid against the subset. The glyphs a composite
   glyph is made of come along, and so does the notdef glyph.
-- A colour glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
+- A color glyph that has no outline of its own (its shapes are its layers) is given a small outline, so a reader can still
   select the text it stands for.
 - A subset carries no name table, so it is meant to be embedded, not loaded back into a `FontSet`.
 - For a typeface from `WithAxes` the subset is a static font at that location: each glyph's points and component offsets have the
@@ -523,7 +523,7 @@ var layout = new ParagraphBuilder(new RunStyle(typeface, 16))
 canvas.DrawParagraph(layout, new PaintPoint(10, 10), PaintColor.FromArgb(255, 0, 0, 0));
 ```
 
-Glyphs are drawn where the shaper put them (nothing is reshaped), from the face each run was shaped in, so fallback faces, kerning, ligatures, bitmap glyphs and COLR/CPAL colour glyphs come out exactly as laid out. The overload taking a `Func<PlacedRun, ParagraphPaint>` chooses a colour and `TextDecorations` (underline, overline, line-through, drawn from the face's own metrics) per run, and an optional callback receives each inline box's bounds. `canvas.DrawGlyphRun` paints a single `GlyphRun` from `Shaper.Shape`. Layout units are the canvas's user units.
+Glyphs are drawn where the shaper put them (nothing is reshaped), from the face each run was shaped in, so fallback faces, kerning, ligatures, bitmap glyphs and COLR/CPAL color glyphs come out exactly as laid out. The overload taking a `Func<PlacedRun, ParagraphPaint>` chooses a color and `TextDecorations` (underline, overline, line-through, drawn from the face's own metrics) per run, and an optional callback receives each inline box's bounds. `canvas.DrawGlyphRun` paints a single `GlyphRun` from `Shaper.Shape`. Layout units are the canvas's user units.
 
 ## The `PeachDrawing.Text.Unicode` namespace
 
@@ -568,7 +568,7 @@ words by looking a few words ahead for the choice that covers the text best, pre
 alike; a stretch that no word matches stays whole, cut off from the words around it; and it never breaks inside a syllable (no
 break before a dependent vowel, tone mark or other sign, after a leading vowel, inside a Khmer or Burmese subscript/stacked consonant,
 or before a Burmese asat that closes the syllable before it). The script decides, not `Language`, and `WordBreak`, `Strictness` and
-overflow wrapping apply on top of it. A word list is read the first time text of its script is analysed (about 0.44 MB of embedded
+overflow wrapping apply on top of it. A word list is read the first time text of its script is analyzed (about 0.44 MB of embedded
 data in all, in the `PeachDrawing.Text.Data` package this one depends on, Brotli-compressed like the rest of its Unicode data), and is
 kept for the life of the process. A compound that the list has as one word stays whole even where a browser splits it. Set
 `LineBreakOptions.ComplexContext` to `ComplexContextBreaking.GeneralCategory` to have no opportunity inside a run of these scripts,
@@ -581,7 +581,7 @@ decoder seam](#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam
 `Segmenter` finds the boundaries of [UAX #29](https://www.unicode.org/reports/tr29/): `FindGraphemeBoundaries` (extended
 grapheme clusters: a letter with its accents, a Hangul syllable, an emoji sequence, a flag), `FindWordBoundaries` and
 `FindSentenceBoundaries`. Each returns increasing UTF-16 indices, including the start and the end of the text, and none
-for empty text; the pieces are the text between neighbouring boundaries.
+for empty text; the pieces are the text between neighboring boundaries.
 
 ```csharp
 int[] clusters = Segmenter.FindGraphemeBoundaries("e\u0301\U0001F1FA\U0001F1F8");   // [0, 2, 6]
@@ -628,7 +628,7 @@ Both answer `null` for a script or language the built-in table does not cover.
 
 - `VerticalOrientation.IsEffectivelyUpright` says whether a character stays upright in vertical text set with CSS
   `text-orientation: mixed`; `VerticalOrientation.Of` returns the UAX #50 class behind it.
-- `DefaultIgnorables.Contains` recognises the characters that carry meaning but draw nothing, such as joiners,
+- `DefaultIgnorables.Contains` recognizes the characters that carry meaning but draw nothing, such as joiners,
   variation selectors and bidi controls, for which drawing a "missing glyph" box would be wrong.
 - `Hyphenator.FindBreakPoints("hyphenation", "en-US")` returns the indexes at which a hyphen may be inserted, using
   the TeX patterns for the closest supported language. An unsupported language, a word shorter than that language's
@@ -679,12 +679,12 @@ work there), and it beats Flate on fonts and prose from quality 3 up (on source 
 
 `PeachDrawing.Text.Compression.BrotliCompression` is the encoding counterpart of `BrotliDecompression`: `TryCompress(data, quality, out compressed)` compresses with .NET's own encoder, `IsAvailable` reports whether any encoder works on this host, and `SetCompressor` registers a replacement (it receives the destination stream and the quality, 0 to 11, and returns a writable stream that finishes the Brotli data when disposed and leaves the destination open). PeachPDF uses it for PDF 2.0's `/BrotliDecode` streams. On a host with no encoder of its own, register `ManagedBrotliCompressor` (above).
 
-## Licences
+## Licenses
 
 The engine (`PeachDrawing.Text`) is BSD 3-Clause. It carries its third-party notices with it, in `THIRD-PARTY-LICENSES.md`: the font
 readers derive from PDFsharp (MIT), several shaping algorithms are ports of HarfBuzz code, and the TrueType instruction interpreter and
 Adobe's CFF engine that do the [grid fitting](#grid-fitting-hinting) are ports of FreeType's (under the FreeType Project License,
-whose text ships in the package as `FTL.TXT`, with Adobe's patent licence grant for the CFF engine; an application that redistributes
+whose text ships in the package as `FTL.TXT`, with Adobe's patent license grant for the CFF engine; an application that redistributes
 the package has to credit the FreeType Team in its documentation). The data tables - the Unicode Character Database, the `hyph-utf8`
 pattern collection and ICU's Thai, Lao, Khmer and Burmese word lists - live in `PeachDrawing.Text.Data` and carry their notices in
 that package's own `THIRD-PARTY-LICENSES.md`. See [License](license.md) for the whole list.

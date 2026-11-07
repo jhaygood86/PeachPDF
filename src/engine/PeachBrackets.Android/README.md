@@ -69,7 +69,7 @@ without a restart.
 **Look.** `PageBackground`, and `Input` (the pointing devices the `hover` and `pointer` media queries report; by default the view asks the
 system). The view reports the screen density as the device pixel ratio, so a `srcset` image loads at the density the screen needs.
 
-**Forms.** Check boxes, radio buttons, text fields (with the soft keyboard chosen from the field's `type`), drop-downs, date, time and colour
+**Forms.** Check boxes, radio buttons, text fields (with the soft keyboard chosen from the field's `type`), drop-downs, date, time and color
 dialogs, range controls and file fields are drawn from their CSS and work. For a file field forward the result from your activity:
 
 ```csharp

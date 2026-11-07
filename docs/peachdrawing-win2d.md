@@ -74,7 +74,7 @@ composer's bitmap is `width x PixelsPerPoint` DIPs wide at `Win2dComposerOptions
 | `PushBlendMode` | `CanvasBlend` where Win2D has the rule (add, minimum); see [limitations](#limitations) |
 | `PushAntiAlias` | `CanvasAntialiasing` |
 | `DrawImage` (with source rectangle, sampling) | `DrawImage` of a `CanvasBitmap` made from the decoded pixels, per device |
-| `BeginLayer` | A `CanvasCommandList`, composited with opacity, colour matrix, blur and drop shadow effects when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects (a blur holds its layer's edge pixels only when `BlurEffect.ClampEdges` is set) instead of through a CPU bitmap |
+| `BeginLayer` | A `CanvasCommandList`, composited with opacity, color matrix, blur and drop shadow effects when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects (a blur holds its layer's edge pixels only when `BlurEffect.ClampEdges` is set) instead of through a CPU bitmap |
 | `CreateTile` | A `CanvasCommandList` (vector, resolution independent) |
 | `DrawImageWithOpacity` / `WithColorMatrix` / `Masked` / `AlphaMasked` / `BlendedOver` | `OpacityEffect`, `ColorMatrixEffect`, `LuminanceToAlphaEffect` + `AlphaMaskEffect`, `BlendEffect` |
 | `BeginRasterSurface` / `DrawRaster` | The shared raster fallback, drawn back as a bitmap |
@@ -87,7 +87,7 @@ composer's bitmap is `width x PixelsPerPoint` DIPs wide at `Win2dComposerOptions
 kind, so a font is never measured by one engine and drawn by the other.
 
 - **`Win2dTextEngine.PeachDrawing`** (default): the shared [`PeachDrawing.Text`](peachdrawing-text.md) engine. Text is shaped from the font
-  file and drawn as exact glyph outlines (colour, bitmap and COLR glyphs included), so it lays out exactly as it does on the PDF, SVG and
+  file and drawn as exact glyph outlines (color, bitmap and COLR glyphs included), so it lays out exactly as it does on the PDF, SVG and
   raster canvases.
 - **`Win2dTextEngine.DirectWrite`**: Windows' own text stack through `CanvasTextLayout`: installed fonts, shaped and rasterized as
   Windows does it, with OpenType features through `CanvasTypography`. **This mode is not feature complete**; see
@@ -99,21 +99,21 @@ kind, so a font is never measured by one engine and drawn by the other.
 
 | `Win2dTextRendering` | What is drawn |
 |---|---|
-| `Auto` (default) | Chooses for each run, so text looks like the rest of Windows wherever that is possible: `Lcd` on screen (a session the host owns) when ClearType is on and the pixels behind the text can be read, `Grayscale` otherwise, and `Outline` for large text and for text that is rotated or skewed. A `Win2dComposer`'s bitmap is an export that may be shown on any display, so it gets `Grayscale`, never colour fringes. |
+| `Auto` (default) | Chooses for each run, so text looks like the rest of Windows wherever that is possible: `Lcd` on screen (a session the host owns) when ClearType is on and the pixels behind the text can be read, `Grayscale` otherwise, and `Outline` for large text and for text that is rotated or skewed. A `Win2dComposer`'s bitmap is an export that may be shown on any display, so it gets `Grayscale`, never color fringes. |
 | `Outline` | Each run's exact outlines filled as vector geometry: full quality under any transform and brush, but not fitted to the pixel grid and blended as plain coverage, so small text looks lighter and softer than Windows draws it. |
-| `Grayscale` | The run is fitted to the pixel grid by the font's own hinting (the TrueType interpreter and CFF engine of the shared text engine; `RenderContext.TextHinting` picks the dialect, `Standard` when unset), rasterized to a coverage mask, corrected for the brightness of the text colour so light and dark text have the same apparent weight, and drawn as a bitmap on whole device pixels. Close to Windows' grayscale text. |
+| `Grayscale` | The run is fitted to the pixel grid by the font's own hinting (the TrueType interpreter and CFF engine of the shared text engine; `RenderContext.TextHinting` picks the dialect, `Standard` when unset), rasterized to a coverage mask, corrected for the brightness of the text color so light and dark text have the same apparent weight, and drawn as a bitmap on whole device pixels. Close to Windows' grayscale text. |
 | `Lcd` | As `Grayscale`, with a coverage per red, green and blue stripe (3x horizontal detail, a short filter across stripes, `LcdBgrStripes` for the opposite order) blended per channel. |
 
 `Win2dRenderContext.TextPositionSteps` (1 to 64, default 64) is how many steps of a pixel a run's position is kept at before its coverage is made. A run is drawn from a mask made for where it falls within a pixel, so text that moves a little every frame needs a new mask, and a new bitmap on the device, for each position it passes through; with 4 steps there are four to make, at the cost of drawing text up to an eighth of a pixel from where it belongs. `HtmlView` sets 4 while it plays animations. It has no effect in DirectWrite mode.
 
-`Grayscale` and `Lcd` draw a run as `Outline` when it is rotated or skewed, or in a colour font, and a run too large to rasterize over a host's session. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
+`Grayscale` and `Lcd` draw a run as `Outline` when it is rotated or skewed, or in a color font, and a run too large to rasterize over a host's session. `Auto` also draws text above 48 device pixels per em as `Outline`, where hinting and the weight correction mean nothing and a mask costs far more.
 
-**What LCD text needs.** Blending each colour channel with its own coverage needs the pixels behind the text. There are two ways to get them.
+**What LCD text needs.** Blending each color channel with its own coverage needs the pixels behind the text. There are two ways to get them.
 
-- **On the GPU, with `Win2dCanvas.FromRenderTarget`.** Give the canvas the `CanvasRenderTarget` its session draws into (made with `CanvasAlphaMode.Ignore`, an opaque surface) and text is not blended as it is drawn: runs are queued and composited by a pixel shader (`Shaders/LcdBlend.hlsl`, embedded as `LcdBlend.bin`) in one pass, `backdrop * (1 - coverage) + colour * coverage` for each colour channel, against a copy of the pixels already drawn there. Nothing is read back to the CPU, so a screen of text costs about a millisecond rather than tens of them, over any background: a flat colour, a gradient, an image or something translucent. The queue is drawn before anything else that could touch it (a shape, image, layer or clip or blend change over the same pixels), so text stays where it was drawn in the order things were drawn; a run over another queued run starts a new queue so the two blend with each other. Grayscale text takes the same path. `HtmlView` paints every region this way, into a render target of its own that it then puts on the control's surface.
+- **On the GPU, with `Win2dCanvas.FromRenderTarget`.** Give the canvas the `CanvasRenderTarget` its session draws into (made with `CanvasAlphaMode.Ignore`, an opaque surface) and text is not blended as it is drawn: runs are queued and composited by a pixel shader (`Shaders/LcdBlend.hlsl`, embedded as `LcdBlend.bin`) in one pass, `backdrop * (1 - coverage) + color * coverage` for each color channel, against a copy of the pixels already drawn there. Nothing is read back to the CPU, so a screen of text costs about a millisecond rather than tens of them, over any background: a flat color, a gradient, an image or something translucent. The queue is drawn before anything else that could touch it (a shape, image, layer or clip or blend change over the same pixels), so text stays where it was drawn in the order things were drawn; a run over another queued run starts a new queue so the two blend with each other. Grayscale text takes the same path. `HtmlView` paints every region this way, into a render target of its own that it then puts on the control's surface.
 - **By reading back, with `Win2dCanvas.FromSession`.** A `Win2dComposer` reads its own bitmap. Over a session you hand to `FromSession`, the canvas asks Win2D for the session's native Direct2D target and copies the rectangle behind each run into a CPU-readable bitmap (about 0.04 to 0.1 ms a run on a GPU, which adds up on a page of text), blends on the CPU and draws the result. It applies only when the target has no alpha channel and the blend is the ordinary one; drawing inside a clip is fine. A session that records into a command list, or a target with an alpha channel, gets `Grayscale`. Anything unexpected in the native interface (a missing interface, a pixel format that is not 32-bit BGRA, a failed copy) also falls back to `Grayscale`; nothing throws.
 
-**Repeated runs and scrolling.** A run's mask is kept in a cache (up to 48 MB, least recently used out first) keyed by the text, font, scale and the run's position within its pixel (to 1/64), not by colour or by what is behind it. Drawing the same run again - as a scrolling view does for the strip it reveals - skips shaping, hinting and rasterizing; moving it by whole pixels still hits. A word seen for the first time is built from the masks of its letters, which are kept the same way (up to 24 MB; a letter is rasterized once for each font, size and position within the pixel to 1/16), so only letters not drawn before cost anything. On the GPU path the bitmaps made from a mask (its coverage per colour channel, and the text colour times it) are kept too (up to 64 MB), so a repeated run is two draw calls and no CPU work. The scratch render targets the blend works in belong to the render context and are released with it, or when the device is lost. Setting the `PEACH_TEXT_STATS` environment variable writes the time spent rasterizing and blending text, and the cache's hit count, to the debugger output every couple of seconds.
+**Repeated runs and scrolling.** A run's mask is kept in a cache (up to 48 MB, least recently used out first) keyed by the text, font, scale and the run's position within its pixel (to 1/64), not by color or by what is behind it. Drawing the same run again - as a scrolling view does for the strip it reveals - skips shaping, hinting and rasterizing; moving it by whole pixels still hits. A word seen for the first time is built from the masks of its letters, which are kept the same way (up to 24 MB; a letter is rasterized once for each font, size and position within the pixel to 1/16), so only letters not drawn before cost anything. On the GPU path the bitmaps made from a mask (its coverage per color channel, and the text color times it) are kept too (up to 64 MB), so a repeated run is two draw calls and no CPU work. The scratch render targets the blend works in belong to the render context and are released with it, or when the device is lost. Setting the `PEACH_TEXT_STATS` environment variable writes the time spent rasterizing and blending text, and the cache's hit count, to the debugger output every couple of seconds.
 
 **How close it is.** The weight correction and the filter were fitted to what Direct2D's own text renderer produces, so the result is close to DirectWrite's text, not identical: glyph advances and metrics still follow the font file rather than DirectWrite's, and DirectWrite's rasterizer is not available to match exactly. A masked run costs several times an outline run (a page of body text paints in about 95 ms against about 35 ms as outlines on a software device), so choose `Outline` for a text-heavy page that does not need the look.
 
@@ -133,13 +133,13 @@ DirectWrite mode is a convenience for text that should look like the rest of Win
 | Area | In DirectWrite mode |
 |---|---|
 | Layout | Metrics, hinting, kerning and font fallback are DirectWrite's, so line breaks and measured widths differ from the PDF, SVG and raster canvases. |
-| Outlines | None. `GetTextOutline` returns `null`, so text with a gradient or pattern fill or a stroke falls back to a solid colour, and `text-decoration-skip-ink` skips nothing. |
+| Outlines | None. `GetTextOutline` returns `null`, so text with a gradient or pattern fill or a stroke falls back to a solid color, and `text-decoration-skip-ink` skips nothing. |
 | Glyphs by index (`DrawGlyphs`, MathML stretchy parts) | Drawn only when the same family is also found in the `PeachDrawing.Text` font set; otherwise nothing is drawn. |
 | OpenType features | `font-feature-settings` tags, kerning on/off and ligatures off are mapped; the `font-variant-*` caps, numeric and East Asian groups are not. |
 | Variable fonts | `font-variation-settings` and `font-optical-sizing` are ignored; weight, style and stretch select among the family's faces. |
 | `unicode-range` | Not split per range; a face is used for every character it covers. |
 | Fonts the document adds | Supported, by weight and italic only. They are loaded from temporary files the context deletes on `Dispose` (best effort: a file DirectWrite still has mapped is left behind). |
-| Colour glyphs | Drawn by DirectWrite's colour-font support; per-palette choice (`font-palette`) is not applied. |
+| Color glyphs | Drawn by DirectWrite's color-font support; per-palette choice (`font-palette`) is not applied. |
 | Vertical text, `letter-spacing` | Vertical metrics are not provided; letter spacing is applied as trailing space after each character. |
 
 ## Images
@@ -150,7 +150,7 @@ DirectWrite mode is a convenience for text that should look like the rest of Win
   Component straight into the bitmap of each device it is drawn on, so no managed copy of its pixels is made (the pixels are decoded only if
   something asks for them, through the image's `GetPixels`). Anything Windows cannot decode is decoded by PeachImage, as is an image that
   carries an orientation in its metadata, because loading into a bitmap applies that orientation and the canvas applies it itself. The pixels
-  can differ slightly from PeachImage's (JPEG decoders round differently; colour-managed and CMYK files may convert differently).
+  can differ slightly from PeachImage's (JPEG decoders round differently; color-managed and CMYK files may convert differently).
 - **`Win2dImageCodec.PeachImage`**: the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
   every other canvas.
 - **`Win2dImageCodec.Native`**: the Windows Imaging Component (`BitmapDecoder`), which can read what the codecs installed on the machine can,
@@ -244,7 +244,7 @@ frame that is drawn, and a change of frame writes the new pixels into the bitmap
 ## Limitations
 
 - **Blend modes.** A drawing session blends only by add and minimum, so `Plus` and `Darken` are exact and the other `PaintBlendMode`s
-  (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honoured on this canvas.
+  (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honored on this canvas.
 - **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
   with unequal x and y deviations uses their mean.
 - **Text inside a rounded or path clip** (`PushClip(GraphicsPath)`, `PushClipExclude`) is `Lcd` only on a canvas made by `FromRenderTarget`, which blends text on the GPU: such a clip

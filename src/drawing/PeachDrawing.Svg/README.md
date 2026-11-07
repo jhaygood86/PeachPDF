@@ -88,6 +88,6 @@ browsers draw it. Canvas calls with no SVG meaning (tagged-PDF structure) are ig
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

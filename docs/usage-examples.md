@@ -171,7 +171,7 @@ var document = await generator.GeneratePdf(null, pdfConfig);
 document.Save(stream);
 ```
 
-Relative references resolve against the configured `NetworkLoader`'s `BaseUri` (as above), or a `<base href>` element if the document has one. With no loader configured, they resolve against the current working directory and load from the local file system (see [Rendering a local HTML file](#rendering-a-local-html-file) to make that base an explicit file location instead, or [Disabling local file access](#disabling-local-file-access) to switch that behaviour off).
+Relative references resolve against the configured `NetworkLoader`'s `BaseUri` (as above), or a `<base href>` element if the document has one. With no loader configured, they resolve against the current working directory and load from the local file system (see [Rendering a local HTML file](#rendering-a-local-html-file) to make that base an explicit file location instead, or [Disabling local file access](#disabling-local-file-access) to switch that behavior off).
 
 ## Disabling local file access
 
@@ -302,7 +302,7 @@ document.Save(fileStream);
 
 ## Detecting text that was clipped away
 
-A word can be drawn into the PDF and then truncated by a clip — an `overflow: hidden` box narrower than an unbreakable value, most often. The glyphs are still in the content stream, so a reader that parses that stream finds them and reports the document complete, while anything that honours the clip shows only part of the word. Both are behaving correctly; the difference simply is not recorded in the file.
+A word can be drawn into the PDF and then truncated by a clip — an `overflow: hidden` box narrower than an unbreakable value, most often. The glyphs are still in the content stream, so a reader that parses that stream finds them and reports the document complete, while anything that honors the clip shows only part of the word. Both are behaving correctly; the difference simply is not recorded in the file.
 
 That makes it the one loss class only the engine can report, because only the painter knows the word's rect was wider than the clip it was drawn into. `PeachPdfDocument.ClipReport` is that report:
 
@@ -335,7 +335,7 @@ Two things are deliberately **not** reported:
 
 ## Crisp 1px borders at 100% zoom
 
-A box's background and border are painted on its exact layout position, which is rarely a whole CSS pixel (1px = 0.75pt). A `1px` border (0.75pt) at a fractional position straddles two device pixels of a viewer showing the page at 100% zoom, each about half covered, so it reads as a wider, paler line than the same border in a browser. Browsers avoid this by rounding each edge of the box to a whole CSS pixel before painting. PeachPDF writes the exact geometry by default, which is what the PDF format can express and what other CSS print engines write; to get the browser behaviour instead, opt in:
+A box's background and border are painted on its exact layout position, which is rarely a whole CSS pixel (1px = 0.75pt). A `1px` border (0.75pt) at a fractional position straddles two device pixels of a viewer showing the page at 100% zoom, each about half covered, so it reads as a wider, paler line than the same border in a browser. Browsers avoid this by rounding each edge of the box to a whole CSS pixel before painting. PeachPDF writes the exact geometry by default, which is what the PDF format can express and what other CSS print engines write; to get the browser behavior instead, opt in:
 
 ```csharp
 var config = new PdfGenerateConfig
@@ -621,9 +621,9 @@ Things to know:
 
 - **Permissions are a request, not a lock.** A reader enforces them voluntarily, and anyone who can open the document can read all of its content. Only the passwords are cryptographic: use a user password when the content itself must stay private.
 - **Not with PDF/A or PDF/X.** Both standards forbid encryption, so setting `Encryption` together with `PdfAConformance` or `PdfXConformance` throws.
-- **PDF version.** The default PDF 2.0 file carries revision 6 natively. With `PdfVersion.Pdf17` the file is written as PDF 1.7 and announces the Adobe extension level 8 that PDF 1.7 readers (Acrobat X and later, Chrome, Edge, Firefox, MuPDF, pdf.js) recognise.
+- **PDF version.** The default PDF 2.0 file carries revision 6 natively. With `PdfVersion.Pdf17` the file is written as PDF 1.7 and announces the Adobe extension level 8 that PDF 1.7 readers (Acrobat X and later, Chrome, Edge, Firefox, MuPDF, pdf.js) recognize.
 - **Whole document.** Encryption applies to the file as a whole, so every `AddPdfPages`/`AddPages` call on one document must give the same options; a different set throws.
-- **Passwords** are normalised to Unicode NFKC and used as UTF-8, and only the first 127 bytes count.
+- **Passwords** are normalized to Unicode NFKC and used as UTF-8, and only the first 127 bytes count.
 - **Runtime support.** Encryption needs the platform's AES and SHA-2 implementations. A host that has none (browser WebAssembly may be one) throws `PlatformNotSupportedException` when the document is saved.
 
 The [`peachpdf`](cli.md) tool exposes this as `--user-password`, `--owner-password`, `--permissions` and `--no-encrypt-metadata`.
@@ -823,7 +823,7 @@ Requirements:
 
 #### The profile
 
-A Factur-X invoice declares how much of the EN 16931 data model its XML carries — its *profile*. PeachPDF reads it from the XML's own guideline identifier (`GuidelineSpecifiedDocumentContextParameter/ID`, business term BT-24), so by default you set nothing. Set `FacturXOptions.Profile` only to state it explicitly — it must then agree with the XML, so a document cannot claim a profile its XML does not meet — or when the XML uses a guideline PeachPDF does not recognise.
+A Factur-X invoice declares how much of the EN 16931 data model its XML carries — its *profile*. PeachPDF reads it from the XML's own guideline identifier (`GuidelineSpecifiedDocumentContextParameter/ID`, business term BT-24), so by default you set nothing. Set `FacturXOptions.Profile` only to state it explicitly — it must then agree with the XML, so a document cannot claim a profile its XML does not meet — or when the XML uses a guideline PeachPDF does not recognize.
 
 | `FacturXProfile` | `fx:ConformanceLevel` | Embedded as | Default `/AFRelationship` |
 |---|---|---|---|
@@ -1079,7 +1079,7 @@ var config = new PdfGenerateConfig
 };
 ```
 
-The output is still vector content, not a bitmap. On opaque content it matches the CSS formulas to within a few of 255 levels in both PDFium and MuPDF. Where the content is partly transparent (an `rgba()` colour, an antialiased edge) a blend mode lets some of the layer's own colour through, so the colour there is slightly off. Like the default, it needs PDF transparency, so it is rejected under PDF/A-1 and PDF/X-1a/X-3, as the transfer-function form is. `grayscale()`, `sepia()`, `saturate()` and `hue-rotate()` are bitmaps either way and are not affected.
+The output is still vector content, not a bitmap. On opaque content it matches the CSS formulas to within a few of 255 levels in both PDFium and MuPDF. Where the content is partly transparent (an `rgba()` color, an antialiased edge) a blend mode lets some of the layer's own color through, so the color there is slightly off. Like the default, it needs PDF transparency, so it is rejected under PDF/A-1 and PDF/X-1a/X-3, as the transfer-function form is. `grayscale()`, `sepia()`, `saturate()` and `hue-rotate()` are bitmaps either way and are not affected.
 
 ### Turning off smoothing: `RasterAntiAliasing`
 
@@ -1102,7 +1102,7 @@ On the command line the setting is `--no-raster-antialiasing`; see [the CLI refe
 
 ## Flattening transparency for PDF/A-1 and PDF/X
 
-PDF/A-1 and PDF/X-1a/X-3 forbid transparency, which CSS uses everywhere: `opacity`, `rgba()` colours, gradients with an alpha stop, PNGs with an alpha channel, `mix-blend-mode`, blurred shadows, `filter`, SVG masks and filters. By default a document that targets one of these levels and uses any of it is rejected. `TransparencyPolicy.Flatten` turns the rejection into a conversion:
+PDF/A-1 and PDF/X-1a/X-3 forbid transparency, which CSS uses everywhere: `opacity`, `rgba()` colors, gradients with an alpha stop, PNGs with an alpha channel, `mix-blend-mode`, blurred shadows, `filter`, SVG masks and filters. By default a document that targets one of these levels and uses any of it is rejected. `TransparencyPolicy.Flatten` turns the rejection into a conversion:
 
 ```csharp
 var config = new PdfGenerateConfig
@@ -1118,7 +1118,7 @@ What needs transparency is worked out by the PDF writer's own rules, so nothing 
 
 - **Text stays selectable.** The text of a flattened element is placed again over the bitmap as invisible text, so it can still be selected, searched and copied, and tagged-PDF structure still points at it.
 - **Placed size is exact.** The bitmap is placed at exactly the size of the region it replaces; only its pixel count depends on `RasterizationDpi`.
-- **PDF/X-1a** forbids RGB, so the bitmaps are embedded as DeviceCMYK, converted from the rendered colours by the usual naive formula (no colour management). Other content in an X-1a document is subject to that level's usual colour rules.
+- **PDF/X-1a** forbids RGB, so the bitmaps are embedded as DeviceCMYK, converted from the rendered colors by the usual naive formula (no color management). Other content in an X-1a document is subject to that level's usual color rules.
 - **Limits.** An element under a CSS `transform` cannot be flattened (its backdrop is in another coordinate space) and is still rejected. A region of the page is a bitmap, so it is as sharp as `RasterizationDpi`, not infinitely, and file size grows with the flattened area. Where two flattened regions meet, some viewers' image smoothing can show a faint one-pixel seam.
 - **Other levels.** PDF/A-2, PDF/A-3 and PDF/X-4 permit transparency and are unaffected by the policy.
 

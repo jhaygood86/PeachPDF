@@ -12,7 +12,7 @@ dotnet add package PeachDrawing.PDF
 ```
 
 > **Status: pre-1.0.** The package's public surface is `PdfRenderContext`, `PdfComposer`, `PdfComposerPage`, `PdfCanvas`, the
-> document options and conformance enums, colour management (`ColorOptions`), links, bookmarks, the tag recorder and its structure
+> document options and conformance enums, color management (`ColorOptions`), links, bookmarks, the tag recorder and its structure
 > details, the form and annotation builders, and the `PdfOperation`/`PdfPageSource` page-import types - all described on this page -
 > and `PublicApi.txt` is the exact, machine-checked snapshot of it. PeachPDF is the package's other consumer: it renders HTML and CSS
 > onto these same canvases and builds PDF/A, tagged, linked and interactive documents through this same API, so this is the PDF
@@ -49,7 +49,7 @@ A `PdfRenderContext` is the `RenderContext` a PDF canvas draws with. Like every 
 with - brushes, pens, fonts, images - and its constructor registers every font installed on the machine, so `GetFont` works
 immediately for installed families. Beyond that:
 
-- **`AddFont(Stream, familyName)`** registers a font file (TrueType, OpenType, WOFF or WOFF2, recognised by content) under a family
+- **`AddFont(Stream, familyName)`** registers a font file (TrueType, OpenType, WOFF or WOFF2, recognized by content) under a family
   name. A host with no installed fonts (a browser running WebAssembly, say) has to do this before it can draw any text.
 - **`PixelsPerPoint`** is the scale between the units you draw in and PDF points, `1.0` by default: one drawing unit is one point.
   Set it **before** asking the context for fonts: a font is sized in the context's units, so a font made earlier keeps the size it
@@ -79,7 +79,7 @@ Neither a composer nor its canvases are thread safe: use one composer per file.
 
 `Configure(options)` applies a `PdfComposerOptions` after construction, for a document whose settings are not known when the composer is
 created. The document information (title, author, ...) can be written again by a later call; the format settings - version,
-conformance, colour management, encryption - are fixed by the first call, and a later call that asks for different ones is rejected
+conformance, color management, encryption - are fixed by the first call, and a later call that asks for different ones is rejected
 rather than producing a file whose header disagrees with how its pages were written.
 
 ### `PdfComposerOptions`
@@ -94,11 +94,11 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `Linearize` | Writes the file in the linearized ("fast web view") layout of ISO 32000-1 Annex F: the first page's objects first, then the other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has arrived. Off by default; works with AES-256 encryption. `PdfOperation.Linearize()` sets it for an operation's output, and `PdfGenerateConfig.Linearize` / the CLI's `--linearize` for PeachPDF's. |
 | `CompressContentStreams`, `BrotliCompression` | Content streams are Flate-compressed by default. Turn compression off to read the drawing operators in a text editor; Brotli (PDF 2.0) is opt-in, because not every reader decodes it yet. |
 | `Conformance`, `XConformance`, `UAConformance` | The PDF/A, PDF/X and PDF/UA level the file claims - see [Archival and print conformance](#archival-and-print-conformance) and [Tagged PDF](#tagged-pdf). |
-| `ColorOptions` | Colour management: the output intent profile and how colours are converted to it. |
+| `ColorOptions` | Color management: the output intent profile and how colors are converted to it. |
 | `EmbeddedFiles`, `FacturX` | Files attached to the document. |
 | `WriteXmpMetadata`, `CustomXmpProperties` | The XMP packet, written for you whenever a PDF/A level is claimed. |
 | `ImageCompression`, `DownscaleImages`, `DownscaleQuality`, `MaximumDownscaleMultiplier`, `JxlPassthrough` | How images are embedded and how large they may be. |
-| `FlattenTransparency`, `PortableColorFilters` | Draw transparency and colour filters as plain content, for readers that handle them poorly. |
+| `FlattenTransparency`, `PortableColorFilters` | Draw transparency and color filters as plain content, for readers that handle them poorly. |
 | `Encryption` | A `PdfEncryptionOptions`: AES-256 password protection with a user password, an owner password and a `PdfPermissions` set. |
 
 The options are read when they are applied: a later change to the object does not reach a document already configured.
@@ -118,8 +118,8 @@ draws a bitmap with [PeachDrawing](peachdrawing.md)'s `RasterCanvas`.
   a drop shadow, an arbitrary filter - is drawn into a bitmap at the resolution the context asks for (`RasterizationDpi`) and embedded
   as an image.
 - **Text.** A run is shaped, with ligatures, kerning, bidirectional reordering and complex scripts, and written with the glyphs it uses
-  embedded in a subset of the font. Text stays selectable and searchable. Colour fonts are drawn as vector artwork.
-- **Colour.** An RGB colour is written as `DeviceRGB` and a CMYK colour as `DeviceCMYK`, each in the space it was made in.
+  embedded in a subset of the font. Text stays selectable and searchable. Color fonts are drawn as vector artwork.
+- **Color.** An RGB color is written as `DeviceRGB` and a CMYK color as `DeviceCMYK`, each in the space it was made in.
 
 ## Bleed and printer's marks
 
@@ -155,10 +155,10 @@ never be lifted. The options are copied when the composer is created, so changin
 
 Set `Conformance` to a `PdfAConformance` (`PdfA1B`, `PdfA2B`, `PdfA2A`, `PdfA3B`, `PdfA4`, ...) or `XConformance` to a `PdfXConformance`
 (`X1a`, `X3`, `X4`, `X6`) and the composer writes what that level requires of the file - the output intent, the XMP metadata, the right
-header version - and refuses what it forbids: encryption, transparency in a level that has none, an image in a colour space the output
+header version - and refuses what it forbids: encryption, transparency in a level that has none, an image in a color space the output
 intent cannot describe. A violation is reported when the offending content is drawn, as an exception derived from
 `CanvasConstraintException`, rather than discovered by a validator afterwards. `ColorOptions` carries the ICC profile the output intent
-names (`OutputIntentProfile`, `OutputIntentIdentifier`) and how colours are converted to it (`ConversionMode`: `PreserveAsAuthored`, `ConvertToOutputIntent`,
+names (`OutputIntentProfile`, `OutputIntentIdentifier`) and how colors are converted to it (`ConversionMode`: `PreserveAsAuthored`, `ConvertToOutputIntent`,
 `GrayscaleViaK`, `ConvertToProfile`), plus the `RenderingIntent` (`Perceptual`, `RelativeColorimetric`, `Saturation`, `AbsoluteColorimetric`),
 `UseBlackPointCompensation`, `BlackGeneration` (`UseTrueBlack` or `UseRichBlack`) and a `FallbackCmykProfile` for CMYK content the output intent cannot describe.
 
@@ -245,7 +245,7 @@ A definition has a `Kind` (`Text`, `Checkbox`, `Radio`, `Select`, `List`, `PushB
 look of each state is drawn by your `IPdfFormAppearance`, which receives a `Canvas` the size of the control, so a field looks like the
 rest of your page. A drop-down or list box lists its choices as `PdfFormOption` values (`value`, `label`, `selected`). Radio buttons that share a `Name` are one field. A text field can be `Multiline`, a list box `MultiSelect`, and a push button's `Value` is its caption; a signature field is unsigned.
 
-`composer.CreateAnnotationBuilder(context)` returns a `PdfAnnotationBuilder` for the annotations that are not links or form fields. `AddAnnotation(page, definition)` places a `PdfAnnotationDefinition`: its `Subtype` (`Highlight`, `Text`, `Square`, `Stamp`, `Ink`, ...), `Bounds`, `Contents`, `Title`, colours, `Opacity`, `BorderWidth`, the `QuadPoints` of a text markup, the `InkStrokes` of a drawing, and a `PaintAppearance` that draws how it looks.
+`composer.CreateAnnotationBuilder(context)` returns a `PdfAnnotationBuilder` for the annotations that are not links or form fields. `AddAnnotation(page, definition)` places a `PdfAnnotationDefinition`: its `Subtype` (`Highlight`, `Text`, `Square`, `Stamp`, `Ink`, ...), `Bounds`, `Contents`, `Title`, colors, `Opacity`, `BorderWidth`, the `QuadPoints` of a text markup, the `InkStrokes` of a drawing, and a `PaintAppearance` that draws how it looks.
 
 ### Annotation appearances, file attachments and popups
 
@@ -284,9 +284,9 @@ var page = composer.AddPage(width, height);
 var notDrawn = source.Paint(0, page.Canvas);          // features of the page that could not be drawn
 ```
 
-`Paint` draws the page's content again rather than copying the file's objects, so it works the same on every canvas. The canvas' origin is the top-left of the area the page occupies and its units are points; the page is clipped to its own crop box (or media box) and honours `/Rotate`. On a `PdfCanvas`, text from an embedded TrueType, OpenType, CFF or Type 1 font comes out as real text with the original's text map, so it still selects, searches and copies as the same characters.
+`Paint` draws the page's content again rather than copying the file's objects, so it works the same on every canvas. The canvas' origin is the top-left of the area the page occupies and its units are points; the page is clipped to its own crop box (or media box) and honors `/Rotate`. On a `PdfCanvas`, text from an embedded TrueType, OpenType, CFF or Type 1 font comes out as real text with the original's text map, so it still selects, searches and copies as the same characters.
 
-The importer reads classic and stream cross-reference tables, object streams and incremental updates, and rebuilds a file whose table is missing or damaged. It draws paths (fill, stroke, clip, dashes, caps and joins), the graphics state, device, ICC-based, Lab and indexed colour (a gray or RGB ICC profile is applied, converting to sRGB through the profile; a CMYK one stays device CMYK, and a CMYK image stays a DeviceCMYK image on a PDF canvas), constant alpha, blend modes, transfer functions that are linear between 0 and 1 (`/TR`, `/TR2`: the clamped scale-and-offset a colour adjustment produces, applied to what is painted under them as a group), luminosity and alpha soft masks (the masked content is drawn into a tile, the mask into another, and the two composited, so a mask applies to a group as a whole), form XObjects, images, inline ones included (JPEG, also with a mask; JPEG 2000; CCITT fax and JBIG2, including as stencil masks; Flate, LZW, run-length and ASCII-filtered samples in any bit depth and colour space the importer reads, with `/Decode`, stencil and colour-key masks and `/SMask`) and text in simple TrueType, CFF (`Type1C`), Type 1 (`FontFile`, hinting dropped) and Type 3 fonts, and in Type0 fonts over TrueType or CFF (`CIDFontType0C`) programs (filled, stroked and clipping render modes for the former) and Type0 fonts with an `Identity-H` encoding. Tiling patterns (coloured and uncoloured) are drawn as one tile repeated under the pattern matrix - on a PDF canvas as a real tiling pattern - with the cell clipped to its steps, so a pattern whose box is larger than its steps does not overlap itself. Function-based shadings (type 1) are evaluated per pixel into an image over their domain. Axial and radial shadings are drawn whether used as a pattern or with `sh`, with their colour functions (sampled, exponential, stitching and PostScript calculator) read into gradient stops; a shading that does not extend past its ends paints as if it did. Mesh shadings (free-form and lattice triangle meshes, Coons and tensor-product patches) are rasterized into an image sized to how large the mesh is drawn, so on a PDF canvas a mesh becomes a raster. What it cannot draw yet - fonts that are not embedded - is skipped, and `Paint` returns a name for each such feature it met. Files protected by the Standard security handler with AES-128 or AES-256 are read with the empty user password, which is what "restrict editing and copying" protection uses, or with the password given to `PdfPageSource.Open(bytes, password)` (the user password; an AES-256 file opens with its owner password too, but an AES-128 file's owner password cannot be turned into its user password without RC4). A file that needs a password it was not given, or was given a wrong one, throws `PdfPasswordException`, a `NotSupportedException`. Only ciphers that .NET provides are supported, so a file encrypted with RC4 (the older 40 and 128 bit protection) throws `NotSupportedException`, as does a file that uses a handler other than the Standard one. Data that is not a PDF throws `InvalidDataException`.
+The importer reads classic and stream cross-reference tables, object streams and incremental updates, and rebuilds a file whose table is missing or damaged. It draws paths (fill, stroke, clip, dashes, caps and joins), the graphics state, device, ICC-based, Lab and indexed color (a gray or RGB ICC profile is applied, converting to sRGB through the profile; a CMYK one stays device CMYK, and a CMYK image stays a DeviceCMYK image on a PDF canvas), constant alpha, blend modes, transfer functions that are linear between 0 and 1 (`/TR`, `/TR2`: the clamped scale-and-offset a color adjustment produces, applied to what is painted under them as a group), luminosity and alpha soft masks (the masked content is drawn into a tile, the mask into another, and the two composited, so a mask applies to a group as a whole), form XObjects, images, inline ones included (JPEG, also with a mask; JPEG 2000; CCITT fax and JBIG2, including as stencil masks; Flate, LZW, run-length and ASCII-filtered samples in any bit depth and color space the importer reads, with `/Decode`, stencil and color-key masks and `/SMask`) and text in simple TrueType, CFF (`Type1C`), Type 1 (`FontFile`, hinting dropped) and Type 3 fonts, and in Type0 fonts over TrueType or CFF (`CIDFontType0C`) programs (filled, stroked and clipping render modes for the former) and Type0 fonts with an `Identity-H` encoding. Tiling patterns (colored and uncolored) are drawn as one tile repeated under the pattern matrix - on a PDF canvas as a real tiling pattern - with the cell clipped to its steps, so a pattern whose box is larger than its steps does not overlap itself. Function-based shadings (type 1) are evaluated per pixel into an image over their domain. Axial and radial shadings are drawn whether used as a pattern or with `sh`, with their color functions (sampled, exponential, stitching and PostScript calculator) read into gradient stops; a shading that does not extend past its ends paints as if it did. Mesh shadings (free-form and lattice triangle meshes, Coons and tensor-product patches) are rasterized into an image sized to how large the mesh is drawn, so on a PDF canvas a mesh becomes a raster. What it cannot draw yet - fonts that are not embedded - is skipped, and `Paint` returns a name for each such feature it met. Files protected by the Standard security handler with AES-128 or AES-256 are read with the empty user password, which is what "restrict editing and copying" protection uses, or with the password given to `PdfPageSource.Open(bytes, password)` (the user password; an AES-256 file opens with its owner password too, but an AES-128 file's owner password cannot be turned into its user password without RC4). A file that needs a password it was not given, or was given a wrong one, throws `PdfPasswordException`, a `NotSupportedException`. Only ciphers that .NET provides are supported, so a file encrypted with RC4 (the older 40 and 128 bit protection) throws `NotSupportedException`, as does a file that uses a handler other than the Standard one. Data that is not a PDF throws `InvalidDataException`.
 
 `PdfPageSource` also reads what a viewer navigates by: `GetLinks(pageIndex)` (web and in-file links, each rectangle in the same top-left, rotated-page terms `Paint` draws in), `GetOutline()` (the bookmarks flattened in reading order, as `PdfBookmark` entries whose `PageIndex` is a page of that file), `GetNamedDestinations()`, `GetMetadata()` (title, author, subject, keywords, creator, producer) and `GetAttachments()` (the attached files with their data). A destination's `TopPoints` is how far below the top of the page, as shown, it sits. `GetConformance()` reports the PDF/A and PDF/X levels the file claims (from its XMP metadata, and for PDF/X its information dictionary), and `GetOutputIntent()` its output intent when it has one with a readable ICC profile; `GetMetadata()` includes the file's `Language`. `GetFormFields(pageIndex)` returns the page's form fields (text, check box, radio, drop-down, list box, push button, signature) as `PdfFormFieldDefinition`s you can pass straight to `PdfFormBuilder.AddField`, each drawn by the appearance stream its widget had in the file; `GetAnnotations(pageIndex)` returns its other annotations that have an appearance as `PdfAnnotationDefinition`s for `PdfAnnotationBuilder.AddAnnotation`; and `Paint(pageIndex, canvas, PdfAnnotationPaint.ExceptFormFields)` also draws the appearance of the page's other annotations (`All` includes the form fields, as a viewer shows the page). To tag a page you draw onto a document you are tagging, make a `PdfTagSession` with `source.CreateTagSession(recorder)` and pass it as `Paint`'s last argument: the structure the file gave the page's marked content (types mapped through its role map, a figure's `/Alt`, languages, actual text, attributes) is recorded under the recorder's current parent in the order of the file's structure tree, and whatever else is drawn is marked as an artifact. Once the page's links are added, `TieLinkToStructure(session, link, added)` ties each to the structure element the file gave it. Use a new session for each drawing of a page. These are read-only; adding them to a document you are writing is up to you (`PdfComposerPage.AddLink`, `AddNamedDestination`, `AddBookmarks`, `PdfComposerOptions.EmbeddedFiles`), which is what `OverlayFile` does for the pages it draws.
 
@@ -363,7 +363,7 @@ You do not need this package to render HTML to PDF - [PeachPDF](getting-started.
 directly to write a PDF from your own drawing code, to build a report or label with the drawing API rather than markup, or to implement
 a feature PeachPDF does not need.
 
-## Licences
+## Licenses
 
 `PeachDrawing.PDF` is BSD 3-Clause. Its PDF writing engine is adapted from [PDFsharp](https://github.com/empira/PDFsharp) (MIT) and its
 notice ships in the package; the engine is internal and not part of the API. See [License](license.md) for the whole list.

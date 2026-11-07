@@ -90,7 +90,7 @@ canvas.PopClip();
 ## Text
 
 Text is shaped by [PeachDrawing.Text](https://www.nuget.org/packages/PeachDrawing.Text/): ligatures, kerning, mark attachment,
-Arabic and Indic scripts, bidirectional text, COLR/CPAL colour glyphs and bitmap glyphs, with grid-fitted rendering. `canvas.MeasureString`
+Arabic and Indic scripts, bidirectional text, COLR/CPAL color glyphs and bitmap glyphs, with grid-fitted rendering. `canvas.MeasureString`
 measures with the same shaping, and `canvas.DrawParagraph(layout, origin, color)` paints a laid-out
 `PeachDrawing.Text` paragraph. A standalone canvas has no SVG engine, so an OpenType glyph defined by an SVG document falls back to
 its plain outline.
@@ -106,7 +106,7 @@ canvas.DrawImageWithOpacity(image, new Rect(340, 0, 320, 240), opacity: 0.5);
 canvas.DrawImageWithColorMatrix(image, new Rect(0, 260, 320, 240), ColorMatrix.Identity);
 ```
 
-Image variants cover opacity, blend modes, colour matrices, alpha and luminosity masks, and bicubic or pixelated sampling.
+Image variants cover opacity, blend modes, color matrices, alpha and luminosity masks, and bicubic or pixelated sampling.
 
 ## Layers and effects
 
@@ -136,6 +136,6 @@ exposes the raster helpers PeachPDF uses: `PathStroker` (turn a pen's stroke int
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

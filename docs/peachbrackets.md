@@ -74,7 +74,7 @@ foreach (var page in document.Pages)
 
 `Pages` lists the laid-out pages: each has its `Index` and the size of its sheet in points. `GetContentHeight(pageIndex)` says how far down a
 page's content reaches, in points from the top of its content area, which is what a viewer that sizes itself to the document needs (the sheet
-itself is as tall as the page, whatever the content). A page's size can differ from its neighbours'
+itself is as tall as the page, whatever the content). A page's size can differ from its neighbors'
 when `@page` rules say so, which is why you read it per page rather than assuming one size.
 
 ### Synchronous layout
@@ -117,7 +117,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `ImageSelection` | How a `srcset` image is chosen: `ImageSelectionPolicy.HighestDensity` (the default for `Print`) or `BestForTarget` (the default for `Screen`), with a `Tolerance`, a `MaxDecodePixels` budget and `UpgradeOnZoom`. See [Responsive images on screen](#responsive-images-on-screen). |
 | `Preferences` | The reader's settings that `prefers-reduced-motion`, `prefers-contrast`, `forced-colors`, `inverted-colors`, `prefers-reduced-transparency` and `prefers-reduced-data` report (`UserPreferences`). The default is a static document's: reduced motion on, everything else off, so a document reports what it always did. A window or phone reads them from the system (Windows high contrast, Android's text-contrast and remove-animations settings). |
 | `FontScale` | A multiplier for the root font size (1, the default, leaves it alone), for a reader who sets a text size on their system. Text sized in `em`, `rem`, a percentage or a keyword follows; text in `px` or `pt` does not. Added to `UserStyleSheet`, so ignored when `StyleSheet` is set. |
-| `PaintFormControls` | Draw form controls with their look for a host that shows the page: a check box's check mark and a radio button's dot (in `accent-color`), a text field's value or placeholder, a button's label (`Submit` and `Reset` by default), a drop-down's chosen option and arrow, and a range's track and thumb. Everything is drawn from the control's own CSS, so borders, backgrounds, padding, fonts and colours apply. Off by default, which keeps a control the plain box it is in a PDF; it takes precedence over `CollectFormFields` for how a control is drawn, so a host can collect the fields and still show them. |
+| `PaintFormControls` | Draw form controls with their look for a host that shows the page: a check box's check mark and a radio button's dot (in `accent-color`), a text field's value or placeholder, a button's label (`Submit` and `Reset` by default), a drop-down's chosen option and arrow, and a range's track and thumb. Everything is drawn from the control's own CSS, so borders, backgrounds, padding, fonts and colors apply. Off by default, which keeps a control the plain box it is in a PDF; it takes precedence over `CollectFormFields` for how a control is drawn, so a host can collect the fields and still show them. |
 | `TextSpacing` | Spacing applied over the document's own for a reader who needs more room around text: line height, paragraph spacing, letter spacing and word spacing as multiples of the font size. `TextSpacingOverrides.Wcag` is what WCAG 2.2 success criterion 1.4.12 asks a page to survive. Added to `UserStyleSheet` as `!important` rules, so it is ignored when `StyleSheet` is set. |
 | `StyleSheet` | A style sheet parsed ahead of time (`PeachBrackets.Building.StyleSheet`), applied in place of `UserStyleSheet`, so the same parsed rules serve many documents. It is not changed by loading. When it is set, `UserStyleSheet`, `FontScale` and `TextSpacing` (which are added to `UserStyleSheet`) are ignored. |
 | `Input` | The pointing devices the `hover`, `pointer`, `any-hover` and `any-pointer` media features report (`InputCapabilities.Mouse`, `Touch` or `None`, or your own combination). See [Restyling in place](#restyling-in-place). |
@@ -133,7 +133,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `CollectFormFields` | Collect form controls into `Annotations.FormFields`. |
 | `RecordTextRuns` | Let the document report where its text is (`TextRuns`), for selection, copy and find. |
 | `EnableIncrementalUpdates` | Allow `SetStyle` to restyle elements, and `ReplaceTextAsync` and its relatives to edit the text, of the laid-out document in place. |
-| `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colours where no rule applies. Needs `RecordTextRuns`. |
+| `EnableSelectionStyling`, `SelectionBackground`, `SelectionForeground` | Paint a selection (`SetSelectedRanges`) in the document's `::selection` style, or in these colors where no rule applies. Needs `RecordTextRuns`. |
 
 The options are read when the document is loaded.
 
@@ -177,7 +177,7 @@ document.ScrollIntoView(someItem);                          // every container t
 document.ScrollPositionChanged += (_, e) => Log(e.Element.Id, e.X, e.Y);
 ```
 
-Scrolling moves what is drawn, not the layout, so it costs a repaint of the scrollport. `GetElementBounds`, hit testing (`GetCursorAt`, `GetInteractionAt`), text runs, links and form controls follow the scrolled position, and a point outside a container's scrollport is not on what it clips. A host that draws no bars of its own routes input with `GetScrollbarAt(page, x, y)` (the container, the axis, the thumb or the track before or after it, and the track and thumb in points), `ScrollThumbTo` (a thumb being dragged: where its leading edge is to be), `ScrollByPage` (a press on the track), `GetScrollContainerFor(element, dx, dy)` (the container a key goes to when the focus is in `element`) and `GetElementOf(node)` (the element of an accessibility node). A host that routes a wheel turn or a touch drag asks which container is under the pointer with `GetScrollContainerAt(page, x, y, dx, dy)`: the innermost one that can scroll the way asked, so a container at the end of its content passes the turn on to the one around it (scroll chaining), and `null` means the host scrolls the surface. The scrollable overflow area is what the container holds, plus the padding at its end; a nested scroll container counts as its own box. A container drawn with `overflow: auto` or `scroll` shows overlay scrollbars (a thumb on the right and bottom edges, over the content); `hidden` scrolls by these calls only and shows none. A scroll moves by the container's `scroll-behavior`: `smooth` glides (about 0.3 s, stepped by `AdvanceAnimations`, and instant under reduced motion), and `SetScrollPosition`, `ScrollBy` and `ScrollIntoView` take a `ScrollBehavior` (`Auto`, `Instant`, `Smooth`) to override it. A container with `scroll-snap-type` settles on the nearest snap position of its children's `scroll-snap-align` (`start`, `center`, `end`; `mandatory` always, `proximity` only when one is near; `scroll-snap-stop: always` holds a scroll back at each position) after every programmatic scroll; a host that moves content by a drag calls `DragScrollBy` while the thumb or finger is held, and `SettleScroll` when it is let go. `ScrollIntoView` keeps the room `scroll-margin` (on the element) and `scroll-padding` (on the container) ask for on every side. `ScrollIntoView(element, behavior, block, inline)` also takes a `ScrollAlignment` for each axis (`Nearest`, `Start`, `Center`, `End`), and `ScrollTextIntoView(range)` brings a range found by `FindText` into view in the containers that hold it. A `position: sticky` box inside a scroll container sticks to its scrollport, within the container's scrollable area. Where the content starts at the right (right-to-left text, `vertical-rl`) it runs on to the left and the offsets are negative: `ScrollMetrics.MinX` is how far (`scrollLeft` is zero at the start, as in a browser). The scrollable overflow area counts a transformed box where the transform puts it; shadows and outlines are ink overflow and do not extend it. A reload (a class change that restyles the document) keeps the offsets, finding each container again by its place in the source. The cursor over a scrollbar is the default arrow. `scrollbar-gutter` has no effect, as the specification says of overlay scrollbars. `overscroll-behavior: contain` or `none` stops `GetScrollContainerAt` passing a turn on from a container that is at its end, so the host leaves the page where it is. `scrollbar-width: none` shows no bars and `thin` narrower ones, and `scrollbar-color` sets the thumb and track colours. The scroll offsets are kept while the document is laid out again and are dropped when a container goes away. Scroll and view timelines (`animation-timeline: scroll(self)`, `scroll(nearest)`, `scroll-timeline`, `view()`) follow the container that scrolls them, see [Scroll-driven animations](#scroll-driven-animations).
+Scrolling moves what is drawn, not the layout, so it costs a repaint of the scrollport. `GetElementBounds`, hit testing (`GetCursorAt`, `GetInteractionAt`), text runs, links and form controls follow the scrolled position, and a point outside a container's scrollport is not on what it clips. A host that draws no bars of its own routes input with `GetScrollbarAt(page, x, y)` (the container, the axis, the thumb or the track before or after it, and the track and thumb in points), `ScrollThumbTo` (a thumb being dragged: where its leading edge is to be), `ScrollByPage` (a press on the track), `GetScrollContainerFor(element, dx, dy)` (the container a key goes to when the focus is in `element`) and `GetElementOf(node)` (the element of an accessibility node). A host that routes a wheel turn or a touch drag asks which container is under the pointer with `GetScrollContainerAt(page, x, y, dx, dy)`: the innermost one that can scroll the way asked, so a container at the end of its content passes the turn on to the one around it (scroll chaining), and `null` means the host scrolls the surface. The scrollable overflow area is what the container holds, plus the padding at its end; a nested scroll container counts as its own box. A container drawn with `overflow: auto` or `scroll` shows overlay scrollbars (a thumb on the right and bottom edges, over the content); `hidden` scrolls by these calls only and shows none. A scroll moves by the container's `scroll-behavior`: `smooth` glides (about 0.3 s, stepped by `AdvanceAnimations`, and instant under reduced motion), and `SetScrollPosition`, `ScrollBy` and `ScrollIntoView` take a `ScrollBehavior` (`Auto`, `Instant`, `Smooth`) to override it. A container with `scroll-snap-type` settles on the nearest snap position of its children's `scroll-snap-align` (`start`, `center`, `end`; `mandatory` always, `proximity` only when one is near; `scroll-snap-stop: always` holds a scroll back at each position) after every programmatic scroll; a host that moves content by a drag calls `DragScrollBy` while the thumb or finger is held, and `SettleScroll` when it is let go. `ScrollIntoView` keeps the room `scroll-margin` (on the element) and `scroll-padding` (on the container) ask for on every side. `ScrollIntoView(element, behavior, block, inline)` also takes a `ScrollAlignment` for each axis (`Nearest`, `Start`, `Center`, `End`), and `ScrollTextIntoView(range)` brings a range found by `FindText` into view in the containers that hold it. A `position: sticky` box inside a scroll container sticks to its scrollport, within the container's scrollable area. Where the content starts at the right (right-to-left text, `vertical-rl`) it runs on to the left and the offsets are negative: `ScrollMetrics.MinX` is how far (`scrollLeft` is zero at the start, as in a browser). The scrollable overflow area counts a transformed box where the transform puts it; shadows and outlines are ink overflow and do not extend it. A reload (a class change that restyles the document) keeps the offsets, finding each container again by its place in the source. The cursor over a scrollbar is the default arrow. `scrollbar-gutter` has no effect, as the specification says of overlay scrollbars. `overscroll-behavior: contain` or `none` stops `GetScrollContainerAt` passing a turn on from a container that is at its end, so the host leaves the page where it is. `scrollbar-width: none` shows no bars and `thin` narrower ones, and `scrollbar-color` sets the thumb and track colors. The scroll offsets are kept while the document is laid out again and are dropped when a container goes away. Scroll and view timelines (`animation-timeline: scroll(self)`, `scroll(nearest)`, `scroll-timeline`, `view()`) follow the container that scrolls them, see [Scroll-driven animations](#scroll-driven-animations).
 
 ### The viewport, fixed and sticky boxes
 
@@ -218,7 +218,7 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   innermost part at a point. See [Accessibility](accessibility.md).
 - **Interaction state** (`SetPointerStateAsync(page, x, y, pressed, canvas)`, `ClearPointerStateAsync(canvas)`, `SetFocusAsync(element, focusVisible, canvas)`)
   make the document's `:hover`, `:active`, `:focus`, `:focus-visible` and `:focus-within` rules apply. A state change that only changes how
-  something is painted - a colour, `opacity`, `transform`, `filter`, a shadow, an outline, `text-decoration`, `cursor` - is applied to the
+  something is painted - a color, `opacity`, `transform`, `filter`, a shadow, an outline, `text-decoration`, `cursor` - is applied to the
   styles in place with no layout: the `UpdateResult` has `Incremental = true`, `DirtyRegions` cover where the elements were painted and where
   they are now (a shadow, outline, blur or transform widens them), and `DocumentElement` handles, text runs and the selection stay valid. A
   change to anything else (a size, a font, `display`, generated content, a pseudo-element appearing) applies by cascading and laying the document
@@ -263,7 +263,7 @@ top-left corner of the sheet. A consumer that writes a format with these concept
   either a `Uri` or an `Anchor` with the `Destination` (`PagePosition`: page index and distance from the top) it leads to.
 - **`Bookmarks`** - the outline: each `Bookmark` has a `Level`, a `Title`, whether it starts open, and a `Uri` or `Destination`. Headings
   produce them by default; `bookmark-level`, `bookmark-label` and `bookmark-target` change that.
-- **`Annotations`** - the annotations authors asked for with `-peachpdf-pdf-annotation-type`: each `PageAnnotation` has its `PageIndex`, `Kind` (`PageAnnotationKind`: a note, a text mark, an attached-file icon, a shape, free text, a stamp, ink), `Bounds`, the `Quads` of a text mark, the `Strokes` of ink, an optional `PopupBounds`, and its icon name, colour, title, contents, author, attachment name and dates. Always collected.
+- **`Annotations`** - the annotations authors asked for with `-peachpdf-pdf-annotation-type`: each `PageAnnotation` has its `PageIndex`, `Kind` (`PageAnnotationKind`: a note, a text mark, an attached-file icon, a shape, free text, a stamp, ink), `Bounds`, the `Quads` of a text mark, the `Strokes` of ink, an optional `PopupBounds`, and its icon name, color, title, contents, author, attachment name and dates. Always collected.
 - **`FormFields`** - with `CollectFormFields` on, each `PageFormField` has its `PageIndex`, `Bounds`, a `Classification` (`FormFieldKind`,
   name, value, checked state, options, and the `readonly`/`required`/`maxlength`/`placeholder` attributes), and a `FormFieldAppearance` that
   paints each state of the control onto a canvas of your choosing, so an interactive field can look like the rest of the page.
@@ -304,16 +304,16 @@ On `HtmlDocument`:
 
 With `EnableSelectionStyling` (and `RecordTextRuns`) set, `document.SetSelectedRanges(ranges)` selects the text between pairs of positions and
 `PaintPageAsync` paints it: the `background-color` of the document's `::selection` rules fills the selected characters and the spaces between
-selected words, and the rule's `color` replaces the text colour inside the selection. `SetSelectedRanges(null)` clears it; repaint the pages
+selected words, and the rule's `color` replaces the text color inside the selection. `SetSelectedRanges(null)` clears it; repaint the pages
 to show either change. Where no `::selection` rule applies, `HtmlDocumentOptions.SelectionBackground` (light blue) and
-`SelectionForeground` (the text's own colour) are used. With the option off, `::selection` rules are ignored, as they are in a PDF.
+`SelectionForeground` (the text's own color) are used. With the option off, `::selection` rules are ignored, as they are in a PDF.
 
 - A rule applies to the text of the element it matches (`p::selection`, `.note::selection`, or a bare `::selection` for every element); an
   element with no rule of its own takes its nearest ancestor's.
 - The `background-color` fills the whole line box behind the selected characters; `color`, `text-shadow` and `-webkit-text-stroke*` restyle the selected
   text, and a `text-decoration` the rule adds is drawn under it. `color` and `text-shadow` an ancestor's `::selection` declares are inherited by a child
   with rules of its own. A selection never changes layout, follows a CSS transform of its element, and is not painted in vertical writing modes.
-- Where a selection changes the text colour, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
+- Where a selection changes the text color, the selected word is drawn twice (once clipped to the selection), so a PDF written with a selection
   holds that word's text more than once. Selection is meant for interactive output, not for PDF.
 
 ### Named highlights: `::highlight()`, `::spelling-error`, `::grammar-error`, `::target-text`
@@ -324,8 +324,8 @@ Highlight API does for ranges a page registers. The names `spelling-error`, `gra
 `ClearHighlights()` remove them; `HighlightNames` lists them in painting order.
 
 - Highlights are painted lowest first: the built-in ones, then the custom ones by `priority` and then by the order they were first set, then the
-  selection over all of them. Where several change the text colour the one painted last wins, per stretch of the word it covers.
-- A highlight no rule styles paints nothing (the selection, by contrast, has default colours). Rules apply as for `::selection`: to the text of the
+  selection over all of them. Where several change the text color the one painted last wins, per stretch of the word it covers.
+- A highlight no rule styles paints nothing (the selection, by contrast, has default colors). Rules apply as for `::selection`: to the text of the
   element they match, falling back to the nearest ancestor's; `::highlight( name )` is the same selector as `::highlight(name)`, and the name is
   case-sensitive.
 - The same properties are painted as for the selection. A text edit removes every highlight, since the positions they hold no longer
@@ -364,18 +364,18 @@ it, so they follow ligatures and justification but not a custom `letter-spacing`
 
 ## Restyling in place
 
-A consumer that shows a document and changes it - a selection, a hover colour, an editor's highlight - should not load and lay out the
+A consumer that shows a document and changes it - a selection, a hover color, an editor's highlight - should not load and lay out the
 document again for every change. With `EnableIncrementalUpdates`, `document.SetStyle(element, property, value)` changes one CSS property of
 an element of the laid-out document and returns an `UpdateResult`: whether it was applied, why not if it was not, and the `DirtyRegions`
 (page index and a rectangle in points) that now look different. No layout pass runs, so nothing moves.
 
 - Get the element with `GetElement(id)`, or `GetElementAt(page, x, y)` for the innermost element under a point (what a click hit).
-- Applied in place: `color` (the element's descendants that inherited it follow; one with a colour of its own keeps it), `background-color`,
+- Applied in place: `color` (the element's descendants that inherited it follow; one with a color of its own keeps it), `background-color`,
   `text-decoration-line`, `text-decoration-style`, `text-decoration-color` and `outline-color`. A border drawn in `currentcolor` follows a `color`
   change.
 - Not applied, with the reason in `UpdateResult.Reason` and the document untouched: any other property (anything that can move or resize
   content needs a layout pass), a value that does not parse, and the `background-color` of `html` and `body`, which is the page canvas's.
-- A background or outline set to `currentcolor` earlier keeps the colour it had; only a later write picks up the new one.
+- A background or outline set to `currentcolor` earlier keeps the color it had; only a later write picks up the new one.
 - To show the change, clear each region on the page's canvas and call `PaintPageRegionAsync(page, canvas, region)`, which paints only what
   lies inside it; or paint the page again.
 
@@ -404,7 +404,7 @@ while (document.HasRunningAnimations)
   records (an `<img>`; a `background-image` shows its first frame). `HasRunningAnimations` says whether another step is due, and an `AnimationFrame`'s `IsRunning` whether
   anything is still playing after this one: a paused animation, one that has ended and a document with none make no more frames, so a host stops its frame loop and starts
   it again when a state change or a newly loaded image makes `HasRunningAnimations` true.
-- **What it costs.** `AdvanceAnimations(now)` plays the properties that cannot change layout (`transform`, `opacity`, `filter`, colours, shadows, outlines): a frame runs
+- **What it costs.** `AdvanceAnimations(now)` plays the properties that cannot change layout (`transform`, `opacity`, `filter`, colors, shadows, outlines): a frame runs
   no layout and no cascade, just the sampling of what is playing and a repaint of the regions that changed.
 - **Layout properties.** `AdvanceAnimations(now, measuringCanvas)` (or `AdvanceAnimationsAsync`) also plays the properties that move or resize boxes (`width`, `height`,
   `margin`, `padding`, `top`/`left`, `border-width`, `font-size`, flex and grid sizing, ...). A step that changes one lays the whole document out again on the canvas, so
@@ -432,14 +432,14 @@ while (document.HasRunningAnimations)
 
 - **Events.** Each `AnimationFrame` has `Events`, the events a browser would dispatch for what happened since the last step, in order, as `AnimationEventInfo` (`Kind`, `Element`, `Name`,
   `ElapsedTime`): `AnimationStart`, `AnimationIteration` (at the start of each iteration after the first), `AnimationEnd` and `AnimationCancel` (an animation that began and stopped before it
-  ended because the element no longer names it, or it was cancelled), and for a transition `TransitionRun` (when it is created, even with a delay to wait), `TransitionStart`,
-  `TransitionEnd` and `TransitionCancel` (replaced by a newer transition of the property, its element gone, or cancelled). `Name` is the `animation-name` or the property. An event
+  ended because the element no longer names it, or it was canceled), and for a transition `TransitionRun` (when it is created, even with a delay to wait), `TransitionStart`,
+  `TransitionEnd` and `TransitionCancel` (replaced by a newer transition of the property, its element gone, or canceled). `Name` is the `animation-name` or the property. An event
   caused by a call (a transition that a class change created, an animation `Cancel()`ed) is reported by the next step, and `HasRunningAnimations` is true until it has been. A
   WinUI `HtmlView` raises them as `AnimationEvents`.
 - **Control.** `HtmlDocument.GetAnimations()` (or `GetAnimations(element)`) lists the animations and transitions that are running as `DocumentAnimation` objects, which follow
   Web Animations 1 §4.4: `Name`, `IsTransition`, `Element`, `PlayState` (`Idle`, `Running`, `Paused`, `Finished`), `CurrentTime` (seek by setting it, paused or not), `PlaybackRate` and
   `UpdatePlaybackRate` (negative plays backwards), `Play()`, `Pause()`, `Finish()` (an animation that repeats for ever has no end and throws), `Reverse()`, `Cancel()` (the element has the value
-  it would have without the animation; a transition ends on the value the style has) and `Finished`, a task that completes when it finishes and is cancelled if it is cancelled or removed first.
+  it would have without the animation; a transition ends on the value the style has) and `Finished`, a task that completes when it finishes and is canceled if it is canceled or removed first.
   A change takes effect on the next step. The object stays the animation it was when the document is loaded again for a restyle, and is `Idle` once the element stops naming it. Seeking does
   not report the events of the time it skips over: the flags that say what was reported follow the new position.
 
@@ -615,7 +615,7 @@ the load time; they say which phase the time is in.
 
 ## Font and URI helpers for a host
 
-A `RenderContext` that wants the HTML engine's font behaviour (the CSS generic families, `system-ui`, `font-variation-settings`) needs three
+A `RenderContext` that wants the HTML engine's font behavior (the CSS generic families, `system-ui`, `font-variation-settings`) needs three
 small things, which `FontDefaults` provides: `DefaultFamily` and `DefaultSizePoints`, `GenericFamilies` (each CSS keyword with the generic
 family it stands for) and `ToAxisSettings` (the encoded `font-variation-settings` as font axes). `DataUri.TryDecode` decodes a `data:` URI,
 percent-decoding before base64-decoding as the URL standard does, and `PeachBrackets.Svg.SvgGlyphPainter` is the `ISvgGlyphPainter` that paints
@@ -631,7 +631,7 @@ You do not need this package to render HTML to PDF - [PeachPDF](getting-started.
 through [PeachDrawing.PDF](peachdrawing-pdf.md). Reach for `PeachBrackets` directly to render HTML to something else (a preview bitmap, a
 different document format, your own canvas), or to inspect how a document paginates and what its links and outline are.
 
-## Licences
+## Licenses
 
 `PeachBrackets` is BSD 3-Clause. The CSS parser descends from [ExCSS](https://github.com/TylerBrinks/ExCSS) and the layout engine from
 [HTML Renderer](https://github.com/ArthurHub/HTML-Renderer); their notices ship in the package. See [License](license.md) for the whole list.

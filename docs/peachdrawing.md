@@ -11,7 +11,7 @@ compatible, and is versioned in lockstep with PeachPDF: the same version number 
 dotnet add package PeachDrawing
 ```
 
-> **Status: pre-1.0.** `RasterCanvas` and `RasterRenderContext` are the package's centre, with the raster helpers
+> **Status: pre-1.0.** `RasterCanvas` and `RasterRenderContext` are the package's center, with the raster helpers
 > around them (`RasterLayerEffects`, `PathStroker`, `RasterSurfaceFactory`, `RasterSurfaceEncoding`, `TextOutlineBuilder`, `Warp`, `Homography`,
 > `DepthBuffer`/`DepthPlane`, `ColorMatrixFilter` and the `Filters` namespace: `GaussianBlur`, `DropShadow`, `FilterOps`, `Turbulence`).
 > `RasterSurface`, the pixel buffer they work on, lives in `PeachDrawing.Core`. See `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF is the
@@ -60,7 +60,7 @@ since there is no CSS cascade here to resolve a generic keyword against.
   device pixels, with the plain unit convention below. `dpi` is accepted for forward-compatible signature
   parity with a future encoder that tags physical resolution on save; it does not otherwise affect drawing
   today.
-- **`AddFont(Stream, fontFamilyName)`** registers a font (TrueType, OpenType, WOFF or WOFF2 - recognised by
+- **`AddFont(Stream, fontFamilyName)`** registers a font (TrueType, OpenType, WOFF or WOFF2 - recognized by
   its content) directly under a family name, bypassing CSS `@font-face` entirely - the standalone
   equivalent of `RenderContext.AddFontFamilyFromUrl`.
 
@@ -93,8 +93,8 @@ raster-specific to learn separately.
 `RasterCanvas` implements the entire `Canvas` surface - rectangles, polygons, arbitrary vector paths (fill
 and stroke, with the usual dash/cap/join/miter controls), solid and gradient (linear, radial, conic)
 brushes, clipping (rectangular and arbitrary-path), affine transforms, the 16 PDF/CSS blend modes, shaped
-text (including COLR/CPAL colour glyphs - v0 layers and the v1 paint graph with solid, linear, radial and sweep gradients, transforms and blend-mode composites, honouring `font-palette` overrides - `SVG ` table glyphs falling back to their plain outline - see
-below - and CBDT/CBLC/sbix bitmap glyphs), and images (opacity, blend-mode compositing, colour-matrix
+text (including COLR/CPAL color glyphs - v0 layers and the v1 paint graph with solid, linear, radial and sweep gradients, transforms and blend-mode composites, honoring `font-palette` overrides - `SVG ` table glyphs falling back to their plain outline - see
+below - and CBDT/CBLC/sbix bitmap glyphs), and images (opacity, blend-mode compositing, color-matrix
 transforms, alpha and luminosity masking). Grid-fitted (hinted) text rendering is supported through
 `PeachDrawing.Text`'s own hinting engine.
 
@@ -123,7 +123,7 @@ rather than using this package. See [Implementing your own
 Canvas](peachdrawing-core.md#implementing-your-own-canvas); `RasterCanvas`'s own source is a
 complete, real second worked example alongside [PeachDrawing.PDF](peachdrawing-pdf.md)'s `PdfCanvas`.
 
-## Licences
+## Licenses
 
 `PeachDrawing` is BSD 3-Clause. It carries no third-party code of its own; its dependencies
 (`PeachDrawing.Core`, `PeachDrawing.Text`, `PeachImage`) carry their own notices. See

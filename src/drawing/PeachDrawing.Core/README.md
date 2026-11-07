@@ -1,7 +1,7 @@
 # PeachDrawing.Core
 
 The drawing-surface abstraction [PeachPDF](https://peachpdf.net/) targets to write PDF, published as its own package so other
-renderers can target it too: a `Canvas` to draw shapes, text and images on, a `RenderContext` to resolve colours, fonts and paint
+renderers can target it too: a `Canvas` to draw shapes, text and images on, a `RenderContext` to resolve colors, fonts and paint
 objects from, and the paint-ready value types (`Brush`, `Pen`, `GraphicsPath`, `PaintColor`, `Rect` and the rest) that connect
 them. Write your drawing code once against `Canvas` and run it on any backend. Its only dependency is
 [PeachDrawing.Text](https://www.nuget.org/packages/PeachDrawing.Text/), for font and typeface types. It is trimmable and Native AOT
@@ -48,7 +48,7 @@ static void Paint(Canvas canvas, RenderContext context)
 For example, with the PDF backend: `Paint(composer.AddPage(400, 300).Canvas, context)`; with the bitmap one:
 `Paint(context.CreateCanvas(400, 300), context)`.
 
-## `RenderContext`: colours, fonts and paint objects
+## `RenderContext`: colors, fonts and paint objects
 
 ```csharp
 Font? font = context.GetFont("Source Sans", size: 16, PaintFontStyle.Bold);       // CSS Fonts 4 face matching
@@ -74,7 +74,7 @@ canvas.PushBlendMode(PaintBlendMode.Multiply);
 
 canvas.DrawRectangle(brush, 10, 10, 180, 80);
 canvas.DrawLine(pen, 0, 0, 200, 100);
-canvas.DrawImage(image, new Rect(20, 20, 64, 64));                                  // + opacity, blend, colour-matrix and mask variants
+canvas.DrawImage(image, new Rect(20, 20, 64, 64));                                  // + opacity, blend, color-matrix and mask variants
 
 canvas.PopBlendMode();
 canvas.PopClip();
@@ -88,13 +88,13 @@ canvas.PopTransform();
   `GetInkCrossings` measure against the same shaping. `DrawStringInRect` aligns a run in a rectangle by `BoxAlignment`. `DrawGlyphs` draws glyphs you
   shaped yourself with `PeachDrawing.Text`.
 - **Layers and effects:** `canvas.BeginLayer(new LayerOptions(Opacity: 0.5, Effects: [new BlurEffect(4)]))` draws a group that is composited as one piece,
-  with blur, drop-shadow and colour-matrix effects.
+  with blur, drop-shadow and color-matrix effects.
 - **Tiles:** `CreateTile(width, height)` returns a canvas and image for content drawn once and reused (an SVG pattern cell, say).
 - **Links, cursors and semantics:** `AddLink`, `AddDestinationLink`, `AddDestination`, `AddCursor` and `AddSemanticRegion` say what is clickable and what
   things mean; a canvas of pixels ignores them, PDF writes annotations, SVG writes `<a>`, and the Skia, Win2D and CoreGraphics backends record them for a host to hit-test.
 - **Structure hooks:** `BeginArtifact` and `BeginMarkedContent` bracket tagged-PDF content; other backends ignore them.
 
-## Paragraphs and colour glyphs on any Canvas
+## Paragraphs and color glyphs on any Canvas
 
 ```csharp
 using PeachDrawing.Text.Layout;
@@ -106,7 +106,7 @@ var layout = new ParagraphBuilder(new RunStyle(typeface, 16))
 canvas.DrawParagraph(layout, new PaintPoint(10, 10), PaintColor.Black);             // glyphs exactly where the shaper put them
 ```
 
-`ColorGlyphPainter` walks COLR v0/v1 colour glyphs into an `IColorGlyphTarget`; `CanvasColorGlyphTarget` paints them on any `Canvas`.
+`ColorGlyphPainter` walks COLR v0/v1 color glyphs into an `IColorGlyphTarget`; `CanvasColorGlyphTarget` paints them on any `Canvas`.
 
 ## Implementing your own Canvas
 
@@ -125,6 +125,6 @@ tiles). The guide has the full list and the contracts, such as units (`PixelsPer
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

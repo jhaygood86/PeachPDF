@@ -12,7 +12,7 @@ dotnet add package PeachDrawing.Text
 
 **Status:** pre-1.0, versioned in lockstep with PeachPDF (the same number for every release); until 1.0 the public API may change between releases.
 Public today: font loading and matching (`FontSet`, `TypefaceFamily`, `Typeface`), what a typeface says about itself (`TypefaceMetrics`, glyph mapping,
-advances), shaping (`Shaper`, `ShapeSettings`, `GlyphRun`), glyph outlines and colour glyphs (`GlyphOutline`, `ColorPalette`, the COLR paint graph,
+advances), shaping (`Shaper`, `ShapeSettings`, `GlyphRun`), glyph outlines and color glyphs (`GlyphOutline`, `ColorPalette`, the COLR paint graph,
 bitmap glyphs), variable fonts (`Typeface.WithAxes`), the `MATH` table, paragraph layout (`PeachDrawing.Text.Layout`), font subsetting for embedding
 (`TypefaceExporter`) and the `PeachDrawing.Text.Unicode` namespace (bidirectional text, scripts, line breaking, hyphenation, emoji). Targets .NET 10 and later.
 
@@ -22,7 +22,7 @@ bitmap glyphs), variable fonts (`Typeface.WithAxes`), the `MATH` table, paragrap
   (fontconfig) and Android; CSS Fonts 4 face matching by weight, width and style; `unicode-range` and glyph-coverage fallback.
 - **Shaping:** GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, the Universal Shaping Engine
   (Devanagari, Bengali, Gujarati, Tamil), Khmer, default-ignorable handling, and variation sequences.
-- **Outlines and colour:** glyph outlines, COLR v0/v1 with CPAL, CBDT/CBLC and sbix bitmaps, SVG glyph documents, and TrueType and CFF grid fitting (hinting).
+- **Outlines and color:** glyph outlines, COLR v0/v1 with CPAL, CBDT/CBLC and sbix bitmaps, SVG glyph documents, and TrueType and CFF grid fitting (hinting).
 - **Layout:** paragraphs laid out at any width with hit testing, carets and selection boxes.
 - **Unicode:** the Bidirectional Algorithm (UAX #9), line breaking (UAX #14), script itemization, vertical orientation, TeX/Liang hyphenation for 73 languages.
 
@@ -79,7 +79,7 @@ Lines break where UAX #14 allows, bidirectional text is reordered per line, fall
 `text-overflow` ellipsis and inline boxes are supported. `PeachDrawing.Text` stops at positions: with [PeachDrawing.Core](https://www.nuget.org/packages/PeachDrawing.Core/)
 one call paints a layout on any canvas (`canvas.DrawParagraph(layout, origin, color)`).
 
-## Outlines and colour glyphs
+## Outlines and color glyphs
 
 ```csharp
 using PeachDrawing.Text.Outlines;
@@ -93,7 +93,7 @@ if (face.TryMapRune(new Rune('g'), out ushort g) && face.TryGetOutline(g, out Gl
 }
 ```
 
-`ColorPalette` and the COLR paint graph (`GetColorPaint`) give colour glyphs, `TryGetSvgGlyph` the SVG documents of an `SVG ` table, and `EmbeddedBitmap` bitmap glyphs.
+`ColorPalette` and the COLR paint graph (`GetColorPaint`) give color glyphs, `TryGetSvgGlyph` the SVG documents of an `SVG ` table, and `EmbeddedBitmap` bitmap glyphs.
 
 ## Variable fonts
 
@@ -141,10 +141,10 @@ rather than fail. The repository's `PeachDrawing.Text.Brotli` project is a ready
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`). Parts of the font readers derive from PDFsharp (MIT), the TrueType bytecode interpreter
-and Adobe's CFF engine that grid-fit outlines are ported from FreeType (FreeType Project License, `FTL.TXT`, with Adobe's patent licence grant), several shaping algorithms are
+and Adobe's CFF engine that grid-fit outlines are ported from FreeType (FreeType Project License, `FTL.TXT`, with Adobe's patent license grant), several shaping algorithms are
 ports of HarfBuzz code (Old MIT), and the data tables come from the Unicode Character Database, the `hyph-utf8`
 pattern collection and ICU's Thai, Lao, Khmer and Burmese word lists; each of those notices is reproduced in `THIRD-PARTY-LICENSES.md`, which ships in this package.
 

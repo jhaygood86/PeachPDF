@@ -65,7 +65,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 |---|---|
 | `DrawRectangle`, `DrawPath`, `DrawPolygon` (brush) | `DrawRect` / `DrawPath` with a fill `SKPaint` (an `SKPath` built from the path's curves for the one call) |
 | `DrawLine`, `DrawRectangle`, `DrawPath` (pen) | The same with a stroke paint: caps, joins, miter limit and an `SKPathEffect` dash; a zero width is Skia's hairline |
-| Solid, linear and radial brushes | `SKShader` colour, linear gradient, radial gradient (an ellipse is the circle squeezed by the shader's matrix; a focus or focus radius is a two-point conical gradient); clamp or repeat |
+| Solid, linear and radial brushes | `SKShader` color, linear gradient, radial gradient (an ellipse is the circle squeezed by the shader's matrix; a focus or focus radius is a two-point conical gradient); clamp or repeat |
 | Conic gradient | A native sweep gradient |
 | `TileBrush`, hatch brush | A picture or image shader that repeats; a hatch is a tile made for the call |
 | `PushClip` (rectangle, path), `PushClipExclude` | `Save` + `ClipRect` / `ClipPath` (intersect) or `ClipRect` (difference) |
@@ -74,7 +74,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 | `PushBlendMode` | `SKPaint.BlendMode` on every draw: all sixteen blend modes, including the non-separable ones |
 | `PushAntiAlias` | `SKPaint.IsAntialias` and the clip's anti-aliasing |
 | `DrawImage` (with source rectangle, sampling) | `DrawImage` with `SKSamplingOptions` (nearest, linear with mipmaps, or Mitchell cubic) |
-| `BeginLayer` | `SaveLayer` with a paint: opacity, blend mode and colour matrix, and `SKImageFilter` blur (blurred into transparency at the layer's edge, or clamped with `BlurEffect.ClampEdges`) and drop shadow, applied to the group when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects instead of through a CPU bitmap |
+| `BeginLayer` | `SaveLayer` with a paint: opacity, blend mode and color matrix, and `SKImageFilter` blur (blurred into transparency at the layer's edge, or clamped with `BlurEffect.ClampEdges`) and drop shadow, applied to the group when the layer is finished. `HasNativeLayerEffects` is true, so the HTML painter draws a blurred outset `box-shadow`, a CSS `filter` and a `backdrop-filter` as layers with effects instead of through a CPU bitmap |
 | `CreateTile` | An `SKPictureRecorder`: vector, resolution independent, replayed by the GPU |
 | `DrawImageWithOpacity` / `WithColorMatrix` | A paint with alpha or an `SKColorFilter` (a picture is drawn as one group) |
 | `DrawImageMasked` / `AlphaMasked` / `BlendedOver` | An isolated `SaveLayer`: the content, then the mask drawn with `DstIn` (luminance filter for a luminosity mask) or `DstOut`; or the two tiles blended with each other inside it |
@@ -90,7 +90,7 @@ matching kind, so a font is never measured by one engine and drawn by the other.
 - **`SkiaTextEngine.PeachDrawing`** (default): the shared [`PeachDrawing.Text`](peachdrawing-text.md) engine, which does the **full text shaping
   itself** - GSUB and GPOS (ligatures, kerning, mark attachment, contextual lookups), Arabic and Syriac joining, Indic and Khmer shaping,
   bidirectional text and script itemization - with no shaping library for you to add. Text is shaped from the font file and drawn as exact
-  glyph outlines (colour, bitmap and SVG glyphs included), so it lays out exactly as it does on the PDF, SVG and raster canvases.
+  glyph outlines (color, bitmap and SVG glyphs included), so it lays out exactly as it does on the PDF, SVG and raster canvases.
 - **`SkiaTextEngine.Native`**: Skia's own fonts. Families are resolved by the platform's font manager (`SKFontManager`), shaped with
   an `ISkiaTextShaper` and drawn by Skia as glyph runs, from the glyph atlas on a GPU surface. Unlike the default engine, this one does not
   shape text itself: the package ships a basic shaper that needs nothing beyond Skia (one glyph per character, the font's own advances); for ligatures, kerning and complex scripts the context is given `PeachTextShaper` (the
@@ -144,14 +144,14 @@ Native mode is a convenience for text that should look like the rest of the plat
 | Area | In native mode |
 |---|---|
 | Layout | Metrics, hinting, kerning and font fallback are Skia's and the platform's, so line breaks and measured widths differ from the PDF, SVG and raster canvases. |
-| Outlines | None. `GetTextOutline` returns `null`, so text with a gradient or pattern fill or a stroke falls back to a solid colour, and `text-decoration-skip-ink` skips nothing. |
+| Outlines | None. `GetTextOutline` returns `null`, so text with a gradient or pattern fill or a stroke falls back to a solid color, and `text-decoration-skip-ink` skips nothing. |
 | Glyphs by index (`DrawGlyphs`, MathML stretchy parts) | Not drawn: they are addressed in the font file the `PeachDrawing.Text` engine reads. |
 | Shaping | The basic shaper does no substitution, kerning or reordering; supply an `ISkiaTextShaper` for those. `font-feature-settings` and the `font-variant-*` groups are never passed on. |
 | Variable fonts | `font-variation-settings` and `font-optical-sizing` are ignored; weight, style and stretch select among the family's faces. |
 | `unicode-range` | Not split per range; a face is used for every character it covers. |
 | Fonts the document adds | Supported where Skia can load the file (TrueType and OpenType); a WOFF or WOFF2 file is not loadable by Skia and is ignored in this mode. |
 | Bold and italic | Synthesised (emboldening, a slant) when the matched face lacks them and the document has not forbidden it. |
-| Colour glyphs | Drawn by Skia's own colour-font support where the platform has it; per-palette choice (`font-palette`) is not applied. |
+| Color glyphs | Drawn by Skia's own color-font support where the platform has it; per-palette choice (`font-palette`) is not applied. |
 | Vertical text | Vertical metrics are not provided. |
 
 ## Images
@@ -162,7 +162,7 @@ Native mode is a convenience for text that should look like the rest of the plat
   surface straight into the texture it uploads (once per `GpuContext`), so no managed copy of the pixels is made; Skia may also discard the
   decoded pixels and redo the decode when memory is wanted. Anything Skia cannot decode is decoded by PeachImage, as is an image that carries
   an orientation in its metadata (the canvas applies the orientation itself). The pixels can differ slightly from PeachImage's (JPEG decoders
-  round differently; Skia's codecs keep a colour profile that PeachImage ignores), and an image whose data is damaged past its header draws
+  round differently; Skia's codecs keep a color profile that PeachImage ignores), and an image whose data is damaged past its header draws
   nothing instead of failing to load.
 - **`SkiaImageCodec.PeachImage`**: the shared [PeachImage](peachimage.md) decoder, with the same formats and the same pixels as on
   every other canvas.
@@ -227,7 +227,7 @@ on every drawing call throws `ObjectDisposedException`. Dispose the context afte
 ## Limitations
 
 - **Surface only.** The package draws; it does not create, present or flush surfaces. Flushing a GPU surface is the host's.
-- **Gradients.** Gradient colours interpolate unpremultiplied, as Skia does by default; a conic gradient with stops that go past one turn
+- **Gradients.** Gradient colors interpolate unpremultiplied, as Skia does by default; a conic gradient with stops that go past one turn
   is clamped to the first turn.
 - **Native text** is not feature complete; see the [table above](#native-font-mode-is-not-feature-complete).
 - **Links** have no default launcher; see [links](#links).

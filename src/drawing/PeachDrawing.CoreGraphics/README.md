@@ -2,7 +2,7 @@
 
 A CoreGraphics `Canvas` for [PeachDrawing.Core](https://www.nuget.org/packages/PeachDrawing.Core) on macOS and iOS: draw shapes, gradients, clips, layers, text and images with Apple's
 Quartz 2D, with no PDF, HTML or CSS involved and no [PeachPDF](https://peachpdf.net/) reference needed. Because it is a PeachDrawing `Canvas`, drawing code written against
-`PeachDrawing.Core` runs on CoreGraphics unchanged, and the same code can also write PDF, SVG or a bitmap. Layer effects (blur, drop shadow, colour matrices) run through Core Image,
+`PeachDrawing.Core` runs on CoreGraphics unchanged, and the same code can also write PDF, SVG or a bitmap. Layer effects (blur, drop shadow, color matrices) run through Core Image,
 on a Metal device when there is one; conic gradients are computed on the CPU.
 
 **You supply the context.** The package never creates a window, a view or a layer: it draws into a `CGContext` you already have - a view's, a layer's, a bitmap's - and borrows it,
@@ -50,7 +50,7 @@ composer.Save(file);                                      // CoreGraphicsImageFo
 ## Text
 
 Text is shaped by the shared [PeachDrawing.Text](https://www.nuget.org/packages/PeachDrawing.Text/) engine by default, so it looks and measures the same as on every other
-PeachDrawing canvas (OpenType shaping, Arabic and Indic scripts, bidi, colour glyphs). `new CoreGraphicsRenderContext(CoreGraphicsTextEngine.Native)` uses CoreText instead, so text
+PeachDrawing canvas (OpenType shaping, Arabic and Indic scripts, bidi, color glyphs). `new CoreGraphicsRenderContext(CoreGraphicsTextEngine.Native)` uses CoreText instead, so text
 matches the rest of the platform; that mode is not feature complete (the guide has the table). Register your own fonts with `await context.AddFont(stream, "Family")`.
 
 ## Images
@@ -64,7 +64,7 @@ using var native = new CoreGraphicsRenderContext(CoreGraphicsTextEngine.PeachDra
 
 ## Layers, effects and gradients
 
-`canvas.BeginLayer(new LayerOptions(...))` composites a group with opacity, a blend mode and blur, drop-shadow and colour-matrix effects. Blur and shadow run in Core Image (in sRGB, so a
+`canvas.BeginLayer(new LayerOptions(...))` composites a group with opacity, a blend mode and blur, drop-shadow and color-matrix effects. Blur and shadow run in Core Image (in sRGB, so a
 blur averages the same numbers as on the other backends), on the GPU when `context.EffectsUseGpu` is true. Layers and tiles are bitmaps made at the resolution the canvas draws at.
 
 ## Links, cursors and semantics
@@ -96,6 +96,6 @@ them, and the context owns the Core Image context and native font faces (dispose
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

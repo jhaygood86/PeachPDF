@@ -36,7 +36,7 @@ using var brush = canvas.GetSolidBrush(PaintColor.FromArgb(255, 220, 90, 40));
 canvas.DrawRectangle(brush, 20, 20, 360, 260);
 ```
 
-The context is only **borrowed**: disposing the canvas restores its graphics state (matrix, clip, colours) and leaves it usable.
+The context is only **borrowed**: disposing the canvas restores its graphics state (matrix, clip, colors) and leaves it usable.
 
 **Orientation.** The canvas draws top-down (y grows downwards), like every other `Canvas`. A raw CoreGraphics context and an AppKit view have their
 origin at the **bottom left**, so by default `FromContext` flips them about `bounds`; a UIKit context (and an AppKit view that is flipped) already has
@@ -67,7 +67,7 @@ Rectangles, lines, polygons, image rectangles, brush geometry and text positions
 | `PushBlendMode` | A graphics-state level plus `SetBlendMode`; all sixteen blend modes (and `Plus`, as plus-lighter) have a CoreGraphics counterpart, so a pushed blend applies to each draw exactly |
 | `PushAntiAlias` | `SetShouldAntialias` |
 | Rectangles, lines, paths, polygons | Fills and strokes of a `CGPath`; line width, caps, joins, miter limit and dashes are the pen's |
-| Solid brush or pen | The fill or stroke colour (sRGB) |
+| Solid brush or pen | The fill or stroke color (sRGB) |
 | Linear and radial gradient | `CGGradient`: linear and radial (with a true focus circle) are native; an ellipse is a circle under a scaled matrix; the *repeat* spread draws as many periods as reach the clip |
 | Conic gradient | CoreGraphics has no angular gradient, so the fill is computed per pixel on the CPU at the device's resolution over the clip's bounds and drawn as an image |
 | Gradient or pattern *pen* | The pen's outline (`ReplacePathWithStrokedPath`) is the clip the brush paints through |
@@ -76,8 +76,8 @@ Rectangles, lines, polygons, image rectangles, brush geometry and text positions
 | `DrawImage` (and its source rectangle and sampling) | `DrawImage` of the (cropped) `CGImage` with the interpolation quality the sampling asks for (`Nearest`/`Pixelated` is none; the others medium or high - CoreGraphics has no cubic) |
 | `DrawImageWithOpacity` | The context's alpha and blend mode, then the image |
 | `DrawImageMasked`, `DrawImageAlphaMasked`, `DrawImageBlendedOver` | An isolated bitmap of the destination: the content is drawn, then the mask with a destination-in (or destination-out, inverted) blend - a luminosity mask first becomes opacity in Core Image - or the two images with the blend mode between them |
-| `DrawImageWithColorMatrix` | Core Image's colour matrix filter |
-| `BeginLayer` | The group is drawn into a bitmap of its own and composited back through its opacity, blend mode, colour matrix and effects when the layer is disposed |
+| `DrawImageWithColorMatrix` | Core Image's color matrix filter |
+| `BeginLayer` | The group is drawn into a bitmap of its own and composited back through its opacity, blend mode, color matrix and effects when the layer is disposed |
 | `BlurEffect`, `DropShadowEffect`, `ColorMatrixEffect` | Core Image (see below); `HasNativeLayerEffects` is true |
 | `BeginRasterSurface` / `DrawRaster` | The shared `PeachDrawing` software rasterizer for what is not expressible as vector content; its pixels are drawn as an image |
 | `DrawString`, `DrawGlyphs` | See [text](#text) |
@@ -86,7 +86,7 @@ Rectangles, lines, polygons, image rectangles, brush geometry and text positions
 
 ## Effects and the GPU
 
-Blur, drop shadow, colour matrices and luminance-to-opacity run in **Core Image**. When the machine has a Metal device (`MTLDevice.SystemDefault`,
+Blur, drop shadow, color matrices and luminance-to-opacity run in **Core Image**. When the machine has a Metal device (`MTLDevice.SystemDefault`,
 or the one you give `CoreGraphicsRenderContext`'s `gpuDevice` parameter) they run on the GPU; with `useGpu: false`, or where there is none, they run on the
 CPU with the same result. `CoreGraphicsRenderContext.EffectsUseGpu` says which. Core Image works in sRGB here, not its default linear space, so a blur
 averages the same numbers it does on the other backends. A blur uses the mean of its two sigmas (Core Image's blur is not elliptical).
@@ -96,7 +96,7 @@ averages the same numbers it does on the other backends. A blur uses the mean of
 Two engines, chosen when the context is made (`CoreGraphicsTextEngine`).
 
 - **`PeachDrawing` (the default).** The shared `PeachDrawing.Text` engine: full OpenType shaping, joining scripts, Indic shaping and bidi from the font file; each run is
-  drawn as glyph outlines (one filled `CGPath` per run), so text measures and lays out exactly as it does on the PDF, SVG and raster canvases. Colour
+  drawn as glyph outlines (one filled `CGPath` per run), so text measures and lays out exactly as it does on the PDF, SVG and raster canvases. Color
   glyphs (COLR, embedded bitmaps, SVG glyphs) are drawn too. System fonts come from CoreText through the engine's font set.
 - **`Native`.** CoreText resolves the family, shapes the run (`CTLine`) and draws it, so text looks like the rest of the platform's (system font, optical sizes)
   but does not lay out identically to the other canvases. It is **not feature complete**:
@@ -105,7 +105,7 @@ Two engines, chosen when the context is made (`CoreGraphicsTextEngine`).
 |---|---|
 | Text outlines | `GetTextOutline` returns `null`, so a caller falls back to drawing the string |
 | Font features requested by a document (`font-variant-caps`, `font-variant-position`) | Reported unsupported; CoreText applies the font's default features |
-| Colour glyph fonts' COLR/SVG layers | CoreText draws the font's own colour glyphs (Apple Color Emoji) but not the library's layer painters |
+| Color glyph fonts' COLR/SVG layers | CoreText draws the font's own color glyphs (Apple Color Emoji) but not the library's layer painters |
 | Variable-font axes from `font-variation-settings` | Not applied |
 | Ink-skipping underlines | `GetInkCrossings` reports none |
 
@@ -142,7 +142,7 @@ The codec is chosen when the context is made (`CoreGraphicsImageCodec`).
 - **`Auto`.** Chosen image by image: where the context has a Metal device, an image ImageIO has a codec for is kept as its **encoded bytes** and decoded by the system
   on first draw - in hardware where it can - so no managed copy of its pixels is made unless something asks for them (`GetPixels`); any other image, any image with an
   orientation stored in its metadata, and every image on a context without a Metal device is decoded by PeachImage. Pixels can differ slightly from PeachImage's
-  where the system converts colour-managed or CMYK files.
+  where the system converts color-managed or CMYK files.
 
 ## Links
 
@@ -161,7 +161,7 @@ Every native object the backend creates has one owner and is released determinis
 |---|---|---|
 | The `CGContext` passed to `FromContext` | The caller (always) | The caller |
 | A pushed clip, transform or blend (a graphics-state level) | The canvas that pushed it | The matching pop, or `CoreGraphicsCanvas.Dispose()` for any still pushed |
-| Paths, gradients, colours | The one draw call that needs them | The end of that call, even when it throws |
+| Paths, gradients, colors | The one draw call that needs them | The end of that call, even when it throws |
 | A tile (`CreateTile`) | The caller, through the canvas and image it returned | Disposing them; disposing the image also ends a tile canvas still open |
 | A layer (`BeginLayer`) | The `CanvasLayer` returned | Disposing it composites and releases its bitmap; a canvas disposed first ends it as it stands |
 | Decoded image | The `Image` | `Dispose()` |

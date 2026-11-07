@@ -135,7 +135,7 @@ canvas.PopTransform();
 Also on `Canvas`: `DrawStringInRect(text, font, color, rect, horizontal, vertical)` places a run inside a rectangle by `BoxAlignment`
 (`Start`, `Center`, `End`) on each axis, `GetClip()` returns the current clip rectangle, `PushAntiAlias`/`PopAntiAlias` switch
 anti-aliasing for a scope, and `PaintRequiresTransparency(paint)` asks whether drawing a callback would need transparency the format
-cannot express. `DrawString` takes an optional `FontPalette` (a base palette index plus colour overrides) for COLR/CPAL colour fonts and
+cannot express. `DrawString` takes an optional `FontPalette` (a base palette index plus color overrides) for COLR/CPAL color fonts and
 `ShapeSettings` for OpenType features.
 
 `PixelsPerPoint` is the scale between this `Canvas`'s own coordinate space and true PDF points (`1.0`, the
@@ -335,7 +335,7 @@ to no page, writes nothing.
 ## Tile and hatch brushes
 
 A `TileBrush` repeats a picture across the plane, so a shape filled with it shows the part of the grid under it and
-neighbouring shapes continue the same pattern.
+neighboring shapes continue the same pattern.
 
 ```csharp
 var (tile, image) = canvas.CreateTile(20, 20)!.Value;
@@ -364,7 +364,7 @@ that has no hatch of its own. A pen can stroke with either brush.
 `canvas.PushAntiAlias(false)` / `PopAntiAlias()` turn edge smoothing off or on for the shapes drawn in between, and
 nest like the other state stacks. On a raster canvas this is exact; the render-wide setting
 (`RasterAntiAliasing`) is a ceiling, so a request for smoothing never overrides a render that turned it off. The default
-implementation can only honour `true`, through the older `SetAntiAliasSmoothingMode` pair it is built on.
+implementation can only honor `true`, through the older `SetAntiAliasSmoothingMode` pair it is built on.
 
 `canvas.DrawImage(image, destRect, ImageSampling.…)` picks how the image's pixels are read: `Automatic` (what the image's
 own `Interpolate` asks for), `Nearest`, `Bilinear`, `Bicubic` (Catmull-Rom over sixteen pixels; the raster canvas has a
@@ -423,16 +423,16 @@ worked example. A few things worth knowing before you start:
   the same effects pipeline PeachPDF drives. `RenderContext.CreateSvgGlyphPainter` is the seam a backend with an
   SVG engine uses to draw OpenType `SVG ` glyphs.
 
-## Drawing shaped text, paragraphs and colour glyphs on any `Canvas`
+## Drawing shaped text, paragraphs and color glyphs on any `Canvas`
 
 The package also holds the logic every `Canvas` shares for text that `PeachDrawing.Text` has already
 shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/clip/brush members:
 
-- `canvas.DrawParagraph(layout, origin, colour)` and `canvas.DrawGlyphRun(run, size, baselineOrigin, colour)`
+- `canvas.DrawParagraph(layout, origin, color)` and `canvas.DrawGlyphRun(run, size, baselineOrigin, color)`
   (`CanvasParagraphExtensions`) paint a `ParagraphLayout` or a `GlyphRun` at the positions the shaper and the
-  layout chose; `ParagraphPaint`/`TextDecorations` give a per-run colour and underline/overline/line-through
+  layout chose; `ParagraphPaint`/`TextDecorations` give a per-run color and underline/overline/line-through
   (see [Drawing a layout](peachdrawing-text.md#drawing-a-layout)).
-- `PathText.DrawStringAlongPath(text, typeface, size, colour, path, options)` sets text along a path: it shapes the
+- `PathText.DrawStringAlongPath(text, typeface, size, color, path, options)` sets text along a path: it shapes the
   text, then places every glyph at its own distance along the path and turns it to follow the curve, so kerning and
   ligatures survive. `PathText.Layout` returns the placed glyphs (`PathGlyph`: glyph index, advance, transform) for a caller
   that draws them itself, and `PathText.GetGlyphFrame` is the one placement step (a distance along the path, the side, a
@@ -441,12 +441,12 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
 - `InkCrossings.Measure` finds where a run of text puts ink inside a horizontal band, one stretch per glyph: what a
   `text-decoration-skip-ink` underline needs to break around descenders. It is what `Canvas.GetInkCrossings` answers.
 - `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and
-  `font-palette` overrides, the foreground-colour sentinel, gradient stops and extend modes, transforms,
+  `font-palette` overrides, the foreground-color sentinel, gradient stops and extend modes, transforms,
   clips and blend modes - and describes it to an `IColorGlyphTarget` as clipped fills.
   `CanvasColorGlyphTarget` maps that onto any `Canvas`'s own paths, clips, brushes and blend modes; a backend
   with a different way of drawing implements `IColorGlyphTarget` itself.
 
-## Licences
+## Licenses
 
 `PeachDrawing.Core` is BSD 3-Clause. It carries no third-party code of its own; its one dependency,
 `PeachDrawing.Text`, carries its own notices in its `THIRD-PARTY-LICENSES.md`. See [License](license.md)

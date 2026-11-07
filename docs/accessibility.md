@@ -136,9 +136,9 @@ nesting). The Skia, Win2D and CoreGraphics canvases record them in their link ma
 
 A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the engine draws every `<input>` and `<select>` itself from the
 control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
-buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges, a colour input (a block of its colour), a file input (a "Choose File" button
+buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges, a color input (a block of its color), a file input (a "Choose File" button
 and "No file chosen") and date and time inputs (their value, or the pattern it would take while empty: `mm/dd/yyyy`, `--:-- --`...). The text of a text field can be edited
-through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or colour field and a range control are operated through the hosts' own popups and drag handling, and a file input opens the host's file picker. The accessibility tree already reports each control's role, name and state.
+through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or color field and a range control are operated through the hosts' own popups and drag handling, and a file input opens the host's file picker. The accessibility tree already reports each control's role, name and state.
 
 ## Preferences and text spacing
 
@@ -153,15 +153,15 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 
 ### Forced colors
 
-With `UserPreferences.ForcedColors` on, the document is also drawn in the colours of `UserPreferences.ForcedPalette` (a
+With `UserPreferences.ForcedColors` on, the document is also drawn in the colors of `UserPreferences.ForcedPalette` (a
 `SystemColorPalette`: `Canvas`, `CanvasText`, `LinkText`, `ButtonFace`... filled from the platform, or `SystemColorPalette.Light` / `.Dark`), as a
 browser does under a Windows high contrast theme: text takes `CanvasText` (`LinkText` in a link, `ButtonText` in a button, `FieldText` in a field),
 backgrounds take `Canvas` (`ButtonFace`, `Field`, `Mark`), borders, outlines and column rules take `CanvasText` (`ButtonBorder` on a control),
 box shadows, text shadows and gradient backgrounds are not drawn (a `url()` image is kept), and an inline `<svg>`'s `fill` and `stroke`
-(solid, gradient or pattern) take `CanvasText`. A fully transparent colour stays transparent. An element opts out with
-[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text colour with
-`preserve-parent-color`. The CSS [system colour keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
-work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes.
+(solid, gradient or pattern) take `CanvasText`. A fully transparent color stays transparent. An element opts out with
+[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text color with
+`preserve-parent-color`. The CSS [system color keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
+work in any style sheet; they always have the colors of `SystemColorPalette.Light`, whatever palette the host passes.
 ### Text size
 
 `HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a

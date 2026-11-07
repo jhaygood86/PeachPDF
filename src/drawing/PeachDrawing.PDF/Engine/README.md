@@ -12,7 +12,7 @@ type here is `internal`.
 | `AcroForms/`, `Annotations/`, `Structure/` | `PeachDrawing.PDF.Engine.AcroForms`, `.Annotations`, `.Structure` | Interactive forms, annotations and the tagged-PDF structure tree |
 | `Drawing/` | `PeachDrawing.PDF.Engine.Drawing` | `PdfGraphics` (the drawing surface), `PdfForm`, `PdfRasterImage` and the image sources |
 | `Rendering/` | `PeachDrawing.PDF.Engine.Rendering` | `PdfGraphicsRenderer`, which turns drawing calls into content-stream operators |
-| `Resources/`, `Security/` | (embedded data; `PeachDrawing.PDF.Engine.Security`) | The bundled ICC colour profiles used for PDF/A and PDF/X output intents, and the AES-256 security handler behind encryption |
+| `Resources/`, `Security/` | (embedded data; `PeachDrawing.PDF.Engine.Security`) | The bundled ICC color profiles used for PDF/A and PDF/X output intents, and the AES-256 security handler behind encryption |
 | `Filters/`, `IO/`, `Internal/` | `.Filters`, `.IO`, `.Internal` | Stream compression, `PdfWriter`, and the encodings and number formatting |
 
 The engine draws with the shared `PeachDrawing.Core` types (`Rect`, `PaintColor`, `Brush`, `Pen`, `GraphicsPath`,

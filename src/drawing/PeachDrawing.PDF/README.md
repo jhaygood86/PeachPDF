@@ -74,7 +74,7 @@ canvas.DrawImage(context.ImageFromStream(stream), new Rect(220, 40, 140, 100));
 ```
 
 Text is shaped with ligatures, kerning, bidirectional reordering and complex scripts, written with only the glyphs used, and
-colour fonts are drawn as vector artwork. `MeasureString` measures against the same shaping `DrawString` uses.
+color fonts are drawn as vector artwork. `MeasureString` measures against the same shaping `DrawString` uses.
 
 ## Links, destinations and bookmarks
 
@@ -98,8 +98,8 @@ composer.AddBookmarks([new PdfBookmark(level: 1, title: "Chapter one", isOpen: t
 | `Linearize` | Write the file for "fast web view". |
 | `CompressContentStreams`, `BrotliCompression` | Flate is on by default; Brotli (PDF 2.0) is opt-in. |
 | `ImageCompression`, `DownscaleImages`, `DownscaleQuality`, `MaximumDownscaleMultiplier`, `JxlPassthrough` | How images are embedded; `composer.ConsolidateImages()` stores repeated pictures once. |
-| `FlattenTransparency`, `PortableColorFilters` | Draw transparency and colour filters as plain content for readers that handle them poorly. |
-| `Conformance`, `XConformance`, `UAConformance`, `ColorOptions` | PDF/A, PDF/X and PDF/UA levels, and the output-intent ICC profile and colour conversion they need. |
+| `FlattenTransparency`, `PortableColorFilters` | Draw transparency and color filters as plain content for readers that handle them poorly. |
+| `Conformance`, `XConformance`, `UAConformance`, `ColorOptions` | PDF/A, PDF/X and PDF/UA levels, and the output-intent ICC profile and color conversion they need. |
 | `Encryption` | AES-256 with a user password, an owner password and `PdfPermissions`. |
 | `EmbeddedFiles`, `FacturX` | Attached files, including a Factur-X / ZUGFeRD invoice. |
 
@@ -170,6 +170,6 @@ A `PdfComposer` and its canvases are not thread safe: use one composer per file.
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause. The PDF engine is adapted from PDFsharp (MIT); its notice is in `THIRD-PARTY-LICENSES.md`, which ships in this package.

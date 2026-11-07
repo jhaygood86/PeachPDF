@@ -37,7 +37,7 @@ pause, when the control is resized, so it reflows like a web page. `Html` and `S
 
 ## Features
 
-**Links.** Handle a link yourself by cancelling it:
+**Links.** Handle a link yourself by canceling it:
 
 ```csharp
 Viewer.LinkClicked += (s, e) =>
@@ -56,7 +56,7 @@ HtmlViewFonts.AddFile(@"C:\fonts\SourceSans3-Regular.ttf");
 ```
 
 **Selection and the clipboard.** `SelectedText`, `CopySelection()` and `SelectAll()`; Ctrl+C and Ctrl+A work when the control has focus.
-`SelectionColor` sets the colour behind selected text.
+`SelectionColor` sets the color behind selected text.
 
 **Scrolling, zoom and anchors.** `ScrollToElement("section-2")` scrolls an element to the top; `IsZoomEnabled` (on by default) allows Ctrl+wheel and pinch zoom.
 
@@ -71,7 +71,7 @@ text is drawn), and `Input` (the pointing devices the `hover` and `pointer` medi
 while something is playing. It stays off when Windows' animation effects are off. `AnimationEvents` reports `animationstart`,
 `transitionend` and the rest.
 
-**Forms.** Check boxes, radio buttons, text fields (with IME, caret, selection and clipboard), drop-downs, date, time and colour pickers, file
+**Forms.** Check boxes, radio buttons, text fields (with IME, caret, selection and clipboard), drop-downs, date, time and color pickers, file
 pickers and range controls are drawn from their CSS and work. `FormSubmitting` gives you the form as it would be sent
 (`e.Submission.Serialize()` makes the body; the view sends nothing itself); `FormInvalid` reports failed validation.
 

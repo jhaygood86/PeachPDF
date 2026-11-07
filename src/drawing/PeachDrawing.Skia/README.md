@@ -58,7 +58,7 @@ composer.Save(file, SkiaImageFormat.Png);                               // also 
 ## Text
 
 Text is shaped by the shared [PeachDrawing.Text](https://www.nuget.org/packages/PeachDrawing.Text/) engine by default (OpenType substitution and positioning, Arabic and
-Indic scripts, bidirectional text, colour glyphs), so it looks the same on every platform. Register your own fonts with `await context.AddFont(stream, "Family")`.
+Indic scripts, bidirectional text, color glyphs), so it looks the same on every platform. Register your own fonts with `await context.AddFont(stream, "Family")`.
 
 ```csharp
 using var native = new SkiaRenderContext(SkiaTextEngine.Native);        // Skia's own fonts and the platform's glyph rendering
@@ -74,7 +74,7 @@ platform) or `Native`. Telling the context about the host's `GRContext` (`contex
 
 ## Layers, effects and blend modes
 
-`canvas.BeginLayer(new LayerOptions(...))` is an isolated `SaveLayer` with opacity, a blend mode and blur, drop-shadow and colour-matrix effects; the 16 blend modes
+`canvas.BeginLayer(new LayerOptions(...))` is an isolated `SaveLayer` with opacity, a blend mode and blur, drop-shadow and color-matrix effects; the 16 blend modes
 are `SKBlendMode`s and conic gradients are sweep shaders. Everything else on the `Canvas` API (paths, gradients, clips, transforms, masks) maps directly to Skia.
 
 ## Links, cursors and semantics
@@ -108,6 +108,6 @@ faces it creates (dispose it), and a canvas disposed with clips or layers still 
 PeachPDF is free and open source. If it saves you time, you can [sponsor jhaygood86 on GitHub](https://github.com/sponsors/jhaygood86);
 sponsors can get paid support, see [Sponsorship](https://peachpdf.net/sponsorship.html).
 
-## Licence
+## License
 
 BSD 3-Clause (see `LICENSE`).

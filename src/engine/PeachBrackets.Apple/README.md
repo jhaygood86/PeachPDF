@@ -58,7 +58,7 @@ a click that was not on a link. `ScrollChanged` and `ZoomChanged` follow the vie
 **Selection and the pasteboard.** `SelectedText`, `CopySelection()`, `SelectAll()` and `ScrollToElement("id")`; Cmd+C and Cmd+A work on a Mac
 and with a hardware keyboard on iOS.
 
-**Forms.** Check boxes, radio buttons, text fields, drop-downs, date, time and colour pickers, file fields and range controls are drawn from
+**Forms.** Check boxes, radio buttons, text fields, drop-downs, date, time and color pickers, file fields and range controls are drawn from
 their CSS and work (`NSTextInputClient` on macOS, `UIKeyInput` on iOS). `FormSubmitting` gives the form as it would be sent
 (`e.Submission.Serialize()`; the view sends nothing itself) and `FormInvalid` reports failed validation.
 
