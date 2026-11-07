@@ -60,6 +60,33 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
+        public async Task BackgroundBlendMode_BlendsTheImageLayerInsideAGroupOfItsOwn()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div style="width: 60pt; height: 60pt; background-color:#ffff00; background-image: linear-gradient(#00ffff, #00ffff); background-blend-mode: multiply;"></div>
+                </body></html>
+                """;
+
+            var pdfText = await GetPdfText(html);
+
+            Assert.Contains("/BM /Multiply", pdfText);
+            Assert.Matches(GsThenDoOnSameCmLine, pdfText);
+        }
+
+        [Fact]
+        public async Task BackgroundBlendModeNormal_ProducesNoBlendModeExtGState()
+        {
+            var html = """
+                <!DOCTYPE html><html><body>
+                <div style="width: 60pt; height: 60pt; background-color:#ffff00; background-image: linear-gradient(#00ffff, #00ffff);"></div>
+                </body></html>
+                """;
+
+            Assert.DoesNotContain("/BM /", await GetPdfText(html));
+        }
+
+        [Fact]
         public async Task MixBlendModeNormal_ProducesNoBlendModeExtGState()
         {
             var html = """

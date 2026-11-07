@@ -528,6 +528,45 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
         }
 
         [Fact]
+        public async Task IsStackingContextBox_IsolationIsolate_ReturnsTrue()
+        {
+            var root = await Render("<div><span id='inner' style='isolation: isolate;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.True(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task IsStackingContextBox_IsolationAuto_ReturnsFalse()
+        {
+            var root = await Render("<div><span id='inner' style='isolation: auto;'>Text</span></div>");
+            var span = DomUtils.GetBoxById(root, "inner")!;
+
+            Assert.False(DomUtils.IsStackingContextBox(span));
+        }
+
+        [Fact]
+        public async Task NeedsIsolatedGroup_OnlyWhenIsolatedAndSomethingInsideBlends()
+        {
+            var root = await Render(
+                "<div id='plain' style='isolation: isolate;'><p>Text</p></div>"
+                + "<div id='blending' style='isolation: isolate;'><p style='mix-blend-mode: multiply;'>Text</p></div>"
+                + "<div id='notIsolated'><p style='mix-blend-mode: multiply;'>Text</p></div>");
+
+            Assert.False(DomUtils.NeedsIsolatedGroup(DomUtils.GetBoxById(root, "plain")!));
+            Assert.True(DomUtils.NeedsIsolatedGroup(DomUtils.GetBoxById(root, "blending")!));
+            Assert.False(DomUtils.NeedsIsolatedGroup(DomUtils.GetBoxById(root, "notIsolated")!));
+        }
+
+        [Fact]
+        public async Task IsolationIsolate_ForcesFlatTransformStyle()
+        {
+            var root = await Render("<div id='inner' style='transform-style: preserve-3d; isolation: isolate;'>Text</div>");
+
+            Assert.False(DomUtils.EstablishesPreserve3d(DomUtils.GetBoxById(root, "inner")!));
+        }
+
+        [Fact]
         public async Task IsStackingContextBox_NormalMixBlendMode_ReturnsFalse()
         {
             var root = await Render("<div><span id='inner' style='mix-blend-mode: normal;'>Text</span></div>");

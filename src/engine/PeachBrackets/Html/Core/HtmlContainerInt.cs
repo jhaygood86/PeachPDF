@@ -4075,6 +4075,59 @@ namespace PeachBrackets.Html
         /// </summary>
         internal CssBox? CanvasBackgroundBox { get; private set; }
 
+        private CssBox? _metaColorSchemeRoot;
+        private PeachBrackets.Css.ColorScheme? _metaColorScheme;
+
+        /// <summary>
+        /// The scheme the document's <c>&lt;meta name="color-scheme" content="..."&gt;</c> names (CSS Color Adjust 1 section 2.3), which stands in for a
+        /// <c>color-scheme</c> the root does not declare; null when there is no such valid element.
+        /// </summary>
+        internal PeachBrackets.Css.ColorScheme? MetaColorScheme
+        {
+            get
+            {
+                if (Root is null) return null;
+                if (!ReferenceEquals(_metaColorSchemeRoot, Root))
+                {
+                    _metaColorSchemeRoot = Root;
+                    _metaColorScheme = FindMetaColorScheme(Root);
+                }
+
+                return _metaColorScheme;
+            }
+        }
+
+        private static PeachBrackets.Css.ColorScheme? FindMetaColorScheme(CssBox box)
+        {
+            if (box.HtmlTag is { } tag && tag.Name.Equals("meta", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(tag.TryGetAttribute("name"), "color-scheme", StringComparison.OrdinalIgnoreCase)
+                && tag.TryGetAttribute("content") is { } content
+                && PeachBrackets.Css.ColorScheme.TryParse(content) is { } scheme)
+                return scheme;
+
+            foreach (var child in box.Boxes)
+            {
+                if (FindMetaColorScheme(child) is { } found) return found;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// The colour a dark page is drawn on (<c>Canvas</c> in a dark scheme) when the root's used <c>color-scheme</c> is dark, else null:
+        /// the canvas of a light page is the white of the sheet.
+        /// </summary>
+        internal PaintColor? DarkCanvasColor
+        {
+            get
+            {
+                if (Root is null || DomUtils.GetBoxByTagName(Root, "html") is not { } html || !html.UsesDarkColorScheme) return null;
+
+                var dark = PeachBrackets.Css.ColorSchemeScope.DarkCanvas;
+                return PaintColor.FromArgb(dark.A, dark.R, dark.G, dark.B);
+            }
+        }
+
         /// <summary>
         /// Resolves <see cref="CanvasBackgroundBox"/> and marks the chosen box so its own ordinary
         /// background pass is suppressed — otherwise the same background would be painted twice, once

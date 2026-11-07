@@ -935,6 +935,38 @@
       }
     },
     {
+      "name": "isolation",
+      "comment": "CSS Compositing and Blending Level 1 section 3.2. Does not inherit. isolate makes the element a stacking context (DomUtils.IsStackingContextBox) and so an isolated group: a descendant's mix-blend-mode blends with what the element painted, not with the page behind it. FragmentPainter paints such a box through a layer even when it is opaque.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.IsolationModeConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "IsolationMode",
+        "keywordMap": "Map.IsolationModes",
+        "fallback": "IsolationMode.Auto"
+      },
+      "html": {
+        "propertyPath": "Isolation",
+        "csharpDataType": "CssProperty<IsolationMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.Isolation.ToString()"
+      }
+    },
+    {
+      "name": "background-blend-mode",
+      "comment": "CSS Compositing and Blending Level 1 section 3.1: <blend-mode># (one per background layer, the list repeating like background-origin's). Does not inherit and is not part of the background shorthand. Each image or gradient layer blends with the layers beneath it and the background colour; the element's background is its own isolated group.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.MixBlendModeConverter.FromList()"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "keyword-list", "keywordMap": "Map.BlendModes" },
+      "html": {
+        "propertyPath": "BackgroundBlendMode",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
       "name": "filter",
       "comment": "cssDataType 'cssom-grammar' calls FilterGrammar.TryParse directly - the same grammar PeachBrackets.Html.Paint.FilterEffectResolver (via CssBox.ActualFilterFunctions) calls at paint time. No acceptsNoneLiteral needed: TryParse is already none-aware (returns an empty list, not null, for the literal 'none'), matching box-shadow's own convention. opacity()/brightness()/contrast()/invert() have a native PDF path; blur()/grayscale()/sepia()/saturate()/hue-rotate()/drop-shadow() are rendered into a bitmap by the raster backend (FilterEffectResolver.Resolved.RequiresRaster).",
       "inherited": false,
@@ -2521,6 +2553,39 @@
       }
     },
     {
+      "name": "print-color-adjust",
+      "comment": "CSS Color Adjust 1 section 4. Inherited. economy lets the UA drop backgrounds and recolour to save ink, exact asks for the colours as authored. PeachPDF writes a document, not an ink-limited print, so it paints every colour as authored under both values - which is what economy permits (the UA may, not must, adjust) and what exact requires. The value is still cascaded and readable (CssBox.PrintColorAdjust). -webkit-print-color-adjust and the legacy color-adjust are aliases (VendorPropertyAliases).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.PrintColorAdjustModeConverter"},
+      "initialValue": "economy",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "PrintColorAdjustMode",
+        "keywordMap": "Map.PrintColorAdjustModes",
+        "fallback": "PrintColorAdjustMode.Economy"
+      },
+      "html": {
+        "propertyPath": "PrintColorAdjust",
+        "csharpDataType": "CssProperty<PrintColorAdjustMode>",
+        "area": "BackgroundArea",
+        "getterExpression": "{box}.PrintColorAdjust.ToString()"
+      }
+    },
+    {
+      "name": "color-scheme",
+      "comment": "CSS Color Adjust 1 section 2. Inherited. normal | [ light | dark | <custom-ident> ]+ && only?, stored as the declaration text and read with the ColorScheme.TryParse grammar the CSS-OM converter validates with. The used scheme (ColorScheme.UsesDark, against the user's prefers-color-scheme) picks the dark system-colour palette, the default text colour, the canvas background of the root, and the arm of light-dark().",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ColorSchemeConverter"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.ColorSchemeConverter.Convert" },
+      "html": {
+        "propertyPath": "ColorScheme",
+        "invalidates": "InvalidateColorScheme",
+        "csharpDataType": "string",
+        "area": "BackgroundArea"
+      }
+    },
+    {
       "name": "image-rendering",
       "comment": "CSS Images 3 5.3. Inherited. Chooses how a raster image is resampled when it is drawn at a size other than its own: auto and smooth filter, high-quality filters with a sharper curve, crisp-edges and pixelated keep hard pixel edges.",
       "inherited": true,
@@ -2620,7 +2685,7 @@
         "propertyPath": "BackgroundImages",
         "csharpDataType": "IReadOnlyList<CssImage?>?",
         "area": "BackgroundArea",
-        "customSetter": "{box}.BackgroundImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
+        "customSetter": "using (PeachBrackets.Css.ColorSchemeScope.Enter({box}.UsesDarkColorSchemeNow)) {box}.BackgroundImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }
@@ -2636,7 +2701,7 @@
         "propertyPath": "MaskImages",
         "csharpDataType": "IReadOnlyList<CssImage?>?",
         "area": "BackgroundArea",
-        "customSetter": "{box}.MaskImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
+        "customSetter": "using (PeachBrackets.Css.ColorSchemeScope.Enter({box}.UsesDarkColorSchemeNow)) {box}.MaskImages = {parser}.ParseImages({value}, {box}.HtmlContainer);",
         "hasGetter": false,
         "snapshot": false
       }

@@ -1795,6 +1795,7 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static bool EstablishesPreserve3d(CssBox box) =>
             box.IsPreserve3dRequested
+            && !IsIsolated(box)
             && box.Overflow.Value == PeachBrackets.Css.Overflow.Visible
             && box.IsOpaque
             && box.ActualMixBlendMode == BlendMode.Normal
@@ -1802,6 +1803,26 @@ namespace PeachBrackets.Html.Utils
             && box.ActualBackdropFilterFunctions.Count == 0
             && (string.IsNullOrEmpty(box.ClipPath) || box.ClipPath == Keywords.None)
             && (string.IsNullOrEmpty(box.Clip) || box.Clip == Keywords.Auto);
+
+        /// <summary>Whether <paramref name="box"/> has <c>isolation: isolate</c> (CSS Compositing 1 §3.2).</summary>
+        public static bool IsIsolated(CssBox box) => box.Isolation.Value == IsolationMode.Isolate;
+
+        /// <summary>
+        /// Whether painting <paramref name="box"/> has to build it as an isolated group of its own (CSS Compositing 1 §3.2): it has
+        /// <c>isolation: isolate</c> <em>and</em> something inside it blends (<c>mix-blend-mode</c>), which is the one thing an
+        /// isolated group changes. Without a blending descendant the group would paint the same as the plain content, so none is built.
+        /// </summary>
+        public static bool NeedsIsolatedGroup(CssBox box) => IsIsolated(box) && HasBlendingDescendant(box);
+
+        private static bool HasBlendingDescendant(CssBox box)
+        {
+            foreach (var child in box.Boxes)
+            {
+                if (child.ActualMixBlendMode != BlendMode.Normal || HasBlendingDescendant(child)) return true;
+            }
+
+            return false;
+        }
 
         public static bool IsStackingContextBox(CssBox box)
         {
@@ -1869,6 +1890,12 @@ namespace PeachBrackets.Html.Utils
             // it's painted as an isolated composite unit already (FragmentPainter routes it through the
             // same offscreen-tile path), so its descendants must paint as one atomic block here too.
             if (box.ActualMixBlendMode != BlendMode.Normal)
+            {
+                return true;
+            }
+
+            // isolation: isolate makes a stacking context too (CSS Compositing 1 section 3.2), whatever its content.
+            if (IsIsolated(box))
             {
                 return true;
             }

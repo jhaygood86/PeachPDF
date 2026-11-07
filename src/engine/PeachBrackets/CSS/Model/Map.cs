@@ -506,6 +506,18 @@ namespace PeachBrackets.Css
                 {Keywords.None, ForcedColorAdjustMode.None},
                 {"preserve-parent-color", ForcedColorAdjustMode.PreserveParentColor}
             }.Freeze();
+        public static readonly KeywordMap<IsolationMode> IsolationModes =
+            new KeywordMap<IsolationMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, IsolationMode.Auto},
+                {"isolate", IsolationMode.Isolate}
+            }.Freeze();
+        public static readonly KeywordMap<PrintColorAdjustMode> PrintColorAdjustModes =
+            new KeywordMap<PrintColorAdjustMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {"economy", PrintColorAdjustMode.Economy},
+                {"exact", PrintColorAdjustMode.Exact}
+            }.Freeze();
         public static readonly KeywordMap<FontKerningMode> FontKerningModes =
             new KeywordMap<FontKerningMode>(StringComparer.OrdinalIgnoreCase)
             {

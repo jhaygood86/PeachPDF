@@ -207,6 +207,9 @@ namespace PeachBrackets.Css
 
         public static Color? GetColor(string name)
         {
+            // A system colour names the palette of the colour scheme being read (see ColorSchemeScope).
+            if (ColorSchemeScope.IsDark && ColorSchemeScope.TryGetDarkSystemColor(name, out var dark)) return dark;
+
             if (NamedColors.TryGetValue(name, out var color)) return color;
 
             return null;

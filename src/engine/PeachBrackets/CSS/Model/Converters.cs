@@ -244,6 +244,9 @@ namespace PeachBrackets.Css
             Construct(() => new FunctionValueConverter(FunctionNames.Oklch, Any));
         public static readonly IValueConverter ColorMixConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ColorMix, Any));
+        // https://www.w3.org/TR/css-color-5/#light-dark - lenient like color-mix(): the render layer picks the arm by the element's used color-scheme.
+        public static readonly IValueConverter LightDarkConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.LightDark, new ColorPairValueConverter()));
         // https://www.w3.org/TR/css-color-4/#color-function - lenient like the group above: the predefined space and the components are read in the render layer.
         public static readonly IValueConverter ColorFunctionConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ColorFunction, Any));
@@ -462,6 +465,9 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter FontSynthesisModeConverter = Map.FontSynthesisModes.ToConverter();
         public static readonly IValueConverter TextRenderingModeConverter = Map.TextRenderingModes.ToConverter();
         public static readonly IValueConverter ForcedColorAdjustModeConverter = Map.ForcedColorAdjustModes.ToConverter();
+        public static readonly IValueConverter IsolationModeConverter = Map.IsolationModes.ToConverter();
+        public static readonly IValueConverter PrintColorAdjustModeConverter = Map.PrintColorAdjustModes.ToConverter();
+        public static readonly IValueConverter ColorSchemeConverter = new ColorSchemeValueConverter();
         public static readonly IValueConverter FontKerningModeConverter = Map.FontKerningModes.ToConverter();
         public static readonly IValueConverter FontOpticalSizingModeConverter = Map.FontOpticalSizingModes.ToConverter();
         public static readonly IValueConverter DirectionModeConverter = Map.DirectionModes.ToConverter();
@@ -677,13 +683,24 @@ namespace PeachBrackets.Css
             .Or(SkewTransformConverter)
             .Or(PerspectiveConverter);
 
-        public static readonly IValueConverter ColorConverter = PureColorConverter
+        // The system colour keywords whose value depends on the colour scheme (Canvas, CanvasText...) keep their name, so the render layer
+        // reads them against the element's used color-scheme; a keyword resolved here would be fixed at its light value.
+        private static IValueConverter SchemeDependentSystemColors()
+        {
+            IValueConverter? converter = null;
+            foreach (var name in ColorSchemeScope.SchemeDependentNames)
+                converter = converter is null ? new IdentifierValueConverter<object?>(name, null) : converter.Or(name);
+            return converter!;
+        }
+
+        public static readonly IValueConverter ColorConverter = SchemeDependentSystemColors().Or(PureColorConverter)
             .Or(RgbColorConverter.Or(RgbaColorConverter))
             .Or(HslColorConverter.Or(HslaColorConverter))
             .Or(GrayColorConverter.Or(HwbColorConverter))
             .Or(LabColorConverter.Or(OklabColorConverter))
             .Or(LchColorConverter.Or(OklchColorConverter))
             .Or(ColorMixConverter)
+            .Or(LightDarkConverter)
             .Or(ColorFunctionConverter)
             .Or(DeviceCmykColorConverter)
             .Or(RgbLenientConverter.Or(RgbaLenientConverter))

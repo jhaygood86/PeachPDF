@@ -260,6 +260,11 @@ namespace PeachBrackets.Css
         public static readonly string MinHeight = "min-height";
         public static readonly string MinWidth = "min-width";
         public static readonly string MixBlendMode = "mix-blend-mode";
+        public static readonly string Isolation = "isolation";
+        public static readonly string BackgroundBlendMode = "background-blend-mode";
+        public static readonly string PrintColorAdjust = "print-color-adjust";
+        public static readonly string ColorAdjust = "color-adjust";
+        public static readonly string ColorScheme = "color-scheme";
         public static readonly string Opacity = "opacity";
         public static readonly string Order = "order";
         public static readonly string Orphans = "orphans";
