@@ -1,3 +1,0 @@
-# A `line-height` in `em` or `%` is resolved against each descendant's font size instead of inherited as a length
-
-`<div style="font-size:14px;line-height:1.5em"><h2 style="font-size:21px">` has the `h2` 31.5px tall (1.5 x its own 21px) where a browser has 21px: the `em` is resolved once, on the element it is specified on, and the length is inherited (CSS 2.1 section 10.8.1; tracking issue #2254). A unitless `line-height: 1.5` is right. Found as a 3.8px difference for such an `h2` in a table cell; where the `em` is resolved was not traced. A percentage `line-height` does the same now that it resolves (`font-size:14px;line-height:150%` on the parent gives that `h2` 31.5px where a browser has 21px; #2253 fixed the percentage's basis, not where it is resolved).
