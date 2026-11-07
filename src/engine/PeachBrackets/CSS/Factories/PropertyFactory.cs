@@ -88,6 +88,14 @@ namespace PeachBrackets.Css
                 PropertyNames.BorderBottomRightRadius,
                 PropertyNames.BorderBottomLeftRadius);
 
+            // CSS Borders 4: corner-shape, the two-corner border-*-radius shorthands, and the corner-* shorthands that set a
+            // corner's shape and radius together.
+            CornerShorthands.Register((name, converter, longhands, logical) =>
+            {
+                if (logical) AddLogicalShorthand(name, () => new CornerShorthandProperty(name, converter), longhands);
+                else AddShorthand(name, () => new CornerShorthandProperty(name, converter), longhands);
+            });
+
             AddShorthand(PropertyNames.BorderImage, () => new BorderImageProperty(),
                 PropertyNames.BorderImageOutset,
                 PropertyNames.BorderImageRepeat,

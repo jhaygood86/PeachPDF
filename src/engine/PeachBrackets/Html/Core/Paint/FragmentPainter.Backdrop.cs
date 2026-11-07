@@ -98,7 +98,7 @@ namespace PeachBrackets.Html.Paint
                 if (box.IsRounded)
                 {
                     var radii = box.ComputeRadii(borderBox);
-                    shape = RenderUtils.GetRoundRect(g, borderBox, radii.TLX, radii.TLY, radii.TRX, radii.TRY, radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    shape = RenderUtils.GetRoundRect(g, borderBox, radii);
                     g.PushClip(shape);
                 }
 
@@ -134,7 +134,7 @@ namespace PeachBrackets.Html.Paint
                 if (box.IsRounded)
                 {
                     var radii = box.ComputeRadii(borderBox);
-                    shape = RenderUtils.GetRoundRect(g, borderBox, radii.TLX, radii.TLY, radii.TRX, radii.TRY, radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    shape = RenderUtils.GetRoundRect(g, borderBox, radii);
                     g.PushClip(shape);
                     pushedShape = true;
                 }

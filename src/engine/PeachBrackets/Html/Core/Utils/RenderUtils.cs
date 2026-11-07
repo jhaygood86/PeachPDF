@@ -137,8 +137,7 @@ namespace PeachBrackets.Html.Utils
             if (!radii.IsRounded) return 0;
 
             using var path = GetRoundRect(g, rect,
-                radii.TLX, radii.TLY, radii.TRX, radii.TRY,
-                radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                radii);
             g.PushClip(path);
             return 1;
         }
@@ -296,6 +295,24 @@ namespace PeachBrackets.Html.Utils
         /// ambient transform, so this method divides by <see cref="Canvas.PixelsPerPoint"/> itself,
         /// once, before building the path (issue #812).
         /// </remarks>
+        /// <summary>
+        /// <see cref="GetRoundRect(Canvas, Rect, double, double, double, double, double, double, double, double)"/> for a box's
+        /// <see cref="BorderRadii"/>, which also carry the corners' <c>corner-shape</c>: a box with every corner round takes
+        /// the plain elliptical-arc path, any other shape the superellipse one (<see cref="CornerShapePath"/>).
+        /// </summary>
+        public static GraphicsPath GetRoundRect(Canvas g, Rect rect, BorderRadii r)
+        {
+            if (!r.HasShapes)
+                return GetRoundRect(g, rect, r.TLX, r.TLY, r.TRX, r.TRY, r.BRX, r.BRY, r.BLX, r.BLY);
+
+            var ppp = g.PixelsPerPoint;
+            var scaled = new BorderRadii(r.TLX / ppp, r.TLY / ppp, r.TRX / ppp, r.TRY / ppp, r.BRX / ppp, r.BRY / ppp, r.BLX / ppp, r.BLY / ppp)
+                .WithShapes(r.KTL, r.KTR, r.KBR, r.KBL);
+            var path = g.GetGraphicsPath();
+            CornerShapePath.AddRectangle(path, new Rect(rect.Left / ppp, rect.Top / ppp, rect.Width / ppp, rect.Height / ppp), scaled);
+            return path;
+        }
+
         public static GraphicsPath GetRoundRect(Canvas g, Rect rect,
             double nwX, double nwY, double neX, double neY,
             double seX, double seY, double swX, double swY)

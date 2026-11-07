@@ -79,7 +79,7 @@
           "description": "Logical-category only (PPG014 otherwise); descriptive metadata the generator surfaces as CssPropertyRegistry.LogicalProperties for a completeness test against CssBox.ResolveLogicalProperties — the resolution algorithm itself stays hand-written.",
           "required": ["group", "axis", "side"],
           "properties": {
-            "group": { "type": "string", "enum": ["margin", "padding", "inset", "border-width", "border-style", "border-color"] },
+            "group": { "type": "string", "enum": ["margin", "padding", "inset", "border-width", "border-style", "border-color", "corner-shape", "border-radius"] },
             "axis": { "type": "string", "enum": ["block", "inline"] },
             "side": { "type": "string", "enum": ["start", "end"] }
           }

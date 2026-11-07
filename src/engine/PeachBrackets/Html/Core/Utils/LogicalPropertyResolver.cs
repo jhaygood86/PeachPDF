@@ -58,6 +58,20 @@ namespace PeachBrackets.Html.Utils
         public static PhysicalSide InlineEnd(WritingMode writingMode, DirectionMode direction) =>
             Opposite(InlineStart(writingMode, direction));
 
+        /// <summary>
+        /// The physical corner (0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left) sitting between a block
+        /// side and an inline side, which is how css-borders-4 names a flow-relative corner (<c>start-end</c> is
+        /// the corner where the block-start and inline-end sides meet).
+        /// </summary>
+        public static int Corner(PhysicalSide blockSide, PhysicalSide inlineSide)
+        {
+            var vertical = blockSide is PhysicalSide.Top or PhysicalSide.Bottom ? blockSide : inlineSide;
+            var horizontal = blockSide is PhysicalSide.Left or PhysicalSide.Right ? blockSide : inlineSide;
+            var top = vertical == PhysicalSide.Top;
+            var left = horizontal == PhysicalSide.Left;
+            return top ? (left ? 0 : 1) : (left ? 3 : 2);
+        }
+
         private static PhysicalSide Opposite(PhysicalSide side) => side switch
         {
             PhysicalSide.Top => PhysicalSide.Bottom,

@@ -50,6 +50,15 @@ namespace PeachBrackets.Html.Dom
         internal string? BorderInlineEndStyle { get => _rare is null ? default(string?) : _rare.BorderInlineEndStyle; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineEndStyle = value; } }
         internal string? BorderInlineEndColor { get => _rare is null ? default(string?) : _rare.BorderInlineEndColor; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderInlineEndColor = value; } }
 
+        internal string? CornerStartStartShape { get => _rare is null ? default(string?) : _rare.CornerStartStartShape; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.CornerStartStartShape = value; } }
+        internal string? BorderStartStartRadius { get => _rare is null ? default(string?) : _rare.BorderStartStartRadius; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderStartStartRadius = value; } }
+        internal string? CornerStartEndShape { get => _rare is null ? default(string?) : _rare.CornerStartEndShape; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.CornerStartEndShape = value; } }
+        internal string? BorderStartEndRadius { get => _rare is null ? default(string?) : _rare.BorderStartEndRadius; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderStartEndRadius = value; } }
+        internal string? CornerEndStartShape { get => _rare is null ? default(string?) : _rare.CornerEndStartShape; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.CornerEndStartShape = value; } }
+        internal string? BorderEndStartRadius { get => _rare is null ? default(string?) : _rare.BorderEndStartRadius; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderEndStartRadius = value; } }
+        internal string? CornerEndEndShape { get => _rare is null ? default(string?) : _rare.CornerEndEndShape; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.CornerEndEndShape = value; } }
+        internal string? BorderEndEndRadius { get => _rare is null ? default(string?) : _rare.BorderEndEndRadius; set { if (_rare is null) { if (EqualityComparer<string?>.Default.Equals(value, default(string?))) return; _rare = new BoxRareState(); } _rare.BorderEndEndRadius = value; } }
+
         /// <summary>
         /// Resolves every logical margin/padding/inset/border value cascaded onto this box (any of the
         /// 24 properties above that are non-null) into its physical edge, via
@@ -70,7 +79,9 @@ namespace PeachBrackets.Html.Dom
                 && BorderBlockStartWidth is null && BorderBlockStartStyle is null && BorderBlockStartColor is null
                 && BorderBlockEndWidth is null && BorderBlockEndStyle is null && BorderBlockEndColor is null
                 && BorderInlineStartWidth is null && BorderInlineStartStyle is null && BorderInlineStartColor is null
-                && BorderInlineEndWidth is null && BorderInlineEndStyle is null && BorderInlineEndColor is null)
+                && BorderInlineEndWidth is null && BorderInlineEndStyle is null && BorderInlineEndColor is null
+                && CornerStartStartShape is null && CornerStartEndShape is null && CornerEndStartShape is null && CornerEndEndShape is null
+                && BorderStartStartRadius is null && BorderStartEndRadius is null && BorderEndStartRadius is null && BorderEndEndRadius is null)
             {
                 return;
             }
@@ -110,6 +121,16 @@ namespace PeachBrackets.Html.Dom
             if (BorderInlineEndWidth is { } biew) ApplyBorderWidth(inlineEnd, biew, "border-inline-end-width");
             if (BorderInlineEndStyle is { } bies) ApplyBorderStyle(inlineEnd, bies, "border-inline-end-style");
             if (BorderInlineEndColor is { } biec) ApplyBorderColor(inlineEnd, biec, "border-inline-end-color");
+
+            // css-borders-4 §3.5/§3.7: a flow-relative corner is the one between its block side and its inline side.
+            if (CornerStartStartShape is { } csss) ApplyCornerShape(LogicalPropertyResolver.Corner(blockStart, inlineStart), csss, "corner-start-start-shape");
+            if (CornerStartEndShape is { } cses) ApplyCornerShape(LogicalPropertyResolver.Corner(blockStart, inlineEnd), cses, "corner-start-end-shape");
+            if (CornerEndStartShape is { } cess) ApplyCornerShape(LogicalPropertyResolver.Corner(blockEnd, inlineStart), cess, "corner-end-start-shape");
+            if (CornerEndEndShape is { } cees) ApplyCornerShape(LogicalPropertyResolver.Corner(blockEnd, inlineEnd), cees, "corner-end-end-shape");
+            if (BorderStartStartRadius is { } bssr) ApplyCornerRadius(LogicalPropertyResolver.Corner(blockStart, inlineStart), bssr, "border-start-start-radius");
+            if (BorderStartEndRadius is { } bser) ApplyCornerRadius(LogicalPropertyResolver.Corner(blockStart, inlineEnd), bser, "border-start-end-radius");
+            if (BorderEndStartRadius is { } besr) ApplyCornerRadius(LogicalPropertyResolver.Corner(blockEnd, inlineStart), besr, "border-end-start-radius");
+            if (BorderEndEndRadius is { } beer) ApplyCornerRadius(LogicalPropertyResolver.Corner(blockEnd, inlineEnd), beer, "border-end-end-radius");
         }
 
         /// <summary>
@@ -134,7 +155,9 @@ namespace PeachBrackets.Html.Dom
         }
 
         private static bool IsLogicalBoxModelName(string propName) =>
-            propName.Contains("-block-", StringComparison.Ordinal) || propName.Contains("-inline-", StringComparison.Ordinal);
+            propName.Contains("-block-", StringComparison.Ordinal) || propName.Contains("-inline-", StringComparison.Ordinal)
+            || propName.StartsWith("corner-start-", StringComparison.Ordinal) || propName.StartsWith("corner-end-", StringComparison.Ordinal)
+            || propName.StartsWith("border-start-", StringComparison.Ordinal) || propName.StartsWith("border-end-", StringComparison.Ordinal);
 
         /// <summary>
         /// Whether the logical longhand <paramref name="logicalName"/> may write the physical edge
@@ -162,6 +185,34 @@ namespace PeachBrackets.Html.Dom
             };
 
             return order.Of(physicalName) <= order.Of(logicalName);
+        }
+
+        private static readonly string[] PhysicalCornerNames = { "top-left", "top-right", "bottom-right", "bottom-left" };
+
+        private void ApplyCornerShape(int corner, string value, string logicalName)
+        {
+            if (_rare?.LogicalOrder is { } order && order.Of("corner-" + PhysicalCornerNames[corner] + "-shape") > order.Of(logicalName)) return;
+
+            switch (corner)
+            {
+                case 0: CornerTopLeftShape = value; break;
+                case 1: CornerTopRightShape = value; break;
+                case 2: CornerBottomRightShape = value; break;
+                default: CornerBottomLeftShape = value; break;
+            }
+        }
+
+        private void ApplyCornerRadius(int corner, string value, string logicalName)
+        {
+            if (_rare?.LogicalOrder is { } order && order.Of("border-" + PhysicalCornerNames[corner] + "-radius") > order.Of(logicalName)) return;
+
+            switch (corner)
+            {
+                case 0: BorderTopLeftRadius = value; break;
+                case 1: BorderTopRightRadius = value; break;
+                case 2: BorderBottomRightRadius = value; break;
+                default: BorderBottomLeftRadius = value; break;
+            }
         }
 
         private void ApplyMargin(PhysicalSide side, string value, string logicalName)

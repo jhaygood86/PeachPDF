@@ -66,7 +66,7 @@ namespace PeachBrackets.Html.Handlers
                 if (radii.IsRounded)
                 {
                     var roundedPath = RenderUtils.GetRoundRect(g, areaRect,
-                        radii.TLX, radii.TLY, radii.TRX, radii.TRY, radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                        radii);
                     g.PushClip(roundedPath);
                     pushedClip = true;
                 }

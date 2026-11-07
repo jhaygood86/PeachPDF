@@ -221,8 +221,7 @@ namespace PeachBrackets.Html.Paint
 
                 var radii = ClipRadii(clipValue, clipRect);
                 var roundedPath = RenderUtils.GetRoundRect(g, clipRect,
-                    radii.TLX, radii.TLY, radii.TRX, radii.TRY,
-                    radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    radii);
                 return (clipRect, roundedPath, false);
             }
 
@@ -859,7 +858,8 @@ namespace PeachBrackets.Html.Paint
         {
             double Adj(double v) => v > 0 ? Math.Max(0, v + spread) : 0;
             return new BorderRadii(Adj(r.TLX), Adj(r.TLY), Adj(r.TRX), Adj(r.TRY),
-                                   Adj(r.BRX), Adj(r.BRY), Adj(r.BLX), Adj(r.BLY));
+                                   Adj(r.BRX), Adj(r.BRY), Adj(r.BLX), Adj(r.BLY))
+                .WithShapes(r.KTL, r.KTR, r.KBR, r.KBL);
         }
 
         /// <summary>
@@ -911,8 +911,9 @@ namespace PeachBrackets.Html.Paint
         {
             double R(double b) => Math.Max(0, b + d);
             return RenderUtils.GetRoundRect(g, rect,
-                R(baseRadii.TLX), R(baseRadii.TLY), R(baseRadii.TRX), R(baseRadii.TRY),
-                R(baseRadii.BRX), R(baseRadii.BRY), R(baseRadii.BLX), R(baseRadii.BLY));
+                new BorderRadii(R(baseRadii.TLX), R(baseRadii.TLY), R(baseRadii.TRX), R(baseRadii.TRY),
+                    R(baseRadii.BRX), R(baseRadii.BRY), R(baseRadii.BLX), R(baseRadii.BLY))
+                .WithShapes(baseRadii.KTL, baseRadii.KTR, baseRadii.KBR, baseRadii.KBL));
         }
 
         /// <summary>Fills the region of <paramref name="outer"/> that lies outside <paramref name="hole"/>

@@ -162,7 +162,8 @@ namespace PeachBrackets.Html.Handlers
                     borderRadii.BLX, borderRadii.BLY, horizontalReach, verticalReach);
                 outerRadii = DerivedStyle.ApplyCornerOverlap(
                     outerRect,
-                    tlx, tly, trx, try_, brx, bry, blx, bly);
+                    tlx, tly, trx, try_, brx, bry, blx, bly)
+                    .WithShapes(borderRadii.KTL, borderRadii.KTR, borderRadii.KBR, borderRadii.KBL);
             }
 
             if (ring.IsInvert) g.PushBlendMode(PaintBlendMode.Difference);

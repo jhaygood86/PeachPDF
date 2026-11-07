@@ -154,7 +154,7 @@ namespace PeachBrackets.Html.Utils
             if (radii.IsRounded)
             {
                 using var rounded = RenderUtils.GetRoundRect(g, referenceBox,
-                    radii.TLX, radii.TLY, radii.TRX, radii.TRY, radii.BRX, radii.BRY, radii.BLX, radii.BLY);
+                    radii);
                 path.AddPath(rounded);
                 return;
             }

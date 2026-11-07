@@ -13,7 +13,7 @@ namespace PeachBrackets.Html.Handlers
     /// those callers independently resolve geometry, widths, styles, colors, fragment edges, and
     /// suppression before delegating here.
     /// </summary>
-    internal static class BoxEdgesDrawHandler
+    internal static partial class BoxEdgesDrawHandler
     {
         private const double Epsilon = 1e-6;
 
@@ -74,6 +74,12 @@ namespace PeachBrackets.Html.Handlers
             bool avoidGeometryAntialias = false)
         {
             if (outerRect is not { Width: > 0, Height: > 0 }) return;
+
+            if (outerRadii is { HasShapes: true } shaped)
+            {
+                DrawShapedBoxEdges(g, outerRect, shaped, edges, avoidGeometryAntialias);
+                return;
+            }
 
             if (TryDrawSeamlessBevel(g, outerRect, edges, outerRadii)) return;
             if (TryDrawUniformBoxEdges(g, outerRect, edges, outerRadii)) return;
