@@ -3654,7 +3654,7 @@
       "html": {
         "propertyPath": "TextBoxTrim",
         "csharpDataType": "string",
-        "area": "TextArea"
+        "area": "TextDecorationArea"
       }
     },
     {

@@ -7870,6 +7870,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask PerformLayoutEpilogue(Canvas g)
         {
+            ApplyTextBoxTrim();
             CssLayoutEngine.ApplyHeight(this);
             ApplyBlockStep();
 
