@@ -1920,6 +1920,17 @@ namespace PeachBrackets.Html.Dom
             // regional indicators before this box decide whether its first one completes a flag.
             var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value, Language);
 
+            // text-combine-upright (CSS Writing Modes 4 section 9.1) composes characters of vertical text into a one-em upright cell.
+            var wordsAtStart = Words.Count;
+            var combineAll = false;
+            var combineDigits = 0;
+            if (TextCombineUpright is { Length: > 0 } combine && !combine.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                && WritingMode.Value.IsVertical())
+            {
+                if (combine.Equals(Keywords.All, StringComparison.OrdinalIgnoreCase)) combineAll = true;
+                else combineDigits = combine.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [_, var count] && int.TryParse(count, out var n) ? n : 2;
+            }
+
             while (startIdx < text.Length)
             {
                 while (startIdx < text.Length && text[startIdx] == '\r')
@@ -1981,6 +1992,24 @@ namespace PeachBrackets.Html.Dom
                         // boundary) still ends up as its own word, which CssLayoutEngine's per-line bidi
                         // reorder step needs (it treats each word as one homogeneous-level UAX#9 unit).
                         // Only ever shrinks endIdx (never extends past what the rules above decided).
+                        // text-combine-upright: digits N composes each run of ASCII digits into one cell, so a run is a word of its own.
+                        if (combineDigits > 0 && endIdx > startIdx)
+                        {
+                            if (text[startIdx] is >= '0' and <= '9')
+                            {
+                                var runEnd = startIdx;
+                                while (runEnd < endIdx && text[runEnd] is >= '0' and <= '9') runEnd++;
+                                endIdx = runEnd;
+                            }
+                            else
+                            {
+                                for (var digitAt = startIdx + 1; digitAt < endIdx; digitAt++)
+                                {
+                                    if (text[digitAt] is >= '0' and <= '9') { endIdx = digitAt; break; }
+                                }
+                            }
+                        }
+
                         if (BidiLevels is { } levels && endIdx > startIdx)
                         {
                             var boundaryLevel = levels[startIdx];
@@ -2051,6 +2080,11 @@ namespace PeachBrackets.Html.Dom
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
                             if (Words.Count > wordsBefore)
                                 Words[wordsBefore].UnicodeBreakBefore = breakOpportunities[startIdx] != LineBreakOpportunity.Prohibited;
+                            if (combineDigits > 0 && Words.Count == wordsBefore + 1 && cleanWord.Length >= 2 && cleanWord.Length <= combineDigits
+                                && cleanWord.All(static c => c is >= '0' and <= '9'))
+                            {
+                                Words[wordsBefore].CombineUpright = true;
+                            }
                             // Where each fragment starts in this box's own text, for mapping an edit back to it. Only when the
                             // fragments add up to the source span (an uppercased small-caps run can lengthen, a soft hyphen
                             // shortens what the fragments hold): otherwise they are left unmappable rather than wrong.
@@ -2104,6 +2138,34 @@ namespace PeachBrackets.Html.Dom
                     startIdx = endIdx;
                 }
             }
+
+            if (combineAll && Words.Count - wordsAtStart > 0)
+                MergeIntoCombinedWord(wordsAtStart);
+        }
+
+        /// <summary>
+        /// <c>text-combine-upright: all</c>: the words this text produced become one word whose text is the whole run (spaces between
+        /// them kept), set as a single one-em upright cell.
+        /// </summary>
+        private void MergeIntoCombinedWord(int firstWord)
+        {
+            var parts = new System.Text.StringBuilder();
+            for (var i = firstWord; i < Words.Count; i++)
+            {
+                parts.Append(Words[i].Text);
+                if (Words[i].HasSpaceAfter && i < Words.Count - 1) parts.Append(' ');
+            }
+
+            var first = Words[firstWord];
+            var merged = new CssRectWord(this, parts.ToString(), first.HasSpaceBefore, Words[^1].HasSpaceAfter)
+            {
+                BidiLevel = first.BidiLevel,
+                SourceStart = -1,
+                SourceLength = 0,
+                CombineUpright = true,
+            };
+            Words.RemoveRange(firstWord, Words.Count - firstWord);
+            Words.Add(merged);
         }
 
         private static int CountPrecedingRegionalIndicators(CssBox box)

@@ -12,6 +12,7 @@ namespace PeachBrackets.Html.Dom
         internal ScaledFontKind ScaledFontKind = ScaledFontKind.None;
         internal bool UsesPerCodepointFont;
         internal bool IsUprightOrientation;
+        internal bool CombineUpright;
         internal bool SuppressWrapBefore = false;
         internal IReadOnlyList<int>? HyphenationCandidates;
         internal CssRect? PreSplitWord;

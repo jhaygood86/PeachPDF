@@ -1703,6 +1703,12 @@ namespace PeachBrackets.Html.Dom
             {
                 natural = (word.Width, word.Height);
             }
+            else if (word.CombineUpright)
+            {
+                // text-combine-upright: one em square cell down the column, as tall as the font across it.
+                var combinedFont = CssBox.ResolveWordFont(word, word.FirstLineStyle ?? word.OwnerBox);
+                natural = (combinedFont.Size, combinedFont.Height);
+            }
             else
             {
                 // Mirrors FragmentPainter.Text.cs's PaintWords isUpright decision exactly: upright/

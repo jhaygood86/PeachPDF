@@ -409,6 +409,12 @@ namespace PeachBrackets.Html.Dom
         /// upright</c>/<c>sideways</c>, which apply one box-wide decision instead of a per-fragment one,
         /// and for a <c>horizontal-tb</c> box, where orientation has no meaning at all.
         /// </summary>
+        /// <summary>
+        /// Whether this word is composed into a single upright cell one em square (<c>text-combine-upright</c>, CSS Writing Modes 4 section 9.1),
+        /// laid out and painted as one horizontal glyph run squeezed to fit the em, rather than character by character.
+        /// </summary>
+        public bool CombineUpright { get => _rare is null ? default(bool) : _rare.CombineUpright; set { if (_rare is null) { if (!value) return; _rare = new WordRareState(); } _rare.CombineUpright = value; } }
+
         public bool IsUprightOrientation { get => _rare is null ? default(bool) : _rare.IsUprightOrientation; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new WordRareState(); } _rare.IsUprightOrientation = value; } }
 
         /// <summary>
