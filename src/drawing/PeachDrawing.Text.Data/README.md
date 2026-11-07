@@ -9,6 +9,19 @@ than once per target framework PeachDrawing.Text builds for (NuGet does not merg
 `lib/<tfm>` folders). It has no dependencies of its own, exposes no public API, and is not meant to be referenced
 directly - add a package reference to `PeachDrawing.Text` (or `PeachPDF`) instead, and this comes along with it.
 
+## Using it
+
+You do not use this package directly; install the package that needs it:
+
+```bash
+dotnet add package PeachDrawing.Text     # fonts, shaping, layout, bidi, line breaking, hyphenation
+dotnet add package PeachPDF              # HTML and CSS to PDF; brings PeachDrawing.Text with it
+```
+
+The data is read once, on first use, and cached for the life of the process. All of it is Brotli-compressed; on a host whose Brotli decoder does not work (WebAssembly in a
+browser) register a managed one with `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor(...)` before using a feature backed by it, or those features degrade
+(hyphenation, Thai/Lao/Khmer/Burmese line breaking and the Unicode tables) rather than fail. It targets `netstandard2.0`, and is versioned in lockstep with PeachPDF.
+
 See [PeachDrawing.Text's own README](https://www.nuget.org/packages/PeachDrawing.Text/) and
 [peachpdf.net](https://peachpdf.net/) for what the engine and PeachPDF itself do.
 

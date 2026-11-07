@@ -71,6 +71,8 @@ peachpdf invoice.html --pdfa=3a --pdf-lang=en --pdf-creation-date=2026-09-21 --f
 The default page size is **US Letter** (a document's own `@page { size: … }` still overrides it), and
 documents are always laid out as **print** media.
 
+A long option takes its value as `--option=VALUE` or as the next argument (`--option VALUE`); a short option (`-o`, `-s`, `-l`) takes the next argument. The examples use the `=` form.
+
 ### General
 
 | Option | Description |

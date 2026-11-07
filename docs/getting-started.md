@@ -30,7 +30,7 @@ var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
 
-For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), password-protecting and restricting PDFs with AES-256 encryption, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
+For more usage examples — rendering self-contained MHTML files, fetching HTML from a remote URI, sharing a parsed CSS context across renders, saving to disk, working with fonts, enabling tagged PDF (PDF/UA) output, generating PDF/A- and PDF/X-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), password-protecting and restricting PDFs with AES-256 encryption, and returning PDFs from ASP.NET Core or Azure Functions endpoints — see [Usage Examples](usage-examples.md).
 
 ## Thread safety
 
@@ -42,27 +42,49 @@ PeachPDF is built to be **trimming-safe and [Native AOT](https://learn.microsoft
 
 ## Guides
 
-- **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
-- **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
-- **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content (an SVG filter with a pixel primitive is the one exception, rendered as a bitmap).
-- **[Supported MathML Features](supported-mathml-features.md)** — the full compatibility matrix for inline `<math>` formulas, rendered as real vector PDF content using the font's own OpenType `MATH` table.
-- **[How PeachPDF Is Tested](testing.md)** — the automated test suite, the CI matrix, the diff-coverage gate, and the two-renderer rasterization checks that verify output actually renders correctly.
+The guides are grouped as in the site's **Guides** menu.
+
+### Using PeachPDF
+
 - **[Usage Examples](usage-examples.md)** — copy-pasteable examples: local HTML strings, MHTML files, HTTP fetching, shared CSS contexts, saving to disk, fonts, tagged PDF (PDF/UA) output, PDF/A-conformant output (including embedded-file attachments and ZUGFeRD / Factur-X e-invoices), and returning PDFs from ASP.NET Core (controllers and Minimal APIs) and Azure Functions.
 - **[Declarative Document-Building API](declarative-api.md)** — build a PDF directly from C# with `PdfGenerator.CreateDocument`, no HTML/CSS strings required: pages, containers, text, images, rows/columns, tables, lists, repeating headers/footers with page numbers, a document-level stylesheet with class/id selectors, splicing in HTML fragments (with slots) where needed, stamping pages of an existing PDF over or under the document, and merging several documents into one with original or continuous page numbers.
 - **[Command-Line Tool](cli.md)** — the standalone `peachpdf` CLI (a self-contained Native AOT binary) for rendering HTML to PDF from the shell, without writing any code.
-- **[PeachDrawing.Text](peachdrawing-text.md)** — the font and text engine as its own NuGet package, with no third-party dependencies: loading and matching fonts, bidirectional text, script itemization, hyphenation and emoji presentation.
+
+### Rendering reference
+
+- **[HTML & CSS Support](html-css-support.md)** — the full compatibility matrix of supported HTML elements, CSS properties, selectors, and at-rules, including notes on gaps and PeachPDF-specific extensions.
+- **[Supported SVG Features](supported-svg-features.md)** — the full compatibility matrix for inline and standalone SVG, rendered as real vector PDF content (an SVG filter with a pixel primitive is the one exception, rendered as a bitmap).
+- **[Supported MathML Features](supported-mathml-features.md)** — the full compatibility matrix for inline `<math>` formulas, rendered as real vector PDF content using the font's own OpenType `MATH` table.
+- **[Accessibility](accessibility.md)** — the tree of roles, names and states PeachBrackets builds for screen readers and other assistive technologies, and how a host uses it.
+
+### Drawing libraries
+
 - **[PeachDrawing.Core](peachdrawing-core.md)** — the drawing-surface abstraction PeachPDF targets to write PDF (`Canvas`, `RenderContext`, `Brush`/`Pen`/`GraphicsPath`), as its own NuGet package — implement it yourself to target a different backend entirely.
 - **[PeachDrawing](peachdrawing.md)** — a standalone CPU software rasterizer implementing `PeachDrawing.Core`, usable with no PeachPDF reference at all: draw shapes, text and images onto a bitmap and save it in any PeachImage-supported format.
 - **[PeachDrawing.PDF](peachdrawing-pdf.md)** — the PDF `Canvas` PeachPDF renders through, usable with no PeachPDF reference at all: draw pages with the same drawing API and write them as PDF, with embedded font subsets and optional AES-256 encryption, plus merging, page selection, layering and attaching files on PDFs that already exist.
 - **[PeachDrawing.Svg](peachdrawing-svg.md)** — a vector SVG `Canvas` for the same drawing API, usable with no PeachPDF reference at all: draw pages and write them as SVG, with curves, gradients, clips and glyph outlines kept as vector content (or selectable text with an embedded subset font).
-- **[PeachDrawing.CoreGraphics](peachdrawing-coregraphics.md)** — an Apple CoreGraphics `Canvas` for macOS and iOS: draw into a `CGContext` you supply (a view's, a layer's, a bitmap's), with layer effects and `Auto` image decoding on the GPU through Core Image and Metal, CoreText text and ImageIO decoding as options, clickable links, and deterministic cleanup of every native resource.
 - **[PeachDrawing.Skia](peachdrawing-skia.md)** — a SkiaSharp `Canvas` for the same drawing API, usable with no PeachPDF reference at all and not tied to a platform: draw into an `SKCanvas` you supply (so it is hardware accelerated when your surface is, for instance a GPU view on .NET Android), with clickable links, a choice of text engine and image codec, and deterministic cleanup of every native resource.
 - **[PeachDrawing.Win2D](peachdrawing-win2d.md)** — a Windows `Canvas` for the same drawing API, usable with no PeachPDF reference at all: draw with hardware-accelerated Win2D into a drawing session you already have or an offscreen bitmap, with clickable links, a choice of text engine, and deterministic cleanup of every native resource.
+- **[PeachDrawing.CoreGraphics](peachdrawing-coregraphics.md)** — an Apple CoreGraphics `Canvas` for macOS and iOS: draw into a `CGContext` you supply (a view's, a layer's, a bitmap's), with layer effects and `Auto` image decoding on the GPU through Core Image and Metal, CoreText text and ImageIO decoding as options, clickable links, and deterministic cleanup of every native resource.
+
+### Text and images
+
+- **[PeachDrawing.Text](peachdrawing-text.md)** — the font and text engine as its own NuGet package, with no third-party dependencies: loading and matching fonts, bidirectional text, script itemization, hyphenation and emoji presentation.
+- **[PeachImage](peachimage.md)** — the pure .NET image codec library PeachPDF decodes images with: load, convert, resize and save JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF and JPEG XL, with no native dependencies.
+
+### HTML engine and views
+
 - **[PeachBrackets](peachbrackets.md)** — the HTML, CSS, SVG and MathML engine PeachPDF is built on, usable with no PDF involved: load a document, lay it out into pages, and paint each page onto any canvas.
-- **[Accessibility](accessibility.md)** — the tree of roles, names and states PeachBrackets builds for screen readers and other assistive technologies, and how a host uses it.
 - **[PeachBrackets.WinUI](peachbrackets-winui.md)** — a WinUI 3 `HtmlView` control for showing an HTML document in a Windows app: scrolling, zoom, links, selection and copy, and the CSS cursor, hover and touch behavior the document asks for.
 - **[PeachBrackets.Android](peachbrackets-android.md)** — a .NET for Android `HtmlView` for showing an HTML document in an Android app: touch scrolling, fling and pinch zoom, links, long-press selection and copy, and the CSS cursor, hover and touch-action behavior the document asks for.
 - **[PeachBrackets.Apple](peachbrackets-apple.md)** — an AppKit (macOS) and UIKit (iOS) `HtmlView` for showing an HTML document in a Mac or iPhone/iPad app: system scrolling and pinch zoom over tiles composited by the graphics hardware, mouse, trackpad, touch and pointer input, links, selection and copy, and the CSS cursor, hover and touch-action behavior the document asks for.
-- **[PeachImage](peachimage.md)** — the pure .NET image codec library PeachPDF decodes images with: load, convert, resize and save JPEG, PNG, GIF, WebP, AVIF, BMP, TIFF and JPEG XL, with no native dependencies.
+
+### Project
+
+- **[Architecture](architecture.md)** — how PeachPDF converts HTML to PDF: the HTML parser, DOM model, CSS parser, layout engine, painting layer, and PDF renderer.
+- **[How PeachPDF Is Tested](testing.md)** — the automated test suite, the CI matrix, the diff-coverage gate, and the two-renderer rasterization checks that verify output actually renders correctly.
+
+### Also on the site
+
 - **[Feature Showcase](showcase.html)** — real PDFs rendered by the current release at site build time, each paired with the exact HTML (or, for the declarative API, C#) source it was generated from.
-- **[API Reference](api/index.md)** — generated reference for every public type and member of PeachPDF, always in sync with the latest source, with a reference for each of the `PeachDrawing.Core`, `PeachDrawing`, `PeachDrawing.Text` and `PeachImage` packages beside it.
+- **[API Reference](api/index.md)** — generated reference for every public type and member, always in sync with the latest source: PeachPDF, plus a reference for each of `PeachDrawing.Core`, `PeachDrawing`, `PeachDrawing.PDF`, `PeachDrawing.Svg`, `PeachDrawing.Skia`, `PeachDrawing.Win2D`, `PeachDrawing.Text`, `PeachBrackets` and `PeachImage` beside it (the Apple-only `PeachDrawing.CoreGraphics` and the host view packages are covered by their guides).

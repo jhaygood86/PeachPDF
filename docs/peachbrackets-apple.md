@@ -14,8 +14,10 @@ It targets `net10.0-macos` (macOS 11 and later) and `net10.0-ios` (iOS 15 and la
 (`dotnet workload install macos ios`) on a Mac. Because of that it is not in `PeachPDF.slnx`: build it by project. On macOS `HtmlView` is an `NSScrollView`;
 on iOS it is a `UIScrollView`. The two have the same members where the platforms allow, and differ where they do not (below).
 
-> **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types. This first version covers loading, painting, scrolling, zoom, pointer
-> state, links, selection and copy; see [Limits of this version](#limits-of-this-version).
+> **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types: `HtmlLinkActivatedEventArgs`, `HtmlLoadFailedEventArgs`,
+> `HtmlTappedEventArgs`, `HtmlTouchStartedEventArgs` (iOS), `HtmlFormSubmittingEventArgs`, `HtmlFormInvalidEventArgs` and `HtmlAnimationEventsEventArgs`;
+> `PublicApi.ios.txt` and `PublicApi.macos.txt` beside the project are the reviewed snapshots, one per platform because the two views differ. See
+> [Limits](#limits).
 
 ## Quick start
 
@@ -37,7 +39,7 @@ appearance (light or dark) changes. It is laid out as one continuous page; to pa
 | Member | |
 |---|---|
 | `Html` | What to show. |
-| `PageBackground`, `AllowNetworkAccess`, `UseGpu` | The colour behind the page; whether `http`/`https` resources may be loaded (off by default); whether effects run on the GPU. |
+| `PageBackground`, `AllowNetworkAccess`, `UseGpu` | The color behind the page; whether `http`/`https` resources may be loaded (off by default); whether effects run on the GPU. |
 | `DocumentBaseUri` | The address the document's relative references (style sheets, images, fonts) resolve against. Set it, with `AllowNetworkAccess`, when the HTML is a page you fetched yourself: a `<base href>` in the page does not reach its style sheets, which load while it is still being parsed. |
 | `AnimationsEnabled`, `AnimationEvents` | Whether the document plays its CSS animations, transitions and animated images (off by default; takes effect on the next load), and an event with the `animationstart`/`transitionend` family as they happen, on the main thread. The document is stepped on the display's clock (a display link on iOS, a 60 Hz timer in the common run-loop modes on macOS) only while something runs, and only the tiles a frame touches are painted again. Nothing plays, and `prefers-reduced-motion` reports it, when the system asks for reduced motion. A property that moves or resizes boxes lays the document out again each frame, so its cost follows the size of the document. |
 | `Input` | The pointing devices the `hover` and `pointer` media queries report. By default a Mac reports a mouse or trackpad (fine, can hover) and an iPhone or iPad reports touch (coarse, cannot hover); an iPad with a pointer attached reports both and follows the one used last. |
@@ -67,9 +69,9 @@ A click or tap on a control does what it does in a browser: a check box toggles,
 caret where the point was, and the keyboard appears on iOS. In a field the keys do what a text field's keys do: the arrows, Home and End, word moves, Delete,
 Select All, Cut, Copy and Paste, and Return submits a one-line field's form or breaks a line in a text area.
 
-Date, time, date-and-time, colour and file controls open the platform's own picker, and a range control follows a tap: on iOS a sheet with a `UIDatePicker`, the
-system colour picker and the document picker (the chosen files are read at once and handed to the control); on a Mac a small alert with a date field, the shared
-colour panel (the control follows it as the colour is chosen) and an open panel. A range control follows a drag of its thumb (the page does not scroll while it does), and a drag that begins in a text field extends that field's selection.
+Date, time, date-and-time, color and file controls open the platform's own picker, and a range control follows a tap: on iOS a sheet with a `UIDatePicker`, the
+system color picker and the document picker (the chosen files are read at once and handed to the control); on a Mac a small alert with a date field, the shared
+color panel (the control follows it as the color is chosen) and an open panel. A range control follows a drag of its thumb (the page does not scroll while it does), and a drag that begins in a text field extends that field's selection.
 
 While the on-screen keyboard is up on iOS the view adds room under the page for it, so the page can scroll up out of its way, and the field being edited is scrolled into view.
 
@@ -95,7 +97,7 @@ paints again with what loads.
 | `touch-action` | Not applicable to a mouse. | Scrolling and pinch are switched off for a touch where the document does not allow them. |
 | `user-select: none`, `pointer-events: none` | Text is not selected there and the pointer passes through. | The same. |
 
-## Limits of this version
+## Limits
 
 - Text input on iOS goes through `UIKeyInput`: ordinary typing, hardware keyboards and dictation work, but an input method that composes text in place (marked text, as for Chinese or Japanese) commits it only when the composition ends. macOS uses `NSTextInputClient` with marked text.
 - Taking the view out of its window discards the loaded document; it loads again from `Html` when the view returns, so form values, the selection and the zoom are not kept.

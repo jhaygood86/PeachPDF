@@ -11,13 +11,16 @@ for every release, and PeachPDF depends on it.
 dotnet add package PeachDrawing.Core
 ```
 
-> **Status: pre-1.0.** Every type described below is the package's full public surface today - see
-> `PublicApi.txt` for the exact, machine-checked snapshot. Three concrete `Canvas`/`RenderContext`
-> implementations exist today, the third being [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG): [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, drawing with Win2D on Windows) and [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, drawing with SkiaSharp into a canvas you supply, on any platform) and [`PeachDrawing.CoreGraphics`](peachdrawing-coregraphics.md) (`CoreGraphicsCanvas`, drawing with Quartz 2D into a `CGContext` you supply, on macOS and iOS) join them as a fourth and fifth: [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfRenderContext`/`PdfCanvas`, writing PDF, which PeachPDF
-> renders through, together with `RasterCanvas`/`RasterRenderContext` as its raster fallback for effects PDF can't express as
-> vector content) and its own sibling package, `PeachDrawing` (a standalone CPU software rasterizer, usable
-> with no PeachPDF reference at all - see [docs/peachdrawing.md](peachdrawing.md)). Until 1.0, the public
-> API may change between releases.
+> **Status: pre-1.0.** The package's public surface is the `Canvas`/`RenderContext` contract and the paint, geometry, path,
+> effect, cursor and semantic types around it - see `PublicApi.txt` for the exact, machine-checked snapshot. Six concrete
+> `Canvas`/`RenderContext` implementations exist today:
+> [`PeachDrawing.PDF`](peachdrawing-pdf.md) (`PdfCanvas`, writing PDF, which PeachPDF renders through),
+> [`PeachDrawing`](peachdrawing.md) (`RasterCanvas`, a standalone CPU software rasterizer, also PeachPDF's raster fallback for
+> effects PDF cannot express as vector content), [`PeachDrawing.Svg`](peachdrawing-svg.md) (`SvgCanvas`, writing vector SVG),
+> [`PeachDrawing.Win2D`](peachdrawing-win2d.md) (`Win2dCanvas`, Win2D on Windows),
+> [`PeachDrawing.Skia`](peachdrawing-skia.md) (`SkiaCanvas`, SkiaSharp into a canvas you supply, on any platform) and
+> [`PeachDrawing.CoreGraphics`](peachdrawing-coregraphics.md) (`CoreGraphicsCanvas`, Quartz 2D into a `CGContext` you supply, on
+> macOS and iOS). Until 1.0, the public API may change between releases.
 
 ## What this package is for
 
@@ -128,6 +131,12 @@ canvas.PopTransform();
 - **Tagged-PDF structure.** `BeginArtifact`, `BeginMarkedContent`/`EndMarkedContent` and
   `BeginVariableText`/`EndVariableText` bracket content for a PDF/UA structure tree; a `Canvas` with no
   notion of tagged output treats them as no-ops.
+
+Also on `Canvas`: `DrawStringInRect(text, font, color, rect, horizontal, vertical)` places a run inside a rectangle by `BoxAlignment`
+(`Start`, `Center`, `End`) on each axis, `GetClip()` returns the current clip rectangle, `PushAntiAlias`/`PopAntiAlias` switch
+anti-aliasing for a scope, and `PaintRequiresTransparency(paint)` asks whether drawing a callback would need transparency the format
+cannot express. `DrawString` takes an optional `FontPalette` (a base palette index plus color overrides) for COLR/CPAL color fonts and
+`ShapeSettings` for OpenType features.
 
 `PixelsPerPoint` is the scale between this `Canvas`'s own coordinate space and true PDF points (`1.0`, the
 base default, for a `Canvas` with no such distinction); `IsOffscreenTile` says whether this `Canvas` is a
@@ -310,19 +319,23 @@ other.AddDestinationLink(new Rect(40, 200, 90, 14), "terms");           // ...an
   and a destination can be named on the canvas of a page that is drawn after the pages that link to it. A format with no pages (SVG) has one canvas, and a link to a name that is not on it leads nowhere.
 - **`AddSemanticRegion(bounds, info)`** says what `bounds` is to someone who cannot see it. `SemanticInfo` carries a WAI-ARIA role name
   (`heading`, `navigation`, `button`), a name, a description, a language, a heading level, an id and other `aria-*` states by name. Regions
-  are added in reading order and are flat: the nesting of the document is not written. The SVG canvas writes them; the default ignores them,
-  and the PDF canvas records its structure with a tag recorder instead.
+  are added in reading order and are flat: the nesting of the document is not written. The SVG canvas writes them, and the Skia, Win2D
+  and CoreGraphics canvases keep them (with the cursor areas) in their link maps for a host to hit-test (`SemanticAt`) and expose to
+  assistive technology; the default ignores them, and the PDF canvas records its structure with a tag recorder instead.
+- **`AddCursor(bounds, shape, images = null)`** says which mouse cursor `bounds` shows: a `CursorShape` (`Pointer`, `Text`, `ResizeColumn`, ... the
+  CSS `cursor` keywords) and optionally `CursorImage`s (a URI and hotspot) that take precedence where the host can load them. A canvas that
+  draws to a screen host records them so the host can hit-test; the default ignores them.
 - **The return value** is a handle the canvas's own format defines for the link it wrote, or `null`. The PDF canvas returns the `PdfLink` a
   tagged document attaches to a structure element; the SVG canvas has nothing to hand back.
 
-All three do nothing by default, which is right for a canvas of pixels. [PeachDrawing.PDF](peachdrawing-pdf.md) writes link annotations
+All of these do nothing by default, which is right for a canvas of pixels. [PeachDrawing.PDF](peachdrawing-pdf.md) writes link annotations
 and named destinations, and [PeachDrawing.Svg](peachdrawing-svg.md) writes `<a href>` elements. A tile or a measuring canvas, which belongs
 to no page, writes nothing.
 
 ## Tile and hatch brushes
 
 A `TileBrush` repeats a picture across the plane, so a shape filled with it shows the part of the grid under it and
-neighbouring shapes continue the same pattern.
+neighboring shapes continue the same pattern.
 
 ```csharp
 var (tile, image) = canvas.CreateTile(20, 20)!.Value;
@@ -351,7 +364,7 @@ that has no hatch of its own. A pen can stroke with either brush.
 `canvas.PushAntiAlias(false)` / `PopAntiAlias()` turn edge smoothing off or on for the shapes drawn in between, and
 nest like the other state stacks. On a raster canvas this is exact; the render-wide setting
 (`RasterAntiAliasing`) is a ceiling, so a request for smoothing never overrides a render that turned it off. The default
-implementation can only honour `true`, through the older `SetAntiAliasSmoothingMode` pair it is built on.
+implementation can only honor `true`, through the older `SetAntiAliasSmoothingMode` pair it is built on.
 
 `canvas.DrawImage(image, destRect, ImageSampling.…)` picks how the image's pixels are read: `Automatic` (what the image's
 own `Interpolate` asks for), `Nearest`, `Bilinear`, `Bicubic` (Catmull-Rom over sixteen pixels; the raster canvas has a
@@ -359,6 +372,12 @@ real one, others treat it as `Bilinear`) or `Pixelated` (hard-edged when enlargi
 per-draw sampling of its own a canvas falls back to switching `Interpolate` for the duration of the draw.
 
 ## `Font`, `FontFamily` and `Image`
+
+Beyond `GetFont`, a `RenderContext` registers fonts from bytes (`AddFontFromBytes`), a URL (`AddFontFamilyFromUrl`) or an installed face
+(`AddLocalFontFamily`), maps one family name to another (`AddFontFamilyMapping`), asks whether a family exists (`IsFontExists`), drops
+cached fonts (`ClearFontCache`) and decodes an `Image` from a stream (`ImageFromStream`). `TextHinting` and `TextStemDarkening` tune
+glyph rendering for raster canvases, and `RasterizationDpi`/`MaxRasterPixels` bound the bitmaps a vector backend falls back to. `IntRect`
+is the integer pixel rectangle (`Left`, `Top`, `Right`, `Bottom`, `Intersect`) used for raster regions.
 
 `Font` is a resolved, sized typeface, built from a `PeachDrawing.Text.Typeface` (`Font.Typeface`) plus
 whatever synthetic bold/italic a match required (`Font.SyntheticStyle`) - deliberately still a size-bound
@@ -404,16 +423,16 @@ worked example. A few things worth knowing before you start:
   the same effects pipeline PeachPDF drives. `RenderContext.CreateSvgGlyphPainter` is the seam a backend with an
   SVG engine uses to draw OpenType `SVG ` glyphs.
 
-## Drawing shaped text, paragraphs and colour glyphs on any `Canvas`
+## Drawing shaped text, paragraphs and color glyphs on any `Canvas`
 
 The package also holds the logic every `Canvas` shares for text that `PeachDrawing.Text` has already
 shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/clip/brush members:
 
-- `canvas.DrawParagraph(layout, origin, colour)` and `canvas.DrawGlyphRun(run, size, baselineOrigin, colour)`
+- `canvas.DrawParagraph(layout, origin, color)` and `canvas.DrawGlyphRun(run, size, baselineOrigin, color)`
   (`CanvasParagraphExtensions`) paint a `ParagraphLayout` or a `GlyphRun` at the positions the shaper and the
-  layout chose; `ParagraphPaint`/`TextDecorations` give a per-run colour and underline/overline/line-through
+  layout chose; `ParagraphPaint`/`TextDecorations` give a per-run color and underline/overline/line-through
   (see [Drawing a layout](peachdrawing-text.md#drawing-a-layout)).
-- `PathText.DrawStringAlongPath(text, typeface, size, colour, path, options)` sets text along a path: it shapes the
+- `PathText.DrawStringAlongPath(text, typeface, size, color, path, options)` sets text along a path: it shapes the
   text, then places every glyph at its own distance along the path and turns it to follow the curve, so kerning and
   ligatures survive. `PathText.Layout` returns the placed glyphs (`PathGlyph`: glyph index, advance, transform) for a caller
   that draws them itself, and `PathText.GetGlyphFrame` is the one placement step (a distance along the path, the side, a
@@ -422,12 +441,12 @@ shaped, so an implementation gets it by implementing `DrawGlyphs` and the path/c
 - `InkCrossings.Measure` finds where a run of text puts ink inside a horizontal band, one stretch per glyph: what a
   `text-decoration-skip-ink` underline needs to break around descenders. It is what `Canvas.GetInkCrossings` answers.
 - `ColorGlyphs.ColorGlyphPainter` walks one glyph's COLR v0 layers or v1 paint graph - palette and
-  `font-palette` overrides, the foreground-colour sentinel, gradient stops and extend modes, transforms,
+  `font-palette` overrides, the foreground-color sentinel, gradient stops and extend modes, transforms,
   clips and blend modes - and describes it to an `IColorGlyphTarget` as clipped fills.
   `CanvasColorGlyphTarget` maps that onto any `Canvas`'s own paths, clips, brushes and blend modes; a backend
   with a different way of drawing implements `IColorGlyphTarget` itself.
 
-## Licences
+## Licenses
 
 `PeachDrawing.Core` is BSD 3-Clause. It carries no third-party code of its own; its one dependency,
 `PeachDrawing.Text`, carries its own notices in its `THIRD-PARTY-LICENSES.md`. See [License](license.md)

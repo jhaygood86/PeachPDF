@@ -57,12 +57,12 @@ web or to a local file resolves to nothing.
   `pages.yml` check out full history — a shallow clone has no tags, and every deploy would otherwise
   describe itself as a prerelease.
 - **`Arial Narrow` renders at normal width.** Liberation Sans Narrow is not part of Liberation 2.x — it
-  ships separately under a different licence — so no metrically compatible narrow face is bundled.
+  ships separately under a different license — so no metrically compatible narrow face is bundled.
 - **Raster images decode in the browser.** PNG, JPEG, GIF, BMP, WebP, AVIF, TIFF and JPEG XL all use the same
   managed decoder as every other host; only TGA, PSD and HDR are unsupported.
 - **ZIP entry names are read as UTF-8.** A legacy CP437-encoded archive with non-ASCII names will not
   match; `System.Text.Encoding.CodePages` is not available in this host.
-- **`<meta charset>` is not honoured** when decoding an upload — a byte-order mark, or UTF-8, only.
+- **`<meta charset>` is not honored** when decoding an upload — a byte-order mark, or UTF-8, only.
 - Font data is fetched once per page load and cached, but registration is per-render: PeachPDF registers
   fonts on a `PdfGenerator` instance, and the app builds a fresh one each time so one document's
   `@font-face` fonts cannot leak into the next.

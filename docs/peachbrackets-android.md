@@ -13,8 +13,10 @@ dotnet add package PeachBrackets.Android
 It targets `net10.0-android` (and `net11.0-android` when built with the .NET 11 SDK), API level 24 and later, and builds with the `android`
 workload (`dotnet workload install android`). Because of that it is not in `PeachPDF.slnx`: build it by project.
 
-> **Status: pre-1.0.** The public surface is `HtmlView`, `HtmlLinkTappedEventArgs`, `HtmlTouchStartedEventArgs`, `HtmlTappedEventArgs` and
-> `HtmlLoadFailedEventArgs`.
+> **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types: `HtmlLinkTappedEventArgs`, `HtmlTouchStartedEventArgs`,
+> `HtmlTappedEventArgs`, `HtmlLoadFailedEventArgs`, `HtmlFormSubmittingEventArgs`, `HtmlFormInvalidEventArgs` and `HtmlAnimationEventsEventArgs`
+> (plus the generated `Resource` class). It paints with [SkiaSharp](https://github.com/mono/SkiaSharp) through `SkiaSharp.Views.Android`, which the
+> package depends on, as it does on `PeachBrackets` and `PeachDrawing.Skia`; `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## Quick start
 
@@ -33,12 +35,15 @@ fits the system windows (`SetFitsSystemWindows(true)`) or apply the insets yours
 | Member | |
 |---|---|
 | `Html` | What to show. |
-| `PageBackground` | The colour behind the page. |
+| `PageBackground`, `AllowNetworkAccess`, `AnimationsEnabled` | The color behind the page; whether `http`/`https` resources may be loaded (off by default); whether CSS animations, transitions and animated images play (off by default; see [Animations](#animations)). The constructor `HtmlView(context, useGpu: false)` draws on the CPU instead of an OpenGL surface. |
+| `FocusedNode`, `FocusChanged`, `AnimationEvents` | The part of the page with the keyboard focus, and when it changes; the animation events of each frame. |
 | `Input` | The pointing devices the `hover` / `pointer` media queries report. By default the view asks the system which are attached (a touch screen is coarse and cannot hover; a mouse, trackpad or stylus is fine and can). |
 | `Document`, `Zoom`, `SelectedText` | The loaded `HtmlDocument` (replaced whenever the view reloads), the zoom factor, and the selected text. |
 | `CopySelection()`, `SelectAll()`, `ScrollToElement(id)` | Clipboard, selection and scrolling. Ctrl+C and Ctrl+A work with a keyboard. |
 | `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. Reading the fonts, parsing and laying out run on a pool thread, so a slow load never holds the main thread (Android reports an app that takes no input for five seconds as not responding); both events are raised on the main thread. |
 | `LinkTapped` | Raised before a link is followed; set `Cancel` to handle it yourself. |
+| `FormSubmitting`, `FormInvalid`, `AnimationEvents` | A form is about to be submitted (`Submission.Serialize()` makes the body; the view sends nothing itself) or failed validation (`Problems`), and the animation and transition events of each frame. See [Form controls](#form-controls) and [Animations](#animations). |
+| `HandleActivityResult`, `FilePickerRequestCode` | A file field starts the system file picker with `FilePickerRequestCode`; the host activity forwards its `OnActivityResult` to `HandleActivityResult`. |
 
 ## Touch integration points
 
@@ -115,7 +120,7 @@ hardware keyboard works too: arrows, Home and End (Shift selects, Ctrl moves by 
 Ctrl+A, Ctrl+C, Ctrl+X and Ctrl+V (a paste into a one-line field turns line breaks into spaces, and a password is never copied). To an accessibility
 service a text field is editable and takes the set-text, set-selection and paste actions. 
 
-A text area takes the Enter key (a line break; its keyboard offers no action button), Up and Down (by line, keeping the column) and Home and End (to the ends of the line), and its pasted line breaks are kept. A long press on a text field selects the word under the finger and shows the field's menu (Cut, Copy, Paste, Select all) beside the caret; moving the finger on extends the selection from the start of that word. A touch that begins on a range control sets it and dragging moves the thumb. A tap on a drop-down opens its options as a menu, and on a date or time field a dialog (a date-and-time field asks for the date and then the time); a colour field opens a dialog of three sliders over a swatch, and a file field the system's document picker (limited to the kinds its `accept` names, several files if `multiple`), whose result returns through the activity: the application calls `HandleActivityResult` from its `OnActivityResult` and the view uses the results for `FilePickerRequestCode`. The files' contents are read and held by the document for a submission. Tapping a submit button of a form raises `FormSubmitting` with the form as it would be sent (`Submission.Serialize()` makes the body); the view sends nothing itself. Enter, and the keyboard's action key, in a one-line field submits its form as a browser does (through the default button, or when it is the only such field), a form is checked first - when a value is not valid the first such control gets the focus and `FormInvalid` is raised with the problems instead of `FormSubmitting` - an image button sends where it was tapped, and tapping a reset button puts the form's controls back. A mouse wheel over a text area that has more lines than show scrolls it. An application that changes the document itself calls `ApplyUpdate` with the result so the view repaints and an accessibility service hears what a live region now says.
+A text area takes the Enter key (a line break; its keyboard offers no action button), Up and Down (by line, keeping the column) and Home and End (to the ends of the line), and its pasted line breaks are kept. A long press on a text field selects the word under the finger and shows the field's menu (Cut, Copy, Paste, Select all) beside the caret; moving the finger on extends the selection from the start of that word. A touch that begins on a range control sets it and dragging moves the thumb. A tap on a drop-down opens its options as a menu, and on a date or time field a dialog (a date-and-time field asks for the date and then the time); a color field opens a dialog of three sliders over a swatch, and a file field the system's document picker (limited to the kinds its `accept` names, several files if `multiple`), whose result returns through the activity: the application calls `HandleActivityResult` from its `OnActivityResult` and the view uses the results for `FilePickerRequestCode`. The files' contents are read and held by the document for a submission. Tapping a submit button of a form raises `FormSubmitting` with the form as it would be sent (`Submission.Serialize()` makes the body); the view sends nothing itself. Enter, and the keyboard's action key, in a one-line field submits its form as a browser does (through the default button, or when it is the only such field), a form is checked first - when a value is not valid the first such control gets the focus and `FormInvalid` is raised with the problems instead of `FormSubmitting` - an image button sends where it was tapped, and tapping a reset button puts the form's controls back. A mouse wheel over a text area that has more lines than show scrolls it. An application that changes the document itself calls `ApplyUpdate` with the result so the view repaints and an accessibility service hears what a live region now says.
 
 ## Drawing on the graphics hardware
 
@@ -130,7 +135,7 @@ device or emulator without a working GL driver. On the hardware:
   does a change of zoom, which is a different grid.
 - **Animations stay off the tiles.** With `AnimationsEnabled`, a box that only moves or fades is not in the tiles: each frame draws it over them as a texture
   (`DocumentPaintLayer.Animated`, see [the animated layer](peachbrackets.md#animations-and-transitions)), under the fixed and stuck boxes. What else an animation repaints
-  (a colour, a shadow, a layout property) drops only the tiles that hold the changed regions; the rest stay.
+  (a color, a shadow, a layout property) drops only the tiles that hold the changed regions; the rest stay.
 - **A page whose background is attached to the viewport** (`background-attachment: fixed`) changes under every scroll step, so it is painted
   straight, on the hardware but without tiles.
 - **Shadows, filters and `backdrop-filter`** are layers with effects that Skia composes itself, and an image Skia can decode is decoded into the
@@ -154,13 +159,11 @@ configuration changes it handles (`screenSize`, `smallestScreenSize`, `screenLay
 `resizeableActivity`; one that also runs on a laptop-class device with no touch screen marks `android.hardware.touchscreen` as not required. The demo does all of this and, from
 a window 840 dp wide (the Expanded window size class), puts the list of showcases in a pane beside the page.
 
-## Limits of this version
+## Limits
 
-- Form controls are painted but not interactive.
 - Selection has no drag handles; a drag after the long press extends it.
 - A custom `url()` cursor is shown as its keyword.
 - Zoom re-renders at the new scale (the tiles are painted again at it), which is slow on very large pages.
-- Form controls can be focused with Tab, but nothing can be typed into them.
 
 ## Images, style sheets and fonts
 
