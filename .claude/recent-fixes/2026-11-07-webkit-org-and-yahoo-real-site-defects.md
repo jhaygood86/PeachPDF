@@ -1,0 +1,15 @@
+# webkit.org and yahoo.com: four real-site defects
+
+Found by opening each site in the WinUI demo and in the Skia harness, then reducing to a one-feature page (Chromium beside ours).
+
+**1. A font whose names are not US English crashed a Debug build (yahoo.com).** `NameTable.Read` took only the Windows US-English (or Mac) names and `Debug.Assert`ed it had found a family name. A valid web font with its names in another language ended the process. It now falls back to a name in any language, then the typographic family (ID 16), full name, PostScript name; style defaults to "Regular". `FontNameFallbackTests` rewrites a bundled font's records to German only (it fails with the assertion without the fix). Release builds never hit the assert but kept an empty family name.
+
+**2. Right-aligned inline-blocks holding an out-of-flow child overlapped (webkit.org's navigation).** `<li style="display:inline-block">` containing an absolutely positioned sub-menu is laid out atomically, with line boxes of its own. Two faults: `LineContentRightOf`/`FillsContainingBlockWidth` took an auto-width inline-block to fill its container, so its own lines aligned against the container's width instead of its shrink-to-fit width; and the outer line then shifted the same words a second time (`IsAtomicLineUnit` did not know such an inline-block, so its words were moved with the line and again with the subtree). Both fixed; `InlineBlockWithOutOfFlowChildAlignmentTests`. Trap: the symptom shows only under `text-align: right`/`center`, and only with an out-of-flow child (a hidden checkbox counts), so a plain inline-block menu looks fine.
+
+**3. `width: 0; height: 0` on a replaced element was read as "no size".** `TryResolveLength` rejects `Number == 0` (right for min/max limits, wrong for the size itself), so webkit.org's `svg { display: block; width: 0; height: 0 }` (its hidden filter-definitions svg) fell back to the 300x150 default and pushed the page down 150px. `MeasureIntrinsicSize` now accepts a written zero for width/height only (`IsWrittenZero`; an empty value is still absent). `ZeroSizedReplacedElementTests`.
+
+**4. A relative `url()` in a linked style sheet resolved against the page.** `style.css` at `/wp-content/themes/webkit/` says `url('images/webkit.svg')`; read against the page that is `/images/webkit.svg`, a 404, so every logo, chevron and background pattern was missing. Only `@font-face` and `@import` used the sheet's own location. The `Lexer` now takes `UrlBase` (set from the style sheet's `BaseUri` in `CssParser.ParseStyle`) and makes a relative url token absolute when it is created; empty, `#fragment` and scheme-bearing references are left alone. `StylesheetRelativeUrlTests`. Not done: `url()` values inside `style=""` attributes are relative to the document and need nothing.
+
+Not engine bugs on webkit.org: the blog tile images and the search box are inserted by JavaScript.
+
+**Evidence:** `PeachBrackets.Engine.Tests` 18714, `PeachPDF.Tests` 1663, `PeachBrackets.Tests` 964, `PeachDrawing.Text.Tests` 6690, all passing; webkit.org's header, hero and nav now match Chromium's layout.

@@ -121,6 +121,17 @@ namespace PeachBrackets.Html.Utils
                 if (intrinsicWidth is > 0 && intrinsicHeight is > 0)
                     return (intrinsicWidth.Value, intrinsicHeight.Value);
 
+                // A ratio and no size of its own (an svg with only a viewBox): the largest size with that ratio that fits the positioning area, as `contain`
+                // (CSS Images 3 section 5.3, default sizing algorithm).
+                if (hasRatio && containerWidth > 0 && containerHeight > 0)
+                {
+                    var ratioOnly = intrinsicRatio!.Value;
+                    var fittedHeight = containerWidth / ratioOnly;
+                    return fittedHeight > containerHeight
+                        ? (containerHeight * ratioOnly, containerHeight)
+                        : (containerWidth, fittedHeight);
+                }
+
                 return (Math.Max(0, containerWidth), Math.Max(0, containerHeight));
             }
 

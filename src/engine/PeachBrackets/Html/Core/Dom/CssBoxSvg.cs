@@ -73,7 +73,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             var (intrinsicWidth, intrinsicHeight, hasRatio) = SvgIntrinsicSize.ResolveForBox(_document);
-            CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight, hasRatio);
+            CssLayoutEngine.MeasureIntrinsicSize(_svgWord, intrinsicWidth, intrinsicHeight, hasRatio, SvgIntrinsicSize.RatioOnly(_document));
         }
 
         /// <summary>The laid-out HTML of <paramref name="foreignObject"/>, or null when it has none.</summary>

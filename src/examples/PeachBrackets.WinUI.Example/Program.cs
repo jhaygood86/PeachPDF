@@ -23,8 +23,17 @@ public static class Program
     }
 }
 
-public sealed class ExampleApp : Application
+public sealed class ExampleApp : Application, Microsoft.UI.Xaml.Markup.IXamlMetadataProvider
 {
+    // A code-only app has no generated metadata provider; the control library's own supplies the type information its XAML resources need.
+    private readonly Microsoft.UI.Xaml.XamlTypeInfo.XamlControlsXamlMetaDataProvider _metadata = new();
+
+    public Microsoft.UI.Xaml.Markup.IXamlType GetXamlType(Type type) => _metadata.GetXamlType(type);
+
+    public Microsoft.UI.Xaml.Markup.IXamlType GetXamlType(string fullName) => _metadata.GetXamlType(fullName);
+
+    public Microsoft.UI.Xaml.Markup.XmlnsDefinition[] GetXmlnsDefinitions() => _metadata.GetXmlnsDefinitions();
+
     private const string Page = """
         <style>
         body { font: 16px 'Segoe UI', sans-serif; margin: 24px }

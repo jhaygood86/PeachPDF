@@ -174,7 +174,7 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         private async ValueTask ParseStyle(CssData data, ReadOnlyMemory<char> stylesheetText, Uri? baseUri, HashSet<string> visitedImportUris)
         {
-            var stylesheet = ParseStyleSheet(stylesheetText);
+            var stylesheet = new StylesheetParser { UrlBase = baseUri }.Parse(stylesheetText);
             stylesheet.BaseUri = baseUri;
 
             // Guards against circular @import chains (A imports B imports A) recursing forever; also

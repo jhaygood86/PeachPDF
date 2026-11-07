@@ -41,6 +41,9 @@ internal sealed class DemoWindow : Window
     private ToggleSwitch? _fillToggle;
     private string _lastLink = string.Empty;
     private double _loadMilliseconds;
+    private bool _followLinks;
+    private TextBox? _addressBox;
+    private readonly TextBlock _address = new() { Text = "No address opened", TextTrimming = TextTrimming.CharacterEllipsis, Opacity = 0.7, FontSize = 12 };
 
     public DemoWindow()
     {
@@ -75,6 +78,9 @@ internal sealed class DemoWindow : Window
         {
             _lastLink = e.Uri ?? "#" + e.Destination;
             e.Cancel = e.Uri is not null;
+            if (_followLinks && e.Uri is { } target && Uri.TryCreate(target, UriKind.Absolute, out var parsed) && (parsed.Scheme == Uri.UriSchemeHttp || parsed.Scheme == Uri.UriSchemeHttps))
+                NavigateTo(target);
+
             UpdateStatus();
         };
 
@@ -119,7 +125,10 @@ internal sealed class DemoWindow : Window
         }
 
         var wanted = Array.IndexOf(args, "--showcase") is var at and >= 0 && at + 1 < args.Length ? _shown.FindIndex(s => s.Slug == args[at + 1]) : -1;
-        if (_list.Items.Count > 0)
+        // `--uri <address>` opens that web address (or file) first.
+        if (Array.IndexOf(args, "--uri") is var uriAt and >= 0 && uriAt + 1 < args.Length)
+            NavigateTo(args[uriAt + 1]);
+        else if (_list.Items.Count > 0)
             _list.SelectedIndex = Math.Max(0, wanted);
 
         var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -154,6 +163,7 @@ internal sealed class DemoWindow : Window
 
         _categories.SelectedIndex = 0;
         _categories.SelectionChanged += (_, _) => FillList();
+
         _list.SelectionChanged += (_, _) =>
         {
             if (_list.SelectedIndex is >= 0 and var index && index < _shown.Count)
@@ -167,6 +177,49 @@ internal sealed class DemoWindow : Window
         Grid.SetRow(_list, 1);
         panel.Children.Add(_list);
         return panel;
+    }
+
+    /// <summary>
+    /// Opens an address the way a browser would: an http(s) address is fetched, a file: address or an existing path is read from disk, and anything
+    /// else that looks like a host name is tried as https.
+    /// </summary>
+    private void NavigateTo(string? text)
+    {
+        text = text?.Trim().Trim('"');
+        if (string.IsNullOrEmpty(text))
+        {
+            _address.Text = "No address given";
+            return;
+        }
+
+        Showcase showcase;
+        if (File.Exists(text) || (Uri.TryCreate(text, UriKind.Absolute, out var fileUri) && fileUri.IsFile && File.Exists(fileUri.LocalPath)))
+        {
+            var path = File.Exists(text) ? System.IO.Path.GetFullPath(text) : new Uri(text).LocalPath;
+            showcase = new Showcase("custom_file", "Address", System.IO.Path.GetFileName(path), path, path);
+        }
+        else
+        {
+            if (!Uri.TryCreate(text, UriKind.Absolute, out var uri) || (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+            {
+                if (!text.Contains("://") && Uri.TryCreate("https://" + text, UriKind.Absolute, out uri) && uri.Host.Contains('.'))
+                {
+                }
+                else
+                {
+                    _address.Text = "Not an address the demo can open: " + text;
+                    return;
+                }
+            }
+
+            showcase = new Showcase("custom_web", "Address", uri.Host, uri.AbsoluteUri, uri.AbsoluteUri);
+        }
+
+        _address.Text = showcase.Path;
+        if (_addressBox is not null)
+            _addressBox.Text = showcase.Path;
+        _list.SelectedIndex = -1;
+        Show(showcase);
     }
 
     private void FillList()
@@ -183,6 +236,59 @@ internal sealed class DemoWindow : Window
             row.Children.Add(new TextBlock { Text = showcase.Category, FontSize = 11, Opacity = 0.6 });
             _list.Items.Add(row);
         }
+    }
+
+    // The address bar above the page: a field for the address, paste-and-go, and whether links in the page are followed.
+    private FrameworkElement BuildAddressBar()
+    {
+        // Opening an address. A text box would be the natural field, but see above: the address is taken from the clipboard instead (copy it, press the
+        // button), or from `--uri`, or by following a link in the page.
+        var open = new Button { Content = "Open address from clipboard", HorizontalAlignment = HorizontalAlignment.Stretch };
+        open.Click += async (_, _) =>
+        {
+            var content = Windows.ApplicationModel.DataTransfer.Clipboard.GetContent();
+            if (!content.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.Text))
+            {
+                _address.Text = "The clipboard holds no text";
+                return;
+            }
+
+            NavigateTo(await content.GetTextAsync());
+        };
+        var box = new TextBox { PlaceholderText = "https://example.com or a file path", HorizontalAlignment = HorizontalAlignment.Stretch };
+        box.KeyDown += (_, e) =>
+        {
+            if (e.Key == Windows.System.VirtualKey.Enter)
+                NavigateTo(box.Text);
+        };
+        var go = new Button { Content = "Go" };
+        go.Click += (_, _) => NavigateTo(box.Text);
+        _addressBox = box;
+        var follow = new ToggleSwitch { IsOn = _followLinks, OnContent = "Follow links", OffContent = "Follow links" };
+        follow.Toggled += (_, _) => _followLinks = follow.IsOn;
+        open.Content = "Paste & go";
+        open.HorizontalAlignment = HorizontalAlignment.Left;
+        var bar = new Grid { Margin = new Thickness(16, 12, 16, 0), ColumnSpacing = 8 };
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        bar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        bar.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        bar.Children.Add(box);
+        Grid.SetColumn(go, 1);
+        bar.Children.Add(go);
+        Grid.SetColumn(open, 2);
+        bar.Children.Add(open);
+        follow.Header = null;
+        follow.OnContent = "Follow links";
+        follow.OffContent = "Follow links";
+        Grid.SetColumn(follow, 3);
+        bar.Children.Add(follow);
+        Grid.SetRow(_address, 1);
+        Grid.SetColumnSpan(_address, 4);
+        bar.Children.Add(_address);
+        return bar;
     }
 
     // The middle: the title of the showcase, and the box the widget sits in.
@@ -209,9 +315,12 @@ internal sealed class DemoWindow : Window
 
         var grid = new Grid();
         grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         grid.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+        grid.Children.Add(BuildAddressBar());
+        Grid.SetRow(header, 1);
         grid.Children.Add(header);
-        Grid.SetRow(_stage, 1);
+        Grid.SetRow(_stage, 2);
         grid.Children.Add(_stage);
         return grid;
     }
@@ -361,7 +470,7 @@ internal sealed class DemoWindow : Window
         _description.Text = showcase.Description;
         if (!showcase.IsWeb)
         {
-            _view.DocumentBaseUri = null;
+            _view.DocumentBaseUri = showcase.Slug == "custom_file" ? new Uri(showcase.Path) : null;
             _html = File.ReadAllText(showcase.Path);
             ReloadDocument();
             return;

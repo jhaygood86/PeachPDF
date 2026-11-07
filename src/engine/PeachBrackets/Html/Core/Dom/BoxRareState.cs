@@ -130,6 +130,7 @@ namespace PeachBrackets.Html.Dom
         internal PaintPoint? FirstColumnFragmentOrigin;
         internal bool PositionAssignedByEngine;
         internal bool ItemContentSizeEverPinned;
+        internal bool ShrunkByFlexBelowContent;
         internal string? WidthBeforeItemPin;
         internal string? HeightBeforeItemPin;
         internal bool _resumingIntoTheNextFragmentainer;

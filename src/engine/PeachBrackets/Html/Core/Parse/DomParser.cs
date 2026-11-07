@@ -569,7 +569,7 @@ namespace PeachBrackets.Html.Parse
         /// shared instance.
         /// </param>
         /// <returns>
-        /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?, bool)"/>'s
+        /// The fragment's own synthetic root box (<see cref="HtmlParser.ParseDocument(string, CssBox?, bool, bool)"/>'s
         /// default fresh <see cref="CssBox.CreateBlock()"/>) - never itself attached anywhere; the caller
         /// grafts its children onto the real tree (<see cref="CssBox.SetAllBoxes"/>) - together with the
         /// <c>display: contents</c> shells the fragment's own splice already removed from it, which no

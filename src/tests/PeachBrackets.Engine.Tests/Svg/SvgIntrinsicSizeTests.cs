@@ -47,9 +47,23 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal((96.0, 150.0, false), SvgIntrinsicSize.ResolveForBox(Doc(width: 96)));
             Assert.Equal((300.0, 48.0, false), SvgIntrinsicSize.ResolveForBox(Doc(height: 48)));
             Assert.Equal((96.0, 48.0, true), SvgIntrinsicSize.ResolveForBox(Doc(width: 96, height: 48)));
-            Assert.Equal((96.0, 48.0, true), SvgIntrinsicSize.ResolveForBox(Doc(viewBox: true)));
-            Assert.Equal((null, null, false), SvgIntrinsicSize.ResolveForBox(Doc()));
+            // A viewBox alone is a ratio and no size; with a size in one axis it gives the other (96x48 is 2:1).
+            Assert.Equal((null, null, true), SvgIntrinsicSize.ResolveForBox(Doc(viewBox: true)));
+            Assert.Equal((80.0, 40.0, true), SvgIntrinsicSize.ResolveForBox(Doc(width: 80, viewBox: true)));
+            Assert.Equal((80.0, 40.0, true), SvgIntrinsicSize.ResolveForBox(Doc(height: 40, viewBox: true)));
+            // No size and no ratio: the default object size. No document at all (it failed to load) has none.
+            Assert.Equal((300.0, 150.0, false), SvgIntrinsicSize.ResolveForBox(Doc()));
             Assert.Equal((null, null, false), SvgIntrinsicSize.ResolveForBox(null));
+        }
+
+        [Fact]
+        public void RatioOnly_IsTheViewBoxRatioOfADocumentWithNoSize()
+        {
+            Assert.Equal(2.0, SvgIntrinsicSize.RatioOnly(Doc(viewBox: true)));
+            Assert.Null(SvgIntrinsicSize.RatioOnly(Doc(width: 96, viewBox: true)));
+            Assert.Null(SvgIntrinsicSize.RatioOnly(Doc(height: 48, viewBox: true)));
+            Assert.Null(SvgIntrinsicSize.RatioOnly(Doc()));
+            Assert.Null(SvgIntrinsicSize.RatioOnly(null));
         }
 
         [Fact]
