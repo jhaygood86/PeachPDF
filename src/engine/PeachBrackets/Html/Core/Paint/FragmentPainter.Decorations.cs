@@ -1002,7 +1002,7 @@ namespace PeachBrackets.Html.Paint
         {
             if (!DecorationsWorthCollecting(box)) return;
 
-            var content = DecorationContent.Of(fragment, collectSpans: true);
+            var content = DecorationContent.Of(fragment, collectSpans: true, TextEmphasisGrammar.ParseSkip(fragment.Box.TextDecorationSkip));
 
             // The decoration is drawn here, with the decorating box, not with the inline content it
             // covers - and the clip a fragment carries is its clipping *ancestor's*, so this box's own
@@ -1177,6 +1177,14 @@ namespace PeachBrackets.Html.Paint
             var pen = g.GetPen(textDecorationActualColor);
             pen.Width = thickness;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
+
+            // text-decoration-skip: edges shortens the line at both ends so the lines of adjacent decorated boxes do not run together.
+            if ((TextEmphasisGrammar.ParseSkip(styleSource.TextDecorationSkip) & DecorationSkips.Edges) != 0)
+            {
+                spanStart += thickness / 2;
+                spanEnd -= thickness / 2;
+                if (spanEnd <= spanStart) return;
+            }
 
             var span = new DecorationInterval(spanStart, spanEnd);
 

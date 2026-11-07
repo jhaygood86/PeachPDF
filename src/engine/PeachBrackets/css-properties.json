@@ -4679,15 +4679,15 @@
     },
     {
       "name": "text-combine-upright",
-      "comment": "css-writing-modes-4 §9.1: none | all | digits <integer [2,4]>?. Parsed and stored only: composing characters into one upright cell needs vertical-text layout this engine does not have (.claude/accepted-gaps/text-combine-upright-has-no-layout-effect.md). Not inherited, so it sits in TextDecorationArea (the non-inherited text area) - TextArea is adopted whole from the parent.",
-      "inherited": false,
+      "comment": "css-writing-modes-4 §9.1: none | all | digits <integer [2,4]>?. Inherited. In a vertical writing mode, all composes the whole text of the element, and digits N each run of up to N ASCII digits, into one word set as a one-em square upright cell (CssBox.AppendWordsFromText marks it CombineUpright; CssLayoutEngine.NaturalWordSize sizes it; FragmentPainter.PaintCombinedUprightRun squeezes it to fit)",
+      "inherited": true,
       "cssom": {"converter": "Converters.TextCombineUprightConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextCombineUprightConverter.Convert" },
       "html": {
         "propertyPath": "TextCombineUpright",
         "csharpDataType": "string",
-        "area": "TextDecorationArea"
+        "area": "TextArea"
       }
     },
     {

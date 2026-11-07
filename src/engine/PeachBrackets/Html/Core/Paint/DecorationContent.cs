@@ -64,9 +64,9 @@ namespace PeachBrackets.Html.Paint
         /// (css-text-decor-3 §2.4). False for an inline box, whose own per-line rectangles already
         /// <i>are</i> the spans — there, only the exclusions and the ink have to be found.
         /// </param>
-        internal static DecorationContent Of(BoxFragment fragment, bool collectSpans)
+        internal static DecorationContent Of(BoxFragment fragment, bool collectSpans, DecorationSkips skip = DecorationSkips.Objects)
         {
-            var content = new DecorationContent();
+            var content = new DecorationContent { _skip = skip };
 
             foreach (var child in fragment.Children)
             {
@@ -77,7 +77,66 @@ namespace PeachBrackets.Html.Paint
             // much "the content the line covers" as a descendant's are.
             content.CollectWords(fragment);
 
+            if ((skip & (DecorationSkips.Spaces | DecorationSkips.LeadingSpaces | DecorationSkips.TrailingSpaces)) != 0)
+                content.RecordSpaceExclusions();
+
             return content;
+        }
+
+        private DecorationSkips _skip = DecorationSkips.Objects;
+
+        /// <summary>
+        /// <c>text-decoration-skip: spaces</c> (or <c>leading-spaces</c>/<c>trailing-spaces</c>): the gaps between the words of a line, and any
+        /// word made only of white space, are ranges no decoration line crosses. The leading and trailing partial keywords take only the
+        /// white-space words at the start or end of the line.
+        /// </summary>
+        private void RecordSpaceExclusions()
+        {
+            var all = (_skip & DecorationSkips.Spaces) != 0;
+            var lines = new HashSet<CssLineBox>();
+            foreach (var word in _words.Keys)
+            {
+                if (word.Line is { } line) lines.Add(line);
+            }
+
+            foreach (var line in lines)
+            {
+                var words = InkWordsOn(line);
+                if (words is null) continue;
+
+                var firstContent = -1;
+                var lastContent = -1;
+                for (var i = 0; i < words.Count; i++)
+                {
+                    if (string.IsNullOrWhiteSpace(words[i].Word.Text)) continue;
+                    if (firstContent < 0) firstContent = i;
+                    lastContent = i;
+                }
+
+                for (var i = 0; i < words.Count; i++)
+                {
+                    var isSpaceWord = string.IsNullOrWhiteSpace(words[i].Word.Text);
+                    var leading = isSpaceWord && (firstContent < 0 || i < firstContent);
+                    var trailing = isSpaceWord && i > lastContent;
+
+                    if (isSpaceWord && (all || ((_skip & DecorationSkips.LeadingSpaces) != 0 && leading)
+                                        || ((_skip & DecorationSkips.TrailingSpaces) != 0 && trailing)))
+                    {
+                        AddExclusion(line, new DecorationInterval(words[i].Rect.Left, words[i].Rect.Right));
+                    }
+
+                    if (all && i + 1 < words.Count && words[i + 1].Rect.Left > words[i].Rect.Right)
+                        AddExclusion(line, new DecorationInterval(words[i].Rect.Right, words[i + 1].Rect.Left));
+                }
+            }
+        }
+
+        private void AddExclusion(CssLineBox line, DecorationInterval interval)
+        {
+            if (_exclusions.TryGetValue(line, out var list))
+                list.Add(interval);
+            else
+                _exclusions.Add(line, [interval]);
         }
 
         /// <summary>The union rectangle collected for <paramref name="line"/>.</summary>
@@ -224,7 +283,8 @@ namespace PeachBrackets.Html.Paint
 
             if (DomUtils.IsAtomicInline(fragment.Box))
             {
-                RecordExclusions(fragment);
+                // text-decoration-skip: none draws the line through an atomic inline too.
+                if ((_skip & DecorationSkips.Objects) != 0) RecordExclusions(fragment);
                 return;
             }
 
@@ -235,6 +295,8 @@ namespace PeachBrackets.Html.Paint
                 if (lineFragment.Line is not { } lineBox) continue;
 
                 hosted = true;
+
+                if ((_skip & DecorationSkips.BoxDecoration) != 0) RecordBoxDecoration(fragment.Box, lineFragment.Rect, lineBox);
 
                 if (!contributesSpan) continue;
 
@@ -254,6 +316,27 @@ namespace PeachBrackets.Html.Paint
             foreach (var child in fragment.Children)
             {
                 Collect(child, contributesSpan && !hosted);
+            }
+        }
+
+        /// <summary>
+        /// <c>text-decoration-skip: box-decoration</c>: an inline box's margin, border and padding at the ends where it opens and closes are
+        /// ranges the decorating box's line does not cross. A line holding both ends of the box skips both.
+        /// </summary>
+        private void RecordBoxDecoration(CssBox box, Rect rect, CssLineBox line)
+        {
+            if (box.IsBlock || box.DerivedStyle.ActualDisplay != Keywords.Inline) return;
+
+            if (box.FirstHostingLineBox is null || box.FirstHostingLineBox.Equals(line))
+            {
+                var start = box.ActualMarginLeft + box.ActualBorderLeftWidth + box.ActualPaddingLeft;
+                if (start > 0) AddExclusion(line, new DecorationInterval(rect.Left - box.ActualMarginLeft, rect.Left + box.ActualBorderLeftWidth + box.ActualPaddingLeft));
+            }
+
+            if (box.LastHostingLineBox is null || box.LastHostingLineBox.Equals(line))
+            {
+                var end = box.ActualMarginRight + box.ActualBorderRightWidth + box.ActualPaddingRight;
+                if (end > 0) AddExclusion(line, new DecorationInterval(rect.Right - box.ActualBorderRightWidth - box.ActualPaddingRight, rect.Right + box.ActualMarginRight));
             }
         }
 

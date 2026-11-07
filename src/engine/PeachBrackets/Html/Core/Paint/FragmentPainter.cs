@@ -1196,7 +1196,7 @@ namespace PeachBrackets.Html.Paint
                 // atomic inlines inside it, which §2.4 does not decorate, and the glyph ink an underline
                 // or overline skips. Gathered once for the whole box rather than per line.
                 var content = DecorationsWorthCollecting(box)
-                    ? DecorationContent.Of(fragment, collectSpans: false)
+                    ? DecorationContent.Of(fragment, collectSpans: false, TextEmphasisGrammar.ParseSkip(fragment.Box.TextDecorationSkip))
                     : null;
 
                 for (var i = 0; i < lines.Count; i++)
