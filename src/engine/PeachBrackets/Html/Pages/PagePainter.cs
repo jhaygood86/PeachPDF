@@ -191,6 +191,16 @@ namespace PeachBrackets.Html.Pages
                     currentColor: MarginBoxRenderer.ResolveColor(applicablePageStyle, null, _container, _renderContext));
             }
 
+            // A page whose root is in a dark colour scheme is drawn on the dark Canvas colour; the canvas background the author
+            // declared (if any) paints over it.
+            if (_container.DarkCanvasColor is { } darkCanvas)
+            {
+                var bleed = extras.BleedPt * _renderContext.LayoutUnitsPerPoint;
+                using var darkCanvasLease = Lease();
+                Canvas darkCanvasGraphics = darkCanvasLease;
+                darkCanvasGraphics.DrawRectangle(darkCanvasGraphics.GetSolidBrush(darkCanvas), -bleed, -bleed, sheetRect.Width + (2 * bleed), sheetRect.Height + (2 * bleed));
+            }
+
             if (canvasBackgroundBox != null)
             {
                 // Must paint before the content clip below is applied (page.304's IntersectClip),

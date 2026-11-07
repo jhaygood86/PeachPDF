@@ -2897,6 +2897,16 @@ namespace PeachBrackets.Html.Parse
             PendingVarMap pendingVarProperties,
             IReadOnlySet<string>? skipPropertyNames = null)
         {
+            // color-scheme decides which arm of a light-dark() the other declarations of this rule take (a gradient's colour stops are read as the
+            // declaration is applied), whichever order the rule writes them in, so a plain value of it is applied first. It is applied again in its
+            // place below, which changes nothing.
+            foreach (var early in stylesheetRule.Style)
+            {
+                if (early.IsImportant == importantPass && early.Name.Equals(PropertyNames.ColorScheme, StringComparison.OrdinalIgnoreCase)
+                    && !CssGlobalKeywords.TryParse(early.Value, out _) && !early.Value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                    CssUtils.SetPropertyValue(valueParser, box, early.Name, early.Value);
+            }
+
             foreach (var prop in stylesheetRule.Style)
             {
                 if (prop.IsImportant != importantPass)

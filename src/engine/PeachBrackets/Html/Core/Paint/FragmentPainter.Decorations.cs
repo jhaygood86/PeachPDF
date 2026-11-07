@@ -96,12 +96,45 @@ namespace PeachBrackets.Html.Paint
                 return;
             }
 
-            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea);
+            // background-blend-mode (CSS Compositing 1 section 3.1): the element's background is an isolated group in which each
+            // image or gradient layer blends with the layers beneath it and the background colour, never with the page behind.
+            if (hasImages && ResolveBackgroundBlendModes(box) is { } blendModes)
+            {
+                using var group = g.BeginLayer(new LayerOptions(1.0, PaintBlendMode.Normal));
+                PaintBackgroundCore(group?.Canvas ?? g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, blendModes);
+                return;
+            }
+
+            PaintBackgroundCore(g, box, geometry, firstLineStyle, fragment, currentColor, paintingArea, null);
+        }
+
+        /// <summary>
+        /// The <c>background-blend-mode</c> list of <paramref name="box"/> as paint blend modes, or null when every layer is
+        /// <c>normal</c> (the common case, which needs no group).
+        /// </summary>
+        private static PaintBlendMode[]? ResolveBackgroundBlendModes(CssBox box)
+        {
+            var value = box.BackgroundBlendMode;
+            if (string.IsNullOrWhiteSpace(value) || value.Equals(Keywords.Normal, StringComparison.OrdinalIgnoreCase)) return null;
+
+            var names = BackgroundLayerResolver.SplitLayers(value);
+            var modes = new PaintBlendMode[names.Length];
+            var any = false;
+            for (var i = 0; i < names.Length; i++)
+            {
+                if (Map.BlendModes.TryGetValue(names[i], out var mode) && mode != BlendMode.Normal)
+                {
+                    modes[i] = ToRBlendMode(mode);
+                    any = true;
+                }
+            }
+
+            return any ? modes : null;
         }
 
         private static void PaintBackgroundCore(
             Canvas g, CssBox box, in BoxDecorationGeometry geometry, CssBox? firstLineStyle, BoxFragment? fragment, PaintColor? currentColor,
-            Rect? paintingArea)
+            Rect? paintingArea, PaintBlendMode[]? blendModes)
         {
             var rect = geometry.DecorationRect;
 
@@ -237,9 +270,15 @@ namespace PeachBrackets.Html.Paint
 
                 void DrawBrush(Brush brush) => PaintClippedBrush(g, box, brush, clipRect, clipShape);
 
+                // The list repeats to the number of layers, like every other background-* list.
+                var layerBlend = blendModes is null ? PaintBlendMode.Normal : blendModes[layerIndex % blendModes.Length];
+                if (layerBlend != PaintBlendMode.Normal) g.PushBlendMode(layerBlend);
+
                 CssImagePainter.Paint(g, layerImage, layerIndex, originRect, clipRect,
                     clipShape, box.BackgroundPosition, box.BackgroundSize, box.BackgroundRepeat, box.BackgroundAttachment,
                     viewportRect, box, DrawBrush, currentColor: currentColor);
+
+                if (layerBlend != PaintBlendMode.Normal) g.PopBlendMode();
 
                 if (!shapeShared) clipShape?.Dispose();
             }

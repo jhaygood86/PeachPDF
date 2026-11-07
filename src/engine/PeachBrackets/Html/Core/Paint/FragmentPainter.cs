@@ -419,6 +419,9 @@ namespace PeachBrackets.Html.Paint
 
             var box = fragment.Box;
 
+            // Colours read while painting this box (gradients, shadows) belong to its colour scheme.
+            using var colorScheme = ColorSchemeScope.Enter(box.UsesDarkColorScheme);
+
 #if DEBUG
             if (EngineTrace.Enabled) Console.WriteLine($"paint: {box}");
 #endif
@@ -648,7 +651,7 @@ namespace PeachBrackets.Html.Paint
             {
                 // Rendered to a bitmap, filtered and drawn (blur, grayscale, ...): nothing left to paint.
             }
-            else if (box.IsOpaque && box.ActualMixBlendMode == BlendMode.Normal &&
+            else if (box.IsOpaque && box.ActualMixBlendMode == BlendMode.Normal && !DomUtils.NeedsIsolatedGroup(box) &&
                 filter is { OpacityMultiplier: >= 1.0, HasColorMatrix: false })
             {
                 PaintTagged(g, fragment);
@@ -671,7 +674,8 @@ namespace PeachBrackets.Html.Paint
         /// composites bitmaps directly (<see cref="Canvas.PrefersRasterGroups"/>) does in a tight bitmap of the element.
         /// </summary>
         private static bool NeedsGroupCompositing(CssBox box, FilterEffectResolver.Resolved filter) =>
-            !box.IsOpaque || box.ActualMixBlendMode != BlendMode.Normal || filter.OpacityMultiplier < 1.0 || filter.HasColorMatrix;
+            !box.IsOpaque || box.ActualMixBlendMode != BlendMode.Normal || filter.OpacityMultiplier < 1.0 || filter.HasColorMatrix
+            || DomUtils.NeedsIsolatedGroup(box);
 
         /// <summary>
         /// Whether any of <paramref name="fragment"/>'s own decoration rectangles survives

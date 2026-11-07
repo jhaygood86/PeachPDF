@@ -1253,9 +1253,60 @@ namespace PeachBrackets.Html.Dom
         {
             get
             {
-                if (_actualColor.IsEmpty) _actualColor = Owner.GetActualColor(Style.Text.Color);
+                if (_actualColor.IsEmpty) _actualColor = ResolveTextColor();
                 return ForcedColorsAdjuster.Text(Owner, _actualColor);
             }
+        }
+
+        /// <summary>
+        /// The text colour before forced colours. Its initial value is <c>CanvasText</c> (CSS Color Adjust 1 section 2.2), black in a light colour scheme
+        /// and white in a dark one; the cascade keeps the initial as the literal <c>black</c> (a written colour is normalised to <c>rgb()</c>), so a dark
+        /// box whose colour is still that literal takes the dark <c>CanvasText</c>.
+        /// </summary>
+        private PaintColor ResolveTextColor()
+        {
+            var value = Style.Text.Color;
+            if (UsesDarkColorScheme && string.Equals(value, "black", StringComparison.Ordinal))
+            {
+                var dark = PeachBrackets.Css.ColorSchemeScope.DarkCanvasText;
+                return PaintColor.FromArgb(dark.A, dark.R, dark.G, dark.B);
+            }
+
+            return Owner.GetActualColor(value);
+        }
+
+        private sbyte _usesDarkColorScheme = -1;
+
+        /// <summary>
+        /// Whether this box's <em>used</em> <c>color-scheme</c> is dark (CSS Color Adjust 1 section 2.1): the computed list against the user's
+        /// <c>prefers-color-scheme</c>. A document whose root declares none takes the one its <c>&lt;meta name="color-scheme"&gt;</c> names.
+        /// </summary>
+        public bool UsesDarkColorScheme
+        {
+            get
+            {
+                if (_usesDarkColorScheme < 0) _usesDarkColorScheme = (sbyte)(ComputeUsesDarkColorScheme() ? 1 : 0);
+
+                return _usesDarkColorScheme == 1;
+            }
+        }
+
+        /// <summary>Works out <see cref="UsesDarkColorScheme"/> from the style as it stands, without caching it.</summary>
+        internal bool ComputeUsesDarkColorScheme()
+        {
+            var scheme = PeachBrackets.Css.ColorScheme.Parse(Style.Background.ColorScheme);
+            if (scheme == PeachBrackets.Css.ColorScheme.Normal && Owner.HtmlContainer?.MetaColorScheme is { } meta)
+                scheme = meta;
+
+            var preferDark = Owner.HtmlContainer?.PreferredColorScheme == ColorSchemePreference.Dark;
+            return scheme.UsesDark(preferDark);
+        }
+
+        internal void InvalidateColorScheme()
+        {
+            _usesDarkColorScheme = -1;
+            _actualColor = PaintColor.Empty;
+            _actualBackgroundColor = PaintColor.Empty;
         }
 
         public PaintColor ActualBackgroundColor

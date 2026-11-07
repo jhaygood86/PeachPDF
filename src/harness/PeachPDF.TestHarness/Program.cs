@@ -14921,6 +14921,70 @@ await SaveShowcaseAsync("mix_blend_mode", "Graphics & Effects", "mix-blend-mode"
     "mix-blend-mode composites overlapping content via a real PDF blend mode (ExtGState /BM) - normal, multiply, screen, and difference shown over overlapping circles.",
     mixBlendModeHtml, pdfConfig);
 
+// --- background-blend-mode and isolation showcase (CSS Compositing 1 §3) ---
+
+var backgroundBlendHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    .row { display: flex; gap: 12px; margin-bottom: 14px }
+    .cell { width: 150px; text-align: center; font-size: 7pt; color: #444 }
+    .tile { height: 90px; border: 1px solid #ccc; margin-bottom: 3px;
+            background-color: #ffd23f;
+            background-image: linear-gradient(135deg, #00b4d8, #0077b6), linear-gradient(90deg, #e63946 0 50%, #2a9d8f 50% 100%); }
+    .stage { position: relative; height: 90px; background: #ffd23f; border: 1px solid #ccc; margin-bottom: 3px }
+    .group { position: absolute; left: 20px; top: 10px; width: 110px; height: 70px }
+    .blend { width: 70px; height: 50px; background: #00b4d8; mix-blend-mode: multiply }
+    </style></head><body>
+    <h1>background-blend-mode and isolation</h1>
+    <p class="intro">Each background layer blends with the layers beneath it and the background colour, inside the element's own group. isolation: isolate does the same for a descendant's mix-blend-mode: it blends with what the element painted, not the page behind.</p>
+    <div class="row">
+      <div class="cell"><div class="tile" style="background-blend-mode: normal"></div>normal</div>
+      <div class="cell"><div class="tile" style="background-blend-mode: multiply"></div>multiply</div>
+      <div class="cell"><div class="tile" style="background-blend-mode: screen"></div>screen</div>
+      <div class="cell"><div class="tile" style="background-blend-mode: difference, multiply"></div>difference, multiply</div>
+    </div>
+    <div class="row">
+      <div class="cell"><div class="stage"><div class="group"><div class="blend"></div></div></div>isolation: auto</div>
+      <div class="cell"><div class="stage"><div class="group" style="isolation: isolate"><div class="blend"></div></div></div>isolation: isolate</div>
+      <div class="cell"><div class="stage"><div class="group" style="isolation: isolate; background: #e63946"><div class="blend"></div></div></div>isolate over a background</div>
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("background_blend_mode_and_isolation", "Graphics & Effects", "background-blend-mode and isolation",
+    "background-blend-mode blends each background layer with the ones beneath it and the colour in a group of its own; isolation: isolate makes an element an isolated group, so a descendant's mix-blend-mode blends with the element's own paint instead of the page behind.",
+    backgroundBlendHtml, pdfConfig);
+
+// --- color-scheme and light-dark() showcase (CSS Color Adjust 1 §2, CSS Color 5) ---
+
+var colorSchemeHtml = """
+    <!DOCTYPE html><html><head><meta name="color-scheme" content="light dark"><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 9pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; font-size: 7.5pt }
+    .panel { display: inline-block; vertical-align: top; width: 150px; height: 110px; margin: 0 8px 10px 0; padding: 8px; box-sizing: border-box;
+             background: light-dark(#fff4d6, #1b2a41); color: light-dark(#5b3a00, #ffd23f);
+             border: 3px solid light-dark(#e08a00, #4ea8de) }
+    .swatch { margin-top: 6px; height: 26px; background: linear-gradient(90deg, light-dark(#e63946, #ff8fa3), light-dark(#1d4ed8, #7aa7ff)) }
+    .sys { margin-top: 6px; padding: 3px; background: Canvas; color: CanvasText; border: 1px solid CanvasText }
+    </style></head><body>
+    <h1>color-scheme and light-dark()</h1>
+    <p class="intro">light-dark(a, b) is a if the element's used color-scheme is light and b if it is dark; Canvas and CanvasText follow it too. A scheme inherits and can be overridden on a descendant.</p>
+    <div class="panel" style="color-scheme: light">light<div class="swatch"></div><div class="sys">Canvas</div></div>
+    <div class="panel" style="color-scheme: dark">dark<div class="swatch"></div><div class="sys">Canvas</div></div>
+    <div class="panel" style="color-scheme: light dark">light dark (follows the reader)<div class="swatch"></div><div class="sys">Canvas</div></div>
+    <div class="panel" style="color-scheme: dark"><div style="color-scheme: light; color: #5b3a00">dark parent, light child</div><div class="swatch"></div><div class="sys">Canvas</div></div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("color_scheme_and_light_dark", "Graphics & Effects", "color-scheme and light-dark()",
+    "color-scheme picks the scheme an element is drawn in; light-dark() and the Canvas/CanvasText system colours follow it, down to gradient stops, and a descendant can override it.",
+    colorSchemeHtml, pdfConfig);
+
 // --- mask-image showcase (CSS Masking 1 §6) ---
 
 const string MaskImageCss = """

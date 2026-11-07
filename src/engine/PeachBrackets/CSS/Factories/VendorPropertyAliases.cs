@@ -40,6 +40,7 @@ namespace PeachBrackets.Css
                 PropertyNames.BorderBottomLeftRadius, PropertyNames.BorderBottomRightRadius,
                 PropertyNames.BorderImage,
                 PropertyNames.BackgroundClip, PropertyNames.BackgroundOrigin, PropertyNames.BackgroundSize,
+                PropertyNames.PrintColorAdjust,
                 PropertyNames.ClipPath, PropertyNames.Filter, PropertyNames.Opacity,
                 PropertyNames.Columns, PropertyNames.ColumnCount, PropertyNames.ColumnWidth, PropertyNames.ColumnGap,
                 PropertyNames.ColumnFill, PropertyNames.ColumnSpan, PropertyNames.ColumnRule,
@@ -76,6 +77,9 @@ namespace PeachBrackets.Css
             }
 
             map["-webkit-line-clamp"] = PropertyNames.LineClamp;
+
+            // color-adjust was the pre-standard name print-color-adjust replaced (CSS Color Adjust 1 section 4).
+            map[PropertyNames.ColorAdjust] = PropertyNames.PrintColorAdjust;
 
             // WebKit's logical box properties predate margin-inline-*/padding-inline-*.
             foreach (var (legacy, standard) in new[]

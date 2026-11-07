@@ -81,10 +81,43 @@ namespace PeachBrackets.Css
             if (name.Equals(FunctionNames.ColorFunction, StringComparison.OrdinalIgnoreCase))
                 return ParseColorFunction(args, wantOklab, out oklab);
 
+            if (name.Equals(FunctionNames.LightDark, StringComparison.OrdinalIgnoreCase))
+                return ParseLightDark(args, wantOklab, out oklab);
+
             if (name.Equals(FunctionNames.DeviceCmyk, StringComparison.OrdinalIgnoreCase))
                 return ParseDeviceCmyk(args);
 
             return null;
+        }
+
+        // ── light-dark(<color>, <color>) ─────────────────────────────────────────
+        // https://www.w3.org/TR/css-color-5/#light-dark - the first colour in a light colour scheme, the second in a dark one; which one is
+        // the scheme of the element the colour is read for (ColorSchemeScope). Each arm is any colour, light-dark() and color-mix() included.
+        private static Color? ParseLightDark(IEnumerable<Token> args, bool wantOklab, out double[] oklab)
+        {
+            oklab = null;
+            var arms = new List<List<Token>> { new() };
+            foreach (var token in args)
+            {
+                if (token.Type == TokenType.Comma) arms.Add(new List<Token>());
+                else if (token.Type != TokenType.Whitespace) arms[^1].Add(token);
+            }
+
+            if (arms.Count != 2 || arms[0].Count == 0 || arms[1].Count == 0) return null;
+
+            // Both arms must be colours for the declaration to be valid, whichever one is used.
+            var light = ResolveColor(arms[0], wantOklab, out var lightOklab);
+            var dark = ResolveColor(arms[1], wantOklab, out var darkOklab);
+            if (light is null || dark is null) return null;
+
+            if (ColorSchemeScope.IsDark)
+            {
+                oklab = darkOklab;
+                return dark;
+            }
+
+            oklab = lightOklab;
+            return light;
         }
 
         // ── device-cmyk(): 4 components (number or %) + optional alpha ───────────

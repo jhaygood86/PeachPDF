@@ -459,6 +459,12 @@ namespace PeachBrackets.Html.Dom
         /// <summary>The used value of <c>mix-blend-mode</c>.</summary>
         public BlendMode ActualMixBlendMode => DerivedStyle.ActualMixBlendMode;
 
+        /// <summary>Whether the used <c>color-scheme</c> is dark: the scheme of <c>light-dark()</c> and the system colours read for this box.</summary>
+        internal bool UsesDarkColorScheme => DerivedStyle.UsesDarkColorScheme;
+
+        /// <summary>As <see cref="UsesDarkColorScheme"/>, read from the style as it is now, for a cascade still in progress.</summary>
+        internal bool UsesDarkColorSchemeNow => DerivedStyle.ComputeUsesDarkColorScheme();
+
         /// <summary>Gets the actual color for the text.</summary>
         public PaintColor ActualColor => DerivedStyle.ActualColor;
 
@@ -1147,6 +1153,7 @@ namespace PeachBrackets.Html.Dom
             inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageRendering, parentStyle.Background.ImageRendering, static (a, v) => a with { ImageRendering = v });
             inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageOrientation, parentStyle.Background.ImageOrientation, static (a, v) => a with { ImageOrientation = v });
             inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ImageResolution, parentStyle.Background.ImageResolution, static (a, v) => a with { ImageResolution = v });
+            inheritedBackground = inheritedBackground.SetPropertyValueShared(cache, inheritedBackground.ColorScheme, parentStyle.Background.ColorScheme, static (a, v) => a with { ColorScheme = v });
             _computedStyle = _computedStyle.AdoptAreaShared(cache, _computedStyle.Background, inheritedBackground, static (s, a) => s with { Background = a });
 
             // The invalidations these bypass (border/padding/opacity/transform/color/font-palette caches)
@@ -1169,6 +1176,7 @@ namespace PeachBrackets.Html.Dom
                 .SetPropertyValueShared(cache, background.BackgroundRepeat, parentStyle.Background.BackgroundRepeat, static (a, v) => a with { BackgroundRepeat = v })
                 .SetPropertyValueShared(cache, background.BackgroundOrigin, parentStyle.Background.BackgroundOrigin, static (a, v) => a with { BackgroundOrigin = v })
                 .SetPropertyValueShared(cache, background.BackgroundClip, parentStyle.Background.BackgroundClip, static (a, v) => a with { BackgroundClip = v })
+                .SetPropertyValueShared(cache, background.BackgroundBlendMode, parentStyle.Background.BackgroundBlendMode, static (a, v) => a with { BackgroundBlendMode = v })
                 .SetPropertyValueShared(cache, background.BackgroundAttachment, parentStyle.Background.BackgroundAttachment, static (a, v) => a with { BackgroundAttachment = v })
                 .SetPropertyValueShared(cache, background.ObjectFit, parentStyle.Background.ObjectFit, static (a, v) => a with { ObjectFit = v })
                 .SetPropertyValueShared(cache, background.ObjectPosition, parentStyle.Background.ObjectPosition, static (a, v) => a with { ObjectPosition = v });

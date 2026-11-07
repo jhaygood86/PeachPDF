@@ -10900,6 +10900,7 @@ namespace PeachBrackets.Html.Dom
 
         internal PaintColor GetActualColor(string colorStr)
         {
+            using var colorScheme = ColorSchemeScope.Enter(UsesDarkColorScheme);
             return HtmlContainer!.CssParser.ParseColor(colorStr);
         }
 
