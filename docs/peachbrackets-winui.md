@@ -17,8 +17,10 @@ The package depends on only the parts of the Windows App SDK it compiles against
 components (over 100 MB of ONNX Runtime and DirectML). The application decides how it gets the Windows App SDK runtime: reference
 `Microsoft.WindowsAppSDK` itself for the whole thing, or `Microsoft.WindowsAppSDK.Runtime` (and `.DWrite` if it uses it) for a lean package.
 
-> **Status: pre-1.0.** The public surface is `HtmlView`, `HtmlLinkClickedEventArgs` and `HtmlLoadFailedEventArgs`; `PublicApi.txt` beside the
-> project is the reviewed snapshot.
+> **Status: pre-1.0.** The public surface is `HtmlView`, `HtmlViewAutomationPeer` (the UI Automation peer), `HtmlViewFonts` (the shared font set),
+> `HtmlViewScrollMode` (`Auto`, `Disabled`) and the event argument types `HtmlLinkClickedEventArgs`, `HtmlLoadFailedEventArgs`,
+> `HtmlFormSubmittingEventArgs`, `HtmlFormInvalidEventArgs` and `HtmlAnimationEventsEventArgs`; `PublicApi.txt` beside the project is the
+> reviewed snapshot.
 
 ## Quick start
 
@@ -55,9 +57,12 @@ when the control is resized, so it reflows the way a web page does. It is laid o
 | `SelectionColor` | The colour behind selected text. |
 | `UserStyleSheet`, `DocumentMargin` | A style sheet applied before the document's own, and the space left around the document (none by default). |
 | `AnimationsEnabled` | Plays CSS animations, transitions and animated images (GIF, WebP); off by default and always off when Windows' animation effects are. See [Animations](#animations). |
+| `AllowNetworkAccess`, `DocumentBaseUri` | Whether `http`/`https` resources may be fetched (off by default; `data:` URIs and files always load), and the address the document's relative references resolve against (set it when the HTML is a page you fetched yourself). See [Images, style sheets and fonts](#images-style-sheets-and-fonts). |
 | `FontSet` | The fonts the view resolves families from; the shared [`HtmlViewFonts`](#fonts) set unless you give it another. |
 | `DocumentLoaded`, `DocumentFailed` | A document has laid out, or could not be loaded. |
 | `LinkClicked` | Raised before a link is followed; set `Cancel` to handle it yourself. |
+| `FormSubmitting`, `FormInvalid` | A form is about to be submitted (`Submission.Serialize()` makes the body; the view sends nothing itself), or failed its validation (`Problems`). See [Form controls](#form-controls). |
+| `AnimationEvents` | The animation and transition events of each frame; see [Animations](#animations). |
 
 ## Images, style sheets and fonts
 
@@ -198,9 +203,8 @@ character events and everything but composition still works. A progress bar, met
 
 A text area takes Enter (a line break), Up and Down (by line, keeping the column) and Home and End (to the ends of the line); a press on any text field places the caret at once and dragging selects. A right click, or a touch hold, on a text field selects the word under it (a hold) and shows a menu of Cut, Copy, Paste and Select all; the field keeps its focus while the menu is open. A press on a range control sets it and dragging moves the thumb. A click on a drop-down opens its options as a menu, on a date field a calendar, on a time field a clock and on a colour field a colour picker, each writing the choice back to the control (a date-and-time field changes the date and keeps the time); a file field opens the system's file picker (limited to the kinds its `accept` names, one file or several as `multiple` says) and shows the names of the files chosen; their contents are read (for a submission) and held by the document. Clicking or invoking a submit button of a form raises `FormSubmitting` with the form as it would be sent (`Submission.Serialize()` makes the body); the view sends nothing itself. Enter in a one-line field submits its form as a browser does (through the default button, or when it is the only such field), a form is checked first - when a value is not valid the first such control gets the focus and `FormInvalid` is raised with the problems instead of `FormSubmitting` - an image button sends where it was pressed, and clicking or invoking a reset button puts the form's controls back. The mouse wheel over a scroll container (an element with `overflow: auto`, `scroll` or `hidden` of the document) scrolls it, and passes on to the container around it and then to the page at the end of its content; over a text area that has more lines than show it scrolls the text area, and at its first or last line the page scrolls. A container repaints its scrollport only. A press on a scrollbar thumb drags it, and a press on the track beside it scrolls a page. When the focus is inside a container the arrow keys (40 points), Page Up and Down and Space (seven eighths of the container), and Home and End scroll the nearest container around the focused element that can go that way, and the focus itself scrolls the containers around it to show the element. A finger dragged over a container (in a view that scrolls itself) scrolls it by the distance moved while the view's own scroller stays still, and a container with `scroll-snap-type` settles on a snap position when the thumb or finger is let go. A container with `overscroll-behavior: contain` keeps a wheel turn at its end rather than passing it to the page. A finger lifted while it is still moving carries the container on (a fling that slows to a stop in about a second, then settles on a snap position), a press held on a scrollbar track keeps paging after a short pause until the thumb reaches the pointer or the button is let go, and the pointer over a scrollbar is the arrow. A container that has a node in the accessibility tree reports the UI Automation scroll pattern (`Scroll` by a small or a large step, `SetScrollPercent`). An application that changes the document itself calls `ApplyUpdate` with the result so the view repaints and a screen reader hears what a live region now says.
 
-## Limits of this version
+## Limits
 
-- Form controls are painted but not interactive: they can be focused with Tab, but nothing can be typed into them or clicked.
 - Zoom scales the rendered surface; it is not re-rendered at the new scale, so very high zoom is soft.
 - A `url()` cursor image uses its first frame, and an SVG image is not used (the keyword's pointer is shown instead).
 - Find in the page is available through `Document` (`FindText`) but has no built-in user interface.

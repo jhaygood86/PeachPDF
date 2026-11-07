@@ -10,10 +10,10 @@ with PeachPDF: the same version number for every release.
 dotnet add package PeachBrackets
 ```
 
-> **Status: pre-1.0.** `HtmlDocument`, `HtmlDocumentOptions`, `DocumentPage` and the annotation and tagging types on this page are the
-> package's public surface today - see `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF is the package's other consumer:
-> it lays HTML out with this same engine and paints it onto PDF pages, so this is not a copy built beside it. Until 1.0, the public API may
-> change between releases, and what PeachPDF reaches through internals today moves onto it step by step.
+> **Status: pre-1.0.** `HtmlDocument`, `HtmlDocumentOptions`, `DocumentPage`, the annotation and tagging types, the building types and
+> `HtmlRenderException` on this page are the package's public surface - see `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF
+> is the package's other consumer: it lays HTML out with this same engine and paints it onto PDF pages, so this is not a copy built beside
+> it. Until 1.0, the public API may change between releases.
 
 For what the engine supports - elements, properties, selectors, at-rules - see [HTML and CSS support](html-css-support.md) and
 [SVG support](supported-svg-features.md). That matrix describes the engine; it applies here exactly as it does to PeachPDF.
@@ -119,6 +119,10 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `FontScale` | A multiplier for the root font size (1, the default, leaves it alone), for a reader who sets a text size on their system. Text sized in `em`, `rem`, a percentage or a keyword follows; text in `px` or `pt` does not. Added to `UserStyleSheet`, so ignored when `StyleSheet` is set. |
 | `PaintFormControls` | Draw form controls with their look for a host that shows the page: a check box's check mark and a radio button's dot (in `accent-color`), a text field's value or placeholder, a button's label (`Submit` and `Reset` by default), a drop-down's chosen option and arrow, and a range's track and thumb. Everything is drawn from the control's own CSS, so borders, backgrounds, padding, fonts and colours apply. Off by default, which keeps a control the plain box it is in a PDF; it takes precedence over `CollectFormFields` for how a control is drawn, so a host can collect the fields and still show them. |
 | `TextSpacing` | Spacing applied over the document's own for a reader who needs more room around text: line height, paragraph spacing, letter spacing and word spacing as multiples of the font size. `TextSpacingOverrides.Wcag` is what WCAG 2.2 success criterion 1.4.12 asks a page to survive. Added to `UserStyleSheet` as `!important` rules, so it is ignored when `StyleSheet` is set. |
+| `StyleSheet` | A style sheet parsed ahead of time (`PeachBrackets.Building.StyleSheet`), applied in place of `UserStyleSheet`, so the same parsed rules serve many documents. It is not changed by loading. When it is set, `UserStyleSheet`, `FontScale` and `TextSpacing` (which are added to `UserStyleSheet`) are ignored. |
+| `Input` | The pointing devices the `hover`, `pointer`, `any-hover` and `any-pointer` media features report (`InputCapabilities.Mouse`, `Touch` or `None`, or your own combination). See [Restyling in place](#restyling-in-place). |
+| `IncrementalRestyle` | On by default. A change of pointer or focus state (`:hover`, `:active`, `:focus`) that only changes how something is painted is applied to the styles in place, instead of the document being loaded and laid out again; anything else still loads again. `false` always loads again. |
+| `PageNumberOffset`, `TotalPagesOverride` | For a document that is one part of a larger one: the number of pages before it (added to `counter(page)` in margin boxes and running elements; `@page :first` and `:left` still go by the place in this document), and the number `counter(pages)` shows in place of this document's own page count (null, the default, shows its own). |
 | `UserStyleSheet` | CSS applied after the built-in defaults and before the document's own style sheets. |
 | `SynchronousOnly` | The document needs nothing asynchronous; see [Synchronous layout](#synchronous-layout). |
 | `IgnoreAuthorStyleSheets` | Drop the document's own `<style>` and `<link rel=stylesheet>` rules, leaving the defaults and `UserStyleSheet`. |
@@ -616,6 +620,10 @@ small things, which `FontDefaults` provides: `DefaultFamily` and `DefaultSizePoi
 family it stands for) and `ToAxisSettings` (the encoded `font-variation-settings` as font axes). `DataUri.TryDecode` decodes a `data:` URI,
 percent-decoding before base64-decoding as the URL standard does, and `PeachBrackets.Svg.SvgGlyphPainter` is the `ISvgGlyphPainter` that paints
 SVG-in-OpenType glyphs onto the canvas a `RenderContext` hands out.
+
+## Errors
+
+A failure of the engine itself - no font can be found for the text (neither the named family nor the default), a document nested deeper than the engine will follow, a style sheet imported without a container, a margin box that cannot be built - is thrown as `PeachPDF.HtmlRenderException`. The class keeps the `PeachPDF` namespace so PeachPDF and this package share one exception type. Its `RenderErrorType` (`HtmlRenderErrorType`: `General`, `CssParsing`, `HtmlParsing`, `Image`, `Paint`, `Layout`, `KeyboardMouse`, `Iframe`, `ContextMenu`) names the pipeline phase it came from, and `InnerException` carries the cause when there is one. A `SynchronousOnly` document that needs something asynchronous throws `InvalidOperationException` instead (see [Synchronous layout](#synchronous-layout)).
 
 ## Using it from PeachPDF
 

@@ -1,5 +1,5 @@
 # PeachPDF
-Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not depend on Puppeteer, wkhtmltopdf, or any other process to render the HTML to PDF. As a result, this should work in virtually any environment where .NET 10+ works. As a side benefit of being pure .NET, performance improvements in future .NET versions immediately benefit this library. 
+PeachPDF is a pure .NET HTML -> PDF rendering library. This library does not depend on Puppeteer, wkhtmltopdf, or any other process to render the HTML to PDF. As a result, this should work in virtually any environment where .NET 10+ works. As a side benefit of being pure .NET, performance improvements in future .NET versions immediately benefit this library. 
 
 **[Try it in your browser](https://peachpdf.net/demo/)** — the same library running on WebAssembly, rendering your own HTML, MHTML or ZIP with nothing uploaded anywhere.
 
@@ -16,8 +16,9 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 - Gradients (`linear-gradient`, `radial-gradient`, `conic-gradient`, and repeating variants) with CSS Color Level 4 interpolation
 - CSS Paged Media: `@page` rules, named pages, margin boxes, and running headers/footers via `string-set`/`string()` and `position: running()`/`element()`
 - Automatic [PDF metadata extraction](https://peachpdf.net/html-css-support.html#pdf-metadata-extraction) from HTML `<title>` and `<meta>` elements
-- Optional Tagged PDF (PDF/UA) output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see `PdfGenerateConfig.EnableTaggedPdf`)
-- Optional PDF/A (ISO 19005) conformance — parts 1, 2, and 3, each with visual-only (B), guaranteed-text-extraction (U), and accessible (A) levels (see `PdfGenerateConfig.PdfAConformance`) — including file attachments for PDF/A-3 (see `PdfGenerateConfig.Attachments`) and ZUGFeRD / Factur-X hybrid e-invoices (see `PdfGenerateConfig.FacturX`)
+- Optional Tagged PDF output — logical structure tree, automatic document language, CSS-driven tag mapping via `-peachpdf-pdf-tag-type` (see `PdfGenerateConfig.EnableTaggedPdf`) — and PDF/UA-1 and PDF/UA-2 conformance (see `PdfGenerateConfig.PdfUAConformance`)
+- Optional PDF/A (ISO 19005) conformance — parts 1 to 4 (A-1: levels A and B; A-2 and A-3: levels A, B and U; A-4: the base level plus A-4e and A-4f; see `PdfGenerateConfig.PdfAConformance`) — including file attachments for PDF/A-3 (see `PdfGenerateConfig.Attachments`) and ZUGFeRD / Factur-X hybrid e-invoices (see `PdfGenerateConfig.FacturX`)
+- Optional PDF/X (print-production) conformance — X-1a, X-3, X-4 and X-6 (see `PdfGenerateConfig.PdfXConformance`)
 - Optional AES-256 encryption — user and owner passwords and permissions (print, copy, read-only, and more) — using only .NET's own cryptography (see `PdfGenerateConfig.Encryption`)
 - Automatic PDF outline (bookmark sidebar) generation from headings, with full CSS control via `bookmark-level`/`bookmark-label`/`bookmark-state` (CSS Generated Content Module Level 3) — no configuration required
 - Web fonts (`@font-face`), custom fonts loaded from a stream, and system font discovery — with per-character font matching (`@font-face` `unicode-range` and coverage-based fallback across the `font-family` stack), supplementary-plane text via `cmap` format-12, and searchable/selectable `COLR`/`CPAL` color emoji rendered as native PDF vectors
@@ -25,13 +26,11 @@ Peach PDF is a pure .NET HTML -> PDF rendering library. This library does not de
 
 See [HTML & CSS Support](https://peachpdf.net/html-css-support.html) for the full compatibility matrix, [Supported SVG Features](https://peachpdf.net/supported-svg-features.html) for the full SVG compatibility matrix, and [Supported MathML Features](https://peachpdf.net/supported-mathml-features.html) for the full MathML compatibility matrix.
 
-> **Breaking change — spec-correct CSS pixels:** `px` lengths now resolve at the CSS-specified physical ratio (`1px = 1/96in = 0.75pt`) everywhere — layout, borders, images, and `@page` geometry — matching browser print output. Earlier versions treated `1px` as `1pt` for non-font lengths, rendering px-sized content 33% larger than its true CSS size; px-derived lengths shrink by ×0.75 when upgrading. Absolute units (`pt`/`mm`/`cm`/`in`/`pc`) and px font sizes (which already used the correct ratio) are unaffected. See [Length units](https://peachpdf.net/html-css-support.html#length-units).
-
 ## PeachPDF Requirements
 
 - .NET 10 or newer (every currently-supported .NET version, per [Microsoft's .NET support policy](https://dotnet.microsoft.com/platform/support/policy/dotnet-core)). Which PeachPDF releases receive fixes, and on which .NET versions, is set out in the [support policy](https://peachpdf.net/support.html#support-policy).
 
-_Note: This package embeds a PDF writing engine derived from PDFsharp directly in its source tree; that engine carries its own license (see `src/drawing/PeachDrawing.PDF/Engine/LICENSE.md`), but the end result is still open source_
+_Note: This package embeds a PDF writing engine derived from PDFsharp directly in its source tree; that engine carries its own license (see the [License](https://peachpdf.net/license.html) page), but the end result is still open source_
 
 Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved. This software is based in part on the work of the FreeType Team (see [License](https://peachpdf.net/license.html)).
 
@@ -49,6 +48,9 @@ dotnet add package PeachPDF
 Simple example to render PDF to a Stream. All images and assets must be local to the file on the file system or in data: URIs
 
 ```csharp
+using PeachPDF;
+using PeachPDF.Network; // the network loaders below
+
 PdfGenerateConfig pdfConfig = new(){
   PageSize = PageSize.Letter,
   PageOrientation = PageOrientation.Portrait
@@ -61,6 +63,33 @@ var stream = new MemoryStream();
 var document = await generator.GeneratePdf(html, pdfConfig);
 document.Save(stream);
 ```
+
+### Configuring the output
+
+`PdfGenerateConfig` controls page geometry, the PDF flavor, metadata and security. A few common settings:
+
+```csharp
+PdfGenerateConfig pdfConfig = new()
+{
+  PageSize = PageSize.A4,
+  MarginTop = 40, MarginBottom = 40, MarginLeft = 30, MarginRight = 30,   // points
+  Metadata = new PdfDocumentMetadata { Title = "Q3 report", Author = "Finance" },
+  EnableTaggedPdf = true,                    // logical structure tree (accessibility)
+  PdfUAConformance = PdfUAConformance.UA1,   // PDF/UA-1
+  PdfAConformance = PdfAConformance.PdfA2A   // PDF/A-2a, the level that pairs with PDF/UA-1
+};
+```
+
+Title, author, subject and keywords also come from the HTML `<title>` and `<meta>` elements when `Metadata` is not set. Encryption (AES-256) is configured separately, because PDF/A and PDF/X do not allow it:
+
+```csharp
+PdfGenerateConfig secured = new()
+{
+  Encryption = PdfEncryptionOptions.ReadOnly(userPassword: "open-me", ownerPassword: "owner-secret")
+};
+```
+
+Other `PdfGenerateConfig` options worth knowing: `PdfVersion` (PDF 2.0 by default, `Pdf17` for older readers), `PdfXConformance`, `Attachments` and `FacturX` (embedded files and e-invoices), `Linearize` (fast web view), `CompressContentStreams`, `EnableInteractivePdfForms`, `PreferredColorScheme`, `AllowLocalFileAccess` (turn off when rendering untrusted HTML), and `RasterizationDpi` for the few effects drawn as bitmaps. See [Usage Examples](https://peachpdf.net/usage-examples.html) for each of them in context.
 
 ### Rendering an MHTML file
 
@@ -126,7 +155,7 @@ document.Save(stream);
 
 Note that loading resources using relative paths resolves against the configured `NetworkLoader`'s `BaseUri` (e.g. an `HttpClientNetworkLoader` or `FileUriNetworkLoader`), or a `<base href>` element if the HTML has one. With the default loader, relative paths resolve against the current working directory and load from the local file system. `file:` URIs are always loaded from disk regardless of which loader is configured, the same way `data:` URIs always are.
 
-A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](docs/usage-examples.md#rendering-a-local-html-file) for details.
+A local file's content type is resolved from the OS's own MIME mechanism by default (Windows shell associations, macOS/iOS Uniform Type Identifiers, or Linux `/etc/mime.types`), falling back to a built-in set for HTML, CSS, SVG, PeachPDF's raster image formats, and TTF/OTF/WOFF/WOFF2 fonts. For a local file with an extension outside that set, register its MIME type with the OS so PeachPDF can resolve it. See [Rendering a local HTML file](https://peachpdf.net/usage-examples.html#rendering-a-local-html-file) for details.
 
 ### Building a document declaratively
 
@@ -152,11 +181,13 @@ var stream = new MemoryStream();
 document.Save(stream);
 ```
 
-See the [Declarative Document-Building API guide](docs/declarative-api.md) for the full surface.
+See the [Declarative Document-Building API guide](https://peachpdf.net/declarative-api.html) for the full surface.
 
-Several documents merge into one PDF with `DocumentMerge` (original or continuous page numbers, see the guide), existing PDFs go before, between and after the generated pages with `doc.Append(...)` / `doc.Prepend(...)` on the builder ([Adding existing PDFs](docs/declarative-api.md#adding-existing-pdfs)), and existing PDF files are merged, cut up, layered and protected with `PdfOperation` from [PeachDrawing.PDF](docs/peachdrawing-pdf.md#merging-and-working-on-existing-pdfs):
+Several documents merge into one PDF with `DocumentMerge` (original or continuous page numbers, see the guide), existing PDFs go before, between and after the generated pages with `doc.Append(...)` / `doc.Prepend(...)` on the builder ([Adding existing PDFs](https://peachpdf.net/declarative-api.html#adding-existing-pdfs)), and existing PDF files are merged, cut up, layered and protected with `PdfOperation` from [PeachDrawing.PDF](https://peachpdf.net/peachdrawing-pdf.html#merging-and-working-on-existing-pdfs):
 
 ```csharp
+using PeachDrawing.PDF;
+
 PdfOperation.LoadFile("a.pdf").TakePages("1-5").MergeFile("b.pdf", "1,3,5").Save("merged.pdf");
 ```
 
@@ -168,7 +199,7 @@ If you just want to convert HTML to PDF from the shell, the standalone **`peachp
 peachpdf report.html -o report.pdf
 ```
 
-Prebuilt binaries for Windows (x64/ARM64), Linux (x64/ARM64), and macOS (Apple Silicon) are attached to each [GitHub Release](https://github.com/jhaygood86/PeachPDF/releases). See the [Command-Line Tool guide](docs/cli.md) for the full option reference.
+Prebuilt binaries for Windows (x64/ARM64), Linux (x64/ARM64), and macOS (Apple Silicon) are attached to each [GitHub Release](https://github.com/jhaygood86/PeachPDF/releases). See the [Command-Line Tool guide](https://peachpdf.net/cli.html) for the full option reference.
 
 ## Thread safety
 
@@ -231,6 +262,16 @@ Web fonts loaded via @font-face (`url()`, with fallback lists, and `local()`) ar
 ### Supported font formats
 
 We support TrueType, CFF, WOFF, and WOFF2 font formats.
+
+## Related packages
+
+PeachPDF is built on libraries you can also use on their own, all versioned together:
+
+- [PeachBrackets](https://peachpdf.net/peachbrackets.html) — the HTML/CSS/SVG/MathML engine without any PDF: load, lay out and paint pages onto any canvas. Hosts: [WinUI](https://peachpdf.net/peachbrackets-winui.html), [Android](https://peachpdf.net/peachbrackets-android.html), [Apple](https://peachpdf.net/peachbrackets-apple.html).
+- [PeachDrawing.PDF](https://peachpdf.net/peachdrawing-pdf.html) — the PDF writer and PDF operations (merge, split, overlay, encrypt, linearize), usable with no HTML.
+- [PeachDrawing.Core](https://peachpdf.net/peachdrawing-core.html) — the `Canvas` abstraction, with backends [PeachDrawing](https://peachpdf.net/peachdrawing.html) (CPU raster), [PeachDrawing.Svg](https://peachpdf.net/peachdrawing-svg.html), [PeachDrawing.Skia](https://peachpdf.net/peachdrawing-skia.html), [PeachDrawing.Win2D](https://peachpdf.net/peachdrawing-win2d.html) and [PeachDrawing.CoreGraphics](https://peachpdf.net/peachdrawing-coregraphics.html).
+- [PeachDrawing.Text](https://peachpdf.net/peachdrawing-text.html) — fonts, shaping, bidi, hyphenation and paragraph layout.
+- [PeachImage](https://peachpdf.net/peachimage.html) — image decoding and encoding.
 
 ## Sponsorship
 

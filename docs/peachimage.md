@@ -286,8 +286,9 @@ load, such as a service resizing many uploads at once, where reusing buffers cut
 ## API reference
 
 The [PeachImage API reference](api/PeachImage/index.md) documents every public type and member. It sits beside the references for
-[PeachPDF](api/index.md), [PeachDrawing.Core](api/PeachDrawing.Core/index.md), [PeachDrawing](api/PeachDrawing/index.md) and
-[PeachDrawing.Text](api/PeachDrawing.Text/index.md), and the pages of one link to the pages of another where they meet: a
+[PeachPDF](api/index.md), [PeachDrawing.Core](api/PeachDrawing.Core/index.md), [PeachDrawing](api/PeachDrawing/index.md),
+[PeachDrawing.PDF](api/PeachDrawing.PDF/index.md), [PeachDrawing.Svg](api/PeachDrawing.Svg/index.md), [PeachDrawing.Skia](api/PeachDrawing.Skia/index.md),
+[PeachDrawing.Win2D](api/PeachDrawing.Win2D/index.md), [PeachDrawing.Text](api/PeachDrawing.Text/index.md) and [PeachBrackets](api/PeachBrackets/index.md), and the pages of one link to the pages of another where they meet: a
 `RasterCanvas.Save` page links to the `EncoderOptions` it takes here.
 
 ## License

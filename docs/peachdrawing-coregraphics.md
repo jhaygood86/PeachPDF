@@ -15,8 +15,8 @@ and `ios` workloads installed, and uses the .NET macOS and iOS bindings for Core
 
 > **Status: pre-1.0.** The public surface is `CoreGraphicsCanvas`, `CoreGraphicsRenderContext`, `CoreGraphicsComposer`,
 > `CoreGraphicsComposerOptions`, `CoreGraphicsTextEngine`, `CoreGraphicsImageCodec`, `CoreGraphicsImageFormat`, `CoreGraphicsLinkMap`,
-> `CoreGraphicsLink`, `CoreGraphicsLinkOptions`, `CoreGraphicsLinkActivatingEventArgs`, `CoreGraphicsCursorArea`, `CoreGraphicsSemanticRegion` and
-> `ICoreGraphicsLinkLauncher`; `PublicApi.txt` beside the project is the reviewed snapshot.
+> `CoreGraphicsLink`, `CoreGraphicsLinkOptions`, `CoreGraphicsLinkActivatingEventArgs`, `CoreGraphicsCursorArea`, `CoreGraphicsSemanticRegion`,
+> `CoreGraphicsGlyphPlacement` and `ICoreGraphicsLinkLauncher`; `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## You supply the context
 
@@ -149,7 +149,8 @@ The codec is chosen when the context is made (`CoreGraphicsImageCodec`).
 A link is not part of a picture of pixels. `AddLink`, `AddDestinationLink`, `AddCursor` and `AddSemanticRegion` on the **page** canvas (not a layer or tile, whose
 coordinates mean nothing to a pointer) are recorded in `canvas.Links`, a `CoreGraphicsLinkMap` that outlives the canvas. The host hit-tests the pointer
 (`HitTest`, or `HitTestDevice` for a position in the context's own pixels before your matrix) and activates it with `TryActivateAsync`. Nothing is launched
-while painting. There is **no default launcher** (the package does not know your app's navigation): supply an `ICoreGraphicsLinkLauncher` over `NSWorkspace` or
+while painting. `canvas.Links.CursorAt` (or `CursorAtDevice`) gives the cursor area under a point, and `SemanticAt` (or `SemanticAtDevice`) the topmost
+`CoreGraphicsSemanticRegion`, which is what a host needs to answer VoiceOver for what is drawn there; `Cursors` and `Semantics` list them all. There is **no default launcher** (the package does not know your app's navigation): supply an `ICoreGraphicsLinkLauncher` over `NSWorkspace` or
 `UIApplication`, or handle `LinkActivating`; only `http`, `https`, `mailto` and `tel` are opened unless you allow more.
 
 ## Lifecycle

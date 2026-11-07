@@ -11,9 +11,10 @@ version number for every release.
 dotnet add package PeachDrawing.PDF
 ```
 
-> **Status: pre-1.0.** The package's public surface is everything on this page - `PdfRenderContext`, `PdfComposer`,
-> `PdfComposerPage`, `PdfCanvas`, the document options, links, bookmarks, the tag recorder and the form builder - and
-> `PublicApi.txt` is the exact, machine-checked snapshot of it. PeachPDF is the package's other consumer: it renders HTML and CSS
+> **Status: pre-1.0.** The package's public surface is `PdfRenderContext`, `PdfComposer`, `PdfComposerPage`, `PdfCanvas`, the
+> document options and conformance enums, colour management (`ColorOptions`), links, bookmarks, the tag recorder and its structure
+> details, the form and annotation builders, and the `PdfOperation`/`PdfPageSource` page-import types - all described on this page -
+> and `PublicApi.txt` is the exact, machine-checked snapshot of it. PeachPDF is the package's other consumer: it renders HTML and CSS
 > onto these same canvases and builds PDF/A, tagged, linked and interactive documents through this same API, so this is the PDF
 > writer PeachPDF uses, not a copy built beside it. Until 1.0, the public API may change between releases.
 
@@ -52,7 +53,8 @@ immediately for installed families. Beyond that:
   name. A host with no installed fonts (a browser running WebAssembly, say) has to do this before it can draw any text.
 - **`PixelsPerPoint`** is the scale between the units you draw in and PDF points, `1.0` by default: one drawing unit is one point.
   Set it **before** asking the context for fonts: a font is sized in the context's units, so a font made earlier keeps the size it
-  was made with. A context with `PixelsPerPoint = 2` draws in half-points, which is how PeachPDF lays HTML out in CSS pixels.
+  was made with. A context with `PixelsPerPoint = 2` draws in half-points (one drawing unit is half a point); PeachPDF sets it to
+  `PixelsPerInch / 72`, so its default of 72 pixels per inch gives `1.0`.
 - **`GetCssMediaType`** answers `print` where a document offers it, since a PDF is a print medium.
 
 The class is open for deriving: a host adds what is specific to it by overriding `OnFontFamilyAdded` (react when a font is registered)
@@ -91,7 +93,7 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `Version` | `Pdf20` (the default) or `Pdf17`. A 1.7 file whose content needs nothing newer is written with a 1.4 header. |
 | `Linearize` | Writes the file in the linearized ("fast web view") layout of ISO 32000-1 Annex F: the first page's objects first, then the other pages in order, with hint tables, so a viewer fetching the file over a network can show the first page before the rest has arrived. Off by default; works with AES-256 encryption. `PdfOperation.Linearize()` sets it for an operation's output, and `PdfGenerateConfig.Linearize` / the CLI's `--linearize` for PeachPDF's. |
 | `CompressContentStreams`, `BrotliCompression` | Content streams are Flate-compressed by default. Turn compression off to read the drawing operators in a text editor; Brotli (PDF 2.0) is opt-in, because not every reader decodes it yet. |
-| `Conformance`, `XConformance` | The PDF/A and PDF/X level the file claims - see [Archival and print conformance](#archival-and-print-conformance). |
+| `Conformance`, `XConformance`, `UAConformance` | The PDF/A, PDF/X and PDF/UA level the file claims - see [Archival and print conformance](#archival-and-print-conformance) and [Tagged PDF](#tagged-pdf). |
 | `ColorOptions` | Colour management: the output intent profile and how colours are converted to it. |
 | `EmbeddedFiles`, `FacturX` | Files attached to the document. |
 | `WriteXmpMetadata`, `CustomXmpProperties` | The XMP packet, written for you whenever a PDF/A level is claimed. |
@@ -100,6 +102,8 @@ rather than producing a file whose header disagrees with how its pages were writ
 | `Encryption` | A `PdfEncryptionOptions`: AES-256 password protection with a user password, an owner password and a `PdfPermissions` set. |
 
 The options are read when they are applied: a later change to the object does not reach a document already configured.
+
+`composer.ConsolidateImages()` makes a document that embeds the same picture many times store it once: call it after the last page is drawn and before `Save`, and identical image data shares one object.
 
 ## `PdfCanvas`: drawing a page
 
@@ -154,7 +158,9 @@ Set `Conformance` to a `PdfAConformance` (`PdfA1B`, `PdfA2B`, `PdfA2A`, `PdfA3B`
 header version - and refuses what it forbids: encryption, transparency in a level that has none, an image in a colour space the output
 intent cannot describe. A violation is reported when the offending content is drawn, as an exception derived from
 `CanvasConstraintException`, rather than discovered by a validator afterwards. `ColorOptions` carries the ICC profile the output intent
-names and how colours are converted to it (`PreserveAsAuthored`, `ConvertToOutputIntent`, `GrayscaleViaK`, `ConvertToProfile`).
+names (`OutputIntentProfile`, `OutputIntentIdentifier`) and how colours are converted to it (`ConversionMode`: `PreserveAsAuthored`, `ConvertToOutputIntent`,
+`GrayscaleViaK`, `ConvertToProfile`), plus the `RenderingIntent` (`Perceptual`, `RelativeColorimetric`, `Saturation`, `AbsoluteColorimetric`),
+`UseBlackPointCompensation`, `BlackGeneration` (`UseTrueBlack` or `UseRichBlack`) and a `FallbackCmykProfile` for CMYK content the output intent cannot describe.
 
 `EmbeddedFiles` attaches files to the document - the PDF/A-3 and PDF/A-4F way to carry a source or data file next to a page rendering.
 A `PdfEmbeddedFile` has the bytes, a file name, a MIME type, a description, a modification date and a `PdfEmbeddedFileRelationship`
@@ -228,7 +234,8 @@ that runs across a page break is one element). `OpenContentElement` tags what is
 elements opened inside it, `OpenListItemBodyElement` and `OpenPhantomAncestors` cover the list-item and anonymous-wrapper shapes HTML
 layout produces, `AttachMathMlSource` attaches a formula's MathML as an associated file, and `LinkAnnotation(key, link)` ties a `PdfLink` to
 the element of the content it covers, which PDF/UA requires. Pass `requireAlternateText: true` to `CreateTagRecorder` to make a figure
-without alternate text an error instead of a silent gap.
+without alternate text an error instead of a silent gap. The overloads that take a `PdfStructureDetails` give an element its `Alt`, `ActualText`, `Title`, `Language`
+and `Id`, and `Attributes`: a list of `PdfStructureAttributes` (an owner such as `Layout` or `List`, and named `PdfStructureAttributeValue`s built with `FromName`, `FromNumber`, `FromText`, `FromBoolean` or `FromList`).
 
 ## Interactive forms
 
@@ -236,7 +243,7 @@ without alternate text an error instead of a silent gap.
 A definition has a `Kind` (`Text`, `Checkbox`, `Radio`, `Select`, `List`, `PushButton`, `Signature`), a `Name`, a `Value` (or `IsChecked`, or `Options` for a drop-down), the
 `Bounds` on the page in points, and the flags a field can carry (`ReadOnly`, `Required`, `Password`, `MaxLength`, `CombCells`, ...). The
 look of each state is drawn by your `IPdfFormAppearance`, which receives a `Canvas` the size of the control, so a field looks like the
-rest of your page. Radio buttons that share a `Name` are one field. A text field can be `Multiline`, a list box `MultiSelect`, and a push button's `Value` is its caption; a signature field is unsigned.
+rest of your page. A drop-down or list box lists its choices as `PdfFormOption` values (`value`, `label`, `selected`). Radio buttons that share a `Name` are one field. A text field can be `Multiline`, a list box `MultiSelect`, and a push button's `Value` is its caption; a signature field is unsigned.
 
 `composer.CreateAnnotationBuilder(context)` returns a `PdfAnnotationBuilder` for the annotations that are not links or form fields. `AddAnnotation(page, definition)` places a `PdfAnnotationDefinition`: its `Subtype` (`Highlight`, `Text`, `Square`, `Stamp`, `Ink`, ...), `Bounds`, `Contents`, `Title`, colours, `Opacity`, `BorderWidth`, the `QuadPoints` of a text markup, the `InkStrokes` of a drawing, and a `PaintAppearance` that draws how it looks.
 

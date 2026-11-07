@@ -3,45 +3,63 @@
 - title: Getting Started
   url: /getting-started.html
 - title: Guides
-  children:
-    - title: Architecture
-      url: /architecture.html
-    - title: HTML & CSS
-      url: /html-css-support.html
-    - title: SVG
-      url: /supported-svg-features.html
-    - title: MathML
-      url: /supported-mathml-features.html
-    - title: Examples
-      url: /usage-examples.html
-    - title: Declarative API
-      url: /declarative-api.html
-    - title: Command-line tool
-      url: /cli.html
-    - title: PeachDrawing.Text
-      url: /peachdrawing-text.html
-    - title: PeachDrawing.Core
-      url: /peachdrawing-core.html
-    - title: PeachDrawing
-      url: /peachdrawing.html
-    - title: PeachDrawing.PDF
-      url: /peachdrawing-pdf.html
-    - title: PeachDrawing.Svg
-      url: /peachdrawing-svg.html
-    - title: PeachDrawing.Win2D
-      url: /peachdrawing-win2d.html
-    - title: PeachDrawing.Skia
-      url: /peachdrawing-skia.html
-    - title: PeachDrawing.CoreGraphics
-      url: /peachdrawing-coregraphics.html
-    - title: PeachBrackets
-      url: /peachbrackets.html
-    - title: PeachBrackets.Apple
-      url: /peachbrackets-apple.html
-    - title: PeachImage
-      url: /peachimage.html
-    - title: Testing
-      url: /testing.html
+  sections:
+    - title: Using PeachPDF
+      children:
+        - title: Examples
+          url: /usage-examples.html
+        - title: Declarative API
+          url: /declarative-api.html
+        - title: Command-line tool
+          url: /cli.html
+    - title: Rendering reference
+      children:
+        - title: HTML & CSS
+          url: /html-css-support.html
+        - title: SVG
+          url: /supported-svg-features.html
+        - title: MathML
+          url: /supported-mathml-features.html
+        - title: Accessibility
+          url: /accessibility.html
+    - title: Drawing libraries
+      children:
+        - title: PeachDrawing.Core
+          url: /peachdrawing-core.html
+        - title: PeachDrawing
+          url: /peachdrawing.html
+        - title: PeachDrawing.PDF
+          url: /peachdrawing-pdf.html
+        - title: PeachDrawing.Svg
+          url: /peachdrawing-svg.html
+        - title: PeachDrawing.Skia
+          url: /peachdrawing-skia.html
+        - title: PeachDrawing.Win2D
+          url: /peachdrawing-win2d.html
+        - title: PeachDrawing.CoreGraphics
+          url: /peachdrawing-coregraphics.html
+    - title: Text and images
+      children:
+        - title: PeachDrawing.Text
+          url: /peachdrawing-text.html
+        - title: PeachImage
+          url: /peachimage.html
+    - title: HTML engine and views
+      children:
+        - title: PeachBrackets
+          url: /peachbrackets.html
+        - title: PeachBrackets.WinUI
+          url: /peachbrackets-winui.html
+        - title: PeachBrackets.Android
+          url: /peachbrackets-android.html
+        - title: PeachBrackets.Apple
+          url: /peachbrackets-apple.html
+    - title: Project
+      children:
+        - title: Architecture
+          url: /architecture.html
+        - title: Testing
+          url: /testing.html
 - title: Showcase
   url: /showcase.html
 - title: Try it

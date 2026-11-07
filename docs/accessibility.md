@@ -38,6 +38,11 @@ links come from the laid-out page.
 | `Controls`, `Owns`, `FlowTo`, `Details`, `ErrorMessages`, `LabelledBy`, `DescribedBy`, `ActiveDescendant` | The nodes that `aria-controls`, `aria-owns`, `aria-flowto`, `aria-details`, `aria-errormessage`, `aria-labelledby`, `aria-describedby` and `aria-activedescendant` point at |
 | `Bounds` | One rectangle for each page it is on, in points from the top-left of the sheet |
 | `Id` | A name that is the same each time the document is laid out, so a reader that is on a node stays there |
+| `Value`, `ValueMin`, `ValueMax`, `ValueText` | The current number, least and most of a range (a progress bar, meter, slider, scroll bar or spin button; `Value` is null for a node that is not one) and its value as text |
+| `Parent`, `Children`, `DescendantsAndSelf()` | Where the node sits in the tree and a walk below it |
+| `FontFamily`, `FontSize`, `FontWeight`, `IsItalic`, `Underline`, `Strikethrough`, `ForegroundColor`, `BackgroundColor` | The text attributes of a block, from its style, for a host's text pattern |
+
+The tree itself also finds nodes: `FindById(id)` looks a node up by its `Id`, `NodeAt(pageIndex, x, y)` is the node under a point (what `document.GetAccessibilityNodeAt` calls), `FocusOrder` lists the nodes the keyboard steps through in the order HTML defines and `NextFocus(current, forward)` gives the next (or previous) stop after a node, returning null past the ends. `AccessibilityTreeDiff` compares two trees, which is how a host tells its platform nothing changed, that parts came or went, or that a property did.
 
 Elements that mean nothing to a reader (`div`, `span`, a `section` that has no name) are not in the tree; their content is. Content that is not
 shown is not in it either: `display: none`, `visibility: hidden`, `hidden`, `inert`, and anything inside an `aria-hidden="true"` element. An element
@@ -124,7 +129,7 @@ figure alternative text, and shows the title in the viewer. See [Generating PDF/
 page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
 level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
 readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
-nesting). The Skia and Win2D canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`) beside the links, and
+nesting). The Skia, Win2D and CoreGraphics canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`, and `CoreGraphicsLinkMap.Semantics` on Apple platforms) beside the links, and
 `SemanticAt` finds the innermost one under a point, which is what a host's touch exploration or UI Automation hit test needs.
 
 ## Form controls
@@ -194,7 +199,7 @@ progress bar and an image with a description through it with the platform's scre
 Anything that is announced wrongly, silently or twice is worth recording with the page and the setting, since the tree it came from can then be dumped
 (`adb shell uiautomator dump` on Android, the Accessibility Insights tool on Windows) and compared with what the document means.
 
-## Limits of this version
+## Limits
 
 - A name that comes from an element that is not shown (`display: none`) is not read, because it is never laid out; `aria-labelledby` pointing at one
   gives nothing, and no relation can point at one.

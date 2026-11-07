@@ -38,7 +38,7 @@ layout: default
     </div>
     <div class="card">
       <h3>Standards-grade PDF output</h3>
-      <p>Optional tagged PDF (PDF/UA) with CSS-driven tag mapping, PDF/A parts 1–3 (with file attachments and ZUGFeRD/Factur-X e-invoices), PDF/X-1a/3/4 with CMYK and ICC color management, and PDF 2.0. Metadata flows in automatically from <code>&lt;title&gt;</code> and <code>&lt;meta&gt;</code>.</p>
+      <p>Optional tagged PDF (PDF/UA) with CSS-driven tag mapping, PDF/A parts 1–4 (with file attachments and ZUGFeRD/Factur-X e-invoices), PDF/X-1a/3/4/6 with CMYK and ICC color management, and PDF 2.0. Metadata flows in automatically from <code>&lt;title&gt;</code> and <code>&lt;meta&gt;</code>.</p>
     </div>
     <div class="card">
       <h3>Text in every script</h3>
@@ -134,11 +134,15 @@ layout: default
     </a>
     <a class="card card-link" href="{{ '/html-css-support.html' | relative_url }}">
       <h3>HTML &amp; CSS Support</h3>
-      <p>The full compatibility matrix of elements, properties, selectors, at-rules, and MathML — including gaps and extensions.</p>
+      <p>The full compatibility matrix of elements, properties, selectors, and at-rules — including gaps and extensions.</p>
     </a>
     <a class="card card-link" href="{{ '/supported-svg-features.html' | relative_url }}">
       <h3>SVG Features</h3>
       <p>Everything supported in inline and standalone SVG, rendered as real vector PDF content.</p>
+    </a>
+    <a class="card card-link" href="{{ '/supported-mathml-features.html' | relative_url }}">
+      <h3>MathML Features</h3>
+      <p>Everything supported in inline <code>&lt;math&gt;</code>, laid out with the MathML Core algorithm and drawn as vector PDF content.</p>
     </a>
     <a class="card card-link" href="{{ '/usage-examples.html' | relative_url }}">
       <h3>Usage Examples</h3>
@@ -166,7 +170,7 @@ layout: default
     </a>
     <a class="card card-link" href="{{ '/api/' | relative_url }}">
       <h3>API Reference</h3>
-      <p>Generated reference for every public type and member of PeachPDF and the PeachDrawing packages, always in sync with the latest source.</p>
+      <p>Generated reference for every public type and member of PeachPDF, the PeachDrawing and PeachBrackets packages, and PeachImage, always in sync with the latest source.</p>
     </a>
   </div>
 </section>
@@ -176,7 +180,7 @@ layout: default
   <p class="landing-lede">A PDF can contain exactly the right operators and still look wrong, so PeachPDF is tested on the pixels as well as the bytes.</p>
   <div class="card-grid">
     <div class="card">
-      <h3>{% if site.data.tests %}{{ site.data.tests.total }}{% else %}3,000+{% endif %} automated tests</h3>
+      <h3>{% if site.data.tests %}{{ site.data.tests.total }}{% else %}10,000+{% endif %} automated tests</h3>
       <p>The parser, cascade, every layout engine, painting, SVG, fonts, and PDF output — run against .NET 10 and 11.</p>
     </div>
     <div class="card">
@@ -191,6 +195,14 @@ layout: default
       <h3>Verified by rasterizing</h3>
       <p>Graphics work is checked by rendering the output with two independent engines — PDFium, Chrome's, and MuPDF — not only by inspecting PDF operators.</p>
     </div>
+  </div>
+  <p class="landing-lede">Read <a href="{{ '/testing.html' | relative_url }}">how PeachPDF is tested</a> →</p>
+</section>
+
+<section class="landing-section">
+  <h2 class="landing-h2">Packages you can use on their own</h2>
+  <p class="landing-lede">PeachPDF is built from libraries that each ship as a NuGet package of their own, at the same version.</p>
+  <div class="card-grid">
     <a class="card card-link" href="{{ '/peachdrawing-text.html' | relative_url }}">
       <h3>PeachDrawing.Text</h3>
       <p>The font and text engine, with no third-party dependencies: loading and matching fonts, bidirectional text, script itemization, hyphenation and emoji presentation, from a NuGet package of its own.</p>
@@ -203,8 +215,11 @@ layout: default
       <h3>PeachBrackets</h3>
       <p>The HTML, CSS, SVG and MathML engine inside PeachPDF, as a NuGet package of its own: load a document, lay it out into pages, and paint each page onto any canvas - a PDF page, a bitmap, or your own.</p>
     </a>
+    <a class="card card-link" href="{{ '/peachdrawing-core.html' | relative_url }}">
+      <h3>PeachDrawing.Core</h3>
+      <p>The drawing-surface abstraction every backend implements, with backends for the CPU, SVG, Skia, Win2D and CoreGraphics beside the PDF one.</p>
+    </a>
   </div>
-  <p class="landing-lede">Read <a href="{{ '/testing.html' | relative_url }}">how PeachPDF is tested</a> →</p>
 </section>
 
 <section class="landing-cta">

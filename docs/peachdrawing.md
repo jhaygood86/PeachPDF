@@ -11,8 +11,10 @@ compatible, and is versioned in lockstep with PeachPDF: the same version number 
 dotnet add package PeachDrawing
 ```
 
-> **Status: pre-1.0.** `RasterCanvas`, `RasterRenderContext` and `RasterSurface` are the package's full
-> public surface today - see `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF is the
+> **Status: pre-1.0.** `RasterCanvas` and `RasterRenderContext` are the package's centre, with the raster helpers
+> around them (`RasterLayerEffects`, `PathStroker`, `RasterSurfaceFactory`, `RasterSurfaceEncoding`, `TextOutlineBuilder`, `Warp`, `Homography`,
+> `DepthBuffer`/`DepthPlane`, `ColorMatrixFilter` and the `Filters` namespace: `GaussianBlur`, `DropShadow`, `FilterOps`, `Turbulence`).
+> `RasterSurface`, the pixel buffer they work on, lives in `PeachDrawing.Core`. See `PublicApi.txt` for the exact, machine-checked snapshot. PeachPDF is the
 > package's other consumer: `PdfCanvas.BeginRasterSurface` drives this exact `RasterCanvas`
 > implementation as its own raster fallback for effects PDF can't express as vector content (`filter:
 > blur()`, `backdrop-filter`, and the like) - this is not a copy built for PeachPDF's benefit, it is the one
@@ -101,7 +103,7 @@ rendering engine of its own**, so an OpenType font glyph defined by an embedded 
 table) falls back to its plain glyph outline instead of the SVG artwork - rendering an arbitrary SVG
 document is not a generic raster primitive, and `PeachPDF`'s own SVG engine is inextricably tied to its
 HTML/CSS/SVG layers. When PeachPDF drives a `RasterCanvas` as its own raster fallback, it supplies its SVG
-engine through an internal hook (`RenderContext.CreateSvgGlyphPainter`), so `SVG `-table glyphs render fully
+engine through a public hook (`RenderContext.CreateSvgGlyphPainter`, which returns an `ISvgGlyphPainter`), so `SVG `-table glyphs render fully
 correctly there; a standalone caller sees the same plain-outline fallback a font with no `SVG` table at all
 would get.
 

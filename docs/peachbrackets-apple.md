@@ -14,8 +14,10 @@ It targets `net10.0-macos` (macOS 11 and later) and `net10.0-ios` (iOS 15 and la
 (`dotnet workload install macos ios`) on a Mac. Because of that it is not in `PeachPDF.slnx`: build it by project. On macOS `HtmlView` is an `NSScrollView`;
 on iOS it is a `UIScrollView`. The two have the same members where the platforms allow, and differ where they do not (below).
 
-> **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types. This first version covers loading, painting, scrolling, zoom, pointer
-> state, links, selection and copy; see [Limits of this version](#limits-of-this-version).
+> **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types: `HtmlLinkActivatedEventArgs`, `HtmlLoadFailedEventArgs`,
+> `HtmlTappedEventArgs`, `HtmlTouchStartedEventArgs` (iOS), `HtmlFormSubmittingEventArgs`, `HtmlFormInvalidEventArgs` and `HtmlAnimationEventsEventArgs`;
+> `PublicApi.ios.txt` and `PublicApi.macos.txt` beside the project are the reviewed snapshots, one per platform because the two views differ. See
+> [Limits](#limits).
 
 ## Quick start
 
@@ -95,7 +97,7 @@ paints again with what loads.
 | `touch-action` | Not applicable to a mouse. | Scrolling and pinch are switched off for a touch where the document does not allow them. |
 | `user-select: none`, `pointer-events: none` | Text is not selected there and the pointer passes through. | The same. |
 
-## Limits of this version
+## Limits
 
 - Text input on iOS goes through `UIKeyInput`: ordinary typing, hardware keyboards and dictation work, but an input method that composes text in place (marked text, as for Chinese or Japanese) commits it only when the composition ends. macOS uses `NSTextInputClient` with marked text.
 - Taking the view out of its window discards the loaded document; it loads again from `Html` when the view returns, so form values, the selection and the zoom are not kept.

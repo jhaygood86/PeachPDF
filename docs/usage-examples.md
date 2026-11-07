@@ -13,6 +13,7 @@ using PeachPDF.Network;
 
 - [Thread safety](#thread-safety)
 - [Rendering HTML from a local string](#rendering-html-from-a-local-string)
+- [Rendering a local HTML file](#rendering-a-local-html-file)
 - [Rendering an MHTML file](#rendering-an-mhtml-file)
 - [Fetching HTML over HTTP](#fetching-html-over-http)
 - [Disabling local file access](#disabling-local-file-access)
@@ -21,6 +22,7 @@ using PeachPDF.Network;
 - [Saving a PDF to a file](#saving-a-pdf-to-a-file)
 - [Detecting text that was clipped away](#detecting-text-that-was-clipped-away)
 - [Crisp 1px borders at 100% zoom](#crisp-1px-borders-at-100-zoom)
+- [Whole-pixel border widths](#whole-pixel-border-widths)
 - [Rendering CSS animations as a still frame](#rendering-css-animations-as-a-still-frame)
 - [Fonts](#fonts)
 - [Rendering MathML formulas](#rendering-mathml-formulas)
@@ -29,6 +31,9 @@ using PeachPDF.Network;
 - [PDF 2.0 output](#pdf-20-output)
 - [Encrypting and password-protecting PDF output](#encrypting-and-password-protecting-pdf-output)
 - [Enabling interactive PDF forms](#enabling-interactive-pdf-forms)
+- [Generating PDF/A-conformant output](#generating-pdfa-conformant-output)
+- [Authoring colors in CMYK](#authoring-colors-in-cmyk)
+- [Generating PDF/X-conformant output](#generating-pdfx-conformant-output)
 - [Rasterized effects and resolution](#rasterized-effects-and-resolution)
 - [Flattening transparency for PDF/A-1 and PDF/X](#flattening-transparency-for-pdfa-1-and-pdfx)
 - [ASP.NET Core controller endpoint](#aspnet-core-controller-endpoint)
@@ -212,7 +217,7 @@ generator.AddFontFamilyMapping("serif", "Liberation Serif");
 
 The default font on a browser host is Liberation Sans; register a family under that name and it is used directly. Register something else and PeachPDF adopts the first family you register as the default, so text still renders. Note that font-family mapping is consulted only when the requested family isn't registered, and it is single-hop — every mapping has to name a real registered family.
 
-**WOFF2 and `hyphens: auto` need a registered Brotli decoder.** `System.IO.Compression.BrotliStream` throws `PlatformNotSupportedException` in a browser, and WOFF2's font tables and PeachPDF's hyphenation patterns are both Brotli-compressed — without a decoder, a WOFF2 font fails to load and `hyphens: auto` lays out text unhyphenated rather than failing the render. Register [`PeachDrawing.Text.Brotli`](peachdrawing-text.md#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam), a pure-managed decoder built for exactly this seam, once at startup:
+**WOFF2 and `hyphens: auto` need a registered Brotli decoder.** `System.IO.Compression.BrotliStream` throws `PlatformNotSupportedException` in a browser, and WOFF2's font tables and PeachPDF's hyphenation patterns are both Brotli-compressed — without a decoder, a WOFF2 font fails to load and `hyphens: auto` lays out text unhyphenated rather than failing the render. Register the pure-managed decoder in the repository's `PeachDrawing.Text.Brotli` project, built for exactly [this seam](peachdrawing-text.md#the-unicodehyphenationdictionary-data-and-its-brotli-decoder-seam), once at startup. It is not published as a NuGet package: add a project reference to `src/drawing/PeachDrawing.Text.Brotli` (or copy its sources) into your application.
 
 ```csharp
 using PeachDrawing.Text.Brotli;

@@ -26,7 +26,7 @@ using PeachPDF.Layout;
   - [Sectioned page numbers](#sectioned-page-numbers)
 - [Merging documents](#merging-documents)
 - [Adding existing PDFs](#adding-existing-pdfs)
-- [Known v1 limitations](#known-v1-limitations)
+- [Known limitations](#known-limitations)
 
 ## Quick start
 
@@ -495,7 +495,7 @@ var document = await generator.CreateDocument(doc =>
 
 A `DocumentMerge` part can use `Append` and `Prepend` too. With `UseContinuousPageNumbers()` on the merge the added pages are counted in the run; with original numbering they count only if the part's builder called `UseContinuousPageNumbers()` itself.
 
-## Known v1 limitations
+## Known limitations
 
 - **No `Placeholder` prototyping element** — unlike every other terminal method here, a placeholder has no CSS mapping at all, so it needs genuinely new paint code rather than a wrapper over an existing property.
 - **No per-image compression/DPI override, or `ShrinkToFit`/`ScaleToPageSize`** for a declarative document — each of these needs a re-run of the whole builder callback that a hand-built tree has no equivalent for; document-wide settings on `PdfGenerateConfig` (`DownscaleImages`, `PixelsPerInch`, ...) still apply.

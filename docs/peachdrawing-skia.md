@@ -15,7 +15,7 @@ it picks the SkiaSharp native binaries for the platforms it ships to (`SkiaSharp
 for any SkiaSharp app.
 
 > **Status: pre-1.0.** The public surface is `SkiaCanvas`, `SkiaRenderContext`, `SkiaComposer`, `SkiaComposerOptions`, `SkiaTextEngine`,
-> `SkiaImageCodec`, `SkiaImageFormat`, `ISkiaTextShaper`, `PeachTextShaper`, `SkiaShapedRun`, `SkiaLinkMap`, `SkiaLink`, `SkiaLinkOptions`, `SkiaLinkActivatingEventArgs` and `ISkiaLinkLauncher`;
+> `SkiaImageCodec`, `SkiaImageFormat`, `ISkiaTextShaper`, `PeachTextShaper`, `SkiaShapedRun`, `SkiaLinkMap`, `SkiaLink`, `SkiaLinkOptions`, `SkiaLinkActivatingEventArgs`, `ISkiaLinkLauncher`, `SkiaCursorArea` and `SkiaSemanticRegion`;
 > `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## You supply the surface
@@ -35,7 +35,7 @@ using var context = new SkiaRenderContext();
 void OnPaintSurface(object? sender, SKPaintGLSurfaceEventArgs e)
 {
     using var canvas = SkiaCanvas.FromCanvas(context, e.Surface.Canvas, new Rect(0, 0, 400, 300));
-    var brush = canvas.GetSolidBrush(PaintColor.FromArgb(255, 220, 90, 40));
+    using var brush = canvas.GetSolidBrush(PaintColor.FromArgb(255, 220, 90, 40));
     canvas.DrawRectangle(brush, 20, 20, 360, 260);
 }                                                       // the SKCanvas is the view's: it is left as it was found and not flushed
 ```
@@ -46,7 +46,9 @@ under it. Telling the render context about the host's `GRContext` (`SkiaRenderCo
 uploaded to it once and the texture is reused for every draw.
 
 To draw a whole page onto a surface you hold and then read it back, `SkiaComposer` scales a page of a given size in points to fill the
-surface, clears it, and offers `ToPixelBuffer()` and `Save(stream, format)`. It borrows the surface and never disposes it.
+surface, clears it (to `SkiaComposerOptions.Background`, if set), and offers `Finish()`, `ToPixelBuffer()` and `Save(stream, format, quality)` (`SkiaImageFormat`:
+`Png`, `Jpeg`, `Webp`), with `PixelWidth` and `PixelHeight` for the surface's size. It borrows the surface and never disposes it. After adding fonts to the context's `FontSet`
+yourself, `SyncFonts()` makes the context pick them up.
 
 The example project (`src/examples/PeachDrawing.Skia.Example`) draws a handful of scenes onto a CPU surface it makes itself and writes them as PNG
 files; a phone app would pass the canvas of its GPU view and change nothing else.
@@ -77,7 +79,7 @@ dash lengths are in points. The `SKCanvas`'s user space is the layout units, und
 | `DrawImageWithOpacity` / `WithColorMatrix` | A paint with alpha or an `SKColorFilter` (a picture is drawn as one group) |
 | `DrawImageMasked` / `AlphaMasked` / `BlendedOver` | An isolated `SaveLayer`: the content, then the mask drawn with `DstIn` (luminance filter for a luminosity mask) or `DstOut`; or the two tiles blended with each other inside it |
 | `BeginRasterSurface` / `DrawRaster` | The shared raster fallback (for effects such as SVG filter primitives), drawn back as an image |
-| `AddLink`, `AddDestinationLink`, `AddDestination` | Recorded in `SkiaCanvas.Links`; see [links](#links) |
+| `AddLink`, `AddDestinationLink`, `AddDestination`, `AddCursor`, `AddSemanticRegion` | Recorded in `SkiaCanvas.Links`; see [links](#links) |
 | `BeginMarkedContent` and the other tagging calls | Nothing: there is no structure in pixels |
 
 ## Text
@@ -92,12 +94,12 @@ matching kind, so a font is never measured by one engine and drawn by the other.
 - **`SkiaTextEngine.Native`**: Skia's own fonts. Families are resolved by the platform's font manager (`SKFontManager`), shaped with
   an `ISkiaTextShaper` and drawn by Skia as glyph runs, from the glyph atlas on a GPU surface. Unlike the default engine, this one does not
   shape text itself: the package ships a basic shaper that needs nothing beyond Skia (one glyph per character, the font's own advances); for ligatures, kerning and complex scripts the context is given `PeachTextShaper` (the
-  `PeachDrawing.Text` shaper, shipped in the package) or a shaper of the host's own (see [shaping native text](#shaping-native-text-with-harfbuzz)). The text looks like the rest of the platform's, but **this mode is not feature complete**; see
+  `PeachDrawing.Text` shaper, shipped in the package) or a shaper of the host's own (see [shaping native text](#shaping-native-text)). The text looks like the rest of the platform's, but **this mode is not feature complete**; see
   [native fonts](#native-font-mode-is-not-feature-complete).
 
 Fonts a document brings (`@font-face`, `AddFont`) work in both modes.
 
-### Shaping native text with HarfBuzz
+### Shaping native text
 
 `PeachTextShaper` ships in the package: it shapes with the [`PeachDrawing.Text`](peachdrawing-text.md) engine (OpenType substitution and
 positioning, Arabic, Indic and Khmer shaping) by reading the font file Skia has loaded, and Skia draws the glyphs. It needs no library beyond
@@ -196,6 +198,12 @@ A document can ask for a pointer over an area (`Canvas.AddCursor`). The canvas r
 the pointer: `canvas.Links.CursorAt(x, y)` (or `CursorAtDevice` for a position in the surface's own pixels) gives the topmost `SkiaCursorArea`
 - a `CursorShape` and any images the document names - or `null` where the document asks for nothing, and the host shows its own. Mapping a
 `CursorShape` to the platform's pointer is left to the host (Skia has no pointer of its own).
+
+### Semantic regions
+
+`Canvas.AddSemanticRegion` calls (a WAI-ARIA role, name, description, heading level and the like in a `SemanticInfo`) are recorded in `canvas.Links.Semantics` in reading order.
+`SemanticAt(x, y)` (or `SemanticAtDevice`) returns the topmost `SkiaSemanticRegion` under a point, so a host can answer an accessibility query (Android's
+`AccessibilityNodeProvider`, say) for what is drawn there. The regions are flat; nesting is not recorded.
 
 ## Lifecycle
 

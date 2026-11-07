@@ -16,7 +16,7 @@ with a runtime identifier, as for any Win2D app.
 
 > **Status: pre-1.0.** The public surface is `Win2dCanvas`, `Win2dRenderContext`, `Win2dComposer`, `Win2dComposerOptions`,
 > `Win2dImageFormat`, `Win2dTextEngine`, `Win2dImageCodec`, `Win2dLinkMap`, `Win2dLink`, `Win2dLinkOptions`, `Win2dLinkActivatingEventArgs`,
-> `ILinkLauncher` and `Win2dDeviceLostException`; `PublicApi.txt` beside the project is the reviewed snapshot.
+> `Win2dTextRendering`, `Win2dCursorArea`, `Win2dSemanticRegion`, `ILinkLauncher` and `Win2dDeviceLostException`; `PublicApi.txt` beside the project is the reviewed snapshot.
 
 ## Quick start
 
@@ -78,7 +78,7 @@ composer's bitmap is `width x PixelsPerPoint` DIPs wide at `Win2dComposerOptions
 | `CreateTile` | A `CanvasCommandList` (vector, resolution independent) |
 | `DrawImageWithOpacity` / `WithColorMatrix` / `Masked` / `AlphaMasked` / `BlendedOver` | `OpacityEffect`, `ColorMatrixEffect`, `LuminanceToAlphaEffect` + `AlphaMaskEffect`, `BlendEffect` |
 | `BeginRasterSurface` / `DrawRaster` | The shared raster fallback, drawn back as a bitmap |
-| `AddLink`, `AddDestinationLink`, `AddDestination` | Recorded in `Win2dCanvas.Links`; see [links](#links) |
+| `AddLink`, `AddDestinationLink`, `AddDestination`, `AddCursor`, `AddSemanticRegion` | Recorded in `Win2dCanvas.Links`; see [links](#links) |
 | `BeginMarkedContent` and the other tagging calls | Nothing: there is no structure in pixels |
 
 ## Text
@@ -199,6 +199,12 @@ intercept with `Links.LinkActivating` (set `Cancel`), and a link to a place in t
 | `ResizeDiagonalDown`, `ResizeNorthWest`, `ResizeSouthEast` | `SizeNorthwestSoutheast` |
 
 A cursor image cannot be used as a WinUI pointer, so the shape stands in for it.
+
+### Semantic regions
+
+`Canvas.AddSemanticRegion` calls (a WAI-ARIA role, name, description, heading level and the like in a `SemanticInfo`) are recorded in `canvas.Links.Semantics` in reading order.
+`SemanticAt(x, y)` (or `SemanticAtDips`) returns the topmost `Win2dSemanticRegion` under a point, which is what a UI Automation peer needs to describe what is drawn there.
+The regions are flat; nesting is not recorded.
 
 ## Lifecycle
 

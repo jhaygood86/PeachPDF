@@ -210,6 +210,39 @@ body {
   padding: 0.45rem 0.7rem;
 }
 
+/* Sections inside the Guides panel: a small caps heading over its links, with a divider between sections. The
+   panel scrolls when the viewport is shorter than the menu. */
+.nav-menu-panel:has(.nav-menu-section) {
+  max-height: calc(100vh - var(--header-h, 4rem) - 1.5rem);
+  overflow-y: auto;
+  min-width: 15rem;
+}
+
+.nav-menu-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.nav-menu-section + .nav-menu-section {
+  margin-top: 0.35rem;
+  padding-top: 0.35rem;
+  border-top: 1px solid var(--border);
+}
+
+.nav-menu-heading {
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.7rem 0.15rem;
+}
+
+.nav-menu-section a {
+  padding-left: 1.1rem;
+}
+
 /* While .site-nav scrolls sideways it would clip an absolutely-positioned panel. A fixed panel escapes
    that: its containing block is .site-header (its backdrop-filter makes it one), which sits above
    .site-nav, so .site-nav's overflow does not clip it. */

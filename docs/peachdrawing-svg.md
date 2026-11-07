@@ -13,7 +13,7 @@ Native AOT compatible, and is versioned in lockstep with PeachPDF: the same vers
 dotnet add package PeachDrawing.Svg
 ```
 
-> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerOptions`, `SvgTextMode` and
+> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerOptions`, `SvgTextMode`, `SvgConicGradientMode` and
 > `SvgCanvas` are the package's full public surface - see `PublicApi.txt` for the exact, machine-checked snapshot. Until
 > 1.0 the public API may change between releases.
 
@@ -50,6 +50,19 @@ HTML engine works in `PixelsPerInch / 72` units to the point) sets `PixelsPerPoi
 raster canvases give the `Canvas` API: rectangles, lines, polygons, image rectangles, clip rectangles, brush geometry and glyph
 positions are in layout units, while the coordinates of a `GraphicsPath` (for `DrawPath` and `PushClip`), and a `Pen`'s width and
 dash lengths, are in points. `SvgCanvas` scales those to the document's units when it writes them.
+
+### `SvgComposerOptions`
+
+| Option | Meaning |
+|---|---|
+| `TextMode` | `SvgTextMode.Outlines` (the default: each glyph is an exact outline, so the text looks the same everywhere) or `SvgTextMode.Text` (selectable `<text>` with an embedded subset font). |
+| `ConicGradients` | `SvgConicGradientMode.Wedges` (the default: a ring of coloured wedges, drawn the same by every viewer) or `Css` (a CSS `conic-gradient()`, which only browsers draw). |
+| `Background` | A colour painted behind everything; unset leaves the background transparent. |
+| `Precision` | The number of decimal places written for coordinates; fewer makes smaller files. |
+| `Title`, `Description` | Written as the document's `<title>` and `<desc>`, which assistive technology reads. |
+
+`composer.ToSvg()` returns the finished document as a string; `Save(Stream)` and `Save(TextWriter)` write it. `SvgRenderContext.AddFont` also takes
+`FontFaceDescriptors` (weight, style, stretch) and `unicodeRanges` for a face that covers only part of a script.
 
 The repository's `src/examples/PeachDrawing.Svg.Example` project is a runnable version of this with a handful of scenes (shapes and
 dashes, gradients, clips and transforms, blend modes and layer effects, patterns and images, text in both modes); run it and open the

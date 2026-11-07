@@ -1,8 +1,9 @@
 # PeachDrawing.PDF.Engine
 
 The PDF writing engine inside PeachDrawing.PDF. It is derived from [PDFsharp](https://github.com/empira/PDFsharp) (MIT, see
-[LICENSE.md](LICENSE.md)) and has been reshaped to what PeachPDF needs: it only writes PDF, never reads it, and every
-type is `internal`.
+[LICENSE.md](LICENSE.md)) and is shaped to what PeachPDF needs: this folder only writes PDF (reading, merging and
+overlaying existing PDFs live in the package's `Import/` and `Operations/` folders), and every
+type here is `internal`.
 
 | Folder | Namespace | What it holds |
 |---|---|---|
@@ -11,6 +12,7 @@ type is `internal`.
 | `AcroForms/`, `Annotations/`, `Structure/` | `PeachDrawing.PDF.Engine.AcroForms`, `.Annotations`, `.Structure` | Interactive forms, annotations and the tagged-PDF structure tree |
 | `Drawing/` | `PeachDrawing.PDF.Engine.Drawing` | `PdfGraphics` (the drawing surface), `PdfForm`, `PdfRasterImage` and the image sources |
 | `Rendering/` | `PeachDrawing.PDF.Engine.Rendering` | `PdfGraphicsRenderer`, which turns drawing calls into content-stream operators |
+| `Resources/`, `Security/` | (embedded data; `PeachDrawing.PDF.Engine.Security`) | The bundled ICC colour profiles used for PDF/A and PDF/X output intents, and the AES-256 security handler behind encryption |
 | `Filters/`, `IO/`, `Internal/` | `.Filters`, `.IO`, `.Internal` | Stream compression, `PdfWriter`, and the encodings and number formatting |
 
 The engine draws with the shared `PeachDrawing.Core` types (`Rect`, `PaintColor`, `Brush`, `Pen`, `GraphicsPath`,

@@ -9,7 +9,7 @@ Native AOT compatible, and is versioned in lockstep with PeachPDF: the same vers
 dotnet add package PeachDrawing.Text
 ```
 
-> **Status: pre-1.0.** The library is being opened up area by area. Today the public surface is font loading and
+> **Status: pre-1.0.** The public surface is font loading and
 > matching (`FontSet` and the types around it), what a `Typeface` says about itself (metrics, glyph mapping and advances),
 > shaping, glyph outlines and colour glyphs, the `MATH` table, and the `PeachDrawing.Text.Unicode` namespace, all described
 > below. Font subsetting for embedding, and paragraph layout (`PeachDrawing.Text.Layout`), described below, are public too.
@@ -640,16 +640,17 @@ Both answer `null` for a script or language the built-in table does not cover.
 
 The tables above (Bidi, Script, vertical orientation, Arabic joining, the Indic Use tables), the hyphenation patterns and the
 Thai/Lao/Khmer/Burmese word lists ship Brotli-compressed, in a separate package, `PeachDrawing.Text.Data`, that `PeachDrawing.Text`
-depends on (see [Fonts](#fonts-fontset-families-and-matching) above for what "no third-party dependencies" means alongside this). A
+depends on (a dependency on a sibling package of this repository, not on any third-party library). A
 host whose Brotli decoder does not work - WebAssembly in a browser, at the time of writing, where `System.IO.Compression.BrotliStream`
-throws `PlatformNotSupportedException` - gets an empty table or an unhyphenated line instead of a failed render, exactly as before this
-data moved packages. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` lets a host register a managed Brotli
+throws `PlatformNotSupportedException` - gets an empty table or an unhyphenated line instead of a failed render. `PeachDrawing.Text.Compression.BrotliDecompression.SetDecompressor` lets a host register a managed Brotli
 decoder of its own instead, to recover that data there; call it once, before using any feature backed by this data, since each table
 is read once and cached for the life of the process.
 
 `PeachDrawing.Text.Brotli` is a ready-made decoder for that seam: a pure-managed port of
 [google/brotli](https://github.com/google/brotli)'s own C# decoder, with no dependency beyond `PeachDrawing.Text` itself, kept as a
-separate opt-in project rather than folded into `PeachDrawing.Text` so a host that never needs it never pays for it. Call
+separate opt-in project rather than folded into `PeachDrawing.Text` so a host that never needs it never pays for it. It is **not
+published as a NuGet package**: it is a source project in this repository (`src/drawing/PeachDrawing.Text.Brotli`), so a host that wants
+it adds a project reference to it or copies its files. Call
 `PeachDrawing.Text.Brotli.ManagedBrotliDecompressor.Register()` once at startup:
 
 ```csharp

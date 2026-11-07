@@ -55,19 +55,19 @@ title: Why PeachPDF?
   <div class="card-grid">
     <div class="card">
       <h3>PDF/A for archiving</h3>
-      <p>ISO 19005 parts 1, 2, and 3 at levels B, U, and A, with an sRGB output intent and XMP metadata. PDF/A-3 documents can carry file attachments, including the structured XML of a ZUGFeRD / Factur-X e-invoice. A character no font can render fails loudly instead of silently vanishing. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfa-conformant-output">PDF/A guide</a></p>
+      <p>ISO 19005 parts 1 to 4 (levels A, B, and U where a part defines them, plus A-4e and A-4f), with an sRGB output intent and XMP metadata. PDF/A-3 documents can carry file attachments, including the structured XML of a ZUGFeRD / Factur-X e-invoice. A character no font can render fails loudly instead of silently vanishing. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfa-conformant-output">PDF/A guide</a></p>
     </div>
     <div class="card">
       <h3>PDF/X for print</h3>
-      <p>PDF/X-1a, X-3, and X-4, with <code>device-cmyk()</code> colors, CMYK images kept as CMYK, and conversion to a target ICC profile for the press. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfx-conformant-output">PDF/X guide</a></p>
+      <p>PDF/X-1a, X-3, X-4, and X-6, with <code>device-cmyk()</code> colors, CMYK images kept as CMYK, and conversion to a target ICC profile for the press. <a href="{{ '/usage-examples.html' | relative_url }}#generating-pdfx-conformant-output">PDF/X guide</a></p>
     </div>
     <div class="card">
       <h3>PDF/UA tagging</h3>
-      <p>A logical structure tree, automatic document language, and per-element control through <code>-peachpdf-pdf-tag-type</code>. <a href="{{ '/usage-examples.html' | relative_url }}#enabling-tagged-pdf-pdfua-output">Tagged PDF guide</a></p>
+      <p>A logical structure tree, automatic document language, PDF/UA-1 and PDF/UA-2 conformance, and per-element control through <code>-peachpdf-pdf-tag-type</code>. <a href="{{ '/usage-examples.html' | relative_url }}#enabling-tagged-pdf-pdfua-output">Tagged PDF guide</a></p>
     </div>
     <div class="card">
       <h3>PDF 2.0</h3>
-      <p>Optional PDF 2.0 output. MathML formulas are tagged as <code>Formula</code> elements that carry their MathML source as an Associated File. <a href="{{ '/usage-examples.html' | relative_url }}#pdf-20-output">PDF 2.0 guide</a></p>
+      <p>PDF 2.0 output by default (PDF 1.7 on request). MathML formulas are tagged as <code>Formula</code> elements that carry their MathML source as an Associated File. <a href="{{ '/usage-examples.html' | relative_url }}#pdf-20-output">PDF 2.0 guide</a></p>
     </div>
     <div class="card">
       <h3>Bookmarks and navigation</h3>
@@ -128,7 +128,7 @@ title: Why PeachPDF?
         <td>Free — BSD-3-Clause</td>
         <td>✅ HTML, CSS, SVG, and MathML</td>
         <td>Own layout engine, fully in-process</td>
-        <td>✅ PDF/A parts 1–3, PDF/X-1a/3/4, and PDF 2.0; optional tagged output with a structure tree, customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
+        <td>✅ PDF/A parts 1–4, PDF/X-1a/3/4/6, and PDF 2.0; optional tagged output with a structure tree, customizable per element via CSS (<code>-peachpdf-pdf-tag-type</code>, including <code>none</code> for decorative content)</td>
         <td>None — pure managed .NET</td>
         <td>✅ .NET 10 and newer — every currently-supported .NET version</td>
         <td>Excellent — no browser, no native binaries, works in trimmed and AOT deployments</td>
@@ -226,7 +226,7 @@ title: Why PeachPDF?
   </table>
   </div>
   <p class="landing-lede">Licensing, pricing, and standards-support details are as of this writing and change over time — always check each vendor's site before deciding.</p>
-  <p class="landing-lede"><strong>Where PeachPDF isn't the right fit:</strong> it doesn't execute JavaScript, and pixel-perfect Chrome parity isn't the goal — if your documents are rendered by client-side scripts, a browser-based tool is the honest recommendation. A few visual effects are also outside what it draws today, including <code>backdrop-filter</code> and 3D perspective. For everything else, the <a href="{{ '/html-css-support.html' | relative_url }}">compatibility matrix</a> tells you exactly what you get.</p>
+  <p class="landing-lede"><strong>Where PeachPDF isn't the right fit:</strong> it doesn't execute JavaScript, and pixel-perfect Chrome parity isn't the goal — if your documents are rendered by client-side scripts, a browser-based tool is the honest recommendation. A few effects, such as blur, <code>backdrop-filter</code> and 3D perspective, are drawn as a high-resolution bitmap rather than vector content. For everything else, the <a href="{{ '/html-css-support.html' | relative_url }}">compatibility matrix</a> tells you exactly what you get.</p>
 </section>
 
 <section class="landing-section">

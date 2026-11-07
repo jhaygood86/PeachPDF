@@ -26,7 +26,7 @@
       </a>
       <nav class="site-nav" aria-label="Site">
         {%- for item in site.data.nav -%}
-          {%- if item.children -%}
+          {%- if item.children or item.sections -%}
             {%- comment -%}
               A child with a `prefix` owns every page under it (a package's generated API reference); one marked `fallback`
               owns the rest of /api/, which is where PeachPDF's own pages sit, so it is only chosen when no prefix matched.
@@ -45,11 +45,24 @@
             {%- for child in item.children -%}
               {%- if active_url == child.url -%}{%- assign group_active = true -%}{%- endif -%}
             {%- endfor -%}
+            {%- for section in item.sections -%}
+              {%- for child in section.children -%}
+                {%- if active_url == child.url -%}{%- assign group_active = true -%}{%- endif -%}
+              {%- endfor -%}
+            {%- endfor -%}
             <details class="nav-menu{% if group_active %} active{% endif %}">
               <summary>{{ item.title | escape }}</summary>
               <div class="nav-menu-panel">
                 {%- for child in item.children -%}
                 <a href="{{ child.url | relative_url }}"{% if active_url == child.url %} class="active" aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                {%- endfor -%}
+                {%- for section in item.sections -%}
+                <div class="nav-menu-section" role="group" aria-labelledby="nav-section-{{ forloop.index }}">
+                  <div class="nav-menu-heading" id="nav-section-{{ forloop.index }}">{{ section.title | escape }}</div>
+                  {%- for child in section.children -%}
+                  <a href="{{ child.url | relative_url }}"{% if active_url == child.url %} class="active" aria-current="page"{% endif %}>{{ child.title | escape }}</a>
+                  {%- endfor -%}
+                </div>
                 {%- endfor -%}
               </div>
             </details>
