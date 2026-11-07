@@ -337,7 +337,7 @@ namespace PeachBrackets.Html.Paint
                     g.PushTransform(rotation);
                     if (precededBySeparator)
                         PaintWordSeparator(g, styleSource, word, new Rect(0, 0, naturalSize.Width, naturalSize.Height), baselineShift, SeparatorPlacement.Inline, null);
-                    g.DrawString(text, font, colorOverride ?? styleSource.ActualColor, new PaintPoint(0, baselineAdjust), naturalSize,
+                    g.DrawString(text, font, colorOverride ?? styleSource.ActualTextFillColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     PaintTextStroke(g, effectsStyle ?? styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
                     g.PopTransform();
@@ -349,7 +349,7 @@ namespace PeachBrackets.Html.Paint
                     PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Inline, separatorEdge);
                 var wordPoint = new PaintPoint(rect.X, rect.Y + baselineAdjust);
                 PaintTextShadows(g, effectsStyle ?? styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
-                g.DrawString(text, font, colorOverride ?? styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
+                g.DrawString(text, font, colorOverride ?? styleSource.ActualTextFillColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                 PaintTextStroke(g, effectsStyle ?? styleSource, font, text, wordPoint, wordFeatures);
             }
         }
@@ -450,7 +450,7 @@ namespace PeachBrackets.Html.Paint
             };
 
             var stateSource = word.FirstLineStyle ?? separatorStyle;
-            g.DrawString(" ", font, stateSource.ActualColor, point, size, stateSource.ActualLetterSpacing);
+            g.DrawString(" ", font, stateSource.ActualTextFillColor, point, size, stateSource.ActualLetterSpacing);
         }
 
         /// <summary>
@@ -572,14 +572,14 @@ namespace PeachBrackets.Html.Paint
                 if (hasVerticalMetrics || hasVerticalOrigin)
                 {
                     g.PushClip(new Rect(rect.X, placement.CellTop, rect.Width, placement.Advance));
-                    g.DrawString(placement.CharText, font, styleSource.ActualColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
+                    g.DrawString(placement.CharText, font, styleSource.ActualTextFillColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                     PaintTextStroke(g, styleSource, font, placement.CharText, new PaintPoint(placement.X, placement.Y), wordFeatures);
                     g.PopClip();
                 }
                 else
                 {
-                    g.DrawString(placement.CharText, font, styleSource.ActualColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
+                    g.DrawString(placement.CharText, font, styleSource.ActualTextFillColor, new PaintPoint(placement.X, placement.Y), placement.CharSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, charLogicalText);
                     PaintTextStroke(g, styleSource, font, placement.CharText, new PaintPoint(placement.X, placement.Y), wordFeatures);
                 }
@@ -690,7 +690,7 @@ namespace PeachBrackets.Html.Paint
             {
                 var thickness = Math.Max(1d, font.Height / 12d);
                 var y = Math.Round(rect.Y + font.UnderlineOffset);
-                using var brush = g.GetSolidBrush(styleSource.ActualColor);
+                using var brush = g.GetSolidBrush(styleSource.ActualTextFillColor);
                 g.DrawRectangle(brush, rect.X, y, rect.Width, thickness);
                 return;
             }
@@ -707,7 +707,7 @@ namespace PeachBrackets.Html.Paint
             var tiled = new StringBuilder(unit.Length * repeatCount);
             for (var i = 0; i < repeatCount; i++) tiled.Append(unit);
 
-            g.DrawString(tiled.ToString(), font, styleSource.ActualColor, new PaintPoint(rect.X, rect.Y),
+            g.DrawString(tiled.ToString(), font, styleSource.ActualTextFillColor, new PaintPoint(rect.X, rect.Y),
                 new Size(rect.Width, rect.Height), styleSource.ActualLetterSpacing, styleSource.ActualFontPalette,
                 styleSource.ActualTextShapingFeatures);
         }

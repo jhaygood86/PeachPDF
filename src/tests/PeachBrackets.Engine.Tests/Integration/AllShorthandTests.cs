@@ -24,7 +24,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private static bool IsReviewedExclusion(string name) =>
             name is "direction" or "unicode-bidi"
             || VendorPropertyAliases.Canonicalize(name) != name // an alias spelling; its standard name is the longhand
-            || name.StartsWith("-webkit-box-", StringComparison.Ordinal)
+            || (name.StartsWith("-webkit-box-", StringComparison.Ordinal) && name != "-webkit-box-reflect")
             || name.StartsWith("-moz-box-", StringComparison.Ordinal);
 
         private static IEnumerable<string> AllLonghandNames() =>

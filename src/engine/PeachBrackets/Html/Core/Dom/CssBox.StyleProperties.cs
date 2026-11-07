@@ -472,6 +472,7 @@ namespace PeachBrackets.Html.Dom
         public double ActualTextStrokeWidth => DerivedStyle.ActualTextStrokeWidth;
 
         /// <summary>Gets the colour of the stroke around the text (<c>-webkit-text-stroke-color</c>).</summary>
+        public PaintColor ActualTextFillColor => DerivedStyle.ActualTextFillColor;
         public PaintColor ActualTextStrokeColor => DerivedStyle.ActualTextStrokeColor;
 
         /// <summary>Gets the actual background color of the box.</summary>

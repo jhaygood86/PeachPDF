@@ -73,7 +73,7 @@ namespace PeachBrackets.Html.Paint
         private static PaintColor? VisibleForeground(CssRect word, PaintColor? background, PaintColor? foreground)
         {
             if (foreground is not null || background is not { A: > 0 } fill) return foreground;
-            if ((word.FirstLineStyle ?? word.OwnerBox).ActualColor.A != 0) return null;
+            if ((word.FirstLineStyle ?? word.OwnerBox).ActualTextFillColor.A != 0) return null;
 
             var luminance = (0.299 * fill.R) + (0.587 * fill.G) + (0.114 * fill.B);
             return luminance > 140 ? PaintColor.FromArgb(255, 0, 0, 0) : PaintColor.FromArgb(255, 255, 255, 255);

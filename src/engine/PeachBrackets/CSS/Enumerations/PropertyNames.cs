@@ -138,6 +138,8 @@ namespace PeachBrackets.Css
         public static readonly string WebkitTextStroke = "-webkit-text-stroke";
         public static readonly string WebkitTextStrokeWidth = "-webkit-text-stroke-width";
         public static readonly string WebkitTextStrokeColor = "-webkit-text-stroke-color";
+        public static readonly string InitialLetter = "initial-letter";
+        public static readonly string WebkitTextFillColor = "-webkit-text-fill-color";
         public static readonly string FontSynthesis = "font-synthesis";
         public static readonly string FontSynthesisWeight = "font-synthesis-weight";
         public static readonly string FontSynthesisStyle = "font-synthesis-style";

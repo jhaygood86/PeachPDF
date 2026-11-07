@@ -1337,6 +1337,18 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>The colour the box's text glyphs are filled with: <c>-webkit-text-fill-color</c>, where <c>currentcolor</c> (the initial value) is the box's own text colour.</summary>
+        public PaintColor ActualTextFillColor
+        {
+            get
+            {
+                var value = Style.Text.TextFillColor;
+                return string.IsNullOrEmpty(value) || value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
+                    ? ActualColor
+                    : Owner.GetActualColor(value);
+            }
+        }
+
         /// <summary>The colour of the stroke <c>-webkit-text-stroke-color</c> draws around this box's text; <c>currentcolor</c> is the box's own text colour. Not cached, as <see cref="ActualTextStrokeWidth"/>.</summary>
         public PaintColor ActualTextStrokeColor
         {
@@ -1440,6 +1452,17 @@ namespace PeachBrackets.Html.Dom
 
                 return Shaping._actualFontPalette;
             }
+        }
+
+        /// <summary>
+        /// Forgets the resolved font, which is otherwise cached for good on the strength of "only read after the cascade has finished". For the one
+        /// caller that sets <c>font-size</c> after reading the font (<c>initial-letter</c> sizing the <c>::first-letter</c> box from its own metrics).
+        /// </summary>
+        internal void InvalidateFont()
+        {
+            _actualFont = null;
+            _emScale = 1.0;
+            _primaryAdjustRatio = 1.0;
         }
 
         internal void InvalidateFontPalette()

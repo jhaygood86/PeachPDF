@@ -2642,6 +2642,55 @@ namespace PeachBrackets.Html.Parse
             // own step 1) and re-inherits (step 2, box.InheritStyle()) as soon as it starts, so a
             // pre-emptive inherit here would just be immediately discarded and redone.
             CascadeApplyStyles(valueParser, firstLetterBox, cssData, media, containerSizes);
+
+            ApplyInitialLetter(valueParser, originatingBox, firstLetterBox);
+        }
+
+        /// <summary>
+        /// <c>initial-letter</c> (CSS Inline 3 §7.4) on a <c>::first-letter</c> box: floats the letter and sizes its font so its cap height
+        /// spans from the cap line of the originating block's first line down to the baseline of line <c>sink</c> - for a size of N and a
+        /// sink of N that is (N-1) line advances plus the block's own cap height - then places it with margins so the float's outer box
+        /// ends at the bottom of line <c>sink</c>, which is what narrows those lines. The ordinary float placement does the rest.
+        /// Horizontal writing modes only.
+        /// </summary>
+        private static void ApplyInitialLetter(CssValueParser valueParser, CssBox originatingBox, CssBox letterBox)
+        {
+            if (!InitialLetterGrammar.TryParse(letterBox.InitialLetter, out var size, out var sink) || size <= 0) return;
+
+            var parentFont = originatingBox.ActualFont;
+            var letterFont = letterBox.ActualFont;
+            var lineHeight = originatingBox.ActualLineHeight;
+            var parentSize = originatingBox.GetEmHeight();
+            var letterSize = letterBox.GetEmHeight();
+            if (lineHeight <= 0 || parentSize <= 0 || letterSize <= 0) return;
+
+            var parentCap = FontMetricMeasurement.Ratio(parentFont, FontMetric.Cap) * parentSize;
+            var letterCapRatio = FontMetricMeasurement.Ratio(letterFont, FontMetric.Cap);
+            if (letterCapRatio <= 0) return;
+
+            // Where the baseline of the originating block's first line sits, from the top of the line.
+            var firstBaseline = ((lineHeight - parentFont.Height) / 2) + parentFont.Ascent;
+
+            var letterFontSize = (((size - 1) * lineHeight) + parentCap) / letterCapRatio;
+            var scale = letterFontSize / letterSize;
+            var letterAscent = letterFont.Ascent * scale;
+            var letterHeight = letterFont.Height * scale;
+
+            var marginTop = ((sink - 1) * lineHeight) + firstBaseline - letterAscent;
+            // The float's outer box ends a hair short of the bottom of line `sink` (so rounding in the point values cannot let it reach into the
+            // next line). Its height is declared rather than left to the letter's line box because a negative margin-bottom is not honoured by the
+            // float exclusion, which would keep narrowing a line too many; the glyph simply overflows the shorter box.
+            var boxHeight = (sink * lineHeight) - marginTop - 0.05;
+
+            static string Pt(double value) => value.ToString("0.####", System.Globalization.CultureInfo.InvariantCulture) + "pt";
+
+            CssUtils.SetPropertyValue(valueParser, letterBox, "float", "left");
+            CssUtils.SetPropertyValue(valueParser, letterBox, "font-size", Pt(letterFontSize));
+            letterBox.DerivedStyle.InvalidateFont();
+            CssUtils.SetPropertyValue(valueParser, letterBox, "line-height", Pt(letterHeight));
+            CssUtils.SetPropertyValue(valueParser, letterBox, "margin-top", Pt(marginTop));
+            CssUtils.SetPropertyValue(valueParser, letterBox, "margin-bottom", "0");
+            CssUtils.SetPropertyValue(valueParser, letterBox, "height", Pt(boxHeight));
         }
 
         /// <summary>

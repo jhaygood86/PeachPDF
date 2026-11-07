@@ -912,6 +912,21 @@ namespace PeachBrackets.Css
                 {Keywords.AvoidColumn, BreakMode.AvoidColumn},
                 {Keywords.AvoidRegion, BreakMode.AvoidRegion}
             }.Freeze();
+        /// <summary>WebKit's pre-standard -webkit-column-break-before/after.</summary>
+        public static readonly KeywordMap<BreakMode> WebkitColumnBreakModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, BreakMode.Auto},
+                {Keywords.Always, BreakMode.Always},
+                {Keywords.Avoid, BreakMode.Avoid}
+            }.Freeze();
+        /// <summary>WebKit's pre-standard -webkit-column-break-inside.</summary>
+        public static readonly KeywordMap<BreakMode> WebkitColumnBreakInsideModes =
+            new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.Auto, BreakMode.Auto},
+                {Keywords.Avoid, BreakMode.Avoid}
+            }.Freeze();
         /// <summary>css-break-3 §3.3 legacy page-break-inside.</summary>
         public static readonly KeywordMap<BreakMode> PageBreakInsideModes =
             new KeywordMap<BreakMode>(StringComparer.OrdinalIgnoreCase)
@@ -1214,6 +1229,14 @@ namespace PeachBrackets.Css
                 {Keywords.Normal, LineBreak.Normal},
                 {Keywords.Strict, LineBreak.Strict},
                 {Keywords.Anywhere, LineBreak.Anywhere}
+            }.Freeze();
+        public static readonly KeywordMap<TextSecurity> TextSecurities =
+            new KeywordMap<TextSecurity>(StringComparer.OrdinalIgnoreCase)
+            {
+                {Keywords.None, TextSecurity.None},
+                {Keywords.Disc, TextSecurity.Disc},
+                {Keywords.Circle, TextSecurity.Circle},
+                {Keywords.Square, TextSecurity.Square}
             }.Freeze();
         public static readonly KeywordMap<OverflowWrap> OverflowWraps =
             new KeywordMap<OverflowWrap>(StringComparer.OrdinalIgnoreCase)

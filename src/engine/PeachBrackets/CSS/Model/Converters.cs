@@ -430,6 +430,8 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter BreakInsideModeConverter = Map.BreakInsideModes.ToConverter();
         public static readonly IValueConverter PageBreakModeConverter = Map.PageBreakModes.ToConverter();
         public static readonly IValueConverter PageBreakInsideModeConverter = Map.PageBreakInsideModes.ToConverter();
+        public static readonly IValueConverter WebkitColumnBreakModeConverter = Map.WebkitColumnBreakModes.ToConverter();
+        public static readonly IValueConverter WebkitColumnBreakInsideModeConverter = Map.WebkitColumnBreakInsideModes.ToConverter();
         public static readonly IValueConverter UnicodeModeConverter = Map.UnicodeModes.ToConverter();
         public static readonly IValueConverter VisibilityConverter = Map.Visibilities.ToConverter();
         public static readonly IValueConverter PointerEventsConverter = Map.PointerEventsModes.ToConverter();
@@ -519,6 +521,9 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter StrokeLinejoinConverter = Map.StrokeLinejoins.ToConverter();
         public static readonly IValueConverter WordBreakConverter = Map.WordBreaks.ToConverter();
         public static readonly IValueConverter LineBreakConverter = Map.LineBreaks.ToConverter();
+        public static readonly IValueConverter InitialLetterConverter = new InitialLetterValueConverter();
+        public static readonly IValueConverter BoxReflectConverter = new BoxReflectValueConverter();
+        public static readonly IValueConverter TextSecurityConverter = Map.TextSecurities.ToConverter();
         public static readonly IValueConverter OverflowWrapConverter = Map.OverflowWraps.ToConverter();
         public static readonly IValueConverter FillRuleConverter = Map.FillRules.ToConverter();
         public static readonly IValueConverter IntrinsicSizingConverter = Map.IntrinsicSizings.ToConverter();

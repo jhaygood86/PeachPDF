@@ -588,6 +588,10 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         private void PaintClippedWithEffects(Canvas g, BoxFragment fragment)
         {
+            // -webkit-box-reflect: the mirrored copy goes first, under the box itself.
+            if (!_textOnly && !ReferenceEquals(_reflectionOf, fragment) && HasReflection(fragment.Box))
+                PaintReflection(g, fragment);
+
             var box = fragment.Box;
 
             // clip-path clips the entire element rendering (background, border, content, children).
