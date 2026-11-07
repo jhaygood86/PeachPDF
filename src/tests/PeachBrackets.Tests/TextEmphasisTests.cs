@@ -34,6 +34,8 @@ public class TextEmphasisTests
         return count;
     }
 
+    private static bool IsTinted((byte R, byte G, byte B, byte A) p) => p.R < 250 || p.G < 250 || p.B < 250;
+
     private static bool IsRed((byte R, byte G, byte B, byte A) p) => p.R > 180 && p.G < 90 && p.B < 90;
 
     [Theory]
@@ -48,7 +50,9 @@ public class TextEmphasisTests
     {
         var canvas = await PaintAsync(declaration);
 
-        Assert.True(Count(canvas, 0, 31, IsRed) > 0, "marks should be drawn over the text");
+        // Text is white on white, so any tinted pixel above it is a mark; this does not depend on how
+        // heavily a given platform's fallback font draws a thin glyph (a triangle, an asterisk).
+        Assert.True(Count(canvas, 0, 31, IsTinted) > 0, "marks should be drawn over the text");
     }
 
     [Fact]
