@@ -1114,6 +1114,19 @@ namespace PeachBrackets.Html.Paint
                 if (spanEnd <= spanStart) return;
             }
 
+            // text-decoration-inset (css-text-decor-4 §2.7): pull the line's start in by the first length and its
+            // end in by the second (one value insets both). `auto` is no inset.
+            if (styleSource.TextDecorationInset is { Length: > 0 } insetText
+                && !insetText.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+            {
+                var parts = insetText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                var startInset = CssValueParser.ParseLength(parts[0], 0, styleSource);
+                var endInset = parts.Length > 1 ? CssValueParser.ParseLength(parts[1], 0, styleSource) : startInset;
+                spanStart += startInset;
+                spanEnd -= endInset;
+                if (spanEnd <= spanStart) return;
+            }
+
             // Captured once, rather than read back from pen.Width for the rest of this method: pen is a
             // cached instance keyed only by color (RenderContext.GetPen), and WavyDecorationRenderer.
             // StrokeWavyLine below calls g.GetPen(color) itself for the SAME color - the very same cached

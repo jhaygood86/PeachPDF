@@ -9163,6 +9163,23 @@ await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decora
     "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
     decorationSkipHtml, pdfConfig);
 
+await SaveShowcaseAsync("text_emphasis", "Typography & Text", "Text Emphasis Marks",
+    "text-emphasis (CSS Text Decoration 4): a mark over or under every character in a chosen shape and colour, and text-decoration-inset pulling an underline in from both ends.",
+    """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; font-size: 16pt; margin: 36pt }
+      p { margin: 26pt 0 }
+    </style></head><body>
+      <p style="text-emphasis: filled dot">filled dot, the default</p>
+      <p style="text-emphasis: open circle #c0392b">open circle, red</p>
+      <p style="text-emphasis: filled double-circle #2874a6">filled double-circle, blue</p>
+      <p style="text-emphasis: open triangle #1e8449">open triangle, green</p>
+      <p style="text-emphasis-style: sesame; text-emphasis-position: under">sesame, under the text</p>
+      <p style="text-emphasis-style: '*'; text-emphasis-color: #b9770e">a string as the mark</p>
+      <p style="text-decoration: underline; text-decoration-inset: 12pt">underline with text-decoration-inset: 12pt</p>
+    </body></html>
+    """, pdfConfig);
+
 // --- decorated inline-block showcase (css-text-decor-3 §2.4) ---
 // An inline-block that itself declares a decoration (every <a> does, by default) used to be underlined
 // across its whole content box, text or no text: the stray bar over an icon-only header link.

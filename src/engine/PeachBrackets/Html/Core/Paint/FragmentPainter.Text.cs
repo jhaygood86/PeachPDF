@@ -351,6 +351,7 @@ namespace PeachBrackets.Html.Paint
                 PaintTextShadows(g, effectsStyle ?? styleSource, font, text, wordPoint, textSize, wordFeatures, logicalText);
                 g.DrawString(text, font, colorOverride ?? styleSource.ActualColor, wordPoint, textSize, styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                 PaintTextStroke(g, effectsStyle ?? styleSource, font, text, wordPoint, wordFeatures);
+                PaintTextEmphasis(g, styleSource, text, wordPoint, textSize, wordFeatures, font);
             }
         }
 

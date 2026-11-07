@@ -1298,6 +1298,18 @@ namespace PeachBrackets.Html.Dom
             }
         }
 
+        /// <summary>The colour of the marks <c>text-emphasis-style</c> draws; <c>currentcolor</c> is the box's own text colour.</summary>
+        public PaintColor ActualTextEmphasisColor
+        {
+            get
+            {
+                var value = Style.Text.TextEmphasisColor;
+                return string.IsNullOrEmpty(value) || value.Equals(Keywords.CurrentColor, StringComparison.OrdinalIgnoreCase)
+                    ? ActualColor
+                    : Owner.GetActualColor(value);
+            }
+        }
+
         #endregion
 
         #region Text alignment

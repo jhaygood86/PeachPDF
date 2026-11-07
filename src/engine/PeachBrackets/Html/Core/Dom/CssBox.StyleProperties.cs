@@ -468,6 +468,9 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Gets the colour of the stroke around the text (<c>-webkit-text-stroke-color</c>).</summary>
         public PaintColor ActualTextStrokeColor => DerivedStyle.ActualTextStrokeColor;
 
+        /// <summary>Gets the colour of the emphasis marks (<c>text-emphasis-color</c>).</summary>
+        public PaintColor ActualTextEmphasisColor => DerivedStyle.ActualTextEmphasisColor;
+
         /// <summary>Gets the actual background color of the box.</summary>
         public PaintColor ActualBackgroundColor => DerivedStyle.ActualBackgroundColor;
 
