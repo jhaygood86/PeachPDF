@@ -1615,6 +1615,9 @@ namespace PeachBrackets.Html.Parse
 
             ResolveRelativeFontWeight(valueParser, box);
 
+            // line-height computes to an absolute length here, once font-size is final (CSS 2.1 §10.8.1).
+            box.ResolveDeclaredLineHeight();
+
             if (verifyingInheritedOnly)
             {
                 if (!StylesEquivalent(sharedStyle, box))

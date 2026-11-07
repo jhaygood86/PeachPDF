@@ -44,26 +44,26 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task Percentage_StoresParsedLength()
+        public async Task Percentage_ComputesToAnAbsoluteLengthAtTheDeclaringElement()
         {
-            // line-height accepts <length-percentage>, not just <length> - LengthOrCalc (reused as-is from
-            // word-spacing/letter-spacing/row-gap/column-gap/margin/inset/font-size) already covers this.
+            // line-height accepts <length-percentage>; a percentage computes to an absolute length where it is
+            // declared (CSS 2.1 section 10.8.1), so descendants inherit that length, not the percentage.
             var box = await GetLineHeightBoxAsync("150%");
             Assert.True(box.LineHeight.Value is
             {
                 IsValue: true,
-                Value: { LengthOrCalc: { IsCalc: false, Length: { Type: Length.Unit.Percent, Value: 150f } } }
+                Value: { LengthOrCalc: { IsCalc: false, Length: { Type: Length.Unit.Pt } } }
             });
         }
 
         [Fact]
-        public async Task RelativeUnitCalc_StaysDeferred_NotEagerlyResolved()
+        public async Task RelativeUnitCalc_ComputesToAnAbsoluteLengthAtTheDeclaringElement()
         {
             var box = await GetLineHeightBoxAsync("calc(1em + 4px)");
             Assert.True(box.LineHeight.Value is
             {
                 IsValue: true,
-                Value: { IsUnitless: false, LengthOrCalc: { IsCalc: true } }
+                Value: { IsUnitless: false, LengthOrCalc: { IsCalc: false, Length: { Type: Length.Unit.Pt } } }
             });
         }
 

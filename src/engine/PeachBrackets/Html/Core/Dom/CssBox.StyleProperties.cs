@@ -837,29 +837,48 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
-        /// <c>line-height</c>'s eager <c>lh</c> resolution, run by <c>RegistryEmitter.BuildHtmlAssignment</c> against
-        /// the raw authored text (the <c>html.valueComputation</c> "line-height" case). <c>lh</c> in the
-        /// <c>line-height</c> property is the PARENT's line-height (CSS Values and Units 4 §6.1.1), and
-        /// <c>line-height</c> is inherited by adopting the specified value: left as "2lh" every descendant would
-        /// re-resolve it against its own parent and compound one factor per generation. Converting it to an
-        /// absolute length here, against the parent, makes children inherit the length instead - the same reason
-        /// <see cref="ResolveFontSizeValueComputation"/> exists. <c>rlh</c> always means the root's, so it can't
-        /// compound and stays lazy, as does a <c>calc()</c> containing <c>lh</c>.
+        /// Set when a <c>line-height</c> declaration was applied to this box during the cascade, so
+        /// <see cref="ResolveDeclaredLineHeight"/> knows the stored value was declared HERE (and must be made
+        /// absolute) rather than inherited (already absolute, or a bare number).
+        /// </summary>
+        internal bool LineHeightDeclared { get; set; }
+
+        /// <summary>
+        /// <c>line-height</c>'s hook, run by <c>RegistryEmitter.BuildHtmlAssignment</c> against the raw authored text
+        /// (the <c>html.valueComputation</c> "line-height" case). It only notes the declaration: the value cannot be made
+        /// absolute yet, because declarations apply in source order and this box's own <c>font-size</c> (what <c>em</c>/
+        /// <c>%</c> are measured against) may be declared after it. <see cref="ResolveDeclaredLineHeight"/> does it
+        /// once the cascade has settled.
         /// </summary>
         internal string ResolveLineHeightValueComputation(string value)
         {
-            if (ParentBox is not { } parent) return value;
+            LineHeightDeclared = true;
+            return value;
+        }
 
-            using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
-            List<Token> tokens = pooledTokens;
-            if (tokens is not [{ Type: TokenType.Dimension } dimension] || Length.GetUnit(dimension.Unit) != Length.Unit.Lh)
-                return value;
+        /// <summary>
+        /// CSS 2.1 §10.8.1 / CSS Values 4 §6.1.1: a <c>line-height</c> that is a length, percentage or <c>calc()</c> computes
+        /// to an absolute length AT THE DECLARING ELEMENT, and descendants inherit that length; only a unitless number is
+        /// inherited as a number. Left as authored text, every inheriting descendant would re-resolve <c>1.5em</c> against its
+        /// own font size, and a <c>calc(1lh + 8px)</c> would add its 8px once per generation. <c>lh</c> in the property means
+        /// the parent's line-height (<see cref="DerivedStyle.ResolveLineHeightAtDeclaration"/>).
+        /// </summary>
+        internal void ResolveDeclaredLineHeight()
+        {
+            if (!LineHeightDeclared) return;
+            LineHeightDeclared = false;
 
-            // ActualLineHeight is in the container's inflated layout space; the "pt" it is re-parsed as gets the
-            // PixelsPerPoint catch-up multiply back, so divide it out here (see NoEms).
+            if (LineHeight.Value.Value is not { } specified) return;
+            if (specified.LengthOrCalc is not { } lengthOrCalc) return;
+            if (!lengthOrCalc.IsCalc && lengthOrCalc.Length!.Value.IsAbsolute) return;
+
+            // The result is in the container's inflated layout space; the "pt" it is re-parsed as gets the PixelsPerPoint
+            // catch-up multiply back, so divide it out here (see NoEms).
             var pixelsPerPoint = HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
-            var points = dimension.Value * parent.ActualLineHeight / pixelsPerPoint;
-            return $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt";
+            var points = Math.Max(0, DerivedStyle.ResolveLineHeightAtDeclaration(specified)) / pixelsPerPoint;
+            LineHeight = global::PeachBrackets.Css.CssKeywordOrValueParser.FromCssText<NormalKeyword, LengthOrUnitless>(
+                $"{points.ToString(System.Globalization.NumberFormatInfo.InvariantInfo)}pt",
+                Map.NormalKeywords, CssValueParser.TryParseLengthOrUnitless, NormalKeyword.Normal);
         }
 
         /// <summary>

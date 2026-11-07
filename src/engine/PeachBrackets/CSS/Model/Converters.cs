@@ -691,8 +691,12 @@ namespace PeachBrackets.Css
 
         #region Composed
 
+        // CSS Inline 3: normal | <number [0,∞]> | <length-percentage [0,∞]> - a negative value is invalid.
         public static readonly IValueConverter LineHeightConverter =
-            LengthOrPercentConverter.Or(NumberConverter).Or(Keywords.Normal);
+            new StructValueConverter<Length>(ValueExtensions.ToNonNegativeDistance)
+                .Or(new CalcValueConverter(CalcCategory.LengthPercentage | CalcCategory.Number))
+                .Or(new StructValueConverter<float>(ValueExtensions.ToNaturalSingle))
+                .Or(Keywords.Normal);
 
         // CSS Text 4 §3.6: <number [0,∞]> | <length [0,∞]> - no keyword side (unlike LineHeightConverter's
         // "normal"), so this is just the plain length-or-number union. The [0,∞] lower bound isn't
