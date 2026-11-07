@@ -32,7 +32,7 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static double LeftEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX)
         {
-            var marginRight = floatBox.ActualRight + floatBox.ActualMarginRight;
+            var marginRight = floatBox.FlowRightEdge + floatBox.ActualMarginRight;
             if (g is null || !HasShape(floatBox)) return marginRight;
 
             // No outline at all (an image that has not loaded, a shape that does not resolve) leaves the rectangle; an outline that
@@ -45,7 +45,7 @@ namespace PeachBrackets.Html.Utils
         /// <summary>The mirror of <see cref="LeftEdge"/> for a right float: the x a line must end at (<paramref name="clearX"/> when the shape misses the band).</summary>
         public static double RightEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX)
         {
-            var marginLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+            var marginLeft = floatBox.FlowLeftEdge - floatBox.ActualMarginLeft;
             if (g is null || !HasShape(floatBox)) return marginLeft;
 
             if (Resolve(g, floatBox) is not { } outline) return marginLeft;
@@ -92,7 +92,7 @@ namespace PeachBrackets.Html.Utils
                 var margin = string.IsNullOrWhiteSpace(floatBox.ShapeMargin)
                     ? 0
                     : Math.Max(0, CssValueParser.ParseLength(floatBox.ShapeMargin, floatBox.ContainingBlock?.AvailableWidth ?? 0, floatBox));
-                var marginLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+                var marginLeft = floatBox.FlowLeftEdge - floatBox.ActualMarginLeft;
                 var marginTop = floatBox.Location.Y - floatBox.ActualMarginTop;
                 var marginBox = new Rect(marginLeft, marginTop,
                     floatBox.ActualRight + floatBox.ActualMarginRight - marginLeft,
@@ -111,7 +111,7 @@ namespace PeachBrackets.Html.Utils
             var invalid = new Outline(key, [], 0, default, valid: false);
             if (floatBox.ShapeOutsideImage?.Image?.GetPixels() is not { } pixels || pixels.Width <= 0 || pixels.Height <= 0) return invalid;
 
-            var marginLeft = floatBox.Location.X - floatBox.ActualMarginLeft;
+            var marginLeft = floatBox.FlowLeftEdge - floatBox.ActualMarginLeft;
             var marginTop = floatBox.Location.Y - floatBox.ActualMarginTop;
             var marginBox = new Rect(marginLeft, marginTop,
                 floatBox.ActualRight + floatBox.ActualMarginRight - marginLeft,

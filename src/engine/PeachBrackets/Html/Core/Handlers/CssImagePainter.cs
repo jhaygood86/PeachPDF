@@ -171,15 +171,18 @@ namespace PeachBrackets.Html.Handlers
             string positionList, string sizeList, string repeatList,
             CssBox box)
         {
-            var (intrinsicWidth, intrinsicHeight) = SvgIntrinsicSize.Resolve(svgDocument);
+            // An svg with a viewBox and no width or height has an aspect ratio and no size (CSS Images 3 section 5.1): it is not as large as its viewBox, it is
+            // fitted to the area it is painted in (BackgroundLayerResolver.ResolveSize). slashdot.org's logo, a 374 x 53 viewBox in a 138 x 20 box, was drawn at 374
+            // pixels and clipped to its corner.
+            var (intrinsicWidth, intrinsicHeight, hasIntrinsicRatio) = SvgIntrinsicSize.ResolveForBox(svgDocument);
             // SVG user units are CSS pixels (1px = 1/96in); convert to layout points so the tile
             // is sized in the same units as originRect - matching MeasureIntrinsicSize's handling
             // of the same document for <img src="x.svg">.
             intrinsicWidth *= Length.PointsPerPx;
             intrinsicHeight *= Length.PointsPerPx;
-            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0
+            double? intrinsicRatio = intrinsicWidth is > 0 && intrinsicHeight is > 0 && hasIntrinsicRatio
                 ? intrinsicWidth.Value / intrinsicHeight.Value
-                : null;
+                : SvgIntrinsicSize.RatioOnly(svgDocument);
 
             var sizeValue = BackgroundLayerResolver.LayerAt(BackgroundLayerResolver.SplitLayers(sizeList), layerIndex);
             var (tileWidth, tileHeight) = BackgroundLayerResolver.ResolveSize(

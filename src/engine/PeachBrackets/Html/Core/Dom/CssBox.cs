@@ -4499,6 +4499,13 @@ namespace PeachBrackets.Html.Dom
         internal bool ItemContentSizeEverPinned { get => _rare is null ? default(bool) : _rare.ItemContentSizeEverPinned; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.ItemContentSizeEverPinned = value; } }
 
         /// <summary>
+        /// Whether a column flex container's <c>flex-shrink</c> gave this item less height than its content needs (CSS Flexbox 1 section 9.7), on the pass that
+        /// last resolved it. The item is exactly that tall, and its content overflows it (visibly, or clipped when it is a scroll container); the height is not
+        /// a measurement that page breaks may later outgrow.
+        /// </summary>
+        internal bool ShrunkByFlexBelowContent { get => _rare is not null && _rare.ShrunkByFlexBelowContent; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.ShrunkByFlexBelowContent = value; } }
+
+        /// <summary>
         /// What <see cref="Width"/>/<see cref="Height"/> held before
         /// <see cref="Fragmentation.ItemContentCommit.CommitLayout"/> first pinned them, saved so a later
         /// layout generation can measure this item against what the author wrote rather than against the
@@ -7578,6 +7585,34 @@ namespace PeachBrackets.Html.Dom
         private static CssBox UnwrapSoleFloatChild(CssBox box) =>
             box.HtmlTag is null && box.Boxes.Count == 1 && box.Boxes[0].IsFloated ? box.Boxes[0] : box;
 
+        // Where the box is in flow, before its own relative offset: what the content that goes around a float lays out against (CSS 2.1 section 9.4.3, relative
+        // positioning is visual only), where Location/ActualRight/ActualBottom are where it is drawn. Equal to them for a box that is not relatively positioned.
+        internal double FlowLeftEdge => Location.X - RelativeOffsetX;
+        internal double FlowTopEdge => Location.Y - RelativeOffsetY;
+        internal double FlowRightEdge => ActualRight - RelativeOffsetX;
+        internal double FlowBottomEdge => ActualBottom - RelativeOffsetY;
+
+
+        /// <summary>
+        /// Moves a <c>position: relative</c> box by its <c>left</c>/<c>top</c>/<c>right</c>/<c>bottom</c> offsets from where it was placed in flow, and records
+        /// them (see the notes at the call in <see cref="CommitBlockChildOffset"/>). Every placement of such a box ends with this: a block-level child's, and a float
+        /// flowed with inline content (CSS 2.1 section 9.4.3: a float is offset like any other box; only <c>absolute</c> and <c>fixed</c> leave the flow).
+        /// </summary>
+        /// <summary>The distance a <c>position: relative</c> box is moved by its offsets (CSS 2.1 section 9.4.3), horizontally and vertically.</summary>
+        internal static (double X, double Y) ComputeRelativeOffset(CssBox child) =>
+            (ResolveNearFarOffset(child.Left, child.Right, child.ContainingBlock.AvailableWidth, child),
+             ResolveNearFarOffset(child.Top, child.Bottom, RelativeContainingBlockHeight(child), child));
+
+        internal static void ApplyRelativeOffset(CssBox child)
+        {
+            var (offsetX, offsetY) = ComputeRelativeOffset(child);
+
+            child.RelativeOffsetX = offsetX;
+            child.RelativeOffsetY = offsetY;
+            child.Location = new PaintPoint(child.Location.X + offsetX, child.Location.Y + offsetY);
+            child.ActualBottom = child.Location.Y;
+        }
+
         /// <summary>
         /// Writes the offset <see cref="ResolveBlockChildOffset"/> decided on, positions
         /// <paramref name="child"/> under whichever positioning scheme it uses, and registers the used page
@@ -7597,6 +7632,9 @@ namespace PeachBrackets.Html.Dom
                 {
                     var top = FloatLineTop(child, offset.Top) ?? offset.Top;
 
+                    // Placed afresh: an offset left from an earlier pass is not this placement's (it is applied again below).
+                    child.RelativeOffsetX = 0;
+                    child.RelativeOffsetY = 0;
                     child.Location = new PaintPoint(child.ResolveBlockInlineStart(offset.Left, top), top);
                     child.ActualBottom = top;
 
@@ -7644,13 +7682,7 @@ namespace PeachBrackets.Html.Dom
                     // A percentage refers to the containing block's width (left/right) or height (top/bottom),
                     // not the box's own size (CSS Positioned Layout 3 section 3.1). A containing block whose
                     // height is not definite leaves a top/bottom percentage as `auto`, as every engine does.
-                    var offsetX = ResolveNearFarOffset(child.Left, child.Right, child.ContainingBlock.AvailableWidth, child);
-                    var offsetY = ResolveNearFarOffset(child.Top, child.Bottom, RelativeContainingBlockHeight(child), child);
-
-                    child.RelativeOffsetX = offsetX;
-                    child.RelativeOffsetY = offsetY;
-                    child.Location = new PaintPoint(child.Location.X + offsetX, child.Location.Y + offsetY);
-                    child.ActualBottom = child.Location.Y;
+                    ApplyRelativeOffset(child);
                 }
 
                 if (child.Position.Value is PositionMode.Absolute)
@@ -9116,6 +9148,32 @@ namespace PeachBrackets.Html.Dom
             box.IsInlineRunWrapper && box.ParentBox is { } parent && FloatsShareTheLine(parent);
 
         /// <summary>
+        /// Whether the float <paramref name="floated"/> is next to another float among the in-flow children of <paramref name="parent"/> (no child that is in flow between
+        /// them), so that the two sit side by side in one row. A float alone between block-level siblings is not in a row.
+        /// </summary>
+        private static bool IsInRowOfFloats(CssBox parent, CssBox floated)
+        {
+            var index = parent.Boxes.IndexOf(floated);
+
+            for (var i = index - 1; i >= 0; i--)
+            {
+                var sibling = parent.Boxes[i];
+                if (sibling.DerivedStyle.ActualDisplay == Keywords.None || sibling.IsAbsolutelyPositioned || IsOutsideMarker(sibling)) continue;
+                if (sibling.IsFloated) return true;
+                break;
+            }
+
+            for (var i = index + 1; i < parent.Boxes.Count; i++)
+            {
+                var sibling = parent.Boxes[i];
+                if (sibling.DerivedStyle.ActualDisplay == Keywords.None || sibling.IsAbsolutelyPositioned || IsOutsideMarker(sibling)) continue;
+                return sibling.IsFloated;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Whether a floated child of <paramref name="box"/> is placed beside <paramref name="box"/>'s
         /// own inline content, and so ADDS its width to that content's line for max-content sizing,
         /// rather than opening a competing line of its own.
@@ -9287,6 +9345,17 @@ namespace PeachBrackets.Html.Dom
             // found this is a logo beside a five-line address, and the row measured as "logo + the address's
             // FIRST line" (140pt against the 164pt it needs) -- the outer row then handed it 140pt, and
             // the address wrapped to one word per line with the logo painted over it.
+            // A box holding only collapsible white space (`<i class="icon"></i> <span>text</span>`: the markup's space between the two) has no word of
+            // its own, but it is one space on the line, unless the line has nothing before it (css-text-3 §4.1.1, white-space phase II). FlowBox advances the
+            // cursor by it under exactly this condition; a measure that left it out sized a shrink-to-fit box one space narrower than its own layout needs,
+            // and the box's last word hung out past its right edge (or wrapped).
+            if (!atLineStart && box.Text is { Length: > 0 } text && string.IsNullOrWhiteSpace(text) && !box.IsImage && box.IsInline
+                && box.Boxes.Count == 0 && box.Words.Count == 0)
+            {
+                maxSum += box.ActualWordSpacing;
+                trailingSpace = box.ActualWordSpacing;
+            }
+
             // An orthogonal flow root with a definite width is one opaque box to the line it sits in (css-writing-modes-4 §4.3,
             // css-sizing-3 §5.1): its contribution is that declared width, and its words run along the other axis, so summing them
             // here as if they were horizontal text made a vertical box 15 characters tall ask for 15 characters of width.
@@ -9468,6 +9537,10 @@ namespace PeachBrackets.Html.Dom
                 // every other box pays nothing for it.
                 bool? floatsShareTheLine = null;
 
+                // Where the box has block-level children floats are not beside any one line of them, but consecutive floats still sit side by side, in one row
+                // (as wide as all of them when nothing limits the width): the width of the row so far, ended by a child that is in flow or a float that clears.
+                var floatRowWidth = 0d;
+
                 // recursively on all the child boxes
                 foreach (var childBox in box.Boxes)
                 {
@@ -9480,6 +9553,12 @@ namespace PeachBrackets.Html.Dom
                     // splitting the inline around it (#1299).
                     if (childBox.IsAbsolutelyPositioned) continue;
 
+                    // An outside marker is not part of the list item's own layout (CSS Lists 3 section 3.1; FlowBox skips it the same way), so it is not part of what
+                    // sizes the item either: its margin (the gap to the text) made every floated `<li>` five pixels wider than its text, even with `list-style: none`.
+                    if (IsOutsideMarker(childBox)) continue;
+
+                    if (!childBox.IsFloated) floatRowWidth = 0;
+
                     // A float is out of flow but is still placed BESIDE the inline content of the block
                     // it is in (CSS 2.1 §9.5), so its width adds to that content's line. The flat walk
                     // cannot express that by descending into it: §9.7 blockifies a float, so
@@ -9487,7 +9566,7 @@ namespace PeachBrackets.Html.Dom
                     // its own, competing with the text beside it instead of adding to it (issue #1033).
                     // Measured in isolation and added, exactly as the flex-row branch above measures an
                     // item.
-                    if (childBox.IsFloated && (floatsShareTheLine ??= FloatsShareTheLine(box)))
+                    if (childBox.IsFloated && ((floatsShareTheLine ??= FloatsShareTheLine(box)) || IsInRowOfFloats(box, childBox)))
                     {
                         childBox.GetMinMaxWidth(g, out var floatMin, out var floatMax);
 
@@ -9565,7 +9644,24 @@ namespace PeachBrackets.Html.Dom
                         // was the one the DOM-time pass removed, so simply adding its word width on top
                         // of the still-pending trailingSpace’s worth already in maxSum reconstructs the
                         // single interior space, matching Chromium/Firefox either way.
-                        maxSum += floatMax + floatMargins;
+                        if (floatsShareTheLine ??= FloatsShareTheLine(box))
+                        {
+                            maxSum += floatMax + floatMargins;
+                        }
+                        else
+                        {
+                            // A row of floats between block-level siblings (a menu of floated items and a clearing block): the row is a line of its own, as
+                            // wide as its floats side by side; the lines compete for the widest.
+                            if (childBox.Clear.Value is not ClearMode.None) floatRowWidth = 0;
+                            floatRowWidth += floatMax + floatMargins;
+
+                            // Whole lines compete (width and the decoration that goes with it): paddingSum belongs to whichever line set maxSum.
+                            if (floatRowWidth + descendantDecoration > maxSum + paddingSum)
+                            {
+                                maxSum = floatRowWidth;
+                                paddingSum = descendantDecoration;
+                            }
+                        }
 
                         atLineStart = false;
                         continue;
@@ -10060,6 +10156,11 @@ namespace PeachBrackets.Html.Dom
                 // margin.
                 var firstInFlowChild = current.Boxes.FirstOrDefault(b => !b.IsExcludedFromFlow && b.DerivedStyle.ActualDisplay != Keywords.None && !b.IsTableGridDecorationBox);
                 if (firstInFlowChild == null || firstInFlowChild.Clear.Value != ClearMode.None || firstInFlowChild == current) break;
+
+                // Only a block-level child's margin is adjoining (CSS 2.1 section 8.3.1): the first child of a box that holds inline content is an inline-level
+                // box (text, an inline-block, a replaced element), whose margin sits inside its line and never collapses with the parent's. Folded in, an
+                // inline-block's `margin-top: 19px` after a float moved the anonymous block that holds both 19px down, and the float with it.
+                if (firstInFlowChild.IsInline) break;
 
                 // The child's own margin on `side` always legitimately joins the group here - it's an
                 // ordinary physical value on the CALLER's fixed axis, regardless of the child's own

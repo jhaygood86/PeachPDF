@@ -797,17 +797,15 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
                 LayoutHarness.Wrap(
                     "<div style='height:100pt'>filler</div>"
                     + "<div style='display:flex; flex-direction:column'>"
-                    + $"<div id='footer' style='height:20pt;background:#cde'>{items}</div>"
+                    + $"<div id='footer' style='background:#cde'>{items}</div>"
                     + "</div>"),
                 pageHeight: 200);
 
             var footer = LayoutHarness.FindById(root, "footer")!;
 
-            // The fixture is only meaningful if the item's own committed bounds really do fall short of its
-            // content: ten 20pt paragraphs (200pt) well past the item's own pinned 20pt height.
-            var lastChildBottom = footer.Boxes[^1].ActualBottom;
-            Assert.True(lastChildBottom > footer.ActualBottom + 20,
-                $"expected content well past the item's own bottom ({footer.ActualBottom}), got {lastChildBottom}");
+            // An item whose height comes from its content (CSS 2.1 section 10.6.3 gives a definite `height` as the used height whatever the content does, which
+            // is the next fixture's case). Its content outgrows the size the commit pass pinned from the unbroken measurement as each break adds its strip.
+            Assert.True(footer.Boxes[^1].ActualBottom >= footer.ActualBottom - 0.5);
 
             var fragments = FragmentsOf(container.FragmentTree!, "footer");
             Assert.True(fragments.Count > 1, "fixture must paginate the item's own content");
@@ -835,20 +833,14 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
                 LayoutHarness.Wrap(
                     "<div style='height:190pt'>filler</div>"
                     + "<div style='display:flex; flex-direction:column'>"
-                    + $"<div id='footer' style='height:20pt;background:#cde'>{items}</div>"
+                    + $"<div id='footer' style='background:#cde'>{items}</div>"
                     + "</div>"),
                 pageHeight: 200, margin: 0);
 
             var footer = LayoutHarness.FindById(root, "footer")!;
 
-            // The item's own pinned bounds ([190, 210)) genuinely straddle the page-1/page-2 boundary (200)
-            // by a sliver, rather than falling entirely on one side of it - the shape this test is for.
-            Assert.True(footer.Location.Y < 200 && footer.ActualBottom > 200,
-                $"expected the item's own bounds to straddle the page boundary, got [{footer.Location.Y}, {footer.ActualBottom})");
-
-            var lastChildBottom = footer.Boxes[^1].ActualBottom;
-            Assert.True(lastChildBottom > footer.ActualBottom + 20,
-                $"expected content well past the item's own bottom ({footer.ActualBottom}), got {lastChildBottom}");
+            // The item starts on the first page, 10pt above the page boundary (200), and its content runs on for many pages more.
+            Assert.True(footer.Location.Y < 200, $"expected the item to start on the first page, got {footer.Location.Y}");
 
             var fragments = FragmentsOf(container.FragmentTree!, "footer");
             Assert.True(fragments.Count > 1, "fixture must paginate the item's own content");
@@ -875,6 +867,33 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragments
                 Assert.True(decorationBottom >= contentBottom - 0.5,
                     $"decoration only reaches {decorationBottom}, but this fragment's own content reaches {contentBottom}");
             });
+
+        /// <summary>
+        /// A flex item with a definite <c>height</c> is that tall whatever its content does (CSS 2.1 section 10.6.3; Chromium paints the background of a 20pt
+        /// item over 20pt while its 200pt of content overflows it): content past the box is overflow, not part of it, so the decoration stays at the box's own size
+        /// instead of following the content onto later pages.
+        /// </summary>
+        [Fact]
+        public async Task AFlexItemWithADefiniteHeight_KeepsItsDecorationAtItsOwnHeight()
+        {
+            var items = string.Concat(Enumerable.Range(1, 10)
+                .Select(i => $"<p style='margin:0;height:20pt'>row {i}</p>"));
+
+            var (root, container) = await LayoutHarness.LayoutAsync(
+                LayoutHarness.Wrap(
+                    "<div style='height:100pt'>filler</div>"
+                    + "<div style='display:flex; flex-direction:column'>"
+                    + $"<div id='footer' style='height:20pt;background:#cde'>{items}</div>"
+                    + "</div>"),
+                pageHeight: 200);
+
+            var footer = LayoutHarness.FindById(root, "footer")!;
+            var decorated = FragmentsOf(container.FragmentTree!, "footer").SelectMany(f => f.Lines).ToList();
+
+            Assert.NotEmpty(decorated);
+            Assert.All(decorated, line => Assert.True(line.Rect.Height <= footer.ActualBoxSizingHeight + 0.5,
+                $"decoration is {line.Rect.Height} tall for a box of {footer.ActualBoxSizingHeight}"));
+        }
 
         /// <summary>
         /// A box whose break moved because it would have left fewer lines than <c>orphans</c> behind must
