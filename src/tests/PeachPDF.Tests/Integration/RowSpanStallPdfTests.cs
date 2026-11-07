@@ -7,15 +7,15 @@ namespace PeachPDF.Tests.Integration
     /// it. The driver notices a run that gets nowhere by comparing a pass's outgoing record with the one it was handed, and the table's record
     /// carries the row-span bookkeeping, in which a cell placed again on each pass was listed once more every time: the records were never equal
     /// and the render ran for minutes instead of falling back to laying the rest out in one piece. The same rules are asserted on the pass
-    /// counts in <c>PeachBrackets.Engine.Tests</c> (<c>StalledPaginationTests</c>); this runs through <see cref="PdfGenerator"/>, which is what
-    /// the coverage gate measures the engine through.
+    /// counts in <c>PeachBrackets.Engine.Tests</c> (<c>StalledPaginationTests</c>); this runs through <see cref="PdfGenerator"/>, the whole pipeline a
+    /// caller uses.
     /// </summary>
     public class RowSpanStallPdfTests
     {
         private const string Document =
-            "<!doctype html><html><head><style>@page{size:300pt 160pt;margin:20pt}body{margin:0;font:12pt '{0}'}</style></head><body>" +
+            "<!doctype html><html><head><style>@page{size:300pt 160pt;margin:20pt}body{margin:0;font:12pt '{0}'}th{padding:0;line-height:20pt}table{border-spacing:0}</style></head><body>" +
             "<table><thead><tr><th>w1</th></tr></thead><tbody><tr><td rowspan='4'><table><tbody><tr><td rowspan='3'>" +
-            "<div style='float:right;width:60%;margin:0 0 6pt 0;height:90pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table></body></html>";
+            "<div style='float:right;width:60%;margin:0 0 6pt 0;height:86pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table></body></html>";
 
         [Fact]
         public async Task AStalledRowSpanTable_FinishesInsteadOfRunningToThePassCap()
@@ -27,9 +27,9 @@ namespace PeachPDF.Tests.Integration
 
             // Run off the test's own thread so that a regression fails here, after a minute, rather than hanging the run.
             var render = Task.Run(() => generator.GeneratePdf(html, PageSize.A4));
-            var finished = await Task.WhenAny(render, Task.Delay(TimeSpan.FromSeconds(60)));
+            var finished = await Task.WhenAny(render, Task.Delay(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken));
 
-            Assert.Same(render, finished);
+            Assert.True(ReferenceEquals(render, finished), "the render had not finished after 60s: the stalled passes were not recognised");
 
             var file = (await render).Inspect();
 
