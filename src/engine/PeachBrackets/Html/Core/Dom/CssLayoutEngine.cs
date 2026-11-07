@@ -9561,11 +9561,18 @@ namespace PeachBrackets.Html.Dom
                 ? lineBoxTop + boxExtent.Height
                 : double.MinValue;
 
-            foreach (var box in boxes)
+            // With a line box of its own (FlowTop and an extent), the rectangles are NOT folded in: the extent already holds the strut, every
+            // box's contribution and the edge-aligned atomics, and a text box's content area may overflow the line box (negative leading, or the
+            // font's content area being taller than its `normal` line) without growing it. Folding that overflow in aligned a top-aligned
+            // inline-block to the topmost ink, a fraction of a point above the line top.
+            if (lineBox.FlowTop is null || lineBox.BaselineExtent is null)
             {
-                var r = lineBox.Rectangles[box];
-                lineTop = Math.Min(lineTop, r.Top);
-                lineBottom = Math.Max(lineBottom, r.Bottom);
+                foreach (var box in boxes)
+                {
+                    var r = lineBox.Rectangles[box];
+                    lineTop = Math.Min(lineTop, r.Top);
+                    lineBottom = Math.Max(lineBottom, r.Bottom);
+                }
             }
 
             // Resolved for every box up front, for the same reason lineTop/lineBottom are: each delta is
