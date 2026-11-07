@@ -982,6 +982,39 @@ await SaveShowcaseAsync("border_radius", "Backgrounds & Borders", "Border Radius
     "border-radius from simple uniform rounding to per-corner and elliptical radii, on filled and bordered boxes, plus overflow:hidden clipping descendant content to the curve and background-clip's inset curves reduced by border width.",
     radiusHtml, pdfConfig);
 
+// corner-shape (CSS Borders 4 §3): the six keywords and a superellipse(), on fills, solid/dashed/double borders and clipped content.
+const string CornerShapeCss = "<style>" +
+    "body{font-family:sans-serif;font-size:9pt;margin:14pt;}" +
+    ".row{display:flex;flex-wrap:wrap;gap:14pt;margin-bottom:14pt;}" +
+    ".cell{width:110pt;}" +
+    ".box{width:100pt;height:70pt;border-radius:26pt;background:#4a90d9;}" +
+    ".cap{margin-top:3pt;color:#444;}" +
+    "</style>";
+var cornerShapeHtml = "<!DOCTYPE html><html><head>" + CornerShapeCss + "</head><body>" +
+    "<h3>corner-shape keywords (border-radius: 26pt)</h3><div class=\"row\">" +
+    string.Concat(new[] { "round", "squircle", "bevel", "scoop", "notch", "square", "superellipse(0.5)" }.Select(shape =>
+        "<div class=\"cell\"><div class=\"box\" style=\"corner-shape:" + shape + "\"></div><div class=\"cap\">" + shape + "</div></div>")) +
+    "</div>" +
+    "<h3>Per corner, with the corner shorthands</h3><div class=\"row\">" +
+    "<div class=\"cell\"><div class=\"box\" style=\"corner-shape:bevel scoop squircle notch\"></div><div class=\"cap\">corner-shape: bevel scoop squircle notch</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"border-radius:0;corner-top:scoop 26pt\"></div><div class=\"cap\">corner-top: scoop 26pt</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"border-radius:0;border-right-radius:30pt;corner-right-shape:bevel\"></div><div class=\"cap\">border-right-radius + corner-right-shape</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"border-radius:0;border-start-end-radius:34pt;corner-start-end-shape:notch\"></div><div class=\"cap\">logical start-end</div></div>" +
+    "</div>" +
+    "<h3>Borders and clipping</h3><div class=\"row\">" +
+    "<div class=\"cell\"><div class=\"box\" style=\"background:#fff;border:6pt solid #c0392b;corner-shape:bevel\"></div><div class=\"cap\">solid border, bevel</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"background:#fff;border:6pt solid;border-color:#c0392b #27ae60 #2980b9 #8e44ad;corner-shape:scoop\"></div><div class=\"cap\">four colours, scoop</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"background:#fff;border:4pt dashed #333;corner-shape:squircle\"></div><div class=\"cap\">dashed, squircle</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"background:#fff;border:9pt double #333;corner-shape:notch\"></div><div class=\"cap\">double, notch</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"background:#fff;outline:3pt solid #e67e22;outline-offset:3pt;corner-shape:bevel\"></div><div class=\"cap\">outline, bevel</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"overflow:hidden;corner-shape:bevel;background:#eee\"><div style=\"width:140pt;height:100pt;background:linear-gradient(135deg,#f39c12,#8e44ad)\"></div></div><div class=\"cap\">overflow: hidden, bevel</div></div>" +
+    "<div class=\"cell\"><div class=\"box\" style=\"box-shadow:6pt 6pt 8pt #0006;corner-shape:squircle\"></div><div class=\"cap\">box-shadow, squircle</div></div>" +
+    "</div></body></html>";
+
+await SaveShowcaseAsync("corner_shape", "Backgrounds & Borders", "Corner Shape",
+    "CSS Borders 4 corner-shape: round, squircle, bevel, scoop, notch, square and superellipse() corners, set per corner or through the corner-* and border-*-radius shorthands, with solid, dashed and double borders, outlines, shadows and overflow clipping following the shaped corner.",
+    cornerShapeHtml, pdfConfig);
+
 // image-resolution (CSS Images 4 §6.1): the same 120x120 raster recorded at 300 dpi, sized by its own density, by an explicit resolution and snapped.
 string MakeDensityPngDataUri()
 {

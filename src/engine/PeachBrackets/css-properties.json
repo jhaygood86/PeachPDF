@@ -645,6 +645,278 @@
       }
     },
     {
+      "name": "corner-top-left-shape",
+      "comment": "CSS Borders 4 §3.7: <corner-shape-value>. Stored as the authored/canonical text and read back as the superellipse parameter K by CornerShapeGrammar.ParseK at paint time (BorderRadii carries it); cssom-grammar validates through the same converter the CSS-OM class uses. Not interpolated yet.",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": "round",
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerTopLeftShape",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "corner-top-right-shape",
+      "comment": "CSS Borders 4 §3.7: <corner-shape-value>. Stored as the authored/canonical text and read back as the superellipse parameter K by CornerShapeGrammar.ParseK at paint time (BorderRadii carries it); cssom-grammar validates through the same converter the CSS-OM class uses. Not interpolated yet.",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": "round",
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerTopRightShape",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "corner-bottom-right-shape",
+      "comment": "CSS Borders 4 §3.7: <corner-shape-value>. Stored as the authored/canonical text and read back as the superellipse parameter K by CornerShapeGrammar.ParseK at paint time (BorderRadii carries it); cssom-grammar validates through the same converter the CSS-OM class uses. Not interpolated yet.",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": "round",
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerBottomRightShape",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "corner-bottom-left-shape",
+      "comment": "CSS Borders 4 §3.7: <corner-shape-value>. Stored as the authored/canonical text and read back as the superellipse parameter K by CornerShapeGrammar.ParseK at paint time (BorderRadii carries it); cssom-grammar validates through the same converter the CSS-OM class uses. Not interpolated yet.",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": "round",
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerBottomLeftShape",
+        "csharpDataType": "string",
+        "area": "BorderArea"
+      }
+    },
+    {
+      "name": "corner-start-start-shape",
+      "comment": "CSS Borders 4 §3.7 flow-relative corner shape: resolution scratch space like border-block-start-color (read once by CssBox.ResolveLogicalProperties, which writes the physical corner the box's writing-mode and direction name). Validates through the same converter as the physical longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "corner-shape",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerStartStartShape",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "corner-start-end-shape",
+      "comment": "CSS Borders 4 §3.7 flow-relative corner shape: resolution scratch space like border-block-start-color (read once by CssBox.ResolveLogicalProperties, which writes the physical corner the box's writing-mode and direction name). Validates through the same converter as the physical longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "corner-shape",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerStartEndShape",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "corner-end-start-shape",
+      "comment": "CSS Borders 4 §3.7 flow-relative corner shape: resolution scratch space like border-block-start-color (read once by CssBox.ResolveLogicalProperties, which writes the physical corner the box's writing-mode and direction name). Validates through the same converter as the physical longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "corner-shape",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerEndStartShape",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "corner-end-end-shape",
+      "comment": "CSS Borders 4 §3.7 flow-relative corner shape: resolution scratch space like border-block-start-color (read once by CssBox.ResolveLogicalProperties, which writes the physical corner the box's writing-mode and direction name). Validates through the same converter as the physical longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.CornerShapeConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "corner-shape",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": {
+        "type": "cssom-grammar",
+        "member": "PeachBrackets.Css.Converters.CornerShapeConverter.Convert"
+      },
+      "html": {
+        "propertyPath": "CornerEndEndShape",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-start-start-radius",
+      "comment": "CSS Borders 4 §3.5 flow-relative corner radius: resolution scratch space (see corner-start-start-shape); writes the physical border-*-radius the box's writing-mode and direction name. Validates through the same length-list grammar as the physical radius longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.BorderRadiusConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-radius",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": {
+        "type": "length-list",
+        "min": 1,
+        "max": 2,
+        "allowPercentage": true
+      },
+      "html": {
+        "propertyPath": "BorderStartStartRadius",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-start-end-radius",
+      "comment": "CSS Borders 4 §3.5 flow-relative corner radius: resolution scratch space (see corner-start-start-shape); writes the physical border-*-radius the box's writing-mode and direction name. Validates through the same length-list grammar as the physical radius longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.BorderRadiusConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-radius",
+        "axis": "block",
+        "side": "start"
+      },
+      "cssDataType": {
+        "type": "length-list",
+        "min": 1,
+        "max": 2,
+        "allowPercentage": true
+      },
+      "html": {
+        "propertyPath": "BorderStartEndRadius",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-end-start-radius",
+      "comment": "CSS Borders 4 §3.5 flow-relative corner radius: resolution scratch space (see corner-start-start-shape); writes the physical border-*-radius the box's writing-mode and direction name. Validates through the same length-list grammar as the physical radius longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.BorderRadiusConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-radius",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": {
+        "type": "length-list",
+        "min": 1,
+        "max": 2,
+        "allowPercentage": true
+      },
+      "html": {
+        "propertyPath": "BorderEndStartRadius",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
+      "name": "border-end-end-radius",
+      "comment": "CSS Borders 4 §3.5 flow-relative corner radius: resolution scratch space (see corner-start-start-shape); writes the physical border-*-radius the box's writing-mode and direction name. Validates through the same length-list grammar as the physical radius longhands.",
+      "category": "logical",
+      "inherited": false,
+      "cssom": {
+        "converter": "Converters.BorderRadiusConverter"
+      },
+      "initialValue": null,
+      "resolvesTo": {
+        "group": "border-radius",
+        "axis": "block",
+        "side": "end"
+      },
+      "cssDataType": {
+        "type": "length-list",
+        "min": 1,
+        "max": 2,
+        "allowPercentage": true
+      },
+      "html": {
+        "propertyPath": "BorderEndEndRadius",
+        "csharpDataType": "string?",
+        "area": null
+      }
+    },
+    {
       "name": "border-image-source",
       "comment": "CSS Backgrounds and Borders 3 <13>: none | <image>. Parses into a structurally different field (a single CssImage, not a list) via a custom setter, mirroring background-image's own custom-setter pattern; cssDataType 'cssom-grammar' calls the same Converters.OptionalImageSourceConverter.Convert real grammar background-image and this property's own CSS-OM BorderImageSourceProperty already use, so validation and application share one parser rather than a second, independently-derived one.",
       "inherited": false,

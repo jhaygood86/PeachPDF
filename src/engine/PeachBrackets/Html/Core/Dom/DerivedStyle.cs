@@ -618,8 +618,13 @@ namespace PeachBrackets.Html.Dom
             double brX = ActualBorderBottomRightRadiusX, brY = ActualBorderBottomRightRadiusY;
             double blX = ActualBorderBottomLeftRadiusX, blY = ActualBorderBottomLeftRadiusY;
 
-            return ApplyCornerOverlap(rect, tlX, tlY, trX, trY, brX, brY, blX, blY);
+            return ApplyCornerOverlap(rect, tlX, tlY, trX, trY, brX, brY, blX, blY)
+                .WithShapes(CornerShapeK(Style.Border.CornerTopLeftShape), CornerShapeK(Style.Border.CornerTopRightShape),
+                    CornerShapeK(Style.Border.CornerBottomRightShape), CornerShapeK(Style.Border.CornerBottomLeftShape));
         }
+
+        // css-borders-4 §3.7: the corner-shape longhand as its superellipse parameter; the initial value is round (K = 1).
+        private static double CornerShapeK(string? value) => CornerShapeGrammar.ParseK(value ?? CornerShapeGrammar.Initial);
 
         /// <summary>
         /// Computes overlap-reduced radii for a box's padding edge or content edge, per
@@ -655,7 +660,7 @@ namespace PeachBrackets.Html.Dom
             double brX = Math.Max(0, outer.BRX - insetRight), brY = Math.Max(0, outer.BRY - insetBottom);
             double blX = Math.Max(0, outer.BLX - insetLeft), blY = Math.Max(0, outer.BLY - insetBottom);
 
-            return ApplyCornerOverlap(innerRect, tlX, tlY, trX, trY, brX, brY, blX, blY);
+            return ApplyCornerOverlap(innerRect, tlX, tlY, trX, trY, brX, brY, blX, blY).WithShapes(outer.KTL, outer.KTR, outer.KBR, outer.KBL);
         }
 
         /// <summary>
@@ -2318,12 +2323,29 @@ namespace PeachBrackets.Html.Dom
     {
         public readonly double TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY;
 
+        // The superellipse parameter K of each corner's corner-shape, stored as K - 1 so that default(BorderRadii),
+        // and every constructor that is not told a shape, means "round" (K = 1) without a fix-up. Infinity survives the shift.
+        private readonly double _dkTL, _dkTR, _dkBR, _dkBL;
+
+        /// <summary>The top-left corner's superellipse parameter (1 is <c>round</c>).</summary>
+        public double KTL => _dkTL + 1;
+
+        /// <summary>The top-right corner's superellipse parameter (1 is <c>round</c>).</summary>
+        public double KTR => _dkTR + 1;
+
+        /// <summary>The bottom-right corner's superellipse parameter (1 is <c>round</c>).</summary>
+        public double KBR => _dkBR + 1;
+
+        /// <summary>The bottom-left corner's superellipse parameter (1 is <c>round</c>).</summary>
+        public double KBL => _dkBL + 1;
+
         public bool Equals(BorderRadii other) =>
-            TLX == other.TLX && TLY == other.TLY && TRX == other.TRX && TRY == other.TRY && BRX == other.BRX && BRY == other.BRY && BLX == other.BLX && BLY == other.BLY;
+            TLX == other.TLX && TLY == other.TLY && TRX == other.TRX && TRY == other.TRY && BRX == other.BRX && BRY == other.BRY && BLX == other.BLX && BLY == other.BLY
+            && _dkTL == other._dkTL && _dkTR == other._dkTR && _dkBR == other._dkBR && _dkBL == other._dkBL;
 
         public override bool Equals(object? obj) => obj is BorderRadii other && Equals(other);
 
-        public override int GetHashCode() => HashCode.Combine(TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY);
+        public override int GetHashCode() => HashCode.Combine(HashCode.Combine(TLX, TLY, TRX, TRY, BRX, BRY, BLX, BLY), _dkTL, _dkTR, _dkBR, _dkBL);
 
         public BorderRadii(double tlX, double tlY, double trX, double trY,
                            double brX, double brY, double blX, double blY)
@@ -2332,9 +2354,27 @@ namespace PeachBrackets.Html.Dom
             TRX = trX; TRY = trY;
             BRX = brX; BRY = brY;
             BLX = blX; BLY = blY;
+            _dkTL = _dkTR = _dkBR = _dkBL = 0;
         }
+
+        private BorderRadii(BorderRadii radii, double kTL, double kTR, double kBR, double kBL)
+        {
+            TLX = radii.TLX; TLY = radii.TLY;
+            TRX = radii.TRX; TRY = radii.TRY;
+            BRX = radii.BRX; BRY = radii.BRY;
+            BLX = radii.BLX; BLY = radii.BLY;
+            _dkTL = kTL - 1; _dkTR = kTR - 1; _dkBR = kBR - 1; _dkBL = kBL - 1;
+        }
+
+        /// <summary>These radii with the given corner shapes (css-borders-4 <c>corner-shape</c>), as superellipse parameters.</summary>
+        public BorderRadii WithShapes(double kTL, double kTR, double kBR, double kBL) => new(this, kTL, kTR, kBR, kBL);
 
         public bool IsRounded => TLX > 0 || TLY > 0 || TRX > 0 || TRY > 0 ||
                                  BRX > 0 || BRY > 0 || BLX > 0 || BLY > 0;
+
+        /// <summary>Whether some corner that has a radius is drawn with a shape other than <c>round</c>.</summary>
+        public bool HasShapes =>
+            (_dkTL != 0 && (TLX > 0 && TLY > 0)) || (_dkTR != 0 && (TRX > 0 && TRY > 0)) ||
+            (_dkBR != 0 && (BRX > 0 && BRY > 0)) || (_dkBL != 0 && (BLX > 0 && BLY > 0));
     }
 }

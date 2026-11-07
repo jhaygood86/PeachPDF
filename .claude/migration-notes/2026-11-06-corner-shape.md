@@ -1,0 +1,3 @@
+# `corner-shape`, the `corner-*` shorthands and the flow-relative radii
+
+`corner-shape` and its longhands and shorthands, the `corner-*` shorthands that set a corner's shape and radius together, the two-corner `border-top-radius`-style shorthands and the flow-relative `border-start-start-radius` family used to be dropped as unknown properties, so a box kept its plain round (or square) corners. They now take effect: a corner can be a `bevel`, `scoop`, `notch`, `squircle`, `square` or `superellipse()`, and the fill, clips, shadows, border and outline follow it. A page that carried these for other engines now renders them here too. A corner with no radius is still square, so a page that set only `corner-shape` is unchanged.

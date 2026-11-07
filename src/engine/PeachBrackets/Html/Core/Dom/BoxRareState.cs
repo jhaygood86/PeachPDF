@@ -169,6 +169,14 @@ namespace PeachBrackets.Html.Dom
         internal string? BorderInlineEndWidth;
         internal string? BorderInlineEndStyle;
         internal string? BorderInlineEndColor;
+        internal string? CornerStartStartShape;
+        internal string? BorderStartStartRadius;
+        internal string? CornerStartEndShape;
+        internal string? BorderStartEndRadius;
+        internal string? CornerEndStartShape;
+        internal string? BorderEndStartRadius;
+        internal string? CornerEndEndShape;
+        internal string? BorderEndEndRadius;
         internal GridSubgridContext? SubgridContext;
         internal double RelativeOffsetX;
         internal double RelativeOffsetY;
