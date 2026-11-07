@@ -6355,7 +6355,11 @@ namespace PeachBrackets.Html.Dom
                                     rowSpannedBoxesForRow = [];
                                     rowSpannedBoxes[endRow] = rowSpannedBoxesForRow;
                                 }
-                                rowSpannedBoxesForRow.Add(cell);
+                                // Once: a pass that resumes this row has the list carried over from the pass before (the cursor
+                                // re-seeds it from the token), so a cell re-placed on every pass would be listed once more each
+                                // time, and the token's content equality - the driver's no-progress test - would never see two
+                                // passes as the same.
+                                if (!rowSpannedBoxesForRow.Contains(cell)) rowSpannedBoxesForRow.Add(cell);
                                 break;
                             }
                     }
