@@ -15,7 +15,7 @@ namespace PeachBrackets.Css
     internal static class VendorPropertyAliases
     {
         // Only properties whose prefixed form took the standard grammar. Anything with a genuinely different legacy
-        // grammar (the -webkit-box-* flexbox, -webkit-column-break-*, -webkit-gradient()) is deliberately absent.
+        // grammar (the -webkit-box-* flexbox, -webkit-gradient()) is deliberately absent.
         private static readonly FrozenDictionary<string, string> Table = Build();
 
         /// <summary>Resolves <paramref name="name"/> to its standard name, or returns it unchanged if it is not an alias.</summary>
@@ -35,7 +35,7 @@ namespace PeachBrackets.Css
             {
                 PropertyNames.Transform, PropertyNames.TransformOrigin, PropertyNames.TransformStyle,
                 PropertyNames.Perspective, PropertyNames.PerspectiveOrigin, PropertyNames.BackfaceVisibility,
-                PropertyNames.BoxShadow, PropertyNames.BoxSizing,
+                PropertyNames.BoxShadow, PropertyNames.BoxSizing, PropertyNames.BoxDecorationBreak, PropertyNames.Mask, PropertyNames.InitialLetter,
                 PropertyNames.BorderRadius, PropertyNames.BorderTopLeftRadius, PropertyNames.BorderTopRightRadius,
                 PropertyNames.BorderBottomLeftRadius, PropertyNames.BorderBottomRightRadius,
                 PropertyNames.BorderImage,

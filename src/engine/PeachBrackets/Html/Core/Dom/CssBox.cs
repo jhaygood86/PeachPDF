@@ -1905,7 +1905,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private void AppendWordsFromText(string sourceText)
         {
-            var text = ApplyTextTransform(sourceText, TextTransform);
+            var text = TextSecurityMasker.Apply(ApplyTextTransform(sourceText, TextTransform), TextSecurity.Value);
             var startIdx = 0;
             var preserveSpaces = WhiteSpace.Value is Whitespace.Pre or Whitespace.PreWrap;
             var respectNewLines = preserveSpaces || WhiteSpace.Value == Whitespace.PreLine || IsBrElement;
@@ -8532,7 +8532,9 @@ namespace PeachBrackets.Html.Dom
                 // at ParseToWords time, independent of whether the per-line mirroring pass has run yet.
                 boxWord.FirstLineText = firstLineStyle.TextTransform != TextTransform && boxWord.Text != "\n"
                     ? Bidi.Mirror(
-                        ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), boxWord.BidiLevel)
+                        TextSecurityMasker.Apply(
+                            ApplyTextTransform(boxWord.OriginalText ?? boxWord.Text!, firstLineStyle.TextTransform), TextSecurity.Value),
+                        boxWord.BidiLevel)
                     : null;
                 // When FirstLineText is null (this box's own TextTransform already matches the
                 // first-line rule's, so Text needs no separate re-derivation), prefer PreMirrorText

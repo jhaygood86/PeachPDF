@@ -9268,6 +9268,38 @@ await SaveShowcaseAsync("tab_size", "Typography & Text", "tab-size",
     "tab-size (CSS Text 4): controlling how far a preserved tab character indents inside white-space:pre content.",
     tabSizeHtml, pdfConfig);
 
+// --- WebKit-era properties showcase ---
+
+const string webkitLegacyHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 11pt/16pt Georgia, serif; margin: 0 }
+    h2 { font: bold 10pt Arial, sans-serif; margin: 1em 0 0.4em; padding-bottom: 2px; border-bottom: 1px solid #999 }
+    .dc { width: 360pt }
+    .dc::first-letter { initial-letter: 3; color: crimson; font-weight: bold }
+    .raise::first-letter { initial-letter: 3 1; color: #1a5276; font-weight: bold }
+    .grad { font: bold 36pt Arial, sans-serif; background: linear-gradient(90deg, #e74c3c, #3498db); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent }
+    .pw { font-size: 16pt; -webkit-text-security: disc }
+    .refl { width: 160pt; height: 40pt; background: #3498db; color: #fff; padding: 6pt; box-sizing: border-box; margin-bottom: 60pt;
+            -webkit-box-reflect: below 4pt linear-gradient(transparent 40%, rgba(255,255,255,.6)) }
+    </style></head><body>
+    <h2>initial-letter: 3 (drop cap sunk over three lines)</h2>
+    <p class="dc">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.</p>
+    <h2>initial-letter: 3 1 (raised cap)</h2>
+    <p class="dc raise">Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.</p>
+    <h2>-webkit-background-clip: text + -webkit-text-fill-color: transparent</h2>
+    <div class="grad">Gradient text</div>
+    <h2>-webkit-text-security: disc</h2>
+    <p class="pw">secret password</p>
+    <h2>-webkit-box-reflect</h2>
+    <div class="refl">Reflected box</div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("webkit_legacy_properties", "Typography & Text", "WebKit-era properties",
+    "initial-letter drop caps, -webkit-text-fill-color gradient text, -webkit-text-security bullets and -webkit-box-reflect reflections.",
+    webkitLegacyHtml, pdfConfig);
+
 // --- ::first-letter showcase ---
 
 const string FirstLetterCss = """

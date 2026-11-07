@@ -1,0 +1,3 @@
+# -webkit-text-fill-color, -webkit-text-security, -webkit-box-reflect, initial-letter, -webkit-column-break-*
+
+These used to be dropped as unknown properties. They now take effect: text fills with `-webkit-text-fill-color`, `-webkit-text-security` replaces the characters of the text with bullets (also in the PDF's extractable text), `-webkit-box-reflect` paints a mirrored copy, `initial-letter` (and `-webkit-initial-letter`) floats and sizes a `::first-letter` as a drop cap, and `-webkit-column-break-*` set the matching `break-*`. A page that carried these for other engines now renders them here too.

@@ -2335,6 +2335,117 @@
       }
     },
     {
+      "name": "-webkit-column-break-before",
+      "comment": "WebKit's pre-standard column-break-before: auto/always/avoid only. Shares break-before's storage; 'always' remaps to column, 'avoid' to avoid-column (the legacy property only ever addressed column breaks).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.WebkitColumnBreakModeConverter", "className": "WebkitColumnBreakBefore"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.WebkitColumnBreakModes",
+        "fallback": "BreakMode.Auto"
+      },
+      "aliasOf": "break-before",
+      "html": {
+        "propertyPath": "BreakBefore",
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakBefore.ToString()",
+        "customSetter": "{box}.BreakBefore = CssProperty<BreakMode>.FromCssText({value} is Keywords.Always ? Keywords.Column : {value} is Keywords.Avoid ? Keywords.AvoidColumn : {value}, Map.BreakModes, BreakMode.Auto);"
+      }
+    },
+    {
+      "name": "-webkit-column-break-after",
+      "comment": "WebKit's pre-standard column-break-after: auto/always/avoid only. Shares break-after's storage; 'always' remaps to column, 'avoid' to avoid-column (the legacy property only ever addressed column breaks).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.WebkitColumnBreakModeConverter", "className": "WebkitColumnBreakAfter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.WebkitColumnBreakModes",
+        "fallback": "BreakMode.Auto"
+      },
+      "aliasOf": "break-after",
+      "html": {
+        "propertyPath": "BreakAfter",
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakAfter.ToString()",
+        "customSetter": "{box}.BreakAfter = CssProperty<BreakMode>.FromCssText({value} is Keywords.Always ? Keywords.Column : {value} is Keywords.Avoid ? Keywords.AvoidColumn : {value}, Map.BreakModes, BreakMode.Auto);"
+      }
+    },
+    {
+      "name": "-webkit-column-break-inside",
+      "comment": "WebKit's pre-standard column-break-inside: auto/always/avoid only. Shares break-inside's storage; 'always' remaps to column, 'avoid' to avoid-column (the legacy property only ever addressed column breaks).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.WebkitColumnBreakInsideModeConverter", "className": "WebkitColumnBreakInside"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BreakMode",
+        "keywordMap": "Map.WebkitColumnBreakInsideModes",
+        "fallback": "BreakMode.Auto"
+      },
+      "aliasOf": "break-inside",
+      "html": {
+        "propertyPath": "BreakInside",
+        "csharpDataType": "CssProperty<BreakMode>",
+        "area": "BreakArea",
+        "getterExpression": "{box}.BreakInside.ToString()",
+        "customSetter": "{box}.BreakInside = CssProperty<BreakMode>.FromCssText({value} is Keywords.Always ? Keywords.Column : {value} is Keywords.Avoid ? Keywords.AvoidColumn : {value}, Map.BreakModes, BreakMode.Auto);"
+      }
+    },
+    {
+      "name": "-webkit-font-smoothing",
+      "comment": "Accepted and ignored. auto|none|antialiased|subpixel-antialiased; anti-aliasing is the PDF viewer's business.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-webkit-text-size-adjust",
+      "comment": "Accepted and ignored. Mobile text inflation; no equivalent on a fixed page.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-webkit-tap-highlight-color",
+      "comment": "Accepted and ignored. Touch feedback; meaningless in print.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "black",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-webkit-touch-callout",
+      "comment": "Accepted and ignored. iOS long-press callout; meaningless in print.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "default",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-webkit-overflow-scrolling",
+      "comment": "Accepted and ignored. Touch momentum scrolling; meaningless in print.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
+      "name": "-webkit-user-drag",
+      "comment": "Accepted and ignored. Drag-and-drop behaviour; meaningless in print.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.Any"},
+      "initialValue": "auto",
+      "cssDataType": "unsupported"
+    },
+    {
       "name": "box-decoration-break",
       "comment": "CssProperty<BoxDecorationBreakMode>-backed (issue #598's follow-up: typed enum storage instead of a raw string).",
       "inherited": false,
@@ -4235,6 +4346,64 @@
         "propertyPath": "TextStrokeColor",
         "csharpDataType": "string",
         "area": "TextArea"
+      }
+    },
+    {
+      "name": "initial-letter",
+      "comment": "CSS Inline 3 section 7.4: normal | <number [1,inf]> <integer [1,inf]> | <number [1,inf]> && [ drop | raise ]?. Not inherited. Applied to a ::first-letter box by DomParser.SplitFirstLetter, which floats it and sizes its font so its cap height spans the requested lines (horizontal writing mode only). Stored in DisplayPositioningArea beside float so it is not adopted wholesale by InheritStyle.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.InitialLetterConverter"},
+      "initialValue": "normal",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.InitialLetterConverter.Convert" },
+      "html": {
+        "propertyPath": "InitialLetter",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "-webkit-box-reflect",
+      "comment": "none | [ above | below | left | right ]? <length>? <image>? (WebKit, also implemented by Chromium). A mirrored copy of the box, and everything in it, is painted beside it through the optional image as a mask (the mask is in the source box's own space, so it fades with the content). It takes no space in layout. Read at paint time by FragmentPainter.Reflect; url() mask images are not loaded, gradients are.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BoxReflectConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BoxReflectConverter.Convert" },
+      "html": {
+        "propertyPath": "BoxReflect",
+        "csharpDataType": "string",
+        "area": "VisualEffectsArea"
+      }
+    },
+    {
+      "name": "-webkit-text-fill-color",
+      "comment": "Compatibility Standard, <color>. Inherited; currentcolor (the initial value) is the element's own colour. Read by DerivedStyle.ActualTextFillColor, which the text painter uses in place of color.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ColorConverter", "animatable": true, "registryAnimatable": true},
+      "initialValue": "currentcolor",
+      "cssDataType": ["color", "current-color"],
+      "html": {
+        "propertyPath": "TextFillColor",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "-webkit-text-security",
+      "comment": "none | disc | circle | square. Inherited. Each non-whitespace character of the box's text is replaced by the bullet when its words are built (CssBox.AppendWordsFromText), so layout, paint and extraction all see the masked text.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextSecurityConverter"},
+      "initialValue": "none",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "TextSecurity",
+        "keywordMap": "Map.TextSecurities",
+        "fallback": "TextSecurity.None"
+      },
+      "html": {
+        "propertyPath": "TextSecurity",
+        "csharpDataType": "CssProperty<TextSecurity>",
+        "area": "TextArea",
+        "getterExpression": "{box}.TextSecurity.ToString()"
       }
     },
     {

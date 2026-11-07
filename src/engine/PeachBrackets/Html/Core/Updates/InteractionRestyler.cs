@@ -30,7 +30,7 @@ namespace PeachBrackets.Html.Updates
             "text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness", "text-underline-offset",
             "outline-color", "outline-style", "outline-width", "outline-offset",
             "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color",
-            "-webkit-text-stroke-color",
+            "-webkit-text-stroke-color", "-webkit-text-fill-color",
         };
 
         /// <summary>Whether a change to <paramref name="property"/> only ever changes how a box is painted, so it can be applied with no layout pass.</summary>

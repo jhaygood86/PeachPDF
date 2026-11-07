@@ -1,0 +1,3 @@
+# initial-letter is horizontal, `::first-letter`-only, alphabetic-baseline only
+
+`initial-letter` sizes and sinks a `::first-letter` box as a float (`DomParser.ApplyInitialLetter`). Not done: vertical writing modes (their float entry point is separate), `initial-letter-align` (alphabetic baseline is always used) and `initial-letter-wrap`, and `initial-letter` on an ordinary inline box. A raised cap (`sink` < `size`) uses a negative `margin-top` on the float, so it inherits the negative-margin float limitations. `-webkit-box-reflect` does not load `url()` mask images and does not extend the page clip for a reflection that leaves the page.

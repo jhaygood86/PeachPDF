@@ -80,7 +80,7 @@ namespace PeachBrackets.Engine.Tests.CSS
         [Fact]
         public void PrefixesWithNoSupportedStandardGrammar_AreStillDropped()
         {
-            var sheet = ParseStyleSheet("div { -webkit-box-lines: multiple; -webkit-column-break-before: always; color: red }");
+            var sheet = ParseStyleSheet("div { -webkit-box-lines: multiple; color: red }");
             var style = ((StyleRule)sheet.Rules[0]).Style;
 
             Assert.Single(style);
@@ -188,6 +188,11 @@ namespace PeachBrackets.Engine.Tests.CSS
         [InlineData("position: -webkit-sticky", "position", "sticky")]
         [InlineData("-webkit-box-sizing: border-box", "box-sizing", "border-box")]
         [InlineData("-webkit-flex-direction: column", "flex-direction", "column")]
+        [InlineData("-webkit-box-decoration-break: clone", "box-decoration-break", "clone")]
+        [InlineData("-webkit-column-break-before: always", "break-before", "column")]
+        [InlineData("-webkit-column-break-after: avoid", "break-after", "avoid-column")]
+        [InlineData("-webkit-column-break-inside: avoid", "break-inside", "avoid-column")]
+        [InlineData("-webkit-column-break-before: auto", "break-before", "auto")]
         public async Task Cascade_AppliesThePrefixedDeclaration(string css, string standardName, string expected)
         {
             var box = await FindDivBox(css);
