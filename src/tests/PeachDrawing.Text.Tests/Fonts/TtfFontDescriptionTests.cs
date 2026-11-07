@@ -85,6 +85,10 @@ namespace PeachDrawing.Text.Tests.Fonts
                     // Each parsed font must have non-empty names
                     Assert.NotEmpty(desc.FontFamilyInvariantCulture);
                 }
+                catch (InvalidDataException ex) when (ex.Message == "Bitmap fonts are not supported.")
+                {
+                    // A bitmap-only system font (macOS ships some) is refused on purpose so it is never installed.
+                }
                 catch (Exception ex)
                 {
                     failures.Add((path, ex.Message));
