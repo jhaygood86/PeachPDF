@@ -2224,6 +2224,13 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Whether <c>line-height</c> is anything but <c>normal</c> (which comes from the font's own metrics).</summary>
         internal bool HasDeclaredLineHeight => Style.Text.LineHeight.Value.Value is not null;
 
+        /// <summary>
+        /// What 100% of a <c>line-height</c> is: the box's own font size (CSS 2.1 §10.8.1, and CSS Inline Layout 3), in
+        /// layout units. It used to be the box's own height, which is 0 while its lines are being laid out, so a
+        /// percentage gave every line a height of zero.
+        /// </summary>
+        private double LineHeightPercentageBasis => GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight
         {
@@ -2241,13 +2248,13 @@ namespace PeachBrackets.Html.Dom
                 // unitless/absolute majority skips the guard entirely.
                 if (lineHeight.LengthOrCalc is not { } lengthOrCalc
                     || (!lengthOrCalc.IsCalc && lengthOrCalc.Length!.Value.Type != Length.Unit.Lh))
-                    return CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner);
+                    return CssValueParser.ParseLength(lineHeight, LineHeightPercentageBasis, Owner);
 
                 var wasResolving = _resolvingLineHeight;
                 _resolvingLineHeight = true;
                 try
                 {
-                    return CssValueParser.ParseLength(lineHeight, Owner.Size.Height, Owner);
+                    return CssValueParser.ParseLength(lineHeight, LineHeightPercentageBasis, Owner);
                 }
                 finally
                 {
