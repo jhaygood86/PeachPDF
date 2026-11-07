@@ -1154,7 +1154,7 @@ namespace PeachBrackets.Html.Dom
 
             // A percentage is a fraction of the box's own font size (CSS Text 4 leaves the basis to the UA).
             // GetEmHeight() is in true points; the 100% basis is in layout units.
-            var fontSizeBasis = Owner.GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+            var fontSizeBasis = FontSizeInLayoutUnits;
 
             _actualLetterSpacing = Style.Text.LetterSpacing.Value is { IsValue: true, Value: { } letterSpacing }
                 ? CssValueParser.ParseLength(letterSpacing, fontSizeBasis, Owner)
@@ -2229,7 +2229,10 @@ namespace PeachBrackets.Html.Dom
         /// layout units. It used to be the box's own height, which is 0 while its lines are being laid out, so a
         /// percentage gave every line a height of zero.
         /// </summary>
-        private double LineHeightPercentageBasis => GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+        private double LineHeightPercentageBasis => FontSizeInLayoutUnits;
+
+        /// <summary>This box's own font size in layout units (<see cref="GetEmHeight"/> is in true points): what 100% of a font-relative percentage is.</summary>
+        private double FontSizeInLayoutUnits => GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
 
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight
