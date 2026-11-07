@@ -935,6 +935,120 @@
       }
     },
     {
+      "name": "shape-rendering",
+      "comment": "SVG 2 section 13.5.1. Inherited. auto and geometricPrecision antialias; crispEdges and optimizeSpeed ask for aliased edges, which SvgRenderer passes to Canvas.PushAntiAlias(false) around a shape. A PDF canvas has no pixels, so there it has no visible effect; the raster, Skia, Win2D and CoreGraphics canvases honour it.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.ShapeRenderingModeConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "ShapeRenderingMode",
+        "keywordMap": "Map.ShapeRenderingModes",
+        "fallback": "ShapeRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "ShapeRendering",
+        "csharpDataType": "CssProperty<ShapeRenderingMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.ShapeRendering.ToString()"
+      },
+      "svg": {
+        "propertyPath": null,
+        "inheritedFrom": "ShapeRendering",
+        "invalidBehavior": "inherit",
+        "applyIn": "manual"
+      }
+    },
+    {
+      "name": "vector-effect",
+      "comment": "SVG 2 section 13.8. Does not inherit. non-scaling-stroke strokes the shape in device space, so the stroke width and dashes do not scale with the transform; the other keywords are accepted and have no effect.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.VectorEffectModeConverter"},
+      "initialValue": "none",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "VectorEffectMode",
+        "keywordMap": "Map.VectorEffectModes",
+        "fallback": "VectorEffectMode.None"
+      },
+      "html": {
+        "propertyPath": "VectorEffect",
+        "csharpDataType": "CssProperty<VectorEffectMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.VectorEffect.ToString()"
+      }
+    },
+    {
+      "name": "buffered-rendering",
+      "comment": "SVG Tiny 1.2 section 11.2 (kept in SVG 2 drafts). Does not inherit. A caching hint: auto, dynamic and static never change what is drawn, so the value is cascaded and readable but nothing acts on it.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BufferedRenderingModeConverter"},
+      "initialValue": "auto",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "BufferedRenderingMode",
+        "keywordMap": "Map.BufferedRenderingModes",
+        "fallback": "BufferedRenderingMode.Auto"
+      },
+      "html": {
+        "propertyPath": "BufferedRendering",
+        "csharpDataType": "CssProperty<BufferedRenderingMode>",
+        "area": "VisualEffectsArea",
+        "getterExpression": "{box}.BufferedRendering.ToString()"
+      }
+    },
+    {
+      "name": "math-style",
+      "comment": "MathML Core section 3.3.1. Inherited. normal is display style (fractions and operators at full size), compact is inline style. The UA sheet gives math compact, and block math normal; MathTreeBuilder reads an author change of it in place of the displaystyle attribute.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.MathStyleModeConverter"},
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "MathStyleMode",
+        "keywordMap": "Map.MathStyleModes",
+        "fallback": "MathStyleMode.Normal"
+      },
+      "html": {
+        "propertyPath": "MathStyle",
+        "csharpDataType": "CssProperty<MathStyleMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.MathStyle.ToString()"
+      }
+    },
+    {
+      "name": "math-shift",
+      "comment": "MathML Core section 3.3.2. Inherited. compact asks for the cramped style, which lowers superscripts. Parsed and cascaded; the math layout has no cramped style yet, so it does not change the output.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.MathShiftModeConverter"},
+      "initialValue": "normal",
+      "cssDataType": {
+        "type": "enum-keyword",
+        "enumType": "MathShiftMode",
+        "keywordMap": "Map.MathShiftModes",
+        "fallback": "MathShiftMode.Normal"
+      },
+      "html": {
+        "propertyPath": "MathShift",
+        "csharpDataType": "CssProperty<MathShiftMode>",
+        "area": "TextArea",
+        "getterExpression": "{box}.MathShift.ToString()"
+      }
+    },
+    {
+      "name": "math-depth",
+      "comment": "MathML Core section 3.3.3. Inherited. auto-add | add(<integer>) | <integer>, stored as the declaration text and read by MathTreeBuilder against the script depth it has built so far: an integer is the depth itself, add() a change to it; auto-add is what the script elements do structurally already.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.MathDepthConverter"},
+      "initialValue": "0",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.MathDepthConverter.Convert" },
+      "html": {
+        "propertyPath": "MathDepth",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "isolation",
       "comment": "CSS Compositing and Blending Level 1 section 3.2. Does not inherit. isolate makes the element a stacking context (DomUtils.IsStackingContextBox) and so an isolated group: a descendant's mix-blend-mode blends with what the element painted, not with the page behind it. FragmentPainter paints such a box through a layer even when it is opaque.",
       "inherited": false,

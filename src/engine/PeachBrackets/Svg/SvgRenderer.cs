@@ -3625,6 +3625,11 @@ namespace PeachBrackets.Svg
             var fill = ResolveInMarker(element.Fill);
             var stroke = ResolveInMarker(element.Stroke);
 
+            // shape-rendering: crispEdges and optimizeSpeed ask for hard edges; a canvas with no pixels (PDF) leaves the request unanswered.
+            var aliased = element.ShapeRendering is PeachBrackets.Css.ShapeRenderingMode.CrispEdges or PeachBrackets.Css.ShapeRenderingMode.OptimizeSpeed;
+            if (aliased)
+                g.PushAntiAlias(false);
+
             if (element is not SvgLineElement && fill.Kind != SvgPaintKind.None)
             {
                 // A gradient or pattern that came through context-fill is measured against the context element, not this one.
@@ -3647,6 +3652,9 @@ namespace PeachBrackets.Svg
                 if (pen is not null)
                     DrawUserPath(g, pen, path);
             }
+
+            if (aliased)
+                g.PopAntiAlias();
 
             PaintMarkers(g, document, element, opacity);
         }
@@ -4174,11 +4182,25 @@ namespace PeachBrackets.Svg
 
             // A pen's width and dashes reach the canvas in points, like a path's coordinates.
             var pixelsPerPoint = g.PixelsPerPoint;
-            pen.Width = element.StrokeWidth / pixelsPerPoint;
+
+            // vector-effect: non-scaling-stroke - the width and the dashes are in the host's space, so undo the magnification the transforms so far add.
+            var unscale = 1.0;
+            if (element.NonScalingStroke)
+            {
+                // CurrentTransform is read, not TransformScale: every canvas tracks the first, and the bitmap one reports no magnification at all.
+                var transform = g.CurrentTransform;
+                var scaleX = Math.Sqrt((transform.M11 * transform.M11) + (transform.M12 * transform.M12));
+                var scaleY = Math.Sqrt((transform.M21 * transform.M21) + (transform.M22 * transform.M22));
+                if (scaleX > 0 && scaleY > 0)
+                    unscale = 1.0 / Math.Sqrt(scaleX * scaleY);
+            }
+
+            pen.Width = element.StrokeWidth * unscale / pixelsPerPoint;
             pen.MiterLimit = element.StrokeMiterLimit;
             pen.LineCap = element.StrokeLineCap;
             pen.LineJoin = element.StrokeLineJoin;
-            pen.SetDashPattern(pixelsPerPoint == 1.0 ? element.StrokeDashArray : [.. element.StrokeDashArray.Select(dash => dash / pixelsPerPoint)], element.StrokeDashOffset / pixelsPerPoint);
+            var dashScale = unscale / pixelsPerPoint;
+            pen.SetDashPattern(dashScale == 1.0 ? element.StrokeDashArray : [.. element.StrokeDashArray.Select(dash => dash * dashScale)], element.StrokeDashOffset * dashScale);
             return pen;
         }
 

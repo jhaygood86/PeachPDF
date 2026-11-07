@@ -150,6 +150,11 @@ namespace PeachBrackets.MathML
 
         public Font GetFontAtSize(double sizePt) => Owner.GetActualFontAtSize(sizePt);
 
+        // The root is the <math> box itself, which is cascaded; the elements below it are never styled while the tree stays as source, so they declare nothing.
+        bool? IMathSourceNode.CssDisplayStyle => IsRoot ? new CssBoxMathSourceNode(Owner).CssDisplayStyle : null;
+
+        string? IMathSourceNode.CssMathDepth => IsRoot ? new CssBoxMathSourceNode(Owner).CssMathDepth : null;
+
         // ---- ICssDomNode
 
         string? ICssDomNode.TagName => Tag?.Name;

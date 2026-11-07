@@ -6,6 +6,7 @@ namespace PeachBrackets.Css
         // input form only (see PrinceOpenTypeConverter); never documented or emitted downstream.
         public const string PrinceOpenType = "prince-opentype";
         public const string Url = "url";
+        public const string Add = "add";
         public const string UrlPrefix = "url-prefix";
         public const string Domain = "domain";
         public const string Regexp = "regexp";

@@ -61,5 +61,12 @@ namespace PeachBrackets.MathML
         /// <c>MathLayoutEngine</c> to get the math typeface at each distinct scriptlevel-scaled size a
         /// formula needs, without re-deriving which size to use.</summary>
         Font GetFontAtSize(double sizePt);
+
+        /// <summary>What an author's CSS <c>math-style</c> says for this element when it differs from what the element would
+        /// otherwise have: true for <c>normal</c> (display style), false for <c>compact</c>, null for no change (or no CSS at all).</summary>
+        bool? CssDisplayStyle => null;
+
+        /// <summary>The element's own <c>math-depth</c> declaration text when it differs from its parent's, else null.</summary>
+        string? CssMathDepth => null;
     }
 }

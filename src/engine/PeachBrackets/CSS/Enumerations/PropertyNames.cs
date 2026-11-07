@@ -346,6 +346,12 @@ namespace PeachBrackets.Css
         public static readonly string StrokeDasharray = "stroke-dasharray";
         public static readonly string StrokeDashoffset = "stroke-dashoffset";
         public static readonly string StrokeLinecap = "stroke-linecap";
+        public static readonly string ShapeRendering = "shape-rendering";
+        public static readonly string VectorEffect = "vector-effect";
+        public static readonly string BufferedRendering = "buffered-rendering";
+        public static readonly string MathStyle = "math-style";
+        public static readonly string MathDepth = "math-depth";
+        public static readonly string MathShift = "math-shift";
         public static readonly string StrokeLinejoin = "stroke-linejoin";
         public static readonly string StrokeMiterlimit = "stroke-miterlimit";
         public static readonly string StrokeOpacity = "stroke-opacity";

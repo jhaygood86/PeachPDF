@@ -181,7 +181,8 @@ namespace PeachBrackets.Svg
             TextOrientation TextOrientation,
             SvgPaint ContextFill,
             SvgPaint ContextStroke,
-            bool Visible)
+            bool Visible,
+            PeachBrackets.Css.ShapeRenderingMode ShapeRendering)
         {
             public static readonly InheritedPaint Initial = new(
                 Fill: SvgPaint.Solid(PaintColor.Black),
@@ -203,7 +204,8 @@ namespace PeachBrackets.Svg
                 TextOrientation: TextOrientation.Mixed,
                 ContextFill: SvgPaint.None,
                 ContextStroke: SvgPaint.None,
-                Visible: true);
+                Visible: true,
+                ShapeRendering: PeachBrackets.Css.ShapeRenderingMode.Auto);
         }
 
         /// <summary>
@@ -1568,6 +1570,14 @@ namespace PeachBrackets.Svg
                 || !SvgPropertyRegistry.TrySet(element, "stroke-linejoin", lineJoinAttr, in ctx))
                 element.StrokeLineJoin = inherited.StrokeLineJoin;
 
+            var shapeRenderingAttr = DeclaredOrInitial(node, "shape-rendering")?.Trim();
+            element.ShapeRendering = shapeRenderingAttr is not null && Map.ShapeRenderingModes.TryGetValue(shapeRenderingAttr, out var declaredShapeRendering)
+                ? declaredShapeRendering
+                : inherited.ShapeRendering;
+
+            // vector-effect does not inherit; only non-scaling-stroke changes how a shape is drawn (the other keywords are accepted and ignored).
+            element.NonScalingStroke = DeclaredOrInitial(node, "vector-effect")?.Trim().Equals("non-scaling-stroke", StringComparison.OrdinalIgnoreCase) == true;
+
             var dashArrayAttr = DeclaredOrInitial(node, "stroke-dasharray");
             if (dashArrayAttr is null || dashArrayAttr.Equals("inherit", StringComparison.OrdinalIgnoreCase)
                 || !SvgPropertyRegistry.TrySet(element, "stroke-dasharray", dashArrayAttr, in ctx))
@@ -1695,7 +1705,8 @@ namespace PeachBrackets.Svg
                 textOrientation,
                 inherited.ContextFill,
                 inherited.ContextStroke,
-                element.Visible);
+                element.Visible,
+                element.ShapeRendering);
         }
 
         /// <summary>

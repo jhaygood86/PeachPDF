@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using PeachBrackets.Css;
 using PeachBrackets.Html.Dom;
 using PeachDrawing.Core;
 
@@ -35,6 +37,32 @@ namespace PeachBrackets.MathML
         public PaintColor PaintColor => _box.ActualColor;
 
         public double FontSizePt => _box.ActualFont.Size;
+
+        public bool? CssDisplayStyle
+        {
+            get
+            {
+                var style = _box.MathStyle;
+                if (style.IsGlobalValue || style.IsUnresolved) return null;
+
+                // The root is compared with what the UA sheet gives it (block normal, inline compact); anything else with its parent's value.
+                var baseline = Name == "math"
+                    ? (_box.GetAttribute("display", null) == "block" ? MathStyleMode.Normal : MathStyleMode.Compact)
+                    : _box.ParentBox?.MathStyle is { IsGlobalValue: false, IsUnresolved: false } parentStyle ? parentStyle.Value : MathStyleMode.Compact;
+                return style.Value == baseline ? null : style.Value == MathStyleMode.Normal;
+            }
+        }
+
+        public string? CssMathDepth
+        {
+            get
+            {
+                var depth = _box.MathDepth;
+                if (string.IsNullOrWhiteSpace(depth)) return null;
+                var parent = Name == "math" ? "0" : _box.ParentBox?.MathDepth ?? "0";
+                return string.Equals(depth.Trim(), parent.Trim(), StringComparison.OrdinalIgnoreCase) ? null : depth;
+            }
+        }
 
         public Font GetFontAtSize(double sizePt) => _box.GetActualFontAtSize(sizePt);
     }

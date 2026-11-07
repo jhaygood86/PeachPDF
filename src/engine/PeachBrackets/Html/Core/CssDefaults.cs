@@ -93,7 +93,8 @@ namespace PeachBrackets.Html
             var, address    { font-style: italic }
             pre, tt, code,
             kbd, samp       { font-family: monospace }
-            math            { font-family: math }
+            math            { font-family: math; math-style: compact }
+            math[display=block] { math-style: normal }
             pre             { white-space: pre }
             button, textarea,
             input, select   { display: inline-block }
