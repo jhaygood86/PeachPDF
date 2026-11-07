@@ -826,6 +826,9 @@ namespace PeachBrackets.Css
             .Or(ImageSetImageConverter).Or(CrossFadeImageConverter).Or(ElementImageConverter);
         public static readonly IValueConverter OptionalImageSourceConverter = ImageSourceConverter.OrNone();
         public static readonly IValueConverter MultipleImageSourceConverter = OptionalImageSourceConverter.FromList();
+        /// <summary>CSS Borders 4 <c>&lt;corner-shape-value&gt;</c>.</summary>
+        public static readonly IValueConverter CornerShapeConverter = new CornerShapeValueConverter();
+
         public static readonly IValueConverter BorderRadiusShorthandConverter = new BorderRadiusConverter();
 
         public static readonly IValueConverter BorderRadiusConverter = WithOrder(

@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 
 using System;
 using System.Collections.Generic;
@@ -10,10 +10,22 @@ namespace PeachBrackets.Css
 
     internal sealed class BorderRadiusConverter : IValueConverter
     {
-        private readonly IValueConverter _converter = LengthOrPercentConverter.Periodic(
-            PropertyNames.BorderTopLeftRadius, PropertyNames.BorderTopRightRadius,
-            PropertyNames.BorderBottomRightRadius,
-            PropertyNames.BorderBottomLeftRadius);
+        private readonly IValueConverter _converter;
+        private readonly string[] _labels;
+
+        /// <summary>The <c>border-radius</c> shorthand: four corners, top-left first.</summary>
+        public BorderRadiusConverter()
+            : this(PropertyNames.BorderTopLeftRadius, PropertyNames.BorderTopRightRadius,
+                PropertyNames.BorderBottomRightRadius, PropertyNames.BorderBottomLeftRadius)
+        {
+        }
+
+        /// <summary>A radius shorthand over the given two or four longhands (<c>border-top-radius</c>, <c>corner</c>...).</summary>
+        public BorderRadiusConverter(params string[] labels)
+        {
+            _labels = labels;
+            _converter = LengthOrPercentConverter.Periodic(labels);
+        }
 
         public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
@@ -46,7 +58,7 @@ namespace PeachBrackets.Css
 
         public IPropertyValue Construct(Property[] properties)
         {
-            if (properties.Length == 4)
+            if (properties.Length == 4 && _labels.Length == 4)
             {
                 var front = new List<Token>();
                 var back = new List<Token>();

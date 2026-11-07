@@ -1204,6 +1204,10 @@ namespace PeachBrackets.Html.Dom
                 .SetPropertyValueShared(cache, border.BorderTopRightRadius, parentStyle.Border.BorderTopRightRadius, static (a, v) => a with { BorderTopRightRadius = v })
                 .SetPropertyValueShared(cache, border.BorderBottomRightRadius, parentStyle.Border.BorderBottomRightRadius, static (a, v) => a with { BorderBottomRightRadius = v })
                 .SetPropertyValueShared(cache, border.BorderBottomLeftRadius, parentStyle.Border.BorderBottomLeftRadius, static (a, v) => a with { BorderBottomLeftRadius = v })
+                .SetPropertyValueShared(cache, border.CornerTopLeftShape, parentStyle.Border.CornerTopLeftShape, static (a, v) => a with { CornerTopLeftShape = v })
+                .SetPropertyValueShared(cache, border.CornerTopRightShape, parentStyle.Border.CornerTopRightShape, static (a, v) => a with { CornerTopRightShape = v })
+                .SetPropertyValueShared(cache, border.CornerBottomRightShape, parentStyle.Border.CornerBottomRightShape, static (a, v) => a with { CornerBottomRightShape = v })
+                .SetPropertyValueShared(cache, border.CornerBottomLeftShape, parentStyle.Border.CornerBottomLeftShape, static (a, v) => a with { CornerBottomLeftShape = v })
                 // The outline is the element's too (CSS UI 4 §3 draws it around every fragment of the
                 // element), so a split piece or a repeated header clone has to carry it. Without these a
                 // <span> split around a block child drew no outline on either half.

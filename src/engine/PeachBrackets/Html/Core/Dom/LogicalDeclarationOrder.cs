@@ -38,6 +38,12 @@ namespace PeachBrackets.Html.Dom
                 names.Add("border-" + side + "-color");
             }
 
+            foreach (var corner in new[] { "top-left", "top-right", "bottom-right", "bottom-left" })
+            {
+                names.Add("corner-" + corner + "-shape");
+                names.Add("border-" + corner + "-radius");
+            }
+
             return names.ToFrozenSet(StringComparer.Ordinal);
         }
     }
