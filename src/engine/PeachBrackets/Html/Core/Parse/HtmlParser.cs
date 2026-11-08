@@ -51,6 +51,13 @@ namespace PeachBrackets.Html.Parse
 
             while (tokenizer.ReadNextToken(out var token))
             {
+                if (document && state is { Phase: DocumentPhase.Initial, QuirksDecided: false } && token.Kind is not HtmlTokenKind.Comment
+                    && !(token is HtmlDataToken { Data: { } lead } && string.IsNullOrWhiteSpace(lead)))
+                {
+                    state.IsQuirksMode = DeterminesQuirksMode(token);
+                    state.QuirksDecided = true;
+                }
+
 #if DEBUG
                 if (EngineTrace.Enabled) Console.WriteLine($"parse token start : current box: {state.Current}; tag: {token}");
 #endif
@@ -117,9 +124,10 @@ namespace PeachBrackets.Html.Parse
                             break;
 
                         }
+                    case HtmlTokenKind.DocType:
+                        break;
                     case HtmlTokenKind.CData:
                     case HtmlTokenKind.Comment:
-                    case HtmlTokenKind.DocType:
                     case HtmlTokenKind.ScriptData:
                         break;
                     default:

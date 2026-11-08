@@ -1260,7 +1260,7 @@ namespace PeachBrackets.Html.Dom
 
             var isContainingBlockHeightDefinite = CssLayoutEngine.IsHeightDefinite(ContainingBlock);
 
-            if (CssValueParser.IsValidLength(MaxHeight) && (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(MaxHeight)))
+            if (!IsTableCell && CssValueParser.IsValidLength(MaxHeight) && (isContainingBlockHeightDefinite || !CssValueParser.DependsOnPercentage(MaxHeight)))
             {
                 var maxHeightBasis = CssLayoutEngine.ResolveDefiniteHeightValue(ContainingBlock) ?? ContainingBlock.Size.Height;
                 var maxHeight = CssValueParser.ParseLength(MaxHeight, maxHeightBasis, this) + ActualBoxSizeIncludedHeight;
@@ -9021,7 +9021,7 @@ namespace PeachBrackets.Html.Dom
                 // alignment are measured from. One nested in an inline hangs off the line (#1299), and a
                 // `top: 100%` badge counted here pushed a middle-aligned header's text above its cell,
                 // off every repeated header's page.
-                if (b.IsAbsolutelyPositioned) continue;
+                if (b.IsAbsolutelyPositioned || b.DerivedStyle.ActualDisplay == Keywords.None) continue;
 
                 currentMaxBottom = Math.Max(currentMaxBottom, GetMaximumBottom(b, currentMaxBottom));
             }

@@ -1,3 +1,3 @@
-# A block-level table is laid over a preceding float instead of beside it
+# A block-level table that does not fit beside a preceding float is not moved below it
 
-A table in normal flow after a float (`align=left|right` or CSS `float`) is placed at the container's edge on top of the float; Chrome places it beside the float when it fits and below it when not. Text, `div` and `p` siblings wrap correctly; only a table box does not avoid floats (tracking issue #2187). Seen with `<table align=left width=200>` followed by `<table width=300>`.
+A table in normal flow after a float is moved clear of a float on its left when it fits beside it (`CssLayoutEngineTable.PlaceBesideFloats`, CSS 2.1 section 9.5). One too wide for the room beside the float stays at the container's edge over the float, where Chrome moves it below the float; a float on the right is not avoided either, and the table's width is not narrowed to the room beside the float (tracking issue #2187).
