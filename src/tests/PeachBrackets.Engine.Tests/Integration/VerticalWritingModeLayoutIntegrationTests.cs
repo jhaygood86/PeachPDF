@@ -63,16 +63,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_MultiColumnBox_IsUnresumableOnlyWhenInlineOnly_NotWhenItHasBlockChildren()
+        public async Task VerticalRl_MultiColumnBox_IsUnresumable_WhetherItHoldsInlineOrBlockContent()
         {
-            // CssBox.LayoutContents checks the inlines-only vertical branch BEFORE the multi-column branch
-            // (CssBox.cs), so a vertical box that is both multi-column AND inline-only still dispatches to
-            // the unresumable CreateVerticalLineBoxes, never to the genuinely resumable
-            // CssLayoutEngineColumns - IsUnresumableOrthogonalFlow must report true for it (a post-change
-            // review caught this as a real regression when the predicate briefly checked only
-            // !EstablishesMultiColumnContext, dropping ContainsInlinesOnly entirely). A multi-column box
-            // with genuine block-level children, by contrast, does reach CssLayoutEngineColumns and must
-            // stay resumable.
+            // A vertical multi-column container lays its columns out as strips inside one page band
+            // (CssBox.TryLayoutVerticalColumnsAsync) and cuts its flow between them after layout, so it can
+            // hand back no resumption record to its parent's page fragmentation - with inline-only content
+            // (laid out by CreateVerticalLineBoxes) and with block-level children alike.
             var html = LayoutHarness.Wrap("""
                 <div id="inlineOnly" style="writing-mode: vertical-rl; column-count: 2; width: 300px; height: 100px">
                   Plain inline text content, nothing block-level here.
@@ -92,7 +88,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(withBlockChildren!.EstablishesMultiColumnContext);
 
             Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(inlineOnly));
-            Assert.False(MonolithicContent.IsUnresumableOrthogonalFlow(withBlockChildren));
+            Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(withBlockChildren));
         }
 
         [Fact]
@@ -128,10 +124,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task VerticalRl_TallSingleBlockChild_OverflowsMonolithicallyRatherThanBeingSliced()
         {
-            // Documents the deliberate scope boundary from issue #760: a vertical box's own block-axis
-            // content is monolithic w.r.t. its parent's fragmentation (like the inline-only case already
-            // was), so a child tall enough to exceed one page's own band is not sliced across pages - real
-            // per-child fragmentation of a vertical box's block content is tracked separately (#767).
+            // A vertical box's own block-axis content is monolithic w.r.t. its parent's fragmentation (like the
+            // inline-only case already was), so a child tall enough to exceed one page's own band is not sliced
+            // across pages: css-writing-modes-4 section 7.3.4 allows a break only between line boxes, and the
+            // lines of a vertical box all span the page's own block axis.
             var html = LayoutHarness.Wrap("""
                 <div id="wrapper" style="writing-mode: vertical-rl">
                   <div id="tall" style="width: 60pt; height: 500pt">Tall child.</div>

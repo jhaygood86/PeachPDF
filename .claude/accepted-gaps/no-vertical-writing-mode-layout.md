@@ -1,4 +1,4 @@
-# `writing-mode` real layout is partial: inline content only, no block children, table/columns unaffected
+# `writing-mode` real layout is partial
 
 Tracking issue: [#547](https://github.com/jhaygood86/PeachPDF/issues/547).
 
@@ -213,10 +213,12 @@ excluding only a box that runs an engine of its own or establishes its own multi
 real, deliberate behavior change from before #760 landed, not an incidental side effect: previously, a
 vertical box with block children silently fell back to ordinary `horizontal-tb` physical-Y block stacking,
 which happened to paginate normally (each child a separate, resumable fragment) purely because the bug
-existed. Once real block-axis stacking landed, that box's own content became genuinely monolithic — moved
-whole to the next page (or displaced-per-band) rather than sliced, exactly like the inline-only case. Real
-per-child fragmentation of a vertical box's block content remains tracked separately
-([#767](https://github.com/jhaygood86/PeachPDF/issues/767)).
+existed. Once real block-axis stacking landed, that box's own content became genuinely monolithic with respect to a
+horizontal page — moved whole to the next page (or displaced-per-band) rather than sliced, exactly like the
+inline-only case. That is what the spec asks for (CSS Writing Modes 4 section 7.3.4: breaks are only between
+line boxes, and the lines of a vertical box all span the page's own block axis), not a limitation; a vertical
+box's content does fragment along its own block axis where the fragmentainer runs that way, which is a column of
+a vertical multi-column container (`CssBox.TryLayoutVerticalColumnsAsync`).
 
 Deliberately scoped down, mirroring `CreateVerticalLineBoxes`'s own scope: every child sits at the same
 cross-axis start (no cross-axis wrapping); and a floated/absolutely/fixed-positioned child is routed
@@ -602,27 +604,13 @@ would double-apply the same shift.
   **plain-grid** vertical table (none of the five features above) now relocates whole columns across page
   boundaries wherever one falls between them
   (`CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries`), reusing the existing Y-based page-grid
-  primitives completely unchanged — no axis-agnostic `FragmentainerContext` rewrite needed, unlike Multi-column
-  below, which hits a genuinely different wall (multi-column's *columns themselves* differ along the very
-  axis the shared band is pinned to, not just its own block-axis-vs-page-axis question). A vertical table
+  primitives completely unchanged — no axis-agnostic `FragmentainerContext` rewrite needed. A vertical table
   combining real pagination with any of the five excluded features remains monolithic
   (`MonolithicContent.IsUnresumableVerticalTable`) — it moves whole to a later page, or is displaced-per-band,
   exactly as every vertical table did before #783 — since each of those five needs its own, independent
   extension to the relocation pass (a colspan cell straddling the paginated axis needs its own
   pagination-shell mechanism; a rowspan cell's `CssSpacingBox` placeholders break the relocation pass's
   current one-cell-per-column-per-row assumption; and so on — see #793 for the full breakdown).
-- **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) has no real column
-  arrangement under a vertical writing mode — `column-count`/`column-width` are inert there, and a
-  vertical-writing-mode multicol container falls back to ordinary single-column block flow (`CssLayoutEngineColumns.Layout`
-  takes the same path a `column-count: 1`/auto-width container already does). Unlike Table's rows/columns,
-  this isn't a narrower "arrangement now, fragmentation later" split: every column in this engine has to
-  share one band along the block axis (`FragmentainerContext`'s own `(Top, Bottom)` tuple, hardcoded to
-  physical Y at the type level — the same primitive the page-level pagination driver uses), while columns
-  differ along the inline axis — physical Y for `vertical-rl`/`vertical-lr`, the very axis the shared band
-  is pinned to. Real column arrangement would need that shared band to become axis-agnostic, which ripples
-  into the page-level pagination invariants ~50 other files document — out of scope here. The fallback
-  needs no `MonolithicContent` treatment of its own (unlike a vertical table's row loop): ordinary
-  single-column block flow already supports real pagination.
 - **A vertical-writing-mode Flexbox container's own top-level definite-main-size resolution has no
   aspect-ratio-on-width fallback** ([#772](https://github.com/jhaygood86/PeachPDF/issues/772)). The
   pre-existing `aspect-ratio`-driven auto-height fallback
@@ -631,10 +619,6 @@ would double-apply the same shift.
   since the width-side helper (`TryGetAspectRatioWidth`) is documented as unsafe for a stretch-fit block-
   level box, which a flex container's own auto width already is. A narrow, deliberate boundary matching an
   already-narrow pre-existing feature's own scope, not a general Flexbox regression.
-- **A vertical box's own content never fragments across a page boundary**
-  ([#767](https://github.com/jhaygood86/PeachPDF/issues/767)) — being monolithic, it is moved whole to the
-  next page if it doesn't fit the current one, or displaced-per-band (never resized) if it fits nowhere; it
-  cannot yet split its own content the way ordinary horizontal flow does.
 - **SVG `<textPath>` always flows horizontally along its path**, ignoring the `<text>` root's own
   `writing-mode` — there is no vertical variant of path-following text (matches real browser behavior; not
   tracked as a gap to close, since the combination has no well-defined vertical layout to begin with).

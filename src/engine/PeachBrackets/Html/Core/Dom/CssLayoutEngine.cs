@@ -1102,10 +1102,16 @@ namespace PeachBrackets.Html.Dom
             // A position-independent fallback keeps sizing consistent regardless of where the box lands,
             // so that mover's own "does this fit here, else move to the next page" check still gets a
             // real chance to fire.
-            var heightIsAuto = !CssValueParser.IsValidLength(blockBox.Height);
-            var wrapLimit = heightIsAuto
-                ? Math.Max(1, blockBox.HtmlContainer?.PageSize.Height ?? 1)
-                : Math.Max(1, DefiniteContentHeight(blockBox));
+            //
+            // A box laid out in a multi-column strip (CssBox.StripInlineExtent) has the strip's inline extent
+            // as its definite one: it wraps against it and fills it, as a block-level box fills its column.
+            var stripExtent = blockBox.StripInlineExtent;
+            var heightIsAuto = stripExtent is null && !CssValueParser.IsValidLength(blockBox.Height);
+            var wrapLimit = stripExtent is { } strip
+                ? Math.Max(1, strip)
+                : heightIsAuto
+                    ? Math.Max(1, blockBox.HtmlContainer?.PageSize.Height ?? 1)
+                    : Math.Max(1, DefiniteContentHeight(blockBox));
 
             var frame = WritingModeFrame.ForContentBox(
                 clientLeft, clientTop, clientRight, clientTop + wrapLimit, blockBox.WritingMode.Value, blockBox.Direction.Value);
@@ -1462,7 +1468,12 @@ namespace PeachBrackets.Html.Dom
             // ClientTop/ClientBottom, which ApplyHeight would otherwise not have resolved yet. This also
             // moves BubbleRectangles/AssignRectanglesToBoxes (formerly run immediately after the word loop)
             // to after settling - safe, since neither ever reads blockBox.ActualBottom/ActualRight.
-            if (heightIsAuto)
+            if (stripExtent is not null)
+            {
+                blockBox.ActualBottom = clientTop + wrapLimit
+                    + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;
+            }
+            else if (heightIsAuto)
             {
                 blockBox.ActualBottom = clientTop + Math.Min(maxInlineExtentUsed, wrapLimit)
                     + blockBox.ActualPaddingBottom + blockBox.ActualBorderBottomWidth;

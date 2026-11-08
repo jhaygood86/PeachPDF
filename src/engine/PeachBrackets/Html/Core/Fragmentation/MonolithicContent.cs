@@ -200,13 +200,15 @@ namespace PeachBrackets.Html.Fragmentation
         /// </summary>
         /// <remarks>
         /// <para>
-        /// <b>Not a spec claim</b> (like <see cref="PaginatesItsOwnContent"/>, not <see cref="IsMonolithic"/>'s
-        /// §2 set): nothing in css-break-3 forbids fragmenting a vertical-writing-mode box's content across a
-        /// page boundary. This is a PeachPDF implementation limitation — neither <c>CreateVerticalLineBoxes</c>
-        /// nor <c>LayoutVerticalBlockChildren</c> (issue #760) can hand back a resumption record, laying out
-        /// their whole subtree in one pass instead, the same practical constraint a replaced element has for
-        /// a genuinely different (spec) reason. See the no-vertical-writing-mode-layout accepted gap for the
-        /// tracked follow-up that lifts this.
+        /// <b>Not css-break-3 §2's set</b> (like <see cref="PaginatesItsOwnContent"/>), but the same outcome
+        /// for a reason the spec does give: a vertical box in a horizontal page is an orthogonal flow, whose
+        /// lines run along the page's own block axis, and <see href="https://www.w3.org/TR/css-writing-modes-4/#orthogonal-pagination">
+        /// CSS Writing Modes 4 §7.3.4</see> lets a break fall only between line boxes - so a page boundary
+        /// could only cut through every one of them, and the box is moved whole, or overflows where nothing
+        /// larger fits, as it is in browsers. Neither <c>CreateVerticalLineBoxes</c> nor
+        /// <c>LayoutVerticalBlockChildren</c> hands back a resumption record for that reason, and a vertical
+        /// box's content that <i>can</i> fragment - along its own block axis, into the columns of a vertical
+        /// multi-column container - is cut after layout instead (see below).
         /// </para>
         /// <para>
         /// <b>Deliberately not just <c>box.WritingMode.Value is VerticalRl/VerticalLr</c></b> — that alone
@@ -221,23 +223,16 @@ namespace PeachBrackets.Html.Fragmentation
         /// predicate can never disagree with what actually ran.
         /// </para>
         /// <para>
-        /// <b><c>DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext</c>, not either one
-        /// alone</b> — <c>LayoutContents</c> checks the inlines-only vertical branch <i>before</i> the
-        /// multi-column branch, so a box that is both (an admittedly narrow combination: a vertical,
-        /// multi-column box holding only inline content) still dispatches to the unresumable
-        /// <c>CreateVerticalLineBoxes</c>, never to <c>CssLayoutEngineColumns</c> — dropping the
-        /// <c>ContainsInlinesOnly</c> arm entirely (checking only <c>!EstablishesMultiColumnContext</c>, as
-        /// issue #760's original landing briefly did) wrongly reported that combination as resumable, a real
-        /// regression a post-change review caught. A vertical multi-column box with genuine block-level
-        /// children, by contrast, does reach the resumable <c>CssLayoutEngineColumns</c> path (issue #764),
-        /// which is what <c>!EstablishesMultiColumnContext</c> alone still correctly excludes for that case.
+        /// <b>A vertical multi-column container is included.</b> Its columns are strips stacked along the
+        /// inline axis (<c>CssBox.TryLayoutVerticalColumnsAsync</c>), all inside the one page band, and the
+        /// flow is cut between them after layout rather than resumed, so it cannot hand back a resumption
+        /// record either.
         /// </para>
         /// </remarks>
         internal static bool IsUnresumableOrthogonalFlow(CssBox box) =>
             box.WritingMode.Value.IsVertical()
             && box.PlacesItselfAsBlockBox
-            && !RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay)
-            && (DomUtils.ContainsInlinesOnly(box) || !box.EstablishesMultiColumnContext);
+            && !RunsAnEngineOfItsOwn(box.DerivedStyle.ActualDisplay);
 
         /// <summary>
         /// Whether <paramref name="box"/> is a table box under a vertical writing mode that

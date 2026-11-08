@@ -73,6 +73,9 @@ namespace PeachBrackets.Html.Dom
         internal IReadOnlyDictionary<CssBox, double>? RowHeightRedistribution;
         internal double? NaturalRowAxisExtentCarry;
         internal List<(double X, double Top, double Bottom)>? ColumnRuleSegments;
+        internal List<(double Y, double Left, double Right)>? BlockAxisColumnRuleSegments;
+        internal double? StripInlineExtent;
+        internal double? ColumnsFullInlineExtent;
         internal double? AlgorithmicDefiniteHeight;
         internal HashSet<string>? BuilderSetProperties;
         internal bool IsFragmentStyled;

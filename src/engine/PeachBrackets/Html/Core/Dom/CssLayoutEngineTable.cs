@@ -62,7 +62,7 @@ namespace PeachBrackets.Html.Dom
         // per-row pagination of a vertical table's own content is - it stays monolithic
         // (MonolithicContent.IsUnresumableVerticalTable) because the page-fragmentation system's own
         // primitives (FragmentainerContext, HtmlContainerInt.SlotStartingAt/PageTopOf/PageBottomOf)
-        // are physical-Y-only at the type level, the same architectural wall #764 (Multi-column) hits
+        // are physical-Y-only at the type level, the same architectural wall a vertical multi-column container's fragmentation axis would hit
         // for the identical reason. See .claude/accepted-gaps/no-vertical-writing-mode-layout.md.
         private readonly bool _isVertical;
         private readonly bool _rowAxisStartIsAtMax;

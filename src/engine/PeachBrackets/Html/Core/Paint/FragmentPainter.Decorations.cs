@@ -1826,15 +1826,32 @@ namespace PeachBrackets.Html.Paint
 
             // Column rules are recorded by the columns engine in document space, so they need the same
             // origin shift the builder already applied to every other rectangle on this page.
-            foreach (var (x, top, bottom) in box.ColumnRuleSegments!)
+            if (box.ColumnRuleSegments is { } verticalRules)
             {
-                var visualX = x;
-                var visualTop = top - originY;
-                var visualBottom = bottom - originY;
+                foreach (var (x, top, bottom) in verticalRules)
+                {
+                    var visualX = x;
+                    var visualTop = top - originY;
+                    var visualBottom = bottom - originY;
 
-                if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
+                    if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
 
-                g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+                    g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+                }
+            }
+
+            // A vertical-writing-mode container's columns are stacked along the inline axis, so the rules
+            // between them are horizontal (see CssBox.BlockAxisColumnRuleSegments).
+            if (box.BlockAxisColumnRuleSegments is { } horizontalRules)
+            {
+                foreach (var (y, left, right) in horizontalRules)
+                {
+                    var visualY = y - originY;
+
+                    if (!IsRectVisible(new Rect(left, visualY - 1, right - left, 2), clip)) continue;
+
+                    g.DrawLine(pen, left, visualY, right, visualY);
+                }
             }
         }
 
