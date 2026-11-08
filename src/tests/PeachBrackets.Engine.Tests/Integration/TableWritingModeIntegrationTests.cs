@@ -282,18 +282,18 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_TableWithCollapsedBorders_Fragment_IsMonolithic()
+        public async Task VerticalRl_TableInAFlexContainer_Fragment_IsMonolithic()
         {
-            // Issue #783's own first-cut scope boundary: a vertical table using a feature real
-            // per-column pagination doesn't yet reach (MonolithicContent.HasColumnPaginationExcludedFeature -
-            // collapsed borders here) must keep the whole-table "move as one unit" treatment
-            // CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries declines to touch for it - otherwise
-            // the outer fragmentation driver could try to slice it mid-column, which those excluded
-            // combinations have no support for.
+            // The one scope boundary real per-column pagination keeps
+            // (MonolithicContent.HasColumnPaginationExcludedFeature): a vertical table that is a flex or
+            // grid item keeps the whole-table "move as one unit" treatment, because the flex line holding
+            // it does its own relocation that the table's column pass knows nothing about.
             var html = LayoutHarness.Wrap("""
-                <table id="t" style="writing-mode: vertical-rl; border-collapse: collapse">
-                  <tr><td>Cell</td></tr>
-                </table>
+                <div style="display: flex">
+                  <table id="t" style="writing-mode: vertical-rl; border-collapse: collapse">
+                    <tr><td>Cell</td></tr>
+                  </table>
+                </div>
                 """);
 
             var (_, container) = await LayoutHarness.LayoutAsync(html);
@@ -310,8 +310,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task VerticalRl_PlainGridTable_Fragment_IsNotMonolithic()
         {
-            // Sibling regression guard for the fix above: a plain-grid vertical table (no rowspan/colspan/
-            // caption/thead-tfoot/collapsed borders) is no longer unconditionally monolithic now that real
+            // Sibling regression guard for the fix above: a plain-grid vertical table (no flex/grid parent) is no longer unconditionally monolithic now that real
             // per-column pagination (issue #783) can relocate its content across page boundaries - this
             // table is far too small to actually need relocating, so the assertion is purely about the
             // policy, not about anything visibly different in the rendered output.
