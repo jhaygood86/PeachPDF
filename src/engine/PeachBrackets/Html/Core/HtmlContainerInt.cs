@@ -3912,8 +3912,10 @@ namespace PeachBrackets.Html
             BoxGeometrySnapshot geometry,
             IReadOnlySet<CssBox> continuing,
             FragmentainerContext self,
-            FragmentainerContext? parentContext) =>
-            _emitter?.RecordCapturedInstance(contextRoot, slot, band, inline, geometry, continuing, self, parentContext);
+            FragmentainerContext? parentContext,
+            bool blockAxisIsHorizontal = false) =>
+            _emitter?.RecordCapturedInstance(
+                contextRoot, slot, band, inline, geometry, continuing, self, parentContext, blockAxisIsHorizontal);
 
         /// <summary>Whether <paramref name="contextRoot"/> has recorded columns in any slot.</summary>
         internal bool HoldsCapturedInstances(CssBox contextRoot) => _emitter?.OwnsCapturedInstances(contextRoot) ?? false;

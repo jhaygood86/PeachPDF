@@ -144,10 +144,17 @@ namespace PeachBrackets.Html.Fragmentation
         /// it is placed by its own left edge instead. Columns are disjoint and content is laid out inside
         /// one, so no rectangle is claimed twice unless it genuinely spills across a column gap.
         /// </para>
+        /// <para>
+        /// <c>BlockAxisIsHorizontal</c> says the container's fragmentainers follow one another along the
+        /// <i>inline</i> axis of a vertical writing mode (the strips of a vertical multi-column container),
+        /// so a box cut between two of them is cut across its physical width, and the edges a slice leaves
+        /// open are the left and right ones rather than the top and bottom.
+        /// </para>
         /// </remarks>
         private readonly record struct FragmentRegion(
             double Top, double Bottom, double? Left, double? Right,
-            double? EarlierColumnRight = null, BoxGeometrySnapshot? EarlierGeometry = null)
+            double? EarlierColumnRight = null, BoxGeometrySnapshot? EarlierGeometry = null,
+            bool BlockAxisIsHorizontal = false)
         {
             /// <summary>
             /// Whether <paramref name="rect"/>, a word of <paramref name="box"/>, is the previous column's rather than this one's.
@@ -1437,6 +1444,10 @@ namespace PeachBrackets.Html.Fragmentation
         /// the fragmentainer that was active immediately before <paramref name="self"/> was entered, or null
         /// at the page level — see <see cref="CapturedInstance"/>'s own remarks.
         /// </param>
+        /// <param name="blockAxisIsHorizontal">
+        /// whether the fragmentainers follow one another along the inline axis of a vertical writing mode, so a
+        /// box cut between them is cut across its width — see <see cref="FragmentRegion"/>.
+        /// </param>
         internal void RecordCapturedInstance(
             CssBox contextRoot,
             int slot,
@@ -1445,7 +1456,8 @@ namespace PeachBrackets.Html.Fragmentation
             BoxGeometrySnapshot geometry,
             IReadOnlySet<CssBox> continuing,
             FragmentainerContext self,
-            FragmentainerContext? parentContext)
+            FragmentainerContext? parentContext,
+            bool blockAxisIsHorizontal = false)
         {
             if (!_capturedInstances.TryGetValue((contextRoot, slot), out var fragmentainers))
             {
@@ -1464,7 +1476,8 @@ namespace PeachBrackets.Html.Fragmentation
                                         && previous.Top == band.Top
                         ? previousRight
                         : null,
-                    EarlierGeometry: leftNeighbour?.Geometry),
+                    EarlierGeometry: leftNeighbour?.Geometry,
+                    BlockAxisIsHorizontal: blockAxisIsHorizontal),
                 geometry,
                 continuing,
                 fragmentainers.Count > 0 ? fragmentainers[^1].Continuing : NoBoxes,
@@ -2701,6 +2714,27 @@ namespace PeachBrackets.Html.Fragmentation
                 if (draft.Region.Contains(Displaced(bounds, draft.Shift)))
                 {
                     var local = Localize(bounds, draft.OriginY);
+
+                    if (draft.Region.BlockAxisIsHorizontal)
+                    {
+                        // A strip of a vertical multi-column container: the box is cut across its width, so
+                        // the edges the cut leaves open are its left and right ones, which of the two begins
+                        // and which ends the box depending on the direction the block axis runs.
+                        var resumes = ResumesAnEarlierFragment(draft);
+                        var continues = ContinuesIntoALaterFragment(draft);
+                        var blockStartIsRight =
+                            LogicalPropertyResolver.BlockStart(draft.Box.WritingMode.Value) == PhysicalSide.Right;
+
+                        return
+                        [
+                            new LineFragment(local, null,
+                                new SliceGeometry(
+                                    Localize(UnbrokenBlockStripOf(draft, bounds), draft.OriginY),
+                                    Localize(BandCut(bounds, draft.Box, draft.Region, draft.Shift), draft.OriginY),
+                                    HasLeftEdge: blockStartIsRight ? !continues : !resumes,
+                                    HasRightEdge: blockStartIsRight ? !resumes : !continues))
+                        ];
+                    }
 
                     // One rectangle: nothing slices it in the inline axis, so the strip is as wide as the
                     // rectangle. Its block axis is the fragmented one, which is what the concatenated strip,
@@ -4420,6 +4454,26 @@ namespace PeachBrackets.Html.Fragmentation
             var total = 0d;
             var preceding = 0d;
             var reached = false;
+
+            if (draft.Region.BlockAxisIsHorizontal)
+            {
+                // The transpose: the fragments of a box cut between the strips of a vertical multi-column
+                // container are laid end to end along the block axis, which is physical X, towards the left
+                // for a block axis that starts at the right edge.
+                foreach (var fragment in fragments)
+                {
+                    var width = ExtentOf(fragment).Width;
+
+                    if (ReferenceEquals(fragment, draft)) reached = true;
+                    else if (!reached) preceding += width;
+
+                    total += width;
+                }
+
+                return LogicalPropertyResolver.BlockStart(draft.Box.WritingMode.Value) == PhysicalSide.Right
+                    ? new Rect(bounds.Right + preceding - total, bounds.Y, total, bounds.Height)
+                    : new Rect(bounds.X - preceding, bounds.Y, total, bounds.Height);
+            }
 
             foreach (var fragment in fragments)
             {

@@ -4783,6 +4783,13 @@ namespace PeachBrackets.Html.Dom
                     // box's epilogue - which judges a complete table - waits for the pass that completes it.
                     if (PendingBreakToken is not null) return;
                 }
+                else if (WritingMode.Value.IsVertical() && EstablishesMultiColumnContext && PlacesItselfAsBlockBox
+                         && Boxes.Count > 0 && await TryLayoutVerticalColumnsAsync(g))
+                {
+                    // A vertical-writing-mode multi-column container with two or more columns: the columns are
+                    // strips stacked along the inline axis and their content flows along the block axis -
+                    // see TryLayoutVerticalColumnsAsync. Fewer than two columns is an ordinary vertical box.
+                }
                 else if (WritingMode.Value.IsVertical() && DomUtils.ContainsInlinesOnly(this))
                 {
                     // A vertical-writing-mode box holding only inline content gets real vertical line
@@ -4872,7 +4879,7 @@ namespace PeachBrackets.Html.Dom
 #endif
 
                         }
-                        else if (EstablishesMultiColumnContext && Boxes.Count > 0)
+                        else if (EstablishesMultiColumnContext && Boxes.Count > 0 && !WritingMode.Value.IsVertical())
                         {
                             // Not monolithic any more: a column is a fragmentainer, and this engine drives its
                             // own. It is handed the resumption record so a container continuing on a later page
@@ -5702,7 +5709,10 @@ namespace PeachBrackets.Html.Dom
             var frame = WritingModeFrame.For(this);
 
             var widthIsAuto = !CssValueParser.IsValidLength(Width);
-            var heightIsAuto = !CssValueParser.IsValidLength(Height);
+
+            // Inside a multi-column strip the inline extent is the strip's, definite whatever the height says.
+            var stripExtent = StripInlineExtent;
+            var heightIsAuto = stripExtent is null && !CssValueParser.IsValidLength(Height);
 
             double logicalBlockOffset = 0;
             var maxCrossExtent = clientTop;
@@ -5819,6 +5829,15 @@ namespace PeachBrackets.Html.Dom
                 childBox.Location = new PaintPoint(trueX, clientTop);
                 childBox.ActualBottom = clientTop;
 
+                // A vertical block child of a column's content stretches across the same strip.
+                // A column-span: all child stretches across every column's inline extent instead.
+                childBox.StripInlineExtent = stripExtent is { } stripInline && childBox.WritingMode.Value.IsVertical()
+                    ? Math.Max(1, (ColumnsFullInlineExtent is { } fullInline && childBox.ColumnSpan.Value == ColumnSpanMode.All
+                            ? fullInline
+                            : stripInline) - childBox.ActualPaddingTop - childBox.ActualPaddingBottom
+                        - childBox.ActualBorderTopWidth - childBox.ActualBorderBottomWidth)
+                    : null;
+
                 await childBox.LayoutContentAtItsAssignedPosition(g);
 
                 // A same-writing-mode, non-orthogonal child (excluded from the fit-content branch above)
@@ -5899,7 +5918,11 @@ namespace PeachBrackets.Html.Dom
                 CssLayoutEngine.ShrinkAutoWidthTo(this, frame, logicalBlockOffset);
             }
 
-            if (heightIsAuto)
+            if (stripExtent is { } stripInlineExtent)
+            {
+                ActualBottom = clientTop + stripInlineExtent + ActualPaddingBottom + ActualBorderBottomWidth;
+            }
+            else if (heightIsAuto)
             {
                 ActualBottom = maxCrossExtent + ActualPaddingBottom + ActualBorderBottomWidth;
             }
