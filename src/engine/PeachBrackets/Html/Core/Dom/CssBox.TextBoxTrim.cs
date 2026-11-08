@@ -17,6 +17,9 @@ namespace PeachBrackets.Html.Dom
         {
             if (!IsTrimContainer()) return;
 
+            // Content of a box that straddles a fragmentainer break is already emitted on the earlier one; only a box held in one piece is trimmed.
+            if (_layoutWasResumed || PendingBreakToken is not null) return;
+
             var trim = RhythmGrammar.ParseTrim(TextBoxTrim);
             if (trim == global::PeachBrackets.Css.TextBoxTrim.None) return;
 

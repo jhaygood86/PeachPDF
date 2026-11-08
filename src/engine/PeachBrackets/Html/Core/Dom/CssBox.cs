@@ -2139,7 +2139,8 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
-            if (combineAll && Words.Count - wordsAtStart > 0)
+            // A forced break inside the run (white-space: pre) is not part of a cell: such text is left as it is.
+            if (combineAll && Words.Count - wordsAtStart > 0 && !Words.Skip(wordsAtStart).Any(static w => w.IsLineBreak))
                 MergeIntoCombinedWord(wordsAtStart);
         }
 
@@ -4404,6 +4405,10 @@ namespace PeachBrackets.Html.Dom
 
             var resume = _incomingToken;
             _incomingToken = null;
+
+            // block-step-insert: margin-box space is recomputed by every layout of this box, so a parent that re-lays it out reads none of the last pass's.
+            ResetBlockStepMargins();
+            _layoutWasResumed = resume is not null;
 
             // Laid out from its start again (a balancing retry, a fresh generation): the first fragment is this one.
             if (resume is null) FirstColumnFragmentOrigin = null;

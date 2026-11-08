@@ -144,7 +144,12 @@ namespace PeachBrackets.Html.Animation
                     }
 
                     var value = Sample(valueParser, box, stops, property, directed, easing, CssUtils.GetPropertyValue(box, property), composition: Cycle(compositions, i));
-                    if (value is not null) CssUtils.SetPropertyValue(valueParser, box, property, value);
+                    if (value is not null)
+                    {
+                        CssUtils.SetPropertyValue(valueParser, box, property, value);
+                        // An animated line-height computes to a length where it is declared, like a cascaded one.
+                        box.ResolveDeclaredLineHeight();
+                    }
                 }
             }
         }

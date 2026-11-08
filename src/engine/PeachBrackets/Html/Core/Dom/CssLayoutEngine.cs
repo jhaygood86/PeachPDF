@@ -6192,16 +6192,21 @@ namespace PeachBrackets.Html.Dom
             // The strut is the block's own first-line style; the word's is its inline's (CssBox.FirstLineInlineStyle), which can differ.
             var strutStyle = word.FirstLineStyle is null ? blockBox : blockBox.ResolvedFirstLineStyle ?? word.FirstLineStyle;
 
-            LineBoxExtent ExtentOf(CssBox box) => WithEmphasisReach(box, reserveDoubleOverlineReach
-                ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
-                : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight));
+            // The strut is not text: emphasis marks only make room where text they sit on is, not on a line holding nothing but an image.
+            LineBoxExtent ExtentOf(CssBox box, bool text = true)
+            {
+                var extent = reserveDoubleOverlineReach
+                    ? HalfLeadingExtentWithDecoration(box, pixelsPerPoint)
+                    : HalfLeadingExtentOf(box.ActualFont, box.ActualLineHeight);
+                return text ? WithEmphasisReach(box, extent) : extent;
+            }
 
             // A replaced flex/grid item is its own block container (the cascade blockifies it and
             // CorrectReplacedElementBoxes leaves it unwrapped), so it holds only its own atomic word and
             // no text a strut could serve: the same bookkeeping-only line as the wrapper's.
             var extent = blockBox.IsReplacedBlockWrapper || blockBox is CssBoxImage or CssBoxSvg or CssBoxFrame
                 ? default
-                : ExtentOf(strutStyle);
+                : ExtentOf(strutStyle, text: false);
 
             // An inline box with its own vertical-align (sub, super, a length...) is moved off the baseline
             // by that offset, and everything inside it moves too: CSS 2.1 §10.8 sizes the line from the

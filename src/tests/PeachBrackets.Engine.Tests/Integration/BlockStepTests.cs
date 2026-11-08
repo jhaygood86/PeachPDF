@@ -73,4 +73,24 @@ public class BlockStepTests
 
         Assert.Equal(30, Px(a.ActualBottom - a.Location.Y), 1);
     }
+
+    [Fact]
+    public async Task EndAlignPutsTheSpaceBeforeTheBox()
+    {
+        var (plain, _) = await LayoutAsync("");
+        var (end, b) = await LayoutAsync("block-step-size:25px;block-step-align:end");
+
+        Assert.Equal(Px(plain.Location.Y) + 20, Px(end.Location.Y), 1);
+        Assert.Equal(50, Px(b.Location.Y - plain.Location.Y), 1);
+    }
+
+    [Theory]
+    [InlineData("block-step-size:0")]
+    [InlineData("line-height-step:0")]
+    public async Task AZeroLengthIsValid(string declaration)
+    {
+        var (a, _) = await LayoutAsync(declaration);
+
+        Assert.Equal(declaration.StartsWith("block") ? "0" : "none", declaration.StartsWith("block") ? a.ComputedStyle.BoxModel.BlockStepSize : "none");
+    }
 }

@@ -50,6 +50,8 @@ namespace PeachBrackets.Css
             var toks = Significant(tokens);
             if (toks.Count != 1) return false;
             if (IsIdent(toks[0], Keywords.None)) return true;
+            // A bare 0 is a legal <length>.
+            if (toks[0].Type == TokenType.Number) return toks[0].Value == 0;
             if (toks[0].Type != TokenType.Dimension) return false;
 
             return Converters.LengthConverter.Convert([toks[0]]) is not null && toks[0].Value >= 0;
