@@ -13,7 +13,7 @@ Native AOT compatible, and is versioned in lockstep with PeachPDF: the same vers
 dotnet add package PeachDrawing.Svg
 ```
 
-> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerOptions`, `SvgTextMode` and
+> **Status: pre-1.0.** `SvgRenderContext`, `SvgComposer`, `SvgComposerOptions`, `SvgTextMode`, `SvgConicGradientMode` and
 > `SvgCanvas` are the package's full public surface - see `PublicApi.txt` for the exact, machine-checked snapshot. Until
 > 1.0 the public API may change between releases.
 
@@ -51,6 +51,19 @@ raster canvases give the `Canvas` API: rectangles, lines, polygons, image rectan
 positions are in layout units, while the coordinates of a `GraphicsPath` (for `DrawPath` and `PushClip`), and a `Pen`'s width and
 dash lengths, are in points. `SvgCanvas` scales those to the document's units when it writes them.
 
+### `SvgComposerOptions`
+
+| Option | Meaning |
+|---|---|
+| `TextMode` | `SvgTextMode.Outlines` (the default: each glyph is an exact outline, so the text looks the same everywhere) or `SvgTextMode.Text` (selectable `<text>` with an embedded subset font). |
+| `ConicGradients` | `SvgConicGradientMode.Wedges` (the default: a ring of colored wedges, drawn the same by every viewer) or `Css` (a CSS `conic-gradient()`, which only browsers draw). |
+| `Background` | A color painted behind everything; unset leaves the background transparent. |
+| `Precision` | The number of decimal places written for coordinates; fewer makes smaller files. |
+| `Title`, `Description` | Written as the document's `<title>` and `<desc>`, which assistive technology reads. |
+
+`composer.ToSvg()` returns the finished document as a string; `Save(Stream)` and `Save(TextWriter)` write it. `SvgRenderContext.AddFont` also takes
+`FontFaceDescriptors` (weight, style, stretch) and `unicodeRanges` for a face that covers only part of a script.
+
 The repository's `src/examples/PeachDrawing.Svg.Example` project is a runnable version of this with a handful of scenes (shapes and
 dashes, gradients, clips and transforms, blend modes and layer effects, patterns and images, text in both modes); run it and open the
 files in a browser.
@@ -62,7 +75,7 @@ files in a browser.
 | `DrawRectangle`, `DrawLine`, `DrawPolygon` | `<rect>`, `<line>`, `<polygon>` |
 | `DrawPath` | `<path>`, written from the path's own curves (cubic Béziers, lines, closed figures) - nothing is flattened; `FillMode.EvenOdd` is `fill-rule="evenodd"` |
 | `Pen` | `stroke`, `stroke-width`, `stroke-linecap`, `stroke-linejoin`, `stroke-miterlimit`, `stroke-dasharray`, `stroke-dashoffset`; a zero width is a one-pixel `non-scaling-stroke` hairline |
-| `SolidBrush` | a colour (`fill`, with `fill-opacity` for a translucent one); a CMYK colour is written as its RGB rendition |
+| `SolidBrush` | a color (`fill`, with `fill-opacity` for a translucent one); a CMYK color is written as its RGB rendition |
 | `LinearGradientBrush`, `RadialGradientBrush` | `<linearGradient>`, `<radialGradient>` in user space: `Pad` and `Repeat` spread, the focus and focus radius, and an elliptical radius or a brush transform as a `gradientTransform` |
 | `TileBrush`, `HatchBrush` | `<pattern>` carrying the brush's transform; a tile made by `CreateTile` stays vector content |
 | `ConicGradientBrush` | no SVG equivalent: a fan of 360 thin wedges clipped to the shape |
@@ -93,16 +106,16 @@ a group that holds nothing is not written.
 `SvgComposerOptions.TextMode` chooses how text is written:
 
 - **`SvgTextMode.Outlines`** (the default) - every glyph is an exact vector outline. The text looks identical in every viewer,
-  whatever fonts it has; shaping, kerning, synthetic bold and italic, colour glyphs (COLR/CPAL, drawn as vector paths and
+  whatever fonts it has; shaping, kerning, synthetic bold and italic, color glyphs (COLR/CPAL, drawn as vector paths and
   gradients), bitmap glyphs and OpenType-SVG glyphs are all handled. Each glyph's outline is defined once per size and slant and
   every occurrence is a `<use>`, so a screenful of text is far smaller than the outlines written out again at every position. The
   text is not selectable.
 - **`SvgTextMode.Text`** - selectable, searchable `<text>`, with each character placed at the position the shaper chose and a
   subset of the font embedded in the document as an `@font-face`. A run a viewer could not reproduce that way - ligatures,
-  reordering, colour or bitmap glyphs, or a font that cannot be embedded as an OpenType subset - is still written as outlines, so
+  reordering, color or bitmap glyphs, or a font that cannot be embedded as an OpenType subset - is still written as outlines, so
   the text always looks right.
 
-`Canvas.InvisibleText` is honoured in text mode (the text is written transparent, so it can be selected over content drawn
+`Canvas.InvisibleText` is honored in text mode (the text is written transparent, so it can be selected over content drawn
 some other way) and skipped in outline mode.
 
 ## Limitations
@@ -111,13 +124,13 @@ some other way) and skipped in outline mode.
   shape, or, for a `Pen`, painted through a mask of the stroke; a very large gradient shows the steps. `SvgComposerOptions.ConicGradients =
   SvgConicGradientMode.Css` writes a CSS `conic-gradient()` in a `<foreignObject>` instead - exact and smooth in a browser - inside a
   `<switch>` whose fallback is the wedges, so a viewer that ignores foreign content (resvg, Inkscape and most others) still shows them.
-- **Colour.** Gradient stops interpolate in non-premultiplied sRGB, the SVG default; a CMYK colour is written as its RGB rendition.
+- **Color.** Gradient stops interpolate in non-premultiplied sRGB, the SVG default; a CMYK color is written as its RGB rendition.
 - **Links to another document.** A destination is a fragment of its own SVG, so a link to a place named on another canvas cannot be followed.
   That happens only when one multi-page source (an HTML document with paper pages) is written as several SVGs; a source written as one
   continuous sheet, as the showcases are, has every destination in the file.
 - **Bookmarks, forms and tagging** are PDF concepts and have no counterpart: `BeginMarkedContent` and its relatives do nothing.
 
-## Licences
+## Licenses
 
 PeachDrawing.Svg is BSD 3-Clause-licensed like the rest of PeachPDF; it contains no third-party code (see its
 `THIRD-PARTY-LICENSES.md`).

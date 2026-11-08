@@ -4,8 +4,8 @@ PeachPDF is BSD 3-Clause-licensed (see [LICENSE](LICENSE)), but it embeds and ad
 
 ## PdfSharpCore (embedded fork)
 
-- **Location:** [`src/PeachDrawing.PDF/Engine/`](src/PeachDrawing.PDF/Engine/)
-- **License file:** [`src/PeachDrawing.PDF/Engine/LICENSE.md`](src/PeachDrawing.PDF/Engine/LICENSE.md)
+- **Location:** [`src/drawing/PeachDrawing.PDF/Engine/`](src/drawing/PeachDrawing.PDF/Engine/)
+- **License file:** [`src/drawing/PeachDrawing.PDF/Engine/LICENSE.md`](src/drawing/PeachDrawing.PDF/Engine/LICENSE.md)
 - **License:** MIT
 
 ```
@@ -39,8 +39,8 @@ DEALINGS IN THE SOFTWARE.
 
 ## ExCSS (CSS parser, adapted in-tree)
 
-- **Location:** [`src/PeachBrackets/CSS/`](src/PeachBrackets/CSS/)
-- **License file:** [`src/PeachBrackets/CSS/license.txt`](src/PeachBrackets/CSS/license.txt)
+- **Location:** [`src/engine/PeachBrackets/CSS/`](src/engine/PeachBrackets/CSS/)
+- **License file:** [`src/engine/PeachBrackets/CSS/license.txt`](src/engine/PeachBrackets/CSS/license.txt)
 - **License:** MIT
 
 ```
@@ -76,10 +76,10 @@ None of these fonts ships in the PeachPDF library or its NuGet package. See [doc
 
 ## PeachDrawing.Text
 
-Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved. This software is based in part on the work of the FreeType Team: the TrueType bytecode interpreter and Adobe's CFF engine that grid-fit glyph outlines are ported from FreeType and used under the FreeType Project License (Adobe's files add a patent licence grant, described in the package's notices), whose text ([`FTL.TXT`](src/PeachDrawing.Text/Internal/Hinting/FreeType/FTL.TXT)) ships with the source, in the `PeachDrawing.Text` package and in the `peachpdf` command-line tool's `--credits` output.
+Portions of this software are copyright © 1996-2026 The FreeType Project (https://freetype.org). All rights reserved. This software is based in part on the work of the FreeType Team: the TrueType bytecode interpreter and Adobe's CFF engine that grid-fit glyph outlines are ported from FreeType and used under the FreeType Project License (Adobe's files add a patent licence grant, described in the package's notices), whose text ([`FTL.TXT`](src/drawing/PeachDrawing.Text/Internal/Hinting/FreeType/FTL.TXT)) ships with the source, in the `PeachDrawing.Text` package and in the `peachpdf` command-line tool's `--credits` output.
 
-The font and text engine lives in its own package, [`PeachDrawing.Text`](src/PeachDrawing.Text/). Its own third-party components (PDFsharp-derived font readers, the ported FreeType interpreter and CFF engine, the ported HarfBuzz algorithms, and the WOFF2 glyph-table reconstruction that follows fontTools) are documented in [`src/PeachDrawing.Text/THIRD-PARTY-LICENSES.md`](src/PeachDrawing.Text/THIRD-PARTY-LICENSES.md); the Unicode Character Database tables, ICU's Thai, Lao, Khmer and Burmese word lists and the hyphenation patterns live in its own dependency, [`PeachDrawing.Text.Data`](src/PeachDrawing.Text.Data/), and are documented in [`src/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md`](src/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md). Both ship inside their respective packages and are printed after this document by the `peachpdf` command-line tool's `--credits`.
+The font and text engine lives in its own package, [`PeachDrawing.Text`](src/drawing/PeachDrawing.Text/). Its own third-party components (PDFsharp-derived font readers, the ported FreeType interpreter and CFF engine, the ported HarfBuzz algorithms, and the WOFF2 glyph-table reconstruction that follows fontTools) are documented in [`src/drawing/PeachDrawing.Text/THIRD-PARTY-LICENSES.md`](src/drawing/PeachDrawing.Text/THIRD-PARTY-LICENSES.md); the Unicode Character Database tables, ICU's Thai, Lao, Khmer and Burmese word lists and the hyphenation patterns live in its own dependency, [`PeachDrawing.Text.Data`](src/drawing/PeachDrawing.Text.Data/), and are documented in [`src/drawing/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md`](src/drawing/PeachDrawing.Text.Data/THIRD-PARTY-LICENSES.md). Both ship inside their respective packages and are printed after this document by the `peachpdf` command-line tool's `--credits`.
 
 ## PeachDrawing
 
-The software rasterizer lives in its own package, [`PeachDrawing`](src/PeachDrawing/). Its `feTurbulence` noise generator ([`Filters/Turbulence.cs`](src/PeachDrawing/Filters/Turbulence.cs)) is a C# transliteration of the reference implementation in the W3C Filter Effects Module Level 1, copyright © 2018 W3C® (MIT, ERCIM, Keio, Beihang), used under the W3C permissive document license; the notice is in [`src/PeachDrawing/THIRD-PARTY-LICENSES.md`](src/PeachDrawing/THIRD-PARTY-LICENSES.md).
+The software rasterizer lives in its own package, [`PeachDrawing`](src/drawing/PeachDrawing/). Its `feTurbulence` noise generator ([`Filters/Turbulence.cs`](src/drawing/PeachDrawing/Filters/Turbulence.cs)) is a C# transliteration of the reference implementation in the W3C Filter Effects Module Level 1, copyright © 2018 W3C® (MIT, ERCIM, Keio, Beihang), used under the W3C permissive document license; the notice is in [`src/drawing/PeachDrawing/THIRD-PARTY-LICENSES.md`](src/drawing/PeachDrawing/THIRD-PARTY-LICENSES.md).

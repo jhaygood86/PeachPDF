@@ -1214,14 +1214,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_NestedInlineBlock_IsFlattenedInsteadOfTreatedAsAnAtomicUnit()
+        public async Task VerticalRl_NestedInlineBlock_IsLaidOutAsAnAtomicUnit()
         {
-            // Documents a known gap (see .claude/accepted-gaps/no-vertical-writing-mode-layout.md,
-            // issue #771): MeasureAndCollectWordsInDocumentOrder walks every descendant box with no
-            // formatting-context check, so an inline-block child's own words get flattened straight into
-            // the parent's flat word list instead of being measured/placed as one atomic unit (the way
-            // FlowBox's ApplyAtomicInlineVerticalInsets does for the horizontal engine). The inline-block
-            // box itself never gets positioned, so its own border/padding/background never paint.
+            // An inline-block is one unbreakable item of the column with a formatting context of its own
+            // (css-display-3 section 2.3): its words stay in its own lines rather than being flattened into
+            // the parent's word stream, and the box itself is positioned so its border, padding and
+            // background paint. The detailed behaviour is in VerticalAtomicInlineTests.
             var html = LayoutHarness.Wrap("""
                 <div id="el" style="writing-mode: vertical-rl; width: 300px; height: 400px">before <span id="ib" style="display: inline-block; border: 1px solid red; padding: 4px;">nested block</span> after</div>
                 """);
@@ -1232,15 +1230,14 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.NotNull(el);
             Assert.NotNull(ib);
 
-            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).Select(w => w.Text).ToList();
-            // The inline-block's own text ("nested", "block") shows up as ordinary flat words alongside
-            // the surrounding plain text ("before", "after") - not aggregated into one atomic placement.
-            Assert.Equal(["before", "nested", "block", "after"], words);
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && w.Text is not null).Select(w => w.Text).ToList();
+            Assert.Equal(["before", "after"], words);
+            Assert.Equal(["nested", "block"], ib!.LineBoxes.SelectMany(l => l.Words).Select(w => w.Text).ToList());
 
-            // The inline-block box itself was never positioned by the flattening walk (no analog of
-            // FlowBox's atomic-inline placement/inset bookkeeping exists in the vertical engine yet).
-            Assert.Equal(0, ib!.Location.X);
-            Assert.Equal(0, ib.Location.Y);
+            // The box itself was positioned inside the vertical box.
+            Assert.True(ib.Location.X > el.Location.X);
+            Assert.True(ib.Location.Y > el.Location.Y);
+            Assert.True(ib.ActualRight <= el.ActualRight + 0.01);
         }
 
         [Fact]

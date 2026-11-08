@@ -20,7 +20,7 @@ This policy applies to every release before 1.0. A policy for 1.0 and later will
 ### The rules
 
 1. **Upgrade to 0.9 or later.** Series before 0.9 are not supported. Upgrade to 0.9 or newer to get help.
-2. **Each series supports the .NET versions that were current when it launched.** A series is supported on every .NET release that was out at the time of its first release. For 0.9, that is .NET 8, 9, and 10. While a series has full support, it also adds support for newer .NET releases as they come out, and may support a .NET pre-release (such as a release candidate) on a best-effort basis. Once a series is in maintenance it **adds no new .NET versions**, and the first maintenance release removes support for any .NET pre-release it had. For 0.9, this means maintenance releases after Nov 6, 2026 do **not** support .NET 11; to use .NET 11, upgrade to 0.10.x.
+2. **Each series supports the .NET versions that were current when it launched.** A series is supported on every .NET release that was out at the time of its first release. For 0.9, that is .NET 8, 9, and 10. While a series has full support, it also adds support for newer .NET releases as they come out, and may support a .NET pre-release (such as a release candidate) on a best-effort basis. Once a series is in maintenance it **adds no new .NET versions**, and the first maintenance release removes support for any .NET pre-release it had. For 0.9, this means maintenance releases (after 0.10.x ships on Nov 13, 2026) do **not** support .NET 11; to use .NET 11, upgrade to 0.10.x.
 3. **How long a .NET version stays supported.**
    - An **STS** release (such as .NET 9) is supported only until Microsoft ends support for it.
    - **LTS** releases (such as .NET 8 and .NET 10) are supported until the end of the **newest LTS the series launched with**. For 0.9, that is .NET 10, so 0.9 is supported on both .NET 8 and .NET 10 until .NET 10 reaches end of support.
@@ -47,7 +47,7 @@ This policy applies to every release before 1.0. A policy for 1.0 and later will
 | Series | Status | Details |
 |---|---|---|
 | 0.8 and older | Not supported | Upgrade to 0.9 or later. |
-| 0.9.x | Full support until Nov 6, 2026, then maintenance | Last full-support release is **Nov 6, 2026**. Supported on .NET 8, 9, and 10 until **Nov 10, 2026**; on .NET 8 and 10 until **Nov 14, 2028**. |
+| 0.9.x | Full support through the last 0.9 release (**Nov 6, 2026**), then maintenance when 0.10.x ships on **Nov 13, 2026** | Last full-support release is **Nov 6, 2026**. Supported on .NET 8, 9, and 10 until **Nov 10, 2026**; on .NET 8 and 10 until **Nov 14, 2028**. |
 | 0.10.x | First release **Nov 13, 2026** | Full support starts with the first release. Its own .NET list and end date will be added here when it ships. |
 
 Key dates for 0.9:
@@ -65,7 +65,7 @@ If you are on 0.9 and want to keep receiving every kind of fix, move to 0.10 aft
 
 While a series has full support, all of its libraries are fully supported, on their own or inside PeachPDF, provided you are on the current release series. The component limits below apply only once 0.9.x enters maintenance.
 
-Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also applies to every library PeachPDF depends on, **when that library is used inside PeachPDF**: PeachBrackets, PeachDrawing, PeachDrawing.PDF, PeachDrawing.Core, PeachDrawing.Text, and PeachImage.
+Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also applies to every library PeachPDF depends on, **when that library is used inside PeachPDF**: PeachBrackets, PeachDrawing, PeachDrawing.PDF, PeachDrawing.Core, PeachDrawing.Text, and PeachImage. The other packages (the SVG, Skia, Win2D and CoreGraphics backends and the PeachBrackets view libraries) are not used inside PeachPDF.
 
 | Component | Used inside PeachPDF | Used on its own |
 |---|---|---|
@@ -73,10 +73,11 @@ Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also appli
 | PeachDrawing.PDF | Supported | **Supported** (a directly supported component) |
 | PeachBrackets | Supported | Not covered by the 0.9.x maintenance policy |
 | PeachDrawing, PeachDrawing.Core, PeachDrawing.Text | Supported | Not covered by the 0.9.x maintenance policy |
-| PeachBrackets HtmlView libraries | Not applicable | Not covered by the 0.9.x maintenance policy |
+| PeachDrawing.Svg, PeachDrawing.Skia, PeachDrawing.Win2D, PeachDrawing.CoreGraphics | Not applicable | Not covered by the 0.9.x maintenance policy |
+| PeachBrackets.WinUI, PeachBrackets.Android, PeachBrackets.Apple (the HtmlView libraries) | Not applicable | Not covered by the 0.9.x maintenance policy |
 | PeachImage | Supported | Covered only by the PeachImage project's own policies |
 
-- **Full support for the rest arrives in 0.10.x.** PeachBrackets, the PeachDrawing libraries (other than PeachDrawing.PDF) and the PeachBrackets HtmlView libraries are expected to receive full support when used on their own in the 0.10.x series. That full support is contingent on staying on the current release series: once a newer series is released, the older one is in maintenance and these libraries are no longer covered when used on their own.
+- **Full support for the rest arrives in 0.10.x.** PeachBrackets, the PeachDrawing libraries (other than PeachDrawing.PDF) and the PeachBrackets HtmlView libraries (WinUI, Android and Apple) are expected to receive full support when used on their own in the 0.10.x series. That full support is contingent on staying on the current release series: once a newer series is released, the older one is in maintenance and these libraries are no longer covered when used on their own.
 - **PeachImage is a separate project** with its own releases and support policy. Using it independently of PeachPDF is covered only by that project's policies.
 - **Problems that reach PeachPDF are included.** A security or crashing issue found in any of these libraries that also affects PeachPDF is covered, and is fixed in the 0.9.x series.
 
@@ -84,7 +85,7 @@ Once 0.9.x enters maintenance, the policy applies to **PeachPDF**. It also appli
 
 While a series has full support, it is supported on every operating system the series targets. Once a series is in maintenance, support is limited to **desktop and server operating systems** that the supported .NET versions for that series support, as listed on Microsoft's [.NET support policy page](https://dotnet.microsoft.com/platform/support/policy/dotnet-core). An operating system that a supported .NET version no longer supports is no longer supported by the series either.
 
-**For 0.9.x, mobile operating systems are not supported once it enters maintenance.** This includes Android and iOS, and the `PeachBrackets.Android` library, as well as other mobile platforms. To keep receiving fixes on a mobile operating system, use the 0.10.x series.
+**For 0.9.x, mobile operating systems are not supported once it enters maintenance.** This includes Android and iOS, the `PeachBrackets.Android` library and the iOS side of `PeachBrackets.Apple`, as well as other mobile platforms. To keep receiving fixes on a mobile operating system, use the 0.10.x series.
 
 #### Operating systems supported for 0.9.x in maintenance
 
@@ -121,7 +122,7 @@ Paid support is available for **$25/month per developer** or **$250/year per dev
 - **[Sign up monthly](https://customer.peachstatetechnologies.com/Signup/ret8myBIEZs3WBlMHJqGzxgUAaJ60QSvoifndYG0w6A?term=monthly)** — $25/month per developer.
 - **[Sign up annually](https://customer.peachstatetechnologies.com/Signup/ret8myBIEZs3WBlMHJqGzxgUAaJ60QSvoifndYG0w6A?term=annually)** — $250/year per developer.
 
-A PeachPDF paid support plan also covers PeachDrawing, PeachImage, and PeachBrackets (every package that ships with PeachPDF).
+A PeachPDF paid support plan also covers every PeachDrawing and PeachBrackets package and PeachImage (every package that ships with PeachPDF).
 
 It includes:
 

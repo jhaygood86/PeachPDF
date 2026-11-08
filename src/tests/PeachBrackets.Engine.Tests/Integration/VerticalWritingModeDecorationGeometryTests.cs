@@ -124,6 +124,34 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.NotEmpty(g.Log.OfType<TestRecordingGraphics.DrawPathCall>());
         }
 
+        [Theory]
+        [InlineData("vertical-rl")]
+        [InlineData("vertical-lr")]
+        public async Task AnUnderlinedVerticalInlineBlock_IsUnderlinedDownEveryColumnOfItsText(string writingMode)
+        {
+            // The inline-block wraps its text into several columns of its own (its height cannot hold the words in one);
+            // its propagated decoration (css-text-decor-3 section 2.4) runs down each of them, not as one stub at its edge.
+            var (root, container) = await LayoutHarness.LayoutAsync(Wrap(
+                $"<div style='writing-mode:{writingMode}; height:300pt; width:400pt; font-size:16pt'>"
+                + "<span id='ib' style='display:inline-block; height:40pt; text-decoration:underline'>abc def ghi</span></div>"));
+            var ib = LayoutHarness.FindById(root, "ib")!;
+            Assert.True(ib.LineBoxes.Count >= 3, "the box's text should fill more than two columns");
+
+            var g = new TestRecordingGraphics();
+            FragmentPaintHarness.PaintBox(container, ib, g);
+
+            var lines = Lines(g);
+            Assert.Equal(ib.LineBoxes.Count, lines.Count);
+
+            foreach (var line in lines)
+            {
+                Assert.Equal(line.X1, line.X2, 3);
+                // Each runs along the extent of one column's words.
+                Assert.Contains(ib.LineBoxes, column =>
+                    Math.Abs(column.Words.Min(w => w.Top) - line.Y1) < 0.5 && Math.Abs(column.Words.Max(w => w.Bottom) - line.Y2) < 0.5);
+            }
+        }
+
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static async Task<(PeachBrackets.Html.Dom.CssBox Span, PeachDrawing.Core.Rect Rect, TestRecordingGraphics Graphics)>

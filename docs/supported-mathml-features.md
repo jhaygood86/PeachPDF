@@ -32,7 +32,7 @@ holds even for an attribute name that would otherwise be on the HTML Standard's 
 
 | Element | MDN Reference | Notes |
 |---------|---------------|-------|
-| `math` | [math](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) | The `display` attribute (`"block"`/`"inline"`, MathML Core §2.1) sets the formula's initial `displaystyle`. This only affects MathML Core's own sizing rules (e.g. whether a fraction's numerator/denominator shrink) — it does not change the CSS box-level `display` of the element itself; a `<math>` element always participates in ordinary HTML inline flow, the same way an inline `<svg>` does. Genuine CSS properties — `color`, `font-family`, `font-size`, `background` — cascade into `<math>` content normally, from the surrounding document. The user-agent stylesheet gives `<math>` `font-family: math` (per MathML Core), so a formula is typeset in the first installed math font (see [generic families](usage-examples.md#generic-families-and-system-ui)) unless the author sets a `font-family`. An explicit CSS `width`/`height` (including a percentage, resolved against the containing block) resizes the element's own box independently of its content — per MathML Core, `<math>` is not a replaced element the way `<img>`/`<svg>` are, so the formula's internal typesetting is never rescaled to fit; content can overflow a box smaller than its natural size, or leave extra space in a larger one, exactly like an ordinary block whose content doesn't fill its author-specified size |
+| `math` | [math](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/math) | The `display` attribute (`"block"`/`"inline"`, MathML Core §2.1) sets the formula's initial `displaystyle`. The value is parsed and cascaded to the subtree, but the layout does not yet read the display style, so it does not change the typeset output (see [Accepted Gaps](#accepted-gaps)). It does not change the CSS box-level `display` of the element itself; a `<math>` element always participates in ordinary HTML inline flow, the same way an inline `<svg>` does. Genuine CSS properties — `color`, `font-family`, `font-size`, `background` — cascade into `<math>` content normally, from the surrounding document. The user-agent stylesheet gives `<math>` `font-family: math` (per MathML Core), so a formula is typeset in the first installed math font (see [generic families](usage-examples.md#generic-families-and-system-ui)) unless the author sets a `font-family`. An explicit CSS `width`/`height` (including a percentage, resolved against the containing block) resizes the element's own box independently of its content — per MathML Core, `<math>` is not a replaced element the way `<img>`/`<svg>` are, so the formula's internal typesetting is never rescaled to fit; content can overflow a box smaller than its natural size, or leave extra space in a larger one, exactly like an ordinary block whose content doesn't fill its author-specified size |
 
 ## Token Elements
 
@@ -53,7 +53,7 @@ holds even for an attribute name that would otherwise be on the HTML Standard's 
 | `mrow` | [mrow](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mrow) | Horizontal concatenation of its children. Inter-element spacing around an `mo` with no explicit `lspace`/`rspace` comes from the full [operator dictionary](#operator-dictionary) (MathML Core Appendix B) |
 | `mfrac` | [mfrac](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mfrac) | Numerator/denominator stacked around a real, measured fraction rule, using the font's own `MATH` table constants (`FractionRuleThickness`, `FractionNumeratorGapMin`/`DenominatorGapMin`, `AxisHeight`). `linethickness` override is supported. `bevelled="true"` is parsed but renders as an ordinary (non-slanted) fraction — an accepted gap |
 | `msqrt` / `mroot` | [msqrt](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/msqrt) / [mroot](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mroot) | A real, measured vinculum (radical rule) over the radicand, plus the radical sign itself drawn from the font's `MATH` table `MathVariants` vertical constructions (stretched to match the radicand's height) when the font provides one, reserving that chosen glyph's own real advance width (from the font's `hmtx` table) rather than an approximation. Falls back to a fixed fraction of the current font size only when the font has no `MATH` table or no vertical construction for the radical sign at all. `mroot`'s index is positioned and sized per MathML Core (two script levels smaller, kerned before/after) |
-| `mstyle` | [mstyle](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mstyle) | `displaystyle`, `scriptlevel`, `mathsize`, `mathcolor` are honored for the subtree, and so are the CSS [`math-style`](#css-properties-of-math) and `math-depth`; `mathbackground` and the deprecated MathML 2 presentation attributes it also accepted are not rendered |
+| `mstyle` | [mstyle](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mstyle) | `displaystyle`, `scriptlevel`, `mathsize`, `mathcolor` are honored for the subtree (`displaystyle` is cascaded but the layout does not yet read it, so it changes no sizing), and so are the CSS [`math-style`](#css-properties-of-math) and `math-depth`; `mathbackground` and the deprecated MathML 2 presentation attributes it also accepted are not rendered |
 | `mspace` | (see Token Elements above) | |
 | `mphantom` | [mphantom](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mphantom) | Reserves its content's exact size; draws nothing |
 | `mpadded` | [mpadded](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mpadded) | `width`/`height`/`depth`/`lspace`/`voffset` (each a plain CSS `<length-percentage>`, including the [font-relative units](html-css-support.md#font-relative-units) — a percentage value falls back to that attribute's own default, per spec) override the box's reported size and reposition its content within it, without rescaling the content itself. `height`/`depth` both default to the content's own natural *ascent* when absent (MathML Core's own default, not a bug) |
@@ -75,13 +75,13 @@ holds even for an attribute name that would otherwise be on the HTML Standard's 
 |---------|---------------|-------|
 | `mtable` | [mtable](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mtable) | A real grid: each column sized to its widest cell, each row to its tallest, centered on the table's own vertical center. Per-column/per-row `columnalign`/`rowalign` are parsed but every cell is currently centered regardless of the requested alignment — an accepted gap |
 | `mtr` / `mlabeledtr` | [mtr](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mtr) / [mlabeledtr](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mlabeledtr) | `mlabeledtr`'s label cell is parsed and carried on the row but not yet drawn (equation numbering is a rare feature for a v1) — an accepted gap |
-| `mtd` | [mtd](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mtd) | Cell content lays out at `displaystyle="false"` unless overridden, per MathML Core's own table default |
+| `mtd` | [mtd](https://developer.mozilla.org/en-US/docs/Web/MathML/Reference/Element/mtd) | Cell content cascades `displaystyle="false"` unless overridden, per MathML Core's own table default (the layout does not yet read the display style) |
 
 ## CSS Properties of Math
 
 | Property | Notes |
 |----------|-------|
-| `math-style` | `normal` (display style) or `compact` (inline style), inherited. The user-agent stylesheet gives `<math>` `compact`, and `<math display="block">` `normal`. A value that differs from the one the element would inherit replaces the `displaystyle` attribute on that element and its subtree; a value equal to the inherited one does not override an explicit `displaystyle` |
+| `math-style` | `normal` (display style) or `compact` (inline style), inherited. The user-agent stylesheet gives `<math>` `compact`, and `<math display="block">` `normal`. A value that differs from the one the element would inherit replaces the `displaystyle` attribute on that element and its subtree; a value equal to the inherited one does not override an explicit `displaystyle` (the cascade keeps no "declared" bit). The layout does not yet read the display style, so the value does not change the typeset output |
 | `math-depth` | `auto-add`, `add(<integer>)` or an `<integer>`, inherited. An integer sets the script depth, `add()` changes it, and either replaces `scriptlevel` on the element. `auto-add` is what the script and fraction elements already do and changes nothing. A value equal to the one inherited does not apply again |
 | `math-shift` | `normal` or `compact`, inherited. Accepted and cascaded; the layout has no cramped style yet, so it does not change the output |
 
@@ -147,12 +147,11 @@ require an entirely separate semantic-to-visual layout layer.
 A `<math>` element is one `Math` node in the [accessibility tree](accessibility.md#svg-and-mathml). It is named by `aria-labelledby`, `aria-label`,
 `alttext` or a `text/plain` `<annotation>` inside `<semantics>`, in that order; with none of them it is said in English from its structure (fractions,
 roots, scripts, sums and limits, fences, tables, the common operators and Greek letters). The speech is plain by design: an author who needs a precise
-reading gives one.
+reading gives one. No `/ActualText` is set on the formula; the original MathML travels as an Associated File instead.
 
 ## Accepted Gaps
 
-Each gap noted above with "an accepted gap" is deliberately left out of v1 and, where it is a genuine
-spec deviation, is tracked as an issue for closing it later. In summary:
+Each gap noted above with "an accepted gap" is deliberately not implemented. In summary:
 
 - `mfrac[bevelled]` and `menclose`'s notation marks are parsed but not drawn — neither is part of MathML
   Core at all (Chromium/WebKit don't render them either; Firefox's support for them is a pre-Core legacy
@@ -164,3 +163,4 @@ spec deviation, is tracked as an issue for closing it later. In summary:
   it either).
 - Elementary math (`mstack`/`mlongdiv` and its children) and Content MathML are not implemented at all —
   both dropped entirely by MathML Core.
+- The display style (`display="block"`, `displaystyle`, `math-style`) and `math-shift: compact` (cramped style) are parsed and cascaded but not read by the layout: large operators, limits and fraction gaps do not change with them, and there is no cramped superscript shift.

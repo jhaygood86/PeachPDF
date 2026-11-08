@@ -9,14 +9,14 @@ Maintenance and diagnostic scripts. Nothing here ships in the library or its pac
 | `reduce-repro.py` | bisects a document that reproduces a rendering bug down to the markup or CSS that causes it |
 | `compare-with-chrome.py` | renders one HTML file with Chrome and with PeachPDF and diffs the word geometry |
 
-The three Python scripts need [PyMuPDF](https://pymupdf.readthedocs.io/), which
+`pdf-text-state.py` and `compare-with-chrome.py` need [PyMuPDF](https://pymupdf.readthedocs.io/), which
 `CONTRIBUTING.md` already expects for two-renderer rasterization checks:
 
 ```bash
 python3 -m pip install pymupdf
 ```
 
-Each takes `--help`, and each is standalone — no shared module, nothing to install.
+`reduce-repro.py` uses only the Python standard library. Each script takes `--help`, and each is standalone — no shared module.
 
 ## `pdf-text-state.py`
 

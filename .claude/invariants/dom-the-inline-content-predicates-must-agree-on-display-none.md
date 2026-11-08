@@ -18,4 +18,3 @@ for `<style>text` and was exposed for `float + text` by #1205.
 - A test for text in a fragment must not use `LayoutHarness.Wrap`, which adds the `<body>` that hides the whole
   class.
 
-Origin: `.claude/recent-fixes/2026-09-25-display-none-sibling-no-longer-drops-inline-content.md`.

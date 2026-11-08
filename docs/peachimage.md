@@ -71,7 +71,7 @@ Console.WriteLine($"{info.Width}x{info.Height} {info.PixelFormat} ({info.FormatN
 
 - `IsLosslessEncoding`: whether the pixel data was encoded losslessly by its own codec, so a caller can avoid silently re-encoding an
   already-lossy source as if it were exact. It is true for WebP's lossless mode, a fully lossless AVIF, every TIFF the decoder supports,
-  and a JPEG XL whose colour channels are not XYB-encoded and whose first frame is Modular. It is false for JPEG (always lossy), for
+  and a JPEG XL whose color channels are not XYB-encoded and whose first frame is Modular. It is false for JPEG (always lossy), for
   lossy files, and for a JPEG XL made by recompressing a JPEG (lossless only relative to the original JPEG bytes, not the pixels).
 - `Orientation`: the orientation the file records, as an [`ImageOrientation`](api/PeachImage/ImageOrientation.html); see
   [Orientation](#orientation).
@@ -286,8 +286,9 @@ load, such as a service resizing many uploads at once, where reusing buffers cut
 ## API reference
 
 The [PeachImage API reference](api/PeachImage/index.md) documents every public type and member. It sits beside the references for
-[PeachPDF](api/index.md), [PeachDrawing.Core](api/PeachDrawing.Core/index.md), [PeachDrawing](api/PeachDrawing/index.md) and
-[PeachDrawing.Text](api/PeachDrawing.Text/index.md), and the pages of one link to the pages of another where they meet: a
+[PeachPDF](api/index.md), [PeachDrawing.Core](api/PeachDrawing.Core/index.md), [PeachDrawing](api/PeachDrawing/index.md),
+[PeachDrawing.PDF](api/PeachDrawing.PDF/index.md), [PeachDrawing.Svg](api/PeachDrawing.Svg/index.md), [PeachDrawing.Skia](api/PeachDrawing.Skia/index.md),
+[PeachDrawing.Win2D](api/PeachDrawing.Win2D/index.md), [PeachDrawing.Text](api/PeachDrawing.Text/index.md) and [PeachBrackets](api/PeachBrackets/index.md), and the pages of one link to the pages of another where they meet: a
 `RasterCanvas.Save` page links to the `EncoderOptions` it takes here.
 
 ## License

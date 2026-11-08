@@ -38,6 +38,11 @@ links come from the laid-out page.
 | `Controls`, `Owns`, `FlowTo`, `Details`, `ErrorMessages`, `LabelledBy`, `DescribedBy`, `ActiveDescendant` | The nodes that `aria-controls`, `aria-owns`, `aria-flowto`, `aria-details`, `aria-errormessage`, `aria-labelledby`, `aria-describedby` and `aria-activedescendant` point at |
 | `Bounds` | One rectangle for each page it is on, in points from the top-left of the sheet |
 | `Id` | A name that is the same each time the document is laid out, so a reader that is on a node stays there |
+| `Value`, `ValueMin`, `ValueMax`, `ValueText` | The current number, least and most of a range (a progress bar, meter, slider, scroll bar or spin button; `Value` is null for a node that is not one) and its value as text |
+| `Parent`, `Children`, `DescendantsAndSelf()` | Where the node sits in the tree and a walk below it |
+| `FontFamily`, `FontSize`, `FontWeight`, `IsItalic`, `Underline`, `Strikethrough`, `ForegroundColor`, `BackgroundColor` | The text attributes of a block, from its style, for a host's text pattern |
+
+The tree itself also finds nodes: `FindById(id)` looks a node up by its `Id`, `NodeAt(pageIndex, x, y)` is the node under a point (what `document.GetAccessibilityNodeAt` calls), `FocusOrder` lists the nodes the keyboard steps through in the order HTML defines and `NextFocus(current, forward)` gives the next (or previous) stop after a node, returning null past the ends. `AccessibilityTreeDiff` compares two trees, which is how a host tells its platform nothing changed, that parts came or went, or that a property did.
 
 Elements that mean nothing to a reader (`div`, `span`, a `section` that has no name) are not in the tree; their content is. Content that is not
 shown is not in it either: `display: none`, `visibility: hidden`, `hidden`, `inert`, and anything inside an `aria-hidden="true"` element. An element
@@ -124,16 +129,16 @@ figure alternative text, and shows the title in the viewer. See [Generating PDF/
 page that has a role (landmarks, headings, links, buttons, lists, table parts...), in reading order, with its name, description, language, heading
 level and states. [PeachDrawing.Svg](peachdrawing-svg.md) writes them as `<rect role="..." aria-label="...">`, so an SVG made from a document is
 readable by a screen reader; the text itself is still drawn as outlines unless the SVG is made with selectable text. The regions are flat (no
-nesting). The Skia and Win2D canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`) beside the links, and
+nesting). The Skia, Win2D and CoreGraphics canvases record them in their link map (`SkiaLinkMap.Semantics` / `Win2dLinkMap.Semantics`, and `CoreGraphicsLinkMap.Semantics` on Apple platforms) beside the links, and
 `SemanticAt` finds the innermost one under a point, which is what a host's touch exploration or UI Automation hit test needs.
 
 ## Form controls
 
 A host that shows the page sets `HtmlDocumentOptions.PaintFormControls`, and the engine draws every `<input>` and `<select>` itself from the
 control's own CSS - no native widget is placed over the page - so a control is styled like any other box. The look covers check boxes, radio
-buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges, a colour input (a block of its colour), a file input (a "Choose File" button
+buttons, text-like fields (value or placeholder), buttons, drop-downs and ranges, a color input (a block of its color), a file input (a "Choose File" button
 and "No file chosen") and date and time inputs (their value, or the pattern it would take while empty: `mm/dd/yyyy`, `--:-- --`...). The text of a text field can be edited
-through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or colour field and a range control are operated through the hosts' own popups and drag handling, and a file input opens the host's file picker. The accessibility tree already reports each control's role, name and state.
+through `HtmlDocument` (see [PeachBrackets](peachbrackets.md)); a `textarea` is drawn and edited like a text field (it keeps its line breaks, moves the caret by line and scrolls to keep the caret in view; both hosts route Enter, Up, Down, Home and End to it), a drop-down, a date, time or color field and a range control are operated through the hosts' own popups and drag handling, and a file input opens the host's file picker. The accessibility tree already reports each control's role, name and state.
 
 ## Preferences and text spacing
 
@@ -148,15 +153,15 @@ A host reports what the reader has asked of the system with `HtmlDocumentOptions
 
 ### Forced colors
 
-With `UserPreferences.ForcedColors` on, the document is also drawn in the colours of `UserPreferences.ForcedPalette` (a
+With `UserPreferences.ForcedColors` on, the document is also drawn in the colors of `UserPreferences.ForcedPalette` (a
 `SystemColorPalette`: `Canvas`, `CanvasText`, `LinkText`, `ButtonFace`... filled from the platform, or `SystemColorPalette.Light` / `.Dark`), as a
 browser does under a Windows high contrast theme: text takes `CanvasText` (`LinkText` in a link, `ButtonText` in a button, `FieldText` in a field),
 backgrounds take `Canvas` (`ButtonFace`, `Field`, `Mark`), borders, outlines and column rules take `CanvasText` (`ButtonBorder` on a control),
 box shadows, text shadows and gradient backgrounds are not drawn (a `url()` image is kept), and an inline `<svg>`'s `fill` and `stroke`
-(solid, gradient or pattern) take `CanvasText`. A fully transparent colour stays transparent. An element opts out with
-[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text colour with
-`preserve-parent-color`. The CSS [system colour keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
-work in any style sheet; they always have the colours of `SystemColorPalette.Light`, whatever palette the host passes.
+(solid, gradient or pattern) take `CanvasText`. A fully transparent color stays transparent. An element opts out with
+[`forced-color-adjust`](https://developer.mozilla.org/en-US/docs/Web/CSS/forced-color-adjust) `none`, or keeps just its text color with
+`preserve-parent-color`. The CSS [system color keywords](https://developer.mozilla.org/en-US/docs/Web/CSS/system-color) (`CanvasText`, `LinkText`...)
+work in any style sheet; they always have the colors of `SystemColorPalette.Light`, whatever palette the host passes.
 ### Text size
 
 `HtmlDocumentOptions.FontScale` scales the root font size (1.5 is 150% of the default), so text the document sizes in `em`, `rem`, a
@@ -194,7 +199,7 @@ progress bar and an image with a description through it with the platform's scre
 Anything that is announced wrongly, silently or twice is worth recording with the page and the setting, since the tree it came from can then be dumped
 (`adb shell uiautomator dump` on Android, the Accessibility Insights tool on Windows) and compared with what the document means.
 
-## Limits of this version
+## Limits
 
 - A name that comes from an element that is not shown (`display: none`) is not read, because it is never laid out; `aria-labelledby` pointing at one
   gives nothing, and no relation can point at one.

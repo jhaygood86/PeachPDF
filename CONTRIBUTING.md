@@ -96,7 +96,7 @@ If a change gives PeachPDF a new visible rendering capability, add or update a s
 
 ### Adversarial review prompt example
 
-Most of the defects that slip past a passing test suite in this codebase are the same few kinds: content that silently disappears on a page break, a fix that changes ordinary documents it was never meant to touch, state that drifts each time the tree is laid out again, docs and gap notes that describe behaviour the change has since altered, and tests that pass on both the old and the new code. The prompt below asks a reviewer to hunt for exactly those, by measuring instead of reading. Give it to a human reviewer or to an AI coding agent, replacing `{PR_NUMBER}`, and run it on your own branch before you ask for review; a PR that already survives it moves through review much faster.
+Most of the defects that slip past a passing test suite in this codebase are the same few kinds: content that silently disappears on a page break, a fix that changes ordinary documents it was never meant to touch, state that drifts each time the tree is laid out again, docs and gap notes that describe behavior the change has since altered, and tests that pass on both the old and the new code. The prompt below asks a reviewer to hunt for exactly those, by measuring instead of reading. Give it to a human reviewer or to an AI coding agent, replacing `{PR_NUMBER}`, and run it on your own branch before you ask for review; a PR that already survives it moves through review much faster.
 
 It is an example, not a required template. Adapt the sections to the kind of change, and skip the ones that do not apply. The prompt itself says which checks to run for which kind of change.
 
@@ -203,7 +203,7 @@ through `SaveShowcaseAsync`, and its caption must be true against Chrome and the
 - Tests must assert box/line geometry after layout, or an ordered Canvas call log (see CLAUDE.md Testing
   conventions), never only PDF content-stream substrings. Paint features need a test that fails if the feature
   is a no-op.
-- Judge every edit to pre-existing tests on the merits: intent-preserving, or weakened to fit new behaviour?
+- Judge every edit to pre-existing tests on the merits: intent-preserving, or weakened to fit new behavior?
 - Mutation testing: revert or neuter ONE piece at a time (each condition, list entry, epsilon, guard, cache reset,
   early return), run the new test class plus related classes, then the full suite for survivors, and restore.
   Every survivor is a test gap: add a test or justify it as an equivalent mutant. List all survivors.
@@ -242,7 +242,7 @@ deviates from the spec and which the change follows. Check computed-value vs use
   font fixture or a platform difference. Never treat red or pending CI as green.
 
 ## 11. PR hygiene (report as non-blocking unless it hides a defect)
-- Is the PR reviewable? More than roughly 500 changed lines or several separable behaviours should be split into
+- Is the PR reviewable? More than roughly 500 changed lines or several separable behaviors should be split into
   stacked PRs, each independently correct. Growth after review that folds in unrelated fixes is a red flag.
 - `Fixes #N` for every issue it closes; an issue filed for every accepted gap and every exposed pre-existing bug.
 - Clear description of what was wrong, what changed, what was measured, and what is deliberately not done.
