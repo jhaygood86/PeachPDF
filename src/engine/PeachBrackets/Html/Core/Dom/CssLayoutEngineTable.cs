@@ -2213,6 +2213,9 @@ namespace PeachBrackets.Html.Dom
         /// the body's. A footer row's rowspan needs no remapping (<see cref="_allRows"/> always places
         /// footer rows last, so a footer-opened span has nothing after it in the grid to cross into or
         /// reach past - the raw arithmetic fallback below is already correct for it).
+        /// A body row's rowspan likewise stops at the last body row: the <c>&lt;tfoot&gt;</c> below is a row group of
+        /// its own, and HTML's table model (forming a table, ending a row group) - like every browser engine - does not
+        /// let a cell cross into the next group, so the footer's cells keep their own columns.
         /// </summary>
         private int GetLastRowInGrid(int gridRow, CssBox cell, int rowSpan)
         {
