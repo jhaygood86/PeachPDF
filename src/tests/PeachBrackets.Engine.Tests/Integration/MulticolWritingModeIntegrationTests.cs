@@ -23,9 +23,16 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// </remarks>
     public class MulticolWritingModeIntegrationTests
     {
+        // Enough text to fill three 66pt strips in the bundled font.
+        private static readonly string Words150 = string.Join(" ", Enumerable.Range(0, 80).Select(i => "w" + i.ToString("D3") + "aaa"));
+
         private static readonly string Words60 = string.Join(" ", Enumerable.Range(0, 60).Select(i => "w" + i.ToString("D2") + "aaa"));
 
-        private const string Base = "font-family: 'Liberation Sans'; font-size: 10pt; line-height: 12pt;";
+        // Bundled so the fixtures measure the same text on every platform (the default fonts differ on Linux and macOS).
+        private static Task Register(PeachPDF.Rendering.HtmlRenderContext renderContext) =>
+            BundledFonts.RegisterFont(renderContext, BundledFonts.LiberationSans, "MulticolWritingModeSans");
+
+        private const string Base = "font-family: 'MulticolWritingModeSans'; font-size: 10pt; line-height: 12pt;";
 
         private static CssBox P(CssBox root, string id) => LayoutHarness.FindById(root, id)!;
 
@@ -47,7 +54,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var p0 = P(root, "p0");
             var tops = LineTops(p0);
             var lefts = LineLefts(p0);
@@ -84,7 +91,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var p0 = P(root, "p0");
             var tops = LineTops(p0);
             var lefts = LineLefts(p0);
@@ -105,7 +112,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var tops = LineTops(P(root, "p0"));
             var first = tops.Count(t => t < 100);
             var second = tops.Count - first;
@@ -123,7 +130,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var mc = P(root, "mc");
             var p0 = P(root, "p0");
             var lines = p0.LineBoxes.Count;
@@ -140,11 +147,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             // (220 - 2 * 10) / 3 = 66.67pt strips, 76.67pt apart.
             var html = LayoutHarness.Wrap($$"""
                 <div id="mc" style="writing-mode: vertical-rl; width: 360pt; height: 220pt; column-count: 3; column-gap: 10pt; column-fill: auto; {{Base}}">
-                  <p id="p0" style="margin:0">{{Words60}}</p>
+                  <p id="p0" style="margin:0">{{Words150}}</p>
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var tops = LineTops(P(root, "p0")).Distinct().OrderBy(t => t).ToList();
 
             Assert.Equal(3, tops.Count);
@@ -163,7 +170,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var tops = LineTops(P(root, "p0")).Distinct().OrderBy(t => t).ToList();
 
             Assert.Equal(2, tops.Count);
@@ -185,7 +192,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var a = P(root, "a");
             var b = P(root, "b");
             var c = P(root, "c");
@@ -208,7 +215,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var a = P(root, "a");
             var b = P(root, "b");
 
@@ -229,7 +236,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var b = P(root, "b");
             var c = P(root, "c");
 
@@ -251,7 +258,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var tops = LineTops(P(root, "a"));
             var first = tops.Count(t => t < 100);
 
@@ -269,7 +276,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var a = P(root, "a");
             var b = P(root, "b");
 
@@ -285,7 +292,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 <div id="mc" style="writing-mode: vertical-rl; width: 300pt; height: 220pt; column-count: 2; column-gap: 20pt; column-fill: auto; {{Base}}">{{Words60}}</div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var mc = P(root, "mc");
             var tops = LineTops(mc).Distinct().OrderBy(t => t).ToList();
 
@@ -308,7 +315,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var before = P(root, "before");
             var span = P(root, "span");
             var after = P(root, "after");
@@ -339,7 +346,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var a = P(root, "a");
             var b = P(root, "b");
             var wrap = P(root, "wrap");
@@ -362,7 +369,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var mc = P(root, "mc");
             var ib = P(root, "ib");
 
@@ -385,7 +392,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var a = P(root, "a");
             var b = P(root, "b");
 
@@ -398,11 +405,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var html = LayoutHarness.Wrap($$"""
                 <div id="mc" style="writing-mode: vertical-rl; width: 360pt; height: 220pt; column-count: 3; column-gap: 10pt; column-fill: auto; column-rule: 1pt solid black; {{Base}}">
-                  <p id="p0" style="margin:0">{{Words60}}</p>
+                  <p id="p0" style="margin:0">{{Words150}}</p>
                 </div>
                 """);
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var mc = P(root, "mc");
 
             var rules = mc.BlockAxisColumnRuleSegments;
@@ -428,7 +435,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var mc = P(root, "mc");
             var authored = LayoutHarness.Descendants(mc).SelectMany(b => b.Words).Count();
 
@@ -456,7 +463,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             var wrap = P(root, "wrap");
 
             var pieces = new List<BoxFragment>();
@@ -493,7 +500,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300);
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageHeight: 300, configureRenderContext: Register);
             var mc = P(root, "mc");
             var p0 = P(root, "p0");
 
@@ -523,7 +530,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(P(root, "mc")));
         }
 
@@ -537,7 +544,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 </div>
                 """);
 
-            var (root, _) = await LayoutHarness.LayoutAsync(html);
+            var (root, _) = await LayoutHarness.LayoutAsync(html, configureRenderContext: Register);
             Assert.True(P(root, "p1").Location.X > P(root, "p0").Location.X);
         }
     }
