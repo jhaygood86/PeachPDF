@@ -792,6 +792,8 @@ namespace PeachBrackets.Html.Dom
                 EnforceMinimumSize();
             }
 
+            EnforceMinimumTableWidth();
+
             // A collapsed <col>/<colgroup> (CSS 2.1 §17.6.1) must not compete for space with the
             // rest of the table, so this runs last - after every other step that could size a
             // column up from its content has already run - and nothing after it may spread width
@@ -872,21 +874,36 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// A table in normal flow establishes a block formatting context, so its border box must not overlap the margin box of a float in the same
-        /// context (CSS 2.1 §9.5): it is moved clear of a float on its left when it still fits beside it. One that does not fit beside the floats is left
-        /// where it is: browsers move it below them, which this engine does not do yet.
+        /// context (CSS 2.1 §9.5): it is moved clear of a float on its left when it still fits beside it, and below the floats when it does not fit
+        /// beside them, a float on either side. Its width is not narrowed to the room beside the floats.
         /// </summary>
         private void PlaceBesideFloats()
         {
             if (_continuesAPreviousPass || _isVertical || _tableBox.IsFloated || _tableBox.IsOutOfFlow || _tableBox.ContainingBlock is not { } block) return;
 
             var width = GetWidthSum();
-            var top = _tableBox.Location.Y;
-            var beside = CssLayoutEngine.ExtentBesideFloats(_tableBox, top, block.ClientLeft, block.ClientRight);
-            var left = beside.Left + _tableBox.ActualMarginLeft;
 
-            if (left > _tableBox.Location.X + 0.5 && left + width <= beside.Right + 0.5)
+            // Each step down clears at least one more float, so the walk ends; the bound is only a guard.
+            for (var step = 0; step < 100; step++)
             {
-                _tableBox.Location = _tableBox.Location with { X = left };
+                var top = _tableBox.Location.Y;
+                var beside = CssLayoutEngine.ExtentBesideFloatsWithBottom(_tableBox, top, block.ClientLeft, block.ClientRight);
+                var left = beside.Left + _tableBox.ActualMarginLeft;
+
+                if (left + width <= beside.Right + 0.5)
+                {
+                    if (left > _tableBox.Location.X + 0.5)
+                    {
+                        _tableBox.Location = _tableBox.Location with { X = left };
+                    }
+
+                    return;
+                }
+
+                // It does not fit beside the floats: below the lowest of them it has the whole width (CSS 2.1 §9.5).
+                if (beside.FloatsBottom is not { } bottom || bottom <= top + 0.5) return;
+
+                _tableBox.Location = _tableBox.Location with { Y = bottom };
             }
         }
 
@@ -2918,6 +2935,26 @@ namespace PeachBrackets.Html.Dom
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Grows the columns until the table is as wide as its <c>min-width</c> (CSS 2.1 §10.4: the minimum wins over the maximum), the extra
+        /// shared in proportion to the widths the columns already have. A vertical table's minimum is its height, which another step settles.
+        /// </summary>
+        private void EnforceMinimumTableWidth()
+        {
+            if (_isVertical || _tableBox.MinWidth == "0" || !CssValueParser.IsValidLength(_tableBox.MinWidth)) return;
+
+            var minWidth = CssValueParser.ParseLength(_tableBox.MinWidth, _tableBox.ParentBox!.AvailableWidth, _tableBox);
+            var widthSum = GetWidthSum();
+            if (!(minWidth > widthSum + 0.1) || _columnWidths!.Length == 0) return;
+
+            var extra = minWidth - widthSum;
+            var columnSum = 0.0;
+            foreach (var width in _columnWidths) columnSum += width;
+
+            for (var i = 0; i < _columnWidths.Length; i++)
+                _columnWidths[i] += columnSum > 0 ? extra * _columnWidths[i] / columnSum : extra / _columnWidths.Length;
         }
 
         /// <summary>
@@ -6466,6 +6503,29 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// The left edge of a cell that starts <paramref name="x"/> along the columns and is <paramref name="width"/> wide: where the columns run left to right
+        /// it is <paramref name="x"/>, and in a <c>direction: rtl</c> table (CSS Tables 3: the columns run from the right) the cell is placed the same
+        /// distance from the right edge of the columns instead. The leading and trailing spacing are outside the columns, so the mirror is about them alone.
+        /// </summary>
+        /// <param name="x">where the cell starts if the columns run left to right</param>
+        /// <param name="width">the cell's width over the columns it spans</param>
+        /// <param name="startX">where the columns begin, after the table's leading border and spacing</param>
+        private double MirrorColumnAxis(double x, double width, double startX)
+        {
+            if (_isVertical || _tableBox.Direction.Value != DirectionMode.Rtl) return x;
+
+            var span = 0.0;
+
+            for (var column = 0; column < _columnWidths!.Length; column++)
+            {
+                span += _columnWidths[column];
+                if (column < _columnWidths.Length - 1 && !IsColumnCollapsed(column)) span += HorizontalSpacingAt(column + 1);
+            }
+
+            return startX + span - (x - startX) - width;
+        }
+
+        /// <summary>
         /// Lays one row's cells out at <paramref name="cursor"/>'s current position, advancing the
         /// cursor's <see cref="TableRowCursor.MaxRight"/>/<see cref="TableRowCursor.MaxBottom"/> over them.
         /// </summary>
@@ -6543,6 +6603,7 @@ namespace PeachBrackets.Html.Dom
                     currentX += IsColumnCollapsed(skipped) ? 0 : HorizontalSpacingAt(skipped + 1);
                 }
                 expectedColumn = columnIndex + colSpan;
+                var logicalStartX = currentX;
 
                 // A cell contributes no border-spacing slot of its own when the last column it spans
                 // is collapsed - GetWidthSum leaves that same slot out of the table's own width. This
@@ -6570,7 +6631,7 @@ namespace PeachBrackets.Html.Dom
                     // background for a continuation to draw; the geometry §6.1 wants belongs to the cell
                     // it stands in for, which lives in an earlier row and continues on its own terms.
                     if (cell is not CssSpacingBox)
-                        finishedCells.Add((cell, currentX, width));
+                        finishedCells.Add((cell, MirrorColumnAxis(currentX, width, startX), width));
 
                     rowMaxRight = Math.Max(rowMaxRight, currentX + width);
                     currentX += width + spacingAfterCell;
@@ -6599,7 +6660,7 @@ namespace PeachBrackets.Html.Dom
                     // always the row axis (physical X) - swapped into the correct PaintPoint slot here, the
                     // one place logical and physical coordinates actually meet. See the axis-mapping
                     // fields' own remarks for why this assumes forward growth even for vertical-rl.
-                    cell.Location = _isVertical ? new PaintPoint(currentY, currentX) : new PaintPoint(currentX, currentY);
+                    cell.Location = _isVertical ? new PaintPoint(currentY, currentX) : new PaintPoint(MirrorColumnAxis(currentX, width, startX), currentY);
                     // A row laid out again over cells an earlier run placed - a §4.3 relocation of the whole table after a
                     // cell's own break - starts from no height of its own: ActualBottom is the location plus a stored height,
                     // so moving the location alone leaves the cell as tall as it was where it first broke, and the row, the
@@ -6742,7 +6803,10 @@ namespace PeachBrackets.Html.Dom
                 // vertical table) - ActualBottom, not ActualRight, is that extent there.
                 var cellColumnAxisEdge = _isVertical ? cell.ActualBottom : cell.ActualRight;
                 rowMaxRight = Math.Max(rowMaxRight, cellColumnAxisEdge);
-                currentX = cellColumnAxisEdge + spacingAfterCell;
+                // In an rtl table the cell sits mirrored, but the cursor runs along the columns from where they begin.
+                currentX = !_isVertical && _tableBox.Direction.Value == DirectionMode.Rtl
+                    ? logicalStartX + width + spacingAfterCell
+                    : cellColumnAxisEdge + spacingAfterCell;
             }
 
             // CSS 2.1 §17.5.3: a row's own explicit height/min-height, and any per-row floor a prior
