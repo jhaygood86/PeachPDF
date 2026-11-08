@@ -356,18 +356,11 @@ namespace PeachBrackets.Html.Dom
         private double RepeatedFooterHeight => _footerRepeats && _footerHeight > 0 ? _footerHeight : 0;
 
         /// <summary>
-        /// The lowest physical X the column axis may start at: the page's left edge, except for a table anchored to
-        /// its rtl container's right edge, which overflows toward the start edge and so may begin left of it
-        /// (<see cref="CssLayoutEngine.AnchorsTableToInlineEnd"/>), and a floated table, which a right float wider than
-        /// its container puts left of the page's edge as well.
+        /// The lowest physical X the column axis may start at. A horizontal table's cells lie inside its box wherever the box is: a negative
+        /// margin or offset, a float wider than its container and an over-wide table anchored to an <c>rtl</c> container's right edge all put it
+        /// left of the page's edge (CSS 2.1 §8.3, §10.3.3), so only a vertical table, whose column axis is Y, keeps the floor at 0.
         /// </summary>
-        private double ColumnAxisFloor =>
-            !_isVertical
-            && (_tableBox.IsFloated
-                || CssLayoutEngine.AnchorsTableToInlineEnd(_tableBox)
-                || AnchorsOverWideToInlineEnd)
-                ? double.NegativeInfinity
-                : 0;
+        private double ColumnAxisFloor => _isVertical ? 0 : double.NegativeInfinity;
 
         /// <summary>
         /// Whether this table is wider than its <c>rtl</c> containing block with an <c>auto</c> margin
@@ -853,6 +846,8 @@ namespace PeachBrackets.Html.Dom
                 };
             }
 
+            PlaceBesideFloats();
+
             // Ensure there's no padding
             _tableBox.PaddingLeft = _tableBox.PaddingTop = _tableBox.PaddingRight = _tableBox.PaddingBottom = "0";
 
@@ -873,6 +868,26 @@ namespace PeachBrackets.Html.Dom
             // Published only now that the run has finished - see the constructor for what a half-settled
             // setup would cost a later continuation. A continuation re-publishes the instance it inherited.
             _tableBox.TableSetup = _setup;
+        }
+
+        /// <summary>
+        /// A table in normal flow establishes a block formatting context, so its border box must not overlap the margin box of a float in the same
+        /// context (CSS 2.1 §9.5): it is moved clear of a float on its left when it still fits beside it. One that does not fit beside the floats is left
+        /// where it is: browsers move it below them, which this engine does not do yet.
+        /// </summary>
+        private void PlaceBesideFloats()
+        {
+            if (_continuesAPreviousPass || _isVertical || _tableBox.IsFloated || _tableBox.IsOutOfFlow || _tableBox.ContainingBlock is not { } block) return;
+
+            var width = GetWidthSum();
+            var top = _tableBox.Location.Y;
+            var beside = CssLayoutEngine.ExtentBesideFloats(_tableBox, top, block.ClientLeft, block.ClientRight);
+            var left = beside.Left + _tableBox.ActualMarginLeft;
+
+            if (left > _tableBox.Location.X + 0.5 && left + width <= beside.Right + 0.5)
+            {
+                _tableBox.Location = _tableBox.Location with { X = left };
+            }
         }
 
         /// <summary>
@@ -7286,7 +7301,31 @@ namespace PeachBrackets.Html.Dom
         {
             var att = b.GetAttribute("rowspan", "1");
 
-            return !int.TryParse(att, out var rowSpan) ? 1 : rowSpan;
+            if (!int.TryParse(att, out var rowSpan)) return 1;
+
+            return rowSpan > 1 ? ClampToRowGroup(b, rowSpan) : rowSpan;
+        }
+
+        /// <summary>
+        /// A <c>rowspan</c> that reaches past the last row of its body or footer row group is cut to the rows that exist (HTML Standard, processing
+        /// model for tables: "if the slot goes past the end of the row group, it is clamped"). Left as written, no row ever closed the cell, so its
+        /// content was never aligned or given its height and was drawn above the table. A header's span is left alone: one that crosses into the
+        /// body is laid out as that (<see cref="ComputeHeaderRowSpansCrossingIntoBody"/>).
+        /// </summary>
+        private static int ClampToRowGroup(CssBox cell, int rowSpan)
+        {
+            if (cell is CssSpacingBox || cell.ParentBox is not { } row || row.DerivedStyle.ActualDisplay != Keywords.TableRow) return rowSpan;
+            if (row.ParentBox is not { } group || group.DerivedStyle.ActualDisplay is not (Keywords.TableRowGroup or Keywords.TableFooterGroup)) return rowSpan;
+
+            var remaining = 0;
+            var seenRow = false;
+            foreach (var sibling in group.Boxes)
+            {
+                if (ReferenceEquals(sibling, row)) seenRow = true;
+                if (seenRow && sibling.DerivedStyle.ActualDisplay == Keywords.TableRow) remaining++;
+            }
+
+            return remaining > 0 ? Math.Min(rowSpan, remaining) : rowSpan;
         }
 
         /// <summary>

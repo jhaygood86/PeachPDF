@@ -3239,6 +3239,8 @@ namespace PeachBrackets.Html.Parse
         /// <param name="valueParser">Used to resolve <c>face</c> against installed font families via <see cref="CssValueParser.GetFontFamilyByName"/>.</param>
         private static void TranslateAttributes(HtmlTag tag, CssBox box, CssValueParser valueParser)
         {
+            CenterTableInLegacyCenteredParent(tag, box);
+
             if (!tag.HasAttributes()) return;
 
             foreach (var attKey in tag.Attributes!.Keys)
@@ -3308,6 +3310,25 @@ namespace PeachBrackets.Html.Parse
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// A table that is a child of a <c>&lt;center&gt;</c>, or of an element whose <c>align</c> attribute is <c>center</c>, is centred as a box
+        /// (the HTML Standard's rendering section maps these to <c>-webkit-center</c>, which centres a block-level table, not only the text in it).
+        /// It is a presentational hint: a table's own <c>align</c> or any author margin wins over it.
+        /// </summary>
+        private static void CenterTableInLegacyCenteredParent(HtmlTag tag, CssBox box)
+        {
+            if (!tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)
+                || box.ParentBox?.HtmlTag is not { } parent
+                || (tag.HasAttributes() && tag.Attributes!.ContainsKey(HtmlConstants.Align)))
+                return;
+
+            var centered = parent.Name.Equals("center", StringComparison.OrdinalIgnoreCase)
+                || (parent.HasAttributes() && parent.Attributes!.TryGetValue(HtmlConstants.Align, out var align)
+                    && align.Trim().Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase));
+
+            if (centered) SetHorizontalMargins(box, Keywords.Auto, Keywords.Auto);
         }
 
         /// <summary>

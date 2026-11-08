@@ -2494,7 +2494,16 @@ namespace PeachBrackets.Html.Dom
 
             // Never past the cell's own far edge: a cell whose `height` is declared does not grow to hold what is in it here (it does in a browser,
             // where the height is a minimum), so content that overflows it would give a negative distance and move up out of the cell.
-            if (!isVertical) farEdge = Math.Max(farEdge, Math.Min(CellContentBottom(cell), cellFarEdge));
+            // The content ends where CellContentBottom says (the margin edge of the last in-flow block, floats and the cell's own lines), not where
+            // the lowest word was drawn: a relative offset moves paint and not room (§9.4.3) and a negative bottom margin ends the content above its
+            // box (§8.3.1). The word measure above stays the answer only where no such edge exists.
+            if (!isVertical)
+            {
+                var contentBottom = CellContentBottom(cell);
+                farEdge = double.IsNegativeInfinity(contentBottom)
+                    ? Math.Min(farEdge, cellFarEdge)
+                    : Math.Max(cell.ClientTop, Math.Min(contentBottom, cellFarEdge));
+            }
 
             var dist = cellKeyword switch
             {
@@ -2560,6 +2569,9 @@ namespace PeachBrackets.Html.Dom
                 var lineBottom = line.BaselineY is { } baseline && line.BaselineExtent is { } extent
                     ? baseline + extent.BelowBaseline
                     : line.LineBottom > line.LineTop ? line.LineBottom : double.NegativeInfinity;
+
+                // The lowest word of the line is part of the line whatever the strut says: a fallback font's glyphs can reach below it.
+                if (line.LineBottom > line.LineTop) lineBottom = Math.Max(lineBottom, line.LineBottom);
 
                 bottom = Math.Max(bottom, lineBottom);
             }
@@ -3919,7 +3931,7 @@ namespace PeachBrackets.Html.Dom
 
             if (minHeightValue is { } floor && floor > declared) declared = floor;
 
-            if (CssValueParser.IsValidLength(box.MaxHeight))
+            if (CssValueParser.IsValidLength(box.MaxHeight) && !box.IsTableCell)
             {
                 double? maxBasis = CssValueParser.DependsOnPercentage(box.MaxHeight) ? PercentageHeightBasis() : 0;
                 if (maxBasis is null) return null;
@@ -4174,6 +4186,9 @@ namespace PeachBrackets.Html.Dom
         internal static double? ResolveMaxHeight(CssBox box)
         {
             if (!CssValueParser.IsValidLength(box.MaxHeight)) return null;
+
+            // CSS 2.1 §10.7 leaves the effect of max-height on a table cell undefined, and a cell's height is a minimum (§17.5.3): browsers ignore it.
+            if (box.IsTableCell) return null;
 
             if (!IsHeightDefinite(box.ContainingBlock) && CssValueParser.DependsOnPercentage(box.MaxHeight)) return null;
 

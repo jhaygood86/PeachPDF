@@ -157,4 +157,48 @@ public class CellVerticalAlignContentExtentTests
 
         Assert.Equal(cell.ClientTop + 10, p.Location.Y, 1);
     }
+
+    private const string TallerCell = "<td style='width:10pt;height:100pt;vertical-align:top'></td>";
+
+    private static Task<(CssBox Cell, CssBox P)> LayoutTarget(string childStyle, string extra = "", string cellExtra = "") =>
+        LayoutWithTarget($"<div id='p' style='font-size:10pt;line-height:20pt;{childStyle}'>Hello</div>{extra}", $"vertical-align:middle;{cellExtra}", TallerCell);
+
+    private static Task<(CssBox Cell, CssBox P)> LayoutWithTarget(string content, string cellStyle, string otherCell) => LayoutAsync(content, cellStyle, otherCell);
+
+    // A box with display: none generates no box (CSS 2.1 section 9.2.4): its height is not content of the cell.
+    [Fact]
+    public async Task DisplayNoneChildWithAHeight_IsNotContentOfTheCell()
+    {
+        var (cell, p) = await LayoutTarget("", "<div style='display:none;height:100pt'></div>");
+
+        Assert.Equal(cell.ClientTop + 40, p.Location.Y, 1);
+    }
+
+    // A relative offset moves where a box is drawn, not the room it takes (CSS 2.1 section 9.4.3): the line is centred (y=40), then drawn 15pt lower.
+    [Fact]
+    public async Task RelativelyPositionedLastChild_IsCentredWhereItIsInTheFlow()
+    {
+        var (cell, p) = await LayoutTarget("position:relative;top:15pt");
+
+        Assert.Equal(cell.ClientTop + 40 + 15, p.Location.Y, 1);
+    }
+
+    // The content ends at the bottom margin edge of its last block, above its border edge for a negative margin (sections 8.3.1, 10.6.7).
+    [Fact]
+    public async Task NegativeBottomMarginOfTheLastChild_EndsTheContentAboveItsBox()
+    {
+        var (cell, p) = await LayoutTarget("margin-bottom:-10pt");
+
+        Assert.Equal(cell.ClientTop + 45, p.Location.Y, 1);
+    }
+
+    // max-height does not apply to a table cell (section 10.7, 17.5.3): the cell is as tall as its content and the content sits at its top.
+    [Fact]
+    public async Task MaxHeightOnACell_IsIgnored()
+    {
+        var (cell, p) = await LayoutAsync("<div id='p' style='margin:0 0 10pt;font-size:10pt;line-height:20pt'>Hello</div>", "vertical-align:middle;max-height:10pt");
+
+        Assert.Equal(30, cell.ActualBottom - cell.Location.Y, 1);
+        Assert.Equal(cell.ClientTop, p.Location.Y, 1);
+    }
 }
