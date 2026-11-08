@@ -1081,7 +1081,8 @@ namespace PeachBrackets.Html.Dom
             // The thickness an empty inline element obliges the column it sits in, keyed by the index of the word that follows it
             // (the word count for one after the last word).
             var emptyInlineThickness = new Dictionary<int, double>();
-            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants, emptyInlineThickness);
+            var inlineEvents = new VerticalInlineBoxEvents();
+            await MeasureAndCollectWordsInDocumentOrder(g, blockBox, words, outOfFlowDescendants, emptyInlineThickness, inlineEvents);
 
             var clientTop = blockBox.ClientTop;
             var clientLeft = blockBox.ClientLeft;
@@ -1155,6 +1156,26 @@ namespace PeachBrackets.Html.Dom
                     if (floatsInOrder[f].WordIndex > splitIndex)
                         floatsInOrder[f] = (floatsInOrder[f].Box, floatsInOrder[f].WordIndex + 1);
                 }
+
+                // Everything else keyed by word index follows the stream the same way.
+                inlineEvents.Split(splitIndex);
+                ShiftEmptyInlineThickness(emptyInlineThickness, splitIndex);
+            }
+
+            // The room along the column the inline boxes opening and closing at the word at <paramref name="wordIndex"/> take: the
+            // physical-top side leads in a top-to-bottom column and trails in a bottom-to-top one (direction: rtl, sideways-lr).
+            (double Open, double Close) InlineSpacingAt(int wordIndex)
+            {
+                var open = inlineEvents.EmptySpacingBefore(wordIndex);
+                var close = 0d;
+
+                foreach (var opening in inlineEvents.OpeningAt(wordIndex))
+                    open += InlineAxisSpacing(opening, top: !frame.InlineStartIsBottom);
+
+                foreach (var closing in inlineEvents.ClosingAt(wordIndex))
+                    close += InlineAxisSpacing(closing, top: frame.InlineStartIsBottom);
+
+                return (open, close);
             }
 
             if (words.Count == 0)
@@ -1256,6 +1277,10 @@ namespace PeachBrackets.Html.Dom
 
                 if (word.IsLineBreak)
                 {
+                    // A <br> can be the only word an inline box holds, or its last: the box still opens and closes on this column.
+                    foreach (var opening in inlineEvents.OpeningAt(i)) opening.FirstHostingLineBox = line;
+                    foreach (var closing in inlineEvents.ClosingAt(i)) closing.LastHostingLineBox = line;
+
                     // See CssLineBox.PrecedesForcedBreak: the column this break closes is the last one of
                     // its paragraph, so text-align-last governs it (css-text-3 §6.1/§6.3).
                     line.PrecedesForcedBreak = true;
@@ -1292,7 +1317,13 @@ namespace PeachBrackets.Html.Dom
                 // checked unconditionally, independent of column position, the same way FlowBox's own
                 // `overflows` is: a word that alone is too long for even an empty column must still get a
                 // real hyphenation attempt, not just an unavoidable-overflow pass-through.
-                var wordDoesNotFit = permitsOverflowWrap && inlineOffset + wordAdvance > effectiveWrapLimit + LineFitTolerance;
+                //
+                // An inline box that opens at this word reserves its inline-start margin, border and padding before it, and one that
+                // closes at it reserves the inline-end ones after (CSS 2.1 section 8.1; the horizontal FlowBox's leftSpacing/rightSpacing).
+                // Both belong to the word's fit: a box's edge is never stranded at the end of a column away from its content.
+                var (openSpacing, closeSpacing) = InlineSpacingAt(i);
+                var wordDoesNotFit = permitsOverflowWrap
+                    && inlineOffset + openSpacing + wordAdvance + closeSpacing > effectiveWrapLimit + LineFitTolerance;
 
                 // hyphens:auto/manual: before giving up and wrapping the whole word, see if a cached
                 // candidate break point (from CssBox.ParseToWords - either an explicit soft hyphen or an
@@ -1305,8 +1336,8 @@ namespace PeachBrackets.Html.Dom
                 if (wordDoesNotFit && !word.SuppressWrapBefore &&
                     word.HyphenationCandidates is { Count: > 0 } &&
                     IsWithinHyphenateLimitLines(blockBox, consecutiveHyphenatedColumns) &&
-                    IsWithinHyphenateLimitZone(blockBox, effectiveWrapLimit - inlineOffset, effectiveWrapLimit) &&
-                    TryHyphenateWord(g, word.OwnerBox, word, effectiveWrapLimit - inlineOffset, out var prefixWord, out var suffixWord))
+                    IsWithinHyphenateLimitZone(blockBox, effectiveWrapLimit - inlineOffset - openSpacing, effectiveWrapLimit) &&
+                    TryHyphenateWord(g, word.OwnerBox, word, effectiveWrapLimit - inlineOffset - openSpacing, out var prefixWord, out var suffixWord))
                 {
                     // Splices into both the owning box's own word list (the real source of truth
                     // TryRestoreHyphenationSplit later reads) and this method's own locally-flattened list,
@@ -1333,13 +1364,14 @@ namespace PeachBrackets.Html.Dom
                     wordRectInline = naturalWidth;
                     wordAdvance = naturalWidth + word.ActualWordSpacing;
                     wordBlock = naturalHeight;
+                    (openSpacing, closeSpacing) = InlineSpacingAt(i);
 
                     wordDoesNotFit = false;
                     currentColumnHyphenated = true;
                 }
 
                 if (wordDoesNotFit && (inlineOffset <= columnStartInset || !hasOrdinaryWrapBefore) &&
-                    TryOverflowWrapWord(g, word, effectiveWrapLimit - inlineOffset, out var overflowPrefix,
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit - inlineOffset - openSpacing, out var overflowPrefix,
                         out var overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
@@ -1349,6 +1381,7 @@ namespace PeachBrackets.Html.Dom
                     wordRectInline = naturalWidth;
                     wordAdvance = naturalWidth + word.ActualWordSpacing;
                     wordBlock = naturalHeight;
+                    (openSpacing, closeSpacing) = InlineSpacingAt(i);
                     wordDoesNotFit = false;
                 }
 
@@ -1393,8 +1426,8 @@ namespace PeachBrackets.Html.Dom
                 if (startedNewLine)
                     await StartNewLine();
 
-                if (startedNewLine && naturalWidth > effectiveWrapLimit - columnStartInset &&
-                    TryOverflowWrapWord(g, word, effectiveWrapLimit - columnStartInset, out overflowPrefix,
+                if (startedNewLine && naturalWidth > effectiveWrapLimit - columnStartInset - openSpacing &&
+                    TryOverflowWrapWord(g, word, effectiveWrapLimit - columnStartInset - openSpacing, out overflowPrefix,
                         out overflowSuffix))
                 {
                     ReplaceCollectedWordWithOverflowWrapSplit(words, i, word, overflowPrefix!, overflowSuffix!);
@@ -1404,7 +1437,12 @@ namespace PeachBrackets.Html.Dom
                     wordRectInline = naturalWidth;
                     wordAdvance = naturalWidth + word.ActualWordSpacing;
                     wordBlock = naturalHeight;
+                    (openSpacing, closeSpacing) = InlineSpacingAt(i);
                 }
+
+                // The boxes opening here begin on this column, after the room their inline-start side takes.
+                inlineOffset += openSpacing;
+                foreach (var opening in inlineEvents.OpeningAt(i)) opening.FirstHostingLineBox = line;
 
                 var physical = frame.ToPhysical(new Rect(inlineOffset, blockOffset, wordRectInline, wordBlock));
                 word.Left = physical.X;
@@ -1431,6 +1469,10 @@ namespace PeachBrackets.Html.Dom
                     word, trailingRegionalIndicatorCount, trailingGraphemeContext);
 
                 inlineOffset += wordAdvance;
+
+                // The boxes closing here end on this column, with the room their inline-end side takes after the word.
+                foreach (var closing in inlineEvents.ClosingAt(i)) closing.LastHostingLineBox = line;
+                inlineOffset += closeSpacing;
 
                 // The column's cross-axis thickness is the line box's own extent (CSS 2.1 §10.8.1), not the
                 // word's glyph footprint - `wordBlock` above stays the glyph content area, because that is
@@ -1662,6 +1704,10 @@ namespace PeachBrackets.Html.Dom
                 return;
             }
 
+            // Where the containing block's content edge was when this box was placed: its left margin was added to that, using the width
+            // it had before its content shrank it.
+            var placedContentLeft = blockBox.Location.X - blockBox.ActualMarginLeft;
+
             if (frame.BlockStartIsRight)
             {
                 var trueRight = blockBox.ActualRight;
@@ -1676,6 +1722,38 @@ namespace PeachBrackets.Html.Dom
                 blockBox.ActualRight = contentFarEdgeX
                     + blockBox.ActualPaddingRight + blockBox.ActualBorderRightWidth;
             }
+
+            RecentreAutoMarginsOfShrunkBox(blockBox, placedContentLeft);
+        }
+
+        /// <summary>
+        /// Re-resolves the <c>auto</c> horizontal margins of an in-flow block that
+        /// <see cref="ShrinkAutoWidthTo"/> just narrowed, against the width it ended with.
+        /// </summary>
+        /// <remarks>
+        /// A vertical box's auto width is the extent of its content along the block axis, known only once that content
+        /// is laid out - after the box was placed, with the margins resolved from the width it had then (the containing
+        /// block's, or its <c>max-width</c>, which is why <c>margin: 0 auto</c> beside a <c>max-width</c> centred it
+        /// against the clamp). Per CSS 2.1 section 10.3.3 an auto margin takes what the used width leaves of the
+        /// containing block, so with the used width now settled the box is moved to where those margins put it. A
+        /// right-to-left or vertical containing block, or a box that is not an ordinary in-flow block (floats, flex and
+        /// grid items, positioned boxes, which have margin rules of their own), is left as placed.
+        /// </remarks>
+        /// <param name="box">the box that was shrunk</param>
+        /// <param name="placedContentLeft">the left edge of the containing block's content box the box was placed against</param>
+        private static void RecentreAutoMarginsOfShrunkBox(CssBox box, double placedContentLeft)
+        {
+            if (box.ParentBox is null || box.MarginLeft.Value.IsValue || !IsInFlowBlockLevel(box)) return;
+
+            if (box.ContainingBlock is not { WritingMode.Value: Css.WritingMode.HorizontalTb, Direction.Value: DirectionMode.Ltr }) return;
+
+            var free = ContainingContentWidth(box, box.Location.Y) - (box.ActualRight - box.Location.X);
+            var marginLeft = box.MarginRight.Value.IsValue
+                ? Math.Max(0, free - box.ActualMarginRight)
+                : Math.Max(0, free) / 2;
+
+            var shift = placedContentLeft + marginLeft - box.Location.X;
+            if (Math.Abs(shift) > 1e-6) box.OffsetLeft(shift);
         }
 
         /// <summary>
@@ -1838,7 +1916,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static async ValueTask MeasureAndCollectWordsInDocumentOrder(Canvas g, CssBox box,
             List<CssRect> words, List<(CssBox Box, int WordIndex)> outOfFlowDescendants,
-            Dictionary<int, double>? emptyInlineThickness = null)
+            Dictionary<int, double>? emptyInlineThickness = null, VerticalInlineBoxEvents? inlineEvents = null)
         {
             if (box.Words.Count > 0)
             {
@@ -1883,12 +1961,98 @@ namespace PeachBrackets.Html.Dom
 
                     var thickness = extent.AboveBaseline + extent.BelowBaseline;
                     emptyInlineThickness[words.Count] = emptyInlineThickness.TryGetValue(words.Count, out var held) ? Math.Max(held, thickness) : thickness;
+
+                    // An empty inline box's inline-axis margin, border and padding still occupy room (CSS 2.1 section 8.1): both its sides.
+                    inlineEvents?.AddEmptySpacing(words.Count, InlineAxisSpacing(child, top: true) + InlineAxisSpacing(child, top: false));
                     continue;
                 }
 
-                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants, emptyInlineThickness);
+                var firstWordOfChild = words.Count;
+                await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants, emptyInlineThickness, inlineEvents);
+
+                // The inline box opens at its first word and closes at its last: CreateVerticalLineBoxes reserves its inline-start
+                // and inline-end margin, border and padding there and records which columns host its ends.
+                if (inlineEvents is not null && child.DerivedStyle.ActualDisplay == Keywords.Inline)
+                {
+                    if (words.Count > firstWordOfChild)
+                    {
+                        inlineEvents.Open(firstWordOfChild, child);
+                        inlineEvents.Close(words.Count - 1, child);
+                    }
+                }
             }
         }
+
+        /// <summary>
+        /// Where in a vertical box's flat word stream the inline boxes nested in it open and close, so that
+        /// <see cref="CreateVerticalLineBoxes"/> can reserve each box's inline-axis margin, border and padding at its
+        /// true ends and tell <see cref="CssBox.FirstHostingLineBox"/>/<see cref="CssBox.LastHostingLineBox"/> which
+        /// column holds them - the bookkeeping <see cref="CssLineBox.UpdateRectangle"/> needs to cover each end once.
+        /// Keyed by the index of the word in the stream; <see cref="Split"/> keeps the keys true when a word becomes two.
+        /// </summary>
+        private sealed class VerticalInlineBoxEvents
+        {
+            private readonly Dictionary<int, List<CssBox>> _opens = [];
+            private readonly Dictionary<int, List<CssBox>> _closes = [];
+
+            /// <summary>Room an empty inline box (one with no word) takes before the word that follows it, keyed by that word.</summary>
+            private readonly Dictionary<int, double> _empty = [];
+
+            public void Open(int wordIndex, CssBox box) => Add(_opens, wordIndex, box);
+
+            public void Close(int wordIndex, CssBox box) => Add(_closes, wordIndex, box);
+
+            public void AddEmptySpacing(int beforeWordIndex, double spacing) =>
+                _empty[beforeWordIndex] = _empty.GetValueOrDefault(beforeWordIndex) + spacing;
+
+            public IReadOnlyList<CssBox> OpeningAt(int wordIndex) => _opens.TryGetValue(wordIndex, out var l) ? l : [];
+
+            public IReadOnlyList<CssBox> ClosingAt(int wordIndex) => _closes.TryGetValue(wordIndex, out var l) ? l : [];
+
+            public double EmptySpacingBefore(int wordIndex) => _empty.GetValueOrDefault(wordIndex);
+
+            /// <summary>
+            /// The word at <paramref name="index"/> was split in two (hyphenation, overflow-wrap): the boxes that opened at
+            /// it still open at the first half, the ones that closed at it close at the second, and every later word moved up one.
+            /// </summary>
+            public void Split(int index)
+            {
+                ShiftAfter(_opens, index);
+                ShiftAfter(_closes, index);
+                ShiftAfter(_empty, index);
+
+                if (_closes.Remove(index, out var closing)) _closes[index + 1] = closing;
+            }
+
+            private static void ShiftAfter<T>(Dictionary<int, T> map, int index)
+            {
+                var moved = map.Where(p => p.Key > index).OrderByDescending(p => p.Key).ToList();
+                foreach (var (key, _) in moved) map.Remove(key);
+                foreach (var (key, value) in moved) map[key + 1] = value;
+            }
+
+            private static void Add(Dictionary<int, List<CssBox>> map, int index, CssBox box)
+            {
+                if (!map.TryGetValue(index, out var list)) map[index] = list = [];
+                list.Add(box);
+            }
+        }
+
+        /// <summary>Moves every entry keyed after <paramref name="splitIndex"/> up one, as the word stream gained a word there.</summary>
+        private static void ShiftEmptyInlineThickness(Dictionary<int, double> thickness, int splitIndex)
+        {
+            var moved = thickness.Where(p => p.Key > splitIndex).OrderByDescending(p => p.Key).ToList();
+            foreach (var (key, _) in moved) thickness.Remove(key);
+            foreach (var (key, value) in moved) thickness[key + 1] = value;
+        }
+
+        /// <summary>
+        /// The margin, border and padding on the physical top (<paramref name="top"/>) or bottom side of
+        /// <paramref name="box"/> - what an inline box takes along a vertical box's inline axis at that end of itself.
+        /// </summary>
+        private static double InlineAxisSpacing(CssBox box, bool top) => top
+            ? box.ActualMarginTop + box.ActualBorderTopWidth + box.ActualPaddingTop
+            : box.ActualMarginBottom + box.ActualBorderBottomWidth + box.ActualPaddingBottom;
 
         /// <summary>
         /// Lays out every box <see cref="MeasureAndCollectWordsInDocumentOrder"/> pulled out of a vertical

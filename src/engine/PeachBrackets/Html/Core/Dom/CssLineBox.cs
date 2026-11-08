@@ -301,15 +301,38 @@ namespace PeachBrackets.Html.Dom
             // the rectangle and the content inside it agree.
             var clonesDecorations = box.BoxDecorationBreak.Value == BoxDecorationBreakMode.Clone;
 
-            if (clonesDecorations || (box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
-                x -= leftSpacing;
-            if (clonesDecorations || (box.LastHostingLineBox != null && box.LastHostingLineBox.Equals(this)) || box.IsImage)
-                r += rightSpacing;
-
-            if (!box.IsImage)
+            if (OwnerBox.WritingMode.Value.IsVertical())
             {
-                y -= topSpacing;
-                b += bottomSpacing;
+                // The two axes swap. The inline axis is now physical Y: the box's inline-start side (the top, or the bottom
+                // under direction: rtl) belongs to the line it opens on and its inline-end side to the one it closes on, so
+                // each is covered once, at the box's true ends. The block axis is physical X, and a box's block-axis border
+                // and padding follow every column it has words on (css-break-3 section 6.2 slices only the inline-axis ends).
+                var inlineStartIsBottom = LogicalPropertyResolver.InlineStart(OwnerBox.WritingMode.Value, OwnerBox.Direction.Value)
+                                          == PhysicalSide.Bottom;
+                var opensHere = ReferenceEquals(box.FirstHostingLineBox, this) || box.IsImage;
+                var closesHere = ReferenceEquals(box.LastHostingLineBox, this) || box.IsImage;
+
+                if (inlineStartIsBottom ? closesHere : opensHere) y -= topSpacing;
+                if (inlineStartIsBottom ? opensHere : closesHere) b += bottomSpacing;
+
+                if (!box.IsImage)
+                {
+                    x -= leftSpacing;
+                    r += rightSpacing;
+                }
+            }
+            else
+            {
+                if (clonesDecorations || (box.FirstHostingLineBox != null && box.FirstHostingLineBox.Equals(this)) || box.IsImage)
+                    x -= leftSpacing;
+                if (clonesDecorations || (box.LastHostingLineBox != null && box.LastHostingLineBox.Equals(this)) || box.IsImage)
+                    r += rightSpacing;
+
+                if (!box.IsImage)
+                {
+                    y -= topSpacing;
+                    b += bottomSpacing;
+                }
             }
 
             if (Rectangles.TryGetValue(box, out var f))

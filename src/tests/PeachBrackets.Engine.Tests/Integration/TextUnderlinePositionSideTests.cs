@@ -179,11 +179,16 @@ namespace PeachBrackets.Engine.Tests.Integration
             // taken from the block-end physical side regardless of which edge a keyword's line actually
             // landed on - so a pinned-to-block-start underline (issue #1146) ignored that side's own
             // padding and used the opposite (block-end) side's instead.
+            //
+            // The span's decoration area now reaches out over its block-axis padding on every column (issue #769),
+            // as a horizontal box's reaches over its top and bottom padding, so the inset is what keeps the line
+            // at the text (css-text-decor-3 section 2.5) instead of on the padding's outer edge: padding on the
+            // pinned side must not move the line at all. Reading the opposite side's padding (none here) would
+            // leave it 20pt out on the padding's edge.
             var withPadding = await VerticalUnderlineXAsync(writingMode, side, $"{paddingProperty}:20pt");
             var withoutPadding = await VerticalUnderlineXAsync(writingMode, side, "");
 
-            var inwardSign = side == "left" ? 1 : -1;
-            Assert.Equal(withoutPadding + inwardSign * 20, withPadding, 3);
+            Assert.Equal(withoutPadding, withPadding, 3);
         }
 
         [Theory]

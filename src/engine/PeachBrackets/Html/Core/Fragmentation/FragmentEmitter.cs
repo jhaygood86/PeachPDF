@@ -4263,6 +4263,47 @@ namespace PeachBrackets.Html.Fragmentation
             }
 
             var ordered = new List<KeyValuePair<CssLineBox, Rect>>(rectangles);
+
+            // A vertical box's lines are columns: the box's one long strip runs down the column (the inline axis is physical Y), so the pieces
+            // are stacked by height rather than laid end to end by width, and it is the top and bottom edges that are real or a break. The
+            // left and right edges lie across the columns and are the box's own on every one of them.
+            var verticalOwner = ordered[0].Key.OwnerBox;
+            if (verticalOwner.WritingMode.Value.IsVertical())
+            {
+                var blockStartIsRight = LogicalPropertyResolver.BlockStart(verticalOwner.WritingMode.Value) == PhysicalSide.Right;
+                var inlineStartIsBottom = LogicalPropertyResolver.InlineStart(verticalOwner.WritingMode.Value, verticalOwner.Direction.Value)
+                                          == PhysicalSide.Bottom;
+
+                ordered.Sort((a, b) =>
+                {
+                    var byColumn = blockStartIsRight ? b.Value.X.CompareTo(a.Value.X) : a.Value.X.CompareTo(b.Value.X);
+                    return byColumn != 0 ? byColumn : a.Value.Y.CompareTo(b.Value.Y);
+                });
+
+                var totalHeight = 0d;
+                foreach (var (_, rect) in ordered) totalHeight += rect.Height;
+
+                var precedingHeight = 0d;
+
+                foreach (var (line, rect) in ordered)
+                {
+                    var following = totalHeight - precedingHeight - rect.Height;
+                    var strip = new Rect(rect.X, rect.Y - (inlineStartIsBottom ? following : precedingHeight), rect.Width, totalHeight);
+
+                    slices[line] = new SliceGeometry(
+                        Localize(strip, originY),
+                        FragmentRectOf(rect),
+                        HasLeftEdge: true,
+                        HasRightEdge: true,
+                        HasTopEdge: Math.Abs(rect.Top - strip.Top) <= EdgeEpsilon,
+                        HasBottomEdge: Math.Abs(rect.Bottom - strip.Bottom) <= EdgeEpsilon);
+
+                    precedingHeight += rect.Height;
+                }
+
+                return slices;
+            }
+
             ordered.Sort(static (a, b) =>
             {
                 var byTop = a.Value.Y.CompareTo(b.Value.Y);
