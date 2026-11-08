@@ -294,6 +294,14 @@ namespace PeachBrackets.Html.Fragments
         }
 
         /// <summary>
+        /// Shifts <paramref name="root"/> and its captured descendants by <paramref name="dx"/>/<paramref name="dy"/>
+        /// - the scoped, single-subtree form of <see cref="Translate"/>, for one cell a vertical table's
+        /// column-axis pagination moves to a later page (<c>CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries</c>)
+        /// while the rest of the snapshot stays where it is.
+        /// </summary>
+        internal void TranslateSubtreeOf(CssBox root, double dx, double dy) => TranslateSubtree(root, dx, dy, root);
+
+        /// <summary>
         /// Shifts one captured box's own geometry by <paramref name="dx"/>/<paramref name="dy"/> - the
         /// per-box mutation both <see cref="Translate"/> (every captured box, one shared shift) and
         /// <see cref="ReflectSubtree"/> (one subtree, its own shift) apply.

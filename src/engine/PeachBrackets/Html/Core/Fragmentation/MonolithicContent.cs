@@ -323,34 +323,7 @@ namespace PeachBrackets.Html.Fragmentation
 
             foreach (var child in box.Boxes)
             {
-                switch (child.DerivedStyle.ActualDisplay)
-                {
-                    case Keywords.TableCaption:
-                    case Keywords.TableHeaderGroup:
-                    case Keywords.TableFooterGroup:
-                        return true;
-                    case Keywords.TableRow:
-                        if (RowHasSpanningCell(child)) return true;
-                        break;
-                    case Keywords.TableRowGroup:
-                        foreach (var row in child.Boxes)
-                        {
-                            if (row.DerivedStyle.ActualDisplay == Keywords.TableRow && RowHasSpanningCell(row))
-                                return true;
-                        }
-                        break;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool RowHasSpanningCell(CssBox row)
-        {
-            foreach (var cell in row.Boxes)
-            {
-                if (CssLayoutEngineTable.GetRowSpan(cell) > 1 || CssLayoutEngineTable.GetColSpan(cell) > 1)
-                    return true;
+                if (child.DerivedStyle.ActualDisplay == Keywords.TableCaption) return true;
             }
 
             return false;

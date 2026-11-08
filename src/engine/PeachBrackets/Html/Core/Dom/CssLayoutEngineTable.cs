@@ -4845,36 +4845,87 @@ namespace PeachBrackets.Html.Dom
 
             if (MonolithicContent.HasColumnPaginationExcludedFeature(_tableBox)) return;
 
-            var columnCount = _bodyRows[0].Boxes.Count;
-            if (columnCount == 0) return;
+            if (placedRows != _bodyRows.Count) return;
 
-            // A "plain grid" table (no rowspan/colspan - already excluded above) is still not guaranteed to
-            // have the same cell count in every row: an author can simply write fewer <td>s in one row, or
-            // give a cell display:none in some rows but not others (a ragged row is already a reachable,
-            // unpadded shape elsewhere in this engine - see InsertEmptyBoxes's own remarks). Every column
-            // below is read positionally (_bodyRows[r].Boxes[c]), which silently reads the wrong cell - or
-            // throws - for a short row, so bail out to the existing whole-table mover instead of guessing.
-            for (var r = 1; r < placedRows; r++)
+            // Every real cell of the grid - header, body and footer rows alike - with the column it starts
+            // in and the number of columns it spans. A cell is read by that and not by its position among
+            // its row's boxes: a row can hold fewer cells than there are columns (a ragged row, or a
+            // rowspan cell from an earlier row standing in for its slot with a placeholder), and a cell
+            // can span several columns.
+            var cells = new List<(CssBox Cell, int Column, int Span)>();
+            foreach (var row in _allRows)
             {
-                if (_bodyRows[r].Boxes.Count != columnCount) return;
+                // A second <thead>/<tfoot> is folded into the body as a whole group, not as rows.
+                if (row.DerivedStyle.ActualDisplay != Keywords.TableRow) return;
+
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox) continue;
+
+                    cells.Add((cell, GetCellRealColumnIndex(cell), Math.Max(1, GetColSpan(cell))));
+                }
             }
 
-            var plannedDeltas = new double[columnCount];
-            List<(int Slot, double Bottom)> pageBreaks = [];
+            if (cells.Count == 0) return;
+
+            var columnCount = cells.Max(c => c.Column + c.Span);
+
+            // A cell spanning columns is one box: it cannot be cut by a page boundary falling between the
+            // columns it spans, so those columns travel together. Spans that overlap chain into one unit.
+            var reach = new int[columnCount];
+            foreach (var (_, column, span) in cells)
+            {
+                reach[column] = Math.Max(reach[column], column + span);
+            }
+
+            var groupOfColumn = new int[columnCount];
+            var groupRanges = new List<(int Start, int End)>();
+            for (var column = 0; column < columnCount;)
+            {
+                var end = column + 1;
+                for (var k = column; k < end; k++)
+                {
+                    end = Math.Max(end, reach[k]);
+                }
+
+                for (var k = column; k < end; k++)
+                {
+                    groupOfColumn[k] = groupRanges.Count;
+                }
+
+                groupRanges.Add((column, end));
+                column = end;
+            }
+
+            // Each unit's extent along the column axis is the span of the cells in it.
+            var groupTop = Enumerable.Repeat(double.PositiveInfinity, groupRanges.Count).ToArray();
+            var groupBottom = Enumerable.Repeat(double.NegativeInfinity, groupRanges.Count).ToArray();
+            foreach (var (cell, column, _) in cells)
+            {
+                var group = groupOfColumn[column];
+                groupTop[group] = Math.Min(groupTop[group], cell.Location.Y);
+                groupBottom[group] = Math.Max(groupBottom[group], cell.ActualBottom);
+            }
+
+            var plannedDeltas = new double[groupRanges.Count];
+            List<(int Slot, double Bottom, int LineAfter)> pageBreaks = [];
 
             var appliedDelta = 0d;
-            var currentSlot = Grid(container).SlotStartingAt(_bodyRows[0].Boxes[0].Location.Y);
+            var currentSlot = Grid(container).SlotStartingAt(groupTop.Where(double.IsFinite).Min());
             var previousColumnBottom = 0d;
+            var firstUnit = true;
 
-            for (var c = 0; c < columnCount; c++)
+            for (var g = 0; g < groupRanges.Count; g++)
             {
-                var referenceCell = _bodyRows[0].Boxes[c];
-                var columnTop = referenceCell.Location.Y + appliedDelta;
-                var columnHeight = referenceCell.ActualBottom - referenceCell.Location.Y;
+                // A unit no cell starts in (a column only a <col> declares) has no extent to place.
+                if (!double.IsFinite(groupTop[g])) continue;
+
+                var columnTop = groupTop[g] + appliedDelta;
+                var columnHeight = groupBottom[g] - groupTop[g];
 
                 if (HtmlContainerInt.FallsPast(columnTop + columnHeight, Grid(container).BandOfSlot(currentSlot)))
                 {
-                    if (c == 0)
+                    if (firstUnit)
                     {
                         // The table's own first column doesn't fit where the table currently starts -
                         // nothing has been placed on this page yet for a relocation to preserve, so this
@@ -4891,26 +4942,40 @@ namespace PeachBrackets.Html.Dom
                         return;
                     }
 
-                    pageBreaks.Add((currentSlot, previousColumnBottom));
+                    pageBreaks.Add((currentSlot, previousColumnBottom, groupRanges[g].Start));
 
                     appliedDelta += Grid(container).PageTopOf(nextSlot) - columnTop;
                     currentSlot = nextSlot;
                     columnTop = Grid(container).PageTopOf(nextSlot);
                 }
 
-                plannedDeltas[c] = appliedDelta;
+                firstUnit = false;
+                plannedDeltas[g] = appliedDelta;
                 previousColumnBottom = columnTop + columnHeight;
             }
 
             if (pageBreaks.Count == 0) return;
 
-            for (var c = 0; c < columnCount; c++)
-            {
-                if (plannedDeltas[c] == 0) continue;
+            // The header and footer are drawn from their proxy's snapshot of the group, taken before this
+            // pass ran, so a cell that moves in a header or footer row has to move there as well.
+            var groupProxies = _tableBox.Boxes.OfType<CssProxyBox>().ToList();
+            var movedGroupRows = new HashSet<CssBox>();
 
-                for (var r = 0; r < placedRows; r++)
+            foreach (var (cell, column, _) in cells)
+            {
+                var delta = plannedDeltas[groupOfColumn[column]];
+                if (delta == 0) continue;
+
+                cell.OffsetTop(delta);
+
+                if (cell.ParentBox is not { } row || row.ParentBox is not { } rowGroup) continue;
+                if (!ReferenceEquals(rowGroup, _headerBox) && !ReferenceEquals(rowGroup, _footerBox)) continue;
+
+                movedGroupRows.Add(row);
+                foreach (var proxy in groupProxies)
                 {
-                    _bodyRows[r].Boxes[c].OffsetTop(plannedDeltas[c]);
+                    if (ReferenceEquals(proxy.SourceBox, rowGroup))
+                        proxy.SourceGeometry?.TranslateSubtreeOf(cell, 0, delta);
                 }
             }
 
@@ -4921,29 +4986,107 @@ namespace PeachBrackets.Html.Dom
             // reaches. That is not just a cosmetic gap: a following sibling is positioned from
             // _tableBox.ActualBottom (CssBox's own in-flow placement), so a stale value lands the next box
             // on top of the relocated column(s) rather than after them. plannedDeltas is monotonically
-            // non-decreasing in c (appliedDelta only ever grows), and every column's own pre-relocation
-            // ActualBottom is strictly increasing in c (columns stack forward) - so the last column always
-            // carries both the largest delta and the table's true final column-axis edge, making
-            // plannedDeltas[columnCount - 1] exactly what _tableBox's own trailing border/spacing epilogue
+            // non-decreasing in the unit index (appliedDelta only ever grows), and every unit's own
+            // pre-relocation extent ends further along the axis than the one before it - so the last unit
+            // always carries both the largest delta and the table's true final column-axis edge, making
+            // the delta of the last unit exactly what _tableBox's own trailing border/spacing epilogue
             // (added after the last column's content at Step 7) needs to shift by too. Each row is
             // recomputed from its own (now-relocated) cells instead, the same way AssignRowActualBounds
             // already does for the row loop itself, rather than assumed to share the table's one delta -
             // cheap, and it costs nothing to be exact rather than lean on the same derivation twice.
-            _tableBox.ActualBottom += plannedDeltas[columnCount - 1];
+            var lastDelta = plannedDeltas[Array.FindLastIndex(groupTop, double.IsFinite)];
+            _tableBox.ActualBottom += lastDelta;
 
-            for (var r = 0; r < placedRows; r++)
+            foreach (var row in _bodyRows)
             {
-                _bodyRows[r].ActualBottom = _bodyRows[r].Boxes.Count > 0
-                    ? _bodyRows[r].Boxes.Max(x => x.ActualBottom)
-                    : _bodyRows[r].Location.Y;
+                row.ActualBottom = BottomOfCells(row);
             }
 
             SetRowGroupBoxDimensions(placedRows);
+            RefreshRepeatedGroupExtents(movedGroupRows, groupProxies);
+            SetColumnBoxDimensions();
+
+            // A header or footer spans the table's whole column axis, so every page the table now covers
+            // holds a part of it - the cells of the columns that moved there. It was recorded for the
+            // page the table began on only, and the cells it holds on a later page would be emitted
+            // outside that page's band, so each later page gets its own instance of the same snapshot.
+            var firstSlot = pageBreaks[0].Slot;
+            foreach (var proxy in groupProxies)
+            {
+                for (var slot = firstSlot + 1; slot <= currentSlot; slot++)
+                {
+                    RecordRepeatingGroupFragmentInstance(container, proxy, slot);
+                }
+            }
 
             _tableBox.PageBreakBottoms ??= [];
-            foreach (var (slot, bottom) in pageBreaks)
+            foreach (var (slot, bottom, _) in pageBreaks)
             {
                 _tableBox.PageBreakBottoms[slot] = bottom;
+            }
+        }
+
+        /// <summary>The far column-axis edge of <paramref name="row"/>'s real cells, or its own origin when it has none.</summary>
+        private static double BottomOfCells(CssBox row)
+        {
+            var bottom = row.Location.Y;
+            foreach (var cell in row.Boxes)
+            {
+                if (cell is CssSpacingBox) continue;
+                bottom = Math.Max(bottom, cell.ActualBottom);
+            }
+
+            return bottom;
+        }
+
+        /// <summary>
+        /// Re-states the column-axis extent of the detached <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c> and of
+        /// their rows after <see cref="RelocateColumnsAcrossPageBoundaries"/> moved some of their cells - in
+        /// the live boxes, in each proxy's snapshot of them, and in the proxy itself, whose own bounds are
+        /// what paint-time visibility culling tests.
+        /// </summary>
+        private void RefreshRepeatedGroupExtents(HashSet<CssBox> movedRows, List<CssProxyBox> proxies)
+        {
+            if (movedRows.Count == 0) return;
+
+            foreach (var group in new[] { _headerBox, _footerBox })
+            {
+                if (group is null) continue;
+
+                var groupBottom = group.Location.Y;
+                foreach (var row in group.Boxes)
+                {
+                    if (!movedRows.Contains(row)) continue;
+
+                    row.ActualBottom = BottomOfCells(row);
+                    groupBottom = Math.Max(groupBottom, row.ActualBottom);
+                }
+
+                group.ActualBottom = Math.Max(group.ActualBottom, groupBottom);
+
+                foreach (var proxy in proxies)
+                {
+                    if (!ReferenceEquals(proxy.SourceBox, group) || proxy.SourceGeometry is not { } snapshot) continue;
+
+                    var snapshotBottom = double.NegativeInfinity;
+                    foreach (var row in group.Boxes)
+                    {
+                        if (!movedRows.Contains(row) || !snapshot.TryGetGeometry(row, out var rowGeometry)) continue;
+
+                        foreach (var cell in row.Boxes)
+                        {
+                            if (cell is CssSpacingBox || !snapshot.TryGetGeometry(cell, out var cellGeometry)) continue;
+                            rowGeometry.ActualBottom = Math.Max(rowGeometry.ActualBottom, cellGeometry.ActualBottom);
+                        }
+
+                        snapshotBottom = Math.Max(snapshotBottom, rowGeometry.ActualBottom);
+                    }
+
+                    if (snapshot.TryGetGeometry(group, out var groupGeometry) && double.IsFinite(snapshotBottom))
+                        groupGeometry.ActualBottom = Math.Max(groupGeometry.ActualBottom, snapshotBottom);
+
+                    proxy.ActualBottom = Math.Max(proxy.ActualBottom, group.ActualBottom);
+                }
             }
         }
 

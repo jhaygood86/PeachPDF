@@ -590,27 +590,17 @@ would double-apply the same shift.
   non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
   than a behavior authors should rely on either way.
 - **`sideways-lr` SVG `<text>` is not bidi-reordered**, and in HTML and SVG alike the words of different font sizes in a column are aligned by their line-over edge rather than a shared baseline (also true for `vertical-rl`/`vertical-lr`). `sideways-rl`/`sideways-lr` otherwise work in both pipelines: vertical modes (`WritingMode.IsVertical()`) with always-sideways glyphs, and `sideways-lr` reading bottom to top.
-- **Table's remaining gap, narrowed: real per-column pagination combined with `rowspan`/`colspan`/
-  `<caption>`/`<thead>`-`<tfoot>`/collapsed borders** ([#762](https://github.com/jhaygood86/PeachPDF/issues/762)
-  stays open for exactly this, tracked in its own right as
-  [#793](https://github.com/jhaygood86/PeachPDF/issues/793)). [#783](https://github.com/jhaygood86/PeachPDF/issues/783)
-  closed the literal "real per-row pagination" reading this bullet used to describe — that reading turned
-  out to have no basis in CSS Fragmentation's own model at all (fragmentation direction is always the
-  fragmentation *root's* block flow direction, never a descendant's orthogonal one — a vertical table's row
-  axis, physical X, was never going to be the axis that paginates). What #783 actually built instead: a
-  vertical table's **column** axis is physical Y — genuinely the page's own real fragmentation axis — so a
-  **plain-grid** vertical table (none of the five features above) now relocates whole columns across page
-  boundaries wherever one falls between them
-  (`CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries`), reusing the existing Y-based page-grid
-  primitives completely unchanged — no axis-agnostic `FragmentainerContext` rewrite needed, unlike Multi-column
-  below, which hits a genuinely different wall (multi-column's *columns themselves* differ along the very
-  axis the shared band is pinned to, not just its own block-axis-vs-page-axis question). A vertical table
-  combining real pagination with any of the five excluded features remains monolithic
-  (`MonolithicContent.IsUnresumableVerticalTable`) — it moves whole to a later page, or is displaced-per-band,
-  exactly as every vertical table did before #783 — since each of those five needs its own, independent
-  extension to the relocation pass (a colspan cell straddling the paginated axis needs its own
-  pagination-shell mechanism; a rowspan cell's `CssSpacingBox` placeholders break the relocation pass's
-  current one-cell-per-column-per-row assumption; and so on — see #793 for the full breakdown).
+- **Table's remaining gap, narrowed: real per-column pagination combined with `<caption>` or collapsed
+  borders** ([#793](https://github.com/jhaygood86/PeachPDF/issues/793) stays open for exactly these two).
+  A vertical table's **column** axis is physical Y, the page's own fragmentation axis, so
+  `CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries` moves whole columns across page boundaries
+  wherever one falls between them. It handles `rowspan`, `colspan` (the columns a cell spans travel as one
+  unit), ragged rows and `<thead>`/`<tfoot>` (their cells and their proxies' snapshots move with the column,
+  and each later page gets its own instance of the group). A vertical table with a `<caption>` or
+  `border-collapse: collapse`, or that is a flex/grid item, stays monolithic
+  (`MonolithicContent.IsUnresumableVerticalTable`): a caption would have to be cut along its own inline axis,
+  and collapsed-border segments are built from grid-line geometry that has no page-aware form for a line
+  falling at a break.
 - **Multi-column** ([#764](https://github.com/jhaygood86/PeachPDF/issues/764)) has no real column
   arrangement under a vertical writing mode — `column-count`/`column-width` are inert there, and a
   vertical-writing-mode multicol container falls back to ordinary single-column block flow (`CssLayoutEngineColumns.Layout`
