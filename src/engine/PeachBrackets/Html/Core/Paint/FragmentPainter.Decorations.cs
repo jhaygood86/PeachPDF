@@ -1181,12 +1181,13 @@ namespace PeachBrackets.Html.Paint
             var span = new DecorationInterval(spanStart, spanEnd);
 
             // The atomic-inline exclusion is inline-axis-band reasoning that only understands a
-            // horizontal band today (a margin box measured left to right) - and, separately,
-            // CssLayoutEngine's vertical path records no per-line rectangle for an atomic inline at all,
-            // so there is no layout fact to exclude around even if the band math were made axis-aware
-            // (see .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
-            // This stays confined to a horizontal writing mode, unchanged since before #1075 - do not remove this guard as apparent dead code without first making both the
-            // band math AND vertical layout's own line-box recording axis-aware.
+            // horizontal band today (a margin box measured left to right). The vertical path now records a
+            // per-column rectangle for an atomic inline (CssLayoutEngine.RegisterAtomicInlineRectangles), so
+            // there IS a layout fact to exclude around - which is exactly why this guard is load-bearing: the
+            // x-axis band math would delete a vertical decoration rather than break it (see
+            // .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
+            // This stays confined to a horizontal writing mode - do not remove this guard as apparent dead code
+            // without first making the band math axis-aware.
             var horizontal = IsHorizontalWritingMode(box);
 
             // The atomic inlines to break around are the same for every keyword: they are a fact about

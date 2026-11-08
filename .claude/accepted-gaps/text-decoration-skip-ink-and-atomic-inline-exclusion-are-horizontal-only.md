@@ -29,14 +29,11 @@ What remains genuinely out of scope, unchanged by #1145:
 
 ## The trap
 
-The atomic-inline exclusion's own guard in `PaintDecoration` is **defensive, not currently reachable**:
-`CssLayoutEngine`'s vertical path records no per-line rectangle for an atomic inline at all, so the walk
-finds nothing to exclude in the first place (verified by probing `CssBox.Rectangles`). It is kept
-because that is a layout fact rather than a paint one — a future vertical-layout improvement that
-starts recording those rectangles (see
-[#771](https://github.com/jhaygood86/PeachPDF/issues/771)) would otherwise silently begin deleting
-vertical decorations. Do not remove the guard as "dead code" without first making the exclusion band
-math axis-aware.
+The atomic-inline exclusion's own guard in `PaintDecoration` is **now load-bearing**: since the vertical flow lays an atomic
+inline out as an item of its own (`CreateVerticalLineBoxes`, issue #771), `CssLayoutEngine` records a per-column rectangle for it,
+so the exclusion walk would find something to exclude - and its band math is x-axis-shaped, so letting it run under a vertical
+mode would silently delete vertical decorations instead of merely failing to break them. Do not remove the guard as "dead code"
+without first making the exclusion band math axis-aware.
 
 `VerticalWritingMode_DrawsItsDecorationUncut` (asserting the decoration is a true vertical stroke, not
 merely "uncut") pins the atomic-inline-exclusion gap. `VerticalWritingMode_UprightRun_StillNeverMeasuresInk`

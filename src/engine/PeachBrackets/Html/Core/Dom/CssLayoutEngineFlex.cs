@@ -213,6 +213,16 @@ namespace PeachBrackets.Html.Dom
 
             // Compute container main-axis size
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, _flexBox);
+
+            // Under a vertical writing mode the width is the container's block size, which a preferred aspect-ratio makes
+            // definite from the definite height (its inline size) - the width-side counterpart of the height fallback
+            // below, and so also what makes a column's main size definite, since its main axis is physical X there. An
+            // explicit width wins; so does nothing for a horizontal container, whose stretch-fit width beats the ratio.
+            if (CssLayoutEngine.TryGetVerticalAspectRatioWidth(_flexBox, out var ratioWidth))
+            {
+                containerWidth = ratioWidth;
+            }
+
             _flexBox.ActualRight = _flexBox.Location.X + containerWidth + _flexBox.ActualBoxSizeIncludedWidth;
             _flexBox.ActualBottom = _flexBox.Location.Y;
 
@@ -224,11 +234,10 @@ namespace PeachBrackets.Html.Dom
             // `tbody { aspect-ratio: … }` case. This is unconditionally about the physical Y dimension
             // (Height/ActualBottom) regardless of which role (main or cross) it plays for this container -
             // see ComputeAxisMapping's own remarks for why row/column's roles swap under a vertical writing
-            // mode but Width/Height's own physical meaning never does. A main axis that lands on physical X
-            // (horizontal-tb row, or a vertical-writing-mode column) has no aspect-ratio-on-width analogue
-            // here: TryGetAspectRatioWidth exists but is documented as unsafe for a stretch-fit box (which a
-            // block-level flex container's own auto width already is via GetBoxWidth above), so this stays
-            // scoped to the physical-Y case only - a narrow, defensible boundary, not an oversight.
+            // mode but Width/Height's own physical meaning never does. The width side is settled above: a
+            // vertical container's ratio-derived width (its block size) is what a main axis on physical X
+            // (a vertical-writing-mode column) is sized from, while a horizontal container's stretch-fit
+            // width (a main axis on physical X for a row) is not subject to the ratio at all.
             // "Definite" has to mean the height actually resolved, not merely that one was declared:
             // GetBoxHeight returns null for a *percentage* height whose containing block is not itself
             // height-calculated, which CSS Box Sizing 4 §5 says behaves as automatic. Treating that as

@@ -1063,8 +1063,10 @@ namespace PeachBrackets.Html.Dom
         /// <see cref="CssRect.Width"/>/<see cref="CssRect.Height"/> already are its inline-size/block-size;
         /// only their arrangement, not their own measurement, needs to change here. Width auto-sizing
         /// (fill-available, unaware of writing-mode) is unchanged; only auto height becomes genuinely
-        /// content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height growth. Still scoped
-        /// down: no leading/trailing inline spacing from a nested inline box's own border/padding/margin, no
+        /// content-driven, mirroring <see cref="CreateLineBoxes"/>'s own auto-height growth. A nested inline
+        /// box reserves its inline-start/-end margin, border and padding at its true ends
+        /// (<see cref="VerticalInlineBoxEvents"/>) and an atomic inline-level box is one item of its column
+        /// (<see cref="LayOutVerticalAtomicInline"/>). Still scoped down: no
         /// <c>box-decoration-break: clone</c> - see the no-vertical-writing-mode-layout accepted gap. A float
         /// among the box's own inline content is placed by <see cref="CssBox.PlaceVerticalFloat"/> at the
         /// block-axis position of the column the word stream has reached (issue #796); one in its
@@ -1394,6 +1396,7 @@ namespace PeachBrackets.Html.Dom
                 // that nowrap and permitsOverflowWrap above already suppresses the ordinary wrap check for
                 // all of them, so forcing a break here too would reintroduce #841's bug on this axis.
                 var entersNewNoWrapRun = blockBoxPermitsWrap
+                                          && word is not CssRectAtomicInline
                                           && word.OwnerBox.IsNoWrapRun
                                           && (i == 0 || words[i - 1].OwnerBox != word.OwnerBox);
 
@@ -1603,7 +1606,9 @@ namespace PeachBrackets.Html.Dom
                 ApplyVerticalTextAlignment(lineBox, finalFrame, isLastColumn, spanTop, spanBottom);
                 ApplyVerticalBidiReordering(lineBox, finalFrame, spanTop, spanBottom);
 
+                PlaceAtomicInlines(lineBox);
                 BubbleRectangles(blockBox, lineBox);
+                RegisterAtomicInlineRectangles(blockBox, lineBox);
                 lineBox.AssignRectanglesToBoxes();
             }
         }
@@ -1967,6 +1972,14 @@ namespace PeachBrackets.Html.Dom
                     continue;
                 }
 
+                // An atomic inline-level box is one unbreakable item of the column, laid out on its own - not a run of
+                // words to flow along with the text around it (css-display-3 section 2.3).
+                if (inlineEvents is not null && IsAtomicInlineLevel(child))
+                {
+                    words.Add(await LayOutVerticalAtomicInline(g, child));
+                    continue;
+                }
+
                 var firstWordOfChild = words.Count;
                 await MeasureAndCollectWordsInDocumentOrder(g, child, words, outOfFlowDescendants, emptyInlineThickness, inlineEvents);
 
@@ -2035,6 +2048,109 @@ namespace PeachBrackets.Html.Dom
             {
                 if (!map.TryGetValue(index, out var list)) map[index] = list = [];
                 list.Add(box);
+            }
+        }
+
+        /// <summary>Whether <paramref name="box"/> is an atomic inline-level box: one that lays out as a unit of its own on its parent's line.</summary>
+        private static bool IsAtomicInlineLevel(CssBox box) =>
+            box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineTable or Keywords.InlineFlex or Keywords.InlineGrid;
+
+        /// <summary>
+        /// Lays an atomic inline-level box out on its own for a vertical box's column flow, and returns the item that
+        /// stands for it there. The box is built at a provisional position (its containing block's content corner, below
+        /// and beside its margins) - where it ends up is decided by the flow, and
+        /// <see cref="PlaceAtomicInlines"/> moves it there. The item's natural size is the box's margin box: its inline
+        /// extent along the column is the margin box's physical height and the column thickness it asks for is the
+        /// physical width, whatever writing mode the box itself uses (css-writing-modes-4 section 7.3).
+        /// </summary>
+        /// <param name="g">the canvas</param>
+        /// <param name="atomic">the atomic inline-level box</param>
+        private static async ValueTask<CssRectAtomicInline> LayOutVerticalAtomicInline(Canvas g, CssBox atomic)
+        {
+            // A speculative wrap may have rejected this box earlier in the same layout generation; reaching real placement is
+            // what makes it fragment-visible, as FlowAtomicBlockContentChild does.
+            atomic.AllowFragmentEmissionForCurrentLayout();
+            atomic.ClearRectangles();
+            atomic.RelativeOffsetX = 0;
+            atomic.RelativeOffsetY = 0;
+
+            var containingBlock = atomic.ContainingBlock;
+            atomic.Location = new PaintPoint(
+                containingBlock.ClientLeft + Math.Max(0, atomic.ActualMarginLeft),
+                containingBlock.ClientTop + Math.Max(0, atomic.ActualMarginTop));
+            atomic.ActualBottom = atomic.Location.Y;
+
+            if (atomic.DerivedStyle.ActualDisplay is Keywords.InlineFlex)
+            {
+                // The flex engine resolves its container's own width; out-of-flow children are laid out by hand (css-flexbox-1 section 4.1).
+                await CssLayoutEngineFlex.PerformLayout(g, atomic);
+                await atomic.LayoutOutOfFlowChildrenDetached(g);
+            }
+            else
+            {
+                if (atomic.DerivedStyle.ActualDisplay is Keywords.InlineBlock)
+                {
+                    // A horizontal inline-block is shrink-to-fit (CSS 2.1 section 10.3.9). A vertical one sizes its width - its block
+                    // size - from its own content, once that is laid out, so it starts from the width available to it.
+                    var width = atomic.WritingMode.Value.IsVertical()
+                        ? await GetBoxWidth(g, atomic, atomic.Location.Y) + atomic.ActualBoxSizeIncludedWidth
+                        : await ResolveAtomicInlineBlockWidth(g, atomic, atomic.Location.Y);
+                    atomic.ActualRight = atomic.Location.X + width;
+                }
+
+                await LayoutContentUnbroken(g, atomic);
+            }
+
+            // The box's own lines left one rectangle each on it; its border box is the single rectangle registered on the parent's column.
+            atomic.ClearRectangles();
+
+            var outerWidth = atomic.ActualBoxSizingWidth + atomic.ActualMarginLeft + atomic.ActualMarginRight;
+            var outerHeight = atomic.ActualBoxSizingHeight + atomic.ActualMarginTop + atomic.ActualMarginBottom;
+
+            return new CssRectAtomicInline(atomic) { NaturalSize = (outerHeight, outerWidth) };
+        }
+
+        /// <summary>
+        /// Moves each atomic inline-level box of a finished column to where its item landed, once alignment and bidi
+        /// reordering have settled that, and registers its border box on the column so its background and border paint.
+        /// </summary>
+        /// <param name="lineBox">the column</param>
+        private static void PlaceAtomicInlines(CssLineBox lineBox)
+        {
+            foreach (var word in lineBox.Words)
+            {
+                if (word is not CssRectAtomicInline { OwnerBox: var atomic }) continue;
+
+                var shiftX = word.Left + atomic.ActualMarginLeft - atomic.Location.X;
+                var shiftY = word.Top + atomic.ActualMarginTop - atomic.Location.Y;
+
+                if (Math.Abs(shiftX) > 1e-6) atomic.OffsetLeft(shiftX);
+                if (Math.Abs(shiftY) > 1e-6) atomic.OffsetTop(shiftY);
+
+                atomic.FirstHostingLineBox = lineBox;
+                atomic.LastHostingLineBox = lineBox;
+            }
+        }
+
+        /// <summary>
+        /// Registers the border box of each atomic inline-level box on its column and widens the rectangles of the inline
+        /// boxes around it, which <see cref="BubbleRectangles"/> leaves out: it has no word of its own on the column.
+        /// </summary>
+        /// <param name="blockBox">the vertical box holding the column</param>
+        /// <param name="lineBox">the column</param>
+        private static void RegisterAtomicInlineRectangles(CssBox blockBox, CssLineBox lineBox)
+        {
+            foreach (var word in lineBox.Words)
+            {
+                if (word is not CssRectAtomicInline { OwnerBox: var atomic }) continue;
+
+                var border = new Rect(atomic.Location.X, atomic.Location.Y, atomic.ActualBoxSizingWidth, atomic.ActualBoxSizingHeight);
+                lineBox.Rectangles[atomic] = border;
+
+                if (atomic.ParentBox is { } parent && !ReferenceEquals(parent, blockBox) && parent.IsInline)
+                {
+                    lineBox.UpdateRectangle(parent, border.Left, border.Top, border.Right, border.Bottom);
+                }
             }
         }
 
@@ -3824,6 +3940,39 @@ namespace PeachBrackets.Html.Dom
             if (boxSizingHeight <= 0) return false;
 
             width = boxSizingHeight * ratio.Value;
+            return true;
+        }
+
+        /// <summary>
+        /// The used width of a box in a vertical writing mode whose <c>width</c> is <c>auto</c> but whose <c>height</c> is
+        /// definite and which has a preferred <c>aspect-ratio</c>: its width is its <i>block size</i>, which the ratio
+        /// derives from the definite inline size (CSS Box Sizing 4 section 5.1; css-writing-modes-4 section 3 maps
+        /// width and height onto the box's block and inline sizes). Unlike a horizontal box, whose auto width is its
+        /// stretch-fit inline size and so wins over the ratio - the reason <see cref="TryGetAspectRatioWidth"/> must
+        /// not be used on one - nothing stretches a block size, so the ratio is what makes it definite.
+        /// </summary>
+        /// <remarks>
+        /// Clamped by <c>min-width</c> and <c>max-width</c> (css-sizing-3 section 5.1, max first so min wins), in the same
+        /// box-sizing terms as <see cref="TryGetAspectRatioWidth"/>'s result: the value the caller adds
+        /// <see cref="CssBox.ActualBoxSizeIncludedWidth"/> to.
+        /// </remarks>
+        /// <param name="box">the box</param>
+        /// <param name="width">the width, in the terms <see cref="TryGetAspectRatioWidth"/> uses</param>
+        /// <returns>whether the ratio fixes the width</returns>
+        internal static bool TryGetVerticalAspectRatioWidth(CssBox box, out double width)
+        {
+            width = 0;
+
+            if (!box.WritingMode.Value.IsVertical() || !TryGetAspectRatioWidth(box, out width)) return false;
+
+            var basis = PercentageBase(box).Size.Width;
+
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+                width = Math.Min(width, CssValueParser.ParseLength(box.MaxWidth, basis, box));
+
+            if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                width = Math.Max(width, CssValueParser.ParseLength(box.MinWidth, basis, box));
+
             return true;
         }
 
@@ -8905,6 +9054,9 @@ namespace PeachBrackets.Html.Dom
                 foreach (var word in line.Words)
                 {
                     if (!word.OwnerBox.Equals(box)) continue;
+
+                    // An atomic inline's item stands for a box with a rectangle of its own (RegisterAtomicInlineRectangles).
+                    if (word is CssRectAtomicInline) continue;
 
                     any = true;
                     x = Math.Min(x, word.Left);

@@ -35,12 +35,12 @@ auto height), `ActualRight` for `vertical-lr` (block-start is the left edge, the
 case already has). `CssBox.ActualRight` is a *written* property whose getter is `Location.X + Size.Width`,
 so the `vertical-rl` case has to capture the true (pre-shrink) right edge and re-apply it after moving
 `Location.X`, or the getter reports a moved edge Size.Width was never told to give up — verified against
-both PDFium and MuPDF rasterization (matching output) and the full test suite. One narrow follow-up:
-`width: auto; max-width: Npx; margin: 0 auto` on a vertical box computes centering margins against the
-pre-shrink (max-width-clamped) width, and the content-driven shrink afterward doesn't re-center against
-the final, smaller width, leaving the box off-center — tracked as
-[#773](https://github.com/jhaygood86/PeachPDF/issues/773). Plain `width: auto` (no `max-width`) is
-unaffected, since auto margins already resolve to 0 whenever width itself is auto.
+both PDFium and MuPDF rasterization (matching output) and the full test suite. Once the width has shrunk, the box's `auto` horizontal margins are re-resolved against it
+(`CssLayoutEngine.RecentreAutoMarginsOfShrunkBox`, called from `ShrinkAutoWidthTo`), because the placement pass had
+resolved them from the width the box had before its content shrank it (the containing block's, or a `max-width`
+clamp): `margin: 0 auto` keeps centering a shrunk vertical block in an ordinary left-to-right horizontal containing
+block, and `margin-left: auto` keeps pushing it to the end edge. The whole subtree moves with it (`OffsetLeft`).
+A float, a flex or grid item, a positioned box and a box in a right-to-left or vertical containing block are left as placed.
 
 Flexbox (`display: flex`/`inline-flex`) is also writing-mode-aware now: `CssLayoutEngineFlex` resolves
 which physical axis is its main axis (`_mainAxisIsPhysicalX`) and which physical end main-start/cross-start
@@ -541,6 +541,10 @@ content, or a nested block-children pass) already re-anchored its own `Location.
 pre-shrink `ActualRight` during that call, so re-deriving it again from the stale placeholder width here
 would double-apply the same shift.
 
+**Nested inline boxes and atomic inlines inside vertical line flow** (issues #769 and #771, closed). `CreateVerticalLineBoxes` keeps the bookkeeping the horizontal `FlowBox` keeps: a nested inline box opens at its first word and closes at its last (`VerticalInlineBoxEvents`, rekeyed when hyphenation or overflow-wrap splits a word), which sets `FirstHostingLineBox`/`LastHostingLineBox`, and the inline-start and inline-end margin, border and padding of that box (physical top and bottom, swapped under `direction: rtl` and `sideways-lr`) take room along the column once, at those ends, as part of the word's fit. `CssLineBox.UpdateRectangle` has a vertical branch: the inline-axis ends of the rectangle are covered once, by the hosting columns, and the block-axis border and padding (physical left and right) on every column. `FragmentEmitter.SliceGeometriesOf` stacks a wrapped vertical inline's slices along the column and reports its top and bottom edges as the real ones, and the wrapped-inline outline closes the top and bottom of each slice (the left and right for a horizontal box), which is what the outline fix for a horizontal inline had been held back on. A consequence worth knowing: a vertical inline's decoration area now reaches over its block-axis padding as a horizontal one reaches over its top and bottom padding, so `PaintDecoration`'s block-start/-end inset keeps a `text-underline-position: left`/`right` line at the text rather than moving it by the padding. An atomic inline-level box (`inline-block`, `inline-table`, `inline-flex`, `inline-grid`) is not walked for words: `LayOutVerticalAtomicInline` lays it out on its own with the flow-unbroken machinery the horizontal flow uses for an atomic box, and a `CssRectAtomicInline` item stands for it in the word stream with its margin box as the natural size (the physical height along the column, the physical width as the column thickness), so wrapping, text alignment and bidi reordering treat it like an image and it moves to the next column whole. `PlaceAtomicInlines` moves the box to where its item finally landed, after alignment and bidi, and registers its border box on the column so its background and border paint; the box keeps its own writing mode, so an orthogonal one lays its lines out its own way. The same work closed the gap about an underlined vertical `inline-block` getting only a stub of a line: its propagated decoration now runs down every column of its text.
+
+Flexbox: a container in a vertical writing mode whose `width` is `auto` and whose `height` is definite takes its width from `aspect-ratio` (`CssLayoutEngine.TryGetVerticalAspectRatioWidth`, issue #772, closed). The width is its block size, which nothing stretches, so the ratio fixes it from the definite inline size; a horizontal container's auto width is stretch-fit and keeps winning over the ratio, which is why `TryGetAspectRatioWidth` itself must still not be used on a horizontal box. The resulting width is the main size of a `column` container there (its main axis is physical X).
+
 ## What's still out of scope
 
 - **The atomic-inline exclusion (and an upright run's skip-ink) are horizontal-only**
@@ -566,23 +570,6 @@ would double-apply the same shift.
   with, but text beside it wraps against the provisional (page-height) edge until then; and text in a *nested*
   vertical block whose own height is auto wraps against the page rather than its parent's height, so a bottom
   float only cuts its columns when that block has an explicit height.
-- **A nested inline element's own border/padding/margin does not reserve inline-axis (physical left/right,
-  for `vertical-rl`/`vertical-lr`) space** ([#769](https://github.com/jhaygood86/PeachPDF/issues/769)), and
-  its block-axis (physical top/bottom) padding/border is applied once per column it spans rather than once
-  total — `CreateVerticalLineBoxes` never sets `CssBox.FirstHostingLineBox`/`LastHostingLineBox`, the
-  bookkeeping `CssLineBox.UpdateRectangle` needs to gate leading/trailing inset correctly, so a
-  bordered/padded `<span>` inside vertical text paints with the wrong decoration box. For the same
-  reason, issue #1163's fix closing a wrapped inline's outline into a complete ring on every line is
-  scoped to `horizontal-tb` only — a `vertical-rl`/`vertical-lr` wrapped inline's outline keeps its pre-#1163 open-edge
-  geometry until this gap closes, since closing only the outline while the inline axis itself still
-  has no reserved inset would produce a ring that disagrees with the box's own (not yet correct)
-  extent.
-- **Atomic inline-level content (`inline-block`/`inline-table`) is flattened, not treated as one atomic
-  unit** ([#771](https://github.com/jhaygood86/PeachPDF/issues/771)). `MeasureAndCollectWordsInDocumentOrder`
-  recurses into every descendant box with no formatting-context check, so a nested inline-block's own words
-  get placed as ordinary flat words indistinguishable from its surrounding text, and the inline-block box
-  itself is never positioned (its own border/padding/background never paint). `<img>` (a genuinely atomic
-  replaced element with no nested word-bearing subtree) is unaffected.
 - **An explicit `writing-mode` override on a non-atomic nested inline element** (e.g. a `<span>`, not an
   `inline-block`/`inline-table`) is laid out using its containing block's writing-mode (correct — a plain
   inline never establishes its own flow) but may paint using its own, different, cascaded `WritingMode`
@@ -623,14 +610,6 @@ would double-apply the same shift.
   into the page-level pagination invariants ~50 other files document — out of scope here. The fallback
   needs no `MonolithicContent` treatment of its own (unlike a vertical table's row loop): ordinary
   single-column block flow already supports real pagination.
-- **A vertical-writing-mode Flexbox container's own top-level definite-main-size resolution has no
-  aspect-ratio-on-width fallback** ([#772](https://github.com/jhaygood86/PeachPDF/issues/772)). The
-  pre-existing `aspect-ratio`-driven auto-height fallback
-  (`CssLayoutEngine.TryGetAspectRatioHeight`) stays scoped to the physical Y dimension; a `column`-direction
-  container under a vertical writing mode (main axis physical X) has no equivalent width-driven fallback,
-  since the width-side helper (`TryGetAspectRatioWidth`) is documented as unsafe for a stretch-fit block-
-  level box, which a flex container's own auto width already is. A narrow, deliberate boundary matching an
-  already-narrow pre-existing feature's own scope, not a general Flexbox regression.
 - **A vertical box's own content never fragments across a page boundary**
   ([#767](https://github.com/jhaygood86/PeachPDF/issues/767)) — being monolithic, it is moved whole to the
   next page if it doesn't fit the current one, or displaced-per-band (never resized) if it fits nowhere; it

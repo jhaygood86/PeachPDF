@@ -10702,6 +10702,13 @@ namespace PeachBrackets.Html.Dom
             {
                 if (line.FlowTop is { } flowTop) line.FlowTop = flowTop + amount;
                 if (line.BaselineY is { } baselineY) line.BaselineY = baselineY + amount;
+
+                // An atomic inline's item is held only by the column, not by the box's Words, so a translation has to reach it here
+                // (its box is a child, which the walk moves).
+                foreach (var word in line.Words)
+                {
+                    if (word is CssRectAtomicInline) word.Top += amount;
+                }
             }
         }
 
@@ -10900,6 +10907,15 @@ namespace PeachBrackets.Html.Dom
             foreach (var word in Words)
             {
                 word.Left += amount;
+            }
+
+            // An atomic inline's item lives on the column alone (see OffsetOwnLineBoxesTop).
+            foreach (var line in LineBoxes)
+            {
+                foreach (var word in line.Words)
+                {
+                    if (word is CssRectAtomicInline) word.Left += amount;
+                }
             }
         }
 
