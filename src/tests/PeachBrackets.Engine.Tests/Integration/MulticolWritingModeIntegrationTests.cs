@@ -25,7 +25,7 @@ namespace PeachBrackets.Engine.Tests.Integration
     {
         private static readonly string Words60 = string.Join(" ", Enumerable.Range(0, 60).Select(i => "w" + i.ToString("D2") + "aaa"));
 
-        private const string Base = "font-size: 10pt; line-height: 12pt;";
+        private const string Base = "font-family: 'Liberation Sans'; font-size: 10pt; line-height: 12pt;";
 
         private static CssBox P(CssBox root, string id) => LayoutHarness.FindById(root, id)!;
 
