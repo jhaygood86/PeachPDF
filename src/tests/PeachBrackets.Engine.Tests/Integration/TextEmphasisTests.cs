@@ -285,7 +285,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (_, plain) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none'>ab cd</div>", "d");
             var (_, spaces) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none;text-decoration-skip:spaces'>ab cd</div>", "d");
 
-            Assert.Equal(1, plain.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
+            Assert.Single(plain.Log.OfType<TestRecordingGraphics.DrawLineCall>());
             Assert.Equal(2, spaces.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
         }
 
