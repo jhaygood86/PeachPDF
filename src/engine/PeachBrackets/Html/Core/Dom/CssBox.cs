@@ -3864,6 +3864,8 @@ namespace PeachBrackets.Html.Dom
                         ? previous.SlotIndex
                         : Math.Max(floatContainer.SlotStartingAt(Math.Max(AbsoluteTopBeforePlacement(child), 0)), 0);
                     HashSet<BreakToken> entered = [];
+                    BreakToken? lastToken = null;
+                    var stalledPasses = 0;
                     child.FragmentedAcrossFloatPasses = false;
                     try
                     {
@@ -3874,7 +3876,11 @@ namespace PeachBrackets.Html.Dom
                             if (child.PendingBreakToken is not { } next) break;
                             child.ResumeAt(next, null);
                             child.FragmentedAcrossFloatPasses = child.IsFloated;
-                            if (!entered.Add(next) || entered.Count >= 10000)
+                            // Passes that resume at the same point in a different fragmentainer make no progress (the
+                            // slot is part of the token, so exact equality never sees them): the driver's own guard.
+                            stalledPasses = lastToken is not null && HtmlContainerInt.IsSameProgress(lastToken, next) ? stalledPasses + 1 : 0;
+                            lastToken = next;
+                            if (!entered.Add(next) || entered.Count >= 1000 || stalledPasses >= HtmlContainerInt.MaxStalledPasses)
                             {
                                 floatContainer.DetachFragmentainer();
                                 await child.PerformLayoutImp(g, this, framePlacesChild);

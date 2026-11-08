@@ -108,8 +108,89 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Fragmentation
                 configureContainer: c => c.MaxFragmentainersOverride = 300);
 
             Assert.True(container.FragmentainerPasses < 40, $"{container.FragmentainerPasses} passes");
-            Assert.Equal(1, container.LastResortRelayouts);
+            Assert.Equal(0, container.LastResortRelayouts);
             Assert.Contains("w2", string.Join(" ", AllText(root)));
+        }
+
+        [Fact]
+        public void FlexGridAndFlexColumnTokensAreComparedWithoutTheirSlot_AndByTheirStuckItems()
+        {
+            var container = new CssBox(null, null);
+            var item = new CssBox(null, null);
+            var body = new CssBox(null, null);
+            IReadOnlyList<IReadOnlyList<CssBox>> lines = [[item]];
+
+            BreakToken Item(int slot, int word) => new InlineBreakToken(body, slot, [0], word, 1);
+            BreakToken Flex(int slot, int line, int word) => new FlexBreakToken(container, slot, line, lines,
+                [new UnfinishedFlexItem(item, Item(slot, word))], [], default);
+            BreakToken Grid(int slot, int row, int word) => new GridBreakToken(container, slot, row, lines,
+                [new UnfinishedGridItem(item, Item(slot, word))], [], new Dictionary<CssBox, GridSubgridContext>(), default);
+            BreakToken Column(int slot, int index, int word) => new FlexColumnBreakToken(container, slot, lines,
+                [new ColumnLineCursor(0, index, Item(slot, word))], [], default);
+
+            Assert.True(HtmlContainerInt.IsSameProgress(Flex(5, 0, 2), Flex(4, 0, 2)));
+            Assert.False(HtmlContainerInt.IsSameProgress(Flex(5, 1, 2), Flex(4, 0, 2)));
+            Assert.False(HtmlContainerInt.IsSameProgress(Flex(5, 0, 3), Flex(4, 0, 2)));
+
+            Assert.True(HtmlContainerInt.IsSameProgress(Grid(5, 0, 2), Grid(4, 0, 2)));
+            Assert.False(HtmlContainerInt.IsSameProgress(Grid(5, 1, 2), Grid(4, 0, 2)));
+
+            Assert.True(HtmlContainerInt.IsSameProgress(Column(5, 0, 2), Column(4, 0, 2)));
+            Assert.False(HtmlContainerInt.IsSameProgress(Column(5, 1, 2), Column(4, 0, 2)));
+        }
+
+        private const string FloatUnderHeader =
+            "<style>body { margin: 0; font: 12pt Pinned } th { padding: 0; line-height: 20pt } table { border-spacing: 0 }</style>" +
+            "<table><thead><tr><th>w1</th></tr></thead><tbody><tr><td>" +
+            "<div style='float:right;width:60%;margin:0 0 6pt 0;height:86pt'></div>w2</td></tr></tbody></table>";
+
+        // A table with a repeated header and a float no band can hold, inside a flex or grid container (whose break tokens the
+        // driver could not compare) or an absolutely positioned box (which has a pass loop of its own): it finishes.
+        [Theory]
+        [InlineData("<div style='display:flex'>", "</div>")]
+        [InlineData("<div style='display:grid'>", "</div>")]
+        [InlineData("<div style='position:absolute;left:0;top:0;width:250pt'>", "</div>")]
+        public async Task AStalledTableInsideFlexGridOrAnAbsoluteBox_IsRecoveredFromWithinAFewPasses(string open, string close)
+        {
+            var (root, container) = await LayoutHarness.LayoutAsync(open + FloatUnderHeader + close, pageWidth: 300, pageHeight: 160, margin: 20,
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"),
+                configureContainer: c => c.MaxFragmentainersOverride = 300);
+
+            Assert.True(container.FragmentainerPasses < 60, $"{container.FragmentainerPasses} passes");
+            Assert.Contains("w2", string.Join(" ", AllText(root)));
+        }
+
+        // A float under a repeated header that fits no band (the line beside it is moved below it, where a page that also holds the header
+        // has no room): the line stays beside the float instead of walking page after page, so no page holds only the header.
+        [Theory]
+        [InlineData(80)]
+        [InlineData(86)]
+        [InlineData(90)]
+        [InlineData(95)]
+        [InlineData(100)]
+        public async Task AFloatThatFitsNoBandUnderARepeatedHeader_DoesNotMakeHeaderOnlyPages(int floatHeight)
+        {
+            var html = "<style>body { margin: 0; font: 12pt Pinned } th { padding: 0; line-height: 20pt } table { border-spacing: 0 }</style><table><thead><tr><th>w1</th></tr></thead><tbody><tr><td><table><tbody><tr><td>" +
+                       $"<div style='float:right;width:60%;margin:0 0 6pt 0;height:{floatHeight}pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table>";
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 160, margin: 20,
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"),
+                configureContainer: c => c.MaxFragmentainersOverride = 300);
+
+            Assert.True(container.FragmentainerPasses <= 3, $"{container.FragmentainerPasses} passes");
+            Assert.Equal(0, container.LastResortRelayouts);
+            Assert.Contains("w2", string.Join(" ", AllText(root)));
+        }
+
+        [Fact]
+        public async Task AThreeLevelNestedTableWithARepeatedHeaderInTwoColumns_Finishes()
+        {
+            var html = "<style>body{margin:0;font:10pt/12pt sans-serif} td,th{border:1px solid #000;padding:2pt;vertical-align:top} table{border-collapse:separate}</style><div style='columns:2'><table><thead><tr><th></th></tr></thead><tbody><tr><td><table><tbody><tr><td><table><tbody><tr><td><table><tbody><tr><td></td></tr><tr><td><div style='height:20pt'></div></td></tr></tbody></table></td></tr><tr><td> w11179 w11180 w11181 w11182 w11183 w11184 w11185 w11186 w11187 w11188 w11189 w11190 w11191 </td></tr></tbody></table></td></tr></tbody></table></td></tr></tbody></table></div>";
+            var (root, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: 160, margin: 20,
+                configureRenderContext: renderContext => BundledFonts.RegisterFont(renderContext, BundledFonts.Ttf, "Pinned"),
+                configureContainer: c => c.MaxFragmentainersOverride = 300);
+
+            Assert.True(container.FragmentainerPasses < 60, $"{container.FragmentainerPasses} passes");
+            Assert.Contains("w11191", string.Join(" ", AllText(root)));
         }
 
         private static BreakToken Chain(CssBox html, CssBox body, int slot, int word) =>

@@ -5427,8 +5427,13 @@ namespace PeachBrackets.Html.Dom
 
             var slot = fragmentainer.SlotIndex;
 
-            return lineTop - container.PageTopOf(slot) <= LineFitTolerance
-                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
+            // A table repeating a header draws it at the top of every page, so a fresh page leaves the line that much less room,
+            // and a line inside the table is never at the very top of the page (the header is above it): the question is then
+            // asked of any such line, since what matters is whether it could fit anywhere.
+            var repeatedAtTop = fragmentainer.ResumeContentInset;
+
+            return (lineTop - container.PageTopOf(slot) <= LineFitTolerance || repeatedAtTop > 0)
+                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot) - repeatedAtTop;
         }
 
         /// <summary>
