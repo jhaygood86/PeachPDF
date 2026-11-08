@@ -5427,8 +5427,13 @@ namespace PeachBrackets.Html.Dom
 
             var slot = fragmentainer.SlotIndex;
 
-            return lineTop - container.PageTopOf(slot) <= LineFitTolerance
-                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot);
+            // A table repeating a header draws it at the top of every page, so a fresh page leaves the line that much less room,
+            // and a line inside the table is never at the very top of the page (the header is above it): the question is then
+            // asked of any such line, since what matters is whether it could fit anywhere.
+            var repeatedAtTop = fragmentainer.ResumeContentInset;
+
+            return (lineTop - container.PageTopOf(slot) <= LineFitTolerance || repeatedAtTop > 0)
+                   && nextY - lineTop + lineHeight > container.PageBandHeightOf(slot) - container.TotalBandEndReservationFor(slot) - repeatedAtTop;
         }
 
         /// <summary>
@@ -5866,6 +5871,16 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         internal static (double Left, double Right) ExtentBesideFloats(CssBox block, double top, double left, double right)
         {
+            var (extentLeft, extentRight, _) = ExtentBesideFloatsWithBottom(block, top, left, right);
+            return (extentLeft, extentRight);
+        }
+
+        /// <summary>
+        /// <see cref="ExtentBesideFloats"/>, and the lowest bottom margin edge of the floats that narrow it (null when none does): where a box that
+        /// does not fit beside them goes below.
+        /// </summary>
+        internal static (double Left, double Right, double? FloatsBottom) ExtentBesideFloatsWithBottom(CssBox block, double top, double left, double right)
+        {
             // The line box only carries the coordinates the lookups read, but its constructor adds it to the owner's
             // line boxes, so it is taken off again: a container left with a line box of its own was read as holding
             // inline content and its children's words were emitted a second time.
@@ -5884,8 +5899,12 @@ namespace PeachBrackets.Html.Dom
                 var leftFloat = LeftFloatAt(coordinates, block);
                 var rightFloat = RightFloatAt(coordinates, block);
 
+                double? bottom = null;
+                if (leftFloat is not null) bottom = leftFloat.ActualBottom + leftFloat.ActualMarginBottom;
+                if (rightFloat is not null) bottom = Math.Max(bottom ?? double.NegativeInfinity, rightFloat.ActualBottom + rightFloat.ActualMarginBottom);
+
                 return (leftFloat is null ? left : Math.Max(left, leftFloat.FlowRightEdge + leftFloat.ActualMarginRight),
-                    rightFloat is null ? right : Math.Min(right, rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft));
+                    rightFloat is null ? right : Math.Min(right, rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft), bottom);
             }
             finally
             {

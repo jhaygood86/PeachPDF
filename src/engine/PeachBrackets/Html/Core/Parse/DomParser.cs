@@ -3240,6 +3240,7 @@ namespace PeachBrackets.Html.Parse
         private static void TranslateAttributes(HtmlTag tag, CssBox box, CssValueParser valueParser)
         {
             CenterTableInLegacyCenteredParent(tag, box);
+            StopTableInheritingLegacyTextAlign(tag, box);
 
             if (!tag.HasAttributes()) return;
 
@@ -3309,6 +3310,32 @@ namespace PeachBrackets.Html.Parse
                         box.Width = TranslateLength(value);
                         break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// A table does not inherit the alignment of a <c>&lt;center&gt;</c> or of an <c>align</c> attribute around it: a browser maps those to
+        /// <c>-webkit-center</c> and the like, and resets such a value to <c>start</c> on a table (Blink and WebKit <c>StyleAdjuster</c>), so the text in the
+        /// table's cells stays at the start edge. A <c>text-align</c> from a style rule is still inherited: the nearest ancestor that gives the value is
+        /// looked for, and only one that is such an element resets it.
+        /// </summary>
+        private static void StopTableInheritingLegacyTextAlign(HtmlTag tag, CssBox box)
+        {
+            if (!tag.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)) return;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (ancestor.HtmlTag is { } source
+                    && (source.Name.Equals("center", StringComparison.OrdinalIgnoreCase)
+                        || (!source.Name.Equals(HtmlConstants.Table, StringComparison.OrdinalIgnoreCase)
+                            && source.HasAttributes() && source.Attributes!.ContainsKey(HtmlConstants.Align))))
+                {
+                    box.TextAlignAll = CssProperty<HorizontalAlignment>.FromCssText(Keywords.Start, Map.HorizontalAlignments, HorizontalAlignment.Start);
+                    return;
+                }
+
+                // The ancestor that sets the value differently from its own parent is where it comes from; if that is not a legacy element, it is inherited.
+                if (ancestor.ParentBox is { } up && !Equals(ancestor.TextAlignAll.Value, up.TextAlignAll.Value)) return;
             }
         }
 
