@@ -267,6 +267,21 @@ namespace PeachBrackets.Html.Fragmentation
             && HasColumnPaginationExcludedFeature(box);
 
         /// <summary>
+        /// Whether <paramref name="box"/> is a grid container under a vertical writing mode. Its rows run
+        /// across the page rather than down it, so the grid engine's own fragmentation (moving a row to
+        /// the next page, committing item content a page at a time) has no meaning there and a vertical
+        /// grid is laid out whole in one pass; its parent treats it as indivisible, the same practical
+        /// constraint <see cref="IsUnresumableVerticalTable"/> and <see cref="IsUnresumableOrthogonalFlow"/>
+        /// record for the other vertical boxes.
+        /// </summary>
+        /// <remarks>
+        /// Not a spec claim: css-break-3 does not forbid fragmenting a vertical grid along its columns.
+        /// </remarks>
+        internal static bool IsUnresumableVerticalGrid(CssBox box) =>
+            box.WritingMode.Value.IsVertical()
+            && box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid;
+
+        /// <summary>
         /// Whether <paramref name="box"/> (a table) uses a feature <c>CssLayoutEngineTable
         /// .RelocateColumnsAcrossPageBoundaries</c>'s first cut does not support: a <c>rowspan</c>/
         /// <c>colspan</c> cell, a <c>&lt;caption&gt;</c>, a <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>,
@@ -303,34 +318,7 @@ namespace PeachBrackets.Html.Fragmentation
 
             foreach (var child in box.Boxes)
             {
-                switch (child.DerivedStyle.ActualDisplay)
-                {
-                    case Keywords.TableCaption:
-                    case Keywords.TableHeaderGroup:
-                    case Keywords.TableFooterGroup:
-                        return true;
-                    case Keywords.TableRow:
-                        if (RowHasSpanningCell(child)) return true;
-                        break;
-                    case Keywords.TableRowGroup:
-                        foreach (var row in child.Boxes)
-                        {
-                            if (row.DerivedStyle.ActualDisplay == Keywords.TableRow && RowHasSpanningCell(row))
-                                return true;
-                        }
-                        break;
-                }
-            }
-
-            return false;
-        }
-
-        private static bool RowHasSpanningCell(CssBox row)
-        {
-            foreach (var cell in row.Boxes)
-            {
-                if (CssLayoutEngineTable.GetRowSpan(cell) > 1 || CssLayoutEngineTable.GetColSpan(cell) > 1)
-                    return true;
+                if (child.DerivedStyle.ActualDisplay == Keywords.TableCaption) return true;
             }
 
             return false;
@@ -345,7 +333,8 @@ namespace PeachBrackets.Html.Fragmentation
         /// own call sites individually.
         /// </summary>
         internal static bool IsMonolithicForFragmentation(CssBox box) =>
-            IsMonolithic(box) || IsUnresumableOrthogonalFlow(box) || IsUnresumableVerticalTable(box);
+            IsMonolithic(box) || IsUnresumableOrthogonalFlow(box) || IsUnresumableVerticalTable(box)
+            || IsUnresumableVerticalGrid(box);
 
         // ── §2's "overflows rather than being sliced", as a fitting question ──
 

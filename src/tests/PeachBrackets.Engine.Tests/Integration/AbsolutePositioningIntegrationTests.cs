@@ -268,10 +268,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task AbsoluteInTfootCell_NoPositionedAncestor_ResolvesAgainstPageContentOrigin()
         {
-            // Same bug, the <tfoot> branch of RemoveHeaderFooterFromTree/DomParentBox. The footer cell
-            // needs some real in-flow content alongside "abs" - a footer whose only content is
-            // out-of-flow measures a natural height of 0, which (a separate, pre-existing table quirk,
-            // out of scope here) skips creating a footer proxy for it at all.
+            // Same bug, the <tfoot> branch of RemoveHeaderFooterFromTree/DomParentBox.
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
                 "<table style='border-collapse:collapse; border-spacing:0;'>" +
                 "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
@@ -282,6 +279,25 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs")!;
             Assert.Equal(25, abs.Location.X, 1.5);
+            Assert.Equal(25, abs.Location.Y, 1.5);
+        }
+
+        [Fact]
+        public async Task AbsoluteInTfootCell_WhoseOnlyContentIsOutOfFlow_StillGetsAFooterProxy()
+        {
+            // The footer measures a natural in-flow height of 0, but its out-of-flow content must still
+            // resolve and paint - the <thead> path has always done this.
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(
+                "<table style='border-collapse:collapse; border-spacing:0;'>" +
+                "<tbody><tr><td style='padding:0; border:0; vertical-align:top;'>x</td></tr></tbody>" +
+                "<tfoot><tr><td style='padding:0; border:0; vertical-align:top;'>" +
+                "<div id='abs' style='position:absolute; top:5pt; left:5pt; width:10pt; height:10pt;'></div>" +
+                "</td></tr></tfoot>" +
+                "</table>"), margin: 20);
+
+            var abs = LayoutHarness.FindByIdIncludingHeaderFooterProxies(root, "abs");
+            Assert.NotNull(abs);
+            Assert.Equal(25, abs!.Location.X, 1.5);
             Assert.Equal(25, abs.Location.Y, 1.5);
         }
 
