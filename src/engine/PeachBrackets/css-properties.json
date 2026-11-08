@@ -3580,6 +3580,97 @@
       }
     },
     {
+      "name": "line-height-step",
+      "comment": "CSS Rhythmic Sizing 1 section 3.1: none | <length [0,inf)>. Inherited. Each line box of the block is rounded up to a multiple of the step, the extra space split above and below (CssLayoutEngine.StepExtent).",
+      "inherited": true,
+      "cssom": {"converter": "Converters.LineHeightStepConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.LineHeightStepConverter.Convert" },
+      "html": {
+        "propertyPath": "LineHeightStep",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
+      "name": "block-step-size",
+      "comment": "CSS Rhythmic Sizing 1 section 4.1: none | <length [0,inf)>. Rounds a block container height to a multiple of the size (CssBox.ApplyBlockStep).",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepSizeConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepSizeConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-insert",
+      "comment": "CSS Rhythmic Sizing 1 section 4.2: margin-box | padding-box | content-box. Where the space rounding adds goes.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepInsertConverter"},
+      "initialValue": "margin-box",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepInsertConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepInsert",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-align",
+      "comment": "CSS Rhythmic Sizing 1 section 4.3: auto | center | start | end. Where the content sits in the added space.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepAlignConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepAlignConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepAlign",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "block-step-round",
+      "comment": "CSS Rhythmic Sizing 1 section 4.4: up | down | nearest.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.BlockStepRoundConverter"},
+      "initialValue": "up",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.BlockStepRoundConverter.Convert" },
+      "html": {
+        "propertyPath": "BlockStepRound",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "text-box-trim",
+      "comment": "CSS Inline 3 section 5.1: none | trim-start | trim-end | trim-both. Trims the first/last formatted line of a block container to text-box-edge.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.TextBoxTrimConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextBoxTrimConverter.Convert" },
+      "html": {
+        "propertyPath": "TextBoxTrim",
+        "csharpDataType": "string",
+        "area": "TextDecorationArea"
+      }
+    },
+    {
+      "name": "text-box-edge",
+      "comment": "CSS Inline 3 section 5.2: auto | text-edge. Inherited. The metrics text-box-trim trims to.",
+      "inherited": true,
+      "cssom": {"converter": "Converters.TextBoxEdgeConverter"},
+      "initialValue": "auto",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextBoxEdgeConverter.Convert" },
+      "html": {
+        "propertyPath": "TextBoxEdge",
+        "csharpDataType": "string",
+        "area": "TextArea"
+      }
+    },
+    {
       "name": "vertical-align",
       "comment": "CSS 2.1 §10.8.1 also accepts a <percentage>/<length> value form, offsetting the box from its own baseline (issue #603) - the value side reuses word-spacing/line-height's LengthOrCalc plumbing (valueType \"length\" already covers percentages via CssValueParser.IsValidLength/ValueExtensions.ToDistance, no separate percentage data type needed). PeachBaselineMiddle (the deprecated img align=middle sentinel, see Keywords.PeachBaselineMiddle) is never produced by this grammar - DomParser assigns it directly via CssKeywordOrValueParser's keyword side, same as Float's img align handling.",
       "inherited": false,
@@ -4588,15 +4679,15 @@
     },
     {
       "name": "text-combine-upright",
-      "comment": "css-writing-modes-4 §9.1: none | all | digits <integer [2,4]>?. Parsed and stored only: composing characters into one upright cell needs vertical-text layout this engine does not have (.claude/accepted-gaps/text-combine-upright-has-no-layout-effect.md). Not inherited, so it sits in TextDecorationArea (the non-inherited text area) - TextArea is adopted whole from the parent.",
-      "inherited": false,
+      "comment": "css-writing-modes-4 §9.1: none | all | digits <integer [2,4]>?. Inherited. In a vertical writing mode, all composes the whole text of the element, and digits N each run of up to N ASCII digits, into one word set as a one-em square upright cell (CssBox.AppendWordsFromText marks it CombineUpright; CssLayoutEngine.NaturalWordSize sizes it; FragmentPainter.PaintCombinedUprightRun squeezes it to fit)",
+      "inherited": true,
       "cssom": {"converter": "Converters.TextCombineUprightConverter"},
       "initialValue": "none",
       "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.TextCombineUprightConverter.Convert" },
       "html": {
         "propertyPath": "TextCombineUpright",
         "csharpDataType": "string",
-        "area": "TextDecorationArea"
+        "area": "TextArea"
       }
     },
     {

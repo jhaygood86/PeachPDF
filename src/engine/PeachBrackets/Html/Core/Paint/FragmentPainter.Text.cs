@@ -320,7 +320,11 @@ namespace PeachBrackets.Html.Paint
             {
                 var isUpright = IsUprightWordOrientation(box, word);
 
-                if (isUpright)
+                if (word.CombineUpright)
+                {
+                    PaintCombinedUprightRun(g, text, font, styleSource, rect, baselineAdjust, wordFeatures, logicalText);
+                }
+                else if (isUpright)
                 {
                     if (precededBySeparator)
                         PaintWordSeparator(g, styleSource, word, rect, baselineShift, SeparatorPlacement.Upright, null);
@@ -340,6 +344,7 @@ namespace PeachBrackets.Html.Paint
                     g.DrawString(text, font, colorOverride ?? styleSource.ActualTextFillColor, new PaintPoint(0, baselineAdjust), naturalSize,
                         styleSource.ActualLetterSpacing, styleSource.ActualFontPalette, wordFeatures, logicalText);
                     PaintTextStroke(g, effectsStyle ?? styleSource, font, text, new PaintPoint(0, baselineAdjust), wordFeatures);
+                    PaintTextEmphasis(g, styleSource, text, new PaintPoint(0, baselineAdjust), naturalSize, wordFeatures, font, vertical: true);
                     g.PopTransform();
                 }
             }
@@ -353,6 +358,35 @@ namespace PeachBrackets.Html.Paint
                 PaintTextStroke(g, effectsStyle ?? styleSource, font, text, wordPoint, wordFeatures);
                 PaintTextEmphasis(g, styleSource, text, wordPoint, textSize, wordFeatures, font);
             }
+        }
+
+        /// <summary>
+        /// Paints a <c>text-combine-upright</c> cell: the whole run drawn horizontally in the one-em square <paramref name="rect"/> reserves,
+        /// squeezed in the inline direction when it is wider than the em (CSS Writing Modes 4 section 9.1) and centred across the column.
+        /// </summary>
+        private static void PaintCombinedUprightRun(Canvas g, string text, Font font, CssBox styleSource, Rect rect, double baselineAdjust,
+            ShapeSettings wordFeatures, string? logicalText)
+        {
+            var size = g.MeasureString(text, font, wordFeatures);
+            var em = font.Size;
+            var scale = size.Width > em && size.Width > 0 ? em / size.Width : 1.0;
+            var drawn = size.Width * scale;
+
+            // Centred in the cell: across the column, and along it (the cell is one em tall).
+            var x = rect.X + Math.Max(0, (rect.Width - drawn) / 2);
+            var y = rect.Y + (rect.Height - size.Height) / 2;
+
+            if (scale < 1.0)
+            {
+                // Scale about the cell's own left edge so the squeezed run starts where it is drawn.
+                g.PushTransform(Matrix3x2.CreateScale((float)scale, 1f, new Vector2((float)x, (float)y)));
+            }
+
+            g.DrawString(text, font, styleSource.ActualTextFillColor, new PaintPoint(x, y), size, styleSource.ActualLetterSpacing,
+                styleSource.ActualFontPalette, wordFeatures, logicalText);
+
+            if (scale < 1.0)
+                g.PopTransform();
         }
 
         /// <summary>Which axis <see cref="PaintWordSeparator"/> advances along.</summary>
@@ -562,7 +596,9 @@ namespace PeachBrackets.Html.Paint
                 : null;
 
             var index = 0;
-            foreach (var placement in EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, wordFeatures))
+            var uprightPlacements = EnumerateUprightGlyphPlacements(g, text, font, rect, baselineAdjust, styleSource.ActualLetterSpacing, wordFeatures).ToList();
+            PaintUprightTextEmphasis(g, styleSource, uprightPlacements);
+            foreach (var placement in uprightPlacements)
             {
                 var charLogicalText = logicalRunes != null ? logicalRunes[index].ToString() : null;
 

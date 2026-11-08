@@ -1129,26 +1129,23 @@ namespace PeachBrackets.Html.Paint
                 // HasLeftEdge/HasRightEdge above already painted the border/background with the real,
                 // open flags, so this doesn't touch that. Closing each rectangle is also what lets the
                 // deferred pass below union them: a fragment contributes its whole rectangle to that
-                // region, not a three-sided piece of one. Scoped to a horizontal inline axis - which
-                // also covers sideways-rl/-lr, whose own line boxes are laid out exactly like
-                // horizontal-tb's, see IsVerticalDecorationGeometry - a genuinely vertical
-                // (vertical-rl/vertical-lr) box's wrapped inline outline is left exactly as it was:
-                // its own inline-axis border/padding isn't even reserved at a line wrap yet either
-                // (issue #769), so closing only the outline there would produce a ring that doesn't
-                // match its own box's inline extent.
-                var closesAtLineWrap = !IsVerticalDecorationGeometry(box);
+                // region, not a three-sided piece of one. The inline axis' ends are the left and
+                // right edges of a horizontal line and the top and bottom edges of a vertical column
+                // (IsVerticalDecorationGeometry), and those are the ones closed.
+                var inlineEndsAreTopAndBottom = IsVerticalDecorationGeometry(box);
                 if (collectsOutline)
                 {
                     (outlinePaints ??= []).Add(new OutlineRect(
                         outlineRect,
-                        geometry.HasLeftEdge || closesAtLineWrap,
-                        geometry.HasRightEdge || closesAtLineWrap,
-                        geometry.HasTopEdge,
-                        geometry.HasBottomEdge));
+                        geometry.HasLeftEdge || !inlineEndsAreTopAndBottom,
+                        geometry.HasRightEdge || !inlineEndsAreTopAndBottom,
+                        geometry.HasTopEdge || inlineEndsAreTopAndBottom,
+                        geometry.HasBottomEdge || inlineEndsAreTopAndBottom));
                 }
             }
 
-            if (!_textOnly && box.ColumnRuleSegments is { Count: > 0 } && box.ActualColumnRuleWidth > 0)
+            if (!_textOnly && (box.ColumnRuleSegments is { Count: > 0 } || box.BlockAxisColumnRuleSegments is { Count: > 0 })
+                && box.ActualColumnRuleWidth > 0)
             {
                 PaintColumnRules(g, box, fragment.OriginY, clip);
             }
@@ -1196,7 +1193,7 @@ namespace PeachBrackets.Html.Paint
                 // atomic inlines inside it, which §2.4 does not decorate, and the glyph ink an underline
                 // or overline skips. Gathered once for the whole box rather than per line.
                 var content = DecorationsWorthCollecting(box)
-                    ? DecorationContent.Of(fragment, collectSpans: false)
+                    ? DecorationContent.Of(fragment, collectSpans: false, TextEmphasisGrammar.ParseSkip(fragment.Box.TextDecorationSkip))
                     : null;
 
                 for (var i = 0; i < lines.Count; i++)

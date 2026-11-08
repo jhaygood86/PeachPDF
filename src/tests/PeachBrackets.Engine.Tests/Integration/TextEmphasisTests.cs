@@ -55,14 +55,14 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task Style_IsInherited_ButCombineUprightIsNot()
+        public async Task Style_AndCombineUpright_AreInherited_ButInsetIsNot()
         {
             var (root, _) = await LayoutHarness.LayoutAsync(Wrap(
                 "<div style='text-emphasis-style: dot; text-combine-upright: all; text-decoration-inset: 4pt'><p id='c'>x</p></div>"));
             var child = LayoutHarness.FindById(root, "c")!;
 
             Assert.Equal("dot", child.TextEmphasisStyle);
-            Assert.Equal("none", child.TextCombineUpright);
+            Assert.Equal("all", child.TextCombineUpright);
             Assert.Equal("auto", child.TextDecorationInset);
         }
 
@@ -176,6 +176,148 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (_, g) = await PaintAsync("<div id='d' style='width:300pt; text-decoration: underline; text-decoration-inset: 200pt'>abc</div>", "d");
 
             Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+        }
+
+        [Fact]
+        public async Task AnOverMarkMakesRoomOnATightLine()
+        {
+            // line-height 1: no leading to hold a mark, so the line has to grow above the baseline by the mark's height.
+            var (plain, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1'>ab</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1;text-emphasis-style:dot'>ab</div>", "d");
+            var (under, _) = await PaintAsync("<div id='d' style='font-size:20pt;line-height:1;text-emphasis-style:dot;text-emphasis-position:under right'>ab</div>", "d");
+
+            Assert.True(marked.ActualBottom - marked.Location.Y > plain.ActualBottom - plain.Location.Y + 1);
+            Assert.True(under.ActualBottom - under.Location.Y > plain.ActualBottom - plain.Location.Y + 1);
+            Assert.True(marked.LineBoxes[0].BaselineExtent!.Value.AboveBaseline > plain.LineBoxes[0].BaselineExtent!.Value.AboveBaseline);
+            Assert.Equal(plain.LineBoxes[0].BaselineExtent!.Value.BelowBaseline, marked.LineBoxes[0].BaselineExtent!.Value.BelowBaseline, 3);
+        }
+
+        [Fact]
+        public async Task LeadingThatAlreadyHoldsTheMarkIsNotAddedTo()
+        {
+            var (plain, _) = await PaintAsync("<div id='d' style='font-size:10pt;line-height:4'>ab</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='font-size:10pt;line-height:4;text-emphasis-style:dot'>ab</div>", "d");
+
+            Assert.Equal(plain.ActualBottom - plain.Location.Y, marked.ActualBottom - marked.Location.Y, 3);
+        }
+
+        [Fact]
+        public async Task VerticalText_DrawsTheMarksBesideEachCharacter_OnTheRightByDefault()
+        {
+            var (_, g) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle'>abc</div>", "d");
+
+            var marks = g.DrawStringCalls.Where(c => c.Text == "●").ToList();
+            var letters = g.DrawStringCalls.Where(c => c.Text is "a" or "b" or "c").ToList();
+
+            Assert.Equal(3, marks.Count);
+            Assert.All(marks, m => Assert.True(m.PaintPoint.X >= letters[0].PaintPoint.X + letters[0].Font.Size / 4));
+        }
+
+        [Fact]
+        public async Task VerticalText_LeftPutsTheMarksOnTheOtherSide()
+        {
+            var (_, right) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle'>abc</div>", "d");
+            var (_, left) = await PaintAsync(
+                "<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-emphasis-style:circle;text-emphasis-position:over left'>abc</div>", "d");
+
+            Assert.True(left.DrawStringCalls.First(c => c.Text == "●").PaintPoint.X < right.DrawStringCalls.First(c => c.Text == "●").PaintPoint.X);
+        }
+
+        [Fact]
+        public async Task VerticalText_AMarkReservesRoomInTheColumn()
+        {
+            var (plain, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;font-size:20pt;line-height:1'>abc</div>", "d");
+            var (marked, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;font-size:20pt;line-height:1;text-emphasis-style:circle'>abc</div>", "d");
+
+            Assert.True(marked.ActualRight - marked.Location.X > plain.ActualRight - plain.Location.X + 1);
+        }
+
+        [Fact]
+        public async Task TextShadow_AppliesToTheMarksToo()
+        {
+            var (_, plain) = await PaintAsync("<div id='d' style='text-emphasis-style:circle'>a</div>", "d");
+            var (_, shadowed) = await PaintAsync("<div id='d' style='text-emphasis-style:circle;text-shadow:2pt 2pt 0 #00f'>a</div>", "d");
+
+            Assert.True(shadowed.DrawStringCalls.Count(c => c.Text == "●") > plain.DrawStringCalls.Count(c => c.Text == "●"));
+        }
+
+        [Fact]
+        public async Task CombineUpright_All_SetsTheRunAsOneEmSquareCell()
+        {
+            var (_, g) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt'>a<span style='text-combine-upright:all'>2024</span>b</div>", "d");
+
+            // One DrawString for the whole run, where upright text is drawn a character at a time.
+            Assert.Single(g.DrawStringCalls, c => c.Text == "2024");
+        }
+
+        [Fact]
+        public async Task CombineUpright_Digits_ComposesOnlyRunsUpToTheLimit()
+        {
+            var (_, g) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-combine-upright:digits 3'>x12 y1234</div>", "d");
+
+            Assert.Contains(g.DrawStringCalls, c => c.Text == "12");
+            Assert.DoesNotContain(g.DrawStringCalls, c => c.Text == "1234");
+        }
+
+        [Fact]
+        public async Task CombineUpright_TakesOneEmAlongTheColumn()
+        {
+            var (plain, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt'>2024</div>", "d");
+            var (combined, _) = await PaintAsync("<div id='d' style='writing-mode:vertical-rl;text-orientation:upright;font-size:20pt;text-combine-upright:all'>2024</div>", "d");
+
+            Assert.True(combined.ActualBottom - combined.Location.Y < plain.ActualBottom - plain.Location.Y);
+            Assert.Equal(20.0, combined.ActualBottom - combined.Location.Y, 0);
+        }
+
+        [Fact]
+        public async Task CombineUpright_IsInertInHorizontalText()
+        {
+            var (_, g) = await PaintAsync("<div id='d' style='text-combine-upright:all'>2024</div>", "d");
+
+            Assert.Single(g.DrawStringCalls, c => c.Text == "2024");
+        }
+
+        [Fact]
+        public async Task SkipSpaces_BreaksTheLineAtTheGapsBetweenWords()
+        {
+            var (_, plain) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none'>ab cd</div>", "d");
+            var (_, spaces) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none;text-decoration-skip:spaces'>ab cd</div>", "d");
+
+            Assert.Single(plain.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            Assert.Equal(2, spaces.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
+        }
+
+        [Fact]
+        public async Task SkipNone_DrawsTheLineThroughAnAtomicInline()
+        {
+            var (_, objects) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none'>ab <span style='display:inline-block;width:20pt;height:10pt'></span> cd</div>", "d");
+            var (_, none) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none;text-decoration-skip:none'>ab <span style='display:inline-block;width:20pt;height:10pt'></span> cd</div>", "d");
+
+            Assert.True(objects.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count() > none.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
+        }
+
+        [Fact]
+        public async Task SkipEdges_ShortensBothEnds()
+        {
+            var (_, plain) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline'>abc</div>", "d");
+            var (_, edges) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip:edges'>abc</div>", "d");
+
+            var a = plain.Log.OfType<TestRecordingGraphics.DrawLineCall>().First();
+            var b = edges.Log.OfType<TestRecordingGraphics.DrawLineCall>().First();
+
+            Assert.True(b.X1 > a.X1);
+            Assert.True(b.X2 < a.X2);
+        }
+
+        [Fact]
+        public async Task SkipBoxDecoration_LeavesAnInlineBoxsPaddingUndecorated()
+        {
+            var (_, plain) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none'>a<span style='padding:0 10pt'>b</span>c</div>", "d");
+            var (_, skipped) = await PaintAsync("<div id='d' style='width:300pt;text-decoration:underline;text-decoration-skip-ink:none;text-decoration-skip:box-decoration'>a<span style='padding:0 10pt'>b</span>c</div>", "d");
+
+            Assert.True(skipped.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count() > plain.Log.OfType<TestRecordingGraphics.DrawLineCall>().Count());
         }
     }
 }

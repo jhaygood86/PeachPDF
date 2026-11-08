@@ -97,7 +97,7 @@ namespace PeachBrackets.Html
             math[display=block] { math-style: normal }
             pre             { white-space: pre }
             button, textarea,
-            input, select   { display: inline-block }
+            input, select   { display: inline-block; line-height: normal }
             big             { font-size: 1.17em }
             small, sub, sup { font-size: .83em }
             sub             { vertical-align: sub }

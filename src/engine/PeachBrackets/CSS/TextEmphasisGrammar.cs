@@ -5,6 +5,20 @@ using System.Linq;
 
 namespace PeachBrackets.Css
 {
+    /// <summary>What a decoration line is kept off, from <c>text-decoration-skip</c> (CSS Text Decoration 4 section 2.4).</summary>
+    [System.Flags]
+    internal enum DecorationSkips
+    {
+        None = 0,
+        Objects = 1,
+        Spaces = 2,
+        LeadingSpaces = 4,
+        TrailingSpaces = 8,
+        Edges = 16,
+        BoxDecoration = 32,
+        Ink = 64
+    }
+
     /// <summary>The shape of a <c>text-emphasis-style</c> mark.</summary>
     internal enum TextEmphasisShape
     {
@@ -160,6 +174,35 @@ namespace PeachBrackets.Css
 
             // `spaces` is an alternative to the two partial-space keywords, not a companion.
             return !(seen.Contains("spaces") && (seen.Contains("leading-spaces") || seen.Contains("trailing-spaces")));
+        }
+
+        /// <summary>
+        /// Reads the stored <c>text-decoration-skip</c> text: <c>none</c> skips nothing, <c>auto</c> (and anything unrecognised) is the
+        /// initial <c>objects</c>.
+        /// </summary>
+        internal static DecorationSkips ParseSkip(string text)
+        {
+            var words = (text ?? "").Split(' ', System.StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length == 0 || (words.Length == 1 && words[0].Equals(Keywords.Auto, System.StringComparison.OrdinalIgnoreCase)))
+                return DecorationSkips.Objects;
+
+            var skips = DecorationSkips.None;
+            foreach (var word in words)
+            {
+                skips |= word.ToLowerInvariant() switch
+                {
+                    "objects" => DecorationSkips.Objects,
+                    "spaces" => DecorationSkips.Spaces,
+                    "leading-spaces" => DecorationSkips.LeadingSpaces,
+                    "trailing-spaces" => DecorationSkips.TrailingSpaces,
+                    "edges" => DecorationSkips.Edges,
+                    "box-decoration" => DecorationSkips.BoxDecoration,
+                    "ink" => DecorationSkips.Ink,
+                    _ => DecorationSkips.None
+                };
+            }
+
+            return skips;
         }
 
         /// <summary><c>auto | &lt;length&gt;{1,2}</c> (§2.7): how far each end of the line is pulled in.</summary>

@@ -823,6 +823,38 @@ const string pointerHtml = """
     <p><a class="live" href="https://example.com/live">A live link</a><a class="dead" href="https://example.com/dead">A link with pointer-events: none</a></p>
     """;
 
+// --- Multi-column layout under a vertical writing mode ---
+
+{
+    const string vertical = "Quick brown foxes jump over lazy dogs while the quiet river keeps moving past the old stone bridge. ";
+    var verticalFlow = string.Concat(Enumerable.Repeat(vertical, 7));
+
+    await SaveShowcaseAsync("vertical_multicol", "Layout", "Multi-column Under a Vertical Writing Mode",
+        "Columns of a vertical-rl and a vertical-lr container are horizontal strips stacked along the inline axis, the text of each flowing along the block axis and continuing in the next strip, with horizontal column rules, a balanced block size, and a column-span heading that splits the flow into two runs.",
+        $$"""
+        <!DOCTYPE html><html><head><style>
+          @page { size: a4; margin: 15mm }
+          body { font: 10pt Arial, sans-serif; margin: 0 }
+          h1 { font-size: 14pt; margin: 0 0 4pt }
+          .label { font-size: 8pt; color: #555; margin: 8pt 0 3pt }
+          .mc { height: 150pt; column-count: 3; column-gap: 12pt; column-rule: 1pt solid #b23b3b; border: 1px solid #5b7fa8; padding: 4pt; line-height: 1.3 }
+          .rl { writing-mode: vertical-rl }
+          .lr { writing-mode: vertical-lr }
+          .mc p { margin: 0 }
+          .mc h2 { margin: 0; font-size: 11pt; background: #dfeaf7; column-span: all }
+          .wrap { background: #fdf3c8; border-right: 3pt solid #c58a00; border-left: 3pt solid #2e7d32 }
+        </style></head><body>
+        <h1>Multi-column under a vertical writing mode</h1>
+        <div class="label">vertical-rl, balanced: columns are strips stacked down, lines run right to left</div>
+        <div class="mc rl"><p>{{verticalFlow}}</p></div>
+        <div class="label">vertical-lr, a block wrapper cut across the strips, its slices open at the cut</div>
+        <div class="mc lr"><div class="wrap"><p>{{verticalFlow}}</p></div></div>
+        <div class="label">vertical-rl with a column-span: all heading (two independently balanced runs)</div>
+        <div class="mc rl" style="column-count: 2"><p>{{vertical}}{{vertical}}{{vertical}}</p><h2>Spanning heading</h2><p>{{vertical}}{{vertical}}{{vertical}}</p></div>
+        </body></html>
+        """, pdfConfig);
+}
+
 await SaveShowcaseAsync("progress_meter", "Forms & Interaction", "Progress & Meter",
     "<progress> bars filled to their value in the accent color (a blue by default), an indeterminate bar, and <meter> gauges that turn green, yellow or red by the region their value is in.",
     """
@@ -9251,6 +9283,37 @@ var decorationSkipHtml = "<!DOCTYPE html><html><head>" + decorationSkipCss + "</
 await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decoration Skipping",
     "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
     decorationSkipHtml, pdfConfig);
+
+await SaveShowcaseAsync("line_box_rhythm", "Typography & Text", "Line Height, Rhythm and Text Box Trim",
+    "line-height computed where it is declared, line-height-step and block-step snapping lines and blocks to a grid, text-box-trim cutting the leading off, and emphasis marks and text-combine-upright in vertical text.",
+    """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; font-size: 12pt; margin: 30pt; width: 440pt }
+      .row { display: flex; gap: 18pt; margin-bottom: 14pt; align-items: flex-start }
+      .cell { flex: 1; background: #f4ecd8; padding: 4pt }
+      .lh { line-height: 1.5em; font-size: 12pt; background: #f4ecd8 }
+      .lh h3 { font-size: 22pt; margin: 0; background: #e8b4a0 }
+      .step { line-height: 15pt; line-height-step: 24pt; background: #cfe3f1 }
+      .trim { line-height: 2; background: #d5e8d4 }
+      .trim.t { text-box: trim-both cap alphabetic }
+      .vert { writing-mode: vertical-rl; text-orientation: upright; height: 150pt; display: inline-block; vertical-align: top; margin-right: 24pt; font-size: 16pt; background: #eee }
+    </style></head><body>
+      <div class="lh">line-height: 1.5em on a 12pt parent (18pt lines) &mdash; the heading inherits 18pt, not 1.5 x 22pt
+        <h3>Heading inside</h3></div>
+      <div class="row">
+        <div class="cell step">line-height-step<br>rounds each line<br>up to 24pt</div>
+        <div class="cell" style="line-height:15pt">no step<br>15pt lines<br>for contrast</div>
+        <div class="cell" style="block-step: 40pt padding-box; background:#e1d5e7">block-step: 40pt padding-box</div>
+      </div>
+      <div class="row">
+        <div class="cell trim">Without text-box-trim the half-leading shows above and below.</div>
+        <div class="cell trim t">With text-box: trim-both cap alphabetic the box hugs the caps.</div>
+      </div>
+      <div class="vert" style="text-emphasis: filled circle #c0392b">EMPHASIS</div>
+      <div class="vert" style="text-emphasis: open sesame #2874a6; text-emphasis-position: over left">LEFT SIDE</div>
+      <div class="vert">Year <span style="text-combine-upright: all">2024</span> month <span style="text-combine-upright: digits 2">12</span></div>
+    </body></html>
+    """, pdfConfig);
 
 await SaveShowcaseAsync("text_emphasis", "Typography & Text", "Text Emphasis Marks",
     "text-emphasis (CSS Text Decoration 4): a mark over or under every character in a chosen shape and colour, and text-decoration-inset pulling an underline in from both ends.",

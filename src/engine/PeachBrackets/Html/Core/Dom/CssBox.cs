@@ -1365,8 +1365,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         public double ActualMarginTop =>
             MarginTop.Value is { IsValue: true, Value: { } marginTop }
-                ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this)
-                : 0;
+                ? CssValueParser.ParseLength(marginTop, ContainingBlock.AvailableWidth, this) + _blockStepMarginTop
+                : _blockStepMarginTop;
 
         /// <summary>
         /// Gets the actual Margin on the left
@@ -1384,8 +1384,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         public double ActualMarginBottom =>
             MarginBottom.Value is { IsValue: true, Value: { } marginBottom }
-                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this)
-                : 0;
+                ? CssValueParser.ParseLength(marginBottom, ContainingBlock.AvailableWidth, this) + _blockStepMarginBottom
+                : _blockStepMarginBottom;
 
         /// <summary>
         /// Gets the actual Margin on the right
@@ -1920,6 +1920,17 @@ namespace PeachBrackets.Html.Dom
             // regional indicators before this box decide whether its first one completes a flag.
             var breakOpportunities = UnicodeLineBreaks.Find(text, WordBreak.Value, CountPrecedingRegionalIndicators(this), LineBreak.Value, Language);
 
+            // text-combine-upright (CSS Writing Modes 4 section 9.1) composes characters of vertical text into a one-em upright cell.
+            var wordsAtStart = Words.Count;
+            var combineAll = false;
+            var combineDigits = 0;
+            if (TextCombineUpright is { Length: > 0 } combine && !combine.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                && WritingMode.Value.IsVertical())
+            {
+                if (combine.Equals(Keywords.All, StringComparison.OrdinalIgnoreCase)) combineAll = true;
+                else combineDigits = combine.Split(' ', StringSplitOptions.RemoveEmptyEntries) is [_, var count] && int.TryParse(count, out var n) ? n : 2;
+            }
+
             while (startIdx < text.Length)
             {
                 while (startIdx < text.Length && text[startIdx] == '\r')
@@ -1981,6 +1992,24 @@ namespace PeachBrackets.Html.Dom
                         // boundary) still ends up as its own word, which CssLayoutEngine's per-line bidi
                         // reorder step needs (it treats each word as one homogeneous-level UAX#9 unit).
                         // Only ever shrinks endIdx (never extends past what the rules above decided).
+                        // text-combine-upright: digits N composes each run of ASCII digits into one cell, so a run is a word of its own.
+                        if (combineDigits > 0 && endIdx > startIdx)
+                        {
+                            if (text[startIdx] is >= '0' and <= '9')
+                            {
+                                var runEnd = startIdx;
+                                while (runEnd < endIdx && text[runEnd] is >= '0' and <= '9') runEnd++;
+                                endIdx = runEnd;
+                            }
+                            else
+                            {
+                                for (var digitAt = startIdx + 1; digitAt < endIdx; digitAt++)
+                                {
+                                    if (text[digitAt] is >= '0' and <= '9') { endIdx = digitAt; break; }
+                                }
+                            }
+                        }
+
                         if (BidiLevels is { } levels && endIdx > startIdx)
                         {
                             var boundaryLevel = levels[startIdx];
@@ -2051,6 +2080,11 @@ namespace PeachBrackets.Html.Dom
                             AddWord(cleanWord, hasSpaceBefore, hasSpaceAfter, hyphenationCandidates, cleanOriginalWord, startIdx);
                             if (Words.Count > wordsBefore)
                                 Words[wordsBefore].UnicodeBreakBefore = breakOpportunities[startIdx] != LineBreakOpportunity.Prohibited;
+                            if (combineDigits > 0 && Words.Count == wordsBefore + 1 && cleanWord.Length >= 2 && cleanWord.Length <= combineDigits
+                                && cleanWord.All(static c => c is >= '0' and <= '9'))
+                            {
+                                Words[wordsBefore].CombineUpright = true;
+                            }
                             // Where each fragment starts in this box's own text, for mapping an edit back to it. Only when the
                             // fragments add up to the source span (an uppercased small-caps run can lengthen, a soft hyphen
                             // shortens what the fragments hold): otherwise they are left unmappable rather than wrong.
@@ -2104,6 +2138,35 @@ namespace PeachBrackets.Html.Dom
                     startIdx = endIdx;
                 }
             }
+
+            // A forced break inside the run (white-space: pre) is not part of a cell: such text is left as it is.
+            if (combineAll && Words.Count - wordsAtStart > 0 && !Words.Skip(wordsAtStart).Any(static w => w.IsLineBreak))
+                MergeIntoCombinedWord(wordsAtStart);
+        }
+
+        /// <summary>
+        /// <c>text-combine-upright: all</c>: the words this text produced become one word whose text is the whole run (spaces between
+        /// them kept), set as a single one-em upright cell.
+        /// </summary>
+        private void MergeIntoCombinedWord(int firstWord)
+        {
+            var parts = new System.Text.StringBuilder();
+            for (var i = firstWord; i < Words.Count; i++)
+            {
+                parts.Append(Words[i].Text);
+                if (Words[i].HasSpaceAfter && i < Words.Count - 1) parts.Append(' ');
+            }
+
+            var first = Words[firstWord];
+            var merged = new CssRectWord(this, parts.ToString(), first.HasSpaceBefore, Words[^1].HasSpaceAfter)
+            {
+                BidiLevel = first.BidiLevel,
+                SourceStart = -1,
+                SourceLength = 0,
+                CombineUpright = true,
+            };
+            Words.RemoveRange(firstWord, Words.Count - firstWord);
+            Words.Add(merged);
         }
 
         private static int CountPrecedingRegionalIndicators(CssBox box)
@@ -4343,6 +4406,10 @@ namespace PeachBrackets.Html.Dom
             var resume = _incomingToken;
             _incomingToken = null;
 
+            // block-step-insert: margin-box space is recomputed by every layout of this box, so a parent that re-lays it out reads none of the last pass's.
+            ResetBlockStepMargins();
+            _layoutWasResumed = resume is not null;
+
             // Laid out from its start again (a balancing retry, a fresh generation): the first fragment is this one.
             if (resume is null) FirstColumnFragmentOrigin = null;
 
@@ -4721,6 +4788,13 @@ namespace PeachBrackets.Html.Dom
                     // box's epilogue - which judges a complete table - waits for the pass that completes it.
                     if (PendingBreakToken is not null) return;
                 }
+                else if (WritingMode.Value.IsVertical() && EstablishesMultiColumnContext && PlacesItselfAsBlockBox
+                         && Boxes.Count > 0 && await TryLayoutVerticalColumnsAsync(g))
+                {
+                    // A vertical-writing-mode multi-column container with two or more columns: the columns are
+                    // strips stacked along the inline axis and their content flows along the block axis -
+                    // see TryLayoutVerticalColumnsAsync. Fewer than two columns is an ordinary vertical box.
+                }
                 else if (WritingMode.Value.IsVertical() && DomUtils.ContainsInlinesOnly(this))
                 {
                     // A vertical-writing-mode box holding only inline content gets real vertical line
@@ -4810,7 +4884,7 @@ namespace PeachBrackets.Html.Dom
 #endif
 
                         }
-                        else if (EstablishesMultiColumnContext && Boxes.Count > 0)
+                        else if (EstablishesMultiColumnContext && Boxes.Count > 0 && !WritingMode.Value.IsVertical())
                         {
                             // Not monolithic any more: a column is a fragmentainer, and this engine drives its
                             // own. It is handed the resumption record so a container continuing on a later page
@@ -5640,7 +5714,10 @@ namespace PeachBrackets.Html.Dom
             var frame = WritingModeFrame.For(this);
 
             var widthIsAuto = !CssValueParser.IsValidLength(Width);
-            var heightIsAuto = !CssValueParser.IsValidLength(Height);
+
+            // Inside a multi-column strip the inline extent is the strip's, definite whatever the height says.
+            var stripExtent = StripInlineExtent;
+            var heightIsAuto = stripExtent is null && !CssValueParser.IsValidLength(Height);
 
             double logicalBlockOffset = 0;
             var maxCrossExtent = clientTop;
@@ -5757,6 +5834,15 @@ namespace PeachBrackets.Html.Dom
                 childBox.Location = new PaintPoint(trueX, clientTop);
                 childBox.ActualBottom = clientTop;
 
+                // A vertical block child of a column's content stretches across the same strip.
+                // A column-span: all child stretches across every column's inline extent instead.
+                childBox.StripInlineExtent = stripExtent is { } stripInline && childBox.WritingMode.Value.IsVertical()
+                    ? Math.Max(1, (ColumnsFullInlineExtent is { } fullInline && childBox.ColumnSpan.Value == ColumnSpanMode.All
+                            ? fullInline
+                            : stripInline) - childBox.ActualPaddingTop - childBox.ActualPaddingBottom
+                        - childBox.ActualBorderTopWidth - childBox.ActualBorderBottomWidth)
+                    : null;
+
                 await childBox.LayoutContentAtItsAssignedPosition(g);
 
                 // A same-writing-mode, non-orthogonal child (excluded from the fit-content branch above)
@@ -5837,7 +5923,11 @@ namespace PeachBrackets.Html.Dom
                 CssLayoutEngine.ShrinkAutoWidthTo(this, frame, logicalBlockOffset);
             }
 
-            if (heightIsAuto)
+            if (stripExtent is { } stripInlineExtent)
+            {
+                ActualBottom = clientTop + stripInlineExtent + ActualPaddingBottom + ActualBorderBottomWidth;
+            }
+            else if (heightIsAuto)
             {
                 ActualBottom = maxCrossExtent + ActualPaddingBottom + ActualBorderBottomWidth;
             }
@@ -7870,7 +7960,9 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private async ValueTask PerformLayoutEpilogue(Canvas g)
         {
+            ApplyTextBoxTrim();
             CssLayoutEngine.ApplyHeight(this);
+            ApplyBlockStep();
 
             if (_pendingCrossAxisRtlReflection is { Count: > 0 } stackedChildren)
             {
@@ -10702,6 +10794,13 @@ namespace PeachBrackets.Html.Dom
             {
                 if (line.FlowTop is { } flowTop) line.FlowTop = flowTop + amount;
                 if (line.BaselineY is { } baselineY) line.BaselineY = baselineY + amount;
+
+                // An atomic inline's item is held only by the column, not by the box's Words, so a translation has to reach it here
+                // (its box is a child, which the walk moves).
+                foreach (var word in line.Words)
+                {
+                    if (word is CssRectAtomicInline) word.Top += amount;
+                }
             }
         }
 
@@ -10900,6 +10999,15 @@ namespace PeachBrackets.Html.Dom
             foreach (var word in Words)
             {
                 word.Left += amount;
+            }
+
+            // An atomic inline's item lives on the column alone (see OffsetOwnLineBoxesTop).
+            foreach (var line in LineBoxes)
+            {
+                foreach (var word in line.Words)
+                {
+                    if (word is CssRectAtomicInline) word.Left += amount;
+                }
             }
         }
 

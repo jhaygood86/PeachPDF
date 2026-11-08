@@ -396,6 +396,12 @@ namespace PeachBrackets.Html.Dom
         public bool UsesPerCodepointFont { get => _rare is null ? default(bool) : _rare.UsesPerCodepointFont; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new WordRareState(); } _rare.UsesPerCodepointFont = value; } }
 
         /// <summary>
+        /// Whether this word is composed into a single upright cell one em square (<c>text-combine-upright</c>, CSS Writing Modes 4 section 9.1),
+        /// laid out and painted as one horizontal glyph run squeezed to fit the em, rather than character by character.
+        /// </summary>
+        public bool CombineUpright { get => _rare is null ? default(bool) : _rare.CombineUpright; set { if (_rare is null) { if (!value) return; _rare = new WordRareState(); } _rare.CombineUpright = value; } }
+
+        /// <summary>
         /// This fragment's effective Unicode <c>Vertical_Orientation</c> under <c>text-orientation:
         /// mixed</c> - true when every codepoint in it classifies as
         /// <see cref="PeachDrawing.Text.Unicode.VerticalOrientationClass.U"/> or

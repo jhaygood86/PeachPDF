@@ -374,6 +374,15 @@ namespace PeachBrackets.Css
         public static readonly string TextDecorationSkipInk = "text-decoration-skip-ink";
         public static readonly string TextDecorationSkip = "text-decoration-skip";
         public static readonly string TextDecorationInset = "text-decoration-inset";
+        public static readonly string LineHeightStep = "line-height-step";
+        public static readonly string BlockStepSize = "block-step-size";
+        public static readonly string BlockStepInsert = "block-step-insert";
+        public static readonly string BlockStepAlign = "block-step-align";
+        public static readonly string BlockStepRound = "block-step-round";
+        public static readonly string BlockStep = "block-step";
+        public static readonly string TextBoxTrim = "text-box-trim";
+        public static readonly string TextBoxEdge = "text-box-edge";
+        public static readonly string TextBox = "text-box";
         public static readonly string TextEmphasis = "text-emphasis";
         public static readonly string TextEmphasisColor = "text-emphasis-color";
         public static readonly string TextEmphasisPosition = "text-emphasis-position";

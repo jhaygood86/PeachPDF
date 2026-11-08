@@ -2234,6 +2234,33 @@ namespace PeachBrackets.Html.Dom
         /// <summary>This box's own font size in layout units (<see cref="GetEmHeight"/> is in true points): what 100% of a font-relative percentage is.</summary>
         private double FontSizeInLayoutUnits => GetEmHeight() * (Owner.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
 
+        /// <summary>
+        /// Resolves a declared <c>line-height</c> once, at the element that declares it: <c>em</c>/<c>%</c> against its own
+        /// font size, and <c>lh</c> (CSS Values 4 §6.1.1) as the PARENT's line-height.
+        /// </summary>
+        internal double ResolveLineHeightAtDeclaration(LengthOrUnitless value)
+        {
+            var wasResolving = _resolvingLineHeight;
+            _resolvingLineHeight = true;
+            try
+            {
+                return CssValueParser.ParseLength(value, LineHeightPercentageBasis, Owner);
+            }
+            finally
+            {
+                _resolvingLineHeight = wasResolving;
+            }
+        }
+
+        /// <summary>
+        /// <c>line-height-step</c> (CSS Rhythmic Sizing 1 §3.1) in layout units: the multiple every line box of this block is rounded up
+        /// to, or 0 for <c>none</c>.
+        /// </summary>
+        public double ActualLineHeightStep =>
+            Style.Text.LineHeightStep is { Length: > 0 } text && !text.Equals(Keywords.None, StringComparison.OrdinalIgnoreCase)
+                ? Math.Max(0, CssValueParser.ParseLength(text, 0, Owner))
+                : 0;
+
         /// <summary>Gets the line height. Recomputed fresh every call, not cached.</summary>
         public double ActualLineHeight
         {

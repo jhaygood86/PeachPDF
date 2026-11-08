@@ -57,13 +57,11 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Whether the container, at <paramref name="width"/>, still has several columns. One column is laid out by
-        /// the block flow (and a vertical-writing-mode container always is), which does not use a narrowed extent, so
+        /// the block flow, which does not use a narrowed extent, so
         /// such a container is left as it was and its text avoids the float itself.
         /// </summary>
         private static bool HasSeveralColumnsAt(CssBox columnsBox, double width)
         {
-            if (columnsBox.WritingMode.Value.IsVertical()) return false;
-
             var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
                 ? CssValueParser.ParseLength(columnGapLength, width, columnsBox)
                 : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), width, columnsBox);
@@ -171,26 +169,7 @@ namespace PeachBrackets.Html.Dom
                 ? CssValueParser.ParseLength(columnGapLength, containerWidth, columnsBox)
                 : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), containerWidth, columnsBox);
 
-            // A vertical-writing-mode container's own columns would need to differ along the *inline*
-            // axis - physical Y under vertical-rl/vertical-lr - while every column still has to share
-            // one band along the *block* axis for this engine's whole "columns differ only in the inline
-            // axis" design (this class's own doc comment, above) to keep reusing the page driver's
-            // fragmentation machinery untouched. That shared band (FragmentainerContext's own (Top,
-            // Bottom) tuple) is hardcoded to physical Y at the type level - the same primitive the
-            // page-level driver uses - so a genuinely vertical container's columns would need to differ
-            // along the very axis every column is required to share. Real column arrangement therefore
-            // is not a narrower, separable half of this problem the way it first looked (unlike Table's
-            // rows/columns, where only cell *placement* needed axis-awareness and pagination could stay
-            // deferred independently) - it would need the shared band itself to become axis-agnostic,
-            // rippling into the page-level pagination invariants ~50 other files document. Deferred
-            // whole; column-count/column-width are inert here for now and this container falls back to
-            // the same single-column block-flow path columnCount <= 1 already takes, which already
-            // supports real pagination via the ordinary block-flow machinery. Tracked as #764.
-            var isVertical = columnsBox.WritingMode.Value.IsVertical();
-
-            var (columnCount, columnWidth) = isVertical
-                ? (1, containerWidth)
-                : ResolveColumns(columnsBox, containerWidth, gap);
+            var (columnCount, columnWidth) = ResolveColumns(columnsBox, containerWidth, gap);
 
             if (children.Count == 0)
             {
@@ -1559,7 +1538,7 @@ namespace PeachBrackets.Html.Dom
         /// Resolves <c>column-count</c>/<c>column-width</c>/<c>columns</c> to a concrete (count, width)
         /// pair against the container's content-box width, per CSS Multi-column Layout §3-4.
         /// </summary>
-        private static (int Count, double Width) ResolveColumns(CssBox columnsBox, double containerWidth, double gap)
+        internal static (int Count, double Width) ResolveColumns(CssBox columnsBox, double containerWidth, double gap)
         {
             var columnCount = columnsBox.ColumnCount.Value;
             var hasCount = columnCount.IsValue;

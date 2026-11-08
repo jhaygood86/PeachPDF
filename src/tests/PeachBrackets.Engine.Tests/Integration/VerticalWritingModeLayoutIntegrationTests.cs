@@ -63,16 +63,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_MultiColumnBox_IsUnresumableOnlyWhenInlineOnly_NotWhenItHasBlockChildren()
+        public async Task VerticalRl_MultiColumnBox_IsUnresumable_WhetherItHoldsInlineOrBlockContent()
         {
-            // CssBox.LayoutContents checks the inlines-only vertical branch BEFORE the multi-column branch
-            // (CssBox.cs), so a vertical box that is both multi-column AND inline-only still dispatches to
-            // the unresumable CreateVerticalLineBoxes, never to the genuinely resumable
-            // CssLayoutEngineColumns - IsUnresumableOrthogonalFlow must report true for it (a post-change
-            // review caught this as a real regression when the predicate briefly checked only
-            // !EstablishesMultiColumnContext, dropping ContainsInlinesOnly entirely). A multi-column box
-            // with genuine block-level children, by contrast, does reach CssLayoutEngineColumns and must
-            // stay resumable.
+            // A vertical multi-column container lays its columns out as strips inside one page band
+            // (CssBox.TryLayoutVerticalColumnsAsync) and cuts its flow between them after layout, so it can
+            // hand back no resumption record to its parent's page fragmentation - with inline-only content
+            // (laid out by CreateVerticalLineBoxes) and with block-level children alike.
             var html = LayoutHarness.Wrap("""
                 <div id="inlineOnly" style="writing-mode: vertical-rl; column-count: 2; width: 300px; height: 100px">
                   Plain inline text content, nothing block-level here.
@@ -92,7 +88,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(withBlockChildren!.EstablishesMultiColumnContext);
 
             Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(inlineOnly));
-            Assert.False(MonolithicContent.IsUnresumableOrthogonalFlow(withBlockChildren));
+            Assert.True(MonolithicContent.IsUnresumableOrthogonalFlow(withBlockChildren));
         }
 
         [Fact]
@@ -128,10 +124,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task VerticalRl_TallSingleBlockChild_OverflowsMonolithicallyRatherThanBeingSliced()
         {
-            // Documents the deliberate scope boundary from issue #760: a vertical box's own block-axis
-            // content is monolithic w.r.t. its parent's fragmentation (like the inline-only case already
-            // was), so a child tall enough to exceed one page's own band is not sliced across pages - real
-            // per-child fragmentation of a vertical box's block content is tracked separately (#767).
+            // A vertical box's own block-axis content is monolithic w.r.t. its parent's fragmentation (like the
+            // inline-only case already was), so a child tall enough to exceed one page's own band is not sliced
+            // across pages: css-writing-modes-4 section 7.3.4 allows a break only between line boxes, and the
+            // lines of a vertical box all span the page's own block axis.
             var html = LayoutHarness.Wrap("""
                 <div id="wrapper" style="writing-mode: vertical-rl">
                   <div id="tall" style="width: 60pt; height: 500pt">Tall child.</div>
@@ -1214,14 +1210,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task VerticalRl_NestedInlineBlock_IsFlattenedInsteadOfTreatedAsAnAtomicUnit()
+        public async Task VerticalRl_NestedInlineBlock_IsLaidOutAsAnAtomicUnit()
         {
-            // Documents a known gap (see .claude/accepted-gaps/no-vertical-writing-mode-layout.md,
-            // issue #771): MeasureAndCollectWordsInDocumentOrder walks every descendant box with no
-            // formatting-context check, so an inline-block child's own words get flattened straight into
-            // the parent's flat word list instead of being measured/placed as one atomic unit (the way
-            // FlowBox's ApplyAtomicInlineVerticalInsets does for the horizontal engine). The inline-block
-            // box itself never gets positioned, so its own border/padding/background never paint.
+            // An inline-block is one unbreakable item of the column with a formatting context of its own
+            // (css-display-3 section 2.3): its words stay in its own lines rather than being flattened into
+            // the parent's word stream, and the box itself is positioned so its border, padding and
+            // background paint. The detailed behaviour is in VerticalAtomicInlineTests.
             var html = LayoutHarness.Wrap("""
                 <div id="el" style="writing-mode: vertical-rl; width: 300px; height: 400px">before <span id="ib" style="display: inline-block; border: 1px solid red; padding: 4px;">nested block</span> after</div>
                 """);
@@ -1232,15 +1226,14 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.NotNull(el);
             Assert.NotNull(ib);
 
-            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).Select(w => w.Text).ToList();
-            // The inline-block's own text ("nested", "block") shows up as ordinary flat words alongside
-            // the surrounding plain text ("before", "after") - not aggregated into one atomic placement.
-            Assert.Equal(["before", "nested", "block", "after"], words);
+            var words = el!.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && w.Text is not null).Select(w => w.Text).ToList();
+            Assert.Equal(["before", "after"], words);
+            Assert.Equal(["nested", "block"], ib!.LineBoxes.SelectMany(l => l.Words).Select(w => w.Text).ToList());
 
-            // The inline-block box itself was never positioned by the flattening walk (no analog of
-            // FlowBox's atomic-inline placement/inset bookkeeping exists in the vertical engine yet).
-            Assert.Equal(0, ib!.Location.X);
-            Assert.Equal(0, ib.Location.Y);
+            // The box itself was positioned inside the vertical box.
+            Assert.True(ib.Location.X > el.Location.X);
+            Assert.True(ib.Location.Y > el.Location.Y);
+            Assert.True(ib.ActualRight <= el.ActualRight + 0.01);
         }
 
         [Fact]

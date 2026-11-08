@@ -513,11 +513,19 @@ namespace PeachBrackets.Html.Parse
         {
             if (TryParseLengthOrCalc(value, out var lengthOrCalc))
             {
+                // CSS Inline 3: line-height is <number [0,∞]> | <length-percentage [0,∞]>, so a negative one is invalid and the
+                // declaration is dropped (a calc() is clamped at 0 when it is resolved instead, CSS Values 4 §10.1).
+                if (lengthOrCalc is { IsCalc: false, Length: { Value: < 0 } })
+                {
+                    result = default;
+                    return false;
+                }
+
                 result = new LengthOrUnitless(lengthOrCalc, null);
                 return true;
             }
 
-            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var unitless))
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out var unitless) && unitless >= 0 && double.IsFinite(unitless))
             {
                 result = new LengthOrUnitless(null, unitless);
                 return true;

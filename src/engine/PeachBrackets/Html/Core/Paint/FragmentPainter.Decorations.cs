@@ -1002,7 +1002,7 @@ namespace PeachBrackets.Html.Paint
         {
             if (!DecorationsWorthCollecting(box)) return;
 
-            var content = DecorationContent.Of(fragment, collectSpans: true);
+            var content = DecorationContent.Of(fragment, collectSpans: true, TextEmphasisGrammar.ParseSkip(fragment.Box.TextDecorationSkip));
 
             // The decoration is drawn here, with the decorating box, not with the inline content it
             // covers - and the clip a fragment carries is its clipping *ancestor's*, so this box's own
@@ -1178,15 +1178,24 @@ namespace PeachBrackets.Html.Paint
             pen.Width = thickness;
             pen.DashStyle = TextDecorationStyleMapper.ToDashStyle(textDecorationStyle);
 
+            // text-decoration-skip: edges shortens the line at both ends so the lines of adjacent decorated boxes do not run together.
+            if ((TextEmphasisGrammar.ParseSkip(styleSource.TextDecorationSkip) & DecorationSkips.Edges) != 0)
+            {
+                spanStart += thickness / 2;
+                spanEnd -= thickness / 2;
+                if (spanEnd <= spanStart) return;
+            }
+
             var span = new DecorationInterval(spanStart, spanEnd);
 
             // The atomic-inline exclusion is inline-axis-band reasoning that only understands a
-            // horizontal band today (a margin box measured left to right) - and, separately,
-            // CssLayoutEngine's vertical path records no per-line rectangle for an atomic inline at all,
-            // so there is no layout fact to exclude around even if the band math were made axis-aware
-            // (see .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
-            // This stays confined to a horizontal writing mode, unchanged since before #1075 - do not remove this guard as apparent dead code without first making both the
-            // band math AND vertical layout's own line-box recording axis-aware.
+            // horizontal band today (a margin box measured left to right). The vertical path now records a
+            // per-column rectangle for an atomic inline (CssLayoutEngine.RegisterAtomicInlineRectangles), so
+            // there IS a layout fact to exclude around - which is exactly why this guard is load-bearing: the
+            // x-axis band math would delete a vertical decoration rather than break it (see
+            // .claude/accepted-gaps/text-decoration-skip-ink-and-atomic-inline-exclusion-are-horizontal-only.md).
+            // This stays confined to a horizontal writing mode - do not remove this guard as apparent dead code
+            // without first making the band math axis-aware.
             var horizontal = IsHorizontalWritingMode(box);
 
             // The atomic inlines to break around are the same for every keyword: they are a fact about
@@ -1826,15 +1835,32 @@ namespace PeachBrackets.Html.Paint
 
             // Column rules are recorded by the columns engine in document space, so they need the same
             // origin shift the builder already applied to every other rectangle on this page.
-            foreach (var (x, top, bottom) in box.ColumnRuleSegments!)
+            if (box.ColumnRuleSegments is { } verticalRules)
             {
-                var visualX = x;
-                var visualTop = top - originY;
-                var visualBottom = bottom - originY;
+                foreach (var (x, top, bottom) in verticalRules)
+                {
+                    var visualX = x;
+                    var visualTop = top - originY;
+                    var visualBottom = bottom - originY;
 
-                if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
+                    if (!IsRectVisible(new Rect(visualX - 1, visualTop, 2, visualBottom - visualTop), clip)) continue;
 
-                g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+                    g.DrawLine(pen, visualX, visualTop, visualX, visualBottom);
+                }
+            }
+
+            // A vertical-writing-mode container's columns are stacked along the inline axis, so the rules
+            // between them are horizontal (see CssBox.BlockAxisColumnRuleSegments).
+            if (box.BlockAxisColumnRuleSegments is { } horizontalRules)
+            {
+                foreach (var (y, left, right) in horizontalRules)
+                {
+                    var visualY = y - originY;
+
+                    if (!IsRectVisible(new Rect(left, visualY - 1, right - left, 2), clip)) continue;
+
+                    g.DrawLine(pen, left, visualY, right, visualY);
+                }
             }
         }
 

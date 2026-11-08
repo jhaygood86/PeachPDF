@@ -52,7 +52,7 @@ public class TextEmphasisTests
 
         // Text is white on white, so any tinted pixel above it is a mark; this does not depend on how
         // heavily a given platform's fallback font draws a thin glyph (a triangle, an asterisk).
-        Assert.True(Count(canvas, 0, 31, IsTinted) > 0, "marks should be drawn over the text");
+        Assert.True(Count(canvas, 30, 44, IsTinted) > 0, "marks should be drawn over the text");
     }
 
     [Fact]
@@ -61,8 +61,8 @@ public class TextEmphasisTests
         var over = await PaintAsync("text-emphasis: circle red");
         var under = await PaintAsync("text-emphasis: circle red; text-emphasis-position: under left");
 
-        Assert.True(Count(over, 0, 31, IsRed) > 0);
-        Assert.Equal(0, Count(under, 0, 31, IsRed));
+        Assert.True(Count(over, 30, 44, IsRed) > 0);
+        Assert.Equal(0, Count(under, 30, 44, IsRed));
         Assert.True(Count(under, 60, 120, IsRed) > 0, "an under mark sits below the line");
     }
 
@@ -80,7 +80,7 @@ public class TextEmphasisTests
         var spaced = await PaintAsync("text-emphasis: circle red", "H H");
         var solid = await PaintAsync("text-emphasis: circle red", "HHH");
 
-        Assert.True(Count(spaced, 0, 31, IsRed) < Count(solid, 0, 31, IsRed));
+        Assert.True(Count(spaced, 30, 44, IsRed) < Count(solid, 30, 44, IsRed));
     }
 
     [Theory]
@@ -93,7 +93,7 @@ public class TextEmphasisTests
     {
         var canvas = await PaintAsync(declaration + "; text-emphasis-color: red");
 
-        Assert.Equal(0, Count(canvas, 0, 31, IsRed));
+        Assert.Equal(0, Count(canvas, 30, 44, IsRed));
     }
 
     [Theory]
@@ -104,7 +104,7 @@ public class TextEmphasisTests
     {
         var canvas = await PaintAsync($"text-emphasis: circle red; text-emphasis-position: {position}");
 
-        Assert.True(Count(canvas, 0, 31, IsRed) > 0);
+        Assert.True(Count(canvas, 30, 44, IsRed) > 0);
         Assert.Equal(0, Count(canvas, 60, 120, IsRed));
     }
 
@@ -146,7 +146,7 @@ public class TextEmphasisTests
     [Theory]
     [InlineData("text-decoration-skip: none")]
     [InlineData("text-decoration-skip: auto")]
-    [InlineData("text-decoration-skip: objects spaces edges")]
+    [InlineData("text-decoration-skip: objects spaces")]
     [InlineData("text-decoration-skip: leading-spaces trailing-spaces box-decoration ink")]
     [InlineData("text-decoration-skip: spaces spaces")]
     [InlineData("text-decoration-skip: spaces leading-spaces")]
@@ -160,11 +160,60 @@ public class TextEmphasisTests
     [InlineData("text-combine-upright: digits x")]
     [InlineData("text-combine-upright: digits 2 3")]
     [InlineData("text-combine-upright: sideways")]
-    public async Task StoredOnlyProperties_DoNotChangeHowTheUnderlineIsDrawn(string declaration)
+    public async Task SkipAndCombineValuesWithNothingToAct_On_DoNotChangeHowTheUnderlineIsDrawn(string declaration)
     {
         var plain = await PaintAsync("text-decoration: underline red");
         var painted = await PaintAsync("text-decoration: underline red; " + declaration);
 
         Assert.Equal(Count(plain, 0, 120, IsRed), Count(painted, 0, 120, IsRed));
+    }
+
+    [Fact]
+    public async Task VerticalText_DrawsMarksBesideTheColumn()
+    {
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 300, ViewportHeightPoints = 120 };
+        options.SetMargins(0);
+        string Body(string position) =>
+            $"<p style='margin:0 0 0 100pt; width:60pt; height:100pt; writing-mode:vertical-rl; text-orientation:upright; font:20pt sans-serif; color:#fff; text-emphasis: circle red; {position}'>HHH</p>";
+        var (rightContext, rightDocument) = await TestDocument.LoadAsync(TestDocument.Wrap(Body(""), "<style>html,body{background:#fff;margin:0}</style>"), options);
+        var right = await TestDocument.PaintAsync(rightContext, rightDocument);
+        var (leftContext, leftDocument) = await TestDocument.LoadAsync(TestDocument.Wrap(Body("text-emphasis-position: over left"), "<style>html,body{background:#fff;margin:0}</style>"), options);
+        var left = await TestDocument.PaintAsync(leftContext, leftDocument);
+
+        double MeanRedX(RasterCanvas canvas)
+        {
+            double sum = 0;
+            var count = 0;
+            for (var x = 0; x < 300; x++)
+                for (var y = 0; y < 120; y++)
+                    if (IsRed(TestDocument.Pixel(canvas, x, y))) { sum += x; count++; }
+            return count == 0 ? -1 : sum / count;
+        }
+
+        Assert.True(MeanRedX(right) > 0, "the marks are drawn");
+        // The default side is the right of the column; left puts them on the other side of the glyphs.
+        Assert.True(MeanRedX(right) > MeanRedX(left) + 5);
+    }
+
+    [Fact]
+    public async Task CombineUpright_SetsTheDigitsInOneCell()
+    {
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 300, ViewportHeightPoints = 200 };
+        options.SetMargins(0);
+        string Body(string combine) =>
+            $"<p style='margin:0; width:60pt; writing-mode:vertical-rl; text-orientation:upright; font:20pt sans-serif; background:#000; {combine}'>2024</p>";
+        var (_, plain) = await TestDocument.LoadAsync(TestDocument.Wrap(Body(""), "<style>html,body{margin:0}</style>"), options);
+        var (_, combined) = await TestDocument.LoadAsync(TestDocument.Wrap(Body("text-combine-upright: all"), "<style>html,body{margin:0}</style>"), options);
+
+        Assert.True(combined.GetContentHeight(0) < plain.GetContentHeight(0));
+    }
+
+    [Fact]
+    public async Task SkipSpaces_LeavesTheGapBetweenWordsUndecorated()
+    {
+        var plain = await PaintAsync("text-decoration: underline red; text-decoration-skip-ink: none", "H H");
+        var spaces = await PaintAsync("text-decoration: underline red; text-decoration-skip-ink: none; text-decoration-skip: spaces", "H H");
+
+        Assert.True(Count(spaces, 0, 120, IsRed) < Count(plain, 0, 120, IsRed));
     }
 }

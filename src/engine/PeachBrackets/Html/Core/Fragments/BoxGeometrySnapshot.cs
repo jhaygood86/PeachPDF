@@ -147,6 +147,31 @@ namespace PeachBrackets.Html.Fragments
             }
         }
 
+        /// <summary>
+        /// An empty snapshot, for a fragmentainer whose geometry is stated box by box
+        /// (<see cref="Add"/>, <see cref="AddWhole"/>) rather than read off the live tree - a column of a
+        /// vertical-writing-mode multi-column container, whose boxes were cut across several columns after
+        /// layout, so no single read of the live tree describes any one of them.
+        /// </summary>
+        internal static BoxGeometrySnapshot CreateEmpty() => new();
+
+        /// <summary>States <paramref name="box"/>'s geometry in this fragmentainer.</summary>
+        internal BoxGeometry Add(CssBox box, PaintPoint location, double right, double bottom)
+        {
+            var geometry = new BoxGeometry(box.RectangleCount, box.Words.Count)
+            {
+                Location = location,
+                ActualRight = right,
+                ActualBottom = bottom
+            };
+
+            _geometry[box] = geometry;
+            return geometry;
+        }
+
+        /// <summary>States <paramref name="root"/> and every descendant at their current geometry.</summary>
+        internal void AddWhole(CssBox root) => CaptureBox(root, excluded: null);
+
         internal bool TryGetGeometry(CssBox box, out BoxGeometry geometry) => _geometry.TryGetValue(box, out geometry!);
 
         /// <summary>
@@ -292,6 +317,14 @@ namespace PeachBrackets.Html.Fragments
 
             TranslateSubtree(root, dx, dy: 0, translationRoot: root);
         }
+
+        /// <summary>
+        /// Shifts <paramref name="root"/> and its captured descendants by <paramref name="dx"/>/<paramref name="dy"/>
+        /// - the scoped, single-subtree form of <see cref="Translate"/>, for one cell a vertical table's
+        /// column-axis pagination moves to a later page (<c>CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries</c>)
+        /// while the rest of the snapshot stays where it is.
+        /// </summary>
+        internal void TranslateSubtreeOf(CssBox root, double dx, double dy) => TranslateSubtree(root, dx, dy, root);
 
         /// <summary>
         /// Shifts one captured box's own geometry by <paramref name="dx"/>/<paramref name="dy"/> - the
