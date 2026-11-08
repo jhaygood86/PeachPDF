@@ -579,17 +579,13 @@ Flexbox: a container in a vertical writing mode whose `width` is `auto` and whos
   non-atomic inline in the first place, so this is a narrow, spec-consistent-to-ignore edge case rather
   than a behavior authors should rely on either way.
 - **`sideways-lr` SVG `<text>` is not bidi-reordered**, and in HTML and SVG alike the words of different font sizes in a column are aligned by their line-over edge rather than a shared baseline (also true for `vertical-rl`/`vertical-lr`). `sideways-rl`/`sideways-lr` otherwise work in both pipelines: vertical modes (`WritingMode.IsVertical()`) with always-sideways glyphs, and `sideways-lr` reading bottom to top.
-- **Table's remaining gap, narrowed: real per-column pagination combined with `<caption>` or collapsed
-  borders** ([#793](https://github.com/jhaygood86/PeachPDF/issues/793) stays open for exactly these two).
-  A vertical table's **column** axis is physical Y, the page's own fragmentation axis, so
-  `CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries` moves whole columns across page boundaries
-  wherever one falls between them. It handles `rowspan`, `colspan` (the columns a cell spans travel as one
-  unit), ragged rows and `<thead>`/`<tfoot>` (their cells and their proxies' snapshots move with the column,
-  and each later page gets its own instance of the group). A vertical table with a `<caption>` or
-  `border-collapse: collapse`, or that is a flex/grid item, stays monolithic
-  (`MonolithicContent.IsUnresumableVerticalTable`): a caption would have to be cut along its own inline axis,
-  and collapsed-border segments are built from grid-line geometry that has no page-aware form for a line
-  falling at a break.
+- **A vertical table that is a flex or grid item is not paginated by column** (the rest of
+  [#793](https://github.com/jhaygood86/PeachPDF/issues/793) is done: `rowspan`, `colspan`, ragged rows,
+  `<thead>`/`<tfoot>`, `<caption>` and collapsed borders all paginate). `LineRelocation.MayNotBeCut` reads
+  `MonolithicContent.IsUnresumableVerticalTable` to decide whether the flex line or grid row holding the
+  table moves as one unit, and `CssLayoutEngineTable.RelocateColumnsAcrossPageBoundaries` reasons only about
+  the table's own column axis against the page grid, so it would move the columns independently of what the
+  line does with the table's siblings. Such a table stays monolithic.
 - **SVG `<textPath>` always flows horizontally along its path**, ignoring the `<text>` root's own
   `writing-mode` — there is no vertical variant of path-following text (matches real browser behavior; not
   tracked as a gap to close, since the combination has no well-defined vertical layout to begin with).

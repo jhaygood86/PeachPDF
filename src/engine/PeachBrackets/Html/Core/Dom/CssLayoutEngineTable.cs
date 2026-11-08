@@ -217,6 +217,29 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private double _topCaptionsHeight;
 
+        /// <summary>
+        /// Where a vertical table's first page slice ends along the column axis (physical Y), when
+        /// <see cref="PlanCaptionSlices"/> found the table paginates by column and has a caption; null
+        /// otherwise. A top caption is laid out against the first slice alone, a bottom caption against the
+        /// last, because the caption's inline axis is the very axis the page breaks cut.
+        /// </summary>
+        private double? _firstSliceEnd;
+
+        /// <summary>Where the last page slice starts (the content top of its page) - see <see cref="_firstSliceEnd"/>.</summary>
+        private double _lastSliceStart;
+
+        /// <summary>How far the columns of the last slice moved - see <see cref="_firstSliceEnd"/>.</summary>
+        private double _lastSliceDelta;
+
+        /// <summary>
+        /// How many page breaks <see cref="PlanCaptionSlices"/> planned, so <see cref="RelocateColumnsAcrossPageBoundaries"/>
+        /// can refuse to relocate when its own plan disagrees with the one the captions were sized from.
+        /// </summary>
+        private int _plannedSliceBreaks;
+
+        /// <summary>The grid's border-box row-axis end, kept so the decoration box can be re-sized after relocation.</summary>
+        private double _gridBorderBoxBottom;
+
         private int _columnCount;
 
         private bool _widthSpecified;
@@ -845,6 +868,7 @@ namespace PeachBrackets.Html.Dom
             SuppressParticipantBorderPaint();
             EmitCollapsedBorderSegments();
             EmitHeaderFooterBorderSegments();
+            CutCollapsedBordersAtColumnBreaks();
 
             // Published only now that the run has finished - see the constructor for what a half-settled
             // setup would cost a later continuation. A continuation re-publishes the instance it inherited.
@@ -3541,6 +3565,8 @@ namespace PeachBrackets.Html.Dom
             // resumes rows on a later fragmentainer and must not redo this: the caption already sits
             // where the first pass put it, and _topCaptionsHeight staying 0 on that pass is harmless
             // (see its own remarks).
+            if (_isVertical && !_continuesAPreviousPass && _captionBoxes.Count > 0) PlanCaptionSlices(startX);
+
             if (!_continuesAPreviousPass && _topCaptions.Count > 0)
             {
                 // CSS 2.1 §17.4: a top caption sits flush above the row grid's own border-box, with
@@ -3559,7 +3585,7 @@ namespace PeachBrackets.Html.Dom
                     _topCaptions,
                     _isVertical ? _tableBox.Location.Y : _tableBox.Location.X,
                     _isVertical ? _tableBox.Location.X : _tableBox.Location.Y,
-                    GetWidthSum());
+                    _firstSliceEnd is { } sliceEnd ? sliceEnd - _tableBox.Location.Y : GetWidthSum());
                 _topCaptionsHeight = topCaptionsBottom - (_isVertical ? _tableBox.Location.X : _tableBox.Location.Y);
             }
 
@@ -4667,7 +4693,16 @@ namespace PeachBrackets.Html.Dom
                 // scalar (see its own remark above), so it's exactly LayoutCaptionGroup's rowAxisCursor -
                 // no further axis conversion needed for that argument.
                 var columnAxisStart = _isVertical ? _tableBox.Location.Y : _tableBox.Location.X;
-                contentBottom = await LayoutCaptionGroup(g, _bottomCaptions, columnAxisStart, gridBorderBoxBottom, GetWidthSum());
+                var bottomCaptionStart = columnAxisStart;
+                var bottomCaptionExtent = GetWidthSum();
+                if (_isVertical && _firstSliceEnd is not null)
+                {
+                    // Cut along the column axis, a bottom caption belongs to the last slice alone.
+                    bottomCaptionStart = _lastSliceStart;
+                    bottomCaptionExtent = columnAxisStart + bottomCaptionExtent + _lastSliceDelta - _lastSliceStart;
+                }
+
+                contentBottom = await LayoutCaptionGroup(g, _bottomCaptions, bottomCaptionStart, gridBorderBoxBottom, bottomCaptionExtent);
 
                 // Row-axis-max edge (see ReflectRowAxisForVerticalRl, which reads _tableBox.ActualRight
                 // as exactly that for a vertical table) vs. the ordinary horizontal-tb row axis
@@ -4733,6 +4768,7 @@ namespace PeachBrackets.Html.Dom
                 SetRowGroupBoxDimensions(placedRows);
             }
 
+            _gridBorderBoxBottom = gridBorderBoxBottom;
             FinalizeGridDecorationBoxGeometry(gridBorderBoxBottom);
 
             // Publish where the row loop stopped, as a copy of the cursor's own state rather than the
@@ -4774,8 +4810,8 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Relocates whole columns of a vertical table across page boundaries wherever one falls between
-        /// them - issue #783's first-cut real per-column pagination, scoped to a "plain grid" table (see
-        /// <see cref="MonolithicContent.HasColumnPaginationExcludedFeature"/>).
+        /// them - issue #783's first-cut real per-column pagination, for every vertical table but one that is a
+        /// flex/grid item (see <see cref="MonolithicContent.HasColumnPaginationExcludedFeature"/>).
         /// </summary>
         /// <remarks>
         /// <para>
@@ -4847,55 +4883,9 @@ namespace PeachBrackets.Html.Dom
 
             if (placedRows != _bodyRows.Count) return;
 
-            // Every real cell of the grid - header, body and footer rows alike - with the column it starts
-            // in and the number of columns it spans. A cell is read by that and not by its position among
-            // its row's boxes: a row can hold fewer cells than there are columns (a ragged row, or a
-            // rowspan cell from an earlier row standing in for its slot with a placeholder), and a cell
-            // can span several columns.
-            var cells = new List<(CssBox Cell, int Column, int Span)>();
-            foreach (var row in _allRows)
-            {
-                // A second <thead>/<tfoot> is folded into the body as a whole group, not as rows.
-                if (row.DerivedStyle.ActualDisplay != Keywords.TableRow) return;
+            if (CollectGridCells() is not { } cells) return;
 
-                foreach (var cell in row.Boxes)
-                {
-                    if (cell is CssSpacingBox) continue;
-
-                    cells.Add((cell, GetCellRealColumnIndex(cell), Math.Max(1, GetColSpan(cell))));
-                }
-            }
-
-            if (cells.Count == 0) return;
-
-            var columnCount = cells.Max(c => c.Column + c.Span);
-
-            // A cell spanning columns is one box: it cannot be cut by a page boundary falling between the
-            // columns it spans, so those columns travel together. Spans that overlap chain into one unit.
-            var reach = new int[columnCount];
-            foreach (var (_, column, span) in cells)
-            {
-                reach[column] = Math.Max(reach[column], column + span);
-            }
-
-            var groupOfColumn = new int[columnCount];
-            var groupRanges = new List<(int Start, int End)>();
-            for (var column = 0; column < columnCount;)
-            {
-                var end = column + 1;
-                for (var k = column; k < end; k++)
-                {
-                    end = Math.Max(end, reach[k]);
-                }
-
-                for (var k = column; k < end; k++)
-                {
-                    groupOfColumn[k] = groupRanges.Count;
-                }
-
-                groupRanges.Add((column, end));
-                column = end;
-            }
+            var (groupOfColumn, groupRanges) = GroupColumnsThatTravelTogether(cells);
 
             // Each unit's extent along the column axis is the span of the cells in it.
             var groupTop = Enumerable.Repeat(double.PositiveInfinity, groupRanges.Count).ToArray();
@@ -4907,54 +4897,18 @@ namespace PeachBrackets.Html.Dom
                 groupBottom[group] = Math.Max(groupBottom[group], cell.ActualBottom);
             }
 
-            var plannedDeltas = new double[groupRanges.Count];
-            List<(int Slot, double Bottom, int LineAfter)> pageBreaks = [];
+            if (PlanColumnSlices(container, groupTop, groupBottom) is not { } plan) return;
 
-            var appliedDelta = 0d;
-            var currentSlot = Grid(container).SlotStartingAt(groupTop.Where(double.IsFinite).Min());
-            var previousColumnBottom = 0d;
-            var firstUnit = true;
-
-            for (var g = 0; g < groupRanges.Count; g++)
-            {
-                // A unit no cell starts in (a column only a <col> declares) has no extent to place.
-                if (!double.IsFinite(groupTop[g])) continue;
-
-                var columnTop = groupTop[g] + appliedDelta;
-                var columnHeight = groupBottom[g] - groupTop[g];
-
-                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, Grid(container).BandOfSlot(currentSlot)))
-                {
-                    if (firstUnit)
-                    {
-                        // The table's own first column doesn't fit where the table currently starts -
-                        // nothing has been placed on this page yet for a relocation to preserve, so this
-                        // is an ordinary "does the whole box fit here" question, not a column-relocation
-                        // one. Leave it to the existing whole-table mover.
-                        return;
-                    }
-
-                    var nextSlot = currentSlot + 1;
-                    if (columnHeight > Grid(container).PageBandHeightOf(nextSlot))
-                    {
-                        // No relocation can help a column taller than a whole fresh page - bail out of
-                        // the entire pass, unmodified, per this method's own "plan, then commit" remarks.
-                        return;
-                    }
-
-                    pageBreaks.Add((currentSlot, previousColumnBottom, groupRanges[g].Start));
-
-                    appliedDelta += Grid(container).PageTopOf(nextSlot) - columnTop;
-                    currentSlot = nextSlot;
-                    columnTop = Grid(container).PageTopOf(nextSlot);
-                }
-
-                firstUnit = false;
-                plannedDeltas[g] = appliedDelta;
-                previousColumnBottom = columnTop + columnHeight;
-            }
+            var plannedDeltas = plan.Deltas;
+            var pageBreaks = plan.Breaks;
+            var currentSlot = plan.LastSlot;
 
             if (pageBreaks.Count == 0) return;
+
+            // A caption was sized against the slices PlanCaptionSlices planned before any row existed. A
+            // table whose real geometry now plans differently would leave it spanning the wrong stretch,
+            // so it stays whole instead.
+            if (_captionBoxes.Count > 0 && _plannedSliceBreaks != pageBreaks.Count) return;
 
             // The header and footer are drawn from their proxy's snapshot of the group, taken before this
             // pass ran, so a cell that moves in a header or footer row has to move there as well.
@@ -5024,6 +4978,264 @@ namespace PeachBrackets.Html.Dom
             {
                 _tableBox.PageBreakBottoms[slot] = bottom;
             }
+
+            // Where the table's columns stop on one page and resume on the next, for the collapsed
+            // borders (built after this pass, from the relocated cells) to be cut at.
+            _columnBreakGaps = [];
+            foreach (var (slot, bottom, _) in pageBreaks)
+            {
+                _columnBreakGaps.Add((bottom, Grid(container).PageTopOf(slot + 1)));
+            }
+
+            // The decoration box of a captioned table was sized before the table grew by the relocation.
+            FinalizeGridDecorationBoxGeometry(_gridBorderBoxBottom);
+        }
+
+        /// <summary>
+        /// Every real cell of the grid - header, body and footer rows alike - with the column it starts
+        /// in and the number of columns it spans. A cell is read by that and not by its position among
+        /// its row's boxes: a row can hold fewer cells than there are columns (a ragged row, or a rowspan
+        /// cell from an earlier row standing in for its slot with a placeholder), and a cell can span
+        /// several columns. Null when the grid holds no cell, or holds a row group folded into the body
+        /// (a second <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>) whose rows are not table rows.
+        /// </summary>
+        private List<(CssBox Cell, int Column, int Span)>? CollectGridCells()
+        {
+            var cells = new List<(CssBox Cell, int Column, int Span)>();
+            foreach (var row in _allRows)
+            {
+                if (row.DerivedStyle.ActualDisplay != Keywords.TableRow) return null;
+
+                foreach (var cell in row.Boxes)
+                {
+                    if (cell is CssSpacingBox) continue;
+
+                    cells.Add((cell, GetCellRealColumnIndex(cell), Math.Max(1, GetColSpan(cell))));
+                }
+            }
+
+            return cells.Count == 0 ? null : cells;
+        }
+
+        /// <summary>
+        /// A cell spanning columns is one box: it cannot be cut by a page boundary falling between the
+        /// columns it spans, so those columns travel together. Spans that overlap chain into one unit.
+        /// </summary>
+        private static (int[] GroupOfColumn, List<(int Start, int End)> Ranges) GroupColumnsThatTravelTogether(
+            List<(CssBox Cell, int Column, int Span)> cells)
+        {
+            var columnCount = cells.Max(c => c.Column + c.Span);
+
+            var reach = new int[columnCount];
+            foreach (var (_, column, span) in cells)
+            {
+                reach[column] = Math.Max(reach[column], column + span);
+            }
+
+            var groupOfColumn = new int[columnCount];
+            var groupRanges = new List<(int Start, int End)>();
+            for (var column = 0; column < columnCount;)
+            {
+                var end = column + 1;
+                for (var k = column; k < end; k++)
+                {
+                    end = Math.Max(end, reach[k]);
+                }
+
+                for (var k = column; k < end; k++)
+                {
+                    groupOfColumn[k] = groupRanges.Count;
+                }
+
+                groupRanges.Add((column, end));
+                column = end;
+            }
+
+            return (groupOfColumn, groupRanges);
+        }
+
+        /// <summary>Where the columns go: how far each unit moves, and the page breaks that takes.</summary>
+        /// <param name="Deltas">How far each unit moves along the column axis.</param>
+        /// <param name="Breaks">One entry per break: the slot it ends, where that slice ends, the first unit after it.</param>
+        /// <param name="SliceDeltas">How far the columns of each slice move (one more than there are breaks).</param>
+        /// <param name="LastSlot">The slot the last column lands in.</param>
+        private sealed record ColumnSlicePlan(
+            double[] Deltas, List<(int Slot, double Bottom, int Group)> Breaks, double[] SliceDeltas, int LastSlot);
+
+        /// <summary>
+        /// Walks the column units in order, working out where each lands - the planning half of
+        /// <see cref="RelocateColumnsAcrossPageBoundaries"/>, mutating nothing. Null when no relocation
+        /// can help: the first unit does not fit where the table starts (the whole-table mover answers
+        /// that), or a unit is taller than a whole fresh page.
+        /// </summary>
+        private ColumnSlicePlan? PlanColumnSlices(HtmlContainerInt container, double[] groupTop, double[] groupBottom)
+        {
+            var plannedDeltas = new double[groupTop.Length];
+            List<(int Slot, double Bottom, int Group)> pageBreaks = [];
+            List<double> sliceDeltas = [0];
+
+            var appliedDelta = 0d;
+            var currentSlot = Grid(container).SlotStartingAt(groupTop.Where(double.IsFinite).Min());
+            var previousColumnBottom = 0d;
+            var firstUnit = true;
+
+            for (var g = 0; g < groupTop.Length; g++)
+            {
+                // A unit no cell starts in (a column only a <col> declares) has no extent to place.
+                if (!double.IsFinite(groupTop[g])) continue;
+
+                var columnTop = groupTop[g] + appliedDelta;
+                var columnHeight = groupBottom[g] - groupTop[g];
+
+                if (HtmlContainerInt.FallsPast(columnTop + columnHeight, Grid(container).BandOfSlot(currentSlot)))
+                {
+                    // The table's own first column doesn't fit where the table currently starts - nothing
+                    // has been placed on this page yet for a relocation to preserve, so this is an
+                    // ordinary "does the whole box fit here" question. Leave it to the whole-table mover.
+                    if (firstUnit) return null;
+
+                    var nextSlot = currentSlot + 1;
+
+                    // No relocation can help a column taller than a whole fresh page.
+                    if (columnHeight > Grid(container).PageBandHeightOf(nextSlot)) return null;
+
+                    pageBreaks.Add((currentSlot, previousColumnBottom, g));
+
+                    appliedDelta += Grid(container).PageTopOf(nextSlot) - columnTop;
+                    sliceDeltas.Add(appliedDelta);
+                    currentSlot = nextSlot;
+                    columnTop = Grid(container).PageTopOf(nextSlot);
+                }
+
+                firstUnit = false;
+                plannedDeltas[g] = appliedDelta;
+                previousColumnBottom = columnTop + columnHeight;
+            }
+
+            return new ColumnSlicePlan(plannedDeltas, pageBreaks, [.. sliceDeltas], currentSlot);
+        }
+
+        /// <summary>
+        /// Plans, before any row exists, where a vertical table's columns will break across pages, so
+        /// its captions can be sized for the slice they belong to. A caption is a block whose inline axis
+        /// is the table's column axis - the very axis the page breaks cut - so it cannot be laid out
+        /// across a break; a top caption goes with the first slice, spanning it, and a bottom caption
+        /// with the last. Left unset when the table does not paginate by column.
+        /// </summary>
+        /// <param name="columnAxisStart">where the first column starts along the column axis</param>
+        private void PlanCaptionSlices(double columnAxisStart)
+        {
+            if (_bodyRows.Count == 0 || _columnWidths is not { } widths) return;
+            if (_tableBox.HtmlContainer is not { HasRealPageGrid: true } container) return;
+            if (MonolithicContent.HasColumnPaginationExcludedFeature(_tableBox)) return;
+            if (CollectGridCells() is not { } cells) return;
+
+            var (groupOfColumn, groupRanges) = GroupColumnsThatTravelTogether(cells);
+            if (groupOfColumn.Length > widths.Length) return;
+
+            // Where each column starts, the way LayoutBodyRow advances its cursor from cell to cell.
+            var columnStart = new double[groupOfColumn.Length + 1];
+            columnStart[0] = columnAxisStart;
+            for (var c = 0; c < groupOfColumn.Length; c++)
+            {
+                columnStart[c + 1] = columnStart[c] + widths[c] + (IsColumnCollapsed(c) ? 0 : HorizontalSpacingAt(c + 1));
+            }
+
+            var groupTop = Enumerable.Repeat(double.PositiveInfinity, groupRanges.Count).ToArray();
+            var groupBottom = Enumerable.Repeat(double.NegativeInfinity, groupRanges.Count).ToArray();
+            foreach (var (cell, column, _) in cells)
+            {
+                var group = groupOfColumn[column];
+                groupTop[group] = Math.Min(groupTop[group], columnStart[column]);
+                groupBottom[group] = Math.Max(groupBottom[group], columnStart[column] + GetCellWidth(column, cell));
+            }
+
+            if (PlanColumnSlices(container, groupTop, groupBottom) is not { Breaks.Count: > 0 } plan) return;
+
+            _firstSliceEnd = plan.Breaks[0].Bottom;
+            _lastSliceStart = Grid(container).PageTopOf(plan.LastSlot);
+            _lastSliceDelta = plan.SliceDeltas[^1];
+            _plannedSliceBreaks = plan.Breaks.Count;
+        }
+
+        /// <summary>
+        /// Where a vertical table's relocated columns stop on one page (the first value) and resume on the
+        /// next (the second), per page break; null when no column was relocated.
+        /// </summary>
+        private List<(double End, double Start)>? _columnBreakGaps;
+
+        /// <summary>
+        /// Gives the collapsed borders of a table whose columns were relocated a page-aware form. The
+        /// segments are built from the cells where they now are, so each runs between two cells' edges as
+        /// if the table were continuous. A run that crosses a break is cut at it, and a grid line that
+        /// falls on the break - the end of one page's last column and the start of the next page's first -
+        /// is drawn at both, each page getting the half of the line on its own side.
+        /// </summary>
+        private void CutCollapsedBordersAtColumnBreaks()
+        {
+            if (_columnBreakGaps is not { Count: > 0 } gaps) return;
+
+            _tableBox.CollapsedBorderSegments = CutSegmentsAtBreaks(_tableBox.CollapsedBorderSegments, gaps);
+            if (_headerBox is not null)
+                _headerBox.CollapsedBorderSegments = CutSegmentsAtBreaks(_headerBox.CollapsedBorderSegments, gaps);
+            if (_footerBox is not null)
+                _footerBox.CollapsedBorderSegments = CutSegmentsAtBreaks(_footerBox.CollapsedBorderSegments, gaps);
+        }
+
+        private static List<CollapsedBorderSegment>? CutSegmentsAtBreaks(
+            List<CollapsedBorderSegment>? segments, List<(double End, double Start)> gaps)
+        {
+            if (segments is null) return null;
+
+            const double tolerance = 0.5;
+            var result = new List<CollapsedBorderSegment>(segments.Count + gaps.Count);
+
+            foreach (var segment in segments)
+            {
+                var rect = segment.Rect;
+                var pieces = new List<(double Top, double Bottom)> { (rect.Y, rect.Y + rect.Height) };
+
+                // A grid line running across the column axis, sitting on a break: it belongs to both
+                // pages' edges, and only one of the two was named by the cell that supplied its position.
+                if (segment.IsHorizontal)
+                {
+                    var center = rect.Y + rect.Height / 2;
+                    var half = rect.Height / 2;
+
+                    foreach (var (end, start) in gaps)
+                    {
+                        if (Math.Abs(center - end) <= tolerance)
+                            pieces.Add((start, start + half));
+                        else if (Math.Abs(center - start) <= tolerance)
+                            pieces.Add((end - half, end));
+                    }
+                }
+
+                foreach (var (top, bottom) in pieces)
+                {
+                    var spans = new List<(double Top, double Bottom)> { (top, bottom) };
+
+                    foreach (var (end, start) in gaps)
+                    {
+                        var next = new List<(double Top, double Bottom)>(spans.Count + 1);
+                        foreach (var (spanTop, spanBottom) in spans)
+                        {
+                            if (spanTop < end) next.Add((spanTop, Math.Min(spanBottom, end)));
+                            if (spanBottom > start) next.Add((Math.Max(spanTop, start), spanBottom));
+                        }
+
+                        spans = next;
+                    }
+
+                    foreach (var (spanTop, spanBottom) in spans)
+                    {
+                        if (spanBottom - spanTop <= 0) continue;
+                        result.Add(segment with { Rect = new Rect(rect.X, spanTop, rect.Width, spanBottom - spanTop) });
+                    }
+                }
+            }
+
+            return result;
         }
 
         /// <summary>The far column-axis edge of <paramref name="row"/>'s real cells, or its own origin when it has none.</summary>

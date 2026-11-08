@@ -152,6 +152,152 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(0, container.SlotStartingAt(Find(root, "b5").Location.Y));
         }
 
+        // ─── caption ──────────────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task ATopCaptionIsLaidOutAgainstTheFirstSliceAloneAndNotRepeated()
+        {
+            var (root, container) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-rl; border-spacing:0'>" +
+                $"<caption id='c' style='padding:0'>A caption that is long enough to wrap in the first slice</caption><tr>{Cells("a")}</tr></table>");
+
+            var table = Find(root, "t");
+            var caption = Find(root, "c");
+            Assert.NotNull(table.PageBreakBottoms);
+
+            // The columns paginate as without a caption.
+            Assert.Equal(0, container.SlotStartingAt(Find(root, "a5").Location.Y));
+            Assert.Equal(container.PageTopOf(1), Find(root, "a6").Location.Y, 0.01);
+
+            // The caption spans the first slice (the six columns that fit, 240pt), not the whole 320pt the
+            // table is long, and sits entirely on the first page.
+            Assert.Equal(table.Location.Y, caption.Location.Y, 0.01);
+            Assert.Equal(table.PageBreakBottoms![0], caption.ActualBottom, 0.5);
+            Assert.True(caption.ActualBottom <= container.PageBottomOf(0) + 0.01);
+
+            // It is in the fragment tree of the first page and of no other.
+            var onPage = container.FragmentTree!.Fragmentainers
+                .Select(f => Flatten(f.Root).Any(x => ReferenceEquals(x.Box, caption))).ToList();
+            Assert.True(onPage[0]);
+            Assert.All(onPage.Skip(1), x => Assert.False(x));
+
+            // The grid's decoration box covers the columns on both pages.
+            var decoration = table.TableGridDecorationBox!;
+            Assert.Equal(Find(root, "a7").ActualBottom, decoration.ActualBottom, 0.5);
+            Assert.Equal(table.ActualBottom, decoration.ActualBottom, 0.5);
+        }
+
+        [Fact]
+        public async Task ABottomCaptionBelongsToTheLastSlice()
+        {
+            var (root, container) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-lr; border-spacing:0'>" +
+                $"<caption id='c' style='caption-side:bottom; padding:0'>Bottom caption</caption><tr>{Cells("a")}</tr></table>");
+
+            var caption = Find(root, "c");
+            Assert.Equal(container.PageTopOf(1), caption.Location.Y, 0.5);
+            Assert.Equal(Find(root, "a7").ActualBottom, caption.ActualBottom, 0.5);
+            Assert.Equal(1, container.SlotStartingAt(caption.Location.Y));
+
+            var onPage = container.FragmentTree!.Fragmentainers
+                .Select(f => Flatten(f.Root).Any(x => ReferenceEquals(x.Box, caption))).ToList();
+            Assert.False(onPage[0]);
+            Assert.True(onPage[1]);
+        }
+
+        [Fact]
+        public async Task ACaptionedTableThatFitsOnePageIsLeftAlone()
+        {
+            var (root, _) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-rl; border-spacing:0'>" +
+                $"<caption id='c' style='padding:0'>Short</caption><tr>{Cells("a", 3)}</tr></table>");
+
+            Assert.Null(Find(root, "t").PageBreakBottoms);
+            Assert.Equal(Find(root, "t").Location.Y, Find(root, "c").Location.Y, 0.01);
+            Assert.Equal(120, Find(root, "c").ActualBottom - Find(root, "c").Location.Y, 1);
+        }
+
+        // ─── collapsed borders ────────────────────────────────────────────────────
+
+        [Fact]
+        public async Task CollapsedBorderSegmentsAreCutAtTheBreakAndEachPartGoesWithItsPage()
+        {
+            var (root, container) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-rl; border-collapse:collapse'>" +
+                $"<tr>{Cells("a", extra: "border:4pt solid black;")}</tr></table>");
+
+            var table = Find(root, "t");
+            Assert.NotNull(table.PageBreakBottoms);
+
+            // Borders make the columns 44pt long, so five fit and the break falls before column 5.
+            Assert.Equal(container.PageTopOf(1), Find(root, "a5").Location.Y, 0.01);
+
+            var segments = table.CollapsedBorderSegments!;
+
+            // Every segment lies within one page's band: none straddles the break.
+            foreach (var segment in segments)
+            {
+                var top = segment.Rect.Y;
+                var bottom = segment.Rect.Y + segment.Rect.Height;
+                var page = container.SlotStartingAt(top + 0.01);
+                Assert.True(bottom <= container.PageBottomOf(page) + 0.01, $"segment {segment.Rect} crosses the end of page {page}");
+            }
+
+            // The lines between columns (thin along Y) on page 2 are where the relocated columns are: one
+            // at the page's content top (the half of the line the break cut) and one after each column.
+            var secondPage = segments.Where(s => s.Rect.Y >= container.PageTopOf(1) - 0.01).ToList();
+            var firstPage = segments.Where(s => s.Rect.Y < container.PageTopOf(1) - 0.01).ToList();
+            Assert.NotEmpty(firstPage);
+            Assert.NotEmpty(secondPage);
+
+            // The column-axis lines (IsHorizontal here) that end page 1 stop where the slice stops.
+            var lastOnFirst = firstPage.Where(s => s.IsHorizontal).Max(s => s.Rect.Y + s.Rect.Height);
+            Assert.Equal(table.PageBreakBottoms![0], lastOnFirst, 0.5);
+
+            // Row-axis lines (tall along Y) run the length of each slice: on page 2 they span the two
+            // relocated columns from the page top.
+            var tall = secondPage.Where(s => !s.IsHorizontal).ToList();
+            Assert.NotEmpty(tall);
+            Assert.All(tall, s => Assert.Equal(container.PageTopOf(1), s.Rect.Y, 0.5));
+            Assert.All(tall, s => Assert.Equal(Find(root, "a7").ActualBottom, s.Rect.Y + s.Rect.Height, 2.5));
+        }
+
+        [Fact]
+        public async Task CollapsedBordersOfARepeatedHeaderAreCutAtTheBreakToo()
+        {
+            var (root, container) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-rl; border-collapse:collapse'>" +
+                $"<thead><tr>{Cells("h", extra: "border:4pt solid black;")}</tr></thead>" +
+                $"<tbody><tr>{Cells("b", extra: "border:4pt solid black;")}</tr></tbody></table>");
+
+            var table = Find(root, "t");
+            Assert.NotNull(table.PageBreakBottoms);
+
+            var header = table.Boxes.OfType<CssProxyBox>().Select(p => p.SourceBox)
+                .First(x => x.DerivedStyle.ActualDisplay == "table-header-group");
+            foreach (var segment in header.CollapsedBorderSegments ?? [])
+            {
+                var page = container.SlotStartingAt(segment.Rect.Y + 0.01);
+                Assert.True(segment.Rect.Y + segment.Rect.Height <= container.PageBottomOf(page) + 0.01,
+                    $"header segment {segment.Rect} crosses the end of page {page} ({container.PageBottomOf(page)}); breaks {string.Join(',', table.PageBreakBottoms!.Select(kv => kv.Value))}");
+            }
+        }
+
+        [Fact]
+        public async Task ACaptionedCollapsedTableWithRowspanAndAHeaderPaginates()
+        {
+            var (root, container) = await LayoutAsync(
+                "<table id='t' style='writing-mode:vertical-rl; border-collapse:collapse'>" +
+                "<caption id='c' style='padding:0'>Everything at once</caption>" +
+                $"<thead><tr>{Cells("h", extra: "border:2pt solid black;")}</tr></thead>" +
+                $"<tbody><tr>{Cells("b", extra: "border:2pt solid black;")}</tr></tbody></table>");
+
+            var table = Find(root, "t");
+            Assert.NotNull(table.PageBreakBottoms);
+            Assert.Equal(1, container.SlotStartingAt(Find(root, "b7").Location.Y));
+            Assert.True(Find(root, "c").ActualBottom <= container.PageBottomOf(0) + 0.01);
+        }
+
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {
             yield return fragment;
