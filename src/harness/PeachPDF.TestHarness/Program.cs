@@ -9252,6 +9252,37 @@ await SaveShowcaseAsync("text_decoration_skipping", "Typography & Text", "Decora
     "text-decoration-skip-ink (CSS Text Decoration 4) breaking underlines around descenders, and CSS Text Decoration 3's rule that atomic inlines are not decorated.",
     decorationSkipHtml, pdfConfig);
 
+await SaveShowcaseAsync("line_box_rhythm", "Typography & Text", "Line Height, Rhythm and Text Box Trim",
+    "line-height computed where it is declared, line-height-step and block-step snapping lines and blocks to a grid, text-box-trim cutting the leading off, and emphasis marks and text-combine-upright in vertical text.",
+    """
+    <!DOCTYPE html><html><head><style>
+      body { font-family: sans-serif; font-size: 12pt; margin: 30pt; width: 440pt }
+      .row { display: flex; gap: 18pt; margin-bottom: 14pt; align-items: flex-start }
+      .cell { flex: 1; background: #f4ecd8; padding: 4pt }
+      .lh { line-height: 1.5em; font-size: 12pt; background: #f4ecd8 }
+      .lh h3 { font-size: 22pt; margin: 0; background: #e8b4a0 }
+      .step { line-height: 15pt; line-height-step: 24pt; background: #cfe3f1 }
+      .trim { line-height: 2; background: #d5e8d4 }
+      .trim.t { text-box: trim-both cap alphabetic }
+      .vert { writing-mode: vertical-rl; text-orientation: upright; height: 150pt; display: inline-block; vertical-align: top; margin-right: 24pt; font-size: 16pt; background: #eee }
+    </style></head><body>
+      <div class="lh">line-height: 1.5em on a 12pt parent (18pt lines) &mdash; the heading inherits 18pt, not 1.5 x 22pt
+        <h3>Heading inside</h3></div>
+      <div class="row">
+        <div class="cell step">line-height-step<br>rounds each line<br>up to 24pt</div>
+        <div class="cell" style="line-height:15pt">no step<br>15pt lines<br>for contrast</div>
+        <div class="cell" style="block-step: 40pt padding-box; background:#e1d5e7">block-step: 40pt padding-box</div>
+      </div>
+      <div class="row">
+        <div class="cell trim">Without text-box-trim the half-leading shows above and below.</div>
+        <div class="cell trim t">With text-box: trim-both cap alphabetic the box hugs the caps.</div>
+      </div>
+      <div class="vert" style="text-emphasis: filled circle #c0392b">EMPHASIS</div>
+      <div class="vert" style="text-emphasis: open sesame #2874a6; text-emphasis-position: over left">LEFT SIDE</div>
+      <div class="vert">Year <span style="text-combine-upright: all">2024</span> month <span style="text-combine-upright: digits 2">12</span></div>
+    </body></html>
+    """, pdfConfig);
+
 await SaveShowcaseAsync("text_emphasis", "Typography & Text", "Text Emphasis Marks",
     "text-emphasis (CSS Text Decoration 4): a mark over or under every character in a chosen shape and colour, and text-decoration-inset pulling an underline in from both ends.",
     """

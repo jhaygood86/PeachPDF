@@ -64,6 +64,7 @@ namespace PeachBrackets.Html.Paint
         /// (css-text-decor-3 §2.4). False for an inline box, whose own per-line rectangles already
         /// <i>are</i> the spans — there, only the exclusions and the ink have to be found.
         /// </param>
+        /// <param name="skip">what <c>text-decoration-skip</c> keeps the line off: atomic inlines, spaces, the box decoration of inline boxes</param>
         internal static DecorationContent Of(BoxFragment fragment, bool collectSpans, DecorationSkips skip = DecorationSkips.Objects)
         {
             var content = new DecorationContent { _skip = skip };
