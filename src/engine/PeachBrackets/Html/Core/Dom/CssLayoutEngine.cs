@@ -2570,6 +2570,9 @@ namespace PeachBrackets.Html.Dom
                     ? baseline + extent.BelowBaseline
                     : line.LineBottom > line.LineTop ? line.LineBottom : double.NegativeInfinity;
 
+                // The lowest word of the line is part of the line whatever the strut says: a fallback font's glyphs can reach below it.
+                if (line.LineBottom > line.LineTop) lineBottom = Math.Max(lineBottom, line.LineBottom);
+
                 bottom = Math.Max(bottom, lineBottom);
             }
 
