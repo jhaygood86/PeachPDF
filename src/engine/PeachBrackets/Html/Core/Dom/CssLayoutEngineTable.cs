@@ -4568,7 +4568,7 @@ namespace PeachBrackets.Html.Dom
             // Keyed to the footer being detached rather than to it repeating: this footer closes the
             // *table*, so it is drawn under the last row whether or not §6.2 let it repeat - the same way
             // the header block above still draws a non-repeating <thead> once at the table's top.
-            if (!cursor.Stopped && FooterIsDetached && _footerHeight > 0)
+            if (!cursor.Stopped && FooterIsDetached)
             {
                 await MoveTheClosingFooterOffABoundaryItWouldStraddle(g, container, cursor);
 
