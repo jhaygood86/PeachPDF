@@ -158,6 +158,18 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         [Fact]
+        public void Description_RejectsABitmapFontSoItIsNeverInstalled()
+        {
+            var bytes = File.ReadAllBytes(BundledFonts.Ttf);
+            int tables = BinaryPrimitives.ReadUInt16BigEndian(bytes.AsSpan(4));
+            Encoding.ASCII.GetBytes("bhed").CopyTo(bytes, 12 + 16 * (tables - 1)); // rename the last table's tag
+
+            using var stream = new MemoryStream(bytes);
+
+            Assert.Throws<InvalidDataException>(() => TtfFontDescription.LoadDescription(stream));
+        }
+
+        [Fact]
         public void Reader_RejectsAFontWhoseCmapHasNoUsablePlatform()
         {
             var bytes = File.ReadAllBytes(BundledFonts.Ttf);
