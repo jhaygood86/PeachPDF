@@ -31,9 +31,11 @@ public class MulticolFloatWiderThanColumnTests
         Assert.Empty(lost);
         Assert.Empty(doubled);
 
-        // Below the float (its bottom is at 20 + 32 = 52 less the empty paragraph above it), not beside it.
+        // The text is a block of its own after the float (a float that opens a multi-column run is not wrapped with the text, #2312),
+        // so it is placed as a paragraph after the float is: at the top of the next column when the float leaves it no room. Below the
+        // float in the float's own column (CSS 2.1 §9.5) is what the same markup in a block that is not a multi-column container does.
         var positions = await PaintedWords.PositionsAsync(Page(body));
-        Assert.True(positions["w9_92"].Y >= 20 + 32 - 0.5, $"the text started at y={positions["w9_92"].Y}, beside the float");
+        Assert.True(positions["w9_92"].Y >= 20 + 32 - 0.5 || positions["w9_92"].X > 20 + 81, $"the text started at ({positions["w9_92"].X}, {positions["w9_92"].Y}), beside the float");
     }
 
     // Two such floats (one per column) with text after them, as a generated document had it.

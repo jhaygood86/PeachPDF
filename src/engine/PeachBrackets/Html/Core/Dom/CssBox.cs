@@ -5275,6 +5275,25 @@ namespace PeachBrackets.Html.Dom
             || child.DerivedStyle.ActualDisplay == Keywords.None
             || (child.HtmlTag is null && child.IsSpaceOrEmpty);
 
+        /// <summary>
+        /// Whether every box from this one up to <paramref name="root"/> is laid out in a block's own flow, so that a child of this box
+        /// starts at the top of the column when the column's content does. A table cell, grid or flex container, or an inline-level box
+        /// in the chain places its content by rules of its own (a cell's content sits below the row's top, a grid item below its track's),
+        /// and the column top is then not where a child of it begins (#2320).
+        /// </summary>
+        private bool IsPlainBlockFlowUpTo(CssBox? root)
+        {
+            var box = this;
+
+            while (box is not null && !ReferenceEquals(box, root))
+            {
+                if (box.DerivedStyle.ActualDisplay is not (Keywords.Block or Keywords.ListItem or Keywords.FlowRoot)) return false;
+                box = box.ParentBox;
+            }
+
+            return box is not null;
+        }
+
         private async ValueTask<bool> LayoutBlockChildren(Canvas g, BreakToken? resume)
         {
             var resumeAt = resume as BlockBreakToken;
@@ -5379,13 +5398,17 @@ namespace PeachBrackets.Html.Dom
                     // earlier column, so the first in-flow child after it has no previous sibling in this one. Derived from
                     // the sibling it did have (ResolveBlockChildOffset), it was placed where that sibling ended - in the column
                     // the fill had left - and the text of the child was drawn nowhere.
+                    // A float after the resumed one has no better reference either: placed from its previous in-flow sibling, it
+                    // landed where that paragraph ended in the column left behind (#2319). It gets the column top as well, and
+                    // only an in-flow child ends the stretch of boxes that need it.
                     if (resumeConsumed
                         && i > start
                         && !inFlowChildPlacedByThisFill
-                        && !TakesNoPartInTheFlow(childBox)
+                        && (childBox.IsFloated || !TakesNoPartInTheFlow(childBox))
                         && childBox._resumeTopOverride is null
                         && Boxes[start].IsExcludedFromFlow
-                        && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } resumedColumn })
+                        && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } resumedColumn }
+                        && IsPlainBlockFlowUpTo(resumedColumn.ContextRoot))
                     {
                         childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
                     }
