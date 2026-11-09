@@ -50,6 +50,30 @@ public class MulticolContentLossTests
         Assert.Empty(doubled);
     }
 
+    // A float that runs into the next page's column takes the in-flow content after it with it. That content was
+    // placed from the bottom of the paragraph before the float - in the column the fill had left, a page back - so it
+    // was laid out there and drawn on no page (css-break-3 §4.4: no content may be lost at a break). Each case is a
+    // reduction of a generated document; the markup is kept as it is because the line breaks decide where the float
+    // meets the page foot.
+    [Theory]
+    [InlineData(
+        "<div style=\"height:60pt\"></div><div style=\"columns:2\"><p style=\"margin:0\">w9000_1 w9000_2 w9000_3 w9000_4 w9000_5 w9000_6 w9000_7 w9000_8 w9000_9 w9000_10</p><div style=\"float:left\">w9000_11 w9000_12 w9000_13 w9000_14 w9000_15 w9000_16 w9000_17 w9000_18 w9000_19 w9000_20</div><p style=\"margin:0\">w9000_21</p></div>", "300pt 160pt")]
+    [InlineData(
+        "<p>w9000_1</p><div style=\"columns:3\"><div style=\"float:right\">w9000_2 w9000_3 w9000_4 w9000_5 w9000_6 w9000_7 w9000_8 w9000_9 w9000_10 w9000_11 w9000_12 w9000_13 w9000_14 w9000_15 w9000_16 w9000_17 w9000_18 w9000_19 w9000_20 w9000_21 w9000_22 w9000_23 w9000_24 w9000_25 w9000_26 w9000_27 w9000_28 w9000_29 w9000_30 w9000_31 w9000_32 w9000_33 w9000_34 w9000_35 w9000_36 w9000_37 w9000_38 w9000_39 w9000_40 w9000_41 w9000_42 w9000_43 w9000_44 w9000_45 w9000_46 w9000_47 w9000_48 w9000_49 w9000_50</div><p>w9000_51 w9000_52 w9000_53 w9000_54 w9000_55 w9000_56 w9000_57 w9000_58</p></div>", "300pt 200pt")]
+    [InlineData(
+        "<p style=\"\"></p><p style=\"margin:0 0 3pt\"> w79_143 w79_144 w79_145 w79_146 w79_147 w79_148 </p><div style=\"columns:2\"><p style=\"margin:0 0 3pt\"> w79_197 w79_198 w79_199 w79_200 w79_201 </p><p style=\"margin:0 0 3pt\"> w79_204 w79_205 w79_206 w79_207 w79_208 </p><div style=\"float:left\"> w79_221 w79_222 w79_223 w79_224 w79_225 </div><h1 style=\"font-size:15pt\"> w79_227 </h1></div>", "300pt 160pt")]
+    public async Task ContentAfterAFloatThatContinuesInTheNextColumn_KeepsEveryWord(string body, string pageSize)
+    {
+        var html = $"<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page {{ size: {pageSize}; margin: 20pt }} " +
+                   "body { margin:0; font: 12pt Arial }</style></head><body>" + body + "</body></html>";
+
+        var (painted, _) = await PaintedWords.LayOutAndPaintAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(body, painted);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+    }
+
     // #1554: a float wider than its column, in a multi-column container inside another one. The lines beside it have
     // no room, were pushed past every column's inline extent and so claimed by none of them, and were lost. They move
     // below the float instead (CSS 2.1 §9.5), inside the column the float is in.

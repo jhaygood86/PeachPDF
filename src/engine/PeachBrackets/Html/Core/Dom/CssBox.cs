@@ -5320,6 +5320,7 @@ namespace PeachBrackets.Html.Dom
             // resumed child itself - which §3.1 propagation makes ordinary, since the container that travels
             // is the very box the pass resumed into.
             var resumeConsumed = false;
+            var inFlowChildPlacedByThisFill = false;
 
             _canRestartChildLoop = true;
 
@@ -5353,6 +5354,23 @@ namespace PeachBrackets.Html.Dom
                             resumeAt.ChildToken,
                             resumeAt.ResumeTopOverride ?? ColumnTopForTheChildThisFillBeginsAt(resumeAt, childBox));
                     }
+
+                    // A column fill that resumed onto a float: everything in flow before the float was laid out in an
+                    // earlier column, so the first in-flow child after it has no previous sibling in this one. Derived from
+                    // the sibling it did have (ResolveBlockChildOffset), it was placed where that sibling ended - in the column
+                    // the fill had left - and the text of the child was drawn nowhere.
+                    if (resumeConsumed
+                        && i > start
+                        && !inFlowChildPlacedByThisFill
+                        && !childBox.IsExcludedFromFlow
+                        && childBox._resumeTopOverride is null
+                        && Boxes[start].IsExcludedFromFlow
+                        && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } resumedColumn })
+                    {
+                        childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
+                    }
+
+                    if (!childBox.IsExcludedFromFlow) inFlowChildPlacedByThisFill = true;
 
                     // This frame places the child and then hands it its own content — the offset is
                     // appended by the loop rather than assigned by the child (see LayoutBlockChild).
