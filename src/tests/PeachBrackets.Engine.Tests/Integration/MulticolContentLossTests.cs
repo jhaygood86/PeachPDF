@@ -64,6 +64,8 @@ public class MulticolContentLossTests
         "<p style=''></p><p style='margin:0 0 3pt'> w79_143 w79_144 w79_145 w79_146 w79_147 w79_148 </p><div style='columns:2'><p style='margin:0 0 3pt'> w79_197 w79_198 w79_199 w79_200 w79_201 </p><p style='margin:0 0 3pt'> w79_204 w79_205 w79_206 w79_207 w79_208 </p><div style='float:left'> w79_221 w79_222 w79_223 w79_224 w79_225 </div><h1 style='font-size:15pt'> w79_227 </h1></div>", "300pt 160pt")]
     [InlineData(
         "<div style='height:60pt'></div><div style='columns:2'><p style='margin:0'>w9000_1 w9000_2 w9000_3 w9000_4 w9000_5 w9000_6 w9000_7 w9000_8 w9000_9 w9000_10</p><div style='float:left'>w9000_11 w9000_12 w9000_13 w9000_14 w9000_15 w9000_16 w9000_17 w9000_18 w9000_19 w9000_20 w9000_21 w9000_22 w9000_23 w9000_24 w9000_25 w9000_26</div><div style='display:none'>hidden</div> <p style='margin:0'>w9000_31 w9000_32</p></div>", "300pt 160pt")]
+    [InlineData(
+        "<div style='columns:2'><div style='float:right'><p>w5031_474 w5031_475 w5031_476 w5031_477 w5031_478 w5031_479 w5031_480 w5031_481</p></div><p>w5031_503 w5031_504 w5031_505</p><div style='float:right'></div></div>", "200pt 250pt")]
     public async Task ContentAfterAFloatThatContinuesInTheNextColumn_KeepsEveryWord(string body, string pageSize)
     {
         var html = $"<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page {{ size: {pageSize}; margin: 20pt }} " +

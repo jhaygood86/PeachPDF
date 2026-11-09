@@ -1742,6 +1742,16 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Whether the break record naming the deferred floats exists only for them: every child was placed.</summary>
         private bool DeferredFloatsOnly { get => _rare?.DeferredFloatsOnly ?? false; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.DeferredFloatsOnly = value; } }
 
+        /// <summary>What a multi-column container's next fill starts with: the floats the column before it could not hold.</summary>
+        internal (List<CssBox>? Floats, bool OnlyTheFloats) SnapshotDeferredFloats() => (DeferredFloats, DeferredFloatsOnly);
+
+        /// <summary>Puts back what <see cref="SnapshotDeferredFloats"/> returned, so a fill that is made again starts as the first one did.</summary>
+        internal void RestoreDeferredFloats((List<CssBox>? Floats, bool OnlyTheFloats) snapshot)
+        {
+            DeferredFloats = snapshot.Floats;
+            DeferredFloatsOnly = snapshot.OnlyTheFloats;
+        }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
