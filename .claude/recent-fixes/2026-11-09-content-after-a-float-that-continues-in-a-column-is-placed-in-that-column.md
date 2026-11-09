@@ -36,7 +36,7 @@ more (largest +41, +18, +13 on documents that already lose words). Reductions of
 than its column with the paragraph after it (`columns:3`; the paragraph has no room beside the float and goes below it, past the
 page, where `main` drew it at a stale position); and a right float with text narrower than its word, now placed in another column
 and clipped at the page's content edge where `main` drew it elsewhere. They are other mechanisms that the stale position used to
-hide, see [the residual losses](../accepted-gaps/some-documents-with-floats-still-lose-words-after-tall-floats-continue.md).
+hide (#2316 for the first, #2317 for a float whose first fragment is on a page the fill resumes past), see [the residual losses](../accepted-gaps/some-documents-with-floats-still-lose-words-after-tall-floats-continue.md).
 
 **Not done.** Inline text or a `<span>` right after the float (the float and the text are then in one anonymous block, so the resume token names that block and not the column's children) still loses its words (#2312), and so does a second float after the first (the #2289 family). #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
 other mechanisms and still lose or misplace a word.
