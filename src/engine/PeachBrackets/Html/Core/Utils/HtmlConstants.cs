@@ -131,7 +131,7 @@ namespace PeachBrackets.Html.Utils
         //        public const string cite = "cite";
         public const string Class = "class";
         //        public const string classid = "classid";
-        //        public const string clear = "clear";
+        public const string Clear = "clear";
         //        public const string code = "code";
         //        public const string codebase = "codebase";
         //        public const string codetype = "codetype";

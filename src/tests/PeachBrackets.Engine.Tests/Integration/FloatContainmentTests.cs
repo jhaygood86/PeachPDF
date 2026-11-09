@@ -67,6 +67,24 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(0, box.Height, precision: 6);
         }
 
+        [Theory]
+        // Chrome: the block after each of these starts below the float they contain (CSS 2.1 §10.6.7; the HTML rendering section gives a
+        // fieldset a formatting context of its own, and a button is one whatever its display), so a wrapper around the box and the block
+        // after it is as tall as the float plus that block. Measured in pt so no px conversion is involved.
+        [InlineData("<fieldset style='margin:0;padding:0;border:0'>", "</fieldset>", 80d)]
+        [InlineData("<fieldset style='margin:0;padding:0;border:0'><legend style='display:block;padding:0;margin:0;height:20pt'></legend>", "</fieldset>", 100d)]
+        [InlineData("<button style='display:block;margin:0;padding:0;border:0;width:200pt'>", "</button>", 80d)]
+        public async Task FieldsetAndBlockButton_ContainTheirFloat(string open, string close, double expectedWrapperHeight)
+        {
+            var html = "<!DOCTYPE html><html><body style='margin:0'><div id='w'>" + open +
+                       "<div style='float:left;width:100pt;height:70pt'></div>" + close +
+                       "<div style='height:10pt'></div></div></body></html>";
+
+            var wrapper = await MeasureBoxAsync(html, "w");
+
+            Assert.Equal(expectedWrapperHeight, wrapper.Height, precision: 6);
+        }
+
         [Fact]
         public async Task ContainedFloat_TallerThanTheOtherContent_IsWhatSetsTheHeight()
         {

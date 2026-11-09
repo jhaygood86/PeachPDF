@@ -1329,12 +1329,15 @@ namespace PeachBrackets.Engine.Tests.Integration
                 + "<div id='parent'>"
                 + "<div id='child' style='clear:both; height:10pt; margin-top:30pt;'></div></div>");
             var (root, container) = await BuildAndLayout(html);
+            var floated = FindById(root, "floated")!;
             var parent = FindById(root, "parent")!;
             var child = FindById(root, "child")!;
 
-            // "clear:both" on the child blocks its own top-margin escape into the parent - the child's
-            // margin must remain its own, isolated 30pt gap below wherever clearance placed the parent.
-            Assert.InRange(child.Location.Y - parent.Location.Y, 29.5, 30.5);
+            // "clear:both" on the child blocks its own top-margin escape into the parent: the parent stays
+            // where it is and the child's border edge goes to the float's bottom (CSS 2.1 §9.5.2 - the float
+            // is before the parent, in the same formatting context, and clearance moves the child past it).
+            Assert.Equal(floated.Location.Y, parent.Location.Y, 1);
+            Assert.InRange(child.Location.Y - floated.Location.Y, 59.5, 60.5);
         }
 
         [Fact]
