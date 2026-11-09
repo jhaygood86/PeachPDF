@@ -48,7 +48,7 @@ not new ones the change introduced:
   loses a different subset, not counted as a defect.
 - #2317 (a float whose first fragment is on a page the fill resumes past).
 
-**Not done.** Inline text or a `<span>` right after the float (the float and the text are then in one anonymous block, so the resume token names that block and not the column's children) still loses its words (#2312), and so does a second float after the first (the #2289 family). #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
+**Not done.** #2312, #2319 and the first document of #2320 are fixed by [the follow-up](2026-11-09-floats-after-a-resumed-float-and-floats-that-open-a-text-run-in-columns.md); what is left of #2320 is #2326. #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
 other mechanisms and still lose or misplace a word.
 
 **Tests.** `MulticolContentLossTests.ContentAfterAFloatThatContinuesInTheNextColumn_KeepsEveryWord` (three reductions,
