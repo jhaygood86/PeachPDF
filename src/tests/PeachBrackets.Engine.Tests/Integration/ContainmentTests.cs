@@ -1,8 +1,12 @@
+using PeachBrackets;
 using PeachBrackets.Css;
 using PeachBrackets.Html;
 using PeachBrackets.Html.Dom;
 using PeachBrackets.Html.Fragmentation;
 using PeachBrackets.Html.Utils;
+using PeachDrawing.Core;
+using PeachDrawing.PDF;
+using PeachPDF.Rendering;
 using PeachPDF.Tests.TestSupport;
 
 namespace PeachBrackets.Engine.Tests.Integration;
@@ -172,6 +176,56 @@ public class ContainmentTests
         Assert.Equal(PositionMode.Absolute, f.Position.Value);
         Assert.Equal(c.Location.X + 10, f.Location.X, 6);
         Assert.Equal(c.Location.Y + 3, f.Location.Y, 6);
+    }
+
+    // The rewrite keeps what a fixed box has that an absolute one lacks: its own stacking context (css-position-3 §3.5), which an absolute box with z-index auto does not.
+    [Fact]
+    public async Task AFixedBoxInAContainedBoxStillHasItsOwnStackingContext()
+    {
+        var root = await LayoutAsync(
+            "<div style='contain:layout;width:100pt;height:50pt'>" +
+            "<div id='f' style='position:fixed;width:10pt;height:10pt'></div><div id='a' style='position:absolute;width:10pt;height:10pt'></div></div>");
+
+        Assert.True(Box(root, "f").FixedInContainment);
+        Assert.True(DomUtils.IsStackingContextBox(Box(root, "f")));
+        Assert.False(Box(root, "a").FixedInContainment);
+        Assert.False(DomUtils.IsStackingContextBox(Box(root, "a")));
+    }
+
+    [Fact]
+    public async Task AFixedBoxOutsideAContainedBoxIsNotMarked()
+    {
+        var root = await LayoutAsync("<div id='f' style='position:fixed;width:10pt;height:10pt'></div>");
+
+        Assert.False(Box(root, "f").FixedInContainment);
+        Assert.Equal(PositionMode.Fixed, Box(root, "f").Position.Value);
+    }
+
+    // A change of `contain` or `content-visibility` is never applied in place (it changes what a descendant is positioned against), so the document is loaded
+    // again and the build-time normalisation runs over the new styles: the fixed box follows the containment on and off.
+    [Theory]
+    [InlineData("contain:layout")]
+    [InlineData("contain:paint")]
+    [InlineData("content-visibility:auto")]
+    public async Task AFixedBoxFollowsItsAncestorsContainmentWhenAHoverTurnsItOnAndOff(string hovered)
+    {
+        var html = "<!DOCTYPE html><html><head><style>body{margin:0} #c{margin-left:100px;margin-top:50px;width:200px;height:100px} " +
+                   $"#c:hover{{{hovered}}} #f{{position:fixed;left:10px;top:5px;width:20px;height:10px}}</style></head><body><div id=c><div id=f></div></div></body></html>";
+        var context = new HtmlRenderContext();
+        var size = new Size(800, 600);
+        var document = await HtmlDocument.LoadAsync(html, context, new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = size.Width, PageHeightPoints = size.Height });
+        var canvas = PdfCanvas.CreateMeasuring(context, size);
+        await document.LayoutAsync(canvas);
+
+        var before = document.GetElementBounds("f")!.Value;
+        await document.SetPointerStateAsync(0, 150, 80, pressed: false, canvas);
+        var during = document.GetElementBounds("f")!.Value;
+        await document.ClearPointerStateAsync(canvas);
+        var after = document.GetElementBounds("f")!.Value;
+
+        Assert.True(during.X > before.X + 50 && during.Y > before.Y + 25, $"fixed to the page at {before}, in the contained box at {during}");
+        Assert.Equal(before.X, after.X, 3);
+        Assert.Equal(before.Y, after.Y, 3);
     }
 
     [Fact]

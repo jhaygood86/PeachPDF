@@ -1921,6 +1921,7 @@ namespace PeachBrackets.Html.Parse
                 if (!DomUtils.AppliesLayoutOrPaintContainment(ancestor)) continue;
 
                 box.Position = CssProperty<PositionMode>.FromValue(Keywords.Absolute, PositionMode.Absolute);
+                box.FixedInContainment = true;
                 return;
             }
         }

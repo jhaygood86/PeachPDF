@@ -54,6 +54,7 @@ namespace PeachBrackets.Html.Dom
         internal bool SelectionStyleProcessed;
         internal Dictionary<string, CssBox?>? HighlightStyles;
         internal bool SuppressOwnBackgroundPaint;
+        internal bool FixedInContainment;
         internal bool SuppressOwnBorderPaint;
         internal CssBox? TableGridDecorationBox;
         internal bool IsTableGridDecorationBox;

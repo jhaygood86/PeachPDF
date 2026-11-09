@@ -642,6 +642,13 @@ namespace PeachBrackets.Html.Dom
         /// pass must no-op instead of painting the same background a second time at its own (possibly
         /// much smaller than the page) laid-out rect.
         /// </summary>
+        /// <summary>
+        /// Set on a box whose computed <c>position</c> is <c>fixed</c> but whose containing block is an ancestor that layout or paint containment applies to
+        /// (css-contain-2 §3.2, §3.4) rather than the page: it is placed like an absolute box (<c>DomParser.NormalizeFixedInContainment</c> gives it that
+        /// <see cref="Position"/>), but it keeps what is specific to a fixed box that an absolute one does not have - its own stacking context.
+        /// </summary>
+        internal bool FixedInContainment { get => _rare is not null && _rare.FixedInContainment; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.FixedInContainment = value; } }
+
         internal bool SuppressOwnBackgroundPaint { get => _rare is null ? default(bool) : _rare.SuppressOwnBackgroundPaint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SuppressOwnBackgroundPaint = value; } }
 
         /// <summary>

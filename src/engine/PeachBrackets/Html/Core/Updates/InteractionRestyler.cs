@@ -47,7 +47,7 @@ namespace PeachBrackets.Html.Updates
         // Properties that change what boxes there are or how the tree is built, which a layout pass over the boxes that exist cannot follow.
         private static readonly HashSet<string> Structural = new(StringComparer.OrdinalIgnoreCase)
         {
-            "display", "position", "float", "clear", "content", "contain", "container-type", "container-name", "writing-mode", "direction", "unicode-bidi",
+            "display", "position", "float", "clear", "content", "contain", "content-visibility", "container-type", "container-name", "writing-mode", "direction", "unicode-bidi",
             "will-change", "quotes", "counter-reset", "counter-increment", "counter-set", "all", "visibility",
         };
 

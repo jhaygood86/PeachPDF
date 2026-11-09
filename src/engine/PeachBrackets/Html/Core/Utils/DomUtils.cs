@@ -1906,7 +1906,7 @@ namespace PeachBrackets.Html.Utils
             // here rather than the ZIndex-gated Absolute/Relative arm above - once laid out standalone
             // against a margin box (RunningElementLayout) it needs an unconditional stacking context for
             // its own descendants, matching DerivedStyle.IsPositioned's own treatment of Running.
-            if (box.Position.Value is PositionMode.Fixed or PositionMode.Sticky or PositionMode.Running)
+            if (box.Position.Value is PositionMode.Fixed or PositionMode.Sticky or PositionMode.Running || box.FixedInContainment)
             {
                 return true;
             }
