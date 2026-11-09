@@ -7224,10 +7224,16 @@ namespace PeachBrackets.Html.Dom
                         var previousWord = coordinates.Line.Words.Count > 0
                             ? coordinates.Line.Words[^1]
                             : null;
-                        var hasOrdinaryWrapBefore = HasOrdinaryWrapOpportunityBefore(
-                            previousWord, word, childHasLeadingWhitespace && wordIndex == 0,
-                            coordinates.TrailingRegionalIndicatorCount,
-                            coordinates.TrailingGraphemeContext);
+                        // An atomic inline (an inline-block, an inline-table...) is flowed as a block of its own, so the line it sits on holds its rectangle
+                        // and none of its words: with no word to look back at there was no wrap opportunity after it, and the word that followed stayed on
+                        // the line past its end. Atomic inlines are treated as an object replacement character (CSS Text 3 §5.1), which allows a break
+                        // either side of it, as the replaced elements that are words of the line already do.
+                        var hasOrdinaryWrapBefore = previousWord is null
+                            ? !word.SuppressWrapBefore && !word.IsLineBreak && LineHoldsOnlyAnAtomicInline(coordinates.Line)
+                            : HasOrdinaryWrapOpportunityBefore(
+                                previousWord, word, childHasLeadingWhitespace && wordIndex == 0,
+                                coordinates.TrailingRegionalIndicatorCount,
+                                coordinates.TrailingGraphemeContext);
                         var isGraphemeBoundary = IsGraphemeBoundaryBefore(
                             previousWord, word, coordinates.TrailingRegionalIndicatorCount,
                             coordinates.TrailingGraphemeContext);
@@ -8185,6 +8191,21 @@ namespace PeachBrackets.Html.Dom
         /// it is out of flow, and a line that begins beside one begins at the float's edge with its
         /// leading white space removed - measured against Chromium, which agrees to 0.005px.
         /// </remarks>
+        /// <summary>
+        /// Whether the line holds an atomic inline but no word of its own: the content an atomic inline flows is the atomic inline's, not the line's.
+        /// </summary>
+        private static bool LineHoldsOnlyAnAtomicInline(CssLineBox line)
+        {
+            if (line.Words.Count > 0) return false;
+
+            foreach (var box in line.Rectangles.Keys)
+            {
+                if (DomUtils.IsAtomicInline(box)) return true;
+            }
+
+            return false;
+        }
+
         private static bool IsAtLineStart(CssLineBoxCoordinates coordinates)
         {
             if (coordinates.Line.Rectangles.Count > 0) return false;
