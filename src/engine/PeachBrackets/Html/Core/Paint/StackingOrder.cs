@@ -44,7 +44,7 @@ namespace PeachBrackets.Html.Paint
         /// children — so a descendant that does not appear on this page is simply not found. The
         /// ordering rules themselves are unchanged and still read the originating boxes.
         /// </summary>
-        internal static IEnumerable<StackingParticipant> Flatten(BoxFragment fragment)
+        internal static IEnumerable<StackingParticipant> Flatten(BoxFragment fragment, bool isDetachedRoot = false)
         {
             var box = fragment.Box;
 
@@ -87,7 +87,9 @@ namespace PeachBrackets.Html.Paint
             // z-index children (Appendix E's "non-positioned floats" and "positioned descendants with
             // stack level 0") escaped all the way to the nearest TRUE stacking context ancestor instead of
             // being ordered locally against their true DOM siblings - see IsLocalOrderingScope.
-            if (!IsLocalOrderingScope(box)) yield break;
+            // A detached root (a footnote body, a margin box's content) is painted on its own, outside any page tree, so
+            // nothing above it can claim its descendants: it is an ordering scope itself (css-page-3 3.1 for a margin box).
+            if (!isDetachedRoot && !IsLocalOrderingScope(box)) yield break;
             if (!(box.HtmlContainer?.HasStackingHoistCandidates ?? true)) yield break;
 
             foreach (var participant in SearchForHoistableDescendants(fragment, []))

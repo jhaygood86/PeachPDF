@@ -1221,7 +1221,7 @@ namespace PeachBrackets.Html.Paint
             // collapsed borders and marker below included - so they are set aside and painted last.
             List<List<StackingOrder.StackingParticipant>>? raisedLayers = null;
 
-            var layers = _ownOnly ? [] : StackingOrder.ByLayers(StackingOrder.Flatten(fragment)).ToList();
+            var layers = _ownOnly ? [] : StackingOrder.ByLayers(StackingOrder.Flatten(fragment, ReferenceEquals(fragment, _detachedRoot))).ToList();
 
             // The clips pushed above are canvas state that everything painted below inherits, but an
             // out-of-flow participant whose containing-block chain skips a clipping box is not clipped by it
