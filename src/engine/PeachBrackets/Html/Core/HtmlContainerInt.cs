@@ -4228,20 +4228,7 @@ namespace PeachBrackets.Html
         private (bool HasFloated, bool HasOutOfFlow, bool HasStackingHoistCandidates) ComputeFlowFlagsWithFootnoteBodies(CssBox root)
         {
             var flags = ComputeFlowFlags(root, includeStackingHoistCandidates: true);
-
-            if (!flags.HasStackingHoistCandidates)
-            {
-                foreach (var call in FootnoteCalls)
-                {
-                    if (ComputeFlowFlags(call.Body, includeStackingHoistCandidates: true).HasStackingHoistCandidates
-                        || DomUtils.NeedsStackingHoist(call.Body))
-                    {
-                        flags.HasStackingHoistCandidates = true;
-                        break;
-                    }
-                }
-            }
-
+            flags.HasStackingHoistCandidates |= FootnoteCalls.Any(call => ComputeFlowFlags(call.Body, includeStackingHoistCandidates: true).HasStackingHoistCandidates);
             return flags;
         }
 
