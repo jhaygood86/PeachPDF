@@ -984,7 +984,7 @@ namespace PeachBrackets.Html
         internal void RefreshStackingHoistCandidates()
         {
             if (Root is not null)
-                HasStackingHoistCandidates = ComputeFlowFlags(Root, includeStackingHoistCandidates: true).HasStackingHoistCandidates;
+                HasStackingHoistCandidates = ComputeFlowFlagsWithFootnoteBodies(Root).HasStackingHoistCandidates;
         }
 
         public Size PageSize { get; set; }
@@ -2461,7 +2461,7 @@ namespace PeachBrackets.Html
             // Recompute after layout in case pseudo-element reapplication added any out-of-flow boxes.
             // Every box's size is final now, so it's safe to also compute HasStackingHoistCandidates.
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
-                ComputeFlowFlags(Root!, includeStackingHoistCandidates: true);
+                ComputeFlowFlagsWithFootnoteBodies(Root!);
 
             // Only once the reflow loop has settled, since it reads the final document height.
             ReserveTrailingDirectionalBreak();
@@ -2708,7 +2708,7 @@ namespace PeachBrackets.Html
             await RunLayoutToSettledMeasure(g, rootWidth);
 
             (HasFloatedBoxes, HasOutOfFlowBoxes, HasStackingHoistCandidates) =
-                ComputeFlowFlags(Root!, includeStackingHoistCandidates: true);
+                ComputeFlowFlagsWithFootnoteBodies(Root!);
 
             ReserveTrailingDirectionalBreak();
             _emitter?.EmitReservedBlankSlots();
@@ -4218,6 +4218,32 @@ namespace PeachBrackets.Html
         /// here, never from <see cref="Dom.CssBox"/>.
         /// </summary>
         internal FragmentTree? FragmentTree { get; private set; }
+
+        /// <summary>
+        /// <see cref="ComputeFlowFlags(CssBox, bool)"/> over the tree, plus the stacking-context hoist candidates of every
+        /// <c>float: footnote</c> body: a body is detached from the tree, but it is painted on its own and orders its own
+        /// stacking-context descendants, so one that holds nothing else would otherwise leave the flag false and the
+        /// descendants unpainted.
+        /// </summary>
+        private (bool HasFloated, bool HasOutOfFlow, bool HasStackingHoistCandidates) ComputeFlowFlagsWithFootnoteBodies(CssBox root)
+        {
+            var flags = ComputeFlowFlags(root, includeStackingHoistCandidates: true);
+
+            if (!flags.HasStackingHoistCandidates)
+            {
+                foreach (var call in FootnoteCalls)
+                {
+                    if (ComputeFlowFlags(call.Body, includeStackingHoistCandidates: true).HasStackingHoistCandidates
+                        || DomUtils.NeedsStackingHoist(call.Body))
+                    {
+                        flags.HasStackingHoistCandidates = true;
+                        break;
+                    }
+                }
+            }
+
+            return flags;
+        }
 
         /// <summary>
         /// Recursively checks whether any box in the tree is floated, out-of-flow, and/or (when
