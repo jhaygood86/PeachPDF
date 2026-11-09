@@ -16,9 +16,9 @@ namespace PeachPDF.Tests.Integration
     /// <remarks>
     /// <para>
     /// The fragment emitter reaches a spanning cell through its own row and again through every <c>CssSpacingBox</c>
-    /// standing in for it in the rows it covers. Without the walk dropping the copies that draw what an earlier one already
-    /// shows, every word of a cell spanning N rows was drawn 2N−1 times on top of itself, which reads as bold and extracts
-    /// 2N−1 times.
+    /// standing in for it in the rows it covers. Built once per visit, every word of a cell spanning N rows was drawn 2N−1
+    /// times on top of itself, which reads as bold and extracts 2N−1 times; built once per page, a cell crossing a row taller
+    /// than a page under a repeated group lost every part outside the one band that copy was confined to.
     /// </para>
     /// <para>
     /// These are word censuses of the paint log, not of the fragment tree, because the paint log is what a reader
@@ -291,6 +291,85 @@ namespace PeachPDF.Tests.Integration
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2, "the cell has to continue onto a second page, or this asserts nothing");
         }
+
+        private const string TranslucentHead =
+            "<thead><tr><th style='background:#96aaff;padding:0;height:16px'>HEAD1</th><th style='background:#96aaff;padding:0'>HEAD2</th></tr></thead>";
+
+        private const string TranslucentFoot =
+            "<tfoot><tr><td style='background:#aaff96;padding:0;height:16px'>FOOT1</td><td style='background:#aaff96;padding:0'>FOOT2</td></tr></tfoot>";
+
+        /// <summary>
+        /// A cell spanning <paramref name="rows"/> (each row's height in px) on a 300×400px page, filled with a translucent
+        /// colour so that a part drawn twice shows as a darker band, under the repeated <paramref name="groups"/>.
+        /// </summary>
+        private static string TranslucentSpanningTable(string model, string groups, int[] rows, string align, string content) =>
+            "<!DOCTYPE html><html><head><meta charset='utf-8'><style>@page { size: 300px 400px; margin: 20px } " +
+            "body{margin:0;font:10px/12px Arial} td,th{vertical-align:top;font-weight:normal;text-align:left}</style></head><body>" +
+            $"<table style='border-collapse:{model};border-spacing:0px;table-layout:fixed;width:260px'>" +
+            $"<colgroup><col style='width:100px'><col style='width:160px'></colgroup>{groups}<tbody>" +
+            string.Concat(rows.Select((height, i) => "<tr>" +
+                (i == 0
+                    ? $"<td rowspan='{rows.Length}' style='background:rgba(255,0,0,.5);border:3px solid #006;border-bottom:3px solid #060;vertical-align:{align};padding:2px'>{content}</td>"
+                    : "") +
+                $"<td style='background:#c8dcff;padding:0'><div style='height:{height}px'>R{i}</div></td></tr>")) +
+            "</tbody></table></body></html>";
+
+        public static TheoryData<string, string> SpanningCellsUnderARepeatedGroup() => new()
+        {
+            // The review's repros: the cell's words drawn again under the header on the next page; a cell taller than a
+            // page overstruck; a translucent band drawn twice beside a sliced row; the cell drawn over the repeated header.
+            { "bottom-aligned, tall row last", TranslucentSpanningTable("separate", TranslucentHead + TranslucentFoot, [40, 600], "bottom", "CW1 CW2 CW3") },
+            { "content taller than a page", TranslucentSpanningTable("separate", TranslucentHead + TranslucentFoot, [40, 40], "top", "<div style='height:900px'>CW1 CW2 CW3 CW4 CW5 CW6</div>") },
+            { "footer only, tall row in the middle", TranslucentSpanningTable("collapse", TranslucentFoot, [40, 600, 40], "top", "CW1") },
+            { "header only, content taller than a page", TranslucentSpanningTable("separate", TranslucentHead, [40, 40], "top", "<div style='height:900px'>CW1</div>") },
+            { "header only, tall row first", TranslucentSpanningTable("separate", TranslucentHead, [500, 20], "middle", "CW1") },
+        };
+
+        /// <summary>
+        /// Under a repeated <c>&lt;thead&gt;</c>/<c>&lt;tfoot&gt;</c>, with a row taller than a page sliced across the bands,
+        /// the cell is drawn in parts: no part of its translucent fill twice, none of it over the repeated group, and each of
+        /// its words once in the whole document.
+        /// </summary>
+        [Theory]
+        [MemberData(nameof(SpanningCellsUnderARepeatedGroup))]
+        public async Task ARowspanCellUnderARepeatedGroup_IsDrawnOnceAndNeverOverTheGroup(string layout, string html)
+        {
+            var (_, container) = await PdfGeneratorLayoutHarness.LayoutAsync(html, new PdfGenerateConfig(), BundledFonts.PinSansSerifAsync);
+            var pages = container.FragmentTree!.Fragmentainers.Count;
+            List<string> words = [];
+
+            Assert.True(pages >= 2, $"{layout}: the cell has to continue onto a later page, or this asserts nothing");
+
+            for (var page = 0; page < pages; page++)
+            {
+                using var graphics = new RecordingGraphics(new HtmlRenderContext());
+                FragmentPaintHarness.PaintPage(container, graphics, page);
+
+                words.AddRange(graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString && op.Text!.StartsWith("CW")).Select(op => op.Text!));
+
+                // The translucent fills only: clips pass through, borders and opaque fills do not.
+                var fills = VisibleDecoration(graphics.Log.Where(op =>
+                        op.Kind is not (PaintOpKind.FillRect or PaintOpKind.Polygon) || op.Brush is SolidBrush { PaintColor.A: < 255 }))
+                    .Where(r => r.Width > 0 && r.Height > 0).ToList();
+                var labels = graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString && op.Text is "HEAD1" or "FOOT1").Select(op => op.Bounds).ToList();
+
+                for (var i = 0; i < fills.Count; i++)
+                {
+                    for (var j = i + 1; j < fills.Count; j++)
+                    {
+                        Assert.True(Rect.Intersect(fills[i], fills[j]) is { Width: < 0.01 } or { Height: < 0.01 },
+                            $"{layout}, page {page + 1}: the cell's fill is drawn twice over {Rect.Intersect(fills[i], fills[j])}");
+                    }
+                }
+
+                Assert.DoesNotContain(fills, fill => labels.Exists(label => !Rect.Intersect(fill, label).IsEmpty));
+            }
+
+            Assert.Equal(PaintedWordsOf(html), words.Order());
+        }
+
+        private static IEnumerable<string> PaintedWordsOf(string html) =>
+            System.Text.RegularExpressions.Regex.Matches(html, @"CW\d+").Select(m => m.Value).Order();
 
         /// <summary>The part of each fill and border strip of a paint log that lies inside every clip in force, where some does.</summary>
         private static List<Rect> VisibleDecoration(IEnumerable<PaintOp> log)

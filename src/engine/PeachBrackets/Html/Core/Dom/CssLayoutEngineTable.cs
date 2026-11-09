@@ -7206,6 +7206,13 @@ namespace PeachBrackets.Html.Dom
             if (_isVertical) cell.ActualRight = bottom;
             else cell.ActualBottom = bottom;
 
+            // The span closes on the row that ends it, which can be several fragmentainers after the ones already
+            // emitted with the cell at its opening height. Those are re-opened from where the cell (and the content
+            // the alignment below moves down) changes, or a page in the middle of the span keeps a cell that reached
+            // no further than its first row.
+            if (!_isVertical && Math.Abs(bottom - previousBottom) > 0.001)
+                container?.InvalidateEmittedFragmentsFor(cell, Math.Min(previousBottom, bottom));
+
             var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
 
             cursor.RecordForeignWrite(cell, previousBottom, applied);

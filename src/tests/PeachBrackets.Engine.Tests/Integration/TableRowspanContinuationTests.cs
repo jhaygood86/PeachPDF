@@ -108,7 +108,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// <remarks>
         /// Grouped by fragmentainer rather than listed: a <c>rowspan</c> cell is reached by the emitter
         /// through its own row and through every <c>CssSpacingBox</c> standing in for it, and although the
-        /// walk now drops a copy that would draw what an earlier one already shows (#1834, pinned by
+        /// walk builds it once per page, or in parts under a repeated group (#1834, pinned by
         /// <see cref="TableRowspanCellPaintedOnceTests"/>), what matters here is which fragmentainers hold
         /// the cell and what each one's rectangle is.
         /// </remarks>
