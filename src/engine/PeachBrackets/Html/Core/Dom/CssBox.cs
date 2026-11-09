@@ -1742,6 +1742,16 @@ namespace PeachBrackets.Html.Dom
         /// <summary>Whether the break record naming the deferred floats exists only for them: every child was placed.</summary>
         private bool DeferredFloatsOnly { get => _rare?.DeferredFloatsOnly ?? false; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.DeferredFloatsOnly = value; } }
 
+        /// <summary>What a multi-column container's next fill starts with: the floats the column before it could not hold.</summary>
+        internal (List<CssBox>? Floats, bool OnlyTheFloats) SnapshotDeferredFloats() => (DeferredFloats, DeferredFloatsOnly);
+
+        /// <summary>Puts back what <see cref="SnapshotDeferredFloats"/> returned, so a fill that is made again starts as the first one did.</summary>
+        internal void RestoreDeferredFloats((List<CssBox>? Floats, bool OnlyTheFloats) snapshot)
+        {
+            DeferredFloats = snapshot.Floats;
+            DeferredFloatsOnly = snapshot.OnlyTheFloats;
+        }
+
         internal Rect? EmptyInlineContainingBlock { get => _rare is null ? default(Rect?) : _rare.EmptyInlineContainingBlock; set { if (_rare is null) { if (EqualityComparer<Rect?>.Default.Equals(value, default(Rect?))) return; _rare = new BoxRareState(); } _rare.EmptyInlineContainingBlock = value; } }
 
         /// <summary>
@@ -5255,6 +5265,16 @@ namespace PeachBrackets.Html.Dom
         internal ValueTask<bool> FillFragmentainerWithBlockChildren(Canvas g, BreakToken? resume) =>
             LayoutBlockChildren(g, resume);
 
+        /// <summary>
+        /// Whether <paramref name="child"/> is a box the in-flow content of a fragmentainer does not count: out of flow, or
+        /// not rendered at all (<c>display: none</c>, or the whitespace between two boxes). The multi-column engine filters its
+        /// children the same way.
+        /// </summary>
+        private static bool TakesNoPartInTheFlow(CssBox child) =>
+            child.IsExcludedFromFlow
+            || child.DerivedStyle.ActualDisplay == Keywords.None
+            || (child.HtmlTag is null && child.IsSpaceOrEmpty);
+
         private async ValueTask<bool> LayoutBlockChildren(Canvas g, BreakToken? resume)
         {
             var resumeAt = resume as BlockBreakToken;
@@ -5320,6 +5340,7 @@ namespace PeachBrackets.Html.Dom
             // resumed child itself - which §3.1 propagation makes ordinary, since the container that travels
             // is the very box the pass resumed into.
             var resumeConsumed = false;
+            var inFlowChildPlacedByThisFill = false;
 
             _canRestartChildLoop = true;
 
@@ -5353,6 +5374,23 @@ namespace PeachBrackets.Html.Dom
                             resumeAt.ChildToken,
                             resumeAt.ResumeTopOverride ?? ColumnTopForTheChildThisFillBeginsAt(resumeAt, childBox));
                     }
+
+                    // A column fill that resumed onto a float: everything in flow before the float was laid out in an
+                    // earlier column, so the first in-flow child after it has no previous sibling in this one. Derived from
+                    // the sibling it did have (ResolveBlockChildOffset), it was placed where that sibling ended - in the column
+                    // the fill had left - and the text of the child was drawn nowhere.
+                    if (resumeConsumed
+                        && i > start
+                        && !inFlowChildPlacedByThisFill
+                        && !TakesNoPartInTheFlow(childBox)
+                        && childBox._resumeTopOverride is null
+                        && Boxes[start].IsExcludedFromFlow
+                        && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } resumedColumn })
+                    {
+                        childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
+                    }
+
+                    if (!TakesNoPartInTheFlow(childBox)) inFlowChildPlacedByThisFill = true;
 
                     // This frame places the child and then hands it its own content — the offset is
                     // appended by the loop rather than assigned by the child (see LayoutBlockChild).

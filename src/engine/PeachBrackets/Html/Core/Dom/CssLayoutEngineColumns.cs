@@ -672,6 +672,10 @@ namespace PeachBrackets.Html.Dom
             // and the content genuinely does not fit this fragment.
             var finishedAtTheFullBudget = false;
 
+            // The floats an earlier fragment left for this one, which the first column of every attempt starts with: an attempt that
+            // ends with a float deferred to a column that never came would otherwise hand it to the first column of the next.
+            var deferredAtTheStart = columnsBox.SnapshotDeferredFloats();
+
             for (var attempt = 0; ; attempt++)
             {
                 (carry, contentBottom, filledColumns) =
@@ -740,6 +744,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 PassRewind.RollBackTo(resume, children);
+                columnsBox.RestoreDeferredFloats(deferredAtTheStart);
 
                 // The attempt being discarded recorded columns of its own - but only its own: an earlier
                 // run sharing this (columnsBox, startSlot) slot already finished and must not be erased
@@ -754,6 +759,7 @@ namespace PeachBrackets.Html.Dom
             if (carry is not null && !IsColumnSpanBoundary(carry) && finishedAtTheFullBudget && target < pageBudget)
             {
                 PassRewind.RollBackTo(resume, children);
+                columnsBox.RestoreDeferredFloats(deferredAtTheStart);
                 htmlContainer.ClearCapturedInstancesFrom(columnsBox, startSlot, recordedBefore);
 
                 (carry, contentBottom, filledColumns) =
