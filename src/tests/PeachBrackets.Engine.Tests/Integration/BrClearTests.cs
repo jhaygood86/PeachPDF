@@ -21,21 +21,36 @@ public class BrClearTests
 
     private const string Float = "<div id='f' style='float:left;width:75pt;height:52.5pt'></div>";
 
+    // A break that does not clear leaves the block after it where the line puts it, which depends on the fallback font's line height, so only
+    // "cleared to the float's bottom" is exact (52.5pt) and "not cleared" is anything above it.
     [Theory]
-    [InlineData("clear=\"all\"", 52.5)]
-    [InlineData("clear=\"left\"", 52.5)]
-    [InlineData("clear=\"both\"", 52.5)]
-    [InlineData("clear=\"right\"", 30)]
-    [InlineData("clear=\"none\"", 30)]
-    [InlineData("clear=\"nonsense\"", 30)]
-    [InlineData("", 30)]
-    public async Task BrAfterABlock_PutsTheNextBlockBelowTheFloat(string attribute, double expectedBelowTop)
+    [InlineData("clear=\"all\"", true)]
+    [InlineData("clear=\"left\"", true)]
+    [InlineData("clear=\"both\"", true)]
+    [InlineData("clear=\"right\"", false)]
+    [InlineData("clear=\"none\"", false)]
+    [InlineData("clear=\"nonsense\"", false)]
+    [InlineData("", false)]
+    public async Task BrAfterABlock_PutsTheNextBlockBelowTheFloat(string attribute, bool cleared)
     {
         var root = await LayoutAsync(
             $"<div id='w' style='width:300pt'>{Float}<div style='height:15pt'></div><br {attribute}><div id='n' style='height:7.5pt'></div></div>");
 
-        var w = Box(root, "w");
-        Assert.Equal(w.Location.Y + expectedBelowTop, Box(root, "n").Location.Y, 1);
+        AssertCleared(root, cleared);
+    }
+
+    private static void AssertCleared(CssBox root, bool cleared)
+    {
+        var below = Box(root, "n").Location.Y - Box(root, "w").Location.Y;
+
+        if (cleared)
+        {
+            Assert.Equal(52.5, below, 1);
+        }
+        else
+        {
+            Assert.InRange(below, 15, 52.4);
+        }
     }
 
     [Fact]
@@ -53,7 +68,7 @@ public class BrClearTests
         var root = await LayoutAsync(
             $"<div id='w' style='width:300pt'>{Float}<div style='height:15pt'></div><br clear='all' style='clear:none'><div id='n' style='height:7.5pt'></div></div>");
 
-        Assert.Equal(Box(root, "w").Location.Y + 30, Box(root, "n").Location.Y, 1);
+        AssertCleared(root, false);
     }
 
     [Fact]
