@@ -32,11 +32,21 @@ fill starts with and restores it before each further attempt (`SnapshotDeferredF
 
 **Residuals measured, not fixed.** 320 generated multicol documents (floats and columns always on) rendered by `main` and the
 branch: lost words 28,087 -> 27,312, duplicated 5,858 -> 5,122; 86 documents lose fewer words, 205 the same, 29 lose
-more (largest +41, +18, +13 on documents that already lose words). Reductions of the worst: a float taller than the page and wider
-than its column with the paragraph after it (`columns:3`; the paragraph has no room beside the float and goes below it, past the
-page, where `main` drew it at a stale position); and a right float with text narrower than its word, now placed in another column
-and clipped at the page's content edge where `main` drew it elsewhere. They are other mechanisms that the stale position used to
-hide (#2316 for the first, #2317 for a float whose first fragment is on a page the fill resumes past), see [the residual losses](../accepted-gaps/some-documents-with-floats-still-lose-words-after-tall-floats-continue.md).
+more (largest +41, +18, +13 on documents that already lose words). Each of the 29 was reduced with a delta debugger (predicate:
+`main` draws a word the branch does not) and compared with Chrome; they are other mechanisms that the stale position used to hide,
+not new ones the change introduced:
+
+- **A word with no room beside a float that continues into a later column** (10 documents, #2316 and the comment there): the line
+  is shifted below the float, `ShiftEmptyLineBelowCrowdingFloats` refuses that inside a column (a float continuing from one
+  column into the next has no geometry of its own there), and the line stays where no column claims it. Giving the word room (a
+  `max-width` on the float) makes every one of them draw it, which is how the cluster was confirmed. Includes a nowrap run
+  placed past the content edge and clipped.
+- **A nested `columns` container after the float** (#2318: three documents), **two floats in a column, the second holding a
+  paragraph** (#2319), **a float in a table cell or grid inside columns, and a float then an inline-block** (#2320). Narrowing the
+  float does not change these.
+- **Documents where Chrome loses words too** (a float taller than the page: its own text is clipped there as well): the branch
+  loses a different subset, not counted as a defect.
+- #2317 (a float whose first fragment is on a page the fill resumes past).
 
 **Not done.** Inline text or a `<span>` right after the float (the float and the text are then in one anonymous block, so the resume token names that block and not the column's children) still loses its words (#2312), and so does a second float after the first (the #2289 family). #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
 other mechanisms and still lose or misplace a word.
