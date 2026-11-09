@@ -48,6 +48,51 @@ public class FloatPlacementTests
         Assert.True(positions["w299_469"].X >= 20 + 131 - 0.5, $"first word at x={positions["w299_469"].X}, inside the left float");
     }
 
+    // A word that cannot wrap (white-space: nowrap on its span) is placed like any other word: with no room for it beside a float the
+    // line box moves below the float (CSS 2.1 §9.5), where it used to be put past the float's right edge, off the page. With room
+    // beside the float it stays there.
+    [Theory]
+    [InlineData(260, 50, 20)]
+    [InlineData(130, 20, 150)]
+    public async Task NoWrapWordAfterAFloat_GoesBelowItOnlyWhenThereIsNoRoomBeside(int floatWidth, double expectedTop, double expectedLeft)
+    {
+        var body = $"<div style='float:left;width:{floatWidth}pt;height:30pt'>w1_1</div>" +
+                   "<p><span style='white-space:nowrap'>w1_3</span></p>";
+
+        var html = Page(body);
+        var (painted, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(body, painted);
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+
+        var positions = await PaintedWords.PositionsAsync(html);
+        Assert.Equal(expectedTop, positions["w1_3"].Y, 1.5);
+        Assert.Equal(expectedLeft, positions["w1_3"].X, 1.5);
+    }
+
+    // #2294: what has to stay on one line is the whole nowrap run, not its first word: a run of two words whose first word fits beside the float
+    // still has no room there, and moves below the float. The same when the run wraps onto a line of its own after text (the shift is
+    // asked again for the new line). With room for the run it stays beside the float.
+    [Theory]
+    [InlineData("<span style='white-space:nowrap'>w1_3 w1_4</span>", 220, 50, 20)]
+    [InlineData("<span style='white-space:nowrap'>w1_3 w1_4</span>", 150, 20, 170)]
+    [InlineData("w1_2 <span style='white-space:nowrap'>w1_3 w1_4</span>", 230, 50, 20)]
+    public async Task NoWrapRunAfterAFloat_IsMovedAsAWhole(string paragraph, int floatWidth, double expectedTop, double expectedLeft)
+    {
+        var body = $"<div style='float:left;width:{floatWidth}pt;height:30pt'>w1_1</div><p>{paragraph}</p>";
+
+        var html = Page(body);
+        var (painted, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(body, painted);
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
+
+        var positions = await PaintedWords.PositionsAsync(html);
+        Assert.Equal(expectedTop, positions["w1_3"].Y, 1.5);
+        Assert.Equal(expectedLeft, positions["w1_3"].X, 1.5);
+        Assert.Equal(positions["w1_3"].Y, positions["w1_4"].Y, 1.5);
+    }
+
     // A line with no room beside floats that are taller than the page is shifted below them (CSS 2.1 §9.5), which is in a later
     // fragmentainer: the floats were placed before the line and every page leaves less of them to clear.
     [Fact]
