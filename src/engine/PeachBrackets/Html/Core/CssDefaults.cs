@@ -41,8 +41,9 @@ namespace PeachBrackets.Html
             section, search,
             ol, p, ul, center,
             dir, menu, pre,
-            details, summary,
+            details, summary, legend,
             hr               { display: block }
+            legend           { padding-inline: 2px }
             foreignObject    { display: block }
             li              { display: list-item }
             /* HTML Standard 15.3.1 "Hidden elements", verbatim except where noted. */

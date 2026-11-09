@@ -55,6 +55,16 @@ public sealed class HtmlDocumentOptions
     public double? ViewportHeightPoints { get; set; }
 
     /// <summary>
+    /// Whether a <see cref="MediaType.Screen"/> document skips the contents of a <c>content-visibility: auto</c> element that is not relevant to the user
+    /// (css-contain-2 §4): one whose box lies well away from the viewport and holds neither focus. Off by default, as a document laid out once shows every
+    /// page and a host has to say where it is looking: the host reports the viewport with <see cref="HtmlDocument.SetViewport"/>, and when
+    /// <see cref="HtmlDocument.ContentVisibilityNeedsUpdate"/> is true calls <see cref="HtmlDocument.UpdateContentVisibilityAsync"/> to skip or show contents
+    /// as the viewport moves. A skipped element is as large as an empty box, or its <c>contain-intrinsic-size</c> (<c>auto</c> being the size it last had
+    /// when it was shown). A paged document never skips: all of it is shown.
+    /// </summary>
+    public bool SkipOffscreenContent { get; set; }
+
+    /// <summary>
     /// The pointing devices the <c>hover</c>, <c>any-hover</c>, <c>pointer</c> and <c>any-pointer</c> media features report. <see langword="null"/>
     /// (the default) is <see cref="InputCapabilities.None"/>: a document that is not pointed at, so those queries match their "none" state.
     /// </summary>

@@ -264,6 +264,16 @@ public sealed class DocumentSelection
             throw new ArgumentOutOfRangeException(nameof(position), position, "The character index is outside the text of its run.");
     }
 
+    /// <summary>
+    /// Moves the anchor and the focus to where the same text sits after the document was laid out again with other runs, without a change event: the
+    /// selection is the same, its positions are not.
+    /// </summary>
+    internal void Rebase(TextPosition? anchor, TextPosition? focus)
+    {
+        _anchor = anchor;
+        _focus = focus;
+    }
+
     private void Set(TextPosition? anchor, TextPosition? focus, double? goalX)
     {
         var changed = _anchor != anchor || _focus != focus;

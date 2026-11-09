@@ -278,6 +278,9 @@ namespace PeachBrackets.Html.Parse
             // generation does: "as if it had been replaced in the element tree by its contents".
             FlattenDisplayContents(htmlContainer.DisplayContentsShells, cssValueParser);
 
+            // Before the first pass that reads a box's text (it would parse words nobody will see): what content-visibility: hidden skips is not generated.
+            SkipHiddenContents(root);
+
             CorrectTextBoxes(root);
 
             WrapDetailsContents(root);
@@ -602,6 +605,8 @@ namespace PeachBrackets.Html.Parse
             // No bidi pass runs here (see this method's remarks), so this is spliced against the
             // as-authored tree exactly as GenerateCssTree's own is, just without a bidi pass before it.
             FlattenDisplayContents(displayContentsShells, cssValueParser);
+
+            SkipHiddenContents(root);
 
             WrapDetailsContents(root);
             CorrectTextBoxes(root);
@@ -1606,6 +1611,10 @@ namespace PeachBrackets.Html.Parse
             // reached, so its display is final and can be asked about here.
             NormalizeFlexOrGridItem(box);
 
+            // 11b. A fixed box inside a box that layout or paint containment applies to has that box, not the page, as its containing block
+            // (css-contain-2 §3.2, §3.4), which is what an absolute box has.
+            NormalizeFixedInContainment(box);
+
             // 12. display: contents (CSS Display 3 §2.5): record the element for the splice that follows
             // the cascade, or compute it to something a box can actually be.
             ResolveDisplayContents(box, displayContentsShells);
@@ -1902,6 +1911,25 @@ namespace PeachBrackets.Html.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
                 _ => display
             };
+
+        /// <summary>
+        /// Makes a <c>position: fixed</c> box absolute when an ancestor has layout or paint containment applied, since that ancestor is then its containing
+        /// block (css-contain-2 §3.2, §3.4) and the engine's absolute placement already resolves against an ancestor. The ancestors' own cascade has finished
+        /// by the time this box is reached.
+        /// </summary>
+        private static void NormalizeFixedInContainment(CssBox box)
+        {
+            if (box.Position.Value is not PositionMode.Fixed) return;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (!DomUtils.AppliesLayoutOrPaintContainment(ancestor)) continue;
+
+                box.Position = CssProperty<PositionMode>.FromValue(Keywords.Absolute, PositionMode.Absolute);
+                box.FixedInContainment = true;
+                return;
+            }
+        }
 
         /// <summary>
         /// Brings an in-flow child of a flex or grid container — a flex/grid item — into the shape those
@@ -4155,6 +4183,49 @@ namespace PeachBrackets.Html.Parse
         /// <c>content-visibility: hidden</c> on that box, so no <c>display</c> value an author gives the content can show it (a panel written <c>display: flex</c>
         /// is as hidden as one left alone). A second <c>summary</c> is content, as in the Standard, and is hidden with the rest.
         /// </summary>
+        /// <summary>
+        /// <c>content-visibility: hidden</c> (css-contain-2 §4): the element skips its contents - everything under it, generated content included, is left out
+        /// as if it were <c>display: none</c> - while the element itself stays, with the size containment the value implies (and so the height of an empty
+        /// box, or its <c>contain-intrinsic-size</c>). Contents that are skipped do not take part in layout, painting, hit testing, the accessibility tree or the
+        /// text of the document. It does not apply where containment cannot (a non-atomic inline, an internal table box, a box with no principal box).
+        /// </summary>
+        /// <remarks>
+        /// Closed <c>&lt;details&gt;</c> reaches the same result by another path (<see cref="WrapDetailsContents"/>). <c>content-visibility: auto</c> skips only
+        /// what is not relevant to the user, which in a paged document is nothing: every page is shown. In a screen document that skips what is off screen
+        /// (<see cref="HtmlDocumentOptions.SkipOffscreenContent"/>) the set of elements that are relevant is kept on the container and this runs again over a
+        /// reparse whenever it changes.
+        /// </remarks>
+        private static void SkipHiddenContents(CssBox box)
+        {
+            if (box is CssBoxSvg or CssBoxMath) return;
+
+            if (box.ContentVisibility is { Length: > 0 } visibility && DomUtils.AppliesLayoutContainment(box))
+            {
+                var skipped = visibility.Equals(Keywords.Hidden, StringComparison.OrdinalIgnoreCase);
+
+                // auto skips what is not relevant to the user, which a document set up to say so (a screen one whose host reports a viewport) keeps track of by
+                // the element's place in the source; every other document shows all of it.
+                if (!skipped && visibility.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                    && box.HtmlContainer is { SkipOffscreenContent: true } container && box.HtmlTag is { } tag
+                    && !container.RelevantAutoOrdinals.Contains(tag.SourceOrdinal))
+                {
+                    skipped = true;
+                    box.AutoSkipped = true;
+                }
+
+                if (skipped)
+                {
+                    foreach (var child in box.Boxes)
+                        child.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+
+                    return;
+                }
+            }
+
+            foreach (var child in box.Boxes.ToList())
+                SkipHiddenContents(child);
+        }
+
         private static void WrapDetailsContents(CssBox box)
         {
             if (box is CssBoxSvg or CssBoxMath) return;

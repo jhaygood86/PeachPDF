@@ -1320,6 +1320,15 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool Continuous => MediaType == MediaType.Screen;
 
+        /// <summary>Whether a <c>content-visibility: auto</c> element's contents are skipped while it is not relevant to the user (<see cref="HtmlDocumentOptions.SkipOffscreenContent"/>).</summary>
+        internal bool SkipOffscreenContent { get; set; }
+
+        /// <summary>The source ordinals of the <c>content-visibility: auto</c> elements that are relevant to the user, and so keep their contents. Read when the tree is built.</summary>
+        internal System.Collections.Generic.HashSet<int> RelevantAutoOrdinals { get; set; } = [];
+
+        /// <summary>What each such element's content box last measured while its contents were shown, by source ordinal: what <c>contain-intrinsic-size: auto</c> stands for when they are skipped.</summary>
+        internal System.Collections.Generic.Dictionary<int, (double Width, double Height)> RememberedAutoSizes { get; } = [];
+
         /// <summary>Where a continuous document's viewport is, and how far that displaces the fixed and sticky boxes from where layout put them.</summary>
         internal ViewportState View { get; } = new();
 
@@ -4179,17 +4188,23 @@ namespace PeachBrackets.Html
             // A <body style="display:contents"> generates no box, but its background still propagates to
             // the canvas (CSS Backgrounds 3 §2.11.2 excludes only display:none from that rule) - so it is
             // looked for among the shells as well as the tree.
-            var body = DomUtils.GetBoxByTagName(Root, "body")
+            var bodyBox = DomUtils.GetBoxByTagName(Root, "body");
+            var body = bodyBox
                 ?? DisplayContentsShells.Find(s => s.HtmlTag?.Name.Equals("body", StringComparison.OrdinalIgnoreCase) == true);
 
             // Cleared first so a re-layout can never leave a previous winner suppressed.
             if (html is not null) html.SuppressOwnBackgroundPaint = false;
             if (body is not null) body.SuppressOwnBackgroundPaint = false;
 
+            // Layout or paint containment on the root element or on body stops body's background propagating (css-contain-2 §2); the root's own still
+            // is the canvas. A display: contents body has no box for containment to apply to.
+            var bodyPropagates = !(html is not null && DomUtils.AppliesLayoutOrPaintContainment(html))
+                && !(bodyBox is not null && DomUtils.AppliesLayoutOrPaintContainment(bodyBox));
+
             // The root's own background is the canvas background; body's is propagated only when the
             // root's background-image is none and its background-color is transparent (§2.11.2).
             CanvasBackgroundBox = html is { HasOwnBackground: true } ? html
-                : body is { HasOwnBackground: true } ? body
+                : bodyPropagates && body is { HasOwnBackground: true } ? body
                 : null;
 
             if (CanvasBackgroundBox is not null)

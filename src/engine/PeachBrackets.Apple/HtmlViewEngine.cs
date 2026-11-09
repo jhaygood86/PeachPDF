@@ -75,6 +75,9 @@ internal interface IHtmlViewHost
     /// <summary>Scrolls so that a rectangle of the content (CSS pixels) shows.</summary>
     void Reveal(CGRect frame);
 
+    /// <summary>Scrolls so that <paramref name="y"/>, a distance from the top of the content in CSS pixels, is at the top of what is shown, without animation.</summary>
+    void ScrollTop(double y);
+
     /// <summary>Lets the person choose one of a <c>&lt;select&gt;</c>'s options, near a rectangle of the content; calls <paramref name="chosen"/> with its index, or not at all when dismissed.</summary>
     void PickOption(IReadOnlyList<SelectOption> options, CGRect anchor, Action<int> chosen);
 
@@ -329,6 +332,7 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
             MarginLeftPoints = 0,
             RecordTextRuns = true,
             EnableSelectionStyling = true,
+            SkipOffscreenContent = true,
             CollectFormFields = true,
             PaintFormControls = true,
             ColorScheme = host.IsDark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
@@ -447,6 +451,57 @@ internal sealed partial class HtmlViewEngine(IHtmlViewHost host) : IDisposable
 
         if (document.ViewportLayersChanged)
             _tilesInvalid = true;
+
+        // What came near is shown and what went away skipped, for an element with `content-visibility: auto`.
+        if (document.ContentVisibilityNeedsUpdate)
+            _ = UpdateContentVisibilityAsync(document);
+    }
+
+    private bool _updatingContentVisibility;
+    private bool _contentVisibilityAgain;
+
+    // The contents of an element with `content-visibility: auto` that is away from the view are skipped and those that came near are shown
+    // (css-contain-2 §4). The view is moved to where the document says it is looking, so what changed above it does not move what is on screen.
+    // One update at a time: a scroll that comes while one runs is looked at again when it is done.
+    private async Task UpdateContentVisibilityAsync(HtmlDocument document)
+    {
+        if (_updatingContentVisibility)
+        {
+            _contentVisibilityAgain = true;
+            return;
+        }
+
+        _updatingContentVisibility = true;
+        BeginWork();
+        var held = _context;
+        try
+        {
+            do
+            {
+                _contentVisibilityAgain = false;
+                if (_context is not { } context)
+                    return;
+
+                UpdateResult result;
+                using (var measuring = new CoreGraphicsComposer(context, 1, 1, 1, 1))
+                    result = await document.UpdateContentVisibilityAsync(measuring.Canvas);
+
+                if (!ReferenceEquals(document, _document) || !result.Applied)
+                    continue;
+
+                UpdateMetrics();
+                host.ContentResized();
+                host.ScrollTop(document.Viewport.Y * PixelsPerPoint);
+                Invalidate(result.DirtyRegions);
+                RefreshAccessibility();
+            }
+            while (_contentVisibilityAgain && ReferenceEquals(document, _document));
+        }
+        finally
+        {
+            _updatingContentVisibility = false;
+            EndWork(held);
+        }
     }
 
     private bool _overlayStale = true;

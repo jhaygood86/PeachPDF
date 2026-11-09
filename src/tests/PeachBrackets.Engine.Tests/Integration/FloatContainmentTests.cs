@@ -72,7 +72,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         // fieldset a formatting context of its own, and a button is one whatever its display), so a wrapper around the box and the block
         // after it is as tall as the float plus that block. Measured in pt so no px conversion is involved.
         [InlineData("<fieldset style='margin:0;padding:0;border:0'>", "</fieldset>", 80d)]
-        [InlineData("<fieldset style='margin:0;padding:0;border:0'><legend style='display:block;padding:0;margin:0;height:20pt'></legend>", "</fieldset>", 100d)]
+        [InlineData("<fieldset style='margin:0;padding:0;border:0'><legend style='padding:0;margin:0;height:20pt'></legend>", "</fieldset>", 100d)]
         [InlineData("<button style='display:block;margin:0;padding:0;border:0;width:200pt'>", "</button>", 80d)]
         public async Task FieldsetAndBlockButton_ContainTheirFloat(string open, string close, double expectedWrapperHeight)
         {

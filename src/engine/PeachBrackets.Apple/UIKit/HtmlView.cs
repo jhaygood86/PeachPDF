@@ -776,6 +776,12 @@ public sealed class HtmlView : UIScrollView, IHtmlViewHost, IUIKeyInput, IUIGest
         ScrollRectToVisible(new CGRect(frame.X * zoom, frame.Y * zoom, frame.Width * zoom, frame.Height * zoom), true);
     }
 
+    void IHtmlViewHost.ScrollTop(double y)
+    {
+        var maxY = Math.Max(0, (_page.Frame.Height * ZoomScale) - Bounds.Height);
+        SetContentOffset(new CGPoint(ContentOffset.X, Math.Clamp(y * ZoomScale, 0, maxY)), false);
+    }
+
     // The keyboard comes and goes with the text field's focus: the view is the first responder while one has it.
     void IHtmlViewHost.EditingChanged(bool editing)
     {

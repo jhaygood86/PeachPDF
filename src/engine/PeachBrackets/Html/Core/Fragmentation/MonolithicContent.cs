@@ -35,7 +35,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// Whether content is kept unbroken under CSS Fragmentation §4.1.
         /// </summary>
         internal static bool IsMonolithic(CssBox box) =>
-            IsReplaced(box) || (IsScrollContainer(box)
+            IsReplaced(box) || box.AppliesSizeContainment || (IsScrollContainer(box)
                 && (HasConstrainedLogicalHeight(box)
                     || IsLaidOutByAnEngineThatCannotContinueIt(box)));
 
@@ -143,6 +143,10 @@ namespace PeachBrackets.Html.Fragmentation
             // §3.3 propagates from the root's own body child only, and only while the root has not already
             // declared an overflow of its own.
             if (!IsNamed(box, "body") || box.ParentBox is not { } parent || !IsRootElement(parent))
+                return false;
+
+            // Layout or paint containment on the root element or on body stops the propagation (css-contain-2 §2); body is then an overflow box of its own.
+            if (DomUtils.AppliesLayoutOrPaintContainment(parent) || DomUtils.AppliesLayoutOrPaintContainment(box))
                 return false;
 
             return parent.Overflow.Value == Overflow.Visible;

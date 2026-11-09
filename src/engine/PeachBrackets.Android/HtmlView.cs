@@ -403,6 +403,7 @@ public sealed partial class HtmlView : FrameLayout
         MarginLeftPoints = 0,
         RecordTextRuns = true,
         EnableSelectionStyling = true,
+        SkipOffscreenContent = true,
         CollectFormFields = true,
         PaintFormControls = true,
         ColorScheme = IsNightMode() ? ColorSchemePreference.Dark : ColorSchemePreference.Light,
@@ -500,6 +501,10 @@ public sealed partial class HtmlView : FrameLayout
 
         var perPoint = Scale * PixelsPerPoint;
         document.SetViewport(new PeachDrawing.Core.Rect(_scrollX / perPoint, _scrollY / perPoint, Width / perPoint, Height / perPoint));
+
+        // What came near is shown and what went away skipped, for an element with `content-visibility: auto`.
+        if (document.ContentVisibilityNeedsUpdate)
+            _ = UpdateContentVisibilityAsync(document);
 
         // A scroll moves what an animation on a scroll or view timeline plays at.
         EnsureAnimationLoop();

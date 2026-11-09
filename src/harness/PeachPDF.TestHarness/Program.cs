@@ -15159,6 +15159,69 @@ await SaveShowcaseAsync("background_blend_mode_and_isolation", "Graphics & Effec
     "background-blend-mode blends each background layer with the ones beneath it and the colour in a group of its own; isolation: isolate makes an element an isolated group, so a descendant's mix-blend-mode blends with the element's own paint instead of the page behind.",
     backgroundBlendHtml, pdfConfig);
 
+// --- contain and content-visibility showcase (CSS Containment 2 §3, §4) ---
+
+var containmentHtml = """
+    <!DOCTYPE html><html><head><style>
+    @page { size: a4; margin: 15mm }
+    body { font: 8.5pt Arial, sans-serif; margin: 0 }
+    h1 { font-size: 15pt; margin: 0 0 0.3em }
+    p.intro { margin: 0 0 0.7em; color: #555; font-size: 7.5pt }
+    .row { display: flex; gap: 12px; margin-bottom: 14px }
+    .cell { width: 150px; font-size: 7pt; color: #444 }
+    .box { border: 2px solid #1d4ed8; background: #dbe7ff; margin-bottom: 3px; padding: 3px }
+    .float { float: left; width: 50px; height: 40px; background: #e63946 }
+    .after { height: 10px; background: #2a9d8f }
+    .clip { width: 100px; height: 40px; border: 2px solid #1d4ed8; border-radius: 12px; background: #dbe7ff; margin-bottom: 3px }
+    .wide { width: 135px; height: 60px; background: #e63946 }
+    .cb { position: relative; width: 120px; height: 60px; border: 2px solid #1d4ed8; margin-bottom: 3px }
+    .pin { position: absolute; right: 0; bottom: 0; width: 30px; height: 15px; background: #e63946 }
+    .sz { width: 100px; border: 2px solid #1d4ed8; background: #dbe7ff; margin-bottom: 3px }
+    .sz .inner { height: 50px; background: #e63946 }
+    .cnt .n { counter-increment: c; margin: 0 } .cnt .n::before { content: counter(c) '. ' }
+    .qq { quotes: '<' '>' '[' ']'; margin: 0 } .qq::before { content: open-quote } .qq::after { content: close-quote }
+    </style></head><body>
+    <h1>contain and content-visibility</h1>
+    <p class="intro">Layout and paint containment make a box contain its floats, so what follows starts below them; paint containment also clips the overflow to the padding edge, rounded corners included, and a contained box is the containing block of its absolutely positioned descendants.</p>
+    <div class="row">
+      <div class="cell"><div class="box"><div class="float"></div></div><div class="after"></div>no containment</div>
+      <div class="cell"><div class="box" style="contain: layout"><div class="float"></div></div><div class="after"></div>contain: layout</div>
+      <div class="cell"><div class="box" style="contain: paint"><div class="float"></div></div><div class="after"></div>contain: paint</div>
+      <div class="cell"><div class="box" style="content-visibility: auto"><div class="float"></div></div><div class="after"></div>content-visibility: auto</div>
+    </div>
+    <div class="row">
+      <div class="cell"><div class="clip"><div class="wide"></div></div>no containment</div>
+      <div class="cell"><div class="clip" style="contain: paint"><div class="wide"></div></div>contain: paint</div>
+      <div class="cell"><div class="clip" style="contain: layout"><div class="wide"></div></div>contain: layout (no clip)</div>
+    </div>
+    <div class="row">
+      <div class="cell"><div style="margin-left: 20px"><div class="cb" style="position: static"><div class="pin"></div></div></div>static: the pin goes to the page corner</div>
+      <div class="cell"><div class="cb" style="position: static; contain: layout"><div class="pin"></div></div>contain: layout: against the box</div>
+    </div>
+    <div class="row">
+      <div class="cell"><div class="sz"><div class="inner"></div></div>no containment</div>
+      <div class="cell"><div class="sz" style="contain: size"><div class="inner"></div></div>contain: size: as an empty box</div>
+      <div class="cell"><div class="sz" style="contain: size; contain-intrinsic-height: 20px"><div class="inner"></div></div>contain-intrinsic-height: 20px</div>
+      <div class="cell"><div class="sz" style="content-visibility: hidden; contain-intrinsic-height: 20px"><div class="inner"></div></div>content-visibility: hidden</div>
+    </div>
+    <div class="row">
+      <div class="cell"><div class="clip" style="overflow: clip"><div class="wide"></div></div>overflow: clip</div>
+      <div class="cell"><div class="clip" style="overflow: clip; overflow-clip-margin: 12px"><div class="wide"></div></div>overflow-clip-margin: 12px</div>
+      <div class="cell"><div class="clip" style="overflow: clip; overflow-clip-margin: border-box 4px"><div class="wide"></div></div>border-box 4px</div>
+    </div>
+    <div class="row">
+      <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div><p class="n">b</p></div><p class="n">c</p></div>no containment: 1 2 3</div>
+      <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div style="contain: style"><p class="n">b</p></div><p class="n">c</p></div>contain: style: 1 1 2</div>
+      <div class="cell"><div class="qq">outer <div class="qq">inner</div></div>nested quotes</div>
+      <div class="cell"><div class="qq">outer <div style="contain: style"><div class="qq">inner</div></div></div>contain: style: depth 0 again</div>
+    </div>
+    </body></html>
+    """;
+
+await SaveShowcaseAsync("contain_and_content_visibility", "Layout", "contain and content-visibility",
+    "contain: layout and paint make a box contain its floats and be the containing block of its absolutely positioned descendants; paint containment also clips to the padding edge, rounded corners included; size containment sizes a box as if it were empty (or by contain-intrinsic-size) and style containment scopes counters and quotes. content-visibility: auto turns layout, style and paint containment on and hidden also skips the contents.",
+    containmentHtml, pdfConfig);
+
 // --- color-scheme and light-dark() showcase (CSS Color Adjust 1 §2, CSS Color 5) ---
 
 var colorSchemeHtml = """

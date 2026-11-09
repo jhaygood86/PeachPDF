@@ -94,6 +94,20 @@ namespace PeachBrackets.Html.Dom
             // CssValueParser.PixelsPerPointOf's own doc comment (issue #814).
             var pixelsPerPoint = word.OwnerBox.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
+            // Size containment (css-contain-2 §3.1): a replaced element has a natural width and height of 0 and no natural ratio, or its contain-intrinsic
+            // size; the author's width, height and aspect-ratio still apply.
+            var widthContained = word.OwnerBox.AppliesSizeContainmentInAxis(widthAxis: true);
+            var heightContained = word.OwnerBox.AppliesSizeContainmentInAxis(widthAxis: false);
+
+            if (widthContained || heightContained)
+            {
+                var pixelsToUnits = Length.PointsPerPx * pixelsPerPoint;
+                if (widthContained) intrinsicWidth = (word.OwnerBox.ContainIntrinsicLength(widthAxis: true) ?? 0) / pixelsToUnits;
+                if (heightContained) intrinsicHeight = (word.OwnerBox.ContainIntrinsicLength(widthAxis: false) ?? 0) / pixelsToUnits;
+                hasIntrinsicRatio = false;
+                ratioOnly = null;
+            }
+
             // Intrinsic sizes arrive in CSS-pixel space (a raster's device pixels / an SVG's user
             // units, both 1px = 1/96in per spec), while word.Width/Height are layout units (points).
             // Convert once here; every px-unit branch below applies the same shared factor.
@@ -149,7 +163,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 // 20 is the legacy broken-image placeholder size, in CSS pixels like the px branches.
-                word.Width = hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
+                word.Width = widthContained ? 0 : hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
             }
 
             // The limits the width is kept to; -1 when there is none (or a percentage whose containing block has no width to speak of yet).
@@ -205,7 +219,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 // 22.8 is the legacy placeholder height, in CSS pixels like the px branches.
-                word.Height = word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx * pixelsPerPoint;
+                word.Height = heightContained ? 0 : word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx * pixelsPerPoint;
             }
 
             if (effectiveRatio is > 0)
@@ -3556,7 +3570,7 @@ namespace PeachBrackets.Html.Dom
             if (box.Position.Value is not PositionMode.Absolute) return null;
 
             var ancestor = DomUtils.GetNearestPositionedAncestor(box);
-            return ancestor.IsPositioned || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
+            return DomUtils.FormsAbsoluteContainingBlock(ancestor) || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
         }
 
         public static double? GetBoxHeight(CssBox box)
@@ -4103,6 +4117,24 @@ namespace PeachBrackets.Html.Dom
             var isRootWithPageHeight = box == box.ContainingBlock && box.HtmlContainer is not null;
             var isDefiniteHeight = HasDefiniteHeight(box);
 
+            // Size containment (css-contain-2 §3.1): an auto height is the height of a box with no contents - its contain-intrinsic-height, or nothing - plus its
+            // padding and border, however tall what it holds is; the contents are laid out into it and overflow it. A definite height, min-height and max-height
+            // still apply below.
+            var sizeContainedAutoHeight = !isDefiniteHeight && !isRootWithPageHeight && box.AppliesSizeContainmentInAxis(widthAxis: false);
+
+            if (sizeContainedAutoHeight)
+            {
+                box.ActualBottom = box.Location.Y + (box.ContainIntrinsicLength(widthAxis: false) ?? 0)
+                    + box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
+
+                if (CssValueParser.IsValidLength(box.MinHeight) && (IsHeightDefinite(box.ContainingBlock) || !CssValueParser.DependsOnPercentage(box.MinHeight)))
+                {
+                    var minHeightBasis = ResolveDefiniteHeightValue(box.ContainingBlock) ?? box.ContainingBlock.Size.Height;
+                    box.ActualBottom = Math.Max(box.ActualBottom,
+                        box.Location.Y + CssValueParser.ParseLength(box.MinHeight, minHeightBasis, box) + box.ActualBoxSizeIncludedHeight);
+                }
+            }
+
             // CSS 2.1 §10.6.7: a box that establishes a formatting context of its own and takes its height
             // from content grows to cover any floating descendant whose bottom margin edge falls below its
             // bottom content edge. This is the whole reason `overflow: hidden` (and a float, an
@@ -4118,7 +4150,7 @@ namespace PeachBrackets.Html.Dom
             // it is left alone; the min/max-height clamps below then apply to the result either way, since
             // §10.6.7's increase is
             // part of computing the auto height rather than something that outranks §10.7.
-            if ((!isDefiniteHeight || box.DerivedStyle.ActualDisplay == Keywords.TableCell) && !isRootWithPageHeight && DomUtils.ContainsItsFloats(box))
+            if (!sizeContainedAutoHeight && (!isDefiniteHeight || box.DerivedStyle.ActualDisplay == Keywords.TableCell) && !isRootWithPageHeight && DomUtils.ContainsItsFloats(box))
             {
                 var lowestFloatBottom = DomUtils.LowestFloatBottomInOwnFormattingContext(box);
 
@@ -10306,6 +10338,10 @@ namespace PeachBrackets.Html.Dom
 
             if (box.IsImage) return rect.Bottom + box.ActualMarginBottom;
 
+            // Layout containment gives the box no baseline of its own (css-contain-2 §3.2), so it is aligned by its bottom margin edge, as a replaced element is.
+            if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable && DomUtils.AppliesLayoutContainment(box))
+                return rect.Bottom + box.ActualMarginBottom;
+
             // An inline flex or grid container's baseline is its first item's first line's (css-flexbox-1 §8.5, css-grid-1 §6.1); with no text in any item it is
             // synthesized from the bottom margin edge, as for a replaced element.
             if (box.DerivedStyle.ActualDisplay is Keywords.InlineFlex or Keywords.InlineGrid)
@@ -11034,6 +11070,9 @@ namespace PeachBrackets.Html.Dom
 
         private static async ValueTask<double> GetLargestChildWidth(Canvas g, CssBox box, double currentSize)
         {
+            // Size containment: the contents contribute nothing to the box's intrinsic size (css-contain-2 §3.1).
+            if (box.AppliesSizeContainmentInAxis(widthAxis: true)) return currentSize;
+
             foreach (var childBox in box.Boxes)
             {
                 // An absolutely positioned descendant is out of flow (CSS 2.1 §9.6), so it contributes nothing

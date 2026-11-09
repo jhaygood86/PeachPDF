@@ -642,6 +642,19 @@ namespace PeachBrackets.Html.Dom
         /// pass must no-op instead of painting the same background a second time at its own (possibly
         /// much smaller than the page) laid-out rect.
         /// </summary>
+        /// <summary>
+        /// Set on a box whose computed <c>position</c> is <c>fixed</c> but whose containing block is an ancestor that layout or paint containment applies to
+        /// (css-contain-2 §3.2, §3.4) rather than the page: it is placed like an absolute box (<c>DomParser.NormalizeFixedInContainment</c> gives it that
+        /// <see cref="Position"/>), but it keeps what is specific to a fixed box that an absolute one does not have - its own stacking context.
+        /// </summary>
+        internal bool FixedInContainment { get => _rare is not null && _rare.FixedInContainment; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.FixedInContainment = value; } }
+
+        /// <summary>
+        /// Set on a <c>content-visibility: auto</c> box whose contents are skipped because it is not relevant to the user (<c>DomParser.SkipHiddenContents</c>): it
+        /// has size containment while they are, like <c>content-visibility: hidden</c> always does.
+        /// </summary>
+        internal bool AutoSkipped { get => _rare is not null && _rare.AutoSkipped; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.AutoSkipped = value; } }
+
         internal bool SuppressOwnBackgroundPaint { get => _rare is null ? default(bool) : _rare.SuppressOwnBackgroundPaint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SuppressOwnBackgroundPaint = value; } }
 
         /// <summary>
@@ -8030,7 +8043,7 @@ namespace PeachBrackets.Html.Dom
             // Now that this box's used height and its descendants' percentage heights ARE final, revise
             // every such descendant against them. The second pass is authoritative; the first exists
             // because a box that never reaches here (its containing block is the page) still needs an answer.
-            if (IsPositioned || IsRoot)
+            if (DomUtils.FormsAbsoluteContainingBlock(this) || IsRoot)
             {
                 ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
             }
@@ -8298,7 +8311,7 @@ namespace PeachBrackets.Html.Dom
                     // A positioned descendant establishes the containing block for anything below it and
                     // resolves that subtree from its own epilogue. Only static ancestors are transparent to
                     // this containing-block walk.
-                    if (!child.IsPositioned)
+                    if (!DomUtils.FormsAbsoluteContainingBlock(child))
                     {
                         VisitStaticDescendants(child);
                     }
@@ -9466,6 +9479,14 @@ namespace PeachBrackets.Html.Dom
             {
                 // Nothing of its content: the declared width is folded in below.
             }
+            else if (box.AppliesSizeContainmentInAxis(widthAxis: true))
+            {
+                // Size containment (css-contain-2 §3.1), or inline-size containment where the inline axis is the width: the box is sized as if it had no contents - its contain-intrinsic-width, or nothing, as one unbreakable
+                // run - whatever it holds, a replaced element's own word included. Its padding and border were added above and its declared width is folded in below.
+                var contained = box.ContainIntrinsicLength(widthAxis: true) ?? 0;
+                maxSum += contained;
+                unbreakableRunWidth += contained;
+            }
             else if (IsFlexRow(box) && box.Boxes.Count > 0)
             {
                 double rowMax = 0, rowMin = 0;
@@ -10554,6 +10575,15 @@ namespace PeachBrackets.Html.Dom
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;
+
+            // Layout and paint containment make a box a formatting context root (css-contain-2 §3.2, §3.4), whose margins do not collapse through it; and a box
+            // that size containment gives a height of its own (contain-intrinsic-height) is not empty.
+            if (DomUtils.AppliesLayoutOrPaintContainment(this)
+                || (AppliesSizeContainmentInAxis(widthAxis: false) && (ContainIntrinsicLength(widthAxis: false) ?? 0) > 0))
+            {
+                return false;
+            }
+
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it

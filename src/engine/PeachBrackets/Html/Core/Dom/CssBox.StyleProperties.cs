@@ -302,20 +302,22 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Whether either axis is <c>clip</c> while <see cref="Overflow"/> stays <c>visible</c>: the box
-        /// clips its content to the overflow clip edge without becoming a scroll container.
+        /// clips its content to the overflow clip edge without becoming a scroll container. Paint containment does too: css-contain-2 §3.4 has it change a
+        /// <c>visible</c> axis to <c>clip</c> at used-value time and leave every other value alone.
         /// </summary>
         internal bool ClipsWithoutScrolling =>
-            Overflow.Value == Css.Overflow.Visible && (OverflowX.Value == Css.Overflow.Clip || OverflowY.Value == Css.Overflow.Clip);
+            Overflow.Value == Css.Overflow.Visible
+            && (OverflowX.Value == Css.Overflow.Clip || OverflowY.Value == Css.Overflow.Clip || DomUtils.AppliesPaintContainment(this));
 
         /// <summary>
         /// Whether the box clips its horizontal axis. Only a box that clips without scrolling can leave an
         /// axis open: a <c>visible</c> axis beside a <c>hidden</c>, <c>scroll</c> or <c>auto</c> one is
         /// <c>auto</c> (css-overflow-3 §3.2), so a scroll container clips both.
         /// </summary>
-        internal bool ClipsOverflowHorizontally => !ClipsWithoutScrolling || OverflowX.Value == Css.Overflow.Clip;
+        internal bool ClipsOverflowHorizontally => !ClipsWithoutScrolling || OverflowX.Value == Css.Overflow.Clip || DomUtils.AppliesPaintContainment(this);
 
         /// <summary>Whether the box clips its vertical axis; see <see cref="ClipsOverflowHorizontally"/>.</summary>
-        internal bool ClipsOverflowVertically => !ClipsWithoutScrolling || OverflowY.Value == Css.Overflow.Clip;
+        internal bool ClipsOverflowVertically => !ClipsWithoutScrolling || OverflowY.Value == Css.Overflow.Clip || DomUtils.AppliesPaintContainment(this);
 
         #endregion
 

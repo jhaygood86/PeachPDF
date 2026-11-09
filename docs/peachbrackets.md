@@ -111,6 +111,7 @@ downward. With the default of one unit per point, a canvas for a 400 x 300 point
 | `PageWidthPoints`, `PageHeightPoints` | The sheet. A4 (595 x 842) by default. A `@page { size }` rule in the document overrides it. |
 | `MarginTopPoints`, `MarginRightPoints`, `MarginBottomPoints`, `MarginLeftPoints`, `SetMargins(points)` | The page margins, 20 points each by default. `@page { margin }` overrides them. |
 | `MediaType` | The medium: `Print` (the default) breaks the document into pages and applies `@media print`; `Screen` lays it out as one continuous surface and applies `@media screen`. See [Screen and print media](#screen-and-print-media). |
+| `SkipOffscreenContent` | For `Screen`: skip the contents of `content-visibility: auto` elements that are away from the viewport; see [skipping what is off screen](#skipping-what-is-off-screen-content-visibility-auto). Default false. |
 | `ViewportHeightPoints` | For `Screen`: the height `vh`, a percentage root height and the `height`/`orientation` media features resolve against, and the least height of the surface. Null (the default) when the host does not know it. |
 | `ColorScheme` | What `prefers-color-scheme` reports: `Light` (the default) or `Dark`. |
 | `DevicePixelRatio` | Device pixels the host paints for one CSS pixel (1 by default). The `resolution` and `device-pixel-ratio` media features, a `<source media>` condition and the choice among `srcset` images see it. |
@@ -202,6 +203,23 @@ await document.PaintPageAsync(0, overlayCanvas, DocumentPaintLayer.ViewportAttac
 ```
 
 `Content` and `ViewportAttached` together draw exactly what `All` (the default) does. A fixed box is always in the attached layer; a sticky box is in it while the viewport holds it away from its place, and in the content layer (scrolling with it) before and after. A sticky table cell or row is held inside its table. A `Print` document has no viewport that moves: `SetViewport` returns nothing.
+
+### Skipping what is off screen (`content-visibility: auto`)
+
+An element with `content-visibility: auto` skips its contents while it is not relevant to the user: its box lies well away from the viewport and it holds no focus. A skipped element is as large as an empty box, or its `contain-intrinsic-size` (an `auto` length is the size it last had while its contents were shown). A `Screen` document that sets `SkipOffscreenContent` does this, judging by the viewport it was given; without it every element is shown, and a `Print` document never skips (all of it is shown). Tell the host to look again when the viewport moves:
+
+```csharp
+var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, ViewportHeightPoints = 800, SkipOffscreenContent = true };
+// ...
+document.SetViewport(new Rect(0, scrollY, widthPoints, heightPoints));
+if (document.ContentVisibilityNeedsUpdate)
+{
+    var update = await document.UpdateContentVisibilityAsync(measuringCanvas);   // shows what came near, skips what went away
+    // The document's height can have changed: read Pages[0].HeightPoints again, scroll the host to document.Viewport.Y, and repaint update.DirtyRegions.
+}
+```
+
+Relevant means the box, with half the viewport's height around it, meets the viewport; a box that holds the focus is relevant wherever it is. An element that holds selected text is relevant, and the selection and the highlights are carried over to the document laid out again by the element each text run belongs to. When the contents above the viewport change size, the document moves the viewport so it keeps looking at the same thing: read `Viewport` again after the update and scroll to it. `ContentVisibilityNeedsUpdate` only looks at the elements that have the value, so it is cheap to ask after every `SetViewport`.
 
 A `background-attachment: fixed` image is different: it sits under its box's content and over the backgrounds behind it, so it is part of the content layer and cannot be kept still in the attached one. `HtmlDocument.HasViewportBackgrounds` reports whether the document has one; a host that scrolls a painted surface natively should then paint the visible part of the page itself on every scroll step (`PaintPageRegionAsync`) instead, or the image moves with the content until the next paint puts it back.
 

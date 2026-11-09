@@ -152,8 +152,12 @@ namespace PeachBrackets.Html.Dom
                 // since math content never stretches to fit.
                 var pixelsPerPoint = HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
-                _mathWord.Width = ResolveAxis(new CssLength(Width), layout.InlineSize, ContainingBlock.Size.Width, pixelsPerPoint);
-                _mathWord.Height = ResolveAxis(new CssLength(Height), layout.Ascent + layout.Descent, ContainingBlock.Size.Height, pixelsPerPoint);
+                // Size containment (css-contain-2 §3.1): the natural size is nothing, or the contain-intrinsic size.
+                var naturalWidth = AppliesSizeContainmentInAxis(widthAxis: true) ? ContainIntrinsicLength(widthAxis: true) ?? 0 : layout.InlineSize;
+                var naturalHeight = AppliesSizeContainmentInAxis(widthAxis: false) ? ContainIntrinsicLength(widthAxis: false) ?? 0 : layout.Ascent + layout.Descent;
+
+                _mathWord.Width = ResolveAxis(new CssLength(Width), naturalWidth, ContainingBlock.Size.Width, pixelsPerPoint);
+                _mathWord.Height = ResolveAxis(new CssLength(Height), naturalHeight, ContainingBlock.Size.Height, pixelsPerPoint);
             }
 
             return ValueTask.CompletedTask;

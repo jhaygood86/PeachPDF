@@ -508,6 +508,10 @@ public sealed partial class HtmlView : UserControl
 
         var moved = document.SetViewport(viewport);
 
+        // What came near is shown and what went away skipped, for an element with `content-visibility: auto`.
+        if (document.ContentVisibilityNeedsUpdate)
+            _ = UpdateContentVisibilityAsync(document);
+
         // An animation on a scroll or view timeline is due a step for this scroll, however still the frame loop was.
         EnsureAnimationLoop();
 
@@ -586,6 +590,7 @@ public sealed partial class HtmlView : UserControl
         SelectionBackground = PaintColor.FromArgb(SelectionColor.A, SelectionColor.R, SelectionColor.G, SelectionColor.B),
         RecordTextRuns = true,
         EnableSelectionStyling = true,
+        SkipOffscreenContent = true,
         CollectFormFields = true,
         PaintFormControls = true,
         ColorScheme = ActualTheme == ElementTheme.Dark ? ColorSchemePreference.Dark : ColorSchemePreference.Light,

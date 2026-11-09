@@ -6620,6 +6620,188 @@
       }
     },
     {
+      "name": "contain",
+      "comment": "CSS Containment 2 section 2: none | strict | content | [[size | inline-size] || layout || style || paint], stored as the text written and read through ContainGrammar together with content-visibility and container-type (DomUtils.AppliedContainment). Layout and paint containment make the box an independent formatting context, the containing block of its absolute and fixed descendants and a stacking context; paint containment also clips to the overflow clip edge. Size containment sizes the box as if empty (contain-intrinsic-*), inline-size containment does so in the inline axis only, style containment scopes counters and quotes to the subtree.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Contain",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-top",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the top side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginTopProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginTop",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-right",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the right side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginRightProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginRight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-bottom",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the bottom side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBottomProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBottom",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-left",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the left side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginLeftProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginLeft",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-block-start",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the block-start side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBlockStartProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBlockStart",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-block-end",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the block-end side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBlockEndProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBlockEnd",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-inline-start",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the inline-start side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginInlineStartProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginInlineStart",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-inline-end",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the inline-end side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginInlineEndProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginInlineEnd",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-width",
+      "comment": "contain-intrinsic-width: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicWidthProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicWidth",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-height",
+      "comment": "contain-intrinsic-height: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicHeightProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicHeight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-inline-size",
+      "comment": "contain-intrinsic-inline-size: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicInlineSizeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicInlineSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-block-size",
+      "comment": "contain-intrinsic-block-size: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicBlockSizeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicBlockSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "content-visibility",
+      "comment": "CSS Containment 2 section 4: visible | auto | hidden. auto turns on layout, style and paint containment (ContainGrammar.Of) and skips its contents, with size containment, while it is not relevant to the user: in a screen document whose host asked for it (HtmlDocumentOptions.SkipOffscreenContent), never in a paged one. hidden always skips its contents (DomParser.SkipHiddenContents) and has all four containments.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContentVisibilityConverter"},
+      "initialValue": "visible",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContentVisibilityProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContentVisibility",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
       "name": "scroll-behavior",
       "comment": "css-cssom-view-1 section 3: smooth makes a programmatic scroll of the container (ScrollBy, SetScrollPosition, ScrollIntoView) glide. Read through ScrollGrammar.",
       "inherited": false,
