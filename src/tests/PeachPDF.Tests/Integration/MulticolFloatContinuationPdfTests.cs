@@ -32,7 +32,7 @@ namespace PeachPDF.Tests.Integration
             var file = result.Inspect();
 
             // The paragraph is the only box with a background, so it is painted on exactly one page and that page is not the first.
-            var fill = new Regex(@"1 0 0 rg\s+(?:/\S+ gs\s+)?\S+ \S+ \S+ \S+ re\s+f", RegexOptions.CultureInvariant);
+            var fill = new Regex(@"(?<![\d.])1 0 0 rg\s+(?:/\S+ gs\s+)?\S+ \S+ \S+ \S+ re\s+f", RegexOptions.CultureInvariant);
             var pagesWithIt = Enumerable.Range(0, file.Pages.Count).Where(i => fill.IsMatch(file.ContentText(file.Pages[i]))).ToList();
 
             Assert.Equal(2, file.Pages.Count);

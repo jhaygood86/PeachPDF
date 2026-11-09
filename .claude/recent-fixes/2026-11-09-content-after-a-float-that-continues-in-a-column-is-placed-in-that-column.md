@@ -4,7 +4,7 @@
 child) lays the float's continuation at the top of the column and then goes on to the in-flow children after it.
 `CssBox.ResolveBlockChildOffset` derives a child's top from its previous in-flow sibling, and for the first in-flow child
 after the float that sibling is the paragraph that ended in an earlier fragmentainer. The child was therefore laid out at
-that paragraph's old bottom (Y 93.5 on a page that starts at 20), a page back; the column's snapshot held a geometry no
+that paragraph's old bottom (in the #2290 document: document Y 93.5, on page 1, while the page the float continues on starts at 140), a page back; the column's snapshot held a geometry no
 fragment claimed and the words were painted on no page. `LayoutBlockChildren` now gives that one child the column's
 content top as a resume target (`_resumeTopOverride`), as it already does for a child the resume token names, so the
 text is placed at the top of the column and avoids the float from there.
@@ -19,10 +19,11 @@ words, only about the float outliving its first column.
 `main` and by the branch): words lost 18,361 → 18,258 on A and 1,278 → 1,204 on B, duplicated 6,787 → 6,763 and
 227 → 224; seven documents went from words lost to none (for example 59, 46, 34 and 27 words). Four documents lose one to four words more than on `main`
 (`B_d1002` 83 → 87, `A_d217`, `A_d252`, `A2_d217`); they are documents that already lose dozens of words through
-several floats at once, and the words they now lose are ones `main` drew through the same stale position (not
-reduced; see [the residual losses](../accepted-gaps/some-documents-with-floats-still-lose-words-after-tall-floats-continue.md)).
+several floats at once, and the words they now lose are ones `main` happened to draw (cause not reduced; see [the residual losses](../accepted-gaps/some-documents-with-floats-still-lose-words-after-tall-floats-continue.md)).
 
-**Not done.** #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
+**Boxes that are not in flow do not count.** A `display: none` box (or blank text) between the float and the paragraph is not "the first in-flow child": counting it gave the override to the hidden box and the paragraph after it was placed a page back again (a review found it; it has a test case).
+
+**Not done.** Inline text or a `<span>` right after the float (the float and the text are then in one anonymous block, so the resume token names that block and not the column's children) still loses its words (#2312), and so does a second float after the first (the #2289 family). #2289 (a word after two side-by-side floats, one continuing onto the next page), #2294, #2295, #2296 are
 other mechanisms and still lose or misplace a word.
 
 **Tests.** `MulticolContentLossTests.ContentAfterAFloatThatContinuesInTheNextColumn_KeepsEveryWord` (three reductions,

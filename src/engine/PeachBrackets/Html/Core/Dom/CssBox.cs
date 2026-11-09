@@ -5255,6 +5255,16 @@ namespace PeachBrackets.Html.Dom
         internal ValueTask<bool> FillFragmentainerWithBlockChildren(Canvas g, BreakToken? resume) =>
             LayoutBlockChildren(g, resume);
 
+        /// <summary>
+        /// Whether <paramref name="child"/> is a box the in-flow content of a fragmentainer does not count: out of flow, or
+        /// not rendered at all (<c>display: none</c>, or the whitespace between two boxes). The multi-column engine filters its
+        /// children the same way.
+        /// </summary>
+        private static bool TakesNoPartInTheFlow(CssBox child) =>
+            child.IsExcludedFromFlow
+            || child.DerivedStyle.ActualDisplay == Keywords.None
+            || (child.HtmlTag is null && child.IsSpaceOrEmpty);
+
         private async ValueTask<bool> LayoutBlockChildren(Canvas g, BreakToken? resume)
         {
             var resumeAt = resume as BlockBreakToken;
@@ -5362,7 +5372,7 @@ namespace PeachBrackets.Html.Dom
                     if (resumeConsumed
                         && i > start
                         && !inFlowChildPlacedByThisFill
-                        && !childBox.IsExcludedFromFlow
+                        && !TakesNoPartInTheFlow(childBox)
                         && childBox._resumeTopOverride is null
                         && Boxes[start].IsExcludedFromFlow
                         && HtmlContainer is { IsFragmenting: true, CurrentFragmentainer: { HasOwnBand: true } resumedColumn })
@@ -5370,7 +5380,7 @@ namespace PeachBrackets.Html.Dom
                         childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
                     }
 
-                    if (!childBox.IsExcludedFromFlow) inFlowChildPlacedByThisFill = true;
+                    if (!TakesNoPartInTheFlow(childBox)) inFlowChildPlacedByThisFill = true;
 
                     // This frame places the child and then hands it its own content — the offset is
                     // appended by the loop rather than assigned by the child (see LayoutBlockChild).
