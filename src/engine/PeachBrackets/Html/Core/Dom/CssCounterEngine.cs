@@ -244,6 +244,27 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static string GetEffectiveCounterReset(CssBox box)
         {
+            var counterReset = EffectiveCounterResetHints(box);
+
+            // Style containment (css-contain-2 §3.3): the box behaves as if it had a counter-reset for every counter its subtree increments or sets, so that
+            // what happens to them in there is scoped to the subtree.
+            if (DomUtils.AppliesStyleContainment(box))
+            {
+                var touched = new HashSet<string>(StringComparer.Ordinal);
+                CollectTouchedCounters(box, touched);
+
+                foreach (var name in touched)
+                {
+                    if (!CounterNameAppears(counterReset, name))
+                        counterReset = counterReset is Keywords.None ? name : counterReset + " " + name;
+                }
+            }
+
+            return counterReset;
+        }
+
+        private static string EffectiveCounterResetHints(CssBox box)
+        {
             var counterReset = box.CounterReset;
 
             if (box.HtmlTag is not null &&
@@ -340,7 +361,7 @@ namespace PeachBrackets.Html.Dom
 
                     InheritAndApplyCounter(lastChildInScope, counterName);
 
-                    if (lastChildInScope.TryGetCounter(counterName, out var lastChildCounterValue)
+                    if (TryGetOutgoingCounter(lastChildInScope, counterName, out var lastChildCounterValue)
                         && IsInScope(currentBox, lastChildCounterValue))
                     {
                         currentBox.Counters[counterName] = lastChildCounterValue with
@@ -434,11 +455,60 @@ namespace PeachBrackets.Html.Dom
             return sib;
         }
 
+        /// <summary>
+        /// Whether style containment (css-contain-2 §3.3) keeps what <paramref name="box"/>'s subtree does to the counter <paramref name="counterName"/> inside
+        /// it: it applies to the box and the subtree increments or sets that counter, or has a list item (which increments <c>list-item</c>).
+        /// </summary>
+        private static bool IsolatesCounter(CssBox box, string counterName)
+        {
+            if (!DomUtils.AppliesStyleContainment(box)) return false;
+
+            var touched = new HashSet<string>(StringComparer.Ordinal);
+            CollectTouchedCounters(box, touched);
+
+            return touched.Contains(counterName);
+        }
+
+        /// <summary>The names of the counters <paramref name="box"/> and everything under it increments or sets.</summary>
+        private static void CollectTouchedCounters(CssBox box, HashSet<string> names)
+        {
+            if (box.DerivedStyle.ActualDisplay == Keywords.None) return;
+
+            foreach (var entry in CounterListGrammar.Parse(box.CounterIncrement)) names.Add(entry.Name);
+            foreach (var entry in CounterListGrammar.Parse(GetEffectiveCounterSet(box))) names.Add(entry.Name);
+            if (box.DerivedStyle.ActualDisplay == Keywords.ListItem) names.Add(Keywords.ListItem);
+
+            foreach (var child in box.Boxes)
+                CollectTouchedCounters(child, names);
+        }
+
+        /// <summary>
+        /// The counter that follows <paramref name="box"/> into what comes after it: its own, or for a box that style containment isolates the counter, the one it
+        /// had before it reset the counter for its subtree - what happened in there is not seen outside.
+        /// </summary>
+        private static bool TryGetOutgoingCounter(CssBox box, string counterName, out CssCounter counter)
+        {
+            if (IsolatesCounter(box, counterName))
+            {
+                if (box.TryGetCounter(counterName, out var inner) && inner.ParentScope is { } outer)
+                {
+                    counter = outer;
+                    return true;
+                }
+
+                counter = null!;
+                return false;
+            }
+
+            return box.TryGetCounter(counterName, out counter!);
+        }
+
         private static CssBox GetLastChildInScope(CssBox box, string counterName)
         {
             while (true)
             {
-                if (box.Boxes.Count == 0)
+                // A box that isolates the counter is where the walk stops: what is under it is not seen from outside.
+                if (box.Boxes.Count == 0 || IsolatesCounter(box, counterName))
                 {
                     return box;
                 }
@@ -447,6 +517,9 @@ namespace PeachBrackets.Html.Dom
 
                 foreach (var childBox in box.Boxes)
                 {
+                    // A box with display: none generates nothing, so it does not take part in counting (CSS Lists 3 §4.3), as GetPreviousSibling already has it.
+                    if (childBox.DerivedStyle.ActualDisplay == Keywords.None || childBox.IsTableGridDecorationBox) continue;
+
                     if (childBox.TryGetCounter(counterName, out var counter))
                     {
                         if (counter.IsNewScope)
@@ -457,6 +530,9 @@ namespace PeachBrackets.Html.Dom
 
                     lastChild = childBox;
                 }
+
+                // Every child was skipped (display: none, or a scope of its own): the box itself is the last one in scope.
+                if (ReferenceEquals(lastChild, box)) return box;
 
                 box = lastChild;
             }

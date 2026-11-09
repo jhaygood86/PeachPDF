@@ -15176,6 +15176,10 @@ var containmentHtml = """
     .wide { width: 135px; height: 60px; background: #e63946 }
     .cb { position: relative; width: 120px; height: 60px; border: 2px solid #1d4ed8; margin-bottom: 3px }
     .pin { position: absolute; right: 0; bottom: 0; width: 30px; height: 15px; background: #e63946 }
+    .sz { width: 100px; border: 2px solid #1d4ed8; background: #dbe7ff; margin-bottom: 3px }
+    .sz .inner { height: 50px; background: #e63946 }
+    .cnt .n { counter-increment: c; margin: 0 } .cnt .n::before { content: counter(c) '. ' }
+    .qq { quotes: '<' '>' '[' ']'; margin: 0 } .qq::before { content: open-quote } .qq::after { content: close-quote }
     </style></head><body>
     <h1>contain and content-visibility</h1>
     <p class="intro">Layout and paint containment make a box contain its floats, so what follows starts below them; paint containment also clips the overflow to the padding edge, rounded corners included, and a contained box is the containing block of its absolutely positioned descendants.</p>
@@ -15194,11 +15198,23 @@ var containmentHtml = """
       <div class="cell"><div style="margin-left: 20px"><div class="cb" style="position: static"><div class="pin"></div></div></div>static: the pin goes to the page corner</div>
       <div class="cell"><div class="cb" style="position: static; contain: layout"><div class="pin"></div></div>contain: layout: against the box</div>
     </div>
+    <div class="row">
+      <div class="cell"><div class="sz"><div class="inner"></div></div>no containment</div>
+      <div class="cell"><div class="sz" style="contain: size"><div class="inner"></div></div>contain: size: as an empty box</div>
+      <div class="cell"><div class="sz" style="contain: size; contain-intrinsic-height: 20px"><div class="inner"></div></div>contain-intrinsic-height: 20px</div>
+      <div class="cell"><div class="sz" style="content-visibility: hidden; contain-intrinsic-height: 20px"><div class="inner"></div></div>content-visibility: hidden</div>
+    </div>
+    <div class="row">
+      <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div><p class="n">b</p></div><p class="n">c</p></div>no containment: 1 2 3</div>
+      <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div style="contain: style"><p class="n">b</p></div><p class="n">c</p></div>contain: style: 1 1 2</div>
+      <div class="cell"><div class="qq">outer <div class="qq">inner</div></div>nested quotes</div>
+      <div class="cell"><div class="qq">outer <div style="contain: style"><div class="qq">inner</div></div></div>contain: style: depth 0 again</div>
+    </div>
     </body></html>
     """;
 
 await SaveShowcaseAsync("contain_and_content_visibility", "Layout", "contain and content-visibility",
-    "contain: layout and paint make a box contain its floats and be the containing block of its absolutely positioned descendants; paint containment also clips to the padding edge, rounded corners included. content-visibility: auto turns the same containment on.",
+    "contain: layout and paint make a box contain its floats and be the containing block of its absolutely positioned descendants; paint containment also clips to the padding edge, rounded corners included; size containment sizes a box as if it were empty (or by contain-intrinsic-size) and style containment scopes counters and quotes. content-visibility: auto turns layout, style and paint containment on and hidden also skips the contents.",
     containmentHtml, pdfConfig);
 
 // --- color-scheme and light-dark() showcase (CSS Color Adjust 1 §2, CSS Color 5) ---

@@ -100,6 +100,9 @@ namespace PeachBrackets.Css
         public static readonly string Container = "container";
         public static readonly string ContainerName = "container-name";
         public static readonly string ContainerType = "container-type";
+        public static readonly string ContainIntrinsicSize = "contain-intrinsic-size";
+        public static readonly string ContainIntrinsicWidth = "contain-intrinsic-width";
+        public static readonly string ContainIntrinsicHeight = "contain-intrinsic-height";
         public static readonly string Content = "content";
         public static readonly string CounterIncrement = "counter-increment";
         public static readonly string CounterReset = "counter-reset";

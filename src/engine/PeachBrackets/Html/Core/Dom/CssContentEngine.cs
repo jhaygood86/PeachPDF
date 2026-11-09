@@ -598,7 +598,8 @@ namespace PeachBrackets.Html.Dom
             var previousSibling = GetPreviousQuoteSibling(box);
             var depth = previousSibling is not null
                 ? ApplyQuoteSubtree(previousSibling, GetQuoteDepthAtStart(previousSibling))
-                : box.ParentBox is not null ? GetQuoteDepthAtStart(box.ParentBox) : 0;
+                // Inside a box with style containment the nesting starts again at 0 (css-contain-2 §3.3).
+                : box.ParentBox is not null ? DomUtils.AppliesStyleContainment(box.ParentBox) ? 0 : GetQuoteDepthAtStart(box.ParentBox) : 0;
 
             box.QuoteDepthAtStart = depth;
             return depth;
@@ -642,6 +643,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static int ApplyQuoteSubtree(CssBox box, int startDepth)
         {
+            // What a box with style containment opens and closes stays inside it: after it the depth is what it was before.
+            if (DomUtils.AppliesStyleContainment(box)) return startDepth;
+
             var (rawDelta, localMin) = GetRawQuoteAggregate(box);
             return startDepth + localMin >= 0
                 ? startDepth + rawDelta
@@ -681,7 +685,8 @@ namespace PeachBrackets.Html.Dom
 
                 foreach (var child in box.Boxes)
                 {
-                    aggregate = CombineQuoteAggregate(aggregate, GetRawQuoteAggregate(child));
+                    // A child with style containment keeps its quotes to itself, so it adds nothing to what is around it.
+                    aggregate = DomUtils.AppliesStyleContainment(child) ? aggregate : CombineQuoteAggregate(aggregate, GetRawQuoteAggregate(child));
                 }
             }
 
@@ -745,7 +750,7 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var child in box.Boxes)
             {
-                depth = ApplyQuoteSubtreeExact(child, depth);
+                depth = DomUtils.AppliesStyleContainment(child) ? depth : ApplyQuoteSubtreeExact(child, depth);
             }
 
             return depth;

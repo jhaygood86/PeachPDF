@@ -27,7 +27,7 @@ namespace PeachBrackets.Html.Dom
 
         private static FrozenSet<string> BuildPhysicalEdgeNames()
         {
-            var names = new List<string>();
+            var names = new List<string> { "contain-intrinsic-width", "contain-intrinsic-height" };
             foreach (var side in new[] { "top", "right", "bottom", "left" })
             {
                 names.Add(side);

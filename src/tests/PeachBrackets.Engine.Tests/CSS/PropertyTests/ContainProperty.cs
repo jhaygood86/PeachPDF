@@ -77,6 +77,83 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         }
 
         [Theory]
+        [InlineData("contain-intrinsic-width", "none")]
+        [InlineData("contain-intrinsic-width", "100px")]
+        [InlineData("contain-intrinsic-height", "0")]
+        [InlineData("contain-intrinsic-height", "auto 3em")]
+        [InlineData("contain-intrinsic-inline-size", "auto none")]
+        [InlineData("contain-intrinsic-block-size", "20pt")]
+        public void ContainIntrinsicLonghandLegal(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}: {value}");
+
+            Assert.Equal(name, property.Name);
+            Assert.False(property.IsInherited);
+            Assert.True(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("contain-intrinsic-width", "-1px")]
+        [InlineData("contain-intrinsic-width", "50%")]
+        [InlineData("contain-intrinsic-width", "auto")]
+        [InlineData("contain-intrinsic-height", "10px 20px")]
+        [InlineData("contain-intrinsic-height", "auto auto")]
+        [InlineData("contain-intrinsic-block-size", "1")]
+        [InlineData("contain-intrinsic-inline-size", "wide")]
+        public void ContainIntrinsicLonghandIllegal(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}: {value}");
+
+            Assert.Equal(name, property.Name);
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("10px")]
+        [InlineData("none")]
+        [InlineData("10px 20px")]
+        [InlineData("auto 10px")]
+        [InlineData("auto 10px auto 20px")]
+        [InlineData("10px auto 20px")]
+        [InlineData("auto none none")]
+        public void ContainIntrinsicSizeShorthandLegal(string value)
+        {
+            var property = ParseDeclaration($"contain-intrinsic-size: {value}");
+
+            Assert.IsType<ContainIntrinsicSizeProperty>(property);
+            Assert.True(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("10px 20px 30px")]
+        [InlineData("auto")]
+        [InlineData("auto auto 10px")]
+        [InlineData("-5px")]
+        [InlineData("50%")]
+        public void ContainIntrinsicSizeShorthandIllegal(string value)
+        {
+            var property = ParseDeclaration($"contain-intrinsic-size: {value}");
+
+            Assert.IsType<ContainIntrinsicSizeProperty>(property);
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("auto 10px", true, "10px")]
+        [InlineData("AUTO 2em", true, "2em")]
+        [InlineData("10px", false, "10px")]
+        [InlineData("none", false, null)]
+        [InlineData("auto none", true, null)]
+        [InlineData("", false, null)]
+        [InlineData(null, false, null)]
+        public void ContainIntrinsicTextIsReadBackAsAutoAndALength(string? text, bool auto, string? length)
+        {
+            Assert.Equal(length, ContainGrammar.ParseIntrinsic(text, out var hasAuto));
+            Assert.Equal(auto, hasAuto);
+        }
+
+        [Theory]
         [InlineData(null, null, "None")]
         [InlineData("none", "visible", "None")]
         [InlineData("none", "auto", "Content")]

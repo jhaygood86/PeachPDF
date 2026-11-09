@@ -35,7 +35,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// Whether content is kept unbroken under CSS Fragmentation §4.1.
         /// </summary>
         internal static bool IsMonolithic(CssBox box) =>
-            IsReplaced(box) || (IsScrollContainer(box)
+            IsReplaced(box) || box.AppliesSizeContainment || (IsScrollContainer(box)
                 && (HasConstrainedLogicalHeight(box)
                     || IsLaidOutByAnEngineThatCannotContinueIt(box)));
 

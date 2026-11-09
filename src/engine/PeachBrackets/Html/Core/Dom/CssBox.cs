@@ -9473,6 +9473,14 @@ namespace PeachBrackets.Html.Dom
             {
                 // Nothing of its content: the declared width is folded in below.
             }
+            else if (box.AppliesSizeContainment)
+            {
+                // Size containment (css-contain-2 §3.1): the box is sized as if it had no contents - its contain-intrinsic-width, or nothing, as one unbreakable
+                // run - whatever it holds, a replaced element's own word included. Its padding and border were added above and its declared width is folded in below.
+                var contained = box.ContainIntrinsicLength(widthAxis: true) ?? 0;
+                maxSum += contained;
+                unbreakableRunWidth += contained;
+            }
             else if (IsFlexRow(box) && box.Boxes.Count > 0)
             {
                 double rowMax = 0, rowMin = 0;

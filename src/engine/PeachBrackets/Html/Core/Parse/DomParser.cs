@@ -278,6 +278,9 @@ namespace PeachBrackets.Html.Parse
             // generation does: "as if it had been replaced in the element tree by its contents".
             FlattenDisplayContents(htmlContainer.DisplayContentsShells, cssValueParser);
 
+            // Before the first pass that reads a box's text (it would parse words nobody will see): what content-visibility: hidden skips is not generated.
+            SkipHiddenContents(root);
+
             CorrectTextBoxes(root);
 
             WrapDetailsContents(root);
@@ -602,6 +605,8 @@ namespace PeachBrackets.Html.Parse
             // No bidi pass runs here (see this method's remarks), so this is spliced against the
             // as-authored tree exactly as GenerateCssTree's own is, just without a bidi pass before it.
             FlattenDisplayContents(displayContentsShells, cssValueParser);
+
+            SkipHiddenContents(root);
 
             WrapDetailsContents(root);
             CorrectTextBoxes(root);
@@ -4178,6 +4183,33 @@ namespace PeachBrackets.Html.Parse
         /// <c>content-visibility: hidden</c> on that box, so no <c>display</c> value an author gives the content can show it (a panel written <c>display: flex</c>
         /// is as hidden as one left alone). A second <c>summary</c> is content, as in the Standard, and is hidden with the rest.
         /// </summary>
+        /// <summary>
+        /// <c>content-visibility: hidden</c> (css-contain-2 §4): the element skips its contents - everything under it, generated content included, is left out
+        /// as if it were <c>display: none</c> - while the element itself stays, with the size containment the value implies (and so the height of an empty
+        /// box, or its <c>contain-intrinsic-size</c>). Contents that are skipped do not take part in layout, painting, hit testing, the accessibility tree or the
+        /// text of the document. It does not apply where containment cannot (a non-atomic inline, an internal table box, a box with no principal box).
+        /// </summary>
+        /// <remarks>
+        /// Closed <c>&lt;details&gt;</c> reaches the same result by another path (<see cref="WrapDetailsContents"/>). <c>content-visibility: auto</c> skips only
+        /// what is not relevant to the user, which in a paged document is nothing: every page is shown.
+        /// </remarks>
+        private static void SkipHiddenContents(CssBox box)
+        {
+            if (box is CssBoxSvg or CssBoxMath) return;
+
+            if (box.ContentVisibility is { Length: > 0 } visibility && visibility.Equals(Keywords.Hidden, StringComparison.OrdinalIgnoreCase)
+                && DomUtils.AppliesLayoutContainment(box))
+            {
+                foreach (var child in box.Boxes)
+                    child.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+
+                return;
+            }
+
+            foreach (var child in box.Boxes.ToList())
+                SkipHiddenContents(child);
+        }
+
         private static void WrapDetailsContents(CssBox box)
         {
             if (box is CssBoxSvg or CssBoxMath) return;

@@ -42,7 +42,6 @@ public class ContainmentTests
     [InlineData("contain:paint")]
     [InlineData("contain:content")]
     [InlineData("contain:layout paint")]
-    [InlineData("contain:size layout")]
     [InlineData("content-visibility:auto")]
     public async Task ABoxWithLayoutOrPaintContainment_ContainsItsFloats(string style)
     {
@@ -176,6 +175,198 @@ public class ContainmentTests
         Assert.Equal(PositionMode.Absolute, f.Position.Value);
         Assert.Equal(c.Location.X + 10, f.Location.X, 6);
         Assert.Equal(c.Location.Y + 3, f.Location.Y, 6);
+    }
+
+    // ── size containment (css-contain-2 §3.1) and contain-intrinsic-* (css-sizing-4 §5.1) ──
+
+    private const string Tall = "<div style='height:40pt;width:90pt'></div>";
+
+    [Theory]
+    [InlineData("contain:size", 0d)]
+    [InlineData("contain:strict", 0d)]
+    [InlineData("content-visibility:hidden", 0d)]
+    [InlineData("contain:size;padding:5pt", 10d)]
+    [InlineData("contain:size;contain-intrinsic-height:30pt", 30d)]
+    [InlineData("contain:size;contain-intrinsic-height:30pt;padding:5pt;border:2pt solid", 44d)]
+    [InlineData("contain:size;contain-intrinsic-size:20pt 25pt", 25d)]
+    [InlineData("contain:size;contain-intrinsic-size:15pt", 15d)]
+    [InlineData("contain:size;contain-intrinsic-size:auto 20pt auto 35pt", 35d)]
+    [InlineData("contain:size;contain-intrinsic-height:auto 22pt", 22d)]
+    [InlineData("contain:size;contain-intrinsic-height:none", 0d)]
+    [InlineData("contain:size;height:50pt", 50d)]
+    [InlineData("contain:size;height:50pt;contain-intrinsic-height:30pt", 50d)]
+    [InlineData("contain:size;min-height:12pt", 12d)]
+    // Without size containment, none of it applies.
+    [InlineData("contain-intrinsic-height:30pt", 40d)]
+    [InlineData("contain:layout paint style", 40d)]
+    public async Task SizeContainmentGivesAnAutoHeightBoxTheHeightOfAnEmptyOne(string style, double expected)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'>{Tall}</div>");
+
+        Assert.Equal(expected, Height(Box(root, "t")), 6);
+    }
+
+    [Fact]
+    public async Task TheContentsOfASizeContainedBoxAreLaidOutNormallyAndOverflowIt()
+    {
+        var root = await LayoutAsync("<div id='t' style='contain:size;width:50pt'><div id='c' style='height:40pt'></div></div>");
+
+        Assert.Equal(0, Height(Box(root, "t")), 6);
+        Assert.Equal(40, Height(Box(root, "c")), 6);
+        Assert.Equal(Box(root, "t").Location.Y, Box(root, "c").Location.Y, 6);
+    }
+
+    [Theory]
+    [InlineData("contain:size", 0d)]
+    [InlineData("contain:size;contain-intrinsic-width:70pt", 70d)]
+    [InlineData("contain:size;contain-intrinsic-size:60pt 5pt", 60d)]
+    [InlineData("contain:size;padding:0 4pt;contain-intrinsic-width:70pt", 78d)]
+    [InlineData("contain:size;width:33pt;contain-intrinsic-width:70pt", 33d)]
+    [InlineData("", 26d)]
+    public async Task SizeContainmentGivesAShrinkToFitBoxTheWidthOfAnEmptyOne(string style, double expected)
+    {
+        var root = await LayoutAsync($"<div id='t' style='float:left;{style}'><div style='width:26pt;height:5pt'></div></div>");
+        var t = Box(root, "t");
+
+        Assert.Equal(expected, t.ActualRight - t.Location.X, 6);
+    }
+
+    [Fact]
+    public async Task TheLogicalAndThePhysicalContainIntrinsicLonghandsAreOneCascade_TheLaterWins()
+    {
+        var logicalLast = await LayoutAsync(
+            "<div id='t' style='contain:size;contain-intrinsic-height:30pt;contain-intrinsic-block-size:10pt'>x</div>");
+        var physicalLast = await LayoutAsync(
+            "<div id='t' style='contain:size;contain-intrinsic-block-size:10pt;contain-intrinsic-height:30pt'>x</div>");
+
+        Assert.Equal(10, Height(Box(logicalLast, "t")), 6);
+        Assert.Equal(30, Height(Box(physicalLast, "t")), 6);
+    }
+
+    [Fact]
+    public async Task ABlockSizeIsTheHeightInAHorizontalWritingModeAndTheWidthInAVerticalOne()
+    {
+        var horizontal = await LayoutAsync("<div id='t' style='contain:size;contain-intrinsic-block-size:18pt;contain-intrinsic-inline-size:7pt'>x</div>");
+        var vertical = await LayoutAsync("<div id='t' style='writing-mode:vertical-rl;contain:size;contain-intrinsic-block-size:44pt;contain-intrinsic-inline-size:12pt'>x</div>");
+
+        Assert.Equal(18, Box(horizontal, "t").ContainIntrinsicLength(widthAxis: false));
+        Assert.Equal(7, Box(horizontal, "t").ContainIntrinsicLength(widthAxis: true));
+        Assert.Equal(44, Box(vertical, "t").ContainIntrinsicLength(widthAxis: true));
+        Assert.Equal(12, Box(vertical, "t").ContainIntrinsicLength(widthAxis: false));
+    }
+
+    [Fact]
+    public async Task AReplacedElementWithSizeContainmentHasNoNaturalSize()
+    {
+        const string Png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        var plain = await LayoutAsync($"<img id='t' src='{Png}'>");
+        var contained = await LayoutAsync($"<img id='t' src='{Png}' style='contain:size'>");
+        var intrinsic = await LayoutAsync($"<img id='t' src='{Png}' style='contain:size;contain-intrinsic-size:30pt 20pt'>");
+        var authored = await LayoutAsync($"<img id='t' src='{Png}' style='contain:size;width:15pt;height:9pt'>");
+
+        double Width(CssBox root) => new[] { Box(root, "t") }.Concat(LayoutHarness.Descendants(Box(root, "t"))).SelectMany(b => b.Words).First().Width;
+        double WordHeight(CssBox root) => new[] { Box(root, "t") }.Concat(LayoutHarness.Descendants(Box(root, "t"))).SelectMany(b => b.Words).First().Height;
+
+        Assert.True(Width(plain) > 0);
+        Assert.Equal(0, Width(contained), 6);
+        Assert.Equal(0, WordHeight(contained), 6);
+        Assert.Equal(30, Width(intrinsic), 6);
+        Assert.Equal(20, WordHeight(intrinsic), 6);
+        Assert.Equal(15, Width(authored), 6);
+        Assert.Equal(9, WordHeight(authored), 6);
+    }
+
+    [Theory]
+    [InlineData("contain:size", true)]
+    [InlineData("contain:strict", true)]
+    [InlineData("contain:layout", false)]
+    [InlineData("", false)]
+    public async Task ASizeContainedBoxIsMonolithicWhenFragmenting(string style, bool monolithic)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'><p>text</p></div>");
+
+        Assert.Equal(monolithic, MonolithicContent.IsMonolithic(Box(root, "t")));
+    }
+
+    [Fact]
+    public async Task SizeContainmentDoesNotChangeTheBaseline()
+    {
+        const string Line = "<div id='w' style='font:12pt sans-serif'><span id='xs'>x</span><span style='display:inline-block;{0}'>y</span></div>";
+
+        var plain = await LayoutAsync(string.Format(Line, ""));
+        var contained = await LayoutAsync(string.Format(Line, "contain:size"));
+
+        // Not asserting its size: only that the inline-block still sits on the line by its own text's baseline, as it does without containment.
+        Assert.Equal(FirstWordTop(Box(plain, "xs")), FirstWordTop(Box(contained, "xs")), 6);
+    }
+
+    // ── content-visibility: hidden skips its contents (css-contain-2 §4) ──
+
+    [Fact]
+    public async Task HiddenContentsAreSkippedAndTheBoxIsAsTallAsAnEmptyOne()
+    {
+        var root = await LayoutAsync("<div id='t' style='content-visibility:hidden;padding:3pt'><div id='c' style='height:40pt'>words</div></div><div id='n' style='height:5pt'></div>");
+
+        Assert.Equal(6, Height(Box(root, "t")), 6);
+        Assert.Equal(Keywords.None, Box(root, "c").DerivedStyle.ActualDisplay);
+        Assert.Equal(Box(root, "t").ActualBottom, Box(root, "n").Location.Y, 6);
+        Assert.DoesNotContain(LayoutHarness.Descendants(Box(root, "t")), b => b.Words.Count > 0);
+    }
+
+    [Fact]
+    public async Task TheTextOfAHiddenBoxIsSkippedToo()
+    {
+        var root = await LayoutAsync("<div id='t' style='content-visibility:hidden'>some text<span>more</span></div>");
+
+        Assert.Equal(0, Height(Box(root, "t")), 6);
+        Assert.DoesNotContain(LayoutHarness.Descendants(Box(root, "t")), b => b.Words.Count > 0);
+    }
+
+    [Fact]
+    public async Task AHiddenBoxTakesItsContainIntrinsicSize()
+    {
+        var root = await LayoutAsync("<div id='t' style='content-visibility:hidden;contain-intrinsic-size:auto 80pt auto 30pt;float:left'><div style='height:40pt'></div></div>");
+
+        Assert.Equal(30, Height(Box(root, "t")), 6);
+        Assert.Equal(80, Box(root, "t").ActualRight - Box(root, "t").Location.X, 6);
+    }
+
+    [Theory]
+    [InlineData("content-visibility:visible")]
+    [InlineData("content-visibility:auto")]
+    [InlineData("")]
+    public async Task ContentsThatAreNotHiddenAreLaidOutAsUsual(string style)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'><div id='c' style='height:40pt'>words</div></div>");
+
+        Assert.Equal(40, Height(Box(root, "t")), 6);
+        Assert.NotEqual(Keywords.None, Box(root, "c").DerivedStyle.ActualDisplay);
+    }
+
+    [Fact]
+    public async Task ContentVisibilityHiddenDoesNothingToAnInlineBoxContainmentCannotApplyTo()
+    {
+        var root = await LayoutAsync("<div><span id='t' style='content-visibility:hidden'>kept</span></div>");
+
+        Assert.Contains(LayoutHarness.Descendants(Box(root, "t")), b => b.Words.Count > 0);
+    }
+
+    [Fact]
+    public async Task AHiddenBoxInsideAHiddenBoxIsSkippedWithTheOuterOne()
+    {
+        var root = await LayoutAsync("<div id='t' style='content-visibility:hidden'><div id='u' style='content-visibility:hidden'><div style='height:30pt'></div></div></div>");
+
+        Assert.Equal(0, Height(Box(root, "t")), 6);
+        Assert.Equal(Keywords.None, Box(root, "u").DerivedStyle.ActualDisplay);
+    }
+
+    [Fact]
+    public async Task TheCountersAndQuotesOfSkippedContentsDoNotCount()
+    {
+        var root = await LayoutAsync(
+            "<div style='counter-reset:c'><div style='content-visibility:hidden'><p id='i' style='counter-increment:c'>x</p></div><p id='a' style='counter-increment:c'>y</p></div>");
+
+        Assert.Equal(1, CssCounterEngine.GetCounter(Box(root, "a"), "c")!.Value);
     }
 
     // The rewrite keeps what a fixed box has that an absolute one lacks: its own stacking context (css-position-3 §3.5), which an absolute box with z-index auto does not.

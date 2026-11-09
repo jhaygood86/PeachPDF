@@ -99,15 +99,24 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Theory]
-        [InlineData("contain:strict")]
         [InlineData("contain:content")]
-        [InlineData("contain:size layout style")]
+        [InlineData("contain:layout paint style")]
         public async Task TheShortcutKeywordsAndKeywordSetsContainLikeLayoutAndPaint(string style)
         {
             var (r, _) = await RenderAsync("", $"<div style='width:300pt;{style}'>{RedFloat}</div>{LimeBlock}");
 
             // Size containment is not applied (see the accepted gap), so only the formatting context is under test: the block after starts below the float.
             Assert.True(r.ContainsKey(Red));
+        }
+
+        // strict includes size containment: the box is sized as an empty one, and its paint containment clips what overflows it, so the float is not seen.
+        [Fact]
+        public async Task StrictContainmentSizesTheBoxAsAnEmptyOneAndClipsWhatOverflowsIt()
+        {
+            var (r, _) = await RenderAsync("", $"<div style='width:300pt;contain:strict'>{RedFloat}</div>{LimeBlock}");
+
+            Assert.False(r.ContainsKey(Red));
+            Assert.True(r.ContainsKey(Lime));
         }
 
         [Theory]
@@ -160,6 +169,42 @@ namespace PeachPDF.Tests.Integration
         public async Task StyleContainmentOnATableRowIsAcceptedAndChangesNothing()
         {
             var (r, _) = await RenderAsync("", "<table><tr style='contain:strict'><td style='background:#0f0;width:40pt;height:10pt'>x</td></tr></table>");
+
+            Assert.True(r.ContainsKey(Lime));
+        }
+
+        [Theory]
+        [InlineData("contain:size;contain-intrinsic-height:30pt", 30)]
+        [InlineData("contain:strict;contain-intrinsic-size:auto 80pt auto 25pt", 25)]
+        [InlineData("contain:size", 0)]
+        [InlineData("contain:layout", 60)]
+        public async Task SizeContainmentSizesABoxAsIfItWereEmpty(string style, double expectedHeight)
+        {
+            var (r, _) = await RenderAsync("", $"<div style='background:#0f0;{style}'><div style='height:60pt;width:40pt'>x</div></div><div style='height:5pt;background:#f00'></div>");
+
+            if (expectedHeight == 0)
+                Assert.False(r.ContainsKey(Lime));
+            else
+                Assert.Equal(expectedHeight, r[Lime].H, 1);
+        }
+
+        [Theory]
+        [InlineData("content-visibility:hidden", false)]
+        [InlineData("content-visibility:auto", true)]
+        [InlineData("content-visibility:visible", true)]
+        public async Task HiddenContentIsNotPainted(string style, bool painted)
+        {
+            var (r, _) = await RenderAsync("", $"<div style='{style}'><div style='height:20pt;background:#0f0'>text</div></div>");
+
+            Assert.Equal(painted, r.ContainsKey(Lime));
+        }
+
+        [Fact]
+        public async Task StyleContainmentScopesCountersAndQuotesWhenRendered()
+        {
+            var (r, _) = await RenderAsync(
+                ".n { counter-increment: c } .n::before { content: counter(c) ' ' } .q { quotes: '<' '>' '[' ']' } .q::before { content: open-quote } .q::after { content: close-quote }",
+                "<div style='counter-reset:c'><p class='n'>a</p><div style='contain:style'><p class='n'>b</p><div class='q'><span class='q'>q</span></div></div><p class='n' style='background:#0f0'>d</p></div>");
 
             Assert.True(r.ContainsKey(Lime));
         }

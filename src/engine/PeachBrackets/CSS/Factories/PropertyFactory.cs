@@ -199,6 +199,8 @@ namespace PeachBrackets.Css
                 PropertyNames.ColumnRuleStyle,
                 PropertyNames.ColumnRuleColor);
 
+            AddShorthand(PropertyNames.ContainIntrinsicSize, () => new ContainIntrinsicSizeProperty(),
+                PropertyNames.ContainIntrinsicWidth, PropertyNames.ContainIntrinsicHeight);
             AddShorthand(PropertyNames.Container, () => new ContainerProperty(),
                 PropertyNames.ContainerName, PropertyNames.ContainerType);
             AddShorthand(PropertyNames.Flex, () => new FlexProperty(),

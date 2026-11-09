@@ -456,6 +456,8 @@ namespace PeachBrackets.Css
         // CSS Containment 2: stored as the text that was written and read through ContainGrammar.
         public static readonly IValueConverter ContainConverter = new GrammarValueConverter(ContainGrammar.IsContain);
         public static readonly IValueConverter ContentVisibilityConverter = new GrammarValueConverter(ContainGrammar.IsContentVisibility);
+        public static readonly IValueConverter ContainIntrinsicConverter = new TokenGrammarValueConverter(ContainGrammar.TryParseIntrinsic);
+        public static readonly IValueConverter ContainIntrinsicSizeConverter = new ContainIntrinsicSizeShorthandConverter();
         public static readonly IValueConverter OverscrollBehaviorConverter = new GrammarValueConverter(ScrollGrammar.IsOverscrollBehavior);
         public static readonly IValueConverter ScrollSnapTypeConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapType(text, out _, out _));
         public static readonly IValueConverter ScrollSnapAlignConverter = new GrammarValueConverter(text => ScrollGrammar.TryParseSnapAlign(text, out _, out _));

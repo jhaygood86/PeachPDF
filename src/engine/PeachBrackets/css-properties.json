@@ -6633,6 +6633,58 @@
       }
     },
     {
+      "name": "contain-intrinsic-width",
+      "comment": "contain-intrinsic-width: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicWidthProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicWidth",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-height",
+      "comment": "contain-intrinsic-height: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicHeightProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicHeight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-inline-size",
+      "comment": "contain-intrinsic-inline-size: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicInlineSizeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicInlineSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "contain-intrinsic-block-size",
+      "comment": "contain-intrinsic-block-size: css-sizing-4 section 5.1: auto? [none | <length>], stored as the text written and read through ContainGrammar.ParseIntrinsic. The size a box with size containment (or skipped contents) has in this axis instead of 0; with auto and no earlier rendering to remember, it is the same length.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainIntrinsicConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainIntrinsicBlockSizeProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContainIntrinsicBlockSize",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
       "name": "content-visibility",
       "comment": "CSS Containment 2 section 4: visible | auto | hidden. auto turns on layout, style and paint containment (ContainGrammar.Of); contents are never skipped, so auto behaves as if the element were always on screen and hidden applies its containment but still shows its contents.",
       "inherited": false,

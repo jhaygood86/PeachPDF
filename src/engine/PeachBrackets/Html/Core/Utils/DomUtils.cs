@@ -1361,6 +1361,12 @@ namespace PeachBrackets.Html.Utils
         /// <summary>Whether paint containment applies to <paramref name="box"/>: it clips to its padding edge.</summary>
         internal static bool AppliesPaintContainment(CssBox box) => (AppliedContainment(box) & Containment.Paint) != 0;
 
+        /// <summary>
+        /// Whether style containment applies to <paramref name="box"/> (css-contain-2 §3.3): the counters its subtree increments or sets and the quote nesting
+        /// inside it are scoped to the subtree. It has no display exclusions.
+        /// </summary>
+        internal static bool AppliesStyleContainment(CssBox box) => (AppliedContainment(box) & Containment.Style) != 0;
+
         /// <summary>Whether layout containment applies to <paramref name="box"/>.</summary>
         internal static bool AppliesLayoutContainment(CssBox box) => (AppliedContainment(box) & Containment.Layout) != 0;
 

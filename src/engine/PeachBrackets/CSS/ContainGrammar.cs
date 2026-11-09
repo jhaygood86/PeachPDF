@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace PeachBrackets.Css
 {
@@ -98,6 +100,46 @@ namespace PeachBrackets.Css
             return value.Equals("visible", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("auto", StringComparison.OrdinalIgnoreCase)
                 || value.Equals("hidden", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// <c>auto? [ none | &lt;length [0,∞]&gt; ]</c> (css-sizing-4 §5.1, <c>contain-intrinsic-width</c> and its siblings), over the tokens of one value.
+        /// </summary>
+        internal static bool TryParseIntrinsic(IReadOnlyList<Token> tokens)
+        {
+            var toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToList();
+
+            if (toks.Count > 0 && toks[0].Type == TokenType.Ident && toks[0].Data.Isi(Keywords.Auto)) toks.RemoveAt(0);
+            if (toks.Count != 1) return false;
+
+            if (toks[0].Type == TokenType.Ident) return toks[0].Data.Isi(Keywords.None);
+
+            // A bare 0 is a legal <length>.
+            if (toks[0].Type == TokenType.Number) return toks[0].Value == 0;
+            if (toks[0].Type != TokenType.Dimension) return false;
+
+            return Converters.LengthConverter.Convert([toks[0]]) is not null && toks[0].Value >= 0;
+        }
+
+        /// <summary>
+        /// Reads the stored text of a <c>contain-intrinsic-*</c> value: whether it has <c>auto</c> (the last remembered size, which a document with no
+        /// earlier rendering has none of, so the length that follows is used) and the length, or null for <c>none</c> or text that is not one.
+        /// </summary>
+        internal static string? ParseIntrinsic(string? text, out bool auto)
+        {
+            auto = false;
+            if (string.IsNullOrWhiteSpace(text)) return null;
+
+            var parts = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            var index = 0;
+
+            if (parts.Length > 1 && parts[0].Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+            {
+                auto = true;
+                index = 1;
+            }
+
+            return parts[index].Equals(Keywords.None, StringComparison.OrdinalIgnoreCase) ? null : parts[index];
         }
 
         /// <summary>
