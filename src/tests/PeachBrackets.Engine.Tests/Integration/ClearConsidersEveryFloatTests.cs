@@ -43,6 +43,73 @@ public class ClearConsidersEveryFloatTests
         Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
     }
 
+    // CSS 2.1 §9.5.2: the floats of the formatting context that come before the box, whatever box they are in - including a float before an
+    // ancestor of the box. Chrome: the cleared box is at the bottom of the float.
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    public async Task FloatBeforeAnAncestor_IsClearedByABlockWithClear(int depth)
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{Float}{Nested("<div id='b' style='clear:left;height:7.5pt'></div>", depth)}</div>");
+
+        Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
+    }
+
+    [Fact]
+    public async Task FloatBeforeAnAncestor_IsClearedByAFloatWithClear()
+    {
+        var (c, b, _) = await LayoutAsync($"<div id='c' style='width:300pt'>{Float}<div>{ClearingFloat()}</div></div>");
+
+        Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
+        Assert.Equal(c.Location.X, b.Location.X, 1);
+    }
+
+    [Theory]
+    [InlineData("left", 0)]
+    [InlineData("right", 45)]
+    [InlineData("both", 45)]
+    public async Task RightFloatBeforeAnAncestor_IsClearedOnlyByClearRightOrBoth(string clear, double below)
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'><div style='float:right;width:75pt;height:45pt'></div><div><div id='b' style='clear:{clear};height:7.5pt'></div></div></div>");
+
+        Assert.Equal(c.Location.Y + below, b.Location.Y, 1);
+    }
+
+    // A float outside a box that is a formatting context of its own is not a float of that context (CSS 2.1 §9.4.1).
+    [Theory]
+    [InlineData("overflow:hidden")]
+    [InlineData("display:flow-root")]
+    [InlineData("display:inline-block;width:200pt")]
+    public async Task FloatBeforeAFormattingContextRoot_IsNotClearedFromInsideIt(string style)
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{Float}<div style='{style}'><div id='b' style='clear:left;height:7.5pt'></div></div></div>");
+
+        Assert.Equal(c.Location.Y, b.Location.Y, 1);
+    }
+
+    // The floats before an ancestor are measured as they are laid out, not as they are drawn (CSS 2.1 §9.4.3).
+    [Fact]
+    public async Task RelativelyPositionedFloatBeforeAnAncestor_ClearsAtItsStaticBottom()
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'><div style='float:left;position:relative;top:30pt;width:75pt;height:45pt'></div><div><div id='b' style='clear:left;height:7.5pt'></div></div></div>");
+
+        Assert.Equal(c.Location.Y + 45, b.Location.Y, 1);
+    }
+
+    [Fact]
+    public async Task FloatBeforeAnAncestor_IsNotClearedWhenTheBoxIsAlreadyBelowIt()
+    {
+        var (c, b, _) = await LayoutAsync(
+            $"<div id='c' style='width:300pt'>{Float}<div><div style='height:60pt'></div><div id='b' style='clear:left;height:7.5pt'></div></div></div>");
+
+        Assert.Equal(c.Location.Y + 60, b.Location.Y, 1);
+    }
+
     [Fact]
     public async Task FloatTwoLevelsDown_IsClearedByABlockWithClear()
     {

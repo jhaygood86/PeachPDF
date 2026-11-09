@@ -29,6 +29,19 @@ namespace PeachBrackets.Html.Entities
         }
 
         /// <summary>
+        /// The smallest bottom margin edge among the blockers met since the float was last moved, or positive infinity when it has met none. A float
+        /// that does not fit beside them goes to the first of these that makes room (CSS 2.1 §9.5.1 rules 7 and 8: as high as possible), not below the
+        /// lowest, which <see cref="MaxBottom"/> is.
+        /// </summary>
+        public double NextBottom { get; set; } = double.PositiveInfinity;
+
+        /// <summary>
+        /// The edge the float goes below when it does not fit where it is: the first blocker bottom that frees some room, which is always below the
+        /// float's outer top (so the move makes progress), else the lowest one met.
+        /// </summary>
+        public double DropEdge => NextBottom > OuterTop + 0.01 && NextBottom <= MaxBottom ? NextBottom : MaxBottom;
+
+        /// <summary>
         /// Moves the float below <paramref name="clearEdge"/>, the lowest margin edge it has to clear. The border box
         /// starts <see cref="MarginTop"/> past it, so a negative margin-top leaves the border box above the edge while
         /// the margin box starts at it. <see cref="OuterTop"/> is what the conflict test reads, and it is never above

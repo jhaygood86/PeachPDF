@@ -3254,6 +3254,9 @@ namespace PeachBrackets.Html.Parse
                     case HtmlConstants.Align:
                         TranslateAlign(tag, box, value);
                         break;
+                    case HtmlConstants.Clear when tag.Name.Equals("br", StringComparison.OrdinalIgnoreCase):
+                        TranslateBrClear(box, valueParser, value);
+                        break;
                     case HtmlConstants.Background:
                         box.BackgroundImages = [new CssImage.Url(value.ToLower())];
                         break;
@@ -3356,6 +3359,23 @@ namespace PeachBrackets.Html.Parse
                     && align.Trim().Equals(HtmlConstants.Center, StringComparison.OrdinalIgnoreCase));
 
             if (centered) SetHorizontalMargins(box, Keywords.Auto, Keywords.Auto);
+        }
+
+        /// <summary>
+        /// Translates <c>&lt;br clear&gt;</c>: the HTML Standard's rendering section maps the obsolete attribute to the <c>clear</c> property of the
+        /// element, <c>all</c> being <c>both</c>. Any other value maps to nothing.
+        /// </summary>
+        private static void TranslateBrClear(CssBox box, CssValueParser valueParser, string value)
+        {
+            var keyword = value.Trim().ToLowerInvariant() switch
+            {
+                "left" => Keywords.Left,
+                "right" => Keywords.Right,
+                "all" or "both" => Keywords.Both,
+                _ => null
+            };
+
+            if (keyword is not null) CssUtils.SetPropertyValue(valueParser, box, "clear", keyword);
         }
 
         /// <summary>
@@ -4105,7 +4125,9 @@ namespace PeachBrackets.Html.Parse
                     rightBox = CssBox.CreateBox(parentBox, badBox.HtmlTag);
                     rightBox.InheritStyle(badBox, true);
 
-                    if (parentBox.Boxes.Count > 2)
+                    // Right after the block that was split at, which is index 1 unless the recursion above already hoisted the block (and
+                    // its own pieces) into the parent: then the pieces are in source order after it and the right piece belongs at the end.
+                    if (parentBox.Boxes.Count > 2 && splitBox.ParentBox != null)
                         rightBox.SetBeforeBox(parentBox.Boxes[1]);
 
                     if (splitBox.ParentBox != null)

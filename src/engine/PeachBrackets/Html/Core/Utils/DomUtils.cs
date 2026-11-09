@@ -1293,6 +1293,15 @@ namespace PeachBrackets.Html.Utils
             if (box.Overflow.Value is not Overflow.Visible) return true;
             if (box.DerivedStyle.IsFlowRoot) return true;
 
+            // The HTML rendering section gives a fieldset a formatting context of its own, and a button is one whatever its display
+            // (a `display: block` button is not caught by the inline-block arm below).
+            if (box.HtmlTag is { } tag
+                && (tag.Name.Equals("fieldset", StringComparison.OrdinalIgnoreCase)
+                    || tag.Name.Equals("button", StringComparison.OrdinalIgnoreCase)))
+            {
+                return true;
+            }
+
             if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.TableCell
                 or Keywords.TableCaption or Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid)

@@ -4199,6 +4199,31 @@ namespace PeachBrackets.Html.Dom
 
         #region Private methods
 
+        /// <summary>
+        /// Moves the line just opened after the line break <paramref name="br"/> down to the bottom of the floats the break's <c>clear</c> names,
+        /// when they reach below it: every float of the formatting context that comes before the break, in <paramref name="blockBox"/> or before it.
+        /// </summary>
+        private static void ClearAfterBreak(CssBox blockBox, CssBox br, CssLineBoxCoordinates coordinates)
+        {
+            var clear = br.EffectiveClear;
+            var edge = double.NegativeInfinity;
+
+            // Everything before the break inside the block (the earlier children, and the earlier parts of the inline boxes the break is in).
+            for (var node = br; node != blockBox && node.ParentBox is { } parent; node = parent)
+            {
+                edge = Math.Max(edge, LowestFloatBottomInChildren(parent, clear, 0, parent.IndexOfChild(node)));
+            }
+
+            edge = Math.Max(edge, LowestFloatBottomBeforeContainingBlock(blockBox, clear));
+
+            if (edge > coordinates.CurrentY + 0.01)
+            {
+                coordinates.CurrentY = edge;
+                coordinates.MaxBottom = Math.Max(coordinates.MaxBottom, edge);
+                coordinates.Line.ContentRight = LineContentRightOf(blockBox, edge);
+            }
+        }
+
         private static void ClearBox(CssBox box, int currentBoxIdx, CssBox containingBox)
         {
             var clearance = Math.Max(containingBox.ClientTop, box.Location.Y);
@@ -4213,6 +4238,10 @@ namespace PeachBrackets.Html.Dom
             // border edge - a float with a negative bottom margin (Acid2's ".nose { margin: -2em 2em -1em }") is cleared 1em higher than its
             // visible bottom.
             var earlierEdge = LowestFloatBottomInChildren(containingBox, box.EffectiveClear, 0, currentBoxIdx);
+
+            // And the floats before the containing block itself, in the same formatting context (§9.5.2: every earlier float of the context, whatever
+            // box it is in).
+            earlierEdge = Math.Max(earlierEdge, LowestFloatBottomBeforeContainingBlock(containingBox, box.EffectiveClear));
 
             floatEdge = Math.Max(floatEdge, earlierEdge);
             clearance = Math.Max(clearance, earlierEdge);
@@ -4273,6 +4302,42 @@ namespace PeachBrackets.Html.Dom
             if (DomUtils.ContainsItsFloats(box)) return double.NegativeInfinity;
 
             return LowestFloatBottomInChildren(box, clearPropValue, offset, int.MaxValue);
+        }
+
+        /// <summary>
+        /// The lowest bottom outer edge among the floats that come before <paramref name="containingBox"/> in its formatting context, which a box
+        /// inside it with <paramref name="clearPropValue"/> clears: the earlier siblings of the containing block and of each ancestor above it,
+        /// up to the block that establishes the formatting context (whose floats are the only ones in play; a float outside it is not in the
+        /// context, CSS 2.1 section 9.4.1). The same climb as <see cref="DomUtils.GetLowestEarlierFloatTop"/>, which measures tops for rule 5.
+        /// </summary>
+        private static double LowestFloatBottomBeforeContainingBlock(CssBox containingBox, ClearMode clearPropValue)
+        {
+            var lowest = double.NegativeInfinity;
+
+            // What the relative offsets of the boxes the cleared box lies in have moved it by: the boxes it lies in are laid out in their moved
+            // frame, while an earlier sibling's floats are in their own, so the offset is taken off every float found (CSS 2.1 section 9.4.3).
+            var frameOffsetY = 0d;
+
+            for (var reference = containingBox; reference.ParentBox is { } parent; reference = parent)
+            {
+                // The context ends at its root: nothing outside it is a float of the context. A multi-column container's columns each measure
+                // from their own top, so what is before it does not hold a box inside it either.
+                if (DomUtils.ContainsItsFloats(reference) || reference.ColumnsBesideFloats is not null) break;
+
+                frameOffsetY += reference.RelativeOffsetY;
+
+                var index = parent.IndexOfChild(reference);
+
+                // A multi-column parent's children are in columns: only the earlier siblings in the column being filled count, which the
+                // mark says, and an earlier column's are never in play.
+                if (parent.EstablishesMultiColumnContext && parent.CurrentColumnFirstChild is null) break;
+
+                lowest = Math.Max(lowest, LowestFloatBottomInChildren(parent, clearPropValue, -frameOffsetY, index));
+
+                if (parent.EstablishesMultiColumnContext) break;
+            }
+
+            return lowest;
         }
 
         /// <summary>
@@ -4365,12 +4430,19 @@ namespace PeachBrackets.Html.Dom
                     coordinates.MaxBottom = blockerStaticBottom;
                 }
 
+                if (blockerStaticBottom < coordinates.NextBottom)
+                {
+                    coordinates.NextBottom = blockerStaticBottom;
+                }
+
                 if (coordinates.Left + box.ActualWidth + rightMargin > coordinates.Right + DomUtils.FloatFitTolerance
                     || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
-                    coordinates.DropTo(coordinates.MaxBottom);
+                    // The highest place that has room (rule 7), which is below the first blocker to end, not the last.
+                    coordinates.DropTo(coordinates.DropEdge);
+                    coordinates.NextBottom = double.PositiveInfinity;
                     coordinates.Left = startX + box.ActualMarginLeft;
 
                     // css-break-3 §5.1: this drop may have carried the float onto a fragmentainer of a
@@ -4457,12 +4529,21 @@ namespace PeachBrackets.Html.Dom
                     coordinates.MaxBottom = blockerBottom;
                 }
 
+                if (blockerBottom < coordinates.NextBottom)
+                {
+                    coordinates.NextBottom = blockerBottom;
+                }
+
                 if (coordinates.Left > coordinates.FloatRightStartX - coordinates.MarginLeft + DomUtils.FloatFitTolerance
                     || !triedPositions.Add((coordinates.Left, coordinates.Right, coordinates.Top)))
                 {
                     triedPositions.Clear();
 
-                    coordinates.DropTo(coordinates.MaxBottom);
+                    // As in FloatBoxLeft: the first blocker bottom that frees room, not the lowest. The left edge the blockers above set is
+                    // given up with them, as there: a left float that ended on the way no longer holds this one in.
+                    coordinates.DropTo(coordinates.DropEdge);
+                    coordinates.NextBottom = double.PositiveInfinity;
+                    coordinates.Left = startX;
 
                     // Re-derive at the band the drop reached (css-break-3 §5.1), mirroring FloatBoxLeft.
                     limitRight = ContentRightOf(containingBox, coordinates.Top);
@@ -7217,6 +7298,14 @@ namespace PeachBrackets.Html.Dom
                             wrapNoWrapBox = false;
                             OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, wordOrdinal,
                                 word.IsLineBreak, isRtl);
+
+                            // <br clear>: what follows the break starts below the floats it clears (the HTML Standard maps the attribute to
+                            // `clear`; the break's line is extended to them, so a block after it starts there too).
+                            if (word.IsLineBreak && (b.IsBrElement ? b : b.ParentBox is { IsBrElement: true } parentBreak ? parentBreak : null) is { } br
+                                && br.EffectiveClear != ClearMode.None)
+                            {
+                                ClearAfterBreak(blockBox, br, coordinates);
+                            }
 
                             lastLeftIntersectingFloatBox = LeftFloatAt(coordinates, b, g);
 
