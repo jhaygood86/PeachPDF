@@ -4311,8 +4311,19 @@ namespace PeachBrackets.Html.Parse
             }
             else if (ContainsVariantBoxes(box) || wrapsInlineRunForColumns)
             {
+                // In a multi-column container a float that opens a run stays a child of the container: it then continues in
+                // the next column as a block does (css-break-3 §4), which a float inside the run's anonymous block cannot -
+                // the resume record would name that block, and the text after the float with it (#2312). A float after the
+                // run's first text still joins the run, where it sits beside the line it follows.
+                var inMultiColumn = box.EstablishesMultiColumnContext;
+
                 for (int i = 0; i < box.Boxes.Count; i++)
                 {
+                    if (inMultiColumn && box.Boxes[i].IsFloated && !CssBox.IsOutsideMarker(box.Boxes[i]))
+                    {
+                        continue;
+                    }
+
                     if (JoinsTheInlineRun(box.Boxes[i]))
                     {
                         var newbox = CssBox.CreateBlock(box, null, box.Boxes[i++]);
