@@ -1264,7 +1264,8 @@ namespace PeachBrackets.Html.Utils
                     MaxBottom = coordinates.MaxBottom,
                     ReferenceWidth = 0,
                     Right = coordinates.MaxRight,
-                    LeftFloatsOnly = true
+                    LeftFloatsOnly = true,
+                    SeekPastGap = lastIntersectingFloat is null && Math.Abs(coordinates.CurrentX - coordinates.Line.ContentLeft) < 0.01
                 };
 
                 var intersectingFloat = GetFirstIntersectingFloatBox(box, floatCoordinates, Floating.Left);
@@ -2176,6 +2177,7 @@ namespace PeachBrackets.Html.Utils
 
             switch (floatProp)
             {
+                case Floating.Left when coordinates.SeekPastGap && targetRight > currentLeft && targetBox.EffectiveFloatSide == Floating.Left:
                 case Floating.Left when targetRight > currentLeft && targetLeft <= currentLeft
                     && (!coordinates.LeftFloatsOnly || targetBox.EffectiveFloatSide == Floating.Left):
                 // A float past the containing block's right edge, which this one may extend out to meet (rule 9: as far right as it can go). One

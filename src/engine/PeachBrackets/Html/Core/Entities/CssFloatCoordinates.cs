@@ -73,6 +73,14 @@ namespace PeachBrackets.Html.Entities
         /// </summary>
         public bool LeftFloatsOnly { get; init; }
 
+        /// <summary>
+        /// Set by the line-flow cursor lookup when the cursor is still at the line's start and no float has been found yet: a left float that
+        /// overlaps the line vertically bounds it by its right edge whether or not it starts at the cursor (CSS 2.1 §9.5: a line box beside a
+        /// float is shortened to the float's margin box). Without it a float that begins right of the line start - the second of two floats side
+        /// by side once the first has ended on an earlier page - is not seen, and the line runs over it.
+        /// </summary>
+        public bool SeekPastGap { get; init; }
+
         public double FloatRightStartX => Right - ReferenceWidth;
 
         /// <summary>

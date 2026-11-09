@@ -2519,6 +2519,17 @@ namespace PeachBrackets.Html.Dom
                     : Math.Max(cell.ClientTop, Math.Min(contentBottom, cellFarEdge));
             }
 
+            // A cell whose content runs across a page foot is fragmented, and a fragmented cell has no free room to distribute: css-tables-3 §6.1
+            // gives each fragment the cell's content in turn, and the spanned rows' extent measured here includes the room a repeated header or
+            // footer group takes on each page, which is not the cell's. Browsers do not centre or bottom-align a split cell either (Gecko forces
+            // top alignment for one, `nsTableRowFrame::ReflowCellFrame`). Measured against that extent the content was moved down by room that
+            // is not there, and the lines pushed past the strip they were laid out in were drawn on no page.
+            if (!isVertical && cell.HtmlContainer is { HasRealPageGrid: true } grid
+                && farEdge > grid.PageBottomOf(grid.SlotStartingAt(cell.ClientTop)) + 0.01)
+            {
+                return 0d;
+            }
+
             var dist = cellKeyword switch
             {
                 VerticalAlignment.Bottom => cellFarEdge - farEdge,
