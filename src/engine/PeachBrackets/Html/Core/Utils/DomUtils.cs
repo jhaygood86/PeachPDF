@@ -823,10 +823,17 @@ namespace PeachBrackets.Html.Utils
             do
             {
                 currentBox = currentBox.EffectiveParentBox;
-            } while (currentBox is { IsPositioned: false, EffectiveParentBox: not null });
+            } while (currentBox is { EffectiveParentBox: not null } && !FormsAbsoluteContainingBlock(currentBox));
 
             return currentBox!;
         }
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is the containing block of its absolutely positioned descendants: a positioned box, or one that layout containment or
+        /// paint containment applies to (css-contain-2 §3.2, §3.4). A <c>position: fixed</c> descendant of the latter is made absolute where the tree is built
+        /// (<c>DomParser.NormalizeFixedInContainment</c>), so this is the one place layout asks.
+        /// </summary>
+        internal static bool FormsAbsoluteContainingBlock(CssBox box) => box.IsPositioned || AppliesLayoutOrPaintContainment(box);
 
         /// <summary>
         /// The next box up the chain whose <c>overflow</c> clip can apply to <paramref name="box"/>, or
@@ -866,7 +873,7 @@ namespace PeachBrackets.Html.Utils
             while (true)
             {
                 if (FormsContainingBlockForFixed(current)
-                    || (position is PositionMode.Absolute && current.IsPositioned))
+                    || (position is PositionMode.Absolute && FormsAbsoluteContainingBlock(current)))
                     return current;
 
                 if (current.EffectiveParentBox is not { } parent)
@@ -1283,7 +1290,8 @@ namespace PeachBrackets.Html.Utils
         /// contains its floats (<see cref="ContainsItsFloats"/>), but is deliberately not answered here: this
         /// predicate also ends the float scans and the margin collapse through a box, and nothing in this
         /// engine narrows or moves an in-flow multi-column container beside a preceding float, so text in
-        /// its columns has to keep seeing that float.
+        /// its columns has to keep seeing that float. Layout containment and paint containment (<see cref="AppliesLayoutOrPaintContainment"/>) each make a box
+        /// one too (css-contain-2 §3.2, §3.4), which is also what contains its floats and stops its margins collapsing through it.
         /// </summary>
         internal static bool EstablishesIndependentFormattingContext(CssBox box)
         {
@@ -1292,6 +1300,7 @@ namespace PeachBrackets.Html.Utils
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Fixed) return true;
             if (box.Overflow.Value is not Overflow.Visible) return true;
             if (box.DerivedStyle.IsFlowRoot) return true;
+            if (AppliesLayoutOrPaintContainment(box)) return true;
 
             // The HTML rendering section gives a fieldset a formatting context of its own, and a button is one whatever its display
             // (a `display: block` button is not caught by the inline-block arm below).
@@ -1312,6 +1321,48 @@ namespace PeachBrackets.Html.Utils
             return box.ParentBox.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex
                 or Keywords.Grid or Keywords.InlineGrid;
         }
+
+        /// <summary>
+        /// The containment that applies to <paramref name="box"/>: what its <c>contain</c> and <c>content-visibility</c> ask for (<see cref="ContainGrammar.Of"/>),
+        /// less what cannot apply to it. Layout and paint containment have no effect on a box that generates none, a non-atomic inline box, or an internal table box
+        /// other than a table cell (css-contain-2 §3.2, §3.4); size containment does not apply to an internal table box (a caption is not one) or to a table either (§3.1).
+        /// Cheap for the box that asks for nothing, which is nearly every one.
+        /// </summary>
+        internal static Containment AppliedContainment(CssBox box)
+        {
+            var asked = ContainGrammar.Of(box.Contain, box.ContentVisibility);
+
+            if (asked == Containment.None) return Containment.None;
+
+            if (box.IsInline && !IsAtomicInline(box)) return Containment.None;
+
+            var display = box.DerivedStyle.ActualDisplay;
+
+            // No principal box: display: none, and display: contents (the box is a shell that was lifted out).
+            if (display is Keywords.None or Keywords.Contents) return Containment.None;
+
+            if (display is Keywords.TableRowGroup or Keywords.TableHeaderGroup or Keywords.TableFooterGroup or Keywords.TableRow or Keywords.TableColumn
+                or Keywords.TableColumnGroup or Keywords.TableCaption)
+            {
+                return Containment.Style;
+            }
+
+            // Size containment does not apply to a table or a table cell either (css-contain-2 §3.1); layout and paint containment do.
+            return display is Keywords.Table or Keywords.InlineTable or Keywords.TableCell ? asked & ~Containment.Size : asked;
+        }
+
+        /// <summary>
+        /// Whether layout containment or paint containment applies to <paramref name="box"/>, which makes it an independent formatting context, the containing
+        /// block of its absolute and fixed descendants and a stacking context (css-contain-2 §3.2, §3.4). Reads only the cascaded style, so it can be asked
+        /// before layout.
+        /// </summary>
+        internal static bool AppliesLayoutOrPaintContainment(CssBox box) => (AppliedContainment(box) & (Containment.Layout | Containment.Paint)) != 0;
+
+        /// <summary>Whether paint containment applies to <paramref name="box"/>: it clips to its padding edge.</summary>
+        internal static bool AppliesPaintContainment(CssBox box) => (AppliedContainment(box) & Containment.Paint) != 0;
+
+        /// <summary>Whether layout containment applies to <paramref name="box"/>.</summary>
+        internal static bool AppliesLayoutContainment(CssBox box) => (AppliedContainment(box) & Containment.Layout) != 0;
 
         /// <summary>
         /// Whether <paramref name="box"/> contains its own floats - grows to cover them
@@ -1841,6 +1892,12 @@ namespace PeachBrackets.Html.Utils
             }
 
             if (box.Position.Value is PositionMode.Absolute or PositionMode.Relative && box.ZIndex.Value is { IsValue: true })
+            {
+                return true;
+            }
+
+            // Layout containment and paint containment each create a stacking context (css-contain-2 §3.2, §3.4).
+            if (AppliesLayoutOrPaintContainment(box))
             {
                 return true;
             }

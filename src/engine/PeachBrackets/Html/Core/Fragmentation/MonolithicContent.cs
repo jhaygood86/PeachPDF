@@ -145,6 +145,10 @@ namespace PeachBrackets.Html.Fragmentation
             if (!IsNamed(box, "body") || box.ParentBox is not { } parent || !IsRootElement(parent))
                 return false;
 
+            // Layout or paint containment on the root element or on body stops the propagation (css-contain-2 §2); body is then an overflow box of its own.
+            if (DomUtils.AppliesLayoutOrPaintContainment(parent) || DomUtils.AppliesLayoutOrPaintContainment(box))
+                return false;
+
             return parent.Overflow.Value == Overflow.Visible;
         }
 

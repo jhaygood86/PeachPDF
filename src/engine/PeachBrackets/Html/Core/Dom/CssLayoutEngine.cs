@@ -3556,7 +3556,7 @@ namespace PeachBrackets.Html.Dom
             if (box.Position.Value is not PositionMode.Absolute) return null;
 
             var ancestor = DomUtils.GetNearestPositionedAncestor(box);
-            return ancestor.IsPositioned || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
+            return DomUtils.FormsAbsoluteContainingBlock(ancestor) || DomUtils.InlineContainingBlockOf(ancestor) is not null ? ancestor : null;
         }
 
         public static double? GetBoxHeight(CssBox box)
@@ -10305,6 +10305,10 @@ namespace PeachBrackets.Html.Dom
             if (ReferenceEquals(box, lineBox.OwnerBox)) return null;
 
             if (box.IsImage) return rect.Bottom + box.ActualMarginBottom;
+
+            // Layout containment gives the box no baseline of its own (css-contain-2 §3.2), so it is aligned by its bottom margin edge, as a replaced element is.
+            if (box.DerivedStyle.ActualDisplay is Keywords.InlineBlock or Keywords.InlineFlex or Keywords.InlineGrid or Keywords.InlineTable && DomUtils.AppliesLayoutContainment(box))
+                return rect.Bottom + box.ActualMarginBottom;
 
             // An inline flex or grid container's baseline is its first item's first line's (css-flexbox-1 §8.5, css-grid-1 §6.1); with no text in any item it is
             // synthesized from the bottom margin edge, as for a replaced element.

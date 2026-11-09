@@ -1606,6 +1606,10 @@ namespace PeachBrackets.Html.Parse
             // reached, so its display is final and can be asked about here.
             NormalizeFlexOrGridItem(box);
 
+            // 11b. A fixed box inside a box that layout or paint containment applies to has that box, not the page, as its containing block
+            // (css-contain-2 §3.2, §3.4), which is what an absolute box has.
+            NormalizeFixedInContainment(box);
+
             // 12. display: contents (CSS Display 3 §2.5): record the element for the splice that follows
             // the cascade, or compute it to something a box can actually be.
             ResolveDisplayContents(box, displayContentsShells);
@@ -1902,6 +1906,24 @@ namespace PeachBrackets.Html.Parse
                     CssProperty<DisplayMode>.FromValue(Keywords.Table, DisplayMode.Table),
                 _ => display
             };
+
+        /// <summary>
+        /// Makes a <c>position: fixed</c> box absolute when an ancestor has layout or paint containment applied, since that ancestor is then its containing
+        /// block (css-contain-2 §3.2, §3.4) and the engine's absolute placement already resolves against an ancestor. The ancestors' own cascade has finished
+        /// by the time this box is reached.
+        /// </summary>
+        private static void NormalizeFixedInContainment(CssBox box)
+        {
+            if (box.Position.Value is not PositionMode.Fixed) return;
+
+            for (var ancestor = box.ParentBox; ancestor is not null; ancestor = ancestor.ParentBox)
+            {
+                if (!DomUtils.AppliesLayoutOrPaintContainment(ancestor)) continue;
+
+                box.Position = CssProperty<PositionMode>.FromValue(Keywords.Absolute, PositionMode.Absolute);
+                return;
+            }
+        }
 
         /// <summary>
         /// Brings an in-flow child of a flex or grid container — a flex/grid item — into the shape those

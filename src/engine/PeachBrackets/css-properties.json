@@ -6620,6 +6620,32 @@
       }
     },
     {
+      "name": "contain",
+      "comment": "CSS Containment 2 section 2: none | strict | content | [size || layout || style || paint], stored as the text written and read through ContainGrammar together with content-visibility (ContainGrammar.Of). Layout and paint containment make the box an independent formatting context (DomUtils.EstablishesIndependentFormattingContext), the containing block of its absolute and fixed descendants and a stacking context; paint containment also clips to the padding box. Size and style containment parse but have no effect.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContainConverter"},
+      "initialValue": "none",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContainProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "Contain",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "content-visibility",
+      "comment": "CSS Containment 2 section 4: visible | auto | hidden. auto turns on layout, style and paint containment (ContainGrammar.Of); contents are never skipped, so auto behaves as if the element were always on screen and hidden applies its containment but still shows its contents.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.ContentVisibilityConverter"},
+      "initialValue": "visible",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.ContentVisibilityProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "ContentVisibility",
+        "csharpDataType": "string",
+        "area": "DisplayPositioningArea"
+      }
+    },
+    {
       "name": "scroll-behavior",
       "comment": "css-cssom-view-1 section 3: smooth makes a programmatic scroll of the container (ScrollBy, SetScrollPosition, ScrollIntoView) glide. Read through ScrollGrammar.",
       "inherited": false,

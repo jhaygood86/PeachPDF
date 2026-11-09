@@ -8030,7 +8030,7 @@ namespace PeachBrackets.Html.Dom
             // Now that this box's used height and its descendants' percentage heights ARE final, revise
             // every such descendant against them. The second pass is authoritative; the first exists
             // because a box that never reaches here (its containing block is the page) still needs an answer.
-            if (IsPositioned || IsRoot)
+            if (DomUtils.FormsAbsoluteContainingBlock(this) || IsRoot)
             {
                 ResolveAbsolutelyPositionedDescendantAutoBlockMargins();
             }
@@ -8298,7 +8298,7 @@ namespace PeachBrackets.Html.Dom
                     // A positioned descendant establishes the containing block for anything below it and
                     // resolves that subtree from its own epilogue. Only static ancestors are transparent to
                     // this containing-block walk.
-                    if (!child.IsPositioned)
+                    if (!DomUtils.FormsAbsoluteContainingBlock(child))
                     {
                         VisitStaticDescendants(child);
                     }

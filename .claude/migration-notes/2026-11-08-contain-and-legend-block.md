@@ -1,0 +1,6 @@
+# `contain` / `content-visibility: auto` now take effect, and `legend` is a block
+
+- **Before:** `contain` and `content-visibility` were ignored (an unknown property), so a box with `contain: layout` or `paint` did not contain its floats, did not clip, was not a containing block for absolute/fixed descendants and was not a stacking context. A `position: fixed` box inside one was placed against the page. `body`'s background and overflow always propagated to the canvas and viewport. A `<legend>` was inline.
+- **Now:** layout and paint containment (alone, through `content`/`strict`, or through `content-visibility: auto`) give the box a formatting context of its own, make it the containing block of its absolute and fixed descendants, create a stacking context, and (paint) clip to the padding edge. On `html` or `body` they stop `body`'s background and overflow propagating. A `<legend>` is a block with 2px inline padding, so a fieldset's legend now sits on a line of its own at the top.
+- **Check with** `git show <previous-tag>:docs/html-css-support.md`: the previous page listed `contain` as unsupported.
+- **Still not done:** size and style containment and `content-visibility` skipping parse but do nothing.
