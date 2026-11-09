@@ -5398,6 +5398,22 @@ namespace PeachBrackets.Html.Dom
             ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word.Width, word.Height, rightSpacing, clonedTrailing, isRtl,
                 () => growLineToItsExtent(word));
 
+        /// <summary>
+        /// How wide what has to stay on one line is, starting at <paramref name="word"/>: its own width, or for the word of a
+        /// <c>white-space: nowrap</c> run that is not wrapped away from the rest, the run from it to its end.
+        /// </summary>
+        private static double WidthThatCannotBeBrokenFrom(CssBox box, int wordIndex, CssRect word)
+        {
+            if (box.WhiteSpacePermitsWrapping) return word.Width;
+
+            var width = 0d;
+
+            for (var i = wordIndex; i < box.Words.Count; i++)
+                width += i == wordIndex ? word.Width : box.Words[i].FullWidth;
+
+            return width;
+        }
+
         // itemWidth: what the line has to hold from its start to the end of the item (a word's width, or an atomic inline's content edge to its margin edge).
         // itemHeight: how tall the item is, for the check that it would fit below the floats on a fresh page.
         private static void ShiftEmptyLineBelowCrowdingFloats(CssBox blockBox, CssBox box,
@@ -7117,6 +7133,12 @@ namespace PeachBrackets.Html.Dom
                     // white-space:nowrap forbidding wrapping altogether (issue #841).
                     var blockBoxPermitsWrap = blockBox.WhiteSpacePermitsWrapping;
 
+                    // A word that cannot wrap (white-space: nowrap or pre on its inline box) still has to be placed where it fits: a line box
+                    // too narrow beside the floats for its content moves down below them whatever the white-space value (CSS 2.1 §9.5). Not inside a
+                    // column, where moving the line below the float puts it past the column's band and the deferral that follows draws the line
+                    // before it twice (see the accepted gap on nowrap lines).
+                    var shiftsWordsThatCannotWrap = blockBox.HtmlContainer is not { CurrentFragmentainer: { HasOwnBand: true } };
+
                     if (blockBoxPermitsWrap && b.IsNoWrapRun && coordinates.CurrentX > lineStartX)
                     {
                         var boxRight = coordinates.CurrentX;
@@ -7170,11 +7192,17 @@ namespace PeachBrackets.Html.Dom
                         var bottomAlignedAtomicHeightBeforeIncomingWord = coordinates.Line.BottomAlignedAtomicHeight;
                         GrowLineToItsExtent(word);
 
-                        if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpacePermitsWrapping
+                        // See shiftsWordsThatCannotWrap.
+                        if (blockBoxPermitsWrap && !word.IsLineBreak
+                            && (b.WhiteSpacePermitsWrapping || shiftsWordsThatCannotWrap)
                             && IsAtLineStart(coordinates))
                         {
-                            ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
-                                clonedTrailing, isRtl, GrowLineToItsExtent);
+                            ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
+                                rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
+
+                            // The run was to move to a new line because the cursor had been pushed past a float; the line is empty, so a new one
+                            // could not help, and the shift has already put it where the run fits.
+                            if (wrapNoWrapBox && IsAtLineStart(coordinates)) wrapNoWrapBox = false;
                         }
 
                         var actualLimitRight = coordinates.Line.ContentRight - coordinates.BalanceInset;
@@ -7347,10 +7375,10 @@ namespace PeachBrackets.Html.Dom
 
                                 // The line the word wrapped onto may have no room beside that float, as when the float is wider
                                 // than the line; the word goes below it, as it would have had it been about to open the line.
-                                if (blockBoxPermitsWrap && !word.IsLineBreak && b.WhiteSpacePermitsWrapping)
+                                if (blockBoxPermitsWrap && !word.IsLineBreak && (b.WhiteSpacePermitsWrapping || shiftsWordsThatCannotWrap))
                                 {
-                                    ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, word, rightSpacing,
-                                        clonedTrailing, isRtl, GrowLineToItsExtent);
+                                    ShiftEmptyLineBelowCrowdingFloats(blockBox, box, coordinates, WidthThatCannotBeBrokenFrom(b, wordIndex, word), word.Height,
+                                        rightSpacing, clonedTrailing, isRtl, () => GrowLineToItsExtent(word));
                                 }
                             }
 

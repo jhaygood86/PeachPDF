@@ -7,3 +7,5 @@
 **Not claimed:** that `main` (no wrapper, so no columns) overlaps: it draws the words beside the float.
 
 **Any float after a `nowrap`/`pre` line:** the same holds without a `<br>`. A float that follows text on such a line is placed at the line's top and left over the words, as `main` with an explicit `<div>` does; the line is not moved beside the float or broken after it, which drew words twice (see the [recent fix](../recent-fixes/2026-10-20-a-float-after-text-moves-the-text-beside-it.md)). A browser keeps the line whole too, so the gap is the same: a float wider than what is left of the column covers the words after it.
+
+**Outside a column** a nowrap span that has no room beside a float does move below it now (see [the recent fix](../recent-fixes/2026-11-09-a-nowrap-span-with-no-room-beside-a-float-moves-below-it.md)); a block that is itself `nowrap` or `pre` is left beside the float, as headless Edge also does.
