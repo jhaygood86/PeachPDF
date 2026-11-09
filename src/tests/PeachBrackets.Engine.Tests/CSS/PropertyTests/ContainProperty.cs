@@ -166,6 +166,8 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         [InlineData("padding-box")]
         [InlineData("border-box 4px")]
         [InlineData("2em content-box")]
+        [InlineData("-3px")]
+        [InlineData("border-box -2px")]
         [InlineData("CONTENT-BOX")]
         public void OverflowClipMarginLegal(string value)
         {
@@ -178,7 +180,6 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 
         [Theory]
         [InlineData("")]
-        [InlineData("-1px")]
         [InlineData("5")]
         [InlineData("50%")]
         [InlineData("margin-box")]
@@ -190,6 +191,39 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
             var property = ParseDeclaration($"overflow-clip-margin: {value}");
 
             Assert.Equal("overflow-clip-margin", property.Name);
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("overflow-clip-margin-top", "border-box 3px")]
+        [InlineData("overflow-clip-margin-right", "-2px")]
+        [InlineData("overflow-clip-margin-bottom", "content-box")]
+        [InlineData("overflow-clip-margin-left", "0")]
+        [InlineData("overflow-clip-margin-block-start", "1px padding-box")]
+        [InlineData("overflow-clip-margin-block-end", "4px")]
+        [InlineData("overflow-clip-margin-inline-start", "border-box")]
+        [InlineData("overflow-clip-margin-inline-end", "2em")]
+        [InlineData("overflow-clip-margin-inline", "border-box 3px")]
+        [InlineData("overflow-clip-margin-block", "5px")]
+        public void OverflowClipMarginPerSidePropertiesTakeAVisualBoxAndALength(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}: {value}");
+
+            Assert.Equal(name, property.Name);
+            Assert.True(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("overflow-clip-margin-top", "5")]
+        [InlineData("overflow-clip-margin-left", "50%")]
+        [InlineData("overflow-clip-margin-block-end", "margin-box")]
+        [InlineData("overflow-clip-margin-inline", "1px 2px")]
+        [InlineData("overflow-clip-margin-block", "")]
+        public void OverflowClipMarginPerSidePropertiesRejectWhatIsNotAVisualBoxOrALength(string name, string value)
+        {
+            var property = ParseDeclaration($"{name}: {value}");
+
+            Assert.Equal(name, property.Name);
             Assert.False(property.HasValue);
         }
 

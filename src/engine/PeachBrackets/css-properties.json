@@ -6633,14 +6633,105 @@
       }
     },
     {
-      "name": "overflow-clip-margin",
-      "comment": "css-overflow-4 section 3.1: <visual-box> || <length [0,inf]>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the visual box's edge (padding-box when none is written) an axis that clips without scrolling - overflow: clip, or paint containment - cuts its overflow; the rounded corners grow with it. An axis that is hidden, scroll or auto ignores it.",
+      "name": "overflow-clip-margin-top",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the top side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
       "inherited": false,
       "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
       "initialValue": "0px",
-      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginProperty.ValueGrammar.Convert" },
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginTopProperty.ValueGrammar.Convert" },
       "html": {
-        "propertyPath": "OverflowClipMargin",
+        "propertyPath": "OverflowClipMarginTop",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-right",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the right side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginRightProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginRight",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-bottom",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the bottom side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBottomProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBottom",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-left",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the left side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginLeftProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginLeft",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-block-start",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the block-start side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBlockStartProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBlockStart",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-block-end",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the block-end side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginBlockEndProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginBlockEnd",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-inline-start",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the inline-start side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginInlineStartProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginInlineStart",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin-inline-end",
+      "comment": "css-overflow-4 section 3.2: <visual-box> || <length>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the edge of the visual box (padding-box when none is written) the inline-end side of an axis that is cut without scrolling - overflow: clip, or paint containment - clips its overflow; a negative length shrinks it. The rounded corners are shaped as an outer box-shadow spread by the same offset from the border edge. A side of an axis that is hidden, scroll or auto ignores it. The logical longhands are one cascade with the physical ones, the later declaration winning.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginInlineEndProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMarginInlineEnd",
         "csharpDataType": "string",
         "area": "BoxModelArea"
       }

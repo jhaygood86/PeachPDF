@@ -76,6 +76,8 @@ The view tells the document the display's scale (`XamlRoot.RasterizationScale`) 
 
 The view lays its document out as `MediaType.Screen`: one surface as wide as the view, with no pages, no gap between pages and nothing cut at a page height, however tall the document is. In `Auto` mode the view tells the document where it is scrolled (`HtmlDocument.SetViewport`), so `position: fixed`, `position: sticky` and `background-attachment: fixed` follow the scroll, and it draws fixed and stuck boxes on a layer over the scroller (`DocumentPaintLayer.ViewportAttached`) so they never move with the content on the way to their place; the viewport height is the height of the view, and a change of it lays the document out again. A document with a `background-attachment: fixed` image is painted differently: the view draws the visible part of the page itself, on the non-scrolling layer, on every scroll step, and the scrolled canvas only provides the extent, so the picture never moves with the content. An auto-height view (`ScrollMode = Disabled`) has no scroller of its own: it takes the finite height its host offered when it was first measured as the viewport for `vh`, and none when it was offered an unbounded one.
 
+`content-visibility: auto` is honored: the view asks the document to skip what is away from the view and to show what a scroll comes near ([skipping what is off screen](peachbrackets.md#skipping-what-is-off-screen-content-visibility-auto)), and keeps the scroll position on what was in view when the sizes above it change.
+
 ## Using the view in a list
 
 A chat message, a comment or a card is a small HTML document that sits in a list of others. Set `ScrollMode` to `Disabled` and the view stops

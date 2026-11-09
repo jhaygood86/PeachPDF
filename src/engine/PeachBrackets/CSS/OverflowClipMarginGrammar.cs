@@ -13,8 +13,8 @@ namespace PeachBrackets.Css
     }
 
     /// <summary>
-    /// The grammar of <c>overflow-clip-margin</c> (css-overflow-4 §3.1): <c>&lt;visual-box&gt; || &lt;length [0,∞]&gt;</c>, with <c>padding-box</c> and 0 for
-    /// whatever is left out. Kept as the text that was written and read back through these same functions by layout.
+    /// The grammar of the <c>overflow-clip-margin</c> properties (css-overflow-4 §3.2): <c>&lt;visual-box&gt; || &lt;length&gt;</c>, with <c>padding-box</c> and 0 for
+    /// whatever is left out; a negative length shrinks the clip edge. Kept as the text that was written and read back through these same functions by layout.
     /// </summary>
     internal static class OverflowClipMarginGrammar
     {
@@ -50,7 +50,7 @@ namespace PeachBrackets.Css
                 }
                 else if (token.Type == TokenType.Dimension)
                 {
-                    if (Converters.LengthConverter.Convert([token]) is null || token.Value < 0) return false;
+                    if (Converters.LengthConverter.Convert([token]) is null) return false;
                     lengths++;
                 }
                 else

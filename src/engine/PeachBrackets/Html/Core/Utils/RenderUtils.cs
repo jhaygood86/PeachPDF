@@ -225,49 +225,65 @@ namespace PeachBrackets.Html.Utils
             var clipY = box.ClipsAxisAtTheOverflowClipEdge(horizontal: false);
             if (!clipX && !clipY) return paddingRect;
 
-            var (visualBox, margin) = box.OverflowClipMarginValue();
-            if (visualBox == OverflowClipVisualBox.PaddingBox && margin == 0) return paddingRect;
+            var left = box.OverflowClipMarginOf(PhysicalSide.Left);
+            var top = box.OverflowClipMarginOf(PhysicalSide.Top);
+            var right = box.OverflowClipMarginOf(PhysicalSide.Right);
+            var bottom = box.OverflowClipMarginOf(PhysicalSide.Bottom);
 
-            var visual = VisualBoxRect(box, borderBox, paddingRect, visualBox);
+            if (IsInitialMargin(left) && IsInitialMargin(top) && IsInitialMargin(right) && IsInitialMargin(bottom)) return paddingRect;
 
             return Rect.FromLTRB(
-                clipX ? visual.Left - margin : paddingRect.Left,
-                clipY ? visual.Top - margin : paddingRect.Top,
-                clipX ? visual.Right + margin : paddingRect.Right,
-                clipY ? visual.Bottom + margin : paddingRect.Bottom);
+                clipX ? SideEdgeOf(box, borderBox, paddingRect, PhysicalSide.Left, left) : paddingRect.Left,
+                clipY ? SideEdgeOf(box, borderBox, paddingRect, PhysicalSide.Top, top) : paddingRect.Top,
+                clipX ? SideEdgeOf(box, borderBox, paddingRect, PhysicalSide.Right, right) : paddingRect.Right,
+                clipY ? SideEdgeOf(box, borderBox, paddingRect, PhysicalSide.Bottom, bottom) : paddingRect.Bottom);
         }
 
-        private static Rect VisualBoxRect(CssBox box, Rect borderBox, Rect paddingRect, OverflowClipVisualBox visualBox) => visualBox switch
+        private static bool IsInitialMargin((OverflowClipVisualBox VisualBox, double Margin) margin) => margin.VisualBox == OverflowClipVisualBox.PaddingBox && margin.Margin == 0;
+
+        // Where one side of the clip edge is: the side of the visual box it names, moved out by the margin (in by it, when it is negative).
+        private static double SideEdgeOf(CssBox box, Rect borderBox, Rect paddingRect, PhysicalSide side, (OverflowClipVisualBox VisualBox, double Margin) margin)
         {
-            OverflowClipVisualBox.BorderBox => borderBox,
-            OverflowClipVisualBox.ContentBox => Rect.FromLTRB(
-                paddingRect.Left + box.ActualPaddingLeft,
-                paddingRect.Top + box.ActualPaddingTop,
-                Math.Max(paddingRect.Left + box.ActualPaddingLeft, paddingRect.Right - box.ActualPaddingRight),
-                Math.Max(paddingRect.Top + box.ActualPaddingTop, paddingRect.Bottom - box.ActualPaddingBottom)),
-            _ => paddingRect
-        };
+            var (visualBox, length) = margin;
+
+            return side switch
+            {
+                PhysicalSide.Left => (visualBox == OverflowClipVisualBox.BorderBox ? borderBox.Left : visualBox == OverflowClipVisualBox.ContentBox ? paddingRect.Left + box.ActualPaddingLeft : paddingRect.Left) - length,
+                PhysicalSide.Top => (visualBox == OverflowClipVisualBox.BorderBox ? borderBox.Top : visualBox == OverflowClipVisualBox.ContentBox ? paddingRect.Top + box.ActualPaddingTop : paddingRect.Top) - length,
+                PhysicalSide.Right => (visualBox == OverflowClipVisualBox.BorderBox ? borderBox.Right : visualBox == OverflowClipVisualBox.ContentBox ? paddingRect.Right - box.ActualPaddingRight : paddingRect.Right) + length,
+                _ => (visualBox == OverflowClipVisualBox.BorderBox ? borderBox.Bottom : visualBox == OverflowClipVisualBox.ContentBox ? paddingRect.Bottom - box.ActualPaddingBottom : paddingRect.Bottom) + length
+            };
+        }
 
         /// <summary>
-        /// The corner radii of the overflow clip edge: those of the visual box's edge (the border radius less what lies between the border edge and
-        /// it), each grown by the margin where the corner is rounded, so a square corner stays square, then reduced to fit the edge as every set of
-        /// radii is (css-backgrounds-3 §5.5).
+        /// The corner radii of the overflow clip edge (css-overflow-4 §3.2): shaped as an outer box-shadow spread by the same offset from the border edge
+        /// (css-backgrounds-3 §6.1.1), each side of a corner taking the offset of the side it is on, then reduced to fit the edge as every set of radii is
+        /// (§5.5). A corner that is square stays square.
         /// </summary>
         internal static BorderRadii OverflowClipRadiiOf(CssBox box, Rect borderBox, Rect paddingRect, Rect edge)
         {
-            var (visualBox, margin) = box.OverflowClipMarginValue();
-            var visual = VisualBoxRect(box, borderBox, paddingRect, visualBox);
-            var radii = box.ComputeInnerRadii(borderBox, visual,
-                visual.Left - borderBox.Left, visual.Top - borderBox.Top, borderBox.Right - visual.Right, borderBox.Bottom - visual.Bottom);
+            var outer = box.DerivedStyle.ComputeRadii(borderBox);
 
-            if (margin <= 0 || edge == visual) return radii;
-
-            static double Grow(double r, double margin) => r > 0 ? r + margin : 0;
+            // How far each side of the edge lies outside the border edge (inside, when negative).
+            double left = borderBox.Left - edge.Left, top = borderBox.Top - edge.Top, right = edge.Right - borderBox.Right, bottom = edge.Bottom - borderBox.Bottom;
 
             return DerivedStyle.ApplyCornerOverlap(edge,
-                Grow(radii.TLX, margin), Grow(radii.TLY, margin), Grow(radii.TRX, margin), Grow(radii.TRY, margin),
-                Grow(radii.BRX, margin), Grow(radii.BRY, margin), Grow(radii.BLX, margin), Grow(radii.BLY, margin))
-                .WithShapes(radii.KTL, radii.KTR, radii.KBR, radii.KBL);
+                Spread(outer.TLX, left), Spread(outer.TLY, top), Spread(outer.TRX, right), Spread(outer.TRY, top),
+                Spread(outer.BRX, right), Spread(outer.BRY, bottom), Spread(outer.BLX, left), Spread(outer.BLY, bottom))
+                .WithShapes(outer.KTL, outer.KTR, outer.KBR, outer.KBL);
+        }
+
+        // css-backgrounds-3 §6.1.1: a radius spread by s keeps its shape as s grows: r + s when r is at least s, and r + s * (1 + (r/s - 1)^3) when it is
+        // less (so a small radius does not jump to a large one), and none at all when the corner is square. A shrink is the radius less the distance.
+        private static double Spread(double radius, double spread)
+        {
+            if (radius <= 0) return 0;
+            if (spread == 0) return radius;
+            if (spread < 0) return Math.Max(0, radius + spread);
+            if (radius >= spread) return radius + spread;
+
+            var ratio = (radius / spread) - 1;
+            return radius + (spread * (1 + (ratio * ratio * ratio)));
         }
 
         /// <summary>

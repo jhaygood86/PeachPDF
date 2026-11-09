@@ -141,6 +141,8 @@ device or emulator without a working GL driver. On the hardware:
 - **Shadows, filters and `backdrop-filter`** are layers with effects that Skia composes itself, and an image Skia can decode is decoded into the
   texture it uploads (see [Images](peachdrawing-skia.md#images)).
 
+`content-visibility: auto` is honored: the view asks the document to skip what is away from the view and to show what a scroll comes near ([skipping what is off screen](peachbrackets.md#skipping-what-is-off-screen-content-visibility-auto)), and keeps the scroll position on what was in view when the sizes above it change.
+
 ## Animations
 
 Set `AnimationsEnabled` and the view plays the document's CSS animations, transitions and animated images, stepping the document on the display's own frame clock

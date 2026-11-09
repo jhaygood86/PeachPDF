@@ -215,11 +215,11 @@ document.SetViewport(new Rect(0, scrollY, widthPoints, heightPoints));
 if (document.ContentVisibilityNeedsUpdate)
 {
     var update = await document.UpdateContentVisibilityAsync(measuringCanvas);   // shows what came near, skips what went away
-    // The document's height can have changed: read Pages[0].HeightPoints again, and repaint update.DirtyRegions.
+    // The document's height can have changed: read Pages[0].HeightPoints again, scroll the host to document.Viewport.Y, and repaint update.DirtyRegions.
 }
 ```
 
-Relevant means the box, with half the viewport's height around it, meets the viewport; a box that holds the focus is relevant wherever it is. Selection does not make an element relevant. `ContentVisibilityNeedsUpdate` only looks at the elements that have the value, so it is cheap to ask after every `SetViewport`.
+Relevant means the box, with half the viewport's height around it, meets the viewport; a box that holds the focus is relevant wherever it is. An element that holds selected text is relevant, and the selection and the highlights are carried over to the document laid out again by the element each text run belongs to. When the contents above the viewport change size, the document moves the viewport so it keeps looking at the same thing: read `Viewport` again after the update and scroll to it. `ContentVisibilityNeedsUpdate` only looks at the elements that have the value, so it is cheap to ask after every `SetViewport`.
 
 A `background-attachment: fixed` image is different: it sits under its box's content and over the backgrounds behind it, so it is part of the content layer and cannot be kept still in the attached one. `HtmlDocument.HasViewportBackgrounds` reports whether the document has one; a host that scrolls a painted surface natively should then paint the visible part of the page itself on every scroll step (`PaintPageRegionAsync`) instead, or the image moves with the content until the next paint puts it back.
 

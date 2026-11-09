@@ -1,4 +1,5 @@
 using PeachDrawing;
+using PeachBrackets.Text;
 using PeachDrawing.Core;
 
 namespace PeachBrackets.Tests;
@@ -148,5 +149,76 @@ public class ContentVisibilityAutoTests
 
         // Focus is on something inside it that is not there to be focused, so it stays skipped; a host that has focus inside it asks for it by showing it.
         Assert.False(document.ContentVisibilityNeedsUpdate);
+    }
+
+    private static HtmlDocumentOptions ScreenWithRuns()
+    {
+        var options = Screen();
+        options.RecordTextRuns = true;
+        return options;
+    }
+
+    private static string TextSections() =>
+        TestDocument.Wrap(string.Concat(Enumerable.Range(0, 6).Select(i =>
+            $"<div id=s{i} style='content-visibility: auto; contain-intrinsic-size: 100pt'><p style='margin:0'>section {i} text</p><div style='height:390pt'></div></div>")));
+
+    [Fact]
+    public async Task TheViewportKeepsLookingAtTheSameThingWhenContentAboveItChangesSize()
+    {
+        var (context, document) = await TestDocument.LoadAsync(TextSections(), Screen());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        // s0 and s1 are shown and the rest stand in at 100pt: the viewport goes to the top of s5. s0 and s1 are far away now and give their 405pt up, s4
+        // comes near and takes 305pt more: the document above s5 is shorter, and the viewport went with it rather than being left over something else.
+        var before = Top(document, "s5");
+        document.SetViewport(new Rect(0, before, 400, 300));
+        var result = await document.UpdateContentVisibilityAsync(measuring);
+
+        Assert.True(result.Applied);
+        Assert.True(Top(document, "s5") < before - 1);
+        Assert.Equal(Top(document, "s5"), document.Viewport.Y, 3);
+    }
+
+    [Fact]
+    public async Task AnElementWithSelectedTextStaysShownAndTheSelectionSurvivesTheLayoutsAround()
+    {
+        var (context, document) = await TestDocument.LoadAsync(TextSections(), ScreenWithRuns());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        document.SetViewport(new Rect(0, Top(document, "s4"), 400, 300));
+        await document.UpdateContentVisibilityAsync(measuring);
+
+        var runs = document.TextRuns;
+        Assert.True(runs.Any(r => r.Text.Contains("section 4", StringComparison.Ordinal)), string.Join(" | ", runs.Select(r => r.Text)) + $" ... s4 at {Top(document, "s4")}, viewport {document.Viewport}");
+        var run = runs.Select((r, i) => (r, i)).First(x => x.r.Text.Contains("section 4", StringComparison.Ordinal));
+        document.Selection.SetBaseAndExtent(new TextPosition(run.i, 0), new TextPosition(run.i, run.r.Text.Length));
+        var selected = document.Selection.GetText();
+        Assert.Contains("section 4", selected, StringComparison.Ordinal);
+
+        // Back to the top: s4 is far away, but it holds what is selected, so its contents stay, and what is selected is still that text.
+        document.SetViewport(new Rect(0, 0, 400, 300));
+        var result = await document.UpdateContentVisibilityAsync(measuring);
+
+        Assert.True(result.Applied);
+        Assert.Equal(selected, document.Selection.GetText());
+        Assert.Contains(document.TextRuns, r => r.Text.Contains("section 4", StringComparison.Ordinal));
+        Assert.DoesNotContain(document.TextRuns, r => r.Text.Contains("section 3", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task ASelectionIsCarriedOverWhenTheRunsBeforeItChange()
+    {
+        var (context, document) = await TestDocument.LoadAsync(TextSections(), ScreenWithRuns());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        var run = document.TextRuns.Select((r, i) => (r, i)).First(x => x.r.Text.Contains("section 1", StringComparison.Ordinal));
+        document.Selection.SetBaseAndExtent(new TextPosition(run.i, 0), new TextPosition(run.i, run.r.Text.Length));
+        var selected = document.Selection.GetText();
+
+        // s0 loses its contents, so the index of the run that follows moves; the selection is still the same text.
+        document.SetViewport(new Rect(0, 600, 400, 300));
+        await document.UpdateContentVisibilityAsync(measuring);
+
+        Assert.Equal(selected, document.Selection.GetText());
     }
 }

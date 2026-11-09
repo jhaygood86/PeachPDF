@@ -125,4 +125,49 @@ public class OverflowClipMarginTests
 
         Assert.Equal(12, radii.TLX, 6);
     }
+
+    // ── a margin per side, logical and physical longhands as one cascade, negative lengths ──
+
+    [Theory]
+    [InlineData("overflow:clip;overflow-clip-margin-top:10pt", 4, -6, 116, 76)]
+    [InlineData("overflow:clip;overflow-clip-margin-left:3pt;overflow-clip-margin-right:5pt", 1, 4, 121, 76)]
+    [InlineData("overflow:clip;overflow-clip-margin-bottom:border-box 2pt", 4, 4, 116, 82)]
+    [InlineData("overflow:clip;overflow-clip-margin:6pt;overflow-clip-margin-top:0", -2, 4, 122, 82)]
+    [InlineData("overflow:clip;overflow-clip-margin-top:0;overflow-clip-margin:6pt", -2, -2, 122, 82)]
+    [InlineData("overflow:clip;overflow-clip-margin:-3pt", 7, 7, 113, 73)]
+    [InlineData("overflow:clip;overflow-clip-margin:border-box -2pt", 2, 2, 118, 78)]
+    [InlineData("overflow:clip;overflow-clip-margin-inline:5pt", -1, 4, 121, 76)]
+    [InlineData("overflow:clip;overflow-clip-margin-block:5pt", 4, -1, 116, 81)]
+    [InlineData("overflow:clip;overflow-clip-margin-block-start:7pt;overflow-clip-margin-inline-end:2pt", 4, -3, 118, 76)]
+    // The logical side that is declared after the physical one wins, and the other way round.
+    [InlineData("overflow:clip;overflow-clip-margin-left:9pt;overflow-clip-margin-inline-start:2pt", 2, 4, 116, 76)]
+    [InlineData("overflow:clip;overflow-clip-margin-inline-start:2pt;overflow-clip-margin-left:9pt", -5, 4, 116, 76)]
+    // Under rtl the inline start is the right side; in a vertical writing mode the block start is the right side too.
+    [InlineData("overflow:clip;direction:rtl;overflow-clip-margin-inline-start:6pt", 4, 4, 122, 76)]
+    [InlineData("overflow:clip;writing-mode:vertical-rl;overflow-clip-margin-block-start:6pt", 4, 4, 122, 76)]
+    public async Task EachSideTakesItsOwnMarginAndALogicalLonghandNamesTheSideItIsOnUnderTheWritingMode(string style, double left, double top, double right, double bottom)
+    {
+        var box = await BoxAsync(style);
+        var (clip, _, _) = Geometry(box);
+
+        Assert.Equal(left, clip.Left, 6);
+        Assert.Equal(top, clip.Top, 6);
+        Assert.Equal(right, clip.Right, 6);
+        Assert.Equal(bottom, clip.Bottom, 6);
+    }
+
+    [Theory]
+    // A radius less than the spread keeps its shape rather than jumping: r + s * (1 + (r/s - 1)^3).
+    [InlineData(4, 10, 4 + (10 * (1 + (-0.6 * -0.6 * -0.6))))]
+    [InlineData(20, 5, 25)]
+    [InlineData(10, 10, 20)]
+    [InlineData(10, -4, 6)]
+    [InlineData(3, -5, 0)]
+    public async Task TheRoundedCornersAreShapedAsABoxShadowSpreadByTheSameOffset(double radius, double margin, double expected)
+    {
+        var box = await BoxAsync($"overflow:clip;border-width:0;padding:0;border-radius:{radius}pt;overflow-clip-margin:{margin}pt");
+        var radii = Geometry(box).Radii;
+
+        Assert.Equal(expected, radii!.Value.TLX, 6);
+    }
 }

@@ -199,6 +199,12 @@ namespace PeachBrackets.Css
                 PropertyNames.ColumnRuleStyle,
                 PropertyNames.ColumnRuleColor);
 
+            AddShorthand(PropertyNames.OverflowClipMargin, () => new OverflowClipMarginProperty(),
+                PropertyNames.OverflowClipMarginTop, PropertyNames.OverflowClipMarginRight, PropertyNames.OverflowClipMarginBottom, PropertyNames.OverflowClipMarginLeft);
+            AddShorthand(PropertyNames.OverflowClipMarginInline, () => new OverflowClipMarginInlineProperty(),
+                PropertyNames.OverflowClipMarginInlineStart, PropertyNames.OverflowClipMarginInlineEnd);
+            AddShorthand(PropertyNames.OverflowClipMarginBlock, () => new OverflowClipMarginBlockProperty(),
+                PropertyNames.OverflowClipMarginBlockStart, PropertyNames.OverflowClipMarginBlockEnd);
             AddShorthand(PropertyNames.ContainIntrinsicSize, () => new ContainIntrinsicSizeProperty(),
                 PropertyNames.ContainIntrinsicWidth, PropertyNames.ContainIntrinsicHeight);
             AddShorthand(PropertyNames.Container, () => new ContainerProperty(),

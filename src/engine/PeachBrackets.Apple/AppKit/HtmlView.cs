@@ -386,6 +386,8 @@ public sealed class HtmlView : NSScrollView, IHtmlViewHost
 
     void IHtmlViewHost.Reveal(CGRect frame) => _content.ScrollRectToVisible(frame);
 
+    void IHtmlViewHost.ScrollTop(double y) => ScrollToContentY(y);
+
     void IHtmlViewHost.EditingChanged(bool editing)
     {
         if (editing)

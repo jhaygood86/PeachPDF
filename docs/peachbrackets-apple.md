@@ -62,6 +62,8 @@ what shows, so the one a scroll is about to reveal is already there. What is att
 painted straight, since it changes under every scroll step. Effects (blur, shadow, filters, masks) run in Core Image on Metal when the machine has it, and
 images decode with the system's codecs when it does; `UseGpu = false` keeps all of it on the CPU.
 
+`content-visibility: auto` is honored: the view asks the document to skip what is away from the view and to show what a scroll comes near ([skipping what is off screen](peachbrackets.md#skipping-what-is-off-screen-content-visibility-auto)), and keeps the scroll position on what was in view when the sizes above it change.
+
 ## Forms and text input
 
 A click or tap on a control does what it does in a browser: a check box toggles, a radio button checks, a reset button resets its form, a submit button raises

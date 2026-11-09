@@ -485,6 +485,9 @@ public sealed partial class HtmlDocument : IDisposable
             // those that were near, may turn out not to be after the sizes settle, and goes again.
             var initial = new HashSet<int>(_container.RelevantAutoOrdinals);
 
+            // What the viewport top was over, so that content above it growing or shrinking leaves the host looking at the same thing.
+            var anchor = _viewport is not null ? ScrollAnchorAt(_viewport.Value.Y * _unitsPerPoint) : null;
+
             for (var pass = 0; pass < MaxContentVisibilityPasses; pass++)
             {
                 var desired = DesiredRelevantAutoOrdinals();
@@ -495,8 +498,18 @@ public sealed partial class HtmlDocument : IDisposable
 
                 RememberAutoSizes();
                 _container.RelevantAutoOrdinals = desired;
+
+                // The text runs are different afterwards (skipped text has none), so a selection and the highlights are carried over by the element
+                // each run belongs to rather than by its index.
+                var carried = CaptureTextState();
                 await ReloadAsync(measuringCanvas);
+                RestoreTextState(carried);
                 changed = true;
+
+                // At once, not at the end: the next pass judges what is near by where the viewport is, and with what lies above it grown or shrunk it would
+                // be looking at something else, and chase it.
+                if (anchor is { } a)
+                    KeepViewportOver(a);
             }
 
             if (changed)
@@ -510,6 +523,135 @@ public sealed partial class HtmlDocument : IDisposable
         }
     }
 
+    // The deepest element under the line `top` (layout units), not inside the contents of an auto element (an auto element itself counts, as it keeps its
+    // size when its contents are skipped), with how far below its top the line is.
+    private (int Ordinal, double Offset)? ScrollAnchorAt(double top)
+    {
+        (int Ordinal, double Offset)? found = null;
+        var box = _container.Root;
+
+        while (box is not null)
+        {
+            if (box.HtmlTag is { } tag && box.Bounds.Y <= top && top < box.Bounds.Bottom)
+            {
+                found = (tag.SourceOrdinal, top - box.Bounds.Y);
+
+                if (box.ContentVisibility is { Length: > 0 } visibility && visibility.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+                    break;
+            }
+
+            CssBox? next = null;
+            foreach (var child in box.Boxes)
+            {
+                if (child.Bounds.Y <= top && top < child.Bounds.Bottom)
+                {
+                    next = child;
+                    break;
+                }
+            }
+
+            box = next;
+        }
+
+        return found;
+    }
+
+    // Moves the viewport so the line it had over `anchor` is over the same place in that element again.
+    private void KeepViewportOver((int Ordinal, double Offset) anchor)
+    {
+        if (_viewport is not { } viewport || FindByOrdinal(_container.Root, anchor.Ordinal) is not { } box) return;
+
+        var newTop = (box.Bounds.Y + anchor.Offset) / _unitsPerPoint;
+        if (Math.Abs(newTop - viewport.Y) < 0.001) return;
+
+        _viewport = new Rect(viewport.X, newTop, viewport.Width, viewport.Height);
+        ApplyViewport();
+    }
+
+    // The element each text run belongs to and which of that element's runs it is, which stays the same when other parts of the document gain or lose
+    // runs; null for a run with no element to name (it cannot be carried).
+    private static (int Ordinal, int Occurrence)?[] RunKeys(IReadOnlyList<TextRun> runs)
+    {
+        var keys = new (int, int)?[runs.Count];
+        var counts = new Dictionary<int, int>();
+
+        for (var i = 0; i < runs.Count; i++)
+        {
+            var owner = runs[i].Owner;
+            while (owner is not null && owner.HtmlTag is null)
+                owner = owner.ParentBox;
+
+            if (owner?.HtmlTag is not { } tag) continue;
+
+            counts.TryGetValue(tag.SourceOrdinal, out var seen);
+            counts[tag.SourceOrdinal] = seen + 1;
+            keys[i] = (tag.SourceOrdinal, seen);
+        }
+
+        return keys;
+    }
+
+    private sealed record CarriedTextState(
+        (int Ordinal, int Occurrence)?[] Keys, TextRange[] Selected, List<(string Name, int Priority, int Order, TextRange[] Ranges)> Highlights,
+        TextPosition? Anchor, TextPosition? Focus);
+
+    // What the selection, the highlights and the document's own selection are over, if there is any; null when there is none to carry.
+    private CarriedTextState? CaptureTextState()
+    {
+        if (!_recordTextRuns) return null;
+        if (_selectedRanges.Count == 0 && _highlights.Count == 0 && !(_selection?.HasSelection ?? false)) return null;
+
+        return new CarriedTextState(RunKeys(TextRuns), _selectedRanges.ToArray(), [.. _highlights], _selection?.Anchor, _selection?.Focus);
+    }
+
+    private void RestoreTextState(CarriedTextState? carried)
+    {
+        if (carried is null) return;
+
+        var newRuns = TextRuns;
+        var index = new Dictionary<(int, int), int>();
+        var newKeys = RunKeys(newRuns);
+        for (var i = 0; i < newKeys.Length; i++)
+        {
+            if (newKeys[i] is { } key) index[key] = i;
+        }
+
+        TextPosition? Map(TextPosition position)
+        {
+            if (position.RunIndex < 0 || position.RunIndex >= carried.Keys.Length || carried.Keys[position.RunIndex] is not { } key
+                || !index.TryGetValue(key, out var run))
+            {
+                return null;
+            }
+
+            return new TextPosition(run, Math.Min(position.CharIndex, newRuns[run].Text.Length));
+        }
+
+        TextRange[] MapAll(IEnumerable<TextRange> ranges) =>
+            [.. ranges.Select(r => Map(r.Start) is { } start && Map(r.End) is { } end ? new TextRange(start, end) : (TextRange?)null).OfType<TextRange>()];
+
+        _selectedRanges = MapAll(carried.Selected);
+        if (_selectionStyling && _selectedRanges.Count > 0)
+            SetSelectedRanges(_selectedRanges);
+
+        _highlights.Clear();
+        foreach (var (name, priority, order, ranges) in carried.Highlights)
+        {
+            var mapped = MapAll(ranges);
+            if (mapped.Length > 0) _highlights.Add((name, priority, order, mapped));
+        }
+
+        if (_highlights.Count > 0)
+            RebuildHighlights();
+
+        if (_selection is { } selection)
+        {
+            var anchor = carried.Anchor is { } a ? Map(a) : null;
+            var focus = carried.Focus is { } f ? Map(f) : null;
+            selection.Rebase(anchor is not null && focus is not null ? anchor : null, anchor is not null && focus is not null ? focus : null);
+        }
+    }
+
     // The elements with content-visibility: auto whose boxes meet the viewport grown by half its height each way, or that hold the focus. Without a
     // viewport (the host has not said, and gave no height) nothing can be told to be away from it, so every one is relevant.
     private HashSet<int> DesiredRelevantAutoOrdinals()
@@ -517,16 +659,46 @@ public sealed partial class HtmlDocument : IDisposable
         var desired = new HashSet<int>();
         var viewport = ViewportForContentVisibility();
 
+        var selected = SelectedAncestorOrdinals();
+
         foreach (var box in AutoBoxes(_container.Root))
         {
             if (box.HtmlTag is not { } tag) continue;
 
             var focused = _container.Interaction is { } interaction && (interaction.Focused == tag.SourceOrdinal || interaction.FocusWithin.Contains(tag.SourceOrdinal));
-            if (viewport is null || focused || box.Bounds.IntersectsWith(viewport.Value))
+            if (viewport is null || focused || selected.Contains(tag.SourceOrdinal) || box.Bounds.IntersectsWith(viewport.Value))
                 desired.Add(tag.SourceOrdinal);
         }
 
         return desired;
+    }
+
+    // The ordinals of the elements that contain selected text (the selection, or the document's own selection): the contents of an element that holds
+    // what the user selected are relevant to them. Empty unless runs are recorded.
+    private HashSet<int> SelectedAncestorOrdinals()
+    {
+        var ordinals = new HashSet<int>();
+        if (!_recordTextRuns || (_selectedRanges.Count == 0 && !(_selection?.HasSelection ?? false))) return ordinals;
+
+        var runs = TextRuns;
+        var ranges = _selectedRanges.ToList();
+        if (_selection?.GetRange() is { } own) ranges.Add(own);
+
+        foreach (var range in ranges)
+        {
+            var first = Math.Max(0, range.Start.RunIndex);
+            var last = Math.Min(runs.Count - 1, range.End.RunIndex);
+
+            for (var i = first; i <= last; i++)
+            {
+                for (var box = runs[i].Owner; box is not null; box = box.ParentBox)
+                {
+                    if (box.HtmlTag is { } tag && !ordinals.Add(tag.SourceOrdinal)) break;
+                }
+            }
+        }
+
+        return ordinals;
     }
 
     private Rect? ViewportForContentVisibility()

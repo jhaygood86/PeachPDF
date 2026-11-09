@@ -45,11 +45,33 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
-        /// The <c>overflow-clip-margin</c> of the box: the visual box it is measured from and the margin, in layout units.
+        /// The <c>overflow-clip-margin</c> of one side of the box: the visual box it is measured from and the margin (negative to shrink), in layout units. The
+        /// physical longhand of the side and the logical one that names it under this box's writing mode and direction are one cascade, the later
+        /// declaration winning (CSS Logical Properties 1 §1.1), which <see cref="LogicalDeclarationOrder"/> settles.
         /// </summary>
-        internal (OverflowClipVisualBox VisualBox, double Margin) OverflowClipMarginValue()
+        /// <param name="side">the physical side</param>
+        internal (OverflowClipVisualBox VisualBox, double Margin) OverflowClipMarginOf(PhysicalSide side)
         {
-            var visualBox = OverflowClipMarginGrammar.Read(OverflowClipMargin, out var length);
+            var writingMode = WritingMode.Value;
+            var direction = Direction.Value;
+
+            var (physical, physicalName) = side switch
+            {
+                PhysicalSide.Top => (OverflowClipMarginTop, "overflow-clip-margin-top"),
+                PhysicalSide.Right => (OverflowClipMarginRight, "overflow-clip-margin-right"),
+                PhysicalSide.Bottom => (OverflowClipMarginBottom, "overflow-clip-margin-bottom"),
+                _ => (OverflowClipMarginLeft, "overflow-clip-margin-left")
+            };
+
+            string? logical;
+            string logicalName;
+            if (side == LogicalPropertyResolver.BlockStart(writingMode)) (logical, logicalName) = (OverflowClipMarginBlockStart, "overflow-clip-margin-block-start");
+            else if (side == LogicalPropertyResolver.BlockEnd(writingMode)) (logical, logicalName) = (OverflowClipMarginBlockEnd, "overflow-clip-margin-block-end");
+            else if (side == LogicalPropertyResolver.InlineStart(writingMode, direction)) (logical, logicalName) = (OverflowClipMarginInlineStart, "overflow-clip-margin-inline-start");
+            else (logical, logicalName) = (OverflowClipMarginInlineEnd, "overflow-clip-margin-inline-end");
+
+            var text = _rare?.LogicalOrder is { } order && order.Of(logicalName) > order.Of(physicalName) ? logical : physical;
+            var visualBox = OverflowClipMarginGrammar.Read(text, out var length);
 
             return (visualBox, length is null ? 0 : CssValueParser.ParseLength(length, 0, this));
         }
