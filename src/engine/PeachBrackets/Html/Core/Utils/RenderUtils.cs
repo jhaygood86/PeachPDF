@@ -111,15 +111,13 @@ namespace PeachBrackets.Html.Utils
             }
 
             var oneAxis = ClipsOneAxisOnly(overflowBox);
-            var rect = oneAxis ? OpenUnclippedAxes(overflowBox, paddingRect) : paddingRect;
+            var edge = OverflowClipEdgeOf(overflowBox, borderRect, paddingRect);
+            var rect = oneAxis ? OpenUnclippedAxes(overflowBox, edge) : edge;
 
             OverflowClipCurve? curve = null;
             if (overflowBox.IsRounded && !oneAxis)
             {
-                var radii = overflowBox.ComputeInnerRadii(borderRect, paddingRect,
-                    overflowBox.ActualBorderLeftWidth, overflowBox.ActualBorderTopWidth,
-                    overflowBox.ActualBorderRightWidth, overflowBox.ActualBorderBottomWidth);
-                curve = new OverflowClipCurve(paddingRect, radii);
+                curve = new OverflowClipCurve(edge, OverflowClipRadiiOf(overflowBox, borderRect, paddingRect, edge));
             }
 
             return (rect, curve);
@@ -203,15 +201,73 @@ namespace PeachBrackets.Html.Utils
         internal static (Rect ClipRect, BorderRadii? Radii, bool AxisOpen) OverflowClipGeometryOf(CssBox box, Rect borderBox)
         {
             var paddingRect = PaddingEdgeOf(box, borderBox);
+            var edge = OverflowClipEdgeOf(box, borderBox, paddingRect);
             // A box clipping a single axis has that axis's edge only: the other is opened out, and the
             // corners no longer bound the clip.
             var axisOpen = ClipsOneAxisOnly(box);
             var radii = box.IsRounded && !axisOpen
-                ? box.ComputeInnerRadii(borderBox, paddingRect,
-                    box.ActualBorderLeftWidth, box.ActualBorderTopWidth,
-                    box.ActualBorderRightWidth, box.ActualBorderBottomWidth)
+                ? OverflowClipRadiiOf(box, borderBox, paddingRect, edge)
                 : (BorderRadii?)null;
-            return (axisOpen ? OpenUnclippedAxes(box, paddingRect) : paddingRect, radii, axisOpen);
+            return (axisOpen ? OpenUnclippedAxes(box, edge) : edge, radii, axisOpen);
+        }
+
+        /// <summary>
+        /// The overflow clip edge of <paramref name="box"/> (css-overflow-4 §3.1): the edge of its visual box (the padding box unless
+        /// <c>overflow-clip-margin</c> names another) pushed out by the margin, on each axis that is cut without scrolling. An axis that scrolls, or is
+        /// not clipped, keeps the padding edge it always had.
+        /// </summary>
+        /// <param name="box">the clipping box</param>
+        /// <param name="borderBox">its border box (as the caller places it)</param>
+        /// <param name="paddingRect">its padding edge in the same space</param>
+        internal static Rect OverflowClipEdgeOf(CssBox box, Rect borderBox, Rect paddingRect)
+        {
+            var clipX = box.ClipsAxisAtTheOverflowClipEdge(horizontal: true);
+            var clipY = box.ClipsAxisAtTheOverflowClipEdge(horizontal: false);
+            if (!clipX && !clipY) return paddingRect;
+
+            var (visualBox, margin) = box.OverflowClipMarginValue();
+            if (visualBox == OverflowClipVisualBox.PaddingBox && margin == 0) return paddingRect;
+
+            var visual = VisualBoxRect(box, borderBox, paddingRect, visualBox);
+
+            return Rect.FromLTRB(
+                clipX ? visual.Left - margin : paddingRect.Left,
+                clipY ? visual.Top - margin : paddingRect.Top,
+                clipX ? visual.Right + margin : paddingRect.Right,
+                clipY ? visual.Bottom + margin : paddingRect.Bottom);
+        }
+
+        private static Rect VisualBoxRect(CssBox box, Rect borderBox, Rect paddingRect, OverflowClipVisualBox visualBox) => visualBox switch
+        {
+            OverflowClipVisualBox.BorderBox => borderBox,
+            OverflowClipVisualBox.ContentBox => Rect.FromLTRB(
+                paddingRect.Left + box.ActualPaddingLeft,
+                paddingRect.Top + box.ActualPaddingTop,
+                Math.Max(paddingRect.Left + box.ActualPaddingLeft, paddingRect.Right - box.ActualPaddingRight),
+                Math.Max(paddingRect.Top + box.ActualPaddingTop, paddingRect.Bottom - box.ActualPaddingBottom)),
+            _ => paddingRect
+        };
+
+        /// <summary>
+        /// The corner radii of the overflow clip edge: those of the visual box's edge (the border radius less what lies between the border edge and
+        /// it), each grown by the margin where the corner is rounded, so a square corner stays square, then reduced to fit the edge as every set of
+        /// radii is (css-backgrounds-3 §5.5).
+        /// </summary>
+        internal static BorderRadii OverflowClipRadiiOf(CssBox box, Rect borderBox, Rect paddingRect, Rect edge)
+        {
+            var (visualBox, margin) = box.OverflowClipMarginValue();
+            var visual = VisualBoxRect(box, borderBox, paddingRect, visualBox);
+            var radii = box.ComputeInnerRadii(borderBox, visual,
+                visual.Left - borderBox.Left, visual.Top - borderBox.Top, borderBox.Right - visual.Right, borderBox.Bottom - visual.Bottom);
+
+            if (margin <= 0 || edge == visual) return radii;
+
+            static double Grow(double r, double margin) => r > 0 ? r + margin : 0;
+
+            return DerivedStyle.ApplyCornerOverlap(edge,
+                Grow(radii.TLX, margin), Grow(radii.TLY, margin), Grow(radii.TRX, margin), Grow(radii.TRY, margin),
+                Grow(radii.BRX, margin), Grow(radii.BRY, margin), Grow(radii.BLX, margin), Grow(radii.BLY, margin))
+                .WithShapes(radii.KTL, radii.KTR, radii.KBR, radii.KBL);
         }
 
         /// <summary>

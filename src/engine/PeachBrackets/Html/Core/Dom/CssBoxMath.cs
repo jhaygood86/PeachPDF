@@ -153,9 +153,8 @@ namespace PeachBrackets.Html.Dom
                 var pixelsPerPoint = HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0;
 
                 // Size containment (css-contain-2 §3.1): the natural size is nothing, or the contain-intrinsic size.
-                var sizeContained = AppliesSizeContainment;
-                var naturalWidth = sizeContained ? ContainIntrinsicLength(widthAxis: true) ?? 0 : layout.InlineSize;
-                var naturalHeight = sizeContained ? ContainIntrinsicLength(widthAxis: false) ?? 0 : layout.Ascent + layout.Descent;
+                var naturalWidth = AppliesSizeContainmentInAxis(widthAxis: true) ? ContainIntrinsicLength(widthAxis: true) ?? 0 : layout.InlineSize;
+                var naturalHeight = AppliesSizeContainmentInAxis(widthAxis: false) ? ContainIntrinsicLength(widthAxis: false) ?? 0 : layout.Ascent + layout.Descent;
 
                 _mathWord.Width = ResolveAxis(new CssLength(Width), naturalWidth, ContainingBlock.Size.Width, pixelsPerPoint);
                 _mathWord.Height = ResolveAxis(new CssLength(Height), naturalHeight, ContainingBlock.Size.Height, pixelsPerPoint);

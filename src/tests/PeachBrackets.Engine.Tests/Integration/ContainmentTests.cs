@@ -369,6 +369,102 @@ public class ContainmentTests
         Assert.Equal(1, CssCounterEngine.GetCounter(Box(root, "a"), "c")!.Value);
     }
 
+    // ── inline-size containment (css-contain-3) and what container-type implies ──
+
+    [Theory]
+    [InlineData("contain:inline-size", 0d, 40d)]
+    [InlineData("contain:inline-size;contain-intrinsic-inline-size:70pt", 70d, 40d)]
+    [InlineData("contain:inline-size;contain-intrinsic-width:60pt;contain-intrinsic-height:10pt", 60d, 40d)]
+    [InlineData("contain:inline-size layout paint style", 0d, 40d)]
+    [InlineData("container-type:inline-size", 0d, 40d)]
+    [InlineData("container-type:size", 0d, 0d)]
+    [InlineData("container-type:normal", 26d, 40d)]
+    [InlineData("contain:strict", 0d, 0d)]
+    [InlineData("contain:content", 26d, 40d)]
+    [InlineData("contain:size inline-size", 26d, 40d)]
+    public async Task InlineSizeContainmentSizesTheInlineAxisAsAnEmptyBoxAndTheBlockAxisByItsContents(string style, double width, double height)
+    {
+        var root = await LayoutAsync($"<div id='t' style='float:left;{style}'><div style='width:26pt;height:40pt'></div></div>");
+        var t = Box(root, "t");
+
+        Assert.Equal(width, t.ActualRight - t.Location.X, 6);
+        Assert.Equal(height, Height(t), 6);
+    }
+
+    [Theory]
+    [InlineData("contain:inline-size", "InlineSize")]
+    [InlineData("contain:inline-size layout", "InlineSize, Layout")]
+    [InlineData("container-type:inline-size", "InlineSize, Style")]
+    [InlineData("container-type:size", "Size, Style")]
+    [InlineData("container-type:size;contain:layout", "Size, Layout, Style")]
+    [InlineData("container-type:normal", "None")]
+    public async Task AContainerTypeAppliesStyleContainmentAndSizeContainmentOnBothAxesOrTheInlineOne(string style, string expected)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'>x</div>");
+
+        Assert.Equal(Enum.Parse<Containment>(expected), DomUtils.AppliedContainment(Box(root, "t")));
+    }
+
+    [Fact]
+    public async Task InlineSizeContainmentIsTheInlineAxisOfTheBoxsWritingMode()
+    {
+        var horizontal = await LayoutAsync("<div id='t' style='contain:inline-size'>x</div>");
+        var vertical = await LayoutAsync("<div id='t' style='writing-mode:vertical-rl;contain:inline-size'>x</div>");
+
+        Assert.True(Box(horizontal, "t").AppliesSizeContainmentInAxis(widthAxis: true));
+        Assert.False(Box(horizontal, "t").AppliesSizeContainmentInAxis(widthAxis: false));
+        Assert.False(Box(vertical, "t").AppliesSizeContainmentInAxis(widthAxis: true));
+        Assert.True(Box(vertical, "t").AppliesSizeContainmentInAxis(widthAxis: false));
+        Assert.False(Box(horizontal, "t").AppliesSizeContainment);
+    }
+
+    [Theory]
+    [InlineData("contain:inline-size", false)]
+    [InlineData("container-type:inline-size", false)]
+    [InlineData("container-type:size", true)]
+    public async Task OnlyFullSizeContainmentMakesABoxMonolithic(string style, bool monolithic)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'><p>text</p></div>");
+
+        Assert.Equal(monolithic, MonolithicContent.IsMonolithic(Box(root, "t")));
+    }
+
+    [Fact]
+    public async Task InlineSizeContainmentDoesNotApplyToATableCell()
+    {
+        var root = await LayoutAsync("<table><tr><td id='t' style='contain:inline-size'>x</td></tr></table>");
+
+        Assert.Equal(Containment.None, DomUtils.AppliedContainment(Box(root, "t")));
+    }
+
+    [Fact]
+    public async Task AReplacedElementWithInlineSizeContainmentHasNoNaturalInlineSizeAndNoRatio()
+    {
+        const string Png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+        var plain = await LayoutAsync($"<img id='t' src='{Png}' style='height:20pt'>");
+        var contained = await LayoutAsync($"<img id='t' src='{Png}' style='contain:inline-size;height:20pt'>");
+
+        double WordWidth(CssBox root) => new[] { Box(root, "t") }.Concat(LayoutHarness.Descendants(Box(root, "t"))).SelectMany(b => b.Words).First().Width;
+        double WordHeight(CssBox root) => new[] { Box(root, "t") }.Concat(LayoutHarness.Descendants(Box(root, "t"))).SelectMany(b => b.Words).First().Height;
+
+        Assert.True(WordWidth(plain) > 0);
+        Assert.Equal(0, WordWidth(contained), 6);
+        Assert.Equal(20, WordHeight(contained), 6);
+    }
+
+    [Theory]
+    [InlineData("contain:size;contain-intrinsic-height:30pt", 30d)]
+    [InlineData("contain:size;contain-intrinsic-height:30pt;padding:2pt", 34d)]
+    [InlineData("contain:size", 0d)]
+    [InlineData("content-visibility:hidden;contain-intrinsic-size:auto 80pt auto 25pt", 25d)]
+    public async Task WhatFollowsASizeContainedBoxStartsBelowTheSizeItWasGiven(string style, double expectedTop)
+    {
+        var root = await LayoutAsync($"<div id='t' style='{style}'><div style='height:90pt'></div></div><div id='n' style='height:5pt'></div>");
+
+        Assert.Equal(expectedTop, Box(root, "n").Location.Y, 6);
+        Assert.Equal(Box(root, "t").ActualBottom, Box(root, "n").Location.Y, 6);
+    }
+
     // The rewrite keeps what a fixed box has that an absolute one lacks: its own stacking context (css-position-3 §3.5), which an absolute box with z-index auto does not.
     [Fact]
     public async Task AFixedBoxInAContainedBoxStillHasItsOwnStackingContext()

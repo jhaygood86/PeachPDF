@@ -22,6 +22,9 @@ namespace PeachBrackets.Css
         /// <summary>Paint containment (§3.4).</summary>
         Paint = 8,
 
+        /// <summary>Inline-size containment (css-contain-3): size containment in the inline axis alone.</summary>
+        InlineSize = 16,
+
         /// <summary><c>contain: content</c>.</summary>
         Content = Layout | Paint | Style,
 
@@ -38,8 +41,9 @@ namespace PeachBrackets.Css
         private static readonly char[] Whitespace = [' ', '\t', '\r', '\n', '\f'];
 
         /// <summary>
-        /// <c>contain</c>: <c>none | strict | content | [ size || layout || style || paint ]</c>. <c>none</c>, <c>strict</c> and <c>content</c> stand alone; the four
-        /// keywords of the last form may come in any order, each at most once. Anything else makes the whole declaration invalid.
+        /// <c>contain</c>: <c>none | strict | content | [ [ size | inline-size ] || layout || style || paint ]</c>. <c>none</c>, <c>strict</c> and <c>content</c>
+        /// stand alone; the keywords of the last form may come in any order, each at most once, and <c>size</c> and <c>inline-size</c> not together.
+        /// Anything else makes the whole declaration invalid.
         /// </summary>
         internal static bool TryParseContain(string text, out Containment containment)
         {
@@ -70,7 +74,8 @@ namespace PeachBrackets.Css
                 var kind = KindOf(token);
 
                 // Not one of the four, or one that was already there (the stand-alone keywords were taken above, so here they are invalid).
-                if (kind == Containment.None || (containment & kind) != 0)
+                if (kind == Containment.None || (containment & kind) != 0
+                    || ((containment | kind) & (Containment.Size | Containment.InlineSize)) == (Containment.Size | Containment.InlineSize))
                 {
                     containment = Containment.None;
                     return false;
@@ -85,6 +90,7 @@ namespace PeachBrackets.Css
 
         private static Containment KindOf(ReadOnlySpan<char> token) =>
             token.Equals("size", StringComparison.OrdinalIgnoreCase) ? Containment.Size
+            : token.Equals("inline-size", StringComparison.OrdinalIgnoreCase) ? Containment.InlineSize
             : token.Equals("layout", StringComparison.OrdinalIgnoreCase) ? Containment.Layout
             : token.Equals("style", StringComparison.OrdinalIgnoreCase) ? Containment.Style
             : token.Equals("paint", StringComparison.OrdinalIgnoreCase) ? Containment.Paint

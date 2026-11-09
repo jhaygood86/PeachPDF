@@ -1332,6 +1332,14 @@ namespace PeachBrackets.Html.Utils
         {
             var asked = ContainGrammar.Of(box.Contain, box.ContentVisibility);
 
+            // A query container applies style containment and size containment, on both axes or on the inline one only (css-contain-3 §3.1).
+            var containerType = box.ContainerType.Value;
+            // An auto element whose contents are skipped (not relevant to the user) is sized as an empty box (css-contain-2 §4).
+            if (box.AutoSkipped) asked |= Containment.Size;
+
+            if (containerType == PeachBrackets.Css.ContainerType.Size) asked |= Containment.Style | Containment.Size;
+            else if (containerType == PeachBrackets.Css.ContainerType.InlineSize) asked |= Containment.Style | Containment.InlineSize;
+
             if (asked == Containment.None) return Containment.None;
 
             if (box.IsInline && !IsAtomicInline(box)) return Containment.None;
@@ -1348,7 +1356,7 @@ namespace PeachBrackets.Html.Utils
             }
 
             // Size containment does not apply to a table or a table cell either (css-contain-2 §3.1); layout and paint containment do.
-            return display is Keywords.Table or Keywords.InlineTable or Keywords.TableCell ? asked & ~Containment.Size : asked;
+            return display is Keywords.Table or Keywords.InlineTable or Keywords.TableCell ? asked & ~(Containment.Size | Containment.InlineSize) : asked;
         }
 
         /// <summary>

@@ -15205,6 +15205,11 @@ var containmentHtml = """
       <div class="cell"><div class="sz" style="content-visibility: hidden; contain-intrinsic-height: 20px"><div class="inner"></div></div>content-visibility: hidden</div>
     </div>
     <div class="row">
+      <div class="cell"><div class="clip" style="overflow: clip"><div class="wide"></div></div>overflow: clip</div>
+      <div class="cell"><div class="clip" style="overflow: clip; overflow-clip-margin: 12px"><div class="wide"></div></div>overflow-clip-margin: 12px</div>
+      <div class="cell"><div class="clip" style="overflow: clip; overflow-clip-margin: border-box 4px"><div class="wide"></div></div>border-box 4px</div>
+    </div>
+    <div class="row">
       <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div><p class="n">b</p></div><p class="n">c</p></div>no containment: 1 2 3</div>
       <div class="cell cnt"><div style="counter-reset: c"><p class="n">a</p><div style="contain: style"><p class="n">b</p></div><p class="n">c</p></div>contain: style: 1 1 2</div>
       <div class="cell"><div class="qq">outer <div class="qq">inner</div></div>nested quotes</div>

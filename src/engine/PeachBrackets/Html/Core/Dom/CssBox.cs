@@ -649,6 +649,12 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal bool FixedInContainment { get => _rare is not null && _rare.FixedInContainment; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.FixedInContainment = value; } }
 
+        /// <summary>
+        /// Set on a <c>content-visibility: auto</c> box whose contents are skipped because it is not relevant to the user (<c>DomParser.SkipHiddenContents</c>): it
+        /// has size containment while they are, like <c>content-visibility: hidden</c> always does.
+        /// </summary>
+        internal bool AutoSkipped { get => _rare is not null && _rare.AutoSkipped; set { if (_rare is null) { if (!value) return; _rare = new BoxRareState(); } _rare.AutoSkipped = value; } }
+
         internal bool SuppressOwnBackgroundPaint { get => _rare is null ? default(bool) : _rare.SuppressOwnBackgroundPaint; set { if (_rare is null) { if (EqualityComparer<bool>.Default.Equals(value, default(bool))) return; _rare = new BoxRareState(); } _rare.SuppressOwnBackgroundPaint = value; } }
 
         /// <summary>
@@ -9473,9 +9479,9 @@ namespace PeachBrackets.Html.Dom
             {
                 // Nothing of its content: the declared width is folded in below.
             }
-            else if (box.AppliesSizeContainment)
+            else if (box.AppliesSizeContainmentInAxis(widthAxis: true))
             {
-                // Size containment (css-contain-2 §3.1): the box is sized as if it had no contents - its contain-intrinsic-width, or nothing, as one unbreakable
+                // Size containment (css-contain-2 §3.1), or inline-size containment where the inline axis is the width: the box is sized as if it had no contents - its contain-intrinsic-width, or nothing, as one unbreakable
                 // run - whatever it holds, a replaced element's own word included. Its padding and border were added above and its declared width is folded in below.
                 var contained = box.ContainIntrinsicLength(widthAxis: true) ?? 0;
                 maxSum += contained;
@@ -10569,6 +10575,15 @@ namespace PeachBrackets.Html.Dom
             // A multi-column container is a formatting context root too (css-multicol-1 §2), and its height covers its
             // floats (CSS 2.1 §10.6.7), so a container holding only a float is not empty: what follows it goes below.
             if (EstablishesMultiColumnContext || DerivedStyle.IsFlowRoot) return false;
+
+            // Layout and paint containment make a box a formatting context root (css-contain-2 §3.2, §3.4), whose margins do not collapse through it; and a box
+            // that size containment gives a height of its own (contain-intrinsic-height) is not empty.
+            if (DomUtils.AppliesLayoutOrPaintContainment(this)
+                || (AppliesSizeContainmentInAxis(widthAxis: false) && (ContainIntrinsicLength(widthAxis: false) ?? 0) > 0))
+            {
+                return false;
+            }
+
             if (!(ActualPaddingTop < 0.1) || !(ActualPaddingBottom < 0.1)) return false;
             if (!(ActualBorderTopWidth < 0.1) || !(ActualBorderBottomWidth < 0.1)) return false;
             // A box with real text content (e.g. an anonymous text-node box) is not empty even when it

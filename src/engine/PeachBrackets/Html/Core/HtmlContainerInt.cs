@@ -1320,6 +1320,15 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool Continuous => MediaType == MediaType.Screen;
 
+        /// <summary>Whether a <c>content-visibility: auto</c> element's contents are skipped while it is not relevant to the user (<see cref="HtmlDocumentOptions.SkipOffscreenContent"/>).</summary>
+        internal bool SkipOffscreenContent { get; set; }
+
+        /// <summary>The source ordinals of the <c>content-visibility: auto</c> elements that are relevant to the user, and so keep their contents. Read when the tree is built.</summary>
+        internal System.Collections.Generic.HashSet<int> RelevantAutoOrdinals { get; set; } = [];
+
+        /// <summary>What each such element's content box last measured while its contents were shown, by source ordinal: what <c>contain-intrinsic-size: auto</c> stands for when they are skipped.</summary>
+        internal System.Collections.Generic.Dictionary<int, (double Width, double Height)> RememberedAutoSizes { get; } = [];
+
         /// <summary>Where a continuous document's viewport is, and how far that displaces the fixed and sticky boxes from where layout put them.</summary>
         internal ViewportState View { get; } = new();
 

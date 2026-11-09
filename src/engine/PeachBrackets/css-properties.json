@@ -6621,7 +6621,7 @@
     },
     {
       "name": "contain",
-      "comment": "CSS Containment 2 section 2: none | strict | content | [size || layout || style || paint], stored as the text written and read through ContainGrammar together with content-visibility (ContainGrammar.Of). Layout and paint containment make the box an independent formatting context (DomUtils.EstablishesIndependentFormattingContext), the containing block of its absolute and fixed descendants and a stacking context; paint containment also clips to the padding box. Size and style containment parse but have no effect.",
+      "comment": "CSS Containment 2 section 2: none | strict | content | [[size | inline-size] || layout || style || paint], stored as the text written and read through ContainGrammar together with content-visibility and container-type (DomUtils.AppliedContainment). Layout and paint containment make the box an independent formatting context, the containing block of its absolute and fixed descendants and a stacking context; paint containment also clips to the overflow clip edge. Size containment sizes the box as if empty (contain-intrinsic-*), inline-size containment does so in the inline axis only, style containment scopes counters and quotes to the subtree.",
       "inherited": false,
       "cssom": {"converter": "Converters.ContainConverter"},
       "initialValue": "none",
@@ -6630,6 +6630,19 @@
         "propertyPath": "Contain",
         "csharpDataType": "string",
         "area": "DisplayPositioningArea"
+      }
+    },
+    {
+      "name": "overflow-clip-margin",
+      "comment": "css-overflow-4 section 3.1: <visual-box> || <length [0,inf]>, stored as the text written and read through OverflowClipMarginGrammar. How far beyond the visual box's edge (padding-box when none is written) an axis that clips without scrolling - overflow: clip, or paint containment - cuts its overflow; the rounded corners grow with it. An axis that is hidden, scroll or auto ignores it.",
+      "inherited": false,
+      "cssom": {"converter": "Converters.OverflowClipMarginConverter"},
+      "initialValue": "0px",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.OverflowClipMarginProperty.ValueGrammar.Convert" },
+      "html": {
+        "propertyPath": "OverflowClipMargin",
+        "csharpDataType": "string",
+        "area": "BoxModelArea"
       }
     },
     {
@@ -6686,7 +6699,7 @@
     },
     {
       "name": "content-visibility",
-      "comment": "CSS Containment 2 section 4: visible | auto | hidden. auto turns on layout, style and paint containment (ContainGrammar.Of); contents are never skipped, so auto behaves as if the element were always on screen and hidden applies its containment but still shows its contents.",
+      "comment": "CSS Containment 2 section 4: visible | auto | hidden. auto turns on layout, style and paint containment (ContainGrammar.Of) and skips its contents, with size containment, while it is not relevant to the user: in a screen document whose host asked for it (HtmlDocumentOptions.SkipOffscreenContent), never in a paged one. hidden always skips its contents (DomParser.SkipHiddenContents) and has all four containments.",
       "inherited": false,
       "cssom": {"converter": "Converters.ContentVisibilityConverter"},
       "initialValue": "visible",

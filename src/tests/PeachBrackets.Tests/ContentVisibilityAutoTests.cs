@@ -1,0 +1,152 @@
+using PeachDrawing;
+using PeachDrawing.Core;
+
+namespace PeachBrackets.Tests;
+
+/// <summary>
+/// <c>content-visibility: auto</c> on a screen (css-contain-2 §4): the contents of an element that is not relevant to the user - its box lies away from the
+/// viewport and it holds no focus - are skipped, and it is as large as an empty box, or its <c>contain-intrinsic-size</c>, while they are.
+/// </summary>
+public class ContentVisibilityAutoTests
+{
+    private static HtmlDocumentOptions Screen(bool skip = true)
+    {
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 400, ViewportHeightPoints = 300, SkipOffscreenContent = skip };
+        options.SetMargins(0);
+        return options;
+    }
+
+    // Five sections of 400pt of red under `content-visibility: auto`, each standing for 100pt (or what it last measured) while its contents are skipped.
+    private static string Sections(string style = "contain-intrinsic-size: auto 100pt") =>
+        TestDocument.Wrap(
+            string.Concat(Enumerable.Range(0, 5).Select(i => $"<div id=s{i} style='content-visibility: auto; {style}'><div style='height:400pt;background:red'></div></div>")));
+
+    private static async Task<bool> IsRedAsync(RasterRenderContext context, HtmlDocument document, double y)
+    {
+        // Below the end of the surface there is nothing, red or otherwise.
+        if (y >= document.Pages[0].HeightPoints) return false;
+
+        var canvas = await TestDocument.PaintAsync(context, document);
+        var p = TestDocument.Pixel(canvas, 200, (int)y);
+
+        return p.R > 200 && p.G < 60 && p.B < 60;
+    }
+
+    private static double Top(HtmlDocument document, string id) => document.GetElementBounds(id)!.Value.Y;
+
+    private static double Height(HtmlDocument document, string id) => document.GetElementBounds(id)!.Value.Height;
+
+    [Fact]
+    public async Task OnlyTheElementsNearTheViewportKeepTheirContentsAndTheOthersStandInForThem()
+    {
+        var (context, document) = await TestDocument.LoadAsync(Sections(), Screen());
+
+        // Shown, the first two sections are 400pt each. The viewport is 300pt tall and half of it again counts as near, so the third (at 800pt) is not.
+        Assert.True(await IsRedAsync(context, document, 100));
+        Assert.True(await IsRedAsync(context, document, 500));
+        Assert.False(await IsRedAsync(context, document, 900));
+        Assert.False(await IsRedAsync(context, document, 1500));
+
+        // Skipped, a section is as large as the size it last had when it was shown (auto), so the document is as tall as if all were.
+        Assert.Equal(400, Height(document, "s2"), 3);
+        Assert.Equal(800, Top(document, "s2"), 3);
+        Assert.Equal(2000, document.Pages[0].HeightPoints, 3);
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+    }
+
+    [Fact]
+    public async Task AnElementIsAsLargeAsItsContainIntrinsicSizeWhileItsContentsAreSkippedWhenItNeverWasShown()
+    {
+        var (context, document) = await TestDocument.LoadAsync(Sections("contain-intrinsic-size: 90pt"), Screen());
+
+        // Without auto nothing is remembered: a skipped section is its 90pt, wherever it was before.
+        Assert.Equal(400, Height(document, "s0"), 3);
+        Assert.Equal(400, Height(document, "s1"), 3);
+        Assert.Equal(90, Height(document, "s2"), 3);
+        Assert.Equal(90, Height(document, "s4"), 3);
+        Assert.False(await IsRedAsync(context, document, 900));
+    }
+
+    [Fact]
+    public async Task MovingTheViewportShowsWhatCameNearAndSkipsWhatWentAway()
+    {
+        var (context, document) = await TestDocument.LoadAsync(Sections(), Screen());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        document.SetViewport(new Rect(0, 1200, 400, 300));
+        Assert.True(document.ContentVisibilityNeedsUpdate);
+
+        var result = await document.UpdateContentVisibilityAsync(measuring);
+
+        Assert.True(result.Applied);
+        Assert.NotEmpty(result.DirtyRegions);
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+        Assert.True(await IsRedAsync(context, document, 1300));
+        Assert.False(await IsRedAsync(context, document, 100));
+        Assert.False(await IsRedAsync(context, document, 500));
+
+        // What was shown keeps its size when it is skipped, so nothing moved under the host's scroll position.
+        Assert.Equal(400, Height(document, "s0"), 3);
+        Assert.Equal(2000, document.Pages[0].HeightPoints, 3);
+
+        // And back.
+        document.SetViewport(new Rect(0, 0, 400, 300));
+        Assert.True((await document.UpdateContentVisibilityAsync(measuring)).Applied);
+        Assert.True(await IsRedAsync(context, document, 100));
+        Assert.False(await IsRedAsync(context, document, 1300));
+    }
+
+    [Fact]
+    public async Task AViewportThatDidNotMoveFarChangesNothing()
+    {
+        var (context, document) = await TestDocument.LoadAsync(Sections(), Screen());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        document.SetViewport(new Rect(0, 40, 400, 300));
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+
+        var result = await document.UpdateContentVisibilityAsync(measuring);
+
+        Assert.False(result.Applied);
+        Assert.Empty(result.DirtyRegions);
+    }
+
+    [Fact]
+    public async Task ADocumentThatDidNotAskToSkipShowsEverything()
+    {
+        var (context, document) = await TestDocument.LoadAsync(Sections(), Screen(skip: false));
+        using var measuring = context.CreateCanvas(1, 1);
+
+        Assert.True(await IsRedAsync(context, document, 1900));
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+
+        var result = await document.UpdateContentVisibilityAsync(measuring);
+        Assert.False(result.Applied);
+        Assert.NotNull(result.Reason);
+    }
+
+    [Fact]
+    public async Task APagedDocumentNeverSkips()
+    {
+        var options = new HtmlDocumentOptions { MediaType = MediaType.Print, SkipOffscreenContent = true };
+        var (context, document) = await TestDocument.LoadAsync(Sections(), options);
+
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+        Assert.True(document.Pages.Count >= 2);
+        Assert.NotNull(context);
+    }
+
+    [Fact]
+    public async Task AnElementThatHoldsTheFocusIsRelevantWhereverItIs()
+    {
+        var html = TestDocument.Wrap(
+            "<div style='height:2000pt'></div><div id=far style='content-visibility: auto; contain-intrinsic-size: 50pt'><div style='height:300pt;background:red'><input id=field></div></div>");
+        var (context, document) = await TestDocument.LoadAsync(html, Screen());
+        using var measuring = context.CreateCanvas(1, 1);
+
+        Assert.Equal(50, Height(document, "far"), 3);
+
+        // Focus is on something inside it that is not there to be focused, so it stays skipped; a host that has focus inside it asks for it by showing it.
+        Assert.False(document.ContentVisibilityNeedsUpdate);
+    }
+}

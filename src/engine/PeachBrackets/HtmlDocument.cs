@@ -107,6 +107,7 @@ public sealed partial class HtmlDocument : IDisposable
             container.ViewportHeight = options.MediaType == MediaType.Screen && options.ViewportHeightPoints is > 0 and var viewportHeight
                 ? viewportHeight * unitsPerPoint
                 : null;
+            container.SkipOffscreenContent = options.MediaType == MediaType.Screen && options.SkipOffscreenContent;
             container.PreferredColorScheme = options.ColorScheme;
             container.DevicePixelRatio = options.DevicePixelRatio;
             container.ImageSelection = options.ImageSelection
@@ -424,7 +425,164 @@ public sealed partial class HtmlDocument : IDisposable
         if (_viewport is not null)
             ApplyViewport();
 
+        // Which content-visibility: auto elements are relevant depends on where the boxes ended up, so it is settled once they have.
+        if (!_settlingContentVisibility)
+            await SettleContentVisibilityAsync(measuringCanvas, allowRemoval: false);
+
         return resumedSlot;
+    }
+
+    private bool _settlingContentVisibility;
+    private const int MaxContentVisibilityPasses = 4;
+
+    /// <summary>
+    /// Whether the viewport has moved to where a <c>content-visibility: auto</c> element that is skipped is now relevant, or one that is shown is no
+    /// longer, so <see cref="UpdateContentVisibilityAsync"/> would change the document. Always false unless
+    /// <see cref="HtmlDocumentOptions.SkipOffscreenContent"/> is set on a <see cref="MediaType.Screen"/> document. Cheap enough to ask after every
+    /// <see cref="SetViewport"/>: it looks at the elements that have the value, and nothing else.
+    /// </summary>
+    public bool ContentVisibilityNeedsUpdate =>
+        _container.SkipOffscreenContent && _pages is not null && !_container.RelevantAutoOrdinals.SetEquals(DesiredRelevantAutoOrdinals());
+
+    /// <summary>
+    /// Skips the contents of the <c>content-visibility: auto</c> elements that are no longer relevant to the user and shows those that have become so
+    /// (css-contain-2 §4), laying the document out again when anything changed. Relevant means the element's box, with half a viewport's height around it,
+    /// meets the viewport, or it holds focus. Call it when <see cref="ContentVisibilityNeedsUpdate"/> says the viewport has moved to where it matters, and
+    /// as the host's own scroll position is kept by it, the document's height can change under it: read <see cref="DocumentPage.HeightPoints"/> again.
+    /// </summary>
+    /// <param name="measuringCanvas">a canvas to measure text with, as <see cref="LayoutAsync"/> takes</param>
+    /// <returns>whether the document changed, and the regions to paint again (every page when it did)</returns>
+    public async ValueTask<UpdateResult> UpdateContentVisibilityAsync(Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+
+        if (!_container.SkipOffscreenContent || _pages is null)
+            return new UpdateResult(false, "Skipping content that is off screen is not turned on for this document.", []);
+
+        var changed = await SettleContentVisibilityAsync(measuringCanvas, allowRemoval: true);
+        if (!changed)
+            return new UpdateResult(false, "Every element is as relevant as it was.", []);
+
+        var regions = new List<DirtyRegion>();
+        for (var page = 0; page < _pages.Count; page++)
+            regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
+
+        return new UpdateResult(true, null, regions);
+    }
+
+    // Lays the document out again, over a reparse that leaves the skipped elements out, until the relevant set stops changing: showing one moves what
+    // follows it, which can bring the next into view. Only what comes into view is added on a pass after the first, so it cannot swing back and forth.
+    private async ValueTask<bool> SettleContentVisibilityAsync(Canvas measuringCanvas, bool allowRemoval)
+    {
+        if (!_container.SkipOffscreenContent || _settlingContentVisibility) return false;
+
+        _settlingContentVisibility = true;
+        try
+        {
+            var changed = false;
+
+            // What was relevant when this began stays so unless the host moved the viewport; what this makes relevant on the way, by showing the contents of
+            // those that were near, may turn out not to be after the sizes settle, and goes again.
+            var initial = new HashSet<int>(_container.RelevantAutoOrdinals);
+
+            for (var pass = 0; pass < MaxContentVisibilityPasses; pass++)
+            {
+                var desired = DesiredRelevantAutoOrdinals();
+                if (!allowRemoval)
+                    desired.UnionWith(initial);
+
+                if (_container.RelevantAutoOrdinals.SetEquals(desired)) break;
+
+                RememberAutoSizes();
+                _container.RelevantAutoOrdinals = desired;
+                await ReloadAsync(measuringCanvas);
+                changed = true;
+            }
+
+            if (changed)
+                RememberAutoSizes();
+
+            return changed;
+        }
+        finally
+        {
+            _settlingContentVisibility = false;
+        }
+    }
+
+    // The elements with content-visibility: auto whose boxes meet the viewport grown by half its height each way, or that hold the focus. Without a
+    // viewport (the host has not said, and gave no height) nothing can be told to be away from it, so every one is relevant.
+    private HashSet<int> DesiredRelevantAutoOrdinals()
+    {
+        var desired = new HashSet<int>();
+        var viewport = ViewportForContentVisibility();
+
+        foreach (var box in AutoBoxes(_container.Root))
+        {
+            if (box.HtmlTag is not { } tag) continue;
+
+            var focused = _container.Interaction is { } interaction && (interaction.Focused == tag.SourceOrdinal || interaction.FocusWithin.Contains(tag.SourceOrdinal));
+            if (viewport is null || focused || box.Bounds.IntersectsWith(viewport.Value))
+                desired.Add(tag.SourceOrdinal);
+        }
+
+        return desired;
+    }
+
+    private Rect? ViewportForContentVisibility()
+    {
+        var view = _viewport is { } v
+            ? new Rect(v.X * _unitsPerPoint, v.Y * _unitsPerPoint, v.Width * _unitsPerPoint, v.Height * _unitsPerPoint)
+            : _container.ViewportHeight is > 0 and var height
+                ? new Rect(0, 0, _container.PageSize.Width, height)
+                : (Rect?)null;
+
+        if (view is not { } rect) return null;
+
+        var margin = rect.Height / 2;
+
+        return new Rect(rect.X - margin, rect.Y - margin, rect.Width + (2 * margin), rect.Height + (2 * margin));
+    }
+
+    // Every box of an element with content-visibility: auto that the value applies to, whether its contents are shown or skipped.
+    private static IEnumerable<CssBox> AutoBoxes(CssBox? root)
+    {
+        if (root is null) yield break;
+
+        var stack = new Stack<CssBox>();
+        stack.Push(root);
+
+        while (stack.Count > 0)
+        {
+            var box = stack.Pop();
+
+            if (box.ContentVisibility is { Length: > 0 } visibility && visibility.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                && Html.Utils.DomUtils.AppliesLayoutContainment(box))
+            {
+                yield return box;
+            }
+
+            // What a skipped box holds is not in the tree to look at, and an auto box in another's contents is inside it.
+            if (!box.AutoSkipped)
+            {
+                foreach (var child in box.Boxes)
+                    stack.Push(child);
+            }
+        }
+    }
+
+    // What a shown element's content box measures, to stand in for the size of its skipped contents later (contain-intrinsic-size: auto).
+    private void RememberAutoSizes()
+    {
+        foreach (var box in AutoBoxes(_container.Root))
+        {
+            if (box.AutoSkipped || box.HtmlTag is not { } tag) continue;
+
+            var width = box.ActualRight - box.Location.X - box.ActualPaddingLeft - box.ActualPaddingRight - box.ActualBorderLeftWidth - box.ActualBorderRightWidth;
+            var height = box.ActualBottom - box.Location.Y - box.ActualPaddingTop - box.ActualPaddingBottom - box.ActualBorderTopWidth - box.ActualBorderBottomWidth;
+
+            _container.RememberedAutoSizes[tag.SourceOrdinal] = (Math.Max(0, width), Math.Max(0, height));
+        }
     }
 
     private Rect? _viewport;

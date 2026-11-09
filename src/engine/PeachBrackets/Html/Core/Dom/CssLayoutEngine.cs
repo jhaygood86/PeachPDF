@@ -96,13 +96,14 @@ namespace PeachBrackets.Html.Dom
 
             // Size containment (css-contain-2 §3.1): a replaced element has a natural width and height of 0 and no natural ratio, or its contain-intrinsic
             // size; the author's width, height and aspect-ratio still apply.
-            var sizeContained = word.OwnerBox.AppliesSizeContainment;
+            var widthContained = word.OwnerBox.AppliesSizeContainmentInAxis(widthAxis: true);
+            var heightContained = word.OwnerBox.AppliesSizeContainmentInAxis(widthAxis: false);
 
-            if (sizeContained)
+            if (widthContained || heightContained)
             {
                 var pixelsToUnits = Length.PointsPerPx * pixelsPerPoint;
-                intrinsicWidth = (word.OwnerBox.ContainIntrinsicLength(widthAxis: true) ?? 0) / pixelsToUnits;
-                intrinsicHeight = (word.OwnerBox.ContainIntrinsicLength(widthAxis: false) ?? 0) / pixelsToUnits;
+                if (widthContained) intrinsicWidth = (word.OwnerBox.ContainIntrinsicLength(widthAxis: true) ?? 0) / pixelsToUnits;
+                if (heightContained) intrinsicHeight = (word.OwnerBox.ContainIntrinsicLength(widthAxis: false) ?? 0) / pixelsToUnits;
                 hasIntrinsicRatio = false;
                 ratioOnly = null;
             }
@@ -162,7 +163,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 // 20 is the legacy broken-image placeholder size, in CSS pixels like the px branches.
-                word.Width = sizeContained ? 0 : hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
+                word.Width = widthContained ? 0 : hasImageTagHeight ? heightUnits / 1.14f : 20 * Length.PointsPerPx * pixelsPerPoint;
             }
 
             // The limits the width is kept to; -1 when there is none (or a percentage whose containing block has no width to speak of yet).
@@ -218,7 +219,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 // 22.8 is the legacy placeholder height, in CSS pixels like the px branches.
-                word.Height = sizeContained ? 0 : word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx * pixelsPerPoint;
+                word.Height = heightContained ? 0 : word.Width > 0 ? word.Width * 1.14f : 22.8f * Length.PointsPerPx * pixelsPerPoint;
             }
 
             if (effectiveRatio is > 0)
@@ -4119,7 +4120,7 @@ namespace PeachBrackets.Html.Dom
             // Size containment (css-contain-2 §3.1): an auto height is the height of a box with no contents - its contain-intrinsic-height, or nothing - plus its
             // padding and border, however tall what it holds is; the contents are laid out into it and overflow it. A definite height, min-height and max-height
             // still apply below.
-            var sizeContainedAutoHeight = !isDefiniteHeight && !isRootWithPageHeight && box.AppliesSizeContainment;
+            var sizeContainedAutoHeight = !isDefiniteHeight && !isRootWithPageHeight && box.AppliesSizeContainmentInAxis(widthAxis: false);
 
             if (sizeContainedAutoHeight)
             {
@@ -11070,7 +11071,7 @@ namespace PeachBrackets.Html.Dom
         private static async ValueTask<double> GetLargestChildWidth(Canvas g, CssBox box, double currentSize)
         {
             // Size containment: the contents contribute nothing to the box's intrinsic size (css-contain-2 §3.1).
-            if (box.AppliesSizeContainment) return currentSize;
+            if (box.AppliesSizeContainmentInAxis(widthAxis: true)) return currentSize;
 
             foreach (var childBox in box.Boxes)
             {

@@ -572,6 +572,7 @@ PeachBrackets.HtmlDocument : sealed class
   method ValueTask<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetPreferencesAsync(UserPreferences preferences, ColorSchemePreference colorScheme, Canvas measuringCanvas)
   method ValueTask<UpdateResult> ToggleClassAsync(DocumentElement element, String className, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> UpdateContentVisibilityAsync(Canvas measuringCanvas)
   method ValueTask<UpdateResult> UpgradeImagesAsync()
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
   method Void ClearHighlights()
@@ -588,6 +589,7 @@ PeachBrackets.HtmlDocument : sealed class
   method static ValueTask<HtmlDocument> LoadAsync(String html, RenderContext renderContext, HtmlDocumentOptions options = null)
   method virtual Void Dispose()
   property AccessibilityNode FocusedNode { get; }
+  property Boolean ContentVisibilityNeedsUpdate { get; }
   property Boolean HasRunningAnimations { get; }
   property Boolean HasViewportBackgrounds { get; }
   property Boolean NeedsRestyle { get; }
@@ -631,6 +633,7 @@ PeachBrackets.HtmlDocumentOptions : sealed class
   property Boolean IncrementalRestyle { get; set; }
   property Boolean PaintFormControls { get; set; }
   property Boolean RecordTextRuns { get; set; }
+  property Boolean SkipOffscreenContent { get; set; }
   property Boolean SnapBorderWidthsToCssPixels { get; set; }
   property Boolean SnapBoxDecorationsToCssPixels { get; set; }
   property Boolean SynchronousOnly { get; set; }

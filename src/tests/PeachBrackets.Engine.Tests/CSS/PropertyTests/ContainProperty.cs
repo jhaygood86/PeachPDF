@@ -17,6 +17,9 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         [InlineData("size layout", "Size, Layout")]
         [InlineData("paint layout style size", "Strict")]
         [InlineData("style  paint", "Style, Paint")]
+        [InlineData("inline-size", "InlineSize")]
+        [InlineData("inline-size layout paint", "InlineSize, Layout, Paint")]
+        [InlineData("style INLINE-SIZE", "Style, InlineSize")]
         [InlineData("LAYOUT Paint", "Layout, Paint")]
         // The three keywords are expanded once the four are spelled out.
         [InlineData("layout paint style", "Content")]
@@ -39,7 +42,11 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         [InlineData("strict layout")]
         [InlineData("layout content")]
         [InlineData("strict content")]
-        [InlineData("inline-size")]
+        [InlineData("size inline-size")]
+        [InlineData("inline-size size")]
+        [InlineData("inline-size inline-size")]
+        [InlineData("strict inline-size")]
+        [InlineData("none inline-size")]
         [InlineData("layout, paint")]
         [InlineData("nonsense")]
         public void ContainIllegal(string value)
@@ -151,6 +158,51 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
         {
             Assert.Equal(length, ContainGrammar.ParseIntrinsic(text, out var hasAuto));
             Assert.Equal(auto, hasAuto);
+        }
+
+        [Theory]
+        [InlineData("0")]
+        [InlineData("10px")]
+        [InlineData("padding-box")]
+        [InlineData("border-box 4px")]
+        [InlineData("2em content-box")]
+        [InlineData("CONTENT-BOX")]
+        public void OverflowClipMarginLegal(string value)
+        {
+            var property = ParseDeclaration($"overflow-clip-margin: {value}");
+
+            Assert.Equal("overflow-clip-margin", property.Name);
+            Assert.False(property.IsInherited);
+            Assert.True(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData("")]
+        [InlineData("-1px")]
+        [InlineData("5")]
+        [InlineData("50%")]
+        [InlineData("margin-box")]
+        [InlineData("border-box padding-box")]
+        [InlineData("1px 2px")]
+        [InlineData("border-box 1px 2px")]
+        public void OverflowClipMarginIllegal(string value)
+        {
+            var property = ParseDeclaration($"overflow-clip-margin: {value}");
+
+            Assert.Equal("overflow-clip-margin", property.Name);
+            Assert.False(property.HasValue);
+        }
+
+        [Theory]
+        [InlineData(null, "PaddingBox", null)]
+        [InlineData("0px", "PaddingBox", "0px")]
+        [InlineData("border-box", "BorderBox", null)]
+        [InlineData("3pt content-box", "ContentBox", "3pt")]
+        [InlineData("padding-box 2pt", "PaddingBox", "2pt")]
+        public void OverflowClipMarginTextIsReadBackAsAVisualBoxAndALength(string? text, string visualBox, string? length)
+        {
+            Assert.Equal(Enum.Parse<OverflowClipVisualBox>(visualBox), OverflowClipMarginGrammar.Read(text, out var read));
+            Assert.Equal(length, read);
         }
 
         [Theory]

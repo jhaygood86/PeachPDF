@@ -16,6 +16,45 @@ namespace PeachBrackets.Html.Dom
         internal bool AppliesSizeContainment => (DomUtils.AppliedContainment(this) & Containment.Size) != 0;
 
         /// <summary>
+        /// Whether the box is sized as if it were empty in an axis: size containment, or inline-size containment where that axis is the inline one (the
+        /// width in a horizontal writing mode, the height in a vertical one).
+        /// </summary>
+        /// <param name="widthAxis">true for the width, false for the height</param>
+        internal bool AppliesSizeContainmentInAxis(bool widthAxis)
+        {
+            var applied = DomUtils.AppliedContainment(this);
+
+            if ((applied & Containment.Size) != 0) return true;
+            if ((applied & Containment.InlineSize) == 0) return false;
+
+            return widthAxis != WritingModeFrame.For(this).IsVertical;
+        }
+
+        /// <summary>
+        /// Whether the box's overflow on an axis is cut at its overflow clip edge without scrolling (css-overflow-3 §3.2): <c>overflow: clip</c> on it, or
+        /// paint containment turning a <c>visible</c> axis into <c>clip</c> (css-contain-2 §3.4). Neither holds once the box is a scroll container, so
+        /// <c>overflow-clip-margin</c> applies to this axis alone.
+        /// </summary>
+        internal bool ClipsAxisAtTheOverflowClipEdge(bool horizontal)
+        {
+            if (Overflow.Value != Css.Overflow.Visible) return false;
+
+            var axis = horizontal ? OverflowX.Value : OverflowY.Value;
+
+            return axis == Css.Overflow.Clip || (axis == Css.Overflow.Visible && DomUtils.AppliesPaintContainment(this));
+        }
+
+        /// <summary>
+        /// The <c>overflow-clip-margin</c> of the box: the visual box it is measured from and the margin, in layout units.
+        /// </summary>
+        internal (OverflowClipVisualBox VisualBox, double Margin) OverflowClipMarginValue()
+        {
+            var visualBox = OverflowClipMarginGrammar.Read(OverflowClipMargin, out var length);
+
+            return (visualBox, length is null ? 0 : CssValueParser.ParseLength(length, 0, this));
+        }
+
+        /// <summary>
         /// The size, in layout units, a box with size containment has instead of its contents' in the physical axis: its <c>contain-intrinsic-width</c> or
         /// <c>-height</c>, or the <c>-inline-size</c> or <c>-block-size</c> that names the same axis under this box's writing mode, whichever was declared last
         /// (css-sizing-4 §5.1: the logical and physical longhands are one cascade, as in CSS Logical Properties 1 §1.1). Null for <c>none</c>, which is a size
@@ -34,7 +73,13 @@ namespace PeachBrackets.Html.Dom
             var logicalName = logicalIsInline ? "contain-intrinsic-inline-size" : "contain-intrinsic-block-size";
             var text = _rare?.LogicalOrder is { } order && order.Of(logicalName) > order.Of(physicalName) ? logical : physical;
 
-            return ContainGrammar.ParseIntrinsic(text, out _) is { } length ? CssValueParser.ParseLength(length, 0, this) : null;
+            var length = ContainGrammar.ParseIntrinsic(text, out var auto);
+
+            // auto stands for the size the box last had while its contents were shown (css-sizing-4 §5.1), where there is one.
+            if (auto && HtmlTag is { } tag && HtmlContainer is { } container && container.RememberedAutoSizes.TryGetValue(tag.SourceOrdinal, out var remembered))
+                return widthAxis ? remembered.Width : remembered.Height;
+
+            return length is not null ? CssValueParser.ParseLength(length, 0, this) : null;
         }
     }
 }

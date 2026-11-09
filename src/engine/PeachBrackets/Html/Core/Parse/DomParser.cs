@@ -4191,19 +4191,35 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         /// <remarks>
         /// Closed <c>&lt;details&gt;</c> reaches the same result by another path (<see cref="WrapDetailsContents"/>). <c>content-visibility: auto</c> skips only
-        /// what is not relevant to the user, which in a paged document is nothing: every page is shown.
+        /// what is not relevant to the user, which in a paged document is nothing: every page is shown. In a screen document that skips what is off screen
+        /// (<see cref="HtmlDocumentOptions.SkipOffscreenContent"/>) the set of elements that are relevant is kept on the container and this runs again over a
+        /// reparse whenever it changes.
         /// </remarks>
         private static void SkipHiddenContents(CssBox box)
         {
             if (box is CssBoxSvg or CssBoxMath) return;
 
-            if (box.ContentVisibility is { Length: > 0 } visibility && visibility.Equals(Keywords.Hidden, StringComparison.OrdinalIgnoreCase)
-                && DomUtils.AppliesLayoutContainment(box))
+            if (box.ContentVisibility is { Length: > 0 } visibility && DomUtils.AppliesLayoutContainment(box))
             {
-                foreach (var child in box.Boxes)
-                    child.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+                var skipped = visibility.Equals(Keywords.Hidden, StringComparison.OrdinalIgnoreCase);
 
-                return;
+                // auto skips what is not relevant to the user, which a document set up to say so (a screen one whose host reports a viewport) keeps track of by
+                // the element's place in the source; every other document shows all of it.
+                if (!skipped && visibility.Equals(Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                    && box.HtmlContainer is { SkipOffscreenContent: true } container && box.HtmlTag is { } tag
+                    && !container.RelevantAutoOrdinals.Contains(tag.SourceOrdinal))
+                {
+                    skipped = true;
+                    box.AutoSkipped = true;
+                }
+
+                if (skipped)
+                {
+                    foreach (var child in box.Boxes)
+                        child.Display = CssProperty<DisplayMode>.FromValue(Keywords.None, DisplayMode.None);
+
+                    return;
+                }
             }
 
             foreach (var child in box.Boxes.ToList())

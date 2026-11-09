@@ -90,6 +90,86 @@ namespace PeachPDF.Tests.Integration
             Assert.Contains(ClipSizes(content), c => Math.Abs(c.W - 75) < 0.1 && Math.Abs(c.H - 30) < 0.1);
         }
 
+        [Theory]
+        [InlineData("overflow:clip", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:10pt", 95, 50)]
+        [InlineData("overflow:clip;overflow-clip-margin:border-box 5pt;border:3pt solid;box-sizing:content-box", 91, 46)]
+        [InlineData("contain:paint;overflow-clip-margin:4pt;border-radius:10pt", 83, 38)]
+        [InlineData("overflow:hidden;overflow-clip-margin:10pt", 75, 30)]
+        public async Task OverflowClipMarginPushesTheClipEdgeOut(string style, double width, double height)
+        {
+            // Inside the page area: a clip is never wider than the page's own, so a margin that reached into the page margin would be cut there.
+            var (_, content) = await RenderAsync("", $"<div style='margin:40pt'><div style='{style};width:75pt;height:30pt'><div style='width:200pt;height:100pt;background:#f00'></div></div></div>");
+
+            Assert.Contains(ClipSizes(content), c => Math.Abs(c.W - width) < 0.2 && Math.Abs(c.H - height) < 0.2);
+        }
+
+        [Theory]
+        [InlineData("overflow:clip;overflow-clip-margin:content-box 3pt;padding:5pt", 75 - 10 + 6, 30 - 10 + 6)]
+        [InlineData("overflow:clip;overflow-clip-margin:0;padding:5pt", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:5;padding:0", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:bogus;padding:0", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:-4pt;padding:0", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:border-box padding-box;padding:0", 75, 30)]
+        [InlineData("overflow:clip;overflow-clip-margin:4pt;border-radius:12pt;padding:0", 83, 38)]
+        [InlineData("overflow-x:clip;overflow-clip-margin:6pt;padding:0", 87, 30)]
+        public async Task OverflowClipMarginValuesAndTheirFallbacks(string style, double width, double height)
+        {
+            var (_, content) = await RenderAsync("", $"<div style='margin:40pt'><div style='{style};box-sizing:border-box;width:75pt;height:30pt'><div style='width:200pt;height:100pt;background:#f00'></div></div></div>");
+
+            // One axis open: the clip is as tall as the page, so only its width is read.
+            Assert.Contains(ClipSizes(content), c => Math.Abs(c.W - width) < 0.2 && (height == 30 && style.StartsWith("overflow-x") || Math.Abs(c.H - height) < 0.2));
+        }
+
+        [Theory]
+        [InlineData("contain:size;contain-intrinsic-width:70pt", 70)]
+        [InlineData("contain:size", 0)]
+        [InlineData("contain:inline-size;contain-intrinsic-inline-size:55pt", 55)]
+        [InlineData("container-type:inline-size", 0)]
+        [InlineData("contain:layout", 26)]
+        public async Task SizeContainmentGivesAShrinkToFitBoxTheWidthOfAnEmptyOne(string style, double expectedWidth)
+        {
+            var (r, _) = await RenderAsync("", $"<div style='float:left;background:#0f0;padding:0 1pt;min-height:10pt;{style}'><div style='width:26pt;height:10pt;background:#f00'></div></div>");
+
+            if (expectedWidth == 0)
+                Assert.True(!r.ContainsKey(Lime) || r[Lime].W <= 2.01);
+            else
+                Assert.Equal(expectedWidth + (expectedWidth == 26 ? 2 : 2), r[Lime].W, 1);
+        }
+
+        [Fact]
+        public async Task ASizeContainedImageAndABoxWithAMinHeightAreSizedByTheirContainment()
+        {
+            const string Png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+            var (r, _) = await RenderAsync("",
+                $"<img src='{Png}' style='contain:size;contain-intrinsic-size:30pt 20pt;background:#0f0'>" +
+                "<div style='contain:size;min-height:12pt;background:#f00'><div style='height:90pt'></div></div>");
+
+            Assert.True(r.ContainsKey(Red));
+            Assert.Equal(12, r[Red].H, 1);
+        }
+
+        [Fact]
+        public async Task ABoxWhoseChildrenAreAllSkippedDoesNotHoldUpTheCounterOfWhatFollows()
+        {
+            var (r, _) = await RenderAsync(
+                ".n { counter-increment: c } .n::before { content: counter(c) ' ' }",
+                "<div style='counter-reset:c'><p class='n'>a</p><div style='display:none'><p class='n'>hidden</p></div>" +
+                "<div style='content-visibility:hidden'><p class='n'>skipped</p></div><p class='n' style='background:#0f0'>b</p></div>");
+
+            Assert.True(r.ContainsKey(Lime));
+        }
+
+        [Fact]
+        public async Task QuotesInASkippedOrContainedSubtreeAreScopedWhenRendered()
+        {
+            var (r, _) = await RenderAsync(
+                ".q { display:block; quotes: '<' '>' '[' ']' } .q::before { content: open-quote } .q::after { content: close-quote } .c { content: close-quote close-quote }",
+                "<div class='q'>x<div style='contain:style'><div class='q'><div class='c'>y</div></div></div><div class='q' style='background:#0f0'>z</div></div>");
+
+            Assert.True(r.ContainsKey(Lime));
+        }
+
         [Fact]
         public async Task WithoutPaintContainmentOverflowingContentIsNotClipped()
         {
