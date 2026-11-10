@@ -1,4 +1,6 @@
 using System;
+using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 
 namespace PeachDrawing;
 
@@ -33,13 +35,34 @@ internal sealed class BitmapPaint : PaintSource
             var s = 1.0 / factor;
             _deviceToBitmap = Affine.Then(deviceToBitmap, Affine.Scale(s, s));
         }
+
+        // A draw at the bitmap's own size, moved by whole pixels, reads each destination pixel straight from one source pixel: the sampling position is
+        // exactly a pixel's far-left (bilinear weights 0) or inside it (nearest), so the row is a clamped copy. Bicubic is left to its own code.
+        var t = _deviceToBitmap;
+        if (!_bicubic && t.M11 == 1 && t.M12 == 0 && t.M21 == 0 && t.M22 == 1
+            && Math.Abs(t.OffsetX) < 1e9 && Math.Abs(t.OffsetY) < 1e9
+            && Math.Floor(t.OffsetX) == t.OffsetX && Math.Floor(t.OffsetY) == t.OffsetY)
+        {
+            _wholePixelShift = true;
+            _shiftX = (int)t.OffsetX;
+            _shiftY = (int)t.OffsetY;
+        }
     }
+
+    private readonly bool _wholePixelShift;
+    private readonly int _shiftX, _shiftY;
 
     public override void FillSpan(int x0, int y, int count, Span<byte> destination)
     {
         var pixels = _bitmap.Pixels;
         var w = _bitmap.Width;
         var h = _bitmap.Height;
+
+        if (_wholePixelShift)
+        {
+            CopyShiftedRow(pixels, w, h, x0, y, count, destination);
+            return;
+        }
 
         for (var i = 0; i < count; i++)
         {
@@ -85,12 +108,59 @@ internal sealed class BitmapPaint : PaintSource
             var w01 = (256 - wx) * wy;
             var w11 = wx * wy;
 
+            if (Vector128.IsHardwareAccelerated)
+            {
+                // The four channels of each texel at once: the same integer products and sum, rounded and shifted the same way.
+                var sum = Texel(pixels, p00) * Vector128.Create(w00) + Texel(pixels, p10) * Vector128.Create(w10)
+                    + Texel(pixels, p01) * Vector128.Create(w01) + Texel(pixels, p11) * Vector128.Create(w11);
+                var rounded = Vector128.ShiftRightArithmetic(sum + Vector128.Create(32768), 16).AsUInt32();
+                var bytes = Vector128.Narrow(Vector128.Narrow(rounded, rounded), Vector128.Narrow(rounded, rounded));
+                MemoryMarshal.Write(destination.Slice(d, 4), bytes.AsUInt32().ToScalar());
+                continue;
+            }
+
             for (var c = 0; c < 4; c++)
             {
                 var sum = pixels[p00 + c] * w00 + pixels[p10 + c] * w10 + pixels[p01 + c] * w01 + pixels[p11 + c] * w11;
                 destination[d + c] = (byte)((sum + 32768) >> 16);
             }
         }
+    }
+
+    /// <summary>The four channels of the pixel starting at byte <paramref name="p"/>, widened to 32-bit lanes.</summary>
+    private static Vector128<int> Texel(byte[] pixels, int p)
+    {
+        var packed = MemoryMarshal.Read<uint>(pixels.AsSpan(p, 4));
+        return Vector128.WidenLower(Vector128.WidenLower(Vector128.CreateScalar(packed).AsByte())).AsInt32();
+    }
+
+    /// <summary>
+    /// Row <paramref name="y"/> of a whole-pixel-shifted draw: destination pixel x0 + i is source pixel (x0 + i + shift), the column and row clamped
+    /// to the bitmap, copied as runs.
+    /// </summary>
+    private void CopyShiftedRow(byte[] pixels, int w, int h, int x0, int y, int count, Span<byte> destination)
+    {
+        var sy = Math.Clamp(y + _shiftY, 0, h - 1);
+        var row = pixels.AsSpan(sy * w * 4, w * 4);
+        var first = x0 + _shiftX;
+        var i = 0;
+
+        // Columns left of the bitmap take its first pixel.
+        var left = Math.Clamp(-first, 0, count);
+        for (; i < left; i++)
+            row[..4].CopyTo(destination.Slice(i * 4, 4));
+
+        // Columns inside it are one copy.
+        var inside = Math.Clamp(w - Math.Max(first, 0), 0, count - i);
+        if (inside > 0)
+        {
+            row.Slice(Math.Max(first, 0) * 4, inside * 4).CopyTo(destination.Slice(i * 4, inside * 4));
+            i += inside;
+        }
+
+        // Columns right of it take its last pixel.
+        for (; i < count; i++)
+            row.Slice((w - 1) * 4, 4).CopyTo(destination.Slice(i * 4, 4));
     }
 
     /// <summary>Catmull-Rom weights of the four taps around a position <paramref name="t"/> (0..1) past the second one.</summary>
@@ -143,10 +213,35 @@ internal sealed class BitmapPaint : PaintSource
         var h = Math.Max(1, (source.Height + factor - 1) / factor);
         var result = new byte[w * h * 4];
 
+        var fullBlocksX = source.Width / factor;
+        var fullBlocksY = source.Height / factor;
+        var fullCount = (float)(factor * factor);
+
         for (var y = 0; y < h; y++)
         {
             for (var x = 0; x < w; x++)
             {
+                if (Vector128.IsHardwareAccelerated && x < fullBlocksX && y < fullBlocksY)
+                {
+                    // A block entirely inside the source: sum its pixels' channels together, then divide as the loop below does,
+                    // (sum + n / 2) / n rounded down. A single-precision quotient of whole numbers this small never lands on the wrong side of
+                    // a whole number (the closest a true quotient gets to the next one is 1 / n, far above the rounding error), so truncating it
+                    // gives the integer division's result.
+                    var total = Vector128<int>.Zero;
+                    for (var dy = 0; dy < factor; dy++)
+                    {
+                        var rowStart = ((y * factor + dy) * source.Width + x * factor) * 4;
+                        for (var dx = 0; dx < factor; dx++)
+                            total += Texel(source.Pixels, rowStart + dx * 4);
+                    }
+
+                    var quotient = Vector128.ConvertToSingle(total + Vector128.Create(factor * factor / 2)) / Vector128.Create(fullCount);
+                    var averaged = Vector128.ConvertToInt32(quotient).AsUInt32();
+                    var packed = Vector128.Narrow(Vector128.Narrow(averaged, averaged), Vector128.Narrow(averaged, averaged));
+                    MemoryMarshal.Write(result.AsSpan((y * w + x) * 4, 4), packed.AsUInt32().ToScalar());
+                    continue;
+                }
+
                 int r = 0, g = 0, b = 0, a = 0, n = 0;
                 for (var dy = 0; dy < factor; dy++)
                 {

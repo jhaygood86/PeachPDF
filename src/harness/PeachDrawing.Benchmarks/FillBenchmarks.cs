@@ -118,6 +118,10 @@ public class FillBenchmarks
     [Benchmark]
     public void ImageAtNaturalSize() => _canvas.DrawImage(_photo, new Rect(0, 0, 1600, 1200));
 
+    /// <summary>A 1600x1200 image drawn a little larger than itself at a fractional offset: bilinear sampling of every visible pixel, nothing pre-averaged.</summary>
+    [Benchmark]
+    public void ImageSlightlyEnlarged() => _canvas.DrawImage(_photo, new Rect(-3.4, -2.7, 1707.3, 1280.9));
+
     /// <summary>A 1600x1200 image shrunk to a thumbnail.</summary>
     [Benchmark]
     public void ImageShrunk() => _canvas.DrawImage(_photo, new Rect(0, 0, 320, 240));
