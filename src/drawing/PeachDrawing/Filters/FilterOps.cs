@@ -254,8 +254,8 @@ public static partial class FilterOps
         var pr = result.Pixels;
 
         var done = 0;
-        if (Vector256.IsHardwareAccelerated && IsVectorSafe(k1, k2, k3, k4))
-            done = ArithmeticVector256(pa, pb, pr, k1, k2, k3, k4);
+        if (Vector128.IsHardwareAccelerated && IsVectorSafe(k1, k2, k3, k4))
+            done = ArithmeticVector128(pa, pb, pr, k1, k2, k3, k4);
 
         Span<double> values = stackalloc double[4];
         for (var i = done; i + 3 < pa.Length; i += 4)
@@ -278,9 +278,9 @@ public static partial class FilterOps
     private static bool IsVectorSafe(double k1, double k2, double k3, double k4) =>
         Math.Abs(k1) <= 1e6 && Math.Abs(k2) <= 1e6 && Math.Abs(k3) <= 1e6 && Math.Abs(k4) <= 1e6;
 
-    /// <summary>The four bytes of the pixel at <paramref name="i"/> as four doubles in 0-1, one per lane.</summary>
-    private static Vector256<double> PixelToUnit(ReadOnlySpan<byte> pixels, int i) =>
-        Vector256.Create(ByteOverTwoFiftyFive[pixels[i]], ByteOverTwoFiftyFive[pixels[i + 1]], ByteOverTwoFiftyFive[pixels[i + 2]], ByteOverTwoFiftyFive[pixels[i + 3]]);
+    /// <summary>Two of a pixel's channels (<paramref name="first"/> and the next) as doubles in 0-1, one per lane.</summary>
+    private static Vector128<double> ChannelsToUnit(ReadOnlySpan<byte> pixels, int first) =>
+        Vector128.Create(ByteOverTwoFiftyFive[pixels[first]], ByteOverTwoFiftyFive[pixels[first + 1]]);
 
     /// <summary><c>i / 255.0</c> for every byte: the same doubles the division gives, looked up rather than divided for.</summary>
     private static readonly double[] ByteOverTwoFiftyFive = BuildByteOverTwoFiftyFive();
@@ -294,35 +294,43 @@ public static partial class FilterOps
     }
 
     /// <summary>
-    /// <see cref="Arithmetic"/> for every whole pixel, one pixel's four channels per 256-bit vector: the same divisions, multiplies and
-    /// additions in the same order on the same doubles, so the bytes are the scalar loop's. Returns how many bytes it handled.
+    /// <see cref="Arithmetic"/> for every whole pixel, one pixel's four channels as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same multiplies and
+    /// additions in the same order, so the bytes are the scalar loop's. Returns how many bytes it handled.
     /// </summary>
-    private static int ArithmeticVector256(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4)
+    private static int ArithmeticVector128(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4)
     {
-        var vk1 = Vector256.Create(k1);
-        var vk2 = Vector256.Create(k2);
-        var vk3 = Vector256.Create(k3);
-        var vk4 = Vector256.Create(k4);
-        var scale = Vector256.Create(255.0);
-        var zero = Vector256<double>.Zero;
-        var one = Vector256.Create(1.0);
+        var vk1 = Vector128.Create(k1);
+        var vk2 = Vector128.Create(k2);
+        var vk3 = Vector128.Create(k3);
+        var vk4 = Vector128.Create(k4);
+        var scale = Vector128.Create(255.0);
+        var zero = Vector128<double>.Zero;
+        var one = Vector128.Create(1.0);
 
         var count = pa.Length / 4 * 4;
         for (var i = 0; i < count; i += 4)
         {
-            var ia = PixelToUnit(pa, i);
-            var ib = PixelToUnit(pb, i);
-            var v = vk1 * ia * ib + vk2 * ia + vk3 * ib + vk4;
-            v = Vector256.Min(Vector256.Max(v, zero), one);
+            var iaLow = ChannelsToUnit(pa, i);
+            var iaHigh = ChannelsToUnit(pa, i + 2);
+            var ibLow = ChannelsToUnit(pb, i);
+            var ibHigh = ChannelsToUnit(pb, i + 2);
+
+            var low = vk1 * iaLow * ibLow + vk2 * iaLow + vk3 * ibLow + vk4;
+            var high = vk1 * iaHigh * ibHigh + vk2 * iaHigh + vk3 * ibHigh + vk4;
+            low = Vector128.Min(Vector128.Max(low, zero), one);
+            high = Vector128.Min(Vector128.Max(high, zero), one);
 
             // Color is kept within alpha; in the alpha lane this is its own value.
-            v = Vector256.Min(v, Vector256.Create(v.GetElement(3)));
+            var alpha = Vector128.Create(high.GetElement(1));
+            low = Vector128.Min(low, alpha);
+            high = Vector128.Min(high, alpha);
 
-            var rounded = Vector256.Round(v * scale);
-            pr[i] = (byte)rounded.GetElement(0);
-            pr[i + 1] = (byte)rounded.GetElement(1);
-            pr[i + 2] = (byte)rounded.GetElement(2);
-            pr[i + 3] = (byte)rounded.GetElement(3);
+            var roundedLow = Vector128.Round(low * scale);
+            var roundedHigh = Vector128.Round(high * scale);
+            pr[i] = (byte)roundedLow.GetElement(0);
+            pr[i + 1] = (byte)roundedLow.GetElement(1);
+            pr[i + 2] = (byte)roundedHigh.GetElement(0);
+            pr[i + 3] = (byte)roundedHigh.GetElement(1);
         }
 
         return count;

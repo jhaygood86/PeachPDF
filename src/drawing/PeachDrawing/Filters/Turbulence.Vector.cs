@@ -9,9 +9,9 @@ public sealed partial class Turbulence
 {
     /// <summary>
     /// <see cref="RenderReference"/> with the work that does not depend on the channel done once: the stitching set-up for the whole surface,
-    /// and, for each pixel and octave, the lattice lookups the four channels share. The four channels' gradient arithmetic then runs in one
-    /// 256-bit vector - the same multiplies, subtractions and additions, in the same order, on the same doubles, one lane per channel - so the
-    /// values, and the bytes written, are the reference's.
+    /// and, for each pixel and octave, the lattice lookups the four channels share. The four channels' gradient arithmetic then runs in two
+    /// 128-bit vectors (channels 0-1 and 2-3; SSE2 on x64, NEON on ARM64) - the same multiplies, subtractions and additions, in the same order, on
+    /// the same doubles, one lane per channel - so the values, and the bytes written, are the reference's.
     /// </summary>
     private void RenderVector(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
         int octaves, bool fractalSum, bool stitching, double tileX, double tileY, double tileWidth, double tileHeight)
@@ -44,7 +44,6 @@ public sealed partial class Turbulence
         var lattice = _lattice;
         ref var gx = ref MemoryMarshal.GetArrayDataReference(_gradientX);
         ref var gy = ref MemoryMarshal.GetArrayDataReference(_gradientY);
-        var one = Vector256.Create(1.0);
 
         for (var y = 0; y < surface.Height; y++)
         {
@@ -54,7 +53,8 @@ public sealed partial class Turbulence
                 var ux = (surface.GridX + x + 0.5) / pixelsPerUserX;
 
                 var stitch = stitchStart;
-                var sum = Vector256<double>.Zero;
+                var sumLow = Vector128<double>.Zero;
+                var sumHigh = Vector128<double>.Zero;
                 var vx = ux * baseFrequencyX;
                 var vy = uy * baseFrequencyY;
                 var ratio = 1.0;
@@ -91,24 +91,19 @@ public sealed partial class Turbulence
                     var b10 = lattice[j + by0] * 4;
                     var b01 = lattice[i + by1] * 4;
                     var b11 = lattice[j + by1] * 4;
-                    var sx = Vector256.Create(SCurve(rx0));
-                    var sy = Vector256.Create(SCurve(ry0));
+                    var sx = Vector128.Create(SCurve(rx0));
+                    var sy = Vector128.Create(SCurve(ry0));
+                    var rx0v = Vector128.Create(rx0);
+                    var rx1v = Vector128.Create(rx1);
+                    var ry0v = Vector128.Create(ry0);
+                    var ry1v = Vector128.Create(ry1);
 
-                    var rx0v = Vector256.Create(rx0);
-                    var rx1v = Vector256.Create(rx1);
-                    var ry0v = Vector256.Create(ry0);
-                    var ry1v = Vector256.Create(ry1);
+                    var nLow = Noise(ref gx, ref gy, 0, b00, b10, b01, b11, rx0v, rx1v, ry0v, ry1v, sx, sy);
+                    var nHigh = Noise(ref gx, ref gy, 2, b00, b10, b01, b11, rx0v, rx1v, ry0v, ry1v, sx, sy);
 
-                    // The four channels' Noise2: u and v along the lower edge, then along the upper, each pair lerped by sx, those two by sy.
-                    var u = rx0v * Vector256.LoadUnsafe(ref gx, (nuint)b00) + ry0v * Vector256.LoadUnsafe(ref gy, (nuint)b00);
-                    var v = rx1v * Vector256.LoadUnsafe(ref gx, (nuint)b10) + ry0v * Vector256.LoadUnsafe(ref gy, (nuint)b10);
-                    var a = u + sx * (v - u);
-                    u = rx0v * Vector256.LoadUnsafe(ref gx, (nuint)b01) + ry1v * Vector256.LoadUnsafe(ref gy, (nuint)b01);
-                    v = rx1v * Vector256.LoadUnsafe(ref gx, (nuint)b11) + ry1v * Vector256.LoadUnsafe(ref gy, (nuint)b11);
-                    var b = u + sx * (v - u);
-                    var n = a + sy * (b - a);
-
-                    sum += (fractalSum ? n : Vector256.Abs(n)) / Vector256.Create(ratio);
+                    var ratioVector = Vector128.Create(ratio);
+                    sumLow += (fractalSum ? nLow : Vector128.Abs(nLow)) / ratioVector;
+                    sumHigh += (fractalSum ? nHigh : Vector128.Abs(nHigh)) / ratioVector;
                     vx *= 2;
                     vy *= 2;
                     ratio *= 2;
@@ -122,10 +117,10 @@ public sealed partial class Turbulence
                 }
 
                 // The rest is the reference's own scalar code on the four sums.
-                var red = Math.Clamp(fractalSum ? (sum.GetElement(0) + 1.0) / 2.0 : sum.GetElement(0), 0.0, 1.0);
-                var green = Math.Clamp(fractalSum ? (sum.GetElement(1) + 1.0) / 2.0 : sum.GetElement(1), 0.0, 1.0);
-                var blue = Math.Clamp(fractalSum ? (sum.GetElement(2) + 1.0) / 2.0 : sum.GetElement(2), 0.0, 1.0);
-                var alpha = Math.Clamp(fractalSum ? (sum.GetElement(3) + 1.0) / 2.0 : sum.GetElement(3), 0.0, 1.0);
+                var red = Math.Clamp(fractalSum ? (sumLow.GetElement(0) + 1.0) / 2.0 : sumLow.GetElement(0), 0.0, 1.0);
+                var green = Math.Clamp(fractalSum ? (sumLow.GetElement(1) + 1.0) / 2.0 : sumLow.GetElement(1), 0.0, 1.0);
+                var blue = Math.Clamp(fractalSum ? (sumHigh.GetElement(0) + 1.0) / 2.0 : sumHigh.GetElement(0), 0.0, 1.0);
+                var alpha = Math.Clamp(fractalSum ? (sumHigh.GetElement(1) + 1.0) / 2.0 : sumHigh.GetElement(1), 0.0, 1.0);
 
                 var o = (y * surface.Width + x) * 4;
                 pixels[o] = (byte)Math.Round(red * alpha * 255.0);
@@ -134,5 +129,21 @@ public sealed partial class Turbulence
                 pixels[o + 3] = (byte)Math.Round(alpha * 255.0);
             }
         }
+    }
+
+    /// <summary>
+    /// Noise2's gradient arithmetic for two channels (<paramref name="channelOffset"/> 0 or 2): u and v along the lower edge, then along the upper, each pair
+    /// lerped by <paramref name="sx"/>, those two by <paramref name="sy"/>, with the operations in the scalar code's order.
+    /// </summary>
+    private static Vector128<double> Noise(ref double gx, ref double gy, int channelOffset, int b00, int b10, int b01, int b11,
+        Vector128<double> rx0, Vector128<double> rx1, Vector128<double> ry0, Vector128<double> ry1, Vector128<double> sx, Vector128<double> sy)
+    {
+        var u = rx0 * Vector128.LoadUnsafe(ref gx, (nuint)(b00 + channelOffset)) + ry0 * Vector128.LoadUnsafe(ref gy, (nuint)(b00 + channelOffset));
+        var v = rx1 * Vector128.LoadUnsafe(ref gx, (nuint)(b10 + channelOffset)) + ry0 * Vector128.LoadUnsafe(ref gy, (nuint)(b10 + channelOffset));
+        var a = u + sx * (v - u);
+        u = rx0 * Vector128.LoadUnsafe(ref gx, (nuint)(b01 + channelOffset)) + ry1 * Vector128.LoadUnsafe(ref gy, (nuint)(b01 + channelOffset));
+        v = rx1 * Vector128.LoadUnsafe(ref gx, (nuint)(b11 + channelOffset)) + ry1 * Vector128.LoadUnsafe(ref gy, (nuint)(b11 + channelOffset));
+        var b = u + sx * (v - u);
+        return a + sy * (b - a);
     }
 }
