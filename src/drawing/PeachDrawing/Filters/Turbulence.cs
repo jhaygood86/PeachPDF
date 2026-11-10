@@ -1,5 +1,6 @@
 using PeachDrawing.Core;
 using System;
+using System.Runtime.Intrinsics;
 
 namespace PeachDrawing.Filters;
 
@@ -13,7 +14,7 @@ namespace PeachDrawing.Filters;
 /// and stitching logic are the specification's. Specification text copyright (c) 2018 W3C (MIT, ERCIM, Keio, Beihang),
 /// used under the W3C permissive document license (https://www.w3.org/copyright/). See THIRD-PARTY-LICENSES.md.
 /// </remarks>
-public sealed class Turbulence
+public sealed partial class Turbulence
 {
     private const int BSize = 0x100;
     private const int BM = 0xff;
@@ -25,6 +26,8 @@ public sealed class Turbulence
 
     private readonly int[] _lattice = new int[BSize + BSize + 2];
     private readonly double[,,] _gradient = new double[4, BSize + BSize + 2, 2];
+    private readonly double[] _gradientX = new double[(BSize + BSize + 2) * 4];
+    private readonly double[] _gradientY = new double[(BSize + BSize + 2) * 4];
 
     private struct Stitch
     {
@@ -98,6 +101,16 @@ public sealed class Turbulence
             {
                 for (j = 0; j < 2; j++)
                     _gradient[k, BSize + i, j] = _gradient[k, i, j];
+            }
+        }
+
+        // The same gradients with the four channels of one lattice point side by side, for reading them together.
+        for (i = 0; i < BSize + BSize + 2; i++)
+        {
+            for (k = 0; k < 4; k++)
+            {
+                _gradientX[i * 4 + k] = _gradient[k, i, 0];
+                _gradientY[i * 4 + k] = _gradient[k, i, 1];
             }
         }
     }
@@ -205,6 +218,19 @@ public sealed class Turbulence
     /// pixels per user unit) and premultiplying the result, which the reference algorithm defines as straight colour.
     /// </summary>
     public void Render(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
+        int octaves, bool fractalSum, bool stitching, double tileX, double tileY, double tileWidth, double tileHeight)
+    {
+        if (Vector256.IsHardwareAccelerated)
+        {
+            RenderVector(surface, pixelsPerUserX, pixelsPerUserY, baseFrequencyX, baseFrequencyY, octaves, fractalSum, stitching, tileX, tileY, tileWidth, tileHeight);
+            return;
+        }
+
+        RenderReference(surface, pixelsPerUserX, pixelsPerUserY, baseFrequencyX, baseFrequencyY, octaves, fractalSum, stitching, tileX, tileY, tileWidth, tileHeight);
+    }
+
+    /// <summary>The straightforward evaluation: <see cref="Sample"/> for every channel of every pixel. The reference the vector path has to match.</summary>
+    internal void RenderReference(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
         int octaves, bool fractalSum, bool stitching, double tileX, double tileY, double tileWidth, double tileHeight)
     {
         var pixels = surface.Pixels;
