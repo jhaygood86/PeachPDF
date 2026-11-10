@@ -63,11 +63,20 @@ Measured and left alone:
 - **Embedding a large RGBA PNG:** about 51% of the render is `PeachImage`'s `PngAlphaSplit`, in a separate package; the BMP round trip in `ReadBgraBitmap`
   is not on that path at all.
 
-## The biggest lead found, not taken
+## Raster-fallback images without a PNG round trip (taken)
 
-In `box_shadow` (and any document with raster fallbacks: blurred shadows, filters, backdrop filters, flattened transparency) `PdfCanvas.DrawRaster` is
-about 41% of the render, of which `RasterEmbedding.ToXImage` is 32%: the surface is unpremultiplied and PNG-encoded (24%), then `PdfRasterImage.FromStream`
-reads that PNG back (13%) to pass its IDAT through and to split, inflate and re-deflate the alpha plane. The blur itself is 13.5%. Embedding the pixels
-directly (or building the RGB and alpha streams without the PNG round trip) would avoid most of it, but it changes the compressed bytes of every raster-fallback
-image in the PDF, so it cannot be verified by byte equality: it needs a pixel-exact comparison of rasterized pages (PDFium and MuPDF) and a look at the
-size change.
+In `box_shadow` (and any document with raster fallbacks: blurred shadows, filters, backdrop filters, flattened transparency) `PdfCanvas.DrawRaster` was
+about 41% of the render: `RasterEmbedding.ToXImage` PNG-encoded the surface (24%), and `PdfRasterImage.FromStream` read the PNG back (13%) to pass its IDAT
+through and to split, inflate and re-deflate the alpha plane. `RasterPlaneCodec` now builds the streams of that pass-through embed straight from the pixels
+(unpremultiply, RGB and alpha planes, Sub-or-Up row filter, one Flate stream each) behind `RasterPassthroughImageSource`. Interleaved A/B on the same
+machine: `box_shadow` -17%, `css_filter_raster` -13%, `shadows_raster` -23%, `svg_filters_raster` -21%, allocation down 19-43%.
+
+It cannot be byte-identical (the compressed streams differ), so it was verified by rasterizing every page of the 27 PDFs that changed with PDFium and
+MuPDF before and after: 0 differing pages, PDFs 13% smaller in total. Traps the pixel check found, each of which a byte check could not have:
+- **Hard-edged transparency** (every pixel opaque or clear) is a *color key* in the PNG route (a palette image with `tRNS`), and viewers composite a color
+  key differently from an RGB image with a soft mask (MuPDF smooths the mask's edge; `raster_antialiasing_off` is meant to be crisp). It keeps the PNG route.
+- **An opaque surface of 256 colors or fewer** is a palette image, embedded `/Indexed`; MuPDF resamples that differently from `/DeviceRGB` when scaling
+  (9417 differing bytes with identical decoded pixels). It keeps the PNG route.
+- A first version was 28% *slower* on `box_shadow` and allocated 48% more: the few-colors check did a hash insert per pixel of flat surfaces, and the
+  filtered planes were fresh arrays with a half-size compression buffer. Skipping runs of equal pixels, renting the planes, and starting the output at an
+  eighth of the input fixed both. Always A/B interleaved, new and old alternating on the same build state: absolute times on this machine drifted by 2x.
