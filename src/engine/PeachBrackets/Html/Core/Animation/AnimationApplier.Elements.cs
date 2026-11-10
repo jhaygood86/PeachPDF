@@ -231,15 +231,15 @@ namespace PeachBrackets.Html.Animation
 
         // The lengths of an SVG that take a bare number for user units (the stroke, the text and the geometry attributes). The interpolator mixes a number and a length of another unit as a
         // calc(), which is not what `stroke-width: 2` against `10px` means (user units are CSS pixels), so both sides are put in px first.
-        private static readonly HashSet<string> UserUnitProperties = new(StringComparer.OrdinalIgnoreCase) {
+        private static readonly HashSet<string> UserUnitProperties = [with(StringComparer.OrdinalIgnoreCase),
             "stroke-width", "stroke-dashoffset", "stroke-dasharray", "font-size", "letter-spacing", "word-spacing",
             "x", "y", "cx", "cy", "r", "rx", "ry", "width", "height"
-        };
+        ];
 
         // The properties that take no negative number: a keyframe that gives one is invalid (a calc() that comes out negative is valid, and clamps).
-        private static readonly HashSet<string> NonNegativeElementProperties = new(StringComparer.OrdinalIgnoreCase) {
+        private static readonly HashSet<string> NonNegativeElementProperties = [with(StringComparer.OrdinalIgnoreCase),
             "r", "rx", "ry", "width", "height", "stroke-width", "font-size"
-        };
+        ];
 
         private static bool IsInvalidLiteral(string property, string value)
         {

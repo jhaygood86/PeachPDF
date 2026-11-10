@@ -47,10 +47,9 @@ namespace PeachBrackets.Css
             (Keywords.PetiteCaps, ["pcap"]),
             (Keywords.Unicase, ["unic"]),
             (Keywords.TitlingCaps, ["titl"])
-        ];
+];
 
-        private static readonly HashSet<string> CapsTags = new(StringComparer.OrdinalIgnoreCase)
-            { "smcp", "c2sc", "pcap", "c2pc", "unic", "titl" };
+        private static readonly HashSet<string> CapsTags = [with(StringComparer.OrdinalIgnoreCase), "smcp", "c2sc", "pcap", "c2pc", "unic", "titl"];
 
         private static readonly IReadOnlyDictionary<string, string> LigatureTagToKeyword =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)

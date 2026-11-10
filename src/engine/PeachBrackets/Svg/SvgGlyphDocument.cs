@@ -186,10 +186,9 @@ namespace PeachBrackets.Svg
             return true;
         }
 
-        private static readonly HashSet<string> PaintAttributes = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> PaintAttributes = [with(StringComparer.Ordinal),
             "fill", "stroke", "stop-color", "flood-color", "lighting-color", "color", "fill-opacity", "stroke-opacity", "opacity",
-        };
+        ];
 
         /// <summary>
         /// A font's document may write <c>fill="var(--color0, red)"</c> as a presentation attribute, which a cascade does not resolve

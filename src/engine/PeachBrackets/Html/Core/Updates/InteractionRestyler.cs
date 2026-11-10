@@ -24,14 +24,13 @@ namespace PeachBrackets.Html.Updates
     internal static class InteractionRestyler
     {
         // Properties whose value only ever changes how a box is painted. A change to any other property stays out of the fast path.
-        private static readonly HashSet<string> PaintOnly = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> PaintOnly = [with(StringComparer.OrdinalIgnoreCase),
             "color", "background-color", "caret-color", "accent-color", "cursor", "opacity", "mix-blend-mode", "visibility", "transform", "translate", "rotate", "scale", "filter", "box-shadow", "text-shadow",
             "text-decoration-line", "text-decoration-style", "text-decoration-color", "text-decoration-thickness", "text-underline-offset",
             "outline-color", "outline-style", "outline-width", "outline-offset",
             "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "column-rule-color",
             "-webkit-text-stroke-color", "-webkit-text-fill-color",
-        };
+        ];
 
         /// <summary>Whether a change to <paramref name="property"/> only ever changes how a box is painted, so it can be applied with no layout pass.</summary>
         internal static bool IsPaintOnly(string property) => PaintOnly.Contains(property);
@@ -45,11 +44,10 @@ namespace PeachBrackets.Html.Updates
             names.Contains("transform") || names.Contains("translate") || names.Contains("rotate") || names.Contains("scale");
 
         // Properties that change what boxes there are or how the tree is built, which a layout pass over the boxes that exist cannot follow.
-        private static readonly HashSet<string> Structural = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> Structural = [with(StringComparer.OrdinalIgnoreCase),
             "display", "position", "float", "clear", "content", "contain", "content-visibility", "container-type", "container-name", "writing-mode", "direction", "unicode-bidi",
             "will-change", "quotes", "counter-reset", "counter-increment", "counter-set", "all", "visibility",
-        };
+        ];
 
         /// <summary>
         /// Whether a running animation can write <paramref name="property"/> onto the boxes that exist: a paint-only property is only repainted, and any

@@ -1,32 +1,23 @@
 <Project>
   <PropertyGroup>
-    <TargetFrameworks>net10.0</TargetFrameworks>
+    <!-- Every project builds for both supported runtimes. The .NET 11 SDK is required (global.json pins it);
+         net10.0 stays a supported target, not a reason to build with the older SDK. -->
+    <TargetFrameworks>net10.0;net11.0</TargetFrameworks>
     <Nullable>enable</Nullable>
-    <!-- net11.0 is opt-in based on the resolved SDK, not unconditional: global.json pins the
-         floor at a stable .NET 10 SDK with rollForward "latestMajor" and allowPrerelease true,
-         so a contributor with only .NET 10 installed builds/tests exactly as before (net11.0
-         quietly isn't offered), while a machine that also has the .NET 11 RC SDK installed
-         (including CI, once it installs it) automatically gets promoted to it and this condition
-         picks up net11.0 too - no per-contributor or per-job global.json edits needed.
-         $(NETCoreSdkVersion) itself isn't reliably populated yet at this point in project
-         evaluation (confirmed empty here under some SDK versions, populated under others - an
-         internal import-ordering difference between SDK versions, not something to depend on),
-         so the SDK version is derived from $(MSBuildExtensionsPath) instead, which points at the
-         resolved SDK's own root folder and is reliably set this early on every SDK version
-         tested. That path's trailing separator is present under some SDK versions and absent
-         under others (also observed directly), hence the explicit TrimEnd normalization before
-         taking the final path segment. Under VS2026 Insiders, $(MSBuildExtensionsPath) resolves
-         to VS's own MSBuild toolset path rather than a dotnet-SDK folder, so this final segment
-         comes back as the literal string "MSBuild" instead of a version - feeding that straight
-         into VersionGreaterThanOrEquals is a hard MSBuild evaluation error (not just a false
-         condition), which blocked VS2026 from loading the project at all (issue #1130). The
-         regex guard below only invokes VersionGreaterThanOrEquals when the resolved segment
-         actually looks like a version, so an unrecognized host value (this one, or a future
-         one from some other IDE/MSBuild) just leaves TargetFrameworks at the net10.0
-         default instead of crashing. -->
-    <NormalizedSdkPath>$(MSBuildExtensionsPath.TrimEnd('\').TrimEnd('/'))</NormalizedSdkPath>
-    <ResolvedNETCoreSdkVersion>$([System.IO.Path]::GetFileName($(NormalizedSdkPath)))</ResolvedNETCoreSdkVersion>
-    <ResolvedNETCoreSdkVersionLooksVersioned>$([System.Text.RegularExpressions.Regex]::IsMatch($(ResolvedNETCoreSdkVersion), '^\d+(\.\d+){2,3}'))</ResolvedNETCoreSdkVersionLooksVersioned>
-    <TargetFrameworks Condition="'$(ResolvedNETCoreSdkVersionLooksVersioned)' == 'true' AND $([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0</TargetFrameworks>
+    <!-- The 11 SDK's latest language version (C# 15) for every target, so language-only features such as
+         collection-expression arguments (`[with(comparer), ...]`) compile for net10.0 too. Features that
+         need runtime types are still limited to what both targets have. -->
+    <LangVersion>latest</LangVersion>
   </PropertyGroup>
+
+  <!-- Runtime async (the runtime, not the compiler, suspends and resumes async methods) only exists on the
+       .NET 11 runtime, so it is on for net11.0 targets only; net10.0 keeps the compiler's state machines. -->
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net11.0'))">
+    <Features>$(Features);runtime-async=on</Features>
+  </PropertyGroup>
+
+  <!-- IDE hosts that ignore global.json would otherwise fail later with an obscure NETSDK1045. -->
+  <Target Name="RequireDotNet11Sdk" BeforeTargets="_CheckForUnsupportedTargetFramework;ResolveTargetingPackAssets;CoreCompile" Condition="'$(NETCoreSdkVersion)' != '' AND $([MSBuild]::VersionLessThan($(NETCoreSdkVersion), '11.0.100'))">
+    <Error Text="Building PeachPDF requires the .NET 11 SDK (11.0.100 or newer); the SDK in use is $(NETCoreSdkVersion). Install it from https://dotnet.microsoft.com/download/dotnet/11.0 - see global.json." />
+  </Target>
 </Project>

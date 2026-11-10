@@ -382,9 +382,9 @@ namespace PeachDrawing.Core
                 return null;
 
             // A colour matrix on the layer applies before its effects, as it does when there are none.
-            var ordered = options.ColorMatrix is { } matrix
-                ? new List<LayerEffect>(effects.Count + 1) { new ColorMatrixEffect(matrix) }
-                : new List<LayerEffect>(effects.Count);
+            List<LayerEffect> ordered = options.ColorMatrix is { } matrix
+                ? [with(capacity: effects.Count + 1), new ColorMatrixEffect(matrix)]
+                : [with(capacity: effects.Count)];
             ordered.AddRange(effects);
 
             return new CanvasLayer(raster.Graphics, () =>

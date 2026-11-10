@@ -453,11 +453,10 @@ namespace PeachBrackets.Html.TextGeometry
         }
 
         /// <summary>The inline elements a range of text can be wrapped in.</summary>
-        private static readonly HashSet<string> WrappingTags = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> WrappingTags = [with(StringComparer.OrdinalIgnoreCase),
             "a", "abbr", "b", "bdi", "bdo", "cite", "code", "del", "dfn", "em", "i", "ins", "kbd", "mark", "q", "s", "samp", "small", "span", "strong", "sub",
             "sup", "time", "u", "var"
-        };
+        ];
 
         // The text box after <paramref name="leaf"/> that takes everything of its text from <paramref name="index"/> on.
         private static CssBox SplitLeaf(CssBox leaf, int index)

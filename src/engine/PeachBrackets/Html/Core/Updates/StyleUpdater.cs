@@ -19,10 +19,9 @@ namespace PeachBrackets.Html.Updates
     {
         // Properties whose value only ever changes how a box is painted. Anything that can move or resize something stays out: it needs a layout
         // pass this class does not have.
-        private static readonly HashSet<string> PaintOnly = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> PaintOnly = [with(StringComparer.Ordinal),
             "color", "background-color", "text-decoration-line", "text-decoration-style", "text-decoration-color", "outline-color",
-        };
+        ];
 
         // Wide enough for an underline, an outline or a glyph that overhangs its box.
         private const double InflatePoints = 4;

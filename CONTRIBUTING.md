@@ -4,7 +4,7 @@ Thanks for your interest in contributing. This document covers how to build, tes
 
 ## Getting started
 
-- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 10, plus .NET 11 (currently a release candidate) when the SDK you're building with supports it — see [net11.0 locally](#net110-locally) below. A plain `dotnet build`/`dotnet test` with only the .NET 10 SDK installed works exactly as it always has; nothing extra is required unless you specifically want to build or test against net11.0.
+- The solution is at `src/PeachPDF.slnx`. PeachPDF targets .NET 10 and .NET 11, and **building requires the .NET 11 SDK** (`global.json` pins it) — see [.NET 11 SDK](#net-11-sdk) below.
 - All `dotnet` CLI commands below assume your working directory is `src/` — the projects (and their relative paths in this doc) are rooted there.
 
 ## Building and testing
@@ -18,34 +18,14 @@ dotnet test --project tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Test
 
 The HTML/CSS/SVG/MathML engine's internals are tested by `PeachBrackets.Engine.Tests`; PDF output and the public API by `PeachPDF.Tests`.
 
-`PeachPDF.Tests` targets net10.0 by default (net11.0 joins the list only when you're building with an SDK that supports it — see below). A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per resolved target framework in one invocation, which doubles local build/test time when net11.0 is active — always pass `--framework net10.0` for routine local runs. Only add an explicit net11.0 run if you suspect an issue specific to that target.
+`PeachPDF.Tests` targets net10.0 and net11.0. A bare `dotnet test` (no `--framework`) builds and runs the full suite (3000+ tests) once per target framework in one invocation, which doubles local build/test time — always pass `--framework net10.0` for routine local runs. Only add an explicit net11.0 run if you suspect an issue specific to that target.
 
-### net11.0 locally
+### .NET 11 SDK
 
-The repo's tracked `global.json` pins a `10.0.100` floor with `rollForward: "latestMajor"` and `allowPrerelease: true`, and `src/Directory.Build.props` only adds `net11.0` to the multi-targeted projects' `TargetFrameworks` when the SDK actually in use is 11.0.100 or newer. Combined, this means no configuration is needed either way: with only the .NET 10 SDK installed, `dotnet` resolves to it and net11.0 is quietly not offered; install the [.NET 11 RC SDK](https://dotnet.microsoft.com/download/dotnet/11.0) alongside it and `dotnet` automatically promotes to the RC SDK, bringing net11.0 into the list — no `global.json` edits, local or committed.
+The tracked `global.json` pins SDK `11.0.100` (`rollForward: "latestFeature"`, no prereleases), and `src/Directory.Build.props` builds every project for both `net10.0` and `net11.0` unconditionally; a machine with only the .NET 10 SDK fails with a clear message. Install the [.NET 11 SDK](https://dotnet.microsoft.com/download/dotnet/11.0); it also builds and runs the net10.0 target. net11.0 targets compile with `runtime-async=on` (the runtime rather than the compiler runs async methods; net10.0 keeps compiler state machines), so a change to async code should be checked on both.
 
 ```
 dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net11.0
-```
-
-(That command only works once the RC SDK is actually installed — see above.)
-
-The `peachpdf` command-line tool has its own test project, `PeachPDF.Cli.Tests` (net10.0-only, since the CLI is net10.0-only):
-
-```
-dotnet test --project tests/PeachPDF.Cli.Tests/PeachPDF.Cli.Tests.csproj
-```
-
-The font and text engine has its own test project too, `PeachDrawing.Text.Tests` (the font parsers and tables, shaping, bidi, script itemization, hyphenation, and the public API of `PeachDrawing.Text`; it must not reference PeachPDF):
-
-```
-dotnet test --project tests/PeachDrawing.Text.Tests/PeachDrawing.Text.Tests.csproj --framework net10.0
-```
-
-To run a subset of tests:
-
-```
-dotnet test --project tests/PeachPDF.Tests/PeachPDF.Tests.csproj --framework net10.0 --filter-class "*Svg*"
 ```
 
 ## Code coverage

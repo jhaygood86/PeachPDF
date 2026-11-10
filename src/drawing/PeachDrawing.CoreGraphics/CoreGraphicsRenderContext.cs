@@ -229,11 +229,10 @@ public class CoreGraphicsRenderContext : RenderContext, IDisposable
             ? mimeType is not null && s_imageIoTypes.Contains(mimeType.Trim())
             : base.SupportsImageType(mimeType);
 
-    private static readonly HashSet<string> s_imageIoTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> s_imageIoTypes = [with(StringComparer.OrdinalIgnoreCase),
         "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/bmp", "image/x-ms-bmp", "image/tiff",
         "image/x-icon", "image/vnd.microsoft.icon", "image/heic", "image/heif", "image/webp", "image/avif", "image/svg+xml"
-    };
+    ];
 
     /// <inheritdoc />
     protected override Core.Image ImageFromStreamInt(Stream memoryStream) =>
