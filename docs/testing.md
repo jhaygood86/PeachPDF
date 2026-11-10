@@ -63,7 +63,14 @@ dotnet run -c Release --project harness/PeachDrawing.Text.Benchmarks -- --filter
 dotnet run -c Release --project harness/PeachDrawing.Text.Benchmarks -- --filter "*HintingHot*"
 ```
 
-For timing whole-document rendering, the [showcase harness](#the-showcase-harness) has a `--benchmark` mode that times and measures the allocations of each showcase's render.
+The same project also times the per-character lookups and whole-paragraph analysis the layout engine makes (`*Lookup*`: glyph mapping, script and bidi class; `*Paragraph*`: bidi analysis, line-break opportunities, grapheme and word boundaries, each over ASCII, typographic Latin and mixed-script text), and `-- --cold-start` prints the first-use cost of the system-font scan and each Unicode table in a fresh process, which a steady-state benchmark hides. `src/harness/PeachDrawing.Benchmarks` does the same for the CPU rasterizer, again through the public API only: `*Fill*` covers solid, gradient, path, clipped and image fills, and `*Filter*` covers blur, shadow, colour matrix, morphology and turbulence.
+
+```
+dotnet run -c Release --project harness/PeachDrawing.Benchmarks -- --filter "*Fill*"
+dotnet run -c Release --project harness/PeachDrawing.Benchmarks -- --filter "*Filter*"
+```
+
+For timing whole-document rendering, the [showcase harness](#the-showcase-harness) has a `--benchmark` mode that times and measures the allocations of each showcase's render as a PDF, and a `--raster-benchmark` mode that renders each showcase onto the CPU rasterizer instead, which is where the rasterizer's own kernels show up. `--benchmark-filter <slug,slug>` limits either mode to named showcases, and `--benchmark-json <file>` writes the results so a run on one build can be compared with a run on another.
 
 ## See also
 

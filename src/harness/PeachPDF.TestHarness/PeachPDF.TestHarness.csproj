@@ -22,6 +22,8 @@
     <!-- The SVG backend, for the svg flag: every HTML showcase is also rendered onto an SvgCanvas (see Showcases/SvgShowcaseRenderer.cs). -->
     <ProjectReference Include="..\..\drawing\PeachDrawing.Svg\PeachDrawing.Svg.csproj" />
     <ProjectReference Include="..\..\engine\PeachBrackets\PeachBrackets.csproj" />
+    <!-- The CPU rasterizer, for the raster-benchmark flag (see Showcases/RasterShowcaseRenderer.cs). -->
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
   </ItemGroup>
 
   <!--

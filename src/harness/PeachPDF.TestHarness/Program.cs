@@ -77,6 +77,12 @@ static int RunImportRoundTrip(string inputDir, string outputDir)
 var positionalArgs = new List<string>();
 var benchmarkMode = false;
 var benchmarkIterations = 10;
+// --benchmark-filter slug[,slug...]: with --benchmark, only these showcases are measured (an exact slug match).
+// --benchmark-json <file>: with --benchmark, also writes the per-showcase results as JSON, so a baseline run on one
+// build can be diffed against a run on another (see the performance workflow in docs/testing.md).
+var rasterBenchmark = false;
+HashSet<string>? benchmarkFilter = null;
+string? benchmarkJsonPath = null;
 // --svg [--svg-text]: alongside every HTML showcase's PDF, also renders the same HTML through the SVG backend
 // (PeachDrawing.Svg) and writes {slug}.svg (one more file, {slug}-pN.svg, per further page) - a direct look at what the SVG
 // canvas does with real documents; the docs site links it from the showcase card. --svg-text writes selectable <text> with
@@ -93,6 +99,12 @@ for (var i = 0; i < args.Length; i++)
     {
         benchmarkMode = true;
     }
+    else if (args[i] == "--raster-benchmark")
+    {
+        // Same measurement as --benchmark, but each render is HtmlDocument -> RasterCanvas (CPU) instead of GeneratePdf + Save.
+        benchmarkMode = true;
+        rasterBenchmark = true;
+    }
     else if (args[i] == "--html-only")
     {
         htmlOnlyMode = true;
@@ -105,6 +117,18 @@ for (var i = 0; i < args.Length; i++)
     {
         svgMode = true;
         svgTextMode = PeachDrawing.Svg.SvgTextMode.Text;
+    }
+    else if (args[i] == "--benchmark-filter" && i + 1 < args.Length)
+    {
+        benchmarkFilter = new HashSet<string>(
+            args[i + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.Ordinal);
+        i++;
+    }
+    else if (args[i] == "--benchmark-json" && i + 1 < args.Length)
+    {
+        benchmarkJsonPath = Path.GetFullPath(args[i + 1]);
+        i++;
     }
     else if (args[i] == "--benchmark-iterations" && i + 1 < args.Length
         && int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIterations)
@@ -364,6 +388,12 @@ async Task SaveStatesShowcaseAsync(string slug, string category, string cardTitl
 // serialization is a real, distinct cost a caller always pays, not an artifact of the showcase harness.
 async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    if (rasterBenchmark)
+    {
+        await RasterShowcaseRenderer.RenderPagesAsync(sourceHtml, renderConfig);
+        return;
+    }
+
     var document = await generator.GeneratePdf(sourceHtml, renderConfig);
     using var stream = new MemoryStream();
     document.Save(stream);
@@ -371,6 +401,11 @@ async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
 
 async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    if (benchmarkFilter is not null && !benchmarkFilter.Contains(slug))
+    {
+        return;
+    }
+
     // Warm: JIT the whole render path (parser, cascade, layout, PDF writer) before anything is
     // counted - the first render of any process pays a one-time JIT/tiering cost that would otherwise
     // swamp a real per-render number.
@@ -425,6 +460,36 @@ void PrintBenchmarkReport()
     Console.WriteLine($"{"TOTAL (one corpus pass)",-40} {totalMeanMs,10:F2} {"",10} " +
         $"{totalMeanBytes / 1024.0,10:F1} {"",10}");
     Console.WriteLine($"Total: {totalMeanMs:F2} ms, {totalMeanBytes / 1024.0 / 1024.0:F2} MB per pass over the corpus.");
+
+    if (benchmarkFilter is not null)
+    {
+        var missing = benchmarkFilter.Where(s => benchmarkResults.All(r => r.Slug != s)).ToArray();
+        if (missing.Length > 0)
+        {
+            Console.WriteLine($"WARNING: --benchmark-filter named no matching showcase for: {string.Join(", ", missing)}");
+        }
+    }
+
+    if (benchmarkJsonPath is not null)
+    {
+        var json = JsonSerializer.Serialize(
+            new
+            {
+                iterations = benchmarkIterations,
+                showcases = benchmarkResults.OrderBy(r => r.Slug, StringComparer.Ordinal).Select(r => new
+                {
+                    slug = r.Slug,
+                    meanMs = r.MeanWallTimeMs,
+                    medianMs = r.MedianWallTimeMs,
+                    meanBytes = r.MeanAllocatedBytes,
+                    medianBytes = r.MedianAllocatedBytes
+                })
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+        Directory.CreateDirectory(Path.GetDirectoryName(benchmarkJsonPath)!);
+        File.WriteAllText(benchmarkJsonPath, json);
+        Console.WriteLine($"Wrote {benchmarkJsonPath}");
+    }
 }
 
 static string Swatch(string desc, string css) =>

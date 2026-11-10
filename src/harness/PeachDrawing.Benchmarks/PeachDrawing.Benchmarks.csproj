@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BenchmarkDotNet benchmarks of the CPU rasterizer's kernels (scanline fills, gradients, image sampling, clip masks, the raster filters),
+    run by hand when a change is expected to move performance (see docs/testing.md). Not part of any CI job and not packable. Like the
+    rasterizer's tests it reads PeachDrawing through its public API and never references PeachPDF. Single-TFM net10.0, overriding the
+    default of src/Directory.Build.props, so the numbers of two runs are comparable whatever the SDK offers; built outside src/ for the
+    reason given in PeachDrawing.Text.Benchmarks.csproj.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks></TargetFrameworks>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsPublishable>false</IsPublishable>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <OutputPath>$(MSBuildThisFileDirectory)..\..\..\artifacts\benchmarks\PeachDrawing\$(Configuration)\</OutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\drawing\PeachDrawing\PeachDrawing.csproj" />
+  </ItemGroup>
+
+</Project>

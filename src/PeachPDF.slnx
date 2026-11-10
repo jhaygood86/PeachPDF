@@ -15,6 +15,7 @@
   <Project Path="examples/PeachDrawing.Skia.Example/PeachDrawing.Skia.Example.csproj" />
   <Project Path="tests/PeachDrawing.Tests/PeachDrawing.Tests.csproj" />
   <Project Path="drawing/PeachDrawing.Text/PeachDrawing.Text.csproj" />
+  <Project Path="harness/PeachDrawing.Benchmarks/PeachDrawing.Benchmarks.csproj" />
   <Project Path="harness/PeachDrawing.Text.Benchmarks/PeachDrawing.Text.Benchmarks.csproj" />
   <Project Path="drawing/PeachDrawing.Text.Brotli/PeachDrawing.Text.Brotli.csproj" />
   <Project Path="tests/PeachDrawing.Text.Brotli.Tests/PeachDrawing.Text.Brotli.Tests.csproj" />
