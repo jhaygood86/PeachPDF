@@ -341,7 +341,7 @@ namespace PeachBrackets.Html.Dom
                 // A wrapping row whose lines land on pages of different widths collects, sizes and measures
                 // each line against the measure of the page it lands on (css-break-3 5.1) - see
                 // BuildLinesPerPage. Every other container keeps the one measure it always had.
-                lines = perPage ? await BuildLinesPerPage(g, items, mainSize, hints) : CollectLines(items, mainSize);
+                lines = perPage ? await BuildLinesPerPage(g, items, mainSize, hints) : await CollectLines(g, items, mainSize);
 
                 // Phase 4: resolve flex-grow / flex-shrink
                 if (perPage)
@@ -600,7 +600,7 @@ namespace PeachBrackets.Html.Dom
                 while (next < items.Count)
                 {
                     var item = items[next];
-                    var itemMain = item.HypotheticalMainSize + item.MarginBefore + item.MarginAfter;
+                    var itemMain = await LineBreakingSize(g, item) + item.MarginBefore + item.MarginAfter;
 
                     if (current.Count > 0 && used + mainGap + itemMain > measure) break;
 
@@ -839,7 +839,7 @@ namespace PeachBrackets.Html.Dom
 
         // ─── Phase 3: line collection ─────────────────────────────────────────────
 
-        private List<FlexLine> CollectLines(List<FlexItem> items, double mainSize)
+        private async ValueTask<List<FlexLine>> CollectLines(Canvas g, List<FlexItem> items, double mainSize)
         {
             if (!_isWrap)
                 return [new FlexLine(items)];
@@ -851,7 +851,7 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var item in items)
             {
-                double itemMain = item.HypotheticalMainSize
+                double itemMain = await LineBreakingSize(g, item)
                     + item.MarginBefore + item.MarginAfter;
                 if (current.Count > 0 && used + mainGap + itemMain > mainSize)
                 {
@@ -868,6 +868,20 @@ namespace PeachBrackets.Html.Dom
                 lines.Add(new FlexLine(current));
 
             return lines;
+        }
+
+        /// <summary>
+        /// The size an item counts for when a wrapping container decides where its lines break: its hypothetical main size,
+        /// which CSS Flexbox 1 §9.3 step 5 defines as the flex base size clamped by the item's minimum and maximum. For a row
+        /// the minimum is the automatic one (§4.5), so an item with a basis of 0 still takes the room of its longest word and
+        /// a line it would not fit on breaks before it; sizing the line afterwards cannot undo a break that was never made.
+        /// A column container keeps the hypothetical size (its automatic minimum needs a layout of its own to learn).
+        /// </summary>
+        private async ValueTask<double> LineBreakingSize(Canvas g, FlexItem item)
+        {
+            if (!_mainAxisIsPhysicalX) return item.HypotheticalMainSize;
+            var minimum = await AutomaticMinimumWidth(g, item.Box, item.MeasuredMainSize);
+            return minimum is { } floor ? Math.Max(item.HypotheticalMainSize, floor) : item.HypotheticalMainSize;
         }
 
         // ─── Phase 4: flexible length resolution ──────────────────────────────────
@@ -1139,22 +1153,33 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var item in line.Items)
             {
-                var box = item.Box;
-                if (!string.Equals(box.MinWidth, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
-                    || box.Overflow.Value != Css.Overflow.Visible
-                    || (overflows && ParseFloat(box.FlexShrink) <= 0))
-                    continue;
-                if (box.IsImage && box.Width.EndsWith('%')) continue;
+                if (overflows && ParseFloat(item.Box.FlexShrink) <= 0) continue;
 
-                var minimum = await CssLayoutEngine.GetMinContentWidth(g, box);
-                // A percentage width is definite against the line's own main size, so it caps the minimum like a length (§4.5).
-                if (CssValueParser.IsValidLength(box.Width))
-                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Width, container, box) + MainBoxSizeIncluded(box));
-                if (CssValueParser.IsValidLength(box.MaxWidth))
-                    minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxWidth, container, box) + MainBoxSizeIncluded(box));
-
-                RecordAutoMinimum(item, minimum, overflows);
+                if (await AutomaticMinimumWidth(g, item.Box, container) is { } minimum)
+                    RecordAutoMinimum(item, minimum, overflows);
             }
+        }
+
+        /// <summary>
+        /// The automatic minimum width (CSS Flexbox 1 §4.5) of a row item as an outer size, or null when it has none: its
+        /// <c>min-width</c> is not <c>auto</c>, it is a scroll container, or it is a replaced element with a percentage
+        /// width (compressible). The smaller of the specified size (a definite <c>width</c>; a percentage one resolves
+        /// against <paramref name="container"/>, the line's main size) and the content size suggestion (the min-content
+        /// width), less than the definite <c>max-width</c>.
+        /// </summary>
+        private async ValueTask<double?> AutomaticMinimumWidth(Canvas g, CssBox box, double container)
+        {
+            if (!string.Equals(box.MinWidth, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                || box.Overflow.Value != Css.Overflow.Visible)
+                return null;
+            if (box.IsImage && box.Width.EndsWith('%')) return null;
+
+            var minimum = await CssLayoutEngine.GetMinContentWidth(g, box);
+            if (CssValueParser.IsValidLength(box.Width))
+                minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Width, container, box) + MainBoxSizeIncluded(box));
+            if (CssValueParser.IsValidLength(box.MaxWidth))
+                minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxWidth, container, box) + MainBoxSizeIncluded(box));
+            return minimum;
         }
 
         /// <summary>

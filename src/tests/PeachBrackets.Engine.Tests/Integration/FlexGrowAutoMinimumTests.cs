@@ -221,5 +221,48 @@ namespace PeachBrackets.Engine.Tests.Integration
                 Assert.Equal(40, FindById(root, $"i{n}")!.ActualBoxSizingHeight, 1);
             }
         }
+
+        [Fact]
+        public async Task AFlexNoneItemWhoseChildrenHaveADefiniteWidthIsAsWideAsThatWidthNotItsText()
+        {
+            // The child is 100pt wide however long its text: the text wraps inside it, so the item (which cannot shrink) is 100pt.
+            var item = "<div style='flex:none'><div style='width:100pt;height:10pt'></div>"
+                + "<div style='width:100pt'>one two three four five six seven eight nine ten eleven</div></div>";
+            var (root, _) = await LayoutAsync(Wrap($"<div style='display:flex;width:420pt;font-size:12pt'>{item.Replace("<div style='flex:none'>", "<div id='a' style='flex:none'>")}{item.Replace("<div style='flex:none'>", "<div id='b' style='flex:none'>")}</div>"));
+
+            Assert.Equal(100, FindById(root, "a")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(100, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(100, FindById(root, "b")!.Location.X - FindById(root, "a")!.Location.X, 0.5);
+        }
+
+        [Fact]
+        public async Task AWrappingRowBreaksBeforeAnItemThatWouldBeRaisedPastTheLine()
+        {
+            // The third item's basis is 0, but its word cannot be narrower than about 140pt: with the first two it does not fit
+            // the 225pt line, so it starts the second line instead of squeezing the first item onto several lines.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-wrap:wrap;width:225pt;font-size:12pt'>"
+                + "<div id='a' style='flex:0 1 auto'>aa bb cc</div><div id='b' style='flex:0 0 60pt'>dd</div>"
+                + "<div id='c' style='flex:1 1 0'>Lwwwwwwwwwwwwwwwwwwwwwwww</div></div>"));
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+            var c = FindById(root, "c")!;
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 0.5);
+            Assert.True(c.Location.Y > a.Location.Y + 1, $"c starts a second line, a.Y={a.Location.Y} c.Y={c.Location.Y}");
+            Assert.True(a.ActualBoxSizingWidth > 40, $"a keeps its one-line width, was {a.ActualBoxSizingWidth}");
+            Assert.Equal(60, b.ActualBoxSizingWidth, 0.5);
+        }
+
+        [Fact]
+        public async Task AWrappingRowStillKeepsItemsTogetherWhenTheirMinimumsFit()
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-wrap:wrap;width:300pt;font-size:12pt'>"
+                + "<div id='a' style='flex:1 1 0'>aa</div><div id='b' style='flex:1 1 0'>bb</div><div id='c' style='flex:1 1 0'>cc</div></div>"));
+
+            Assert.Equal(FindById(root, "a")!.Location.Y, FindById(root, "c")!.Location.Y, 0.5);
+            Assert.Equal(100, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
+        }
     }
 }
