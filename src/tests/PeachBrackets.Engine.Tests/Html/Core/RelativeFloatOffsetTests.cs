@@ -40,6 +40,8 @@ namespace PeachBrackets.Engine.Tests.Html.Core
             return null;
         }
 
+        private static IEnumerable<CssRect> AllWords(CssBox box) => box.Words.Concat(box.Boxes.SelectMany(AllWords));
+
         private static async Task<CssBox> LayOutAsync(string body)
         {
             var html = $"<!DOCTYPE html><html><head><style>body {{ margin: 0; font: 13px Arial }}</style></head><body>{body}</body></html>";
@@ -109,6 +111,32 @@ namespace PeachBrackets.Engine.Tests.Html.Core
             var root = await LayOutAsync("<div><div id='f' style='float:left; position:relative; left:200px; width:60px; height:20px'>f</div><div id='g' style='float:left; width:40px; height:20px'>g</div></div>");
 
             Assert.Equal(45, FirstWord(Find(root, "g")!)!.Left, 0.5);
+        }
+
+        [Fact]
+        public async Task ALastChildRightFloat_IsOffsetBothWays()
+        {
+            // The #2230 sample: a float that is the only child of its container. Chromium: (346px, 5px) against (350px, 0) static.
+            var plain = await LayOutAsync("<div style='width:500px'><div id='f' style='float:right;width:150px;height:80px'>x</div></div>");
+            var moved = await LayOutAsync("<div style='width:500px'><div id='f' style='float:right;width:150px;height:80px;position:relative;top:5px;left:-4px'>x</div></div>");
+
+            var staticWord = FirstWord(Find(plain, "f")!)!;
+            var movedWord = FirstWord(Find(moved, "f")!)!;
+            Assert.Equal(staticWord.Left - 3, movedWord.Left, 0.5);
+            Assert.Equal(staticWord.Top + 3.75, movedWord.Top, 0.5);
+        }
+
+        [Fact]
+        public async Task TextAfterARelativeBoxHoldingAFloat_FlowsAgainstTheFloatsStaticPosition()
+        {
+            // The #2229 sample: the container is moved 20px down, the float inside it is 60px tall. Chromium: the first line is 191px wide, i.e. beside
+            // the float from the top of the line, so the text starts at the float's static top, not below its drawn top.
+            var root = await LayOutAsync("<div style='width:300px;position:relative;top:20px'><div style='float:right;width:100px;height:60px'></div></div><span id='t'>text that wraps beside the float and keeps going for a good while so that it needs more than one line to show</span>");
+
+            var first = FirstWord(Find(root, "t")!)!;
+            var firstLine = AllWords(Find(root, "t")!).Where(w => !w.IsSpaces && Math.Abs(w.Top - first.Top) < 1).ToList();
+            // The float is at 200px..300px, so the first line ends at 200px (150pt) rather than running to the page edge (Chromium: 191px of text).
+            Assert.True(firstLine.Max(w => w.Right) <= 150.5, $"the first line runs to {firstLine.Max(w => w.Right) / 0.75:0.#}px");
         }
 
         [Fact]

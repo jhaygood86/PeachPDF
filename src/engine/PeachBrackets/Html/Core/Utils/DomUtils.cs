@@ -1265,6 +1265,7 @@ namespace PeachBrackets.Html.Utils
                     ReferenceWidth = 0,
                     Right = coordinates.MaxRight,
                     LeftFloatsOnly = true,
+                    Reader = box,
                     SeekPastGap = Math.Abs(coordinates.CurrentX - coordinates.Line.ContentLeft) < 0.01
                 };
 
@@ -1275,7 +1276,7 @@ namespace PeachBrackets.Html.Utils
                     break;
                 }
 
-                left = intersectingFloat.FlowRightEdge + intersectingFloat.ActualMarginRight;
+                left = intersectingFloat.FlowRightEdgeIn(box) + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
             }
 
@@ -1483,6 +1484,7 @@ namespace PeachBrackets.Html.Utils
         {
             CssBox? narrowest = null;
             var narrowestLeft = double.PositiveInfinity;
+            var reader = reference;
 
             while (reference.ParentBox is not null)
             {
@@ -1507,7 +1509,7 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1516,7 +1518,7 @@ namespace PeachBrackets.Html.Utils
             return narrowest;
         }
 
-        private static void ScanForNarrowestRightFloatBox(CssBox box, double top, double lineLeft, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
+        private static void ScanForNarrowestRightFloatBox(CssBox box, CssBox reader, double top, double lineLeft, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
         {
             boxesVisited++;
 
@@ -1524,10 +1526,16 @@ namespace PeachBrackets.Html.Utils
             // reachable in a multi-column container, where the float sits in an earlier column but covers
             // the same block-axis rows as a line in a later one (css-multicol-1 §2: a float belongs to the
             // column box it appears in).
-            if (box.EffectiveFloatSide == Floating.Right && box.Location.Y <= top && top < box.ActualBottom
-                && box.ActualRight + box.ActualMarginRight > lineLeft)
+            // Where the float is in flow, in the frame of the line being laid out (CSS 2.1 section 9.4.3), not where it is drawn.
+            var delta = box.IsFloated ? box.FrameDeltaFor(reader) : default;
+            var flowX = box.FlowLeftEdge + delta.X;
+            var flowTop = box.FlowTopEdge + delta.Y;
+            var flowBottom = box.FlowBottomEdge + delta.Y;
+
+            if (box.EffectiveFloatSide == Floating.Right && flowTop <= top && top < flowBottom
+                && flowX + (box.ActualRight - box.Location.X) + box.ActualMarginRight > lineLeft)
             {
-                var left = box.Location.X - box.ActualMarginLeft;
+                var left = flowX - box.ActualMarginLeft;
 
                 if (left < narrowestLeft)
                 {
@@ -1538,7 +1546,7 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                ScanForNarrowestRightFloatBox(childBox, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                ScanForNarrowestRightFloatBox(childBox, reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
             }
         }
 
@@ -2069,10 +2077,12 @@ namespace PeachBrackets.Html.Utils
             }
             else if (box.IsFloated)
             {
-                // The line flow's lookup does not take the offsets of the boxes a float lies in (its callers measure against the border boxes as laid
-                // out), but a float's own offset is its own, and the text beside it goes by where it is in flow, not by where it is drawn.
-                offsetX += box.RelativeOffsetX;
-                offsetY += box.RelativeOffsetY;
+                // The line flow's lookup measures against the border boxes as laid out, in the frame of the lines it reads for: the text beside a float
+                // goes by where the float is in flow, not by where it is drawn, so its own offset comes off, and so do those of the boxes it lies in that the
+                // reader's lines do not (a float in a relatively positioned box before the reader is drawn with that box's offset, the reader's text is not).
+                var delta = coordinates.Reader is { } reader ? box.FrameDeltaFor(reader) : default;
+                offsetX += box.RelativeOffsetX - delta.X;
+                offsetY += box.RelativeOffsetY - delta.Y;
             }
 
             if (IsFloatIntersecting(coordinates, floatProp, box, offsetX, offsetY))

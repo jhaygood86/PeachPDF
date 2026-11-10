@@ -1016,10 +1016,10 @@ namespace PeachBrackets.Html.Dom
         /// the layout of anything around it, so in-flow consumers - a following sibling's static
         /// position, the parent's content-driven height/width - must back these out.
         /// </summary>
-        internal double RelativeOffsetX { get => _rare is null ? default(double) : _rare.RelativeOffsetX; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetX = value; } }
+        internal double RelativeOffsetX { get => _rare is null ? default(double) : _rare.RelativeOffsetX; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetX = value; if (value != 0) NoteRelativeOffset(); } }
 
         /// <inheritdoc cref="RelativeOffsetX"/>
-        internal double RelativeOffsetY { get => _rare is null ? default(double) : _rare.RelativeOffsetY; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetY = value; } }
+        internal double RelativeOffsetY { get => _rare is null ? default(double) : _rare.RelativeOffsetY; set { if (_rare is null) { if (EqualityComparer<double>.Default.Equals(value, default(double))) return; _rare = new BoxRareState(); } _rare.RelativeOffsetY = value; if (value != 0) NoteRelativeOffset(); } }
 
         /// <summary>
         /// The bottom edge of the box at its static (un-offset) position - what in-flow layout of

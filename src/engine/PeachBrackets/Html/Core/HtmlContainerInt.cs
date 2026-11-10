@@ -861,6 +861,9 @@ namespace PeachBrackets.Html
         /// </summary>
         internal bool HasFloatedBoxes { get; private set; }
 
+        /// <summary>Whether any box has been given a <c>position: relative</c> offset. Monotone: while false, the float lookups skip working out the offsets of the boxes a float lies in (CSS 2.1 §9.4.3).</summary>
+        internal bool HasRelativeOffsets { get; set; }
+
         /// <summary>
         /// How many float-intersection lookups (<see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>)
         /// layout made during the current <see cref="PerformLayout"/> call, counted before the

@@ -7762,6 +7762,47 @@ namespace PeachBrackets.Html.Dom
         internal double FlowRightEdge => ActualRight - RelativeOffsetX;
         internal double FlowBottomEdge => ActualBottom - RelativeOffsetY;
 
+        private void NoteRelativeOffset()
+        {
+            if (HtmlContainer is { } container) container.HasRelativeOffsets = true;
+        }
+
+        /// <summary>
+        /// How far this box and every box it lies in have been moved by relative positioning, which is how far a box drawn here is from where it is in flow.
+        /// </summary>
+        private (double X, double Y) RelativeChainOffset(bool includeSelf)
+        {
+            double x = 0, y = 0;
+
+            for (var current = includeSelf ? this : ParentBox; current is not null; current = current.ParentBox)
+            {
+                x += current.RelativeOffsetX;
+                y += current.RelativeOffsetY;
+            }
+
+            return (x, y);
+        }
+
+        /// <summary>
+        /// What to add to this float's <see cref="FlowLeftEdge"/>/<see cref="FlowTopEdge"/> (which take off its own offset) so that it is in the frame the lines of
+        /// <paramref name="reader"/> are laid out in: the float is drawn with the offsets of every box it lies in, the reader's lines with those of every box
+        /// the reader lies in, and the ones the two share cancel (CSS 2.1 §9.4.3: relative positioning is visual only, so text goes by where the float is in flow).
+        /// Zero while no box in the document is relatively positioned.
+        /// </summary>
+        internal (double X, double Y) FrameDeltaFor(CssBox reader)
+        {
+            if (reader.HtmlContainer is not { HasRelativeOffsets: true }) return (0, 0);
+
+            var above = RelativeChainOffset(includeSelf: false);
+            var readers = reader.RelativeChainOffset(includeSelf: true);
+            return (readers.X - above.X, readers.Y - above.Y);
+        }
+
+        internal double FlowLeftEdgeIn(CssBox reader) => FlowLeftEdge + FrameDeltaFor(reader).X;
+        internal double FlowRightEdgeIn(CssBox reader) => FlowRightEdge + FrameDeltaFor(reader).X;
+        internal double FlowTopEdgeIn(CssBox reader) => FlowTopEdge + FrameDeltaFor(reader).Y;
+        internal double FlowBottomEdgeIn(CssBox reader) => FlowBottomEdge + FrameDeltaFor(reader).Y;
+
 
         /// <summary>
         /// Moves a <c>position: relative</c> box by its <c>left</c>/<c>top</c>/<c>right</c>/<c>bottom</c> offsets from where it was placed in flow, and records
