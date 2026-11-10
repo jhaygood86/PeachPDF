@@ -108,6 +108,52 @@ public class ScanlineGoldenTests
         for (var i = 0; i < 400; i++)
             c.DrawPath(brush, Circle(c, 6 + i % 20 * 9.7, 5 + i / 20 * 5.3, 2.5 + i % 3));
     }));
+
+    private static RasterSurface ShapedSurface(int width, int height)
+    {
+        var surface = new RasterSurface(width, height, 0, 0, 1, 1);
+        for (var y = 0; y < height; y++)
+        {
+            var row = surface.Row(y);
+            for (var x = 0; x < width; x++)
+            {
+                var inside = (x - width / 2) * (x - width / 2) + (y - height / 2) * (y - height / 2) < (height / 3) * (height / 3) || (x / 7 + y / 5) % 5 == 0;
+                var a = inside ? 90 + (x * 5 + y * 3) % 166 : 0;
+                row[x * 4] = (byte)(a * (x % 13) / 12);
+                row[x * 4 + 1] = (byte)(a * (y % 7) / 6);
+                row[x * 4 + 2] = (byte)(a / 3);
+                row[x * 4 + 3] = (byte)a;
+            }
+        }
+
+        return surface;
+    }
+
+    [Theory]
+    [InlineData(8, 6, 3.0, 3.0, 0, 0, 0, 160, "DROPSHADOW_BLURRED")]
+    [InlineData(-5, 4, 0.0, 0.0, 30, 60, 120, 200, "DROPSHADOW_SHARP_OFFSET")]
+    [InlineData(0, 0, 6.0, 2.0, 200, 0, 0, 255, "DROPSHADOW_ANISOTROPIC_OPAQUE")]
+    public void DropShadow_IsByteIdentical(int dx, int dy, double sigmaX, double sigmaY, int r, int g, int b, int a, string name)
+    {
+        using var surface = ShapedSurface(83, 41);
+
+        PeachDrawing.Filters.DropShadow.Apply(surface, dx, dy, sigmaX, sigmaY, (byte)r, (byte)g, (byte)b, (byte)a);
+
+        var bytes = new byte[83 * 41 * 4];
+        for (var y = 0; y < 41; y++)
+            surface.Row(y)[..(83 * 4)].CopyTo(bytes.AsSpan(y * 83 * 4));
+        ScanlineGolden.Check(name, Convert.ToHexString(SHA256.HashData(bytes)));
+    }
+
+    [Fact]
+    public void TranslucentFillsThroughAClipMask_AreByteIdentical() => ScanlineGolden.Check("SCANLINE_TRANSLUCENT_CLIPPED", Render((c, _) =>
+    {
+        c.DrawRectangle(Solid(c, 255, 240, 240, 200), 0, 0, 203, 117);
+        c.PushClip(Circle(c, 100, 58, 50));
+        c.DrawRectangle(Solid(c, 128, 220, 60, 40), 2.5, 2.5, 198.3, 112);
+        c.DrawRectangle(Solid(c, 255, 20, 20, 120), 30, 30, 140.5, 10);
+        c.PopClip();
+    }));
 }
 
 /// <summary>The recorded hashes of <see cref="ScanlineGoldenTests"/>, by case name.</summary>
@@ -124,5 +170,9 @@ internal static class ScanlineGolden
         ["SCANLINE_MANY_SMALL"] = "6C64EAEAAEF75AAE8501D661E23A6071DE5BCC9B80C715A66F65D77CC27012EE",
         ["SCANLINE_PATHS"] = "856342211902E0BD0FC7B47E18F1A1ED5338EB84912D9FD209555EE7A8C028A8",
         ["SCANLINE_WIDE_RECTS"] = "E57C6E0A7722F71A4F1673773FB59CA4797EDC8C8FEB746DC3CE0C5F766EBD54",
+        ["DROPSHADOW_ANISOTROPIC_OPAQUE"] = "28BA8303D483836C330B521C68CE499B83E1963DE90BE4B409F0D759C0A94E32",
+        ["DROPSHADOW_BLURRED"] = "D223083848DE7F74E2C6B4C4D980973FA4636488686549FCC7DF5346A6CDDEFF",
+        ["DROPSHADOW_SHARP_OFFSET"] = "48274C4BA9290039F780B1BDD48A4CAB7AC9303ED81750CFBF64630919BE1790",
+        ["SCANLINE_TRANSLUCENT_CLIPPED"] = "9888C844B54A21B53B177F85D24DD36BDE4BDA81086C6270A57205C72333E0EF",
     };
 }

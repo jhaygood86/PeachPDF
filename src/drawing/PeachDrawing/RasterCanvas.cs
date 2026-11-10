@@ -526,14 +526,22 @@ public sealed partial class RasterCanvas : Canvas
         if (count <= 0)
             return;
 
-        var work = RentCoverageScratch(count);
-        coverage.Slice(start - x0, count).CopyTo(work);
+        // The pixel scratch grows with the coverage scratch, so it is asked for either way.
+        var scratch = RentCoverageScratch(count);
+        ReadOnlySpan<byte> work = coverage.Slice(start - x0, count);
 
-        if (clip.Mask is { } mask)
-            PixelKernels.MultiplyCoverage(work, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
+        // Coverage is only copied when a mask or the opacity has to change it; the rasterizer's own row is read as it is otherwise.
+        if (clip.Mask is not null || opacity < 255)
+        {
+            work.CopyTo(scratch);
+            if (clip.Mask is { } mask)
+                PixelKernels.MultiplyCoverage(scratch, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
 
-        if (opacity < 255)
-            PixelKernels.ScaleCoverage(work, opacity);
+            if (opacity < 255)
+                PixelKernels.ScaleCoverage(scratch, opacity);
+
+            work = scratch;
+        }
 
         var dst = _surface.Row(y).Slice(start * 4, count * 4);
 

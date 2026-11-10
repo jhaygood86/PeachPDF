@@ -35,6 +35,20 @@ internal static partial class PixelKernels
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(dst.Length, coverage.Length * 4);
 
+        if (BitConverter.IsLittleEndian && (color >> 24) == 255 && coverage.Length >= 2 * OpaqueRunMinimum)
+        {
+            BlendSolidWithOpaqueRuns(dst, coverage, color);
+            return;
+        }
+
+        BlendSolidKernels(dst, coverage, color);
+    }
+
+    /// <summary>Fewer fully covered pixels in a row than this are left to the blend kernels; a longer run is stored as it is.</summary>
+    private const int OpaqueRunMinimum = 16;
+
+    private static void BlendSolidKernels(Span<byte> dst, ReadOnlySpan<byte> coverage, uint color)
+    {
         var done = 0;
         if (System.Runtime.Intrinsics.X86.Avx2.IsSupported && coverage.Length >= 8)
             done = BlendSolidVector256(dst, coverage, color);
@@ -43,6 +57,35 @@ internal static partial class PixelKernels
             done = BlendSolidVector128(dst, coverage, color, done);
 
         BlendSolidScalar(dst, coverage, color, done);
+    }
+
+    /// <summary>
+    /// <see cref="BlendSolid"/> for an opaque colour: a pixel with full coverage becomes the colour exactly (the scalar form's own opaque store),
+    /// so the long runs of full coverage in the interior of a large fill are written with one fill, and the kernels see only the stretches between.
+    /// </summary>
+    private static void BlendSolidWithOpaqueRuns(Span<byte> dst, ReadOnlySpan<byte> coverage, uint color)
+    {
+        var pixels = MemoryMarshal.Cast<byte, uint>(dst);
+        var i = 0;
+        while (i < coverage.Length)
+        {
+            var rest = coverage.Slice(i);
+            var run = rest.IndexOfAnyExcept((byte)255);
+            if (run < 0)
+                run = rest.Length;
+
+            if (run >= OpaqueRunMinimum)
+            {
+                pixels.Slice(i, run).Fill(color);
+                i += run;
+                continue;
+            }
+
+            // Not a long run: hand the kernels a stretch of the row, and look for the next run after it.
+            var stretch = Math.Min(rest.Length, 32);
+            BlendSolidKernels(dst.Slice(i * 4, stretch * 4), rest.Slice(0, stretch), color);
+            i += stretch;
+        }
     }
 
     /// <summary>The scalar reference for <see cref="BlendSolid"/>, starting at pixel <paramref name="start"/>.</summary>
