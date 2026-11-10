@@ -386,6 +386,9 @@ async Task SaveStatesShowcaseAsync(string slug, string category, string cardTitl
 // Renders sourceHtml the same way a real caller would - GeneratePdf, then Save to a stream - without
 // writing anything to disk. This, not just GeneratePdf alone, is what --benchmark times/measures: PDF
 // serialization is a real, distinct cost a caller always pays, not an artifact of the showcase harness.
+// How long the last render spent in GeneratePdf (parse, layout, paint) and in Save (serialize, compress), for the benchmark report.
+double lastGenerateMs = 0, lastSaveMs = 0;
+
 async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
 {
     if (rasterBenchmark)
@@ -394,9 +397,13 @@ async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
         return;
     }
 
+    var started = Stopwatch.GetTimestamp();
     var document = await generator.GeneratePdf(sourceHtml, renderConfig);
+    var generated = Stopwatch.GetTimestamp();
     using var stream = new MemoryStream();
     document.Save(stream);
+    lastSaveMs = Stopwatch.GetElapsedTime(generated).TotalMilliseconds;
+    lastGenerateMs = Stopwatch.GetElapsedTime(started, generated).TotalMilliseconds;
 }
 
 async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateConfig renderConfig)
@@ -413,6 +420,9 @@ async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateCon
 
     var wallTimesMs = new double[benchmarkIterations];
     var allocatedBytes = new long[benchmarkIterations];
+    var gcPauseMs = new double[benchmarkIterations];
+    var gcCollections = new int[benchmarkIterations];
+    var saveMs = new double[benchmarkIterations];
 
     for (var i = 0; i < benchmarkIterations; i++)
     {
@@ -424,16 +434,21 @@ async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateCon
         // it also captures allocation on any thread-pool continuation the async render hops onto,
         // which a per-thread counter would miss.
         var before = GC.GetTotalAllocatedBytes(precise: true);
+        var pauseBefore = GC.GetTotalPauseDuration();
+        var collectionsBefore = GC.CollectionCount(0);
         var stopwatch = Stopwatch.StartNew();
         await RenderOnceAsync(sourceHtml, renderConfig);
         stopwatch.Stop();
         var after = GC.GetTotalAllocatedBytes(precise: true);
+        gcPauseMs[i] = (GC.GetTotalPauseDuration() - pauseBefore).TotalMilliseconds;
+        gcCollections[i] = GC.CollectionCount(0) - collectionsBefore;
+        saveMs[i] = lastSaveMs;
 
         wallTimesMs[i] = stopwatch.Elapsed.TotalMilliseconds;
         allocatedBytes[i] = after - before;
     }
 
-    benchmarkResults.Add(new BenchmarkResult(slug, wallTimesMs, allocatedBytes));
+    benchmarkResults.Add(new BenchmarkResult(slug, wallTimesMs, allocatedBytes, gcPauseMs, gcCollections, saveMs));
     Console.WriteLine($"Benchmarked {slug} ({benchmarkIterations} iterations)");
 }
 
@@ -441,12 +456,12 @@ void PrintBenchmarkReport()
 {
     Console.WriteLine();
     Console.WriteLine($"=== Benchmark report ({benchmarkResults.Count} showcases x {benchmarkIterations} iterations) ===");
-    Console.WriteLine($"{"Showcase",-40} {"Mean ms",10} {"Median ms",10} {"Mean KB",10} {"Median KB",10}");
+    Console.WriteLine($"{"Showcase",-40} {"Mean ms",10} {"Median ms",10} {"Mean KB",10} {"Median KB",10} {"GC ms",8} {"GCs",6} {"Save ms",8}");
 
     foreach (var result in benchmarkResults.OrderBy(r => r.Slug, StringComparer.Ordinal))
     {
         Console.WriteLine($"{result.Slug,-40} {result.MeanWallTimeMs,10:F2} {result.MedianWallTimeMs,10:F2} " +
-            $"{result.MeanAllocatedBytes / 1024.0,10:F1} {result.MedianAllocatedBytes / 1024.0,10:F1}");
+            $"{result.MeanAllocatedBytes / 1024.0,10:F1} {result.MedianAllocatedBytes / 1024.0,10:F1} {result.MeanGcPauseMs,8:F1} {result.MeanGcCollections,6:F1} {result.MeanSaveMs,8:F1}");
     }
 
     // Totals sum each showcase's own mean, rather than averaging per-iteration numbers across
@@ -482,7 +497,10 @@ void PrintBenchmarkReport()
                     meanMs = r.MeanWallTimeMs,
                     medianMs = r.MedianWallTimeMs,
                     meanBytes = r.MeanAllocatedBytes,
-                    medianBytes = r.MedianAllocatedBytes
+                    medianBytes = r.MedianAllocatedBytes,
+                    meanGcPauseMs = r.MeanGcPauseMs,
+                    meanGen0Collections = r.MeanGcCollections,
+                    meanSaveMs = r.MeanSaveMs
                 })
             },
             new JsonSerializerOptions { WriteIndented = true });
@@ -17057,8 +17075,11 @@ static class ShowcaseSourceKind
 }
 
 /// <summary>One showcase's --benchmark measurements: one wall-time (ms) and one allocated-bytes sample per iteration.</summary>
-record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes)
+record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes, double[] GcPauseMs, int[] GcCollections, double[] SaveMs)
 {
+    public double MeanSaveMs => SaveMs.Average();
+    public double MeanGcPauseMs => GcPauseMs.Average();
+    public double MeanGcCollections => GcCollections.Average();
     public double MeanWallTimeMs => WallTimesMs.Average();
     public double MedianWallTimeMs => Median(WallTimesMs);
     public double MeanAllocatedBytes => AllocatedBytes.Average(b => (double)b);
