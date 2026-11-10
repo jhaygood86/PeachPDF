@@ -35,8 +35,6 @@ jobs:
 
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
-      with:
-        include-net11: 'false'
 
     - name: Install the android workload
       run: dotnet workload install android

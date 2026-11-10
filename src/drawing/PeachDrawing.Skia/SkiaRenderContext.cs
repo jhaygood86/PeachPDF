@@ -212,11 +212,10 @@ public class SkiaRenderContext : RenderContext, IDisposable
             ? mimeType is not null && s_skiaTypes.Contains(mimeType.Trim())
             : base.SupportsImageType(mimeType);
 
-    private static readonly HashSet<string> s_skiaTypes = new(StringComparer.OrdinalIgnoreCase)
-    {
+    private static readonly HashSet<string> s_skiaTypes = [with(StringComparer.OrdinalIgnoreCase),
         "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/bmp", "image/x-ms-bmp",
         "image/x-icon", "image/vnd.microsoft.icon", "image/svg+xml"
-    };
+    ];
 
     /// <inheritdoc />
     protected override Core.Image ImageFromStreamInt(Stream memoryStream) =>

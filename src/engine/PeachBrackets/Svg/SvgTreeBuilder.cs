@@ -957,7 +957,7 @@ namespace PeachBrackets.Svg
         [
             "http://www.w3.org/1999/xhtml",
             "http://www.w3.org/2000/svg",
-        ];
+];
 
         /// <summary>
         /// Evaluates <c>systemLanguage</c>, <c>requiredExtensions</c> and <c>requiredFeatures</c> on <paramref name="node"/>.
@@ -1924,10 +1924,9 @@ namespace PeachBrackets.Svg
         }
 
         // The inherited length properties whose value can be written in a font-relative unit.
-        private static readonly HashSet<string> FontRelativeLengthProperties = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> FontRelativeLengthProperties = [with(StringComparer.OrdinalIgnoreCase),
             "letter-spacing", "word-spacing", "stroke-width", "stroke-dashoffset",
-        };
+        ];
 
         /// <summary>
         /// An inherited length is a computed length, fixed where it was declared: <c>2em</c> on a 12px ancestor is 24px for every element below it, not 2em of
@@ -2036,11 +2035,10 @@ namespace PeachBrackets.Svg
             : SvgPropertyRegistry.GetInitialValue(name);
 
         // The SVG properties that are inherited (css-properties.json, "inherited": true, beside the HTML ones in CssDefaults.InheritedProperties).
-        private static readonly HashSet<string> InheritedSvgProperties = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> InheritedSvgProperties = [with(StringComparer.OrdinalIgnoreCase),
             "fill", "stroke", "stroke-width", "stroke-miterlimit", "stroke-dashoffset", "stroke-dasharray", "fill-rule", "fill-opacity",
             "stroke-opacity", "stroke-linecap", "stroke-linejoin", "color",
-        };
+        ];
 
         private static bool IsInheritedProperty(string name) => InheritedSvgProperties.Contains(name) || CssDefaults.InheritedProperties.Contains(name);
 

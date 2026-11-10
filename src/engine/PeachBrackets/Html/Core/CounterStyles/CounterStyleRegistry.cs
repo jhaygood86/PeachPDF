@@ -15,11 +15,10 @@ namespace PeachBrackets.Html.CounterStyles
     internal sealed class CounterStyleRegistry
     {
         // The names §3 reserves: an @counter-style naming one is invalid and ignored.
-        private static readonly HashSet<string> ReservedNames = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> ReservedNames = [with(StringComparer.OrdinalIgnoreCase),
             "none", "decimal", "disc", "square", "circle", "disclosure-open", "disclosure-closed",
             "inherit", "initial", "unset", "revert", "revert-layer", "default",
-        };
+        ];
 
         private readonly Dictionary<string, CounterStyle> _styles;
 

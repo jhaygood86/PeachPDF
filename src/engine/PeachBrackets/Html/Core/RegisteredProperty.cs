@@ -113,10 +113,9 @@ namespace PeachBrackets.Html
             SyntaxMatches(Syntax, value, valueParser, forInitialValue: false);
 
         /// <summary>The single data types a registered property is mixed by (CSS Properties &amp; Values API §5.1.1); the rest are discrete.</summary>
-        private static readonly HashSet<string> InterpolableTypes = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> InterpolableTypes = [with(StringComparer.Ordinal),
             "<length>", "<number>", "<integer>", "<percentage>", "<length-percentage>", "<color>", "<angle>", "<transform-function>", "<transform-list>"
-        };
+        ];
 
         /// <summary>Whether any component of this property's <c>syntax</c> is a type that is mixed by interpolating, so an animation of it is not just a flip.</summary>
         public bool CanInterpolate
@@ -353,12 +352,11 @@ namespace PeachBrackets.Html
 
         /// <summary>The supported <c>syntax</c> component data types (CSS Properties &amp; Values API §3), plus
         /// <c>&lt;ratio&gt;</c> (a PeachPDF extension). A <c>syntax</c> naming any other <c>&lt;foo&gt;</c> is invalid.</summary>
-        private static readonly HashSet<string> KnownDataTypes = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> KnownDataTypes = [with(StringComparer.Ordinal),
             "<length>", "<number>", "<integer>", "<percentage>", "<length-percentage>", "<color>", "<angle>",
             "<ratio>", "<image>", "<url>", "<time>", "<resolution>", "<transform-function>", "<transform-list>",
             "<custom-ident>", "<string>"
-        };
+        ];
 
         /// <summary>
         /// Whether <paramref name="syntax"/> is a well-formed syntax string: every top-level <c>|</c> component

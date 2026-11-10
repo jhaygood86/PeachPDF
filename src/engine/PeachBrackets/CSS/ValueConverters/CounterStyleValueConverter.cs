@@ -16,10 +16,9 @@ namespace PeachBrackets.Css
     {
         // CSS-wide keywords can never be a custom ident, and inside/outside keep list-style's other
         // operand (list-style-position) from being claimed as a counter style name.
-        private static readonly HashSet<string> ReservedIdents = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> ReservedIdents = [with(StringComparer.OrdinalIgnoreCase),
             "inherit", "initial", "unset", "revert", "revert-layer", "default", "inside", "outside",
-        };
+        ];
 
         public IPropertyValue? Convert(IReadOnlyList<Token> value)
         {

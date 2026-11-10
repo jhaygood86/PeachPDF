@@ -3,8 +3,7 @@
 	<Import Project="..\..\ApiReference.props" />
 	<PropertyGroup>
 		<!-- Windows-only: Win2D is a Windows App SDK component. -->
-		<TargetFrameworks>net10.0-windows10.0.19041.0</TargetFrameworks>
-		<TargetFrameworks Condition="'$(ResolvedNETCoreSdkVersionLooksVersioned)' == 'true' AND $([MSBuild]::VersionGreaterThanOrEquals($(ResolvedNETCoreSdkVersion), '11.0.100'))">$(TargetFrameworks);net11.0-windows10.0.19041.0</TargetFrameworks>
+		<TargetFrameworks>net10.0-windows10.0.19041.0;net11.0-windows10.0.19041.0</TargetFrameworks>
 		<SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
 		<AssemblyName>PeachDrawing.Win2D</AssemblyName>
 		<RootNamespace>PeachDrawing.Win2D</RootNamespace>

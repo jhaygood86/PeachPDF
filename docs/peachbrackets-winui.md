@@ -9,7 +9,7 @@ otherwise write itself: it lays the document out for the control's width, paints
 dotnet add package PeachBrackets.WinUI
 ```
 
-It targets `net10.0-windows10.0.19041.0` (and `net11.0-windows10.0.19041.0` when built with the .NET 11 SDK) and uses the Windows App SDK.
+It targets `net10.0-windows10.0.19041.0` and `net11.0-windows10.0.19041.0` and uses the Windows App SDK.
 The application supplies the Win2D native binary by building for a platform (`x64`, `ARM64`).
 
 The package depends on only the parts of the Windows App SDK it compiles against (`Microsoft.WindowsAppSDK.WinUI`, `.Foundation`,

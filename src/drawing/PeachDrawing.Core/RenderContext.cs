@@ -215,11 +215,10 @@ namespace PeachDrawing.Core
             return new LinearGradientBrush(p1, p2, ToStops(stops), isRepeating ? GradientSpread.Repeat : GradientSpread.Pad);
         }
 
-        private static readonly HashSet<string> _defaultImageTypes = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> _defaultImageTypes = [with(StringComparer.OrdinalIgnoreCase),
             "image/png", "image/jpeg", "image/jpg", "image/pjpeg", "image/gif", "image/webp", "image/avif", "image/jxl",
             "image/bmp", "image/x-ms-bmp", "image/tiff", "image/svg+xml", "image/x-icon", "image/vnd.microsoft.icon"
-        };
+        ];
 
         /// <summary>
         /// Whether this context can decode an image of the media type <paramref name="mimeType"/> (<c>image/avif</c>), which a document

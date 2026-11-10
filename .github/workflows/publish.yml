@@ -20,20 +20,9 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
 
-    # A separate step because dotnet-quality applies to every entry in dotnet-version, and
-    # 10.0.x only has GA builds; net11.0 is still pre-GA (RC), which setup-dotnet
-    # classifies as "preview" quality. Drop this step (and the dotnet-quality knob) once
-    # .NET 11 ships its GA SDK. global.json's rollForward "latestMajor"/allowPrerelease
-    # automatically promotes to this SDK once it's installed, so the pack step below produces a
-    # nupkg containing net11.0 output alongside net10.0 with no further wiring needed (see
-    # src/Directory.Build.props for how net11.0 opts in per resolved SDK).
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
 
     - name: Read package version
       id: version
@@ -170,6 +159,7 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
 
     - name: Install the android workload
@@ -210,13 +200,8 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
-
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
 
     - name: Read package version
       id: version
@@ -254,6 +239,7 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
 
     - name: Install the macos and ios workloads
@@ -295,6 +281,7 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
 
     - name: Install the macos and ios workloads
@@ -337,13 +324,8 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: |
+          11.0.x
           10.0.x
-
-    - name: Setup .NET 11 (RC)
-      uses: actions/setup-dotnet@v4
-      with:
-        dotnet-version: 11.0.x
-        dotnet-quality: 'preview'
 
     - name: Read package version
       id: version

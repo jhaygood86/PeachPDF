@@ -19,13 +19,12 @@ internal sealed class PdfTagBinding
     /// <summary>What the recorder is told about one marked-content sequence.</summary>
     internal sealed record Binding(object Key, string Type, string? AltText, IReadOnlyList<(object Key, string Type)> Ancestors);
 
-    static readonly HashSet<string> StandardTypes = new(StringComparer.Ordinal)
-    {
+    static readonly HashSet<string> StandardTypes = [with(StringComparer.Ordinal),
         "Document", "DocumentFragment", "Part", "Art", "Sect", "Div", "Aside", "BlockQuote", "Caption", "TOC", "TOCI", "Index", "NonStruct", "Private",
         "Title", "H", "H1", "H2", "H3", "H4", "H5", "H6", "P", "L", "LI", "Lbl", "LBody", "Table", "TR", "TH", "TD", "THead", "TBody", "TFoot",
         "Span", "Quote", "Note", "FENote", "Reference", "BibEntry", "Code", "Link", "Annot", "Ruby", "RB", "RT", "RP", "Warichu", "WT", "WP",
         "Figure", "Formula", "Form", "Em", "Strong", "Sub",
-    };
+    ];
 
     readonly PdfSourceDocument _doc;
     readonly object _stamp = new();

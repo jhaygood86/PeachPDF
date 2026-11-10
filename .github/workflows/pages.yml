@@ -30,6 +30,7 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
+            11.0.x
             10.0.x
 
       - name: Read package version into site data

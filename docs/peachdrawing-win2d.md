@@ -10,7 +10,7 @@ It is usable with **no PeachPDF reference at all**, and is versioned in lockstep
 dotnet add package PeachDrawing.Win2D
 ```
 
-It targets `net10.0-windows10.0.19041.0` (and `net11.0-windows10.0.19041.0` when built with the .NET 11 SDK) and uses Win2D 1.4, the Windows
+It targets `net10.0-windows10.0.19041.0` and `net11.0-windows10.0.19041.0` and uses Win2D 1.4, the Windows
 App SDK flavour. The application that uses it supplies the Win2D native binary by building for a platform (`x64`, `ARM64`) or publishing
 with a runtime identifier, as for any Win2D app.
 
