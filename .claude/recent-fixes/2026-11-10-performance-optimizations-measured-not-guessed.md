@@ -44,3 +44,30 @@ baseline taken before the edit. The tooling that made that possible is in the tr
   query for individual effects has nothing to answer until a fourth effect exists, so none was added. SVG filter primitives beyond
   blur/shadow/color matrix, `preserve-3d` warps and flattening still run on the CPU `RasterCanvas`; Skia's retained layers rasterize
   on the CPU on purpose (a GPU render target hung an Android emulator frame, see `SkiaRetainedLayer`).
+
+## Later findings (second pass)
+
+Landed: vector image masks (`DrawImageMasked`/`DrawImageAlphaMasked` 13-16 -> 2.5-2.9 ms), radial gradient positions four at a time (about 20%),
+font table tags compared as integers (8% less allocation in the scan).
+
+Measured and left alone:
+- **Parallel scan of installed fonts.** 2.4x faster warm (12.5 -> 5.2 ms for 342 files) and identical results, but a process scans once and in a
+  fresh process JIT and discovery dominate: cold-start did not move (44-55 ms). The Native AOT CLI, with no JIT, is where it could pay; an AOT publish
+  could not be linked from this shell (`vswhere` not on the path), so it was not measured.
+- **Glyph path memoization.** Does not appear in a profile of text-heavy raster renders, and caching flattened paths could not be byte-identical
+  (flattening happens after the translation, so the last bits differ).
+- **CMYK output conversion** (2.3 ms for 1024x768): only the PDF/X-1a path.
+- **Parallel stream compression and PDF writer allocations:** Save is 5-17% of a render.
+- **CSS lexer, hyphenation, `TextTransformer`, paragraph analysis fast paths:** none shows in a profile of stylesheet-heavy showcases; the cascade (about
+  19%) and paint are where the time is. Paragraph analysis over a whole page is about 2% of a render.
+- **Embedding a large RGBA PNG:** about 51% of the render is `PeachImage`'s `PngAlphaSplit`, in a separate package; the BMP round trip in `ReadBgraBitmap`
+  is not on that path at all.
+
+## The biggest lead found, not taken
+
+In `box_shadow` (and any document with raster fallbacks: blurred shadows, filters, backdrop filters, flattened transparency) `PdfCanvas.DrawRaster` is
+about 41% of the render, of which `RasterEmbedding.ToXImage` is 32%: the surface is unpremultiplied and PNG-encoded (24%), then `PdfRasterImage.FromStream`
+reads that PNG back (13%) to pass its IDAT through and to split, inflate and re-deflate the alpha plane. The blur itself is 13.5%. Embedding the pixels
+directly (or building the RGB and alpha streams without the PNG round trip) would avoid most of it, but it changes the compressed bytes of every raster-fallback
+image in the PDF, so it cannot be verified by byte equality: it needs a pixel-exact comparison of rasterized pages (PDFium and MuPDF) and a look at the
+size change.
