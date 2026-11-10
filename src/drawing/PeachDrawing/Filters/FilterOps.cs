@@ -254,11 +254,22 @@ public static partial class FilterOps
         var pr = result.Pixels;
 
         var done = 0;
-        if (Vector128.IsHardwareAccelerated && IsVectorSafe(k1, k2, k3, k4))
-            done = ArithmeticVector128(pa, pb, pr, k1, k2, k3, k4);
+        if (IsVectorSafe(k1, k2, k3, k4))
+        {
+            if (Vector256.IsHardwareAccelerated)
+                done = ArithmeticVector256(pa, pb, pr, k1, k2, k3, k4);
+            else if (Vector128.IsHardwareAccelerated)
+                done = ArithmeticVector128(pa, pb, pr, k1, k2, k3, k4);
+        }
 
+        ArithmeticScalar(pa, pb, pr, k1, k2, k3, k4, done);
+    }
+
+    /// <summary>The scalar reference for <see cref="Arithmetic"/>, from byte <paramref name="start"/> (a multiple of four).</summary>
+    internal static void ArithmeticScalar(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4, int start = 0)
+    {
         Span<double> values = stackalloc double[4];
-        for (var i = done; i + 3 < pa.Length; i += 4)
+        for (var i = start; i + 3 < pa.Length; i += 4)
         {
             for (var c = 0; c < 4; c++)
             {
@@ -275,7 +286,7 @@ public static partial class FilterOps
         }
     }
 
-    private static bool IsVectorSafe(double k1, double k2, double k3, double k4) =>
+    internal static bool IsVectorSafe(double k1, double k2, double k3, double k4) =>
         Math.Abs(k1) <= 1e6 && Math.Abs(k2) <= 1e6 && Math.Abs(k3) <= 1e6 && Math.Abs(k4) <= 1e6;
 
     /// <summary>Two of a pixel's channels (<paramref name="first"/> and the next) as doubles in 0-1, one per lane.</summary>
@@ -297,7 +308,7 @@ public static partial class FilterOps
     /// <see cref="Arithmetic"/> for every whole pixel, one pixel's four channels as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same multiplies and
     /// additions in the same order, so the bytes are the scalar loop's. Returns how many bytes it handled.
     /// </summary>
-    private static int ArithmeticVector128(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4)
+    internal static int ArithmeticVector128(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4)
     {
         var vk1 = Vector128.Create(k1);
         var vk2 = Vector128.Create(k2);

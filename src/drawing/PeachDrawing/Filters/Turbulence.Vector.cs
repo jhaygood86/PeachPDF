@@ -13,7 +13,7 @@ public sealed partial class Turbulence
     /// 128-bit vectors (channels 0-1 and 2-3; SSE2 on x64, NEON on ARM64) - the same multiplies, subtractions and additions, in the same order, on
     /// the same doubles, one lane per channel - so the values, and the bytes written, are the reference's.
     /// </summary>
-    private void RenderVector(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
+    internal void RenderVector128(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
         int octaves, bool fractalSum, bool stitching, double tileX, double tileY, double tileWidth, double tileHeight)
     {
         // What Sample works out for every call: the frequencies snapped to the tile, and where the lattice wraps.

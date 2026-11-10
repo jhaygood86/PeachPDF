@@ -10,7 +10,7 @@ namespace PeachDrawing;
 /// Produces the source colour for each pixel of a fill or stroke: a constant, a gradient, or a bitmap.
 /// Pixels are premultiplied RGBA8, evaluated at pixel centres.
 /// </summary>
-internal abstract class PaintSource
+internal abstract partial class PaintSource
 {
     /// <summary>True when every pixel has the same colour, so callers can use the cheaper solid kernels.</summary>
     public virtual bool IsSolid => false;
@@ -376,7 +376,7 @@ internal abstract class PaintSource
         }
     }
 
-    private sealed class RadialPaint : PaintSource
+    internal sealed partial class RadialPaint : PaintSource
     {
         private readonly Affine _deviceToUser;
         private readonly Stops _stops;
@@ -440,62 +440,82 @@ internal abstract class PaintSource
         public override void FillSpan(int x0, int y, int count, Span<byte> destination)
         {
             var i = 0;
-            if (Vector128.IsHardwareAccelerated && _focalRadius == 0 && count >= 4)
+            if (_focalRadius == 0 && count >= 4)
             {
-                // Four pixels at a time, as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same double-precision multiplies, adds, divisions and
-                // square root as the loop below, one pixel per lane (each is correctly rounded, so a lane holds what the scalar code computes); the
-                // position along the gradient is then finished, wrapped and looked up one pixel at a time exactly as below.
-                var m = _deviceToUser;
-                var yc = y + 0.5;
-                var yTermX = Vector128.Create(yc * m.M21);
-                var yTermY = Vector128.Create(yc * m.M22);
-                var m11 = Vector128.Create(m.M11);
-                var m12 = Vector128.Create(m.M12);
-                var offsetX = Vector128.Create(m.OffsetX);
-                var offsetY = Vector128.Create(m.OffsetY);
-                var cx = Vector128.Create(_cx);
-                var cy = Vector128.Create(_cy);
-                var rx = Vector128.Create(_rx);
-                var ry = Vector128.Create(_ry);
-                var fx = Vector128.Create(_fx);
-                var fy = Vector128.Create(_fy);
-                var a = Vector128.Create(_a);
-                var lanes = Vector128.Create(0.0, 1.0);
+                if (Vector256.IsHardwareAccelerated)
+                    i = FillSpanVector256(x0, y, count, destination);
+                else if (Vector128.IsHardwareAccelerated)
+                    i = FillSpanVector128(x0, y, count, destination);
+            }
 
-                Vector128<double> Position(Vector128<double> x)
+            FillSpanScalar(x0, y, count, destination, i);
+        }
+
+        /// <summary>
+        /// Four pixels at a time, as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same double-precision multiplies, adds, divisions and square root as
+        /// <see cref="FillSpanScalar"/>, one pixel per lane (each is correctly rounded, so a lane holds what the scalar code computes); the position along the
+        /// gradient is then finished, wrapped and looked up one pixel at a time exactly as there. Returns how many pixels it handled (the caller does the rest);
+        /// only for a gradient with no focal radius.
+        /// </summary>
+        internal int FillSpanVector128(int x0, int y, int count, Span<byte> destination)
+        {
+            var i = 0;
+            var m = _deviceToUser;
+            var yc = y + 0.5;
+            var yTermX = Vector128.Create(yc * m.M21);
+            var yTermY = Vector128.Create(yc * m.M22);
+            var m11 = Vector128.Create(m.M11);
+            var m12 = Vector128.Create(m.M12);
+            var offsetX = Vector128.Create(m.OffsetX);
+            var offsetY = Vector128.Create(m.OffsetY);
+            var cx = Vector128.Create(_cx);
+            var cy = Vector128.Create(_cy);
+            var rx = Vector128.Create(_rx);
+            var ry = Vector128.Create(_ry);
+            var fx = Vector128.Create(_fx);
+            var fy = Vector128.Create(_fy);
+            var a = Vector128.Create(_a);
+            var lanes = Vector128.Create(0.0, 1.0);
+
+            Vector128<double> Position(Vector128<double> x)
+            {
+                var ux = x * m11 + yTermX + offsetX;
+                var uy = x * m12 + yTermY + offsetY;
+                var px = (ux - cx) / rx;
+                var py = (uy - cy) / ry;
+                var qx = px - fx;
+                var qy = py - fy;
+                var qf = qx * fx + qy * fy;
+                var q2 = qx * qx + qy * qy;
+                return (qf + Vector128.Sqrt(qf * qf + a * q2)) / a;
+            }
+
+            for (; i + 4 <= count; i += 4)
+            {
+                var x = Vector128.Create((double)(x0 + i) + 0.5) + lanes;
+                var tLow = Position(x);
+                var tHigh = Position(x + Vector128.Create(2.0));
+
+                for (var k = 0; k < 4; k++)
                 {
-                    var ux = x * m11 + yTermX + offsetX;
-                    var uy = x * m12 + yTermY + offsetY;
-                    var px = (ux - cx) / rx;
-                    var py = (uy - cy) / ry;
-                    var qx = px - fx;
-                    var qy = py - fy;
-                    var qf = qx * fx + qy * fy;
-                    var q2 = qx * qx + qy * qy;
-                    return (qf + Vector128.Sqrt(qf * qf + a * q2)) / a;
-                }
+                    var t = (float)(k < 2 ? tLow.GetElement(k) : tHigh.GetElement(k - 2));
+                    if (_innerRatio > 0)
+                        t = (float)((t - _innerRatio) / (1 - _innerRatio));
 
-                for (; i + 4 <= count; i += 4)
-                {
-                    var x = Vector128.Create((double)(x0 + i) + 0.5) + lanes;
-                    var tLow = Position(x);
-                    var tHigh = Position(x + Vector128.Create(2.0));
+                    if (_repeating)
+                        t = _stops.Wrap(t);
 
-                    for (var k = 0; k < 4; k++)
-                    {
-                        var t = (float)(k < 2 ? tLow.GetElement(k) : tHigh.GetElement(k - 2));
-                        if (_innerRatio > 0)
-                            t = (float)((t - _innerRatio) / (1 - _innerRatio));
-
-                        if (_repeating)
-                            t = _stops.Wrap(t);
-
-                        Write(destination, i + k, _stops.At(t));
-                    }
+                    Write(destination, i + k, _stops.At(t));
                 }
             }
 
-            for (; i < count; i++)
+            return i;
+        }
+
+        /// <summary>The per-pixel reference for <see cref="FillSpan"/>, from pixel <paramref name="start"/>.</summary>
+        internal void FillSpanScalar(int x0, int y, int count, Span<byte> destination, int start = 0)
+        {
+            for (var i = start; i < count; i++)
             {
                 var (ux, uy) = _deviceToUser.Apply(x0 + i + 0.5, y + 0.5);
                 var px = (ux - _cx) / _rx;

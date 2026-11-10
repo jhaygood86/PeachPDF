@@ -94,3 +94,14 @@ effect natively on the kept texture). Not landed, deliberately, with the reasons
 - **`DrawImageProjected` for `preserve-3d`:** needs perspective in each backend's image drawing; not verifiable without the GPUs.
 - **Van Herk morphology, a downsampled-image cache, conic gradient vectorization:** feMorphology at large radii is rare, a repeated strongly shrunk image saves
   about a millisecond per repeat, and conic needs `Atan2`, which has no bit-exact vector form.
+
+## 256-bit kernels and the ARM64 macOS coverage gate
+
+`Vector256.IsHardwareAccelerated` is false on ARM64, so a kernel written only with `Vector256<double>` runs the scalar code on Apple Silicon (and on any Arm
+machine), and the macOS CI leg, which is ARM64, never executes it: the diff-coverage gate measured `Turbulence.Vector.cs` at 0% there and failed the PR at 78%. The
+rule now: every double-precision kernel has a 128-bit form (SSE2 on x64, NEON on ARM64; `*.Vector.cs` or inline) and, where it pays, a 256-bit form in its own
+`*.Vector256.cs` file; production dispatches 256 -> 128 -> scalar by `IsHardwareAccelerated`; tests call each form directly against the scalar reference
+(`DoubleKernelVariantTests`) and the 256-bit tests skip where 256-bit vectors are not accelerated; and the macOS leg of the diff-coverage gate passes
+`--exclude '*.Vector256.cs'` (`.github/workflows/test.yml`), so Windows and Linux gate the 256-bit files and macOS gates the 128-bit ones. On x64 the 256-bit form is
+worth keeping: turbulence 27.5 ms against 34.1 ms for the 128-bit form, arithmetic 6.6 against 7.8 ms; the radial gradient is the same either way (the stop lookup,
+not the arithmetic, dominates).

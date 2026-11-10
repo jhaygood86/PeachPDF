@@ -220,9 +220,15 @@ public sealed partial class Turbulence
     public void Render(RasterSurface surface, double pixelsPerUserX, double pixelsPerUserY, double baseFrequencyX, double baseFrequencyY,
         int octaves, bool fractalSum, bool stitching, double tileX, double tileY, double tileWidth, double tileHeight)
     {
+        if (Vector256.IsHardwareAccelerated)
+        {
+            RenderVector256(surface, pixelsPerUserX, pixelsPerUserY, baseFrequencyX, baseFrequencyY, octaves, fractalSum, stitching, tileX, tileY, tileWidth, tileHeight);
+            return;
+        }
+
         if (Vector128.IsHardwareAccelerated)
         {
-            RenderVector(surface, pixelsPerUserX, pixelsPerUserY, baseFrequencyX, baseFrequencyY, octaves, fractalSum, stitching, tileX, tileY, tileWidth, tileHeight);
+            RenderVector128(surface, pixelsPerUserX, pixelsPerUserY, baseFrequencyX, baseFrequencyY, octaves, fractalSum, stitching, tileX, tileY, tileWidth, tileHeight);
             return;
         }
 
