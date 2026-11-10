@@ -323,6 +323,11 @@ namespace PeachPDF.Tests.Integration
             { "footer only, tall row in the middle", TranslucentSpanningTable("collapse", TranslucentFoot, [40, 600, 40], "top", "CW1") },
             { "header only, content taller than a page", TranslucentSpanningTable("separate", TranslucentHead, [40, 40], "top", "<div style='height:900px'>CW1</div>") },
             { "header only, tall row first", TranslucentSpanningTable("separate", TranslucentHead, [500, 20], "middle", "CW1") },
+            { "header only, tall row first, bottom-aligned", TranslucentSpanningTable("separate", TranslucentHead, [500, 20], "bottom", "CW1 CW2") },
+            { "header only, content taller than a page beside short rows", TranslucentSpanningTable("separate", TranslucentHead, [40, 40, 40], "top", "<div style='height:900px'>CW1</div> CW2") },
+
+            // Collapsed borders put a row's top on a half pixel, where two parts of the fill meet.
+            { "collapsed, header only, tall row second", TranslucentSpanningTable("collapse", TranslucentHead, [40, 600, 40], "top", "CW1") },
         };
 
         /// <summary>
@@ -359,10 +364,30 @@ namespace PeachPDF.Tests.Integration
                     {
                         Assert.True(Rect.Intersect(fills[i], fills[j]) is { Width: < 0.01 } or { Height: < 0.01 },
                             $"{layout}, page {page + 1}: the cell's fill is drawn twice over {Rect.Intersect(fills[i], fills[j])}");
+
+                        // Where two parts meet, they meet on a pixel boundary, or each paints half of that pixel and a
+                        // translucent fill shows a darker line there.
+                        foreach (var (upper, lower) in new[] { (fills[i], fills[j]), (fills[j], fills[i]) })
+                        {
+                            if (Math.Abs(upper.Bottom - lower.Top) > 0.01) continue;
+
+                            var pixels = upper.Bottom / (72d / 96d);
+                            Assert.True(Math.Abs(pixels - Math.Round(pixels)) < 0.01,
+                                $"{layout}, page {page + 1}: two parts of the cell's fill meet at {upper.Bottom}pt, inside a pixel");
+                        }
                     }
                 }
 
                 Assert.DoesNotContain(fills, fill => labels.Exists(label => !Rect.Intersect(fill, label).IsEmpty));
+
+                // Nor is its text drawn under the repeated group. Except a bottom-aligned cell's text under a repeated footer:
+                // since #1950 it is aligned within the remainder of the band its row begins in, which runs under the footer,
+                // on main as here (#2313).
+                var cellText = graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString && op.Text!.StartsWith("CW")).Select(op => op.Bounds);
+                var groupLabels = layout == "bottom-aligned, tall row last"
+                    ? graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString && op.Text is "HEAD1").Select(op => op.Bounds).ToList()
+                    : labels;
+                Assert.DoesNotContain(cellText, text => groupLabels.Exists(label => Rect.Intersect(text, label) is { Width: > 0.01, Height: > 0.01 }));
             }
 
             Assert.Equal(PaintedWordsOf(html), words.Order());

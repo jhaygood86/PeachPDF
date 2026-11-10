@@ -2300,8 +2300,17 @@ namespace PeachBrackets.Html.Fragmentation
         /// <summary>The rowspan cell whose decoration alone is being built: its content is not walked.</summary>
         private CssBox? _decorationOnly;
 
+        /// <summary>
+        /// Content built in this walk for rowspan cells whose decoration is built in parts, by the row group whose rows
+        /// they span: each joins that group's children after its rows, so it paints over every part of the decoration.
+        /// </summary>
+        private readonly Dictionary<CssBox, List<Draft>> _rowSpanningCellContentThisWalk = new(ReferenceEqualityComparer.Instance);
+
         private void ClearRowSpanningCellsThisWalk()
         {
+            // Content is queued only while its row group is being walked, which always ends by taking it.
+            System.Diagnostics.Debug.Assert(_rowSpanningCellContentThisWalk.Count == 0, "rowspan cell content left unplaced by a walk");
+            _rowSpanningCellContentThisWalk.Clear();
             _rowSpanningCellsThisWalk.Clear();
             _rowSpanningCellStripsThisWalk.Clear();
             _rowSpanningCellSlicedThisWalk.Clear();
@@ -2352,13 +2361,16 @@ namespace PeachBrackets.Html.Fragmentation
 
             var sliced = SlicedIn(cell, spanned, slot);
 
-            if (sliced.Length == 0)
+            // Building in parts moves the content out from under the cell's own row (see below), so a row whose effects
+            // reach its cells - opacity, a transform, a filter, a blend, a relative offset - keeps the cell whole beneath it.
+            if (sliced.Length == 0 || cell.ParentBox is not { } ownRowBox || KeepsItsCellsWhole(ownRowBox))
             {
-                if (!_rowSpanningCellsThisWalk.Add(key)) return;
+                if (_rowSpanningCellsThisWalk.Contains(key)) return;
 
                 if (BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
                         displacement, fixedOffset) is { } whole)
                 {
+                    _rowSpanningCellsThisWalk.Add(key);
                     children.Add(whole);
                 }
 
@@ -2375,7 +2387,21 @@ namespace PeachBrackets.Html.Fragmentation
                         own, fixedOffset) is { } content)
                 {
                     content.DropDecoration();
-                    children.Add(content);
+
+                    // The content paints over the cell's decoration, which the rows after this one may still be about to
+                    // build: it joins the row group's children once all its rows have been built, so it follows every
+                    // strip. Measured as the cell's own fill drawn over its text. It leaves its row's paint for its group's,
+                    // which is the same paint wherever the row has no effect of its own (KeepsItsCellsWhole).
+                    if (cell.ParentBox?.ParentBox is { } group)
+                    {
+                        if (!_rowSpanningCellContentThisWalk.TryGetValue(group, out var pending))
+                            _rowSpanningCellContentThisWalk[group] = pending = [];
+                        pending.Add(content);
+                    }
+                    else
+                    {
+                        children.Add(content);
+                    }
                 }
             }
 
@@ -2408,6 +2434,8 @@ namespace PeachBrackets.Html.Fragmentation
 
             if (strip is not { Band: var band } || band.Bottom <= region.Top || band.Top >= region.Bottom) return;
 
+            strip = strip.Value with { Band = SnapSharedEdges(band, rows, first, last, region, slot) };
+
             _decorationOnly = cell;
 
             try
@@ -2425,6 +2453,49 @@ namespace PeachBrackets.Html.Fragmentation
                 _decorationOnly = null;
             }
         }
+
+        /// <summary>
+        /// <paramref name="band"/>, the clip of the decoration strip beside rows <paramref name="first"/> to
+        /// <paramref name="last"/>, with each edge it shares with the strip of the row before or after it on this page moved to
+        /// the nearest CSS pixel.
+        /// </summary>
+        /// <remarks>
+        /// Two strips meet where a row starts, which can fall halfway across a pixel. Each then paints its half of that pixel,
+        /// and a translucent fill composited twice there shows as a darker line (measured in collapsed tables, where a row's
+        /// half of a collapsed border puts its top on a half pixel). Both strips round the same edge the same way, so they meet
+        /// on a CSS pixel boundary instead, counted from the page's top: a device pixel at 96 dpi with whole-pixel margins, and
+        /// never a gap or an overlap at any resolution. An edge against anything else - the repeated group, the page - is left
+        /// where it is.
+        /// </remarks>
+        private Rect SnapSharedEdges(Rect band, CssBox[] rows, int first, int last, FragmentRegion region, Slot slot)
+        {
+            const double Epsilon = 0.01;
+
+            var top = band.Top;
+            var bottom = band.Bottom;
+
+            if (first > 0 && Math.Abs(top - rows[first].Location.Y) < Epsilon && OnThisSlot(rows[first - 1]))
+                top = Snapped(top);
+
+            if (last + 1 < rows.Length && Math.Abs(bottom - rows[last + 1].Location.Y) < Epsilon && OnThisSlot(rows[last + 1]))
+                bottom = Snapped(bottom);
+
+            return new Rect(band.X, top, band.Width, bottom - top);
+
+            bool OnThisSlot(CssBox row) =>
+                DisplacementIn(row, slot.Index) is not null
+                || (row.Location.Y >= region.Top - Epsilon && row.Location.Y < region.Bottom - Epsilon);
+
+            double Snapped(double y) =>
+                slot.LocalOriginY + Math.Round((y - slot.LocalOriginY) / Length.PointsPerPx) * Length.PointsPerPx;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="row"/> paints its cells as part of an effect of its own: a stacking context (opacity, a
+        /// transform, a filter, a blend...) or a relative offset. Its rowspan cell's content then stays beneath it.
+        /// </summary>
+        private static bool KeepsItsCellsWhole(CssBox row) =>
+            DomUtils.IsStackingContextBox(row) || row.Position.Value != PositionMode.Static;
 
         /// <summary>The rows <paramref name="cell"/> spans, found once.</summary>
         private SpannedRows RowsSpannedBy(CssBox cell)
@@ -3451,6 +3522,10 @@ namespace PeachBrackets.Html.Fragmentation
                         children.Add(childDraft);
                 }
             }
+
+            // The content of the rowspan cells among this group's rows, built in parts, after every row (AddRowSpanningCell).
+            if (_rowSpanningCellContentThisWalk.Count > 0 && _rowSpanningCellContentThisWalk.Remove(box, out var spanningContent))
+                children.AddRange(spanningContent);
 
             // A box with no per-line rectangles still needs its bounds tested somewhere, and the draft has to
             // exist for that test to be run at all. Only its *current* bounds are available here, which is
