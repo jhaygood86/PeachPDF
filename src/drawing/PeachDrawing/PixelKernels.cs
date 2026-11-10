@@ -22,13 +22,13 @@ internal static partial class PixelKernels
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int Div255(int x) => (x + 128 + ((x + 128) >> 8)) >> 8;
 
-    /// <summary>Packs a premultiplied colour into the little-endian byte order R, G, B, A.</summary>
+    /// <summary>Packs a premultiplied color into the little-endian byte order R, G, B, A.</summary>
     public static uint Pack(byte r, byte g, byte b, byte a) => (uint)(r | (g << 8) | (b << 16) | (a << 24));
 
-    // ---- BlendSolid: source-over of one constant premultiplied colour, scaled by per-pixel coverage ---------
+    // ---- BlendSolid: source-over of one constant premultiplied color, scaled by per-pixel coverage ---------
 
     /// <summary>
-    /// Composites the constant premultiplied colour <paramref name="color"/> (see <see cref="Pack"/>) over
+    /// Composites the constant premultiplied color <paramref name="color"/> (see <see cref="Pack"/>) over
     /// <paramref name="dst"/> (RGBA, premultiplied), each pixel weighted by its 0-255 <paramref name="coverage"/>.
     /// </summary>
     public static void BlendSolid(Span<byte> dst, ReadOnlySpan<byte> coverage, uint color)
@@ -60,7 +60,7 @@ internal static partial class PixelKernels
     }
 
     /// <summary>
-    /// <see cref="BlendSolid"/> for an opaque colour: a pixel with full coverage becomes the colour exactly (the scalar form's own opaque store),
+    /// <see cref="BlendSolid"/> for an opaque color: a pixel with full coverage becomes the color exactly (the scalar form's own opaque store),
     /// so the long runs of full coverage in the interior of a large fill are written with one fill, and the kernels see only the stretches between.
     /// </summary>
     private static void BlendSolidWithOpaqueRuns(Span<byte> dst, ReadOnlySpan<byte> coverage, uint color)
@@ -166,7 +166,7 @@ internal static partial class PixelKernels
         return pixelCount;
     }
 
-    // ---- BlendSpan: source-over of a per-pixel premultiplied colour, scaled by per-pixel coverage ---------
+    // ---- BlendSpan: source-over of a per-pixel premultiplied color, scaled by per-pixel coverage ---------
 
     /// <summary>
     /// Composites <paramref name="src"/> (RGBA, premultiplied, one pixel per coverage entry) over

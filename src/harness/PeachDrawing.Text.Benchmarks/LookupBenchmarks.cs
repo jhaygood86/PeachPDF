@@ -79,7 +79,7 @@ public class ParagraphBenchmarks
 {
     private string _text = "";
 
-    /// <summary>The text analysed.</summary>
+    /// <summary>The text analyzed.</summary>
     [Params(Corpora.Ascii, Corpora.Latin, Corpora.Mixed)]
     public string Corpus { get; set; } = "";
 

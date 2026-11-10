@@ -8,7 +8,7 @@ namespace PeachDrawing.Benchmarks;
 
 /// <summary>
 /// The raster filter kernels on a 1024x768 surface of non-trivial content: the Gaussian blur at a small and a large sigma, the drop shadow, a
-/// colour matrix, morphology at a small and a large radius, and feTurbulence. Each in-place filter works on a fresh copy of the source so the
+/// color matrix, morphology at a small and a large radius, and feTurbulence. Each in-place filter works on a fresh copy of the source so the
 /// content it sees does not drift from one invocation to the next (the copy is part of the measured time and is the same for every build).
 /// </summary>
 [MemoryDiagnoser]
@@ -83,7 +83,7 @@ public class FilterBenchmarks
         DropShadow.Apply(_work, 8, 8, 6, 6, 0, 0, 0, 160);
     }
 
-    /// <summary>A grayscale colour matrix applied in place.</summary>
+    /// <summary>A grayscale color matrix applied in place.</summary>
     [Benchmark]
     public void ColorMatrixGray()
     {

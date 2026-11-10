@@ -1,7 +1,7 @@
 namespace PeachDrawing.Tests;
 
 /// <summary>
-/// <see cref="PixelKernels.BlendSolid"/> stores long runs of full coverage of an opaque colour with one fill; the result has to be the scalar
+/// <see cref="PixelKernels.BlendSolid"/> stores long runs of full coverage of an opaque color with one fill; the result has to be the scalar
 /// reference's, byte for byte, for every length and for every way a row can alternate between runs and partial coverage.
 /// </summary>
 public class BlendSolidOpaqueRunTests
@@ -65,7 +65,7 @@ public class BlendSolidOpaqueRunTests
     }
 
     [Fact]
-    public void BlendSolid_WithAFullyCoveredRowOfAnOpaqueColour_StoresTheColourEverywhere()
+    public void BlendSolid_WithAFullyCoveredRowOfAnOpaqueColor_StoresTheColorEverywhere()
     {
         var coverage = new byte[1000];
         Array.Fill(coverage, (byte)255);

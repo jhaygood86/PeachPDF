@@ -63,7 +63,7 @@ dotnet run -c Release --project harness/PeachDrawing.Text.Benchmarks -- --filter
 dotnet run -c Release --project harness/PeachDrawing.Text.Benchmarks -- --filter "*HintingHot*"
 ```
 
-The same project also times the per-character lookups and whole-paragraph analysis the layout engine makes (`*Lookup*`: glyph mapping, script and bidi class; `*Paragraph*`: bidi analysis, line-break opportunities, grapheme and word boundaries, each over ASCII, typographic Latin and mixed-script text), and `-- --cold-start` prints the first-use cost of the system-font scan and each Unicode table in a fresh process, which a steady-state benchmark hides. `src/harness/PeachDrawing.Benchmarks` does the same for the CPU rasterizer, again through the public API only: `*Fill*` covers solid, gradient, path, clipped and image fills, and `*Filter*` covers blur, shadow, colour matrix, morphology and turbulence.
+The same project also times the per-character lookups and whole-paragraph analysis the layout engine makes (`*Lookup*`: glyph mapping, script and bidi class; `*Paragraph*`: bidi analysis, line-break opportunities, grapheme and word boundaries, each over ASCII, typographic Latin and mixed-script text), and `-- --cold-start` prints the first-use cost of the system-font scan and each Unicode table in a fresh process, which a steady-state benchmark hides. `src/harness/PeachDrawing.Benchmarks` does the same for the CPU rasterizer, again through the public API only: `*Fill*` covers solid, gradient, path, clipped and image fills, and `*Filter*` covers blur, shadow, color matrix, morphology and turbulence.
 
 ```
 dotnet run -c Release --project harness/PeachDrawing.Benchmarks -- --filter "*Fill*"
