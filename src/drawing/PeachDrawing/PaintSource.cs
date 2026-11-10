@@ -87,6 +87,10 @@ internal abstract class PaintSource
         private readonly float[] _positions;
         private readonly float[] _r, _g, _b, _a;
 
+        // What interpolating between stop i and stop i + 1 needs that does not depend on the position: the same floats the interpolation would
+        // compute for every pixel (premultiplied start, and the premultiplied difference to the end), worked out once.
+        private readonly float[] _span, _da, _pr0, _dpr, _pg0, _dpg, _pb0, _dpb;
+
         public Stops(System.Collections.Generic.IReadOnlyList<GradientStop> stops)
         {
             var n = stops.Count;
@@ -106,6 +110,29 @@ internal abstract class PaintSource
                 _g[i] = cg;
                 _b[i] = cb;
                 _a[i] = stops[i].PaintColor.A / 255f;
+            }
+
+            var segments = Math.Max(n - 1, 0);
+            _span = new float[segments];
+            _da = new float[segments];
+            _pr0 = new float[segments];
+            _dpr = new float[segments];
+            _pg0 = new float[segments];
+            _dpg = new float[segments];
+            _pb0 = new float[segments];
+            _dpb = new float[segments];
+            for (var i = 0; i < segments; i++)
+            {
+                var a0 = _a[i];
+                var a1 = _a[i + 1];
+                _span[i] = _positions[i + 1] - _positions[i];
+                _da[i] = a1 - a0;
+                _pr0[i] = _r[i] * a0;
+                _dpr[i] = _r[i + 1] * a1 - _pr0[i];
+                _pg0[i] = _g[i] * a0;
+                _dpg[i] = _g[i + 1] * a1 - _pg0[i];
+                _pb0[i] = _b[i] * a0;
+                _dpb[i] = _b[i + 1] * a1 - _pb0[i];
             }
         }
 
@@ -127,9 +154,39 @@ internal abstract class PaintSource
             while (i < n - 1 && _positions[i] < t)
                 i++;
 
-            var span = _positions[i] - _positions[i - 1];
-            var f = span > 0 ? (t - _positions[i - 1]) / span : 1f;
-            return Pack(i - 1, f, i);
+            var seg = i - 1;
+            var span = _span[seg];
+            var f = span > 0 ? (t - _positions[seg]) / span : 1f;
+            return Interpolate(seg, f);
+        }
+
+        /// <summary>
+        /// The premultiplied color a fraction <paramref name="f"/> of the way from stop <paramref name="seg"/> to the next, interpolated
+        /// premultiplied as CSS Images 3 §3.5.1 requires: the arithmetic of <see cref="Pack"/> with the segment's constants taken from the tables.
+        /// </summary>
+        private uint Interpolate(int seg, float f)
+        {
+            var a = _a[seg] + _da[seg] * f;
+            var pr = _pr0[seg] + _dpr[seg] * f;
+            var pg = _pg0[seg] + _dpg[seg] * f;
+            var pb = _pb0[seg] + _dpb[seg] * f;
+            float r, g, b;
+            if (a == 1f)
+            {
+                // Dividing by exactly one changes nothing, so an opaque stretch skips the three divisions.
+                r = pr; g = pg; b = pb;
+            }
+            else if (a > 0)
+            {
+                r = pr / a; g = pg / a; b = pb / a;
+            }
+            else
+            {
+                r = g = b = 0;
+            }
+
+            Premultiply(r, g, b, a, out var qr, out var qg, out var qb, out var qa);
+            return PixelKernels.Pack(qr, qg, qb, qa);
         }
 
         private uint Pack(int i, float f, int j = -1)
