@@ -111,10 +111,13 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
             int index = value >> 8;
             var page = System.Threading.Volatile.Read(ref pages[index]) ?? BuildPage(pages, index);
-            return page is null ? -1 : page[value & 0xFF];
+            return ReferenceEquals(page, FailedPage) ? -1 : page[value & 0xFF];
         }
 
-        private ushort[]? BuildPage(ushort[]?[] pages, int index)
+        /// <summary>Stands in for a page that could not be built, so a malformed font is not asked to build it again for every lookup on that page.</summary>
+        private static readonly ushort[] FailedPage = new ushort[1];
+
+        private ushort[] BuildPage(ushort[]?[] pages, int index)
         {
             try
             {
@@ -128,7 +131,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             }
             catch (Exception)
             {
-                return null;
+                System.Threading.Volatile.Write(ref pages[index], FailedPage);
+                return FailedPage;
             }
         }
 

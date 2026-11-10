@@ -217,11 +217,16 @@ internal sealed class BitmapPaint : PaintSource
         var fullBlocksY = source.Height / factor;
         var fullCount = (float)(factor * factor);
 
+        // The single-precision division is exact only while a block's sum is below 2^24 and the quotient stays farther from the next whole number than the
+        // rounding error: at a factor of 128 the sum is at most 4.2 million and that gap is at least 1 / 16384, against an error under 2e-5. Past it (a
+        // 130-fold or greater reduction, which is not a draw anyone makes on purpose) the integer loop below does the averaging.
+        var vectorBlocks = Vector128.IsHardwareAccelerated && factor <= 128;
+
         for (var y = 0; y < h; y++)
         {
             for (var x = 0; x < w; x++)
             {
-                if (Vector128.IsHardwareAccelerated && x < fullBlocksX && y < fullBlocksY)
+                if (vectorBlocks && x < fullBlocksX && y < fullBlocksY)
                 {
                     // A block entirely inside the source: sum its pixels' channels together, then divide as the loop below does,
                     // (sum + n / 2) / n rounded down. A single-precision quotient of whole numbers this small never lands on the wrong side of
