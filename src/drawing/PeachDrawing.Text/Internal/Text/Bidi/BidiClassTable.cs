@@ -33,6 +33,9 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
         /// </summary>
         public static BidiClass Of(int codepoint)
         {
+            if ((uint)codepoint < DirectLimit)
+                return Direct.Value[codepoint];
+
             var runs = Runs.Value;
             if (runs.Length == 0)
                 return BidiClass.L;
@@ -52,6 +55,28 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
         }
 
         public static BidiClass Of(System.Text.Rune rune) => Of(rune.Value);
+
+        /// <summary>The code points below this are answered from <see cref="Direct"/>, an array indexed by code point, instead of the binary search.</summary>
+        private const int DirectLimit = 0x2100;
+
+        private static readonly Lazy<BidiClass[]> Direct = new(BuildDirect);
+
+        /// <summary>The binary search's answer for every code point below <see cref="DirectLimit"/>, worked out in one sweep over the runs.</summary>
+        private static BidiClass[] BuildDirect()
+        {
+            var table = new BidiClass[DirectLimit];
+            Array.Fill(table, BidiClass.L);
+            foreach (var run in Runs.Value)
+            {
+                if (run.Start >= DirectLimit)
+                    break;
+
+                for (var cp = Math.Max(run.Start, 0); cp <= Math.Min(run.End, DirectLimit - 1); cp++)
+                    table[cp] = run.Class;
+            }
+
+            return table;
+        }
 
         private static Run[] LoadRuns()
         {
