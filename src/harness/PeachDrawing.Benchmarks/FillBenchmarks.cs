@@ -122,6 +122,14 @@ public class FillBenchmarks
     [Benchmark]
     public void ImageSlightlyEnlarged() => _canvas.DrawImage(_photo, new Rect(-3.4, -2.7, 1707.3, 1280.9));
 
+    /// <summary>A 1600x1200 image through a luminance mask of its own size (CSS <c>mask-image</c> with a luminance mask).</summary>
+    [Benchmark]
+    public void ImageLuminanceMasked() => _canvas.DrawImageMasked(_photo, _photo, new Rect(0, 0, 1600, 1200));
+
+    /// <summary>A 1600x1200 image through an alpha mask of its own size.</summary>
+    [Benchmark]
+    public void ImageAlphaMasked() => _canvas.DrawImageAlphaMasked(_photo, _photo, new Rect(0, 0, 1600, 1200));
+
     /// <summary>A 1600x1200 image shrunk to a thumbnail.</summary>
     [Benchmark]
     public void ImageShrunk() => _canvas.DrawImage(_photo, new Rect(0, 0, 320, 240));

@@ -116,6 +116,14 @@ public class FilterBenchmarks
     public void TurbulenceFractal() =>
         new Turbulence(1).Render(_result, 1, 1, 0.02, 0.02, 4, fractalSum: true, stitching: false, 0, 0, Width, Height);
 
+    /// <summary>The raw CMYK bytes of the surface (the PDF/X-1a image path), with the ordinary black.</summary>
+    [Benchmark]
+    public int CmykPixels() => RasterSurfaceEncoding.ToCmykPixels(_source, richBlack: false).Length;
+
+    /// <summary>The same with the rich black generation neutral pixels get.</summary>
+    [Benchmark]
+    public int CmykPixelsRichBlack() => RasterSurfaceEncoding.ToCmykPixels(_source, richBlack: true).Length;
+
     /// <summary>Arithmetic compositing of two surfaces.</summary>
     [Benchmark]
     public void ArithmeticComposite() => FilterOps.Arithmetic(_source, _source, _result, 0, 0.5, 0.5, 0);
