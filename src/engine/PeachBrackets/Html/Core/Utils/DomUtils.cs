@@ -1093,6 +1093,13 @@ namespace PeachBrackets.Html.Utils
         /// </remarks>
         internal static double GetLowestEarlierFloatTop(CssBox reference)
         {
+            // Inside a multi-column container a Y is measured from the top of its own column, so only the floats of the column the one being placed is in
+            // can be compared with it; one in another column must not hold this one down.
+            // A container holding nothing but floats lays them out in its first column with no fragmentainer, so they all have no column and are
+            // compared with each other.
+            var columnScoped = ClimbReachesMultiColumnContainer(reference);
+            var column = columnScoped ? reference.HtmlContainer?.CurrentFragmentainer?.ColumnKey : null;
+
             var lowest = double.NegativeInfinity;
             var isStartingLevel = true;
 
@@ -1105,20 +1112,17 @@ namespace PeachBrackets.Html.Utils
             {
                 if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) break;
 
-                // Inside a multi-column container a Y is measured from the top of its own column, so the tops of floats in different
-                // columns are not comparable and an earlier column's float must not hold this one down. A block that spans columns has
-                // the same trouble, so what was found below this level is dropped too. After the formatting-context stop above: a root
-                // of its own directly inside the container has its own coordinates, and what was found inside it stands.
-                if (parent.EstablishesMultiColumnContext) return double.NegativeInfinity;
-
                 isStartingLevel = false;
 
                 var index = parent.IndexOfChild(reference);
 
                 for (var i = 0; i < index; i++)
                 {
-                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], -frameOffsetY));
+                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], -frameOffsetY, columnScoped, column));
                 }
+
+                // The container is a formatting context of its own: what lies outside it does not hold a float inside it down.
+                if (parent.EstablishesMultiColumnContext) break;
 
                 frameOffsetY += parent.RelativeOffsetY;
             }
@@ -1126,16 +1130,39 @@ namespace PeachBrackets.Html.Utils
             return lowest;
         }
 
+        /// <summary>Whether the climb of <see cref="GetLowestEarlierFloatTop"/> reaches a multi-column container before it leaves the formatting context.</summary>
+        private static bool ClimbReachesMultiColumnContainer(CssBox reference)
+        {
+            var isStartingLevel = true;
+
+            for (; reference.ParentBox is { } parent; reference = parent)
+            {
+                if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) return false;
+                if (parent.EstablishesMultiColumnContext) return true;
+
+                isStartingLevel = false;
+            }
+
+            return false;
+        }
+
         /// <param name="box">The box to look in.</param>
         /// <param name="offsetAbove">How far the boxes between <paramref name="box"/> and the earlier sibling the search started from have been moved by relative positioning.</param>
-        private static double LowestFloatTopIn(CssBox box, double offsetAbove)
+        /// <param name="columnScoped">Whether only the floats placed in <paramref name="column"/> count (a multi-column container's floats of other columns are not comparable).</param>
+        /// <param name="column">The column the float being placed is in, or null when it is in none.</param>
+        private static double LowestFloatTopIn(CssBox box, double offsetAbove, bool columnScoped, Fragmentation.ColumnAreaKey? column)
         {
             // The static position: a relative offset moves where a float is drawn, not where later floats go (CSS 2.1 §9.4.3). The offset of
             // every box the float lies in has moved it too, since a box's contents are moved along with it.
             var offset = offsetAbove + box.RelativeOffsetY;
 
             // A float is a formatting context of its own, so its contents are not looked into, but it counts itself.
-            if (box.IsFloated) return box.Location.Y - offset - box.ActualMarginTop;
+            if (box.IsFloated)
+            {
+                if (columnScoped && box.HtmlContainer?.ColumnOfFloat(box) != column) return double.NegativeInfinity;
+
+                return box.Location.Y - offset - box.ActualMarginTop;
+            }
 
             if (EstablishesIndependentFormattingContext(box)) return double.NegativeInfinity;
 
@@ -1143,7 +1170,7 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var child in box.Boxes)
             {
-                lowest = Math.Max(lowest, LowestFloatTopIn(child, offset));
+                lowest = Math.Max(lowest, LowestFloatTopIn(child, offset, columnScoped, column));
             }
 
             return lowest;

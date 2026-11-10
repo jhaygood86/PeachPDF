@@ -1,3 +1,0 @@
-# CSS 2.1 §9.5.1 rule 5 is not applied to floats inside a multi-column container
-
-`DomUtils.GetLowestEarlierFloatTop` (a float may not start above an earlier float's top) returns nothing once its climb reaches a multi-column container, because a `Y` inside one is measured from the top of its own column and floats of different columns cannot be compared. So a third float that fits beside the first at the top of a column is placed there although the second was pushed down: Chrome has it beside the second (tracking issue #2225). A float outside a multi-column container, and one in a block formatting context of its own inside it, is not affected. It needs the earlier floats of the same column only.

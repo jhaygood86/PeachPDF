@@ -2748,6 +2748,7 @@ namespace PeachBrackets.Html.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
+                    box.HtmlContainer?.NoteFloatColumn(box);
                     startY = NotAboveAnEarlierFloat(box, startY);
 
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);

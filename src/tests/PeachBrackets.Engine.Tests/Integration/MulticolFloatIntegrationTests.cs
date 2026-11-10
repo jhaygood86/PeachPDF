@@ -53,6 +53,48 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AFloatInAColumn_IsNotPlacedAboveAnEarlierFloatOfThatColumn()
+        {
+            // CSS 2.1 section 9.5.1 rule 5 (#2225). The second float does not fit beside the first and goes below it; the third is narrow enough to
+            // fit beside the first at the top, but may not start above the second's top, so Chrome puts it beside the second.
+            var (root, _) = await BuildAndLayout(@"
+                <div id='mc' style='columns:2; column-gap:10px; width:400px; height:300px; column-fill:auto'>
+                    <div id='f1' style='float:left; width:150px; height:40px'></div>
+                    <div id='f2' style='float:left; width:100px; height:40px'></div>
+                    <div id='f3' style='float:left; width:30px; height:40px'></div>
+                </div>");
+
+            var f2 = FindById(root, "f2")!;
+            var f3 = FindById(root, "f3")!;
+
+            Assert.True(f2.Location.Y > FindById(root, "f1")!.Location.Y);
+            Assert.Equal(f2.Location.Y, f3.Location.Y, 2);
+            Assert.Equal(f2.ActualRight, f3.Location.X, 2);
+        }
+
+        [Fact]
+        public async Task AFloatInASecondColumn_IsNotHeldDownByAFloatNearTheFootOfTheFirst()
+        {
+            // The tops of floats in different columns are not comparable (a Y is measured from the column's own top): the float after the second
+            // paragraph sits at the top of its column's flow, not below where the first float is in the first column.
+            var (root, _) = await BuildAndLayout(@"
+                <div id='mc' style='columns:2; column-gap:10px; width:400px; height:100px; column-fill:auto'>
+                    <div style='height:70px'></div>
+                    <div id='f1' style='float:left; width:100px; height:20px'></div>
+                    <div id='p2' style='height:40px; break-before:column'></div>
+                    <div id='f2' style='float:left; width:100px; height:20px'></div>
+                </div>");
+
+            var mc = FindById(root, "mc")!;
+            var f1 = FindById(root, "f1")!;
+            var f2 = FindById(root, "f2")!;
+
+            Assert.True(f1.Location.Y - mc.Location.Y >= 52, "the first float is near the foot of the first column");
+            Assert.True(f2.Location.X > f1.Location.X + 150, "the second float is in the second column");
+            Assert.True(f2.Location.Y - mc.Location.Y < 52, $"the second float is {f2.Location.Y - mc.Location.Y}pt down, held below the first column's float");
+        }
+
+        [Fact]
         public async Task ContainerHoldingOnlyFloats_ContainsThem()
         {
             // css-multicol-1 §2 makes the container an independent formatting context, so its auto height
