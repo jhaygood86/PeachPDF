@@ -18,17 +18,20 @@ namespace PeachDrawing.Core
                 switch (effect)
                 {
                     case BlurEffect blur:
-                        x += 3 * Math.Max(0, blur.SigmaX);
-                        y += 3 * Math.Max(0, blur.SigmaY);
+                        x += 3 * NonNegative(blur.SigmaX);
+                        y += 3 * NonNegative(blur.SigmaY);
                         break;
                     case DropShadowEffect shadow:
-                        x += Math.Abs(shadow.OffsetX) + 3 * Math.Max(0, shadow.SigmaX);
-                        y += Math.Abs(shadow.OffsetY) + 3 * Math.Max(0, shadow.SigmaY);
+                        x += NonNegative(Math.Abs(shadow.OffsetX)) + 3 * NonNegative(shadow.SigmaX);
+                        y += NonNegative(Math.Abs(shadow.OffsetY)) + 3 * NonNegative(shadow.SigmaY);
                         break;
                 }
             }
 
             return (x, y);
         }
+
+        /// <summary>The value, or zero when it is negative or not a number (so a bad deviation cannot make the region NaN).</summary>
+        private static double NonNegative(double value) => value > 0 ? value : 0;
     }
 }

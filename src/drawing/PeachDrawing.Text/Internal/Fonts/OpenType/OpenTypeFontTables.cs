@@ -109,6 +109,10 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 pages = _pages;
             }
 
+            // Only the Basic Multilingual Plane has pages; anything else (a negative value included) is left to the caller's own search.
+            if ((uint)value > 0xFFFF)
+                return -1;
+
             int index = value >> 8;
             var page = System.Threading.Volatile.Read(ref pages[index]) ?? BuildPage(pages, index);
             return ReferenceEquals(page, FailedPage) ? -1 : page[value & 0xFF];
