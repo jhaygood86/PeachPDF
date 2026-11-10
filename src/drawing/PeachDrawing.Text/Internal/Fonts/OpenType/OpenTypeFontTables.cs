@@ -93,6 +93,77 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             Read();
         }
 
+        private ushort[]?[]? _pages;
+
+        /// <summary>
+        /// The glyph for a Basic Multilingual Plane codepoint, answered from a table of 256-codepoint pages that fills in as codepoints are asked
+        /// about (text uses a few pages of a font, over and over), or -1 when the page cannot be built - a malformed font - and the caller has to
+        /// do the lookup itself, as it always did, so that the font fails where it always failed.
+        /// </summary>
+        internal int LookupCached(int value)
+        {
+            var pages = _pages;
+            if (pages is null)
+            {
+                System.Threading.Interlocked.CompareExchange(ref _pages, new ushort[]?[256], null);
+                pages = _pages;
+            }
+
+            // Only the Basic Multilingual Plane has pages; anything else (a negative value included) is left to the caller's own search.
+            if ((uint)value > 0xFFFF)
+                return -1;
+
+            int index = value >> 8;
+            var page = System.Threading.Volatile.Read(ref pages[index]) ?? BuildPage(pages, index);
+            return ReferenceEquals(page, FailedPage) ? -1 : page[value & 0xFF];
+        }
+
+        /// <summary>Stands in for a page that could not be built, so a malformed font is not asked to build it again for every lookup on that page.</summary>
+        private static readonly ushort[] FailedPage = new ushort[1];
+
+        private ushort[] BuildPage(ushort[]?[] pages, int index)
+        {
+            try
+            {
+                var page = new ushort[256];
+                for (int i = 0; i < page.Length; i++)
+                    page[i] = (ushort)Resolve(index << 8 | i);
+
+                // A page is published only once it is complete.
+                System.Threading.Volatile.Write(ref pages[index], page);
+                return page;
+            }
+            catch (Exception)
+            {
+                System.Threading.Volatile.Write(ref pages[index], FailedPage);
+                return FailedPage;
+            }
+        }
+
+        /// <summary>The format-4 lookup itself: the first segment that ends at or after the codepoint, and what that segment maps it to.</summary>
+        private int Resolve(int value)
+        {
+            int segCount = segCountX2 / 2;
+            int seg;
+            for (seg = 0; seg < segCount; seg++)
+            {
+                if (value <= endCount[seg])
+                    break;
+            }
+
+            if (value < startCount[seg])
+                return 0;
+
+            if (idRangeOffs[seg] == 0)
+                return (value + idDelta[seg]) & 0xFFFF;
+
+            int idx = idRangeOffs[seg] / 2 + (value - startCount[seg]) - (segCount - seg);
+            if (glyphIdArray[idx] == 0)
+                return 0;
+
+            return (glyphIdArray[idx] + idDelta[seg]) & 0xFFFF;
+        }
+
         internal void Read()
         {
             try

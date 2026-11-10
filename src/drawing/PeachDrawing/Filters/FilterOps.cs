@@ -1,6 +1,7 @@
 using PeachDrawing.Core;
 using System;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 
 namespace PeachDrawing.Filters;
 
@@ -251,8 +252,24 @@ public static partial class FilterOps
         var pa = a.Pixels;
         var pb = b.Pixels;
         var pr = result.Pixels;
+
+        var done = 0;
+        if (IsVectorSafe(k1, k2, k3, k4))
+        {
+            if (Vector256.IsHardwareAccelerated)
+                done = ArithmeticVector256(pa, pb, pr, k1, k2, k3, k4);
+            else if (Vector128.IsHardwareAccelerated)
+                done = ArithmeticVector128(pa, pb, pr, k1, k2, k3, k4);
+        }
+
+        ArithmeticScalar(pa, pb, pr, k1, k2, k3, k4, done);
+    }
+
+    /// <summary>The scalar reference for <see cref="Arithmetic"/>, from byte <paramref name="start"/> (a multiple of four).</summary>
+    internal static void ArithmeticScalar(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4, int start = 0)
+    {
         Span<double> values = stackalloc double[4];
-        for (var i = 0; i + 3 < pa.Length; i += 4)
+        for (var i = start; i + 3 < pa.Length; i += 4)
         {
             for (var c = 0; c < 4; c++)
             {
@@ -267,6 +284,67 @@ public static partial class FilterOps
             for (var c = 0; c < 4; c++)
                 pr[i + c] = (byte)Math.Round(values[c] * 255.0);
         }
+    }
+
+    internal static bool IsVectorSafe(double k1, double k2, double k3, double k4) =>
+        Math.Abs(k1) <= 1e6 && Math.Abs(k2) <= 1e6 && Math.Abs(k3) <= 1e6 && Math.Abs(k4) <= 1e6;
+
+    /// <summary>Two of a pixel's channels (<paramref name="first"/> and the next) as doubles in 0-1, one per lane.</summary>
+    private static Vector128<double> ChannelsToUnit(ReadOnlySpan<byte> pixels, int first) =>
+        Vector128.Create(ByteOverTwoFiftyFive[pixels[first]], ByteOverTwoFiftyFive[pixels[first + 1]]);
+
+    /// <summary><c>i / 255.0</c> for every byte: the same doubles the division gives, looked up rather than divided for.</summary>
+    private static readonly double[] ByteOverTwoFiftyFive = BuildByteOverTwoFiftyFive();
+
+    private static double[] BuildByteOverTwoFiftyFive()
+    {
+        var table = new double[256];
+        for (var i = 0; i < table.Length; i++)
+            table[i] = i / 255.0;
+        return table;
+    }
+
+    /// <summary>
+    /// <see cref="Arithmetic"/> for every whole pixel, one pixel's four channels as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same multiplies and
+    /// additions in the same order, so the bytes are the scalar loop's. Returns how many bytes it handled.
+    /// </summary>
+    internal static int ArithmeticVector128(ReadOnlySpan<byte> pa, ReadOnlySpan<byte> pb, Span<byte> pr, double k1, double k2, double k3, double k4)
+    {
+        var vk1 = Vector128.Create(k1);
+        var vk2 = Vector128.Create(k2);
+        var vk3 = Vector128.Create(k3);
+        var vk4 = Vector128.Create(k4);
+        var scale = Vector128.Create(255.0);
+        var zero = Vector128<double>.Zero;
+        var one = Vector128.Create(1.0);
+
+        var count = pa.Length / 4 * 4;
+        for (var i = 0; i < count; i += 4)
+        {
+            var iaLow = ChannelsToUnit(pa, i);
+            var iaHigh = ChannelsToUnit(pa, i + 2);
+            var ibLow = ChannelsToUnit(pb, i);
+            var ibHigh = ChannelsToUnit(pb, i + 2);
+
+            var low = vk1 * iaLow * ibLow + vk2 * iaLow + vk3 * ibLow + vk4;
+            var high = vk1 * iaHigh * ibHigh + vk2 * iaHigh + vk3 * ibHigh + vk4;
+            low = Vector128.Min(Vector128.Max(low, zero), one);
+            high = Vector128.Min(Vector128.Max(high, zero), one);
+
+            // Color is kept within alpha; in the alpha lane this is its own value.
+            var alpha = Vector128.Create(high.GetElement(1));
+            low = Vector128.Min(low, alpha);
+            high = Vector128.Min(high, alpha);
+
+            var roundedLow = Vector128.Round(low * scale);
+            var roundedHigh = Vector128.Round(high * scale);
+            pr[i] = (byte)roundedLow.GetElement(0);
+            pr[i + 1] = (byte)roundedLow.GetElement(1);
+            pr[i + 2] = (byte)roundedHigh.GetElement(0);
+            pr[i + 3] = (byte)roundedHigh.GetElement(1);
+        }
+
+        return count;
     }
 
     /// <summary>Composites <paramref name="top"/> over <paramref name="bottom"/> with a blend mode, into <paramref name="result"/>.</summary>

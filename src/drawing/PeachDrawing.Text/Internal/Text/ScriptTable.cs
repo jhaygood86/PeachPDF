@@ -53,6 +53,9 @@ namespace PeachDrawing.Text.Internal.Text
         /// </summary>
         public static string Of(int codepoint)
         {
+            if ((uint)codepoint < DirectLimit)
+                return Direct.Value[codepoint];
+
             var runs = Runs.Value;
             if (runs.Length == 0)
                 return Unknown;
@@ -72,6 +75,31 @@ namespace PeachDrawing.Text.Internal.Text
         }
 
         public static string Of(System.Text.Rune rune) => Of(rune.Value);
+
+        /// <summary>
+        /// The code points below this are answered from <see cref="Direct"/>, an array indexed by code point, instead of the binary search: it covers
+        /// Latin, Greek, Cyrillic, Hebrew, Arabic, the Indic scripts, Thai, Lao and General Punctuation, where nearly all text is.
+        /// </summary>
+        private const int DirectLimit = 0x2100;
+
+        private static readonly Lazy<string[]> Direct = new(BuildDirect);
+
+        /// <summary>The binary search's answer for every code point below <see cref="DirectLimit"/>, worked out in one sweep over the runs.</summary>
+        private static string[] BuildDirect()
+        {
+            var table = new string[DirectLimit];
+            Array.Fill(table, Unknown);
+            foreach (var run in Runs.Value)
+            {
+                if (run.Start >= DirectLimit)
+                    break;
+
+                for (var cp = Math.Max(run.Start, 0); cp <= Math.Min(run.End, DirectLimit - 1); cp++)
+                    table[cp] = run.Value;
+            }
+
+            return table;
+        }
 
         /// <summary>
         /// Every codepoint range assigned Unicode <c>Script</c> value <paramref name="script"/> (e.g.

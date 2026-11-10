@@ -292,12 +292,20 @@ layer.Draw(canvas);                                                        // wh
 canvas.PushTransform(Matrix3x2.CreateRotation(0.3f, new Vector2(60, 40)));
 layer.Draw(canvas, opacity: 0.5);                                          // again, rotated, half transparent
 canvas.PopTransform();
+
+layer.Draw(canvas, opacity: 1.0, new LayerEffect[] { new BlurEffect(sigma: 6) });   // blurred, from the same recording
 ```
 
 `Draw` places the layer under the target's current transform and takes the opacity of that one draw; the content is not recorded again. `CanDraw(target)` says whether a canvas can
 still draw it (a lost graphics device or another document makes the answer no, and the layer is recorded anew). `CreateRetainedLayer` returns `null` for an empty region or a
 canvas that cannot make one. The default is built from `CreateTile`, so every `Canvas` gets one and a draw replays the tile; `Win2dCanvas` overrides it to keep a texture on the GPU,
 and so does `SkiaCanvas` (the group is drawn once into a bitmap and kept as an image, uploaded to the render context's `GpuContext` when it has one), so a draw is one textured quad.
+
+The third form of `Draw` takes [layer effects](#layers-and-effects) (a blur, a drop shadow, a color matrix) that are applied to the layer as a whole each time it is drawn, before `opacity`.
+The content is still recorded once, so an animation of a blur radius or a shadow costs a composite per frame and not a repaint, and on a canvas that applies effects on the GPU
+(`HasNativeLayerEffects`) the effect runs there on the kept texture. The effect needs room to spread into, so the layer is composited from a region larger than `Bounds` by the effects'
+ink margin (three standard deviations of each blur and shadow, plus a shadow's offset). A canvas that cannot make an effect layer draws the layer without the effects. The default is built
+on `BeginLayer`, so it works on every canvas; a `RetainedLayer` subclass with a better way can override it.
 
 
 ## Links and destinations

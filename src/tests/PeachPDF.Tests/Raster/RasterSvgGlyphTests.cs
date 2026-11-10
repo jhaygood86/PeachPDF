@@ -253,6 +253,14 @@ p {{ margin: 0; font-family: 'SvgTest'; font-size: 40pt; color: #000; filter: dr
                             !o.Text.Contains("/ImageMask") && o.Text.Contains("/DeviceRGB"));
             var data = PdfObjectReader.Inflate(PdfObjectReader.StreamBytes(pdf, image.Number));
 
+            // The image declares a PNG predictor (/Predictor 15): each row is a filter-type byte and then the row's samples, filtered. Read the pixels
+            // the way a viewer does, so the test does not depend on which filter the encoder chose for a row.
+            if (Regex.IsMatch(image.Text, @"/Predictor\s+15"))
+            {
+                var width = int.Parse(Regex.Match(image.Text, @"/Width\s+(\d+)").Groups[1].Value);
+                data = UnfilterPngRows(data, width * 3, 3);
+            }
+
             var reds = 0;
             var blues = 0;
             for (var i = 0; i + 2 < data.Length; i += 3)
@@ -265,6 +273,44 @@ p {{ margin: 0; font-family: 'SvgTest'; font-size: 40pt; color: #000; filter: dr
 
             Assert.True(reds > 500, $"{reds} red pixels");
             Assert.True(blues > 200, $"{blues} blue pixels");
+        }
+
+        /// <summary>Reverses PNG row filtering (types 0-4) of <paramref name="filtered"/>: rows of one filter-type byte then <paramref name="rowLength"/> samples.</summary>
+        private static byte[] UnfilterPngRows(byte[] filtered, int rowLength, int bytesPerPixel)
+        {
+            var rows = filtered.Length / (rowLength + 1);
+            var result = new byte[rows * rowLength];
+            for (var y = 0; y < rows; y++)
+            {
+                var type = filtered[y * (rowLength + 1)];
+                for (var i = 0; i < rowLength; i++)
+                {
+                    var raw = filtered[y * (rowLength + 1) + 1 + i];
+                    var left = i >= bytesPerPixel ? result[y * rowLength + i - bytesPerPixel] : 0;
+                    var up = y > 0 ? result[(y - 1) * rowLength + i] : 0;
+                    var upLeft = y > 0 && i >= bytesPerPixel ? result[(y - 1) * rowLength + i - bytesPerPixel] : 0;
+                    result[y * rowLength + i] = type switch
+                    {
+                        0 => raw,
+                        1 => (byte)(raw + left),
+                        2 => (byte)(raw + up),
+                        3 => (byte)(raw + ((left + up) >> 1)),
+                        4 => (byte)(raw + Paeth(left, up, upLeft)),
+                        _ => throw new InvalidDataException($"Unexpected row filter {type}."),
+                    };
+                }
+            }
+
+            return result;
+        }
+
+        private static int Paeth(int a, int b, int c)
+        {
+            var p = a + b - c;
+            var pa = Math.Abs(p - a);
+            var pb = Math.Abs(p - b);
+            var pc = Math.Abs(p - c);
+            return pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
         }
     }
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 
 namespace PeachDrawing;
 
@@ -10,32 +9,41 @@ namespace PeachDrawing;
 /// </summary>
 internal sealed class PolygonSet
 {
-    private readonly List<double> _points = [];
-    private readonly List<int> _starts = [];
+    // Plain growable arrays with a count, not List<T>: a path is built point by point, and the list's version check and bounds work on every Add
+    // is a measurable share of flattening a page of glyphs. Growth doubles, like the list's.
+    private double[] _points = new double[32];
+    private int _pointLength;
+    private int[] _starts = new int[4];
+    private int _startCount;
 
-    public int ContourCount => _starts.Count;
+    public int ContourCount => _startCount;
 
-    public int PointCount => _points.Count / 2;
+    public int PointCount => _pointLength / 2;
 
     public void BeginContour()
     {
-        _starts.Add(_points.Count / 2);
+        if (_startCount == _starts.Length)
+            Array.Resize(ref _starts, _starts.Length * 2);
+        _starts[_startCount++] = _pointLength / 2;
     }
 
     public void Add(double x, double y)
     {
-        if (_starts.Count == 0)
+        if (_startCount == 0)
             BeginContour();
 
-        _points.Add(x);
-        _points.Add(y);
+        if (_pointLength + 2 > _points.Length)
+            Array.Resize(ref _points, _points.Length * 2);
+        _points[_pointLength] = x;
+        _points[_pointLength + 1] = y;
+        _pointLength += 2;
     }
 
     /// <summary>The start (in points) and end (exclusive) of contour <paramref name="index"/>.</summary>
     public (int Start, int End) GetContour(int index)
     {
         var start = _starts[index];
-        var end = index + 1 < _starts.Count ? _starts[index + 1] : _points.Count / 2;
+        var end = index + 1 < _startCount ? _starts[index + 1] : _pointLength / 2;
         return (start, end);
     }
 
@@ -44,15 +52,16 @@ internal sealed class PolygonSet
     /// <summary>The tight bounding box of every point, or null when the set is empty.</summary>
     public (double MinX, double MinY, double MaxX, double MaxY)? GetBounds()
     {
-        if (_points.Count == 0)
+        if (_pointLength == 0)
             return null;
 
         double minX = double.PositiveInfinity, minY = double.PositiveInfinity;
         double maxX = double.NegativeInfinity, maxY = double.NegativeInfinity;
-        for (var i = 0; i < _points.Count; i += 2)
+        var points = _points.AsSpan(0, _pointLength);
+        for (var i = 0; i < points.Length; i += 2)
         {
-            var x = _points[i];
-            var y = _points[i + 1];
+            var x = points[i];
+            var y = points[i + 1];
             if (x < minX) minX = x;
             if (x > maxX) maxX = x;
             if (y < minY) minY = y;
@@ -90,8 +99,8 @@ internal sealed class PolygonSet
 
     public void Clear()
     {
-        _points.Clear();
-        _starts.Clear();
+        _pointLength = 0;
+        _startCount = 0;
     }
 
     /// <summary>

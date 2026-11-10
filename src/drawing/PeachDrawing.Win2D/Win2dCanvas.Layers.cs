@@ -150,21 +150,47 @@ public sealed partial class Win2dCanvas
         return effect;
     }
 
+    /// <summary>Whether two standard deviations are the same for blurring purposes (so one blur amount does for both directions).</summary>
+    private static bool SameDeviation(double sigmaX, double sigmaY) => Math.Abs(sigmaX - sigmaY) <= 1e-6 * Math.Max(Math.Abs(sigmaX), Math.Abs(sigmaY));
+
+    /// <summary>
+    /// <paramref name="image"/> blurred with standard deviation <paramref name="sigmaX"/> sideways and <paramref name="sigmaY"/> up and down. Equal
+    /// deviations are one Gaussian blur; unequal ones are a horizontal blur and a vertical one in turn, which together are the two-dimensional
+    /// Gaussian (it separates), so each direction gets its own amount instead of both getting their mean. A direction with no deviation is not blurred.
+    /// </summary>
+    private static ICanvasImage Blur(List<IDisposable> made, ICanvasImage image, double sigmaX, double sigmaY, EffectBorderMode border)
+    {
+        if (SameDeviation(sigmaX, sigmaY))
+            return Track(made, new GaussianBlurEffect { Source = image, BlurAmount = (float)sigmaX, BorderMode = border });
+
+        if (sigmaX > 0)
+            image = Track(made, new DirectionalBlurEffect { Source = image, BlurAmount = (float)sigmaX, Angle = 0f, BorderMode = border });
+
+        if (sigmaY > 0)
+            image = Track(made, new DirectionalBlurEffect { Source = image, BlurAmount = (float)sigmaY, Angle = MathF.PI / 2, BorderMode = border });
+
+        return image;
+    }
+
     private static ICanvasImage Apply(List<IDisposable> made, ICanvasImage image, LayerEffect effect)
     {
         switch (effect)
         {
             case BlurEffect blur:
-                // Win2D blurs with one standard deviation; an unequal pair is blurred by their mean.
-                return Track(made, new GaussianBlurEffect { Source = image, BlurAmount = (float)((blur.SigmaX + blur.SigmaY) / 2), BorderMode = blur.ClampEdges ? EffectBorderMode.Hard : EffectBorderMode.Soft });
+                return Blur(made, image, blur.SigmaX, blur.SigmaY, blur.ClampEdges ? EffectBorderMode.Hard : EffectBorderMode.Soft);
 
             case DropShadowEffect shadow:
-                var shade = Track(made, new ShadowEffect
+                // The shadow's own effect blurs by one amount; an unequal pair is made by blurring the unblurred shadow in each direction after.
+                var equal = SameDeviation(shadow.SigmaX, shadow.SigmaY);
+                ICanvasImage shade = Track(made, new ShadowEffect
                 {
                     Source = image,
-                    BlurAmount = (float)((shadow.SigmaX + shadow.SigmaY) / 2),
+                    BlurAmount = equal ? (float)shadow.SigmaX : 0f,
                     ShadowColor = ToColor(shadow.Color),
                 });
+                if (!equal)
+                    shade = Blur(made, shade, shadow.SigmaX, shadow.SigmaY, EffectBorderMode.Soft);
+
                 var moved = Track(made, new Transform2DEffect { Source = shade, TransformMatrix = Matrix3x2.CreateTranslation((float)shadow.OffsetX, (float)shadow.OffsetY) });
                 return Track(made, new CompositeEffect { Mode = CanvasComposite.SourceOver, Sources = { moved, image } });
 

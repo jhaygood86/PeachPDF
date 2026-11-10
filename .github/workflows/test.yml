@@ -315,7 +315,14 @@ jobs:
       run: |
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter "*.coverage.cobertura.*.xml" -Recurse | ForEach-Object FullName)
-        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --format html:diff-cover-report.html
+
+        # The 256-bit (AVX) forms of the vectorized kernels live in *.Vector256.cs files. The macOS runners are ARM64, where 256-bit vectors are not hardware
+        # accelerated and those forms never run (their tests skip), so those files are left out of the macOS gate; the 128-bit forms (NEON there) are what it
+        # measures. Windows and Linux run both forms and gate them.
+        $exclude = @()
+        if ($env:RUNNER_OS -eq 'macOS') { $exclude = @('--exclude', '*.Vector256.cs') }
+
+        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 @exclude --format html:diff-cover-report.html
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4

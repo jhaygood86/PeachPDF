@@ -56,17 +56,8 @@ public static class DropShadow
         if (sigmaX > 0 || sigmaY > 0)
             GaussianBlur.Apply(shadow, sigmaX, sigmaY);
 
-        // content over shadow.
-        for (var i = 0; i < length; i += 4)
-        {
-            var inverse = 255 - content[i + 3];
-            if (inverse == 0)
-                continue;
-
-            content[i] = (byte)Math.Min(255, content[i] + PixelKernels.Div255(shade[i] * inverse));
-            content[i + 1] = (byte)Math.Min(255, content[i + 1] + PixelKernels.Div255(shade[i + 1] * inverse));
-            content[i + 2] = (byte)Math.Min(255, content[i + 2] + PixelKernels.Div255(shade[i + 2] * inverse));
-            content[i + 3] = (byte)Math.Min(255, content[i + 3] + PixelKernels.Div255(shade[i + 3] * inverse));
-        }
+        // content over shadow: each channel is content + shade * (1 - content alpha), clamped, which is source-over with the content on top (the
+        // vector kernel's own form: Div255(content * 255) is content, and a fully opaque pixel adds nothing).
+        PixelKernels.PorterDuff(PorterDuffOp.Over, content[..length], shade[..length], content[..length]);
     }
 }
