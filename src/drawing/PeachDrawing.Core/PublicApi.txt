@@ -814,6 +814,7 @@ PeachDrawing.Core.RetainedLayer : abstract class
   method abstract Void Dispose()
   method abstract Void Draw(Canvas target, Double opacity = 1)
   method abstract Void Seal()
+  method virtual Void Draw(Canvas target, Double opacity, IReadOnlyList<LayerEffect> effects)
   property Boolean IsSealed { get; }
   property Canvas Recorder { get; }
   property Rect Bounds { get; }

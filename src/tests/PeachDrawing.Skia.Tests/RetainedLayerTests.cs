@@ -145,4 +145,61 @@ public class RetainedLayerTests
         Assert.Equal(0, counts.Total);
     }
 
+    [Fact]
+    public void A_retained_layer_drawn_with_a_blur_spreads_beyond_its_bounds_without_being_recorded_again()
+    {
+        using var scene = Scene.Create(100, 100);
+        using var layer = RedSquare(scene, new Rect(40, 40, 20, 20));
+
+        layer.Draw(scene.Canvas, 1.0, new LayerEffect[] { new BlurEffect(4) });
+
+        Assert.True(scene.Px(36, 50).A > 20, $"left of the bounds: {scene.Px(36, 50)}");
+        Assert.InRange(scene.Px(40, 50).A, 60, 200);
+        Assert.True(scene.Px(50, 50).A > 235, "the middle stays nearly opaque");
+        Assert.True(scene.IsClear(20, 50));
+    }
+
+    [Fact]
+    public void The_same_layer_drawn_with_a_wider_blur_reaches_further()
+    {
+        // Two draws of one layer in turn (a canvas is finished once its pixels are read, so each is read from its own scene): the content is recorded once per
+        // scene and only the effect differs.
+        int Reach(double sigma)
+        {
+            using var scene = Scene.Create(100, 100);
+            using var layer = RedSquare(scene, new Rect(40, 40, 20, 20));
+            layer.Draw(scene.Canvas, 1.0, new LayerEffect[] { new BlurEffect(sigma) });
+            return scene.Px(30, 50).A;
+        }
+
+        var narrow = Reach(3);
+        var wide = Reach(8);
+
+        Assert.True(wide > narrow + 10, $"narrow {narrow}, wide {wide}");
+    }
+
+    [Fact]
+    public void An_effect_draw_with_opacity_fades_the_blurred_layer_once()
+    {
+        using var scene = Scene.Create(100, 100);
+        using var layer = RedSquare(scene, new Rect(40, 40, 20, 20));
+
+        layer.Draw(scene.Canvas, 0.5, new LayerEffect[] { new BlurEffect(3) });
+
+        Assert.InRange(scene.Px(50, 50).A, 115, 140);
+    }
+
+    [Fact]
+    public void An_effect_draw_follows_the_target_transform()
+    {
+        using var scene = Scene.Create(100, 100);
+        using var layer = RedSquare(scene, new Rect(40, 40, 20, 20));
+
+        scene.Canvas.PushTransform(System.Numerics.Matrix3x2.CreateTranslation(-30, -30));
+        layer.Draw(scene.Canvas, 1.0, new LayerEffect[] { new BlurEffect(2) });
+        scene.Canvas.PopTransform();
+
+        Assert.True(scene.Px(20, 20).A > 235);
+        Assert.True(scene.IsClear(55, 55));
+    }
 }

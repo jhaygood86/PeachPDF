@@ -23,23 +23,7 @@ public static class RasterLayerEffects
     {
         ArgumentNullException.ThrowIfNull(effects);
 
-        double x = 0, y = 0;
-        foreach (var effect in effects)
-        {
-            switch (effect)
-            {
-                case BlurEffect blur:
-                    x += 3 * Math.Max(0, blur.SigmaX);
-                    y += 3 * Math.Max(0, blur.SigmaY);
-                    break;
-                case DropShadowEffect shadow:
-                    x += Math.Abs(shadow.OffsetX) + 3 * Math.Max(0, shadow.SigmaX);
-                    y += Math.Abs(shadow.OffsetY) + 3 * Math.Max(0, shadow.SigmaY);
-                    break;
-            }
-        }
-
-        return (x, y);
+        return LayerEffectMargins.InkMargin(effects);
     }
 
     /// <summary>Applies <paramref name="effects"/> to <paramref name="surface"/>, in order, changing it in place.</summary>
