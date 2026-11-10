@@ -80,3 +80,17 @@ MuPDF before and after: 0 differing pages, PDFs 13% smaller in total. Traps the 
 - A first version was 28% *slower* on `box_shadow` and allocated 48% more: the few-colors check did a hash insert per pixel of flat surfaces, and the
   filtered planes were fresh arrays with a half-size compression buffer. Skipping runs of equal pixels, renting the planes, and starting the output at an
   eighth of the input fixed both. Always A/B interleaved, new and old alternating on the same build state: absolute times on this machine drifted by 2x.
+
+## GPU effect API (third pass)
+
+Landed: `RetainedLayer.Draw(target, opacity, effects)`: layer effects (blur, shadow, color matrix) applied to a kept recording each time it is drawn, so an
+animated blur or shadow costs a composite per frame and not a repaint; the default is built on `BeginLayer` and runs on every canvas (Win2D and Skia apply the
+effect natively on the kept texture). Not landed, deliberately, with the reasons so they are not relitigated without new information:
+- **New `LayerEffect` types and a multi-input effect graph** (morphology, convolution, lighting, displacement, feComposite/feBlend between two sources): nothing in
+  the repo would call them yet (the SVG filter evaluator works on CPU pixels and would need a rewrite to a graph), and there is no GPU here to show a benefit. The
+  effect set is closed and every screen backend applies all three existing effects natively, so a per-effect capability query has nothing to answer.
+- **A public `Canvas.TryApplyEffects(RasterSurface, ...)`:** its only caller would be code that already holds CPU pixels, which would pay a GPU upload and readback to
+  run an effect the CPU filters already run.
+- **`DrawImageProjected` for `preserve-3d`:** needs perspective in each backend's image drawing; not verifiable without the GPUs.
+- **Van Herk morphology, a downsampled-image cache, conic gradient vectorization:** feMorphology at large radii is rare, a repeated strongly shrunk image saves
+  about a millisecond per repeat, and conic needs `Atan2`, which has no bit-exact vector form.
