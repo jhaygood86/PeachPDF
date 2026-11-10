@@ -872,6 +872,15 @@ namespace PeachBrackets.Html.Dom
 
         // ─── Phase 4: flexible length resolution ──────────────────────────────────
 
+        /// <summary>
+        /// Whether <paramref name="item"/>'s automatic minimum size lies above its hypothetical size: on a line that has free
+        /// space on the flex base sizes this is the item the minimum raises, which §9.7 treats as frozen at its minimum.
+        /// </summary>
+        private static bool IsRaisedByMinimum(FlexItem item) => item.AutoMinMainSize > item.HypotheticalMainSize + RaisedTolerance;
+
+        /// <summary>Layout-unit noise below which a minimum is not counted as raising an item.</summary>
+        private const double RaisedTolerance = 0.01;
+
         private async ValueTask ResolveFlexibleLengths(Canvas g, FlexLine line, double mainSize)
         {
             await ResolveAutoMinimums(g, line, mainSize);
@@ -903,11 +912,19 @@ namespace PeachBrackets.Html.Dom
             // and the line's remaining items take up the rest of the shrink (§9.7), so the one pass below
             // is replaced by the freezing loop. A line with no such item keeps the single pass.
             var hasAutoMinimum = freeSpace < 0 && line.Items.Any(i => i.AutoMinMainSize > 0);
+
+            // A line that has free space on the flex base sizes but whose items, once each is raised to its automatic
+            // minimum, no longer fit shrinks instead (§9.7 step 1 sums the hypothetical sizes, which the minimum has
+            // already clamped): the raised items are frozen at their minimum and the others give up the overflow.
+            var flooredSpace = line.Items.Sum(i =>
+                Math.Max(i.HypotheticalMainSize, i.AutoMinMainSize) + i.MarginBefore + i.MarginAfter);
+            if (freeSpace >= 0 && flooredSpace > mainSize - totalGapSpace + 1e-9 && line.Items.Any(IsRaisedByMinimum))
+                hasAutoMinimum = true;
             if (hasAutoMinimum) ShrinkAgainstAutoMinimums(line, mainSize, mainSize - totalGapSpace);
 
             // The same for a line that grows: an item whose share of the free space leaves it under its automatic minimum
             // is frozen at that minimum and the others take the rest (§9.7). Only items that would violate are marked.
-            var growsAgainstMinimum = freeSpace > 0 && line.Items.Any(i => i.AutoMinMainSize > 0);
+            var growsAgainstMinimum = freeSpace > 0 && !hasAutoMinimum && line.Items.Any(IsRaisedByMinimum);
             if (growsAgainstMinimum) GrowAgainstAutoMinimums(line, mainSize, mainSize - totalGapSpace);
 
             foreach (var item in line.Items)
@@ -917,7 +934,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     final = item.FinalMainSize;
                 }
-                else if (freeSpace > 0)
+                else if (freeSpace > 0 && !hasAutoMinimum)
                 {
                     double totalGrow = line.Items.Sum(i => ParseFloat(i.Box.FlexGrow));
                     var grow = ParseFloat(item.Box.FlexGrow);
@@ -961,9 +978,11 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
-        /// CSS Flexbox 1 §9.7's resolution of a line that overflows, for a line holding an item with a
+        /// CSS Flexbox 1 §9.7's resolution of a line that shrinks, for a line holding an item with a
         /// non-zero automatic minimum size: an item that would shrink below its minimum is frozen at it
-        /// (a min violation) and the shrink it cannot take is shared by the items still free to shrink.
+        /// (a min violation) and the shrink it cannot take is shared by the items still free to shrink. A line that
+        /// starts with free space but ends up too wide once its items are raised to their minimums is resolved here
+        /// too, with the raised items frozen at their minimum from the start.
         /// </summary>
         /// <param name="line">The line; each item's <see cref="FlexItem.FinalMainSize"/> receives its size.</param>
         /// <param name="mainSize">The container's main size, the basis percentage minimums resolve against.</param>
@@ -980,6 +999,15 @@ namespace PeachBrackets.Html.Dom
             {
                 sizes[i] = items[i].HypotheticalMainSize;
                 minimums[i] = Math.Max(ClampMainAxis(items[i].Box, 0, mainSize), items[i].AutoMinMainSize);
+
+                // A minimum above the hypothetical size only exists on a line that had free space before the minimums
+                // were applied: that item's hypothetical size is its minimum, so it starts out frozen there (§9.7
+                // step 3, flex base size < hypothetical main size).
+                if (IsRaisedByMinimum(items[i]))
+                {
+                    frozen[i] = true;
+                    sizes[i] = minimums[i];
+                }
             }
 
             for (var pass = 0; pass <= items.Count; pass++)
@@ -1081,8 +1109,9 @@ namespace PeachBrackets.Html.Dom
         /// <c>min-width: auto</c> stops it shrinking below.
         /// </summary>
         /// <remarks>
-        /// Only a row whose main axis is physical X is covered, and only when the line overflows, since
-        /// nothing else shrinks an item. A scroll container's is zero, as is that of any item whose
+        /// Only a row whose main axis is physical X is covered, and only when the line overflows or has a growing item
+        /// (an exactly full line included, where a minimum can still push it past its container), since nothing else
+        /// resizes an item. A scroll container's is zero, as is that of any item whose
         /// <c>min-width</c> is not <c>auto</c>. Otherwise it is the smaller of the specified size (when
         /// <c>width</c> is a definite length) and the content size suggestion (the min-content width), less
         /// than the definite <c>max-width</c>; a replaced element with a percentage width is compressible and
@@ -1097,8 +1126,9 @@ namespace PeachBrackets.Html.Dom
             var overflows = used > container;
 
             // A line with room to spare grows its items, and one whose growing items would end under their minimum is
-            // resolved like an overflowing one. A line that neither overflows nor grows has nothing to floor.
-            var grows = !overflows && used < container && line.Items.Any(i => ParseFloat(i.Box.FlexGrow) > 0);
+            // resolved like an overflowing one (so is a line that exactly fills its container, once a minimum raises an item).
+            // A line that neither overflows nor grows has nothing to floor.
+            var grows = !overflows && line.Items.Any(i => ParseFloat(i.Box.FlexGrow) > 0);
             if (!overflows && !grows) return;
 
             if (!_mainAxisIsPhysicalX)
@@ -1117,7 +1147,8 @@ namespace PeachBrackets.Html.Dom
                 if (box.IsImage && box.Width.EndsWith('%')) continue;
 
                 var minimum = await CssLayoutEngine.GetMinContentWidth(g, box);
-                if (CssValueParser.IsValidLength(box.Width) && !box.Width.EndsWith('%'))
+                // A percentage width is definite against the line's own main size, so it caps the minimum like a length (§4.5).
+                if (CssValueParser.IsValidLength(box.Width))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Width, container, box) + MainBoxSizeIncluded(box));
                 if (CssValueParser.IsValidLength(box.MaxWidth))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxWidth, container, box) + MainBoxSizeIncluded(box));
@@ -1184,13 +1215,14 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Stores <paramref name="minimum"/> as the item's automatic minimum. Against an overflowing line it is capped at the
-        /// hypothetical size (a larger one cannot matter when shrinking); against a growing line only an item that sits
-        /// under it is marked, so a line with no violation keeps the plain arithmetic.
+        /// hypothetical size (a larger one cannot matter when shrinking); against a growing line every item keeps its
+        /// minimum, and one above its hypothetical size is a violation (see <see cref="DistributeFlex"/>), so a line with
+        /// no violation keeps the plain arithmetic.
         /// </summary>
         private static void RecordAutoMinimum(FlexItem item, double minimum, bool overflows)
         {
             if (overflows) item.AutoMinMainSize = Math.Min(minimum, item.HypotheticalMainSize);
-            else if (minimum > item.HypotheticalMainSize + 0.01) item.AutoMinMainSize = minimum;
+            else item.AutoMinMainSize = minimum;
         }
 
         private async ValueTask ResizeItem(Canvas g, FlexItem item, double finalSize)

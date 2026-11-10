@@ -696,9 +696,7 @@ namespace PeachBrackets.Css
             var flexShrink = FlexGrowShrinkConverter.WithFallback(1).For(PropertyNames.FlexShrink);
             var flexBasis = FlexBasisConverter.WithFallback(0).For(PropertyNames.FlexBasis);
 
-            return WithOrder(flexGrow, flexShrink, flexBasis)
-                  .OrGlobalValue()
-                  .OrNone();
+            return new FlexNoneConverter().Or(WithOrder(flexGrow, flexShrink, flexBasis).OrGlobalValue());
         });
 
         #endregion
