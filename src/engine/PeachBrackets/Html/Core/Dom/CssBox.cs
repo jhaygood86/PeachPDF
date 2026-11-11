@@ -5734,7 +5734,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     DeferredFloatsOnly = true;
                     PendingBreakToken = new BlockBreakToken(
-                        this, lastColumn.SlotIndex, Boxes.IndexOf(deferredFloats[^1]), null, IsBreakBefore: true, null);
+                        this, lastColumn.SlotIndex, Boxes.IndexOf(deferredFloats[^1]), null, IsBreakBefore: true, null, OwesOnlyDeferredFloats: true);
                     return true;
                 }
             }

@@ -882,6 +882,13 @@ namespace PeachBrackets.Html.Dom
                 var columnBottom = boxTop;
 
                 var columnStart = FirstChildIndexOf(carry, children);
+
+                // A column that only lays out the floats an earlier one deferred (every in-flow child was placed there) holds none of the children: the ones
+                // after the float in the source keep that column's geometry, and capturing them here put the same boxes in two instances (#2318).
+                if (carry is BlockBreakToken { OwesOnlyDeferredFloats: true })
+                {
+                    columnStart = children.Count;
+                }
                 var columnInlineLeft = columnLeft + col * pitch;
                 IReadOnlyList<CssBox> markedAtColumnStart = [];
 
@@ -1137,7 +1144,8 @@ namespace PeachBrackets.Html.Dom
                     {
                         var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 
-                        beyond.AddFrom(link.Box.Boxes, from);
+                        // Only deferred floats are owed (every child was placed in this column): what follows the float in the source is here, not beyond.
+                        if (!link.OwesOnlyDeferredFloats) beyond.AddFrom(link.Box.Boxes, from);
 
                         // Floats the column could not hold, laid out here and again by the next column, which is the only one that
                         // holds them.
@@ -1302,6 +1310,10 @@ namespace PeachBrackets.Html.Dom
         private static int PlacedBelow(BreakToken? token, List<CssBox> children)
         {
             if (token is not BlockBreakToken block) return children.Count;
+
+            // Every child was placed in this column and only a float deferred to the next one is owed (the record names that float alone, and a float is not
+            // among the in-flow children): the children after the float in the source are here too, not below the break (#2318).
+            if (block.OwesOnlyDeferredFloats) return children.Count;
 
             var boundary = block.Box.Boxes[block.ResumeChildIndex];
             var index = children.IndexOf(boundary);
@@ -1556,6 +1568,20 @@ namespace PeachBrackets.Html.Dom
             return (i - startIndex, maxColumnHeight);
         }
 
+        /// <summary>The narrowest a column may be given: one CSS pixel (0.75pt).</summary>
+        private const double MinimumColumnWidth = 0.75;
+
+        /// <summary>
+        /// Fewer columns when the gaps between <paramref name="count"/> of them would leave them no width: a column of no width claims none of the words
+        /// laid out in it, so a container narrowed beside a float, or nested in a narrow column, lost its content (#2318).
+        /// </summary>
+        private static int FewerColumnsWhenTheyWouldHaveNoWidth(int count, double containerWidth, double gap)
+        {
+            if (count <= 1 || (containerWidth - gap * (count - 1)) / count >= MinimumColumnWidth) return count;
+
+            return Math.Max(1, Math.Min(count, (int)((containerWidth + gap) / (MinimumColumnWidth + gap))));
+        }
+
         /// <summary>
         /// Resolves <c>column-count</c>/<c>column-width</c>/<c>columns</c> to a concrete (count, width)
         /// pair against the container's content-box width, per CSS Multi-column Layout §3-4.
@@ -1578,7 +1604,7 @@ namespace PeachBrackets.Html.Dom
                 // Validate_ColumnCount already guarantees parsedCount >= 1, so the Math.Max(1, ...) here
                 // only guards maxByWidth's own computation, not parsedCount itself.
                 var maxByWidth = specifiedWidth > 0 ? Math.Max(1, (int)((containerWidth + gap) / (specifiedWidth + gap))) : parsedCount;
-                var count = Math.Max(1, Math.Min(parsedCount, maxByWidth));
+                var count = FewerColumnsWhenTheyWouldHaveNoWidth(Math.Max(1, Math.Min(parsedCount, maxByWidth)), containerWidth, gap);
                 return (count, Math.Max(0, (containerWidth - gap * (count - 1)) / count));
             }
 
@@ -1586,7 +1612,7 @@ namespace PeachBrackets.Html.Dom
             {
                 // parsedCount is already >= 1 here (Validate_ColumnCount enforces it) - Math.Max(1, ...) is
                 // defensive, not load-bearing.
-                var count = Math.Max(1, parsedCount);
+                var count = FewerColumnsWhenTheyWouldHaveNoWidth(Math.Max(1, parsedCount), containerWidth, gap);
                 return (count, Math.Max(0, (containerWidth - gap * (count - 1)) / count));
             }
 
