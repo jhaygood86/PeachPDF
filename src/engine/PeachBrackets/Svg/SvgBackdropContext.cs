@@ -77,7 +77,7 @@ namespace PeachBrackets.Svg
             public SvgBackdropContext? Value;
         }
 
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Canvas, Holder> Slots = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Canvas, Holder> Slots = [];
 
         public static SvgBackdropContext? Get(Canvas canvas) => Slots.TryGetValue(canvas, out var holder) ? holder.Value : null;
 

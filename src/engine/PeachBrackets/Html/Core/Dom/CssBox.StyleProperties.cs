@@ -1101,13 +1101,13 @@ namespace PeachBrackets.Html.Dom
                     foreach (var (customName, customValue) in parentCustom)
                     {
                         if (registered.TryGetValue(customName, out var reg) && !reg.Inherits) continue;
-                        (copy ??= new Dictionary<string, string>(parentCustom.Count))[customName] = customValue;
+                        (copy ??= [with(parentCustom.Count)])[customName] = customValue;
                     }
                     customProperties = copy;
                 }
                 else
                 {
-                    customProperties = new Dictionary<string, string>(parentCustom);
+                    customProperties = [with(parentCustom)];
                 }
             }
             else

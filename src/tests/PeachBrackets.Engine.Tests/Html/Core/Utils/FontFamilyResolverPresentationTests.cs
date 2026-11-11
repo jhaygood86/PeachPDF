@@ -30,7 +30,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
 
         private sealed class ScriptedRenderContext : TestPdfCanvas
         {
-            public Dictionary<string, ScriptedFont> Families { get; } = new(System.StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, ScriptedFont> Families { get; } = [with(System.StringComparer.OrdinalIgnoreCase)];
 
             /// <summary>What system fallback answers for each requested presentation; absent means "nothing found".</summary>
             public Dictionary<EmojiPresentation, ScriptedFont> SystemFallback { get; } = [];

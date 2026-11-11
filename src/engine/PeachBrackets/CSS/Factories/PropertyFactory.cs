@@ -11,15 +11,15 @@ namespace PeachBrackets.Css
     {
         private static readonly Lazy<PropertyFactory> Lazy = new(() => new PropertyFactory());
 
-        private readonly List<string> _animatables = new();
+        private readonly List<string> _animatables = [];
 
-        private readonly Dictionary<string, LonghandCreator> _fontsBuilder = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LonghandCreator> _fontsBuilder = [with(StringComparer.OrdinalIgnoreCase)];
 
-        private readonly Dictionary<string, LonghandCreator> _longhandsBuilder = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, LonghandCreator> _longhandsBuilder = [with(StringComparer.OrdinalIgnoreCase)];
 
-        private readonly Dictionary<string, string[]> _mappingsBuilder = new();
+        private readonly Dictionary<string, string[]> _mappingsBuilder = [];
 
-        private readonly Dictionary<string, ShorthandCreator> _shorthandsBuilder = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, ShorthandCreator> _shorthandsBuilder = [with(StringComparer.OrdinalIgnoreCase)];
 
         // Shorthands that parse and expand like any other, but are NOT used to reconstruct a shorthand when
         // serializing a declaration block. Two kinds live here: the logical box shorthands (margin-block,
@@ -28,7 +28,7 @@ namespace PeachBrackets.Css
         // `margin-block` would change existing output; and the grid mega-shorthands (grid, grid-template),
         // whose multi-slash / areas grammar isn't worth reconstructing. Excluded from GetShorthands (the
         // serialization query) only; CreateShorthand/GetLonghands/IsShorthand still work.
-        private readonly HashSet<string> _logicalShorthands = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _logicalShorthands = [with(StringComparer.OrdinalIgnoreCase)];
 
         private readonly FrozenDictionary<string, LonghandCreator> _fonts;
 
@@ -500,7 +500,7 @@ namespace PeachBrackets.Css
             // `all` covers every longhand registered above (so a newly added property is included automatically),
             // except those the spec exempts (direction, unicode-bidi) and the non-standard legacy flexbox spellings.
             AddLogicalShorthand(PropertyNames.All, () => new AllProperty(),
-                _longhandsBuilder.Keys.Where(name => !IsExcludedFromAll(name)).ToArray());
+                [.. _longhandsBuilder.Keys.Where(name => !IsExcludedFromAll(name))]);
 
             // CSS Counter Styles Level 3 §3 descriptors, stored raw (UnknownProperty) and parsed in Layer B
             // (Html/Core/CounterStyles). speak-as is accepted and ignored (no speech output).
@@ -618,7 +618,7 @@ namespace PeachBrackets.Css
         {
             var propertyNames = GetLonghands(name);
 
-            return propertyNames.Select(CreateLonghand).ToArray();
+            return [.. propertyNames.Select(CreateLonghand)];
         }
 
         public bool IsShorthand(string name)
@@ -638,7 +638,7 @@ namespace PeachBrackets.Css
         {
             return _mappings.TryGetValue(VendorPropertyAliases.Canonicalize(name), out var mapping)
                 ? mapping
-                : Array.Empty<string>();
+                : [];
         }
 
         public IEnumerable<string> GetShorthands(string name)

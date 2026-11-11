@@ -34,12 +34,12 @@ namespace PeachDrawing.Text
     public sealed class FontSet
     {
         private static readonly Lazy<IReadOnlyList<string>> InstalledNames = new(() =>
-            FontResolver.SystemFamilyDisplayNames.Where(name => !string.IsNullOrEmpty(name)).ToArray());
+            [.. FontResolver.SystemFamilyDisplayNames.Where(name => !string.IsNullOrEmpty(name))]);
 
         // One lock for the set: the resolver and its caches are plain dictionaries that a lookup also writes to, so a set shared by several render
         // contexts - on different threads, when a host adds its fonts from a worker - has to be entered one thread at a time.
         private readonly Lock _gate = new();
-        private readonly Dictionary<string, string> _added = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, string> _added = [with(StringComparer.Ordinal)];
         private readonly List<string> _addedFamilies = [];
         private int _version;
 
@@ -68,7 +68,7 @@ namespace PeachDrawing.Text
             {
                 lock (_gate)
                 {
-                    return _addedFamilies.ToArray();
+                    return [.. _addedFamilies];
                 }
             }
         }

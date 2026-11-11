@@ -29,6 +29,6 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Variations
 
         /// <summary>A four-character tag.</summary>
         internal static string Tag(ReadOnlySpan<byte> data, int offset) =>
-            new string(new[] { (char)data[offset], (char)data[offset + 1], (char)data[offset + 2], (char)data[offset + 3] });
+            new([(char)data[offset], (char)data[offset + 1], (char)data[offset + 2], (char)data[offset + 3]]);
     }
 }

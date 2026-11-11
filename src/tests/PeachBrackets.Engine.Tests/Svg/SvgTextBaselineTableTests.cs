@@ -114,7 +114,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         private static double[] GlyphFrameYs(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Select(c => (double)c.Matrix.M32).ToArray();
+            [.. g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Select(c => (double)c.Matrix.M32)];
 
         private static string PathMarkup(string textAttrs, string tspanAttrs = "") =>
             $"""<defs><path id="p" d="M10,50 L190,50"/></defs><text font-size="20" font-family="{Sans}" {textAttrs}><textPath xlink:href="#p">H<tspan {tspanAttrs}>i</tspan></textPath></text>""";

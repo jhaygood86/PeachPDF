@@ -24,7 +24,7 @@ namespace PeachBrackets.Html.TextGeometry
             public bool HasCharacters => End > Start;
         }
 
-        private readonly Dictionary<CssRect, Part> _parts = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssRect, Part> _parts = [with(ReferenceEqualityComparer.Instance)];
 
         public bool TryGet(CssRect word, out Part part) => _parts.TryGetValue(word, out part);
 

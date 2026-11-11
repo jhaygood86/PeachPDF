@@ -151,7 +151,7 @@ internal sealed class PdfReference : PdfItem
         return _objectId + " R";
     }
 
-    internal static PdfReferenceComparer Comparer => new PdfReferenceComparer();
+    internal static PdfReferenceComparer Comparer => new();
 
     /// <summary>
     /// Implements a comparer that compares PdfReference objects by their PdfObjectId.

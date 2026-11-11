@@ -28,10 +28,9 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         /// <summary>The text of each line, top to bottom.</summary>
         private static string[] LineTexts(CssBox box) =>
-            box.LineBoxes
+            [.. box.LineBoxes
                 .Select(line => string.Concat(line.Words.Select(word => word.Text)))
-                .Where(text => text.Length > 0)
-                .ToArray();
+                .Where(text => text.Length > 0)];
 
         [Fact]
         public async Task Thai_WrapsBetweenWords()
@@ -68,7 +67,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var words = LayoutHarness.Descendants(box).SelectMany(b => b.Words).Where(w => !string.IsNullOrEmpty(w.Text)).ToList();
             var em = words[0].Width / 3;
 
-            Assert.Equal(["ฉัน", "รัก", "ภาษา", "ไทย"], words.Select(w => w.Text!).ToArray());
+            Assert.Equal(["ฉัน", "รัก", "ภาษา", "ไทย"], [.. words.Select(w => w.Text!)]);
             Assert.Equal(3, box.LineBoxes.Count);
 
             // Two words on the first line, side by side; the next two each start a line, under the first.

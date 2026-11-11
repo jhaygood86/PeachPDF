@@ -297,7 +297,7 @@ internal class PdfRasterImage : IDisposable
     /// <summary>
     /// Gets the size in point of the image.
     /// </summary>
-    public virtual Size Size => new Size(PointWidth, PointHeight);
+    public virtual Size Size => new(PointWidth, PointHeight);
 
     /// <summary>
     /// Gets the horizontal resolution of the image.

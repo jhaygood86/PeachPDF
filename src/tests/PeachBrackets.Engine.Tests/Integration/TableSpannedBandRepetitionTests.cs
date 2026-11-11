@@ -515,7 +515,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// </remarks>
         private static List<(int Slot, (double Top, double Bottom, double StartsAt, double EndsAt) Strip)>
             StripsOfTheTallRow(HtmlContainerInt container) =>
-            RowFragmentsOf(container)
+            [.. RowFragmentsOf(container)
                 .Where(f => f.Fragment.OverflowClip is not null)
                 .OrderBy(f => f.Slot)
                 .Select(f =>
@@ -527,24 +527,21 @@ namespace PeachBrackets.Engine.Tests.Integration
                         // rectangle is the whole row, drawn from this band's origin, so the difference is
                         // the offset the strip picks the row up at.
                         clip.Top - f.Fragment.Rect.Top, clip.Bottom - f.Fragment.Rect.Top));
-                })
-                .ToList();
+                })];
 
         /// <summary>Every fragment of the tall row, with the slot it was emitted in.</summary>
         private static List<(int Slot, BoxFragment Fragment)> RowFragmentsOf(HtmlContainerInt container) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root)
                     .Where(b => b.Box.Display.Value == DisplayMode.TableRow
                                 && b.Box.Boxes.Count > 0
                                 && b.Box.Boxes[0].Words.Count == 0)
-                    .Select(b => (f.SlotIndex, b)))
-                .ToList();
+                    .Select(b => (f.SlotIndex, b)))];
 
         private static List<int> SlotsDrawnOn(HtmlContainerInt container, string text) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .Where(f => Flatten(f.Root).SelectMany(b => b.Words).Any(w => w.Word.Text == text))
-                .Select(f => f.SlotIndex)
-                .ToList();
+                .Select(f => f.SlotIndex)];
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {

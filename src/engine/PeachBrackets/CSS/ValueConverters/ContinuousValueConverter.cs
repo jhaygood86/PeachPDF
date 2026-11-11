@@ -30,7 +30,7 @@ namespace PeachBrackets.Css
                 options.Add(option);
             }
 
-            return new OptionsValue(options.ToArray(), value);
+            return new OptionsValue([.. options], value);
         }
 
         public IPropertyValue Construct(Property[] properties)

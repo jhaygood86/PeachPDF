@@ -20,7 +20,7 @@ namespace PeachBrackets.Svg
         private readonly RenderContext _renderContext;
         // One set of drawings for each PDF document, so a glyph repeated across pages is built once and its form is shared: the form cache
         // of the SVG renderer is keyed by the drawing's identity. A graphics with no PDF document (the raster one) shares them per adapter.
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, Dictionary<GlyphDocumentKey, SvgDocument?>> Documents = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, Dictionary<GlyphDocumentKey, SvgDocument?>> Documents = [];
 
         private readonly Dictionary<GlyphDocumentKey, SvgDocument?> _documents;
 

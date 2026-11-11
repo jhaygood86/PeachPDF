@@ -157,7 +157,7 @@ namespace PeachDrawing.Text.Internal.Text
                 runs.Add(new Run(start, end, parts[2]));
             }
 
-            return runs.ToArray();
+            return [.. runs];
         }
     }
 }

@@ -16793,7 +16793,7 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                         column.Item().Width(300).Height(160).Image(size =>
                         {
                             var barPlot = new Plot();
-                            barPlot.Add.Bars(new double[] { 42, 31, 27 });
+                            barPlot.Add.Bars([42, 31, 27]);
                             barPlot.Title("Q1 revenue by region ($k)");
                             return barPlot.GetImageBytes((int)size.Width * 2, (int)size.Height * 2, ImageFormat.Png);
                         });

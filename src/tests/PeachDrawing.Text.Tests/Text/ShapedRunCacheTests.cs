@@ -35,7 +35,7 @@ namespace PeachDrawing.Text.Tests.Text
             var second = Shaper.Shape(face, "AB", ShapeSettings.Default);
 
             Assert.Same(first, second);
-            Assert.Equal([1, 2], first.Glyphs.Select(g => g.GlyphIndex).ToArray());
+            Assert.Equal([1, 2], [.. first.Glyphs.Select(g => g.GlyphIndex)]);
         }
 
         [Fact]

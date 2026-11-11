@@ -19,10 +19,10 @@ namespace PeachBrackets.Html
     /// </remarks>
     internal sealed partial class ViewportState
     {
-        private Dictionary<CssBox, (double Dx, double Dy)> _displacements = new(ReferenceEqualityComparer.Instance);
+        private Dictionary<CssBox, (double Dx, double Dy)> _displacements = [with(ReferenceEqualityComparer.Instance)];
         private ViewportIndex? _index;
         private (double X, double Y) _lastOrigin;
-        private HashSet<CssBox> _attached = new(ReferenceEqualityComparer.Instance);
+        private HashSet<CssBox> _attached = [with(ReferenceEqualityComparer.Instance)];
         private List<BoxFragment> _attachedRoots = [];
 
         /// <summary>Which layer the paint in progress is drawing; set by <see cref="HtmlDocument"/> around a paint call.</summary>
@@ -88,8 +88,8 @@ namespace PeachBrackets.Html
             var tree = container.FragmentTree;
             if (!container.Continuous || tree is not { Fragmentainers.Count: > 0 })
             {
-                _displacements = new Dictionary<CssBox, (double, double)>(ReferenceEqualityComparer.Instance);
-                _attached = new HashSet<CssBox>(ReferenceEqualityComparer.Instance);
+                _displacements = [with(ReferenceEqualityComparer.Instance)];
+                _attached = [with(ReferenceEqualityComparer.Instance)];
                 _attachedRoots = [];
                 _index = null;
                 return dirty;
@@ -279,7 +279,7 @@ namespace PeachBrackets.Html
         {
             var index = new ViewportIndex(tree);
             if (tree.Fragmentainers.Count > 0)
-                index.Collect(tree.Fragmentainers[0].Root, null, [], new HashSet<CssBox>(ReferenceEqualityComparer.Instance));
+                index.Collect(tree.Fragmentainers[0].Root, null, [], [with(ReferenceEqualityComparer.Instance)]);
 
             return index;
         }

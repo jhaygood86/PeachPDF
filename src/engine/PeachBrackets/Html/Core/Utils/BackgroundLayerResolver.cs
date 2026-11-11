@@ -32,7 +32,7 @@ namespace PeachBrackets.Html.Utils
             if (value.IndexOf(',') < 0)
                 return [value.Trim()];
 
-            return CssValueParser.SplitTopLevelCommas(value).Select(s => s.Trim()).ToArray();
+            return [.. CssValueParser.SplitTopLevelCommas(value).Select(s => s.Trim())];
         }
 
         /// <summary>

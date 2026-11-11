@@ -111,7 +111,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// <param name="textColor">The color used to draw the outline text.</param>
     public PdfOutline Add(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style, PaintColor textColor)
     {
-        PdfOutline outline = new PdfOutline(title, destinationPage, opened, style, textColor);
+        PdfOutline outline = new(title, destinationPage, opened, style, textColor);
         Add(outline);
         return outline;
     }
@@ -125,7 +125,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// <param name="style">The font style used to draw the outline text.</param>
     public PdfOutline Add(string title, PdfPage destinationPage, bool opened, PdfOutlineStyle style)
     {
-        PdfOutline outline = new PdfOutline(title, destinationPage, opened, style);
+        PdfOutline outline = new(title, destinationPage, opened, style);
         Add(outline);
         return outline;
     }
@@ -138,7 +138,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// <param name="opened">Specifies whether the node is displayed expanded (opened) or collapsed.</param>
     public PdfOutline Add(string title, PdfPage destinationPage, bool opened)
     {
-        PdfOutline outline = new PdfOutline(title, destinationPage, opened);
+        PdfOutline outline = new(title, destinationPage, opened);
         Add(outline);
         return outline;
     }
@@ -148,7 +148,7 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
     /// </summary>
     public PdfOutline Add(string title, PdfPage destinationPage)
     {
-        PdfOutline outline = new PdfOutline(title, destinationPage);
+        PdfOutline outline = new(title, destinationPage);
         Add(outline);
         return outline;
     }

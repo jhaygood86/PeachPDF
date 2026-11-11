@@ -47,7 +47,7 @@ internal sealed class PdfCidFont : PdfFont
     {
         Elements.SetName(Keys.Type, "/Font");
         Elements.SetName(Keys.Subtype, "/CIDFontType2");
-        PdfDictionary cid = new PdfDictionary();
+        PdfDictionary cid = new();
         cid.Elements.SetString("/Ordering", "Identity");
         cid.Elements.SetString("/Registry", "Adobe");
         cid.Elements.SetInteger("/Supplement", 0);
@@ -85,7 +85,7 @@ internal sealed class PdfCidFont : PdfFont
         // CID fonts must be always embedded. PDFsharp embedds automatically a subset.
         ExportedFont subSet = TypefaceExporter.ExportSubset(FontDescriptor._typeface, _characterMapInfo.GlyphIndices, keepCharacterMap: false);
         byte[] fontData = subSet.Data.ToArray();
-        PdfDictionary fontStream = new PdfDictionary(Owner);
+        PdfDictionary fontStream = new(Owner);
         Owner.Internals.AddObject(fontStream);
         bool isCff = subSet.HasCffOutlines;
         if (isCff)

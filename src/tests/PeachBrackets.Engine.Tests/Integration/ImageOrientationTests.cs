@@ -306,9 +306,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         private static void AssertNear(Vector2 expected, Vector2 actual) =>
             Assert.True(Vector2.Distance(expected, actual) < 1e-3f, $"expected {expected}, got {actual}");
 
-        private static string[] TransformOrder(TestRecordingGraphics g) => g.Log
+        private static string[] TransformOrder(TestRecordingGraphics g) => [.. g.Log
             .Where(e => e is TestRecordingGraphics.PushTransformCall or TestRecordingGraphics.DrawImageCall or TestRecordingGraphics.PopTransformCall)
-            .Select(e => e.GetType().Name).ToArray();
+            .Select(e => e.GetType().Name)];
 
         // Where the stored raster's top-left, top-right and bottom-right corners land in the upright destination.
         public static TheoryData<int, Corner, Corner, Corner> ExifCorners => new()

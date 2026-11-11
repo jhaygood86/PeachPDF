@@ -173,12 +173,12 @@ internal sealed class PdfRectangle : PdfItem
     /// <summary>
     /// Gets or sets the coordinates of the first point of this PdfRectangle.
     /// </summary>
-    public PaintPoint Location => new PaintPoint(_x1, _y1);
+    public PaintPoint Location => new(_x1, _y1);
 
     /// <summary>
     /// Gets or sets the size of this PdfRectangle.
     /// </summary>
-    public Size Size => new Size(_x2 - _x1, _y2 - _y1);
+    public Size Size => new(_x2 - _x1, _y2 - _y1);
 
     /// <summary>
     /// Determines if the specified point is contained within this PdfRectangle.
@@ -258,5 +258,5 @@ internal sealed class PdfRectangle : PdfItem
     /// <summary>
     /// Represents an empty PdfRectangle.
     /// </summary>
-    public static readonly PdfRectangle Empty = new PdfRectangle();
+    public static readonly PdfRectangle Empty = new();
 }

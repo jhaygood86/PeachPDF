@@ -12,7 +12,7 @@ namespace PeachBrackets.Html.Paint
     internal sealed partial class FragmentPainter
     {
         /// <summary>Boxes currently being painted into a bitmap whose <c>drop-shadow()</c> the raster filter chain draws.</summary>
-        private readonly HashSet<CssBox> _dropShadowsInRaster = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _dropShadowsInRaster = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// True for the painter that supplies only the <em>text</em> of a subtree that was drawn as a bitmap (see

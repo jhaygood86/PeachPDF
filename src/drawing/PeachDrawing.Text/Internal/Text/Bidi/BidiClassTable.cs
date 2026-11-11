@@ -102,7 +102,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
                 runs.Add(new Run(start, end, cls));
             }
 
-            return runs.ToArray();
+            return [.. runs];
         }
     }
 }

@@ -24,7 +24,7 @@ namespace PeachBrackets.Css
     {
         public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
-            var tokens = value as Token[] ?? value.ToArray();
+            var tokens = value as Token[] ?? [.. value];
             var items = tokens.ToItems();
 
             if (items.Count == 1 && items[0] is [{ Type: TokenType.Ident } soleIdent] && soleIdent.Data.Is(Keywords.None))

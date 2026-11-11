@@ -273,8 +273,10 @@ internal static class PdfLinearizer
         var hintLength = hint0.Length;
         position += hintLength;
 
-        var objectOffsets = new Dictionary<PdfReference, long>();
-        objectOffsets[sections.Catalog] = catalogOffset;
+        var objectOffsets = new Dictionary<PdfReference, long>
+        {
+            [sections.Catalog] = catalogOffset
+        };
         foreach (var r in sections.FirstPage)
         {
             objectOffsets[r] = position;
@@ -439,7 +441,7 @@ internal static class PdfLinearizer
 
         public void Align() => _used = 0;
 
-        public byte[] ToArray() => _bytes.ToArray();
+        public byte[] ToArray() => [.. _bytes];
     }
 
     /// <summary>The primary hint stream's contents: the page offset hint table, then the shared object hint table; the result's first element is the table's length.</summary>
@@ -467,7 +469,7 @@ internal static class PdfLinearizer
             objectCounts[i] = own.Count;
             pageLengths[i] = Length(own);
             // In the order of the objects' numbers, which is the order a checker walks the page's objects in.
-            sharedIds[i] = reach[i].Where(entryIndex.ContainsKey).OrderBy(r => r.ObjectNumber).Select(r => entryIndex[r]).ToList();
+            sharedIds[i] = [.. reach[i].Where(entryIndex.ContainsKey).OrderBy(r => r.ObjectNumber).Select(r => entryIndex[r])];
         }
 
         long leastObjects = objectCounts.Min(), leastLength = pageLengths.Min();

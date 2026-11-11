@@ -95,7 +95,7 @@ public sealed record Win2dCursorArea(Rect Bounds, CursorShape Shape, IReadOnlyLi
 public sealed class Win2dLinkMap
 {
     private readonly List<Win2dLink> _links = [];
-    private readonly Dictionary<string, double> _destinations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, double> _destinations = [with(StringComparer.Ordinal)];
     private readonly Win2dLinkOptions _options;
     private readonly double _unitsPerDip;
 

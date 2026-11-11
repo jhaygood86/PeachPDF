@@ -20,7 +20,7 @@ internal sealed class Type1Font
 {
     const ushort EexecKey = 55665, CharStringKey = 4330, C1 = 52845, C2 = 22719;
 
-    readonly Dictionary<string, byte[]> _charStrings = new(StringComparer.Ordinal);
+    readonly Dictionary<string, byte[]> _charStrings = [with(StringComparer.Ordinal)];
     readonly List<string> _glyphOrder = [];
     readonly List<byte[]?> _subrs = [];
 
@@ -96,7 +96,7 @@ internal sealed class Type1Font
             if (v < 0) continue;
             if (hi < 0) hi = v; else { o.Add((byte)(hi * 16 + v)); hi = -1; }
         }
-        return o.ToArray();
+        return [.. o];
     }
 
     /// <summary>Undoes the Type 1 stream cipher (<paramref name="key"/> 55665 for eexec, 4330 for charstrings) and drops the first <paramref name="skip"/> bytes.</summary>
@@ -485,9 +485,9 @@ internal sealed class Type1Font
         foreach (var code in codes) encodingTable.Add((byte)code);
 
         var nameIndex = CffWriter.Index([System.Text.Encoding.ASCII.GetBytes(Name)]);
-        var stringIndex = CffWriter.Index(strings.ConvertAll(s => System.Text.Encoding.Latin1.GetBytes(s)).ToArray());
+        var stringIndex = CffWriter.Index([.. strings.ConvertAll(s => System.Text.Encoding.Latin1.GetBytes(s))]);
         var gsubrIndex = CffWriter.Index([]);
-        var charStringIndex = CffWriter.Index(charStringBytes.ToArray());
+        var charStringIndex = CffWriter.Index([.. charStringBytes]);
         byte[] privateDict = [139, 20, 139, 21];                       // defaultWidthX 0, nominalWidthX 0: widths are written in full
 
         byte[] header = [1, 0, 4, 4];
@@ -508,7 +508,7 @@ internal sealed class Type1Font
         cff.AddRange(encodingTable);
         cff.AddRange(privateDict);
         cff.AddRange(charStringIndex);
-        return cff.ToArray();
+        return [.. cff];
     }
 
     /// <summary>Encodes an outline as a Type 2 charstring: the width, then relative moves, lines and curves, then endchar.</summary>
@@ -550,7 +550,7 @@ internal sealed class Type1Font
             }
         if (first) Num(width);                                                              // a glyph with no outline still has a width
         o.Add(14);                                                                          // endchar
-        return o.ToArray();
+        return [.. o];
     }
 }
 
@@ -561,14 +561,14 @@ internal static class CffWriter
     public static byte[] Index(byte[][] items)
     {
         var o = new List<byte> { (byte)(items.Length >> 8), (byte)items.Length };
-        if (items.Length == 0) return o.ToArray();
+        if (items.Length == 0) return [.. o];
         o.Add(4);
         long offset = 1;
         void Off(long v) { o.Add((byte)(v >> 24)); o.Add((byte)(v >> 16)); o.Add((byte)(v >> 8)); o.Add((byte)v); }
         Off(offset);
         foreach (var item in items) { offset += item.Length; Off(offset); }
         foreach (var item in items) o.AddRange(item);
-        return o.ToArray();
+        return [.. o];
     }
 
     static void Int5(List<byte> d, int v) { d.Add(29); d.Add((byte)(v >> 24)); d.Add((byte)(v >> 16)); d.Add((byte)(v >> 8)); d.Add((byte)v); }
@@ -601,6 +601,6 @@ internal static class CffWriter
         Int5(d, encoding); d.Add(16);
         Int5(d, charStrings); d.Add(17);
         Int5(d, privateSize); Int5(d, privateOffset); d.Add(18);
-        return d.ToArray();
+        return [.. d];
     }
 }

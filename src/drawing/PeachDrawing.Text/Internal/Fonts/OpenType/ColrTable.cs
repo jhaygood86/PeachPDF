@@ -174,7 +174,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                     found.Add(new ColorLayer(_layerRecords[index].Gid, _layerRecords[index].PaletteIndex));
             }
 
-            layers = found.ToArray();
+            layers = [.. found];
             return true;
         }
 

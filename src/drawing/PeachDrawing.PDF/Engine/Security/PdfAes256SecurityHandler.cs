@@ -119,7 +119,7 @@ internal sealed class PdfAes256SecurityHandler
     }
 
     static PdfString HexString(byte[] bytes)
-        => new PdfString(PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length), PdfStringFlags.HexLiteral);
+        => new(PdfEncoders.LatinOneByteEncoding.GetString(bytes, 0, bytes.Length), PdfStringFlags.HexLiteral);
 
     /// <summary>
     /// Maps the public flags to the /P word: bits 1-2 clear, 7-8 and 13-32 set (reserved, ISO 32000-2 Table 22), and the

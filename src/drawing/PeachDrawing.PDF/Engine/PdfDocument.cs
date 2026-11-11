@@ -129,7 +129,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
 
         if (_outStream is not null)
         {
-            PdfWriter writer = new PdfWriter(_outStream);
+            PdfWriter writer = new(_outStream);
             try
             {
                 DoSave(writer);
@@ -703,7 +703,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         /// Get info for each image in the document.
         /// </summary>
         internal static List<ImageInfo> FindAll(PdfDocument doc) =>
-            doc.Pages.Cast<PdfPage>()
+            [.. doc.Pages.Cast<PdfPage>()
                 .Select(page => page.Elements.GetDictionary("/Resources"))
                 .Select(resources => resources?.Elements?.GetDictionary("/XObject"))
                 .Where(xObjects => xObjects?.Elements is not null)
@@ -712,8 +712,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
                     let xObject = (item.Value as PdfReference)?.Value as PdfDictionary
                     where xObject?.Elements?.GetString("/Subtype") == "/Image"
                     select new ImageInfo(xObjects, item, xObject)
-                )
-                .ToList();
+                )];
     }
 
     internal PdfTrailer _trailer = null!;

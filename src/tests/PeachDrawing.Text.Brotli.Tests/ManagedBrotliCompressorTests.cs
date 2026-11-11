@@ -80,7 +80,7 @@ namespace PeachDrawing.Text.Brotli.Tests
         public void TinyInputs_RoundTrip(int length)
         {
             AssertRoundTrips(Random(length, length), 6);
-            AssertRoundTrips(Enumerable.Repeat((byte)'a', length).ToArray(), 6);
+            AssertRoundTrips([.. Enumerable.Repeat((byte)'a', length)], 6);
         }
 
         [Theory]
@@ -110,7 +110,7 @@ namespace PeachDrawing.Text.Brotli.Tests
         public void RunsOfOneByte_RoundTrip(int quality)
         {
             AssertRoundTrips(new byte[1_000_000], quality);
-            AssertRoundTrips(Enumerable.Repeat((byte)0xFF, 70_000).ToArray(), quality);
+            AssertRoundTrips([.. Enumerable.Repeat((byte)0xFF, 70_000)], quality);
         }
 
         [Fact]
@@ -162,7 +162,7 @@ namespace PeachDrawing.Text.Brotli.Tests
 
             AssertRoundTrips(skewed, 6);
             AssertRoundTrips(allBytes, 6);
-            AssertRoundTrips(allBytes.Concat(allBytes).Concat(allBytes).ToArray(), 6);
+            AssertRoundTrips([.. allBytes, .. allBytes, .. allBytes], 6);
         }
 
         [Fact]

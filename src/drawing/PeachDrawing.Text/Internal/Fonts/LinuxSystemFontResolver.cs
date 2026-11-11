@@ -28,7 +28,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         [LibraryImport(libfontconfig)] private static partial IntPtr FcInitLoadConfigAndFonts();
 
-        static readonly Lazy<IntPtr> fcConfig = new Lazy<IntPtr>(FcInitLoadConfigAndFonts);
+        static readonly Lazy<IntPtr> fcConfig = new(FcInitLoadConfigAndFonts);
 
         /// <summary>
         /// One fontconfig answer per generic family, for the life of the process.
@@ -232,12 +232,12 @@ namespace PeachDrawing.Text.Internal.Fonts
         {
             try
             {
-                return ResolveFontConfig().Where(IsSupportedFontFile).ToArray();
+                return [.. ResolveFontConfig().Where(IsSupportedFontFile)];
             }
             catch (Exception ex)
             {
                 Debug.WriteLine(ex.ToString());
-                return ResolveFallback().Where(IsSupportedFontFile).ToArray();
+                return [.. ResolveFallback().Where(IsSupportedFontFile)];
             }
         }
 
@@ -264,7 +264,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 AddFontsToFontList(path);
             }
 
-            return fontList.ToArray();
+            return [.. fontList];
         }
 
         static IEnumerable<string> SearchPaths()

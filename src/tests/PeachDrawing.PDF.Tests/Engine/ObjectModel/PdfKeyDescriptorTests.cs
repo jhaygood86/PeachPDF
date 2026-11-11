@@ -7,7 +7,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
     public class KeyDescriptorTests
     {
         private static PdfKeyDescriptor CreateDescriptor(PdfKeyType keyType) =>
-            new PdfKeyDescriptor(new PdfKeyAttribute(keyType));
+            new(new PdfKeyAttribute(keyType));
 
         [Theory]
         [InlineData((int)PdfKeyType.Name, typeof(PdfName))]

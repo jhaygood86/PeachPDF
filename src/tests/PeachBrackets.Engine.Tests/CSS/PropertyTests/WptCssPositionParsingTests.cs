@@ -46,10 +46,10 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
 
         // ─── top/right/bottom/left: 'auto | <length-percentage>' ─────────────────
 
-        public static readonly TheoryData<string> CoordinateProperties = new()
-        {
+        public static readonly TheoryData<string> CoordinateProperties =
+        [
             "top", "right", "bottom", "left",
-        };
+        ];
 
         [Theory]
         [MemberData(nameof(CoordinateProperties))]

@@ -109,9 +109,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                   {rows}
                 </table>"), margin: 36);
 
-            return new[] { "c0", "c1", "c2" }
-                .Select(id => FindById(root, id)!.Location.X)
-                .ToArray();
+            return [.. new[] { "c0", "c1", "c2" }.Select(id => FindById(root, id)!.Location.X)];
         }
     }
 }

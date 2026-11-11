@@ -98,9 +98,9 @@ namespace PeachPDF.Tests.Integration
         // reference, not just that the PDF happens to dedup the resulting XObject.
         private sealed class CountingNetworkLoader(Uri baseUri, string primaryHtml) : RNetworkLoader
         {
-            private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = new();
+            private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = [];
 
-            public readonly Dictionary<string, int> RequestCounts = new();
+            public readonly Dictionary<string, int> RequestCounts = [];
 
             public override Uri? BaseUri { get; } = baseUri;
 

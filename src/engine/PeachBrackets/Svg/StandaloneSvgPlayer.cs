@@ -77,7 +77,7 @@ namespace PeachBrackets.Svg
             var smil = SmilSet.Read(new XElementSmilNode(root));
 
             IReadOnlyDictionary<string, KeyframeSet> keyframes = cssData is null
-                ? new Dictionary<string, KeyframeSet>(StringComparer.Ordinal)
+                ? [with(StringComparer.Ordinal)]
                 : RegisteredKeyframes.BuildRegistry(cssData, MediaQueryContext.TypeOnly("print"));
 
             // When the last CSS animation of any element ends, which says whether there are frames left to build.

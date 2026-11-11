@@ -50,7 +50,7 @@ namespace PeachBrackets.Html
             internal readonly bool Result = result;
         }
 
-        private static readonly ConditionalWeakTable<MediaList[], CachedMatch> Memo = new();
+        private static readonly ConditionalWeakTable<MediaList[], CachedMatch> Memo = [];
 
         private static bool Evaluate(MediaList[] enclosingMedia, MediaQueryContext context)
         {

@@ -200,7 +200,7 @@ namespace PeachBrackets.Html.Dom
             (int Start, int Length)? autoFitRange;
             if (colSubgrid && subgrid?.ColumnSizes is { } adoptedColumns)
             {
-                explicitColDefs = Enumerable.Repeat(GridTrackSize.Auto, adoptedColumns.Count).ToList();
+                explicitColDefs = [.. Enumerable.Repeat(GridTrackSize.Auto, adoptedColumns.Count)];
                 autoFitRange = null;
             }
             else
@@ -209,7 +209,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             var explicitRowDefs = rowSubgrid && subgrid is not null
-                ? Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount).ToList()
+                ? [.. Enumerable.Repeat(GridTrackSize.Auto, subgrid.RowCount)]
                 : ExpandTemplate(rowTemplate);
             var autoColDefs = ExpandTrackSizes(_gridBox.GridAutoColumns);
             var autoRowDefs = ExpandTrackSizes(_gridBox.GridAutoRows);
@@ -327,8 +327,8 @@ namespace PeachBrackets.Html.Dom
                 // indefinite height it behaves as `auto` (content-sized) per §7.2.1 — so demote percentage
                 // rows to auto here rather than seeding them to 0 and leaving them fixed (which collapsed
                 // them). Definite height keeps percentage rows resolving normally.
-                var effectiveRowDefs = hasDefiniteBlock ? explicitRowDefs : explicitRowDefs.Select(PercentToAuto).ToList();
-                var effectiveAutoRowDefs = hasDefiniteBlock ? autoRowDefs : autoRowDefs.Select(PercentToAuto).ToList();
+                var effectiveRowDefs = hasDefiniteBlock ? explicitRowDefs : [.. explicitRowDefs.Select(PercentToAuto)];
+                var effectiveAutoRowDefs = hasDefiniteBlock ? autoRowDefs : [.. autoRowDefs.Select(PercentToAuto)];
                 var rowDefs = BuildTrackDefs(effectiveRowDefs, effectiveAutoRowDefs, rowCount);
                 rows = new Track[rowCount];
                 for (var r = 0; r < rowCount; r++)
@@ -382,7 +382,7 @@ namespace PeachBrackets.Html.Dom
                 // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
                 // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
                 if (rowSubgrid && subgrid is not null)
-                    subgrid.ReportedRowSizes = rows.Take(subgrid.RowCount).Select(t => t.Size).ToArray();
+                    subgrid.ReportedRowSizes = [.. rows.Take(subgrid.RowCount).Select(t => t.Size)];
             }
 
             // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
@@ -547,11 +547,10 @@ namespace PeachBrackets.Html.Dom
         /// belongs to.
         /// </remarks>
         private static IReadOnlyList<IReadOnlyList<CssBox>> BuildRowGroups(List<Placement> placements) =>
-            placements
+            [.. placements
                 .GroupBy(p => p.RowStart)
                 .OrderBy(group => group.Key)
-                .Select(group => (IReadOnlyList<CssBox>)group.Select(p => p.Box).ToList())
-                .ToList();
+                .Select(group => (IReadOnlyList<CssBox>)[.. group.Select(p => p.Box)])];
 
         /// <summary>
         /// Captures each subgrid item's <see cref="GridSubgridContext"/> once, up front, while the live
@@ -622,11 +621,11 @@ namespace PeachBrackets.Html.Dom
 
                 var pending = isResumedRow
                     ? seedUnfinished!.Select(u => (Box: u.Item, Resume: (BreakToken?)u.Token)).ToList()
-                    : rowGroups[rowIndex].Select(box => (Box: box, Resume: (BreakToken?)null)).ToList();
+                    : [.. rowGroups[rowIndex].Select(box => (Box: box, Resume: (BreakToken?)null))];
 
                 var finished = isResumedRow && seedFinished is not null
                     ? new List<CssBox>(seedFinished)
-                    : new List<CssBox>();
+                    : [];
                 var unfinished = new List<UnfinishedGridItem>();
 
                 foreach (var (box, itemResume) in pending)
@@ -851,7 +850,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             // Restore DOM order so callers/tests see items in source order.
-            return placements.OrderBy(p => items.IndexOf(p.Box)).ToList();
+            return [.. placements.OrderBy(p => items.IndexOf(p.Box))];
         }
 
         private static (int Major, int Minor) FindFreeCell(
@@ -2101,7 +2100,7 @@ namespace PeachBrackets.Html.Dom
             var table = new Dictionary<string, List<int>>();
             if (template?.LineNames is { Count: > 0 } names)
                 foreach (var (name, lines) in names)
-                    table[name] = lines.ToList();
+                    table[name] = [.. lines];
             return table;
         }
 
@@ -2132,7 +2131,7 @@ namespace PeachBrackets.Html.Dom
             if (template is null)
                 return ([], null);
             if (template.AutoRepeat == GridAutoRepeatKind.None)
-                return (template.Tracks.ToList(), null);
+                return ([.. template.Tracks], null);
 
             var fixedDefs = template.Tracks;
             var repeated = template.AutoRepeatTracks;
@@ -2184,7 +2183,7 @@ namespace PeachBrackets.Html.Dom
             using var pooledTokens = CssValueParser.GetCssTokensPooled(value);
             List<Token> tokens = pooledTokens;
             var list = GridTrackListGrammar.TryParseTrackSizeList(tokens);
-            return list is { Count: > 0 } ? list.ToList() : [GridTrackSize.Auto];
+            return list is { Count: > 0 } ? [.. list] : [GridTrackSize.Auto];
         }
 
         /// <summary>Builds <paramref name="count"/> track definitions: the explicit tracks, then implicit

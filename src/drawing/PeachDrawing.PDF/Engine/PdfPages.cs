@@ -74,7 +74,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     public PdfPage Add()
     {
-        PdfPage page = new PdfPage();
+        PdfPage page = new();
         Insert(Count, page);
         return page;
     }
@@ -84,7 +84,7 @@ internal sealed class PdfPages : PdfDictionary, IEnumerable<PdfPage>
     /// </summary>
     public PdfPage Insert(int index)
     {
-        PdfPage page = new PdfPage();
+        PdfPage page = new();
         Insert(index, page);
         return page;
     }

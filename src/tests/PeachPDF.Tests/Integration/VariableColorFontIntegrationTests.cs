@@ -35,7 +35,7 @@ body {{ font-family: 'VC'; font-size: 60pt; }}
 
         /// <summary>The fill opacities the colour glyphs are painted with (the <c>/ca</c> entries of the graphics states).</summary>
         private static List<double> Opacities(string pdf) =>
-            Regex.Matches(pdf, @"/ca\s+(-?\d*\.?\d+)").Select(m => double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).Distinct().ToList();
+            [.. Regex.Matches(pdf, @"/ca\s+(-?\d*\.?\d+)").Select(m => double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture)).Distinct()];
 
         [Fact]
         public async Task ThePaintOfAColourGlyph_FollowsTheWeight()

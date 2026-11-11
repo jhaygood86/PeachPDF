@@ -25,7 +25,7 @@ internal static class PdfColorConversionGuard
     // own cached sRGB array) - parsing an ICC profile isn't free, and a solid-color-heavy document
     // realizes the same few colors/profiles over and over. ConditionalWeakTable needs no manual
     // eviction: an entry disappears once nothing but the cache still references the byte[] key.
-    private static readonly ConditionalWeakTable<byte[], PeachImage.IccColorProfile> ProfileCache = new();
+    private static readonly ConditionalWeakTable<byte[], PeachImage.IccColorProfile> ProfileCache = [];
 
     /// <summary>
     /// Returns <paramref name="color"/> converted per the document's <see cref="ColorOptions.ConversionMode"/>,

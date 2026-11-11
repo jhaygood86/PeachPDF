@@ -830,7 +830,7 @@ internal sealed class TtAvarSegment
 /// </summary>
 internal sealed class TtVarTables
 {
-    private static readonly ConditionalWeakTable<OpenTypeFontface, StrongBox<TtVarTables?>> Cache = new();
+    private static readonly ConditionalWeakTable<OpenTypeFontface, StrongBox<TtVarTables?>> Cache = [];
 
     private readonly OpenTypeFontface _font;
     private readonly byte[] _data;

@@ -25,7 +25,7 @@ namespace PeachBrackets.Engine.Tests.CSS
             var sheet = StylesheetParser.Default.Parse("#a { " + declaration + "; }");
             var style = sheet.Rules.OfType<IStyleRule>().Single().Style;
 
-            return longhands.Select(name => style.GetPropertyValue(name)).ToArray();
+            return [.. longhands.Select(name => style.GetPropertyValue(name))];
         }
 
         [Theory]
@@ -123,8 +123,7 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.DoesNotContain("/ShadingType", await Pdf("rgba(255, 0, 0, .5)"));
 
             // And it is the same page as the longhands it stands for.
-            static string[] Streams(string pdf) => System.Text.RegularExpressions.Regex.Matches(pdf, @"stream(.*?)endstream", System.Text.RegularExpressions.RegexOptions.Singleline)
-                .Select(match => match.Groups[1].Value).ToArray();
+            static string[] Streams(string pdf) => [.. System.Text.RegularExpressions.Regex.Matches(pdf, @"stream(.*?)endstream", System.Text.RegularExpressions.RegexOptions.Singleline).Select(match => match.Groups[1].Value)];
 
             var longhands = await Pdf("linear-gradient(to right, #00f, #0f0)", "background-color: rgba(255, 0, 0, .5)");
             Assert.Equal(Streams(longhands), Streams(shorthand));

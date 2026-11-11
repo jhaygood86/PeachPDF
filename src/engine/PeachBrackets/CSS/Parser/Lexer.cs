@@ -1385,10 +1385,10 @@ namespace PeachBrackets.Css
             return new(TokenType.EndOfFile, ReadOnlyMemory<char>.Empty, _position);
         }
 
-        private Token NewGreaterThan() => new Token(TokenType.GreaterThan, ">".AsMemory(), _position);
-        private Token NewGreaterThanOrEqual() => new Token(TokenType.GreaterThanOrEqual, ">=".AsMemory(), _position);
-        private Token NewLessThan() => new Token(TokenType.LessThan, "<".AsMemory(), _position);
-        private Token NewLessThanOrEqual() => new Token(TokenType.LessThanOrEqual, "<=".AsMemory(), _position);
+        private Token NewGreaterThan() => new(TokenType.GreaterThan, ">".AsMemory(), _position);
+        private Token NewGreaterThanOrEqual() => new(TokenType.GreaterThanOrEqual, ">=".AsMemory(), _position);
+        private Token NewLessThan() => new(TokenType.LessThan, "<".AsMemory(), _position);
+        private Token NewLessThanOrEqual() => new(TokenType.LessThanOrEqual, "<=".AsMemory(), _position);
 
 
         private Token NumberExponential(char letter)

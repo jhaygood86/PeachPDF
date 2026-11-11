@@ -78,16 +78,16 @@ namespace PeachBrackets.Html
         /// Document-level named string storage for CSS GCPM string-set property.
         /// Stores named strings in document order to support first/last retrieval.
         /// </summary>
-        private readonly List<NamedString> _namedStrings = new();
+        private readonly List<NamedString> _namedStrings = [];
 
-        private readonly List<NamedPageElement> _namedPageElements = new();
+        private readonly List<NamedPageElement> _namedPageElements = [];
 
         /// <summary>
         /// Document-level running-element storage for css-gcpm-3's <c>position: running()</c>, in
         /// document order (the order <see cref="Dom.CssBox.LayoutBlockChildren"/> registers them, which
         /// is document order for the same reason <see cref="_namedStrings"/> is).
         /// </summary>
-        private readonly List<RunningElement> _runningElements = new();
+        private readonly List<RunningElement> _runningElements = [];
 
         /// <summary>
         /// Every css-gcpm-3 <c>float: footnote</c> call in the document, in document order - built once
@@ -1155,7 +1155,7 @@ namespace PeachBrackets.Html
         /// this cache rather than re-decoding. Owns the cached <see cref="Image"/> instances - disposed
         /// only in <see cref="Dispose(bool)"/>, once, at the true end of this render.
         /// </summary>
-        private readonly Dictionary<string, (Image? Image, SvgDocument? SvgDocument)> _resolvedImageResources = new();
+        private readonly Dictionary<string, (Image? Image, SvgDocument? SvgDocument)> _resolvedImageResources = [];
 
         /// <summary>
         /// Looks up a previously resolved image/SVG resource by its resolved absolute source URI.
@@ -3540,7 +3540,7 @@ namespace PeachBrackets.Html
         /// The boxes already rewound to in this layout — one rewind per head, so a run that keeps reaching
         /// the same conclusion cannot cycle.
         /// </summary>
-        private readonly HashSet<CssBox> _passesRewoundFor = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _passesRewoundFor = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Records a request to re-enter the pass that placed <paramref name="head"/>, so a keep-with-next
@@ -5576,7 +5576,7 @@ namespace PeachBrackets.Html
         /// everything under it out, so an annotation is never written over paper nothing was drawn on. The painter is the one place that knows
         /// what it culled - the subtree's extent, the projection a perspective applies - which a box-tree rule would have to guess at.
         /// </summary>
-        internal void NoteNotRendered(CssBox box) => (_notRenderedBoxes ??= new HashSet<CssBox>(ReferenceEqualityComparer.Instance)).Add(box);
+        internal void NoteNotRendered(CssBox box) => (_notRenderedBoxes ??= [with(ReferenceEqualityComparer.Instance)]).Add(box);
 
         /// <summary>Whether the painter recorded <paramref name="box"/> with <see cref="NoteNotRendered"/>.</summary>
         internal bool IsNotRendered(CssBox box) => _notRenderedBoxes?.Contains(box) == true;

@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Encodings
             var yy = new[] { '©', '€' };
             char[] zz = ['©', '€'];
 
-            var bytes = ansiEncoding.GetBytes(new[] { '©', '€' }, 0, 2);
+            var bytes = ansiEncoding.GetBytes(['©', '€'], 0, 2);
             Assert.Equal((int)'©', bytes[0]);
             Assert.Equal((int)'', bytes[1]);
         }

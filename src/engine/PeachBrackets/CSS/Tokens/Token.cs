@@ -39,7 +39,7 @@ namespace PeachBrackets.Css
         public static readonly Token Whitespace = new(TokenType.Whitespace, " ".AsMemory(), TextPosition.Empty);
         public static readonly Token Comma = new(TokenType.Comma, ",".AsMemory(), TextPosition.Empty);
 
-        private static readonly char[] FloatIndicators = { '.', 'e', 'E' };
+        private static readonly char[] FloatIndicators = ['.', 'e', 'E'];
 
         public readonly TokenType Type;
 
@@ -113,7 +113,7 @@ namespace PeachBrackets.Css
             new(type, data, position);
 
         public static Token NewFunction(ReadOnlyMemory<char> data, TextPosition position) =>
-            new(TokenType.Function, data, position, new TokenExtra { Arguments = new List<Token>() });
+            new(TokenType.Function, data, position, new TokenExtra { Arguments = [] });
 
         public static Token NewNumber(ReadOnlyMemory<char> number, TextPosition position) =>
             new(TokenType.Number, number, position);

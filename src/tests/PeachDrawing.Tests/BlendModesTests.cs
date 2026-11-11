@@ -92,7 +92,7 @@ namespace PeachDrawing.Tests
         {
             var result = Blend(PaintBlendMode.Luminosity, Cb, Cs);
 
-            Assert.Equal(Lum(new byte[] { 128, 153, 179 }), Lum(result), 1);
+            Assert.Equal(Lum([128, 153, 179]), Lum(result), 1);
         }
 
         [Fact]
@@ -100,7 +100,7 @@ namespace PeachDrawing.Tests
         {
             var result = Blend(PaintBlendMode.Color, Cb, Cs);
 
-            Assert.Equal(Lum(new byte[] { 204, 102, 51 }), Lum(result), 1);
+            Assert.Equal(Lum([204, 102, 51]), Lum(result), 1);
         }
 
         [Fact]
@@ -108,8 +108,8 @@ namespace PeachDrawing.Tests
         {
             var result = Blend(PaintBlendMode.Hue, Cb, Cs);
 
-            Assert.Equal(Lum(new byte[] { 204, 102, 51 }), Lum(result), 1);
-            Assert.Equal(Sat(new byte[] { 204, 102, 51 }), Sat(result), 1);
+            Assert.Equal(Lum([204, 102, 51]), Lum(result), 1);
+            Assert.Equal(Sat([204, 102, 51]), Sat(result), 1);
         }
 
         [Fact]
@@ -117,8 +117,8 @@ namespace PeachDrawing.Tests
         {
             var result = Blend(PaintBlendMode.Saturation, Cb, (255, 0, 0, 255));
 
-            Assert.Equal(Lum(new byte[] { 204, 102, 51 }), Lum(result), 1);
-            Assert.True(Sat(result) > Sat(new byte[] { 204, 102, 51 }));
+            Assert.Equal(Lum([204, 102, 51]), Lum(result), 1);
+            Assert.True(Sat(result) > Sat([204, 102, 51]));
         }
 
         [Fact]

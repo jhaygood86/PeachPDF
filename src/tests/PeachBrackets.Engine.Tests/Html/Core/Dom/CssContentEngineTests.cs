@@ -338,11 +338,11 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         {
             // The tree-walk fallback's "last" keyword returns the *nearest* ancestor assignment (the
             // parent, since it's found first walking up), not the farthest - opposite of "first".
-            var parentTag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var parentTag = new HtmlTag("div", false, []);
             var parent = new CssBox(null, parentTag);
             parent.NamedStrings["chapter"] = new NamedString("chapter", "Parent Chapter");
 
-            var childTag = new HtmlTag("span", false, new Dictionary<string, string>());
+            var childTag = new HtmlTag("span", false, []);
             var child = new CssBox(parent, childTag);
             child.Content = "string(chapter, last)";
 
@@ -625,15 +625,15 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
             // (ApplyQuoteSubtreeExact, including its recursion into "closer"'s own child) is reached and
             // correct, not just AppendQuote's own always-exact walk.
             var parent = CreateBox();
-            var opener = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            var opener = new CssBox(parent, new HtmlTag("span", false, []));
             opener.Content = "open-quote";
 
-            var closer = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            var closer = new CssBox(parent, new HtmlTag("span", false, []));
             closer.Content = "close-quote";
-            var closerChild = new CssBox(closer, new HtmlTag("span", false, new Dictionary<string, string>()));
+            var closerChild = new CssBox(closer, new HtmlTag("span", false, []));
             closerChild.Content = "close-quote open-quote close-quote close-quote";
 
-            var afterCloser = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+            var afterCloser = new CssBox(parent, new HtmlTag("span", false, []));
             afterCloser.Content = "open-quote";
 
             CssContentEngine.ApplyContent(opener);
@@ -744,13 +744,13 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 
         private CssBox CreateBox()
         {
-            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var tag = new HtmlTag("div", false, []);
             return new CssBox(null, tag);
         }
 
         private CssBox CreateBox(HtmlContainerInt container)
         {
-            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var tag = new HtmlTag("div", false, []);
             var box = new CssBox(null, tag);
             box.HtmlContainer = container;
             return box;

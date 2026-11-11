@@ -179,7 +179,7 @@ internal sealed partial class PdfImage : PdfXObject
         {
             Stream = new PdfStream(imageDataCompressed, this);
             Elements[PdfStream.Keys.Length] = new PdfInteger(imageDataCompressed.Length);
-            PdfArray arrayFilters = new PdfArray(_document);
+            PdfArray arrayFilters = new(_document);
             arrayFilters.Elements.Add(new PdfName("/FlateDecode"));
             arrayFilters.Elements.Add(new PdfName("/DCTDecode"));
             Elements[PdfStream.Keys.Filter] = arrayFilters;
@@ -719,7 +719,7 @@ internal sealed partial class PdfImage : PdfXObject
             // monochrome mask is either sufficient or
             // provided for compatibility with older reader versions
             byte[] maskDataCompressed = StreamCompression.Encode(_document.Options, maskData, out var maskFilter);
-            PdfDictionary pdfMask = new PdfDictionary(_document);
+            PdfDictionary pdfMask = new(_document);
             pdfMask.Elements.SetName(Keys.Type, "/XObject");
             pdfMask.Elements.SetName(Keys.Subtype, "/Image");
 
@@ -744,7 +744,7 @@ internal sealed partial class PdfImage : PdfXObject
 
             // The image provides an alpha mask (requires Arcrobat 5.0 or higher)
             byte[] alphaMaskCompressed = StreamCompression.Encode(_document.Options, alphaMask, out var alphaFilter);
-            PdfDictionary smask = new PdfDictionary(_document);
+            PdfDictionary smask = new(_document);
             smask.Elements.SetName(Keys.Type, "/XObject");
             smask.Elements.SetName(Keys.Subtype, "/Image");
 

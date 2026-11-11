@@ -30,7 +30,7 @@ internal sealed class CffFont
     public double[] FontBBox { get; private init; } = [0, 0, 0, 0];
 
     /// <summary>The font's own code-to-glyph encoding when it is a custom one; empty for the predefined Standard and Expert encodings.</summary>
-    public Dictionary<int, int> BuiltInEncoding { get; private init; } = new();
+    public Dictionary<int, int> BuiltInEncoding { get; private init; } = [];
 
     /// <summary>Reads <paramref name="cff"/>; null when it is not a CFF program this reader understands.</summary>
     public static CffFont? Parse(byte[] cff)

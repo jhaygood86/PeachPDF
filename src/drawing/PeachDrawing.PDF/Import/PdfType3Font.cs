@@ -11,8 +11,8 @@ namespace PeachDrawing.PDF.Import;
 /// </summary>
 internal sealed class PdfType3Font
 {
-    readonly Dictionary<int, string> _names = new();
-    readonly Dictionary<int, double> _widths = new();
+    readonly Dictionary<int, string> _names = [];
+    readonly Dictionary<int, double> _widths = [];
     readonly PdfDictionary _charProcs;
     readonly PdfSourceDocument _doc;
 

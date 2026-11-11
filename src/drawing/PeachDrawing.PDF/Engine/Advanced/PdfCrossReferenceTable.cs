@@ -150,7 +150,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         get
         {
             Dictionary<PdfObjectId, PdfReference>.ValueCollection collection = ObjectTable.Values;
-            List<PdfReference> list = new List<PdfReference>(collection);
+            List<PdfReference> list = [with(collection)];
             list.Sort(PdfReference.Comparer);
             PdfReference[] irefs = new PdfReference[collection.Count];
             list.CopyTo(irefs, 0);
@@ -268,6 +268,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
             }
         }
 
-        return found.ToArray();
+        return [.. found];
     }
 }

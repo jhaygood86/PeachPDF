@@ -165,7 +165,7 @@ public static class HostResourceLoader
             {
                 if (hit.Expires > DateTime.UtcNow)
                 {
-                    response = new RNetworkResponse(new MemoryStream(hit.Content, writable: false), new Dictionary<string, string[]>(hit.Headers));
+                    response = new RNetworkResponse(new MemoryStream(hit.Content, writable: false), [with(hit.Headers)]);
                     return true;
                 }
 
@@ -241,7 +241,7 @@ public static class HostResourceLoader
                 activity?.SetTag("bytes", content.Bytes.Length);
                 await stream.DisposeAsync();
                 Remember(uri.AbsoluteUri, content.Bytes, headers);
-                return new RNetworkResponse(new MemoryStream(content.Bytes, writable: false), new Dictionary<string, string[]>(headers));
+                return new RNetworkResponse(new MemoryStream(content.Bytes, writable: false), [with(headers)]);
             }
 
             // Bigger than the limit: hand back what was read followed by the rest, uncached.

@@ -99,7 +99,7 @@ namespace PeachBrackets.Html.Handlers
                 if (edge.Style is (LineStyle.Dotted or LineStyle.Dashed) &&
                     edge.PaintColor.A < byte.MaxValue)
                 {
-                    if (!(groupedColors ??= new HashSet<PaintColor>()).Add(edge.PaintColor)) continue;
+                    if (!(groupedColors ??= []).Add(edge.PaintColor)) continue;
 
                     var group = new List<Border>();
                     foreach (var candidate in EdgePaintOrder)
@@ -390,7 +390,7 @@ namespace PeachBrackets.Html.Handlers
                         }
                     }
 
-                    groups ??= new List<(PaintColor, GraphicsPath)>(4);
+                    groups ??= [with(4)];
                     if (groupIndex < 0)
                     {
                         groupIndex = groups.Count;

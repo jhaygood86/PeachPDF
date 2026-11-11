@@ -310,10 +310,10 @@ namespace PeachDrawing.PDF
 
             var targets = layer.TargetPages is null
                 ? Enumerable.Range(1, _pages.Count).ToList()
-                : PdfPageSelector.Select(layer.TargetPages, _pages.Count).ToList();
+                : [.. PdfPageSelector.Select(layer.TargetPages, _pages.Count)];
             var from = layer.SourcePages is null
                 ? Enumerable.Range(1, source.PageCount).ToList()
-                : PdfPageSelector.Select(layer.SourcePages, source.PageCount).ToList();
+                : [.. PdfPageSelector.Select(layer.SourcePages, source.PageCount)];
             var repeat = layer.RepeatSourcePages is null ? [] : PdfPageSelector.Select(layer.RepeatSourcePages, source.PageCount).ToList();
 
             for (var ordinal = 0; ordinal < targets.Count; ordinal++)

@@ -206,13 +206,13 @@ namespace PeachDrawing.Text.Tests.Fonts
             var ok = new List<object> { 0, 0, Op.RMoveTo };
             ok.AddRange(Enumerable.Repeat<object>(1, 512)); // 512 operands: 256 lines
             ok.Add(Op.RLineTo);
-            Assert.True(TryDraw(Cs(ok.ToArray()), 0, out var outline));
+            Assert.True(TryDraw(Cs([.. ok]), 0, out var outline));
             Assert.Equal(256, outline.Contours[0].Segments.Count);
 
             var tooMany = new List<object> { 0, 0, Op.RMoveTo };
             tooMany.AddRange(Enumerable.Repeat<object>(1, 514));
             tooMany.Add(Op.RLineTo);
-            Assert.False(TryDraw(Cs(tooMany.ToArray()), 0, out _));
+            Assert.False(TryDraw(Cs([.. tooMany]), 0, out _));
         }
 
         [Fact]
@@ -302,7 +302,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 }
 
                 tokens.Add(Op.Return);
-                subrs[level] = Cs(tokens.ToArray());
+                subrs[level] = Cs([.. tokens]);
             }
 
             var table = Read([Cs(0, 0, Op.RMoveTo, -107, Op.CallGSubr, 1, 1, Op.RLineTo)], subrs);
@@ -323,7 +323,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         // ---------------------------------------------------------------------------------------------------------------------------
 
         private static (double X, double Y)[] Curves(GlyphOutline outline) =>
-            outline.Contours[0].Segments.SelectMany(s => new[] { s.Control1, s.Control2, s.End }).Select(p => (p.X, p.Y)).ToArray();
+            [.. outline.Contours[0].Segments.SelectMany(s => new[] { s.Control1, s.Control2, s.End }).Select(p => (p.X, p.Y))];
 
         [Fact]
         public void HFlex_DrawsTwoCurves_ThatEndAtTheStartingHeight()
@@ -358,7 +358,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             tokens.AddRange(operands.Cast<object>());
             tokens.Add(Op.Flex1);
 
-            Assert.True(TryDraw(Cs(tokens.ToArray()), 0, out var outline));
+            Assert.True(TryDraw(Cs([.. tokens]), 0, out var outline));
 
             Assert.Equal(expected, Curves(outline).SelectMany(p => new[] { p.X, p.Y }).ToArray());
         }
@@ -478,11 +478,11 @@ namespace PeachDrawing.Text.Tests.Fonts
         [Fact]
         public void MoreGlyphsThanAFontCanHave_IsNotSupported()
         {
-            var many = Table(Enumerable.Repeat(Array.Empty<byte>(), 65536).ToArray());
+            var many = Table([.. Enumerable.Repeat(Array.Empty<byte>(), 65536)]);
 
             Assert.False(new Cff2Table(many, 0, many.Length).IsSupported);
 
-            var most = Table(Enumerable.Repeat(Array.Empty<byte>(), 65535).ToArray());
+            var most = Table([.. Enumerable.Repeat(Array.Empty<byte>(), 65535)]);
             Assert.True(new Cff2Table(most, 0, most.Length).IsSupported);
         }
 
@@ -547,7 +547,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             U16(withLength, store.Count);
             withLength.AddRange(store);
 
-            var bytes = Table([Cs(1, 1, Op.RMoveTo)], variationStore: withLength.ToArray());
+            var bytes = Table([Cs(1, 1, Op.RMoveTo)], variationStore: [.. withLength]);
 
             Assert.False(new Cff2Table(bytes, 0, bytes.Length).IsSupported);
         }
@@ -575,7 +575,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         public void ADataSetThatNamesTheSameRegionManyTimes_GetsTheSameFactorEachTime()
         {
             // 40 entries, alternating region 0 and region 1: more than the sixteen from which each region's factor is worked out once.
-            var table = Table([Cs(1, 1, Op.RMoveTo)], variationStore: VariationStore(Regions, [Enumerable.Range(0, 40).Select(i => i % 2).ToArray()]));
+            var table = Table([Cs(1, 1, Op.RMoveTo)], variationStore: VariationStore(Regions, [[.. Enumerable.Range(0, 40).Select(i => i % 2)]]));
             var read = new Cff2Table(table, 0, table.Length);
 
             double[] scalars = read.GetRegionScalars(0, [0.5])!;

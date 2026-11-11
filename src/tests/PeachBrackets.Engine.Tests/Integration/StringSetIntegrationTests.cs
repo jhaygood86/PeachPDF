@@ -271,7 +271,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var results = new System.Collections.Generic.List<CssBox>();
             FindAllBoxesByTagNameRecursive(root, tagName, results);
-            return results.ToArray();
+            return [.. results];
         }
 
         private void FindAllBoxesByTagNameRecursive(CssBox box, string tagName, System.Collections.Generic.List<CssBox> results)

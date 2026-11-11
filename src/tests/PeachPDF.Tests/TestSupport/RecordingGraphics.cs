@@ -201,7 +201,7 @@ namespace PeachPDF.Tests.TestSupport
 
         public override void PushBlendMode(PaintBlendMode mode) { }
         public override void PopBlendMode() { }
-        public override object SetAntiAliasSmoothingMode() => new object();
+        public override object SetAntiAliasSmoothingMode() => new();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         /// <summary>
         /// Overrides the default fixed <c>(0, 12)</c> <see cref="MeasureString(string, Font, ShapeSettings?)"/>

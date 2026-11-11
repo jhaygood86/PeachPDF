@@ -44,12 +44,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(container.FragmentTree!.Fragmentainers.Count > 2,
                 "fixture must run to at least three pages, or 'Page N of M' asserts nothing");
 
-            return container.FragmentTree.Fragmentainers
+            return [.. container.FragmentTree.Fragmentainers
                 .Select(f => string.Concat(
                     Flatten(f.MarginBoxes.Single(m => m.BoxName == "bottom-center").Content)
                         .SelectMany(b => b.Words)
-                        .Select(w => w.Word.Text)))
-                .ToArray();
+                        .Select(w => w.Word.Text)))];
         }
 
         private static System.Collections.Generic.IEnumerable<BoxFragment> Flatten(BoxFragment box)

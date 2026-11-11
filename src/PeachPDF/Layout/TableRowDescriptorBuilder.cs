@@ -15,7 +15,7 @@ namespace PeachPDF.Layout
             Dictionary<string, string>? attributes = null;
             if (columnSpan != 1 || rowSpan != 1)
             {
-                attributes = new Dictionary<string, string>();
+                attributes = [];
                 if (columnSpan != 1) attributes["colspan"] = columnSpan.ToString(CultureInfo.InvariantCulture);
                 if (rowSpan != 1) attributes["rowspan"] = rowSpan.ToString(CultureInfo.InvariantCulture);
             }

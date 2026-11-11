@@ -589,9 +589,9 @@ namespace PeachBrackets.Html.Fragmentation
             /// </summary>
             internal void Adopt(List<(CssLineBox Line, Rect Rect)> lines, List<TextFragment> words, List<Draft> children)
             {
-                if (lines.Count > 0) Lines = lines.ToArray();
-                if (words.Count > 0) Words = words.ToArray();
-                if (children.Count > 0) Children = children.ToArray();
+                if (lines.Count > 0) Lines = [.. lines];
+                if (words.Count > 0) Words = [.. words];
+                if (children.Count > 0) Children = [.. children];
             }
         }
 
@@ -634,7 +634,7 @@ namespace PeachBrackets.Html.Fragmentation
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuedFrom = [];
         private readonly HashSet<(FragmentKey Key, int Slot)> _continuesInto = [];
         private readonly Dictionary<FragmentKey, Dictionary<CssLineBox, Rect>> _rectangles = [];
-        private readonly HashSet<CssBox> _frozen = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _frozen = [with(ReferenceEqualityComparer.Instance)];
         private readonly SortedSet<int> _stale = [];
         private readonly Dictionary<(CssBox Root, int Slot), List<CapturedInstance>> _capturedInstances = [];
 
@@ -651,7 +651,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// still safe for a normal <c>BuildDraft</c> call to consult (it re-derives <c>ownPrunable</c> fresh
         /// every visit); only the cursor's blind, no-BuildDraft-call skip needs the extra caution.
         /// </summary>
-        private readonly HashSet<CssBox> _capturedInstanceOwners = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _capturedInstanceOwners = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Every ancestor of every box in <see cref="_capturedInstanceOwners"/>, for the life of this
@@ -672,7 +672,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// this filter's per-visit one have different enough safety margins that widening one silently
         /// widening the other is not obviously safe either.
         /// </summary>
-        private readonly HashSet<CssBox> _capturedInstanceOwnerAncestors = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _capturedInstanceOwnerAncestors = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Walks from <paramref name="owner"/> up through every <see cref="CssBox.ParentBox"/>, adding each
@@ -706,7 +706,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// more than it had to, and the pass doing the clearing re-records.
         /// </remarks>
         private readonly Dictionary<CssBox, SortedDictionary<int, Rect>> _continuationShells =
-            new(ReferenceEqualityComparer.Instance);
+            [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// How far a box's own geometry is displaced in a given fragmentainer, and the content band that
@@ -720,7 +720,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// same in every band.
         /// </remarks>
         private readonly Dictionary<CssBox, Dictionary<int, (CssBox Root, double Shift, Rect Band)>> _displacements =
-            new(ReferenceEqualityComparer.Instance);
+            [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// How far a box's border box is displaced and resized, along the inline axis, in a given
@@ -729,7 +729,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// live geometry (which describes the fragmentainer that placed it) is the same in every slot.
         /// </summary>
         private readonly Dictionary<CssBox, Dictionary<int, (double X, double Width)>> _inlineFrames =
-            new(ReferenceEqualityComparer.Instance);
+            [with(ReferenceEqualityComparer.Instance)];
 
         private int _lastEmittedSlot = -1;
 
@@ -772,7 +772,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// </para>
         /// </summary>
         private readonly Dictionary<CssRect, (int Slot, string Site)> _wordClaimSite =
-            new(ReferenceEqualityComparer.Instance);
+            [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Releases every word in <paramref name="root"/>'s subtree that is currently claimed for
@@ -980,16 +980,16 @@ namespace PeachBrackets.Html.Fragmentation
         /// verification build can be run against the same starting state the pruned one saw. Only
         /// maintained when <see cref="VerifyPruningAgainstFullWalk"/> is on.
         /// </summary>
-        private readonly HashSet<CssBox> _frozenBeforeSlot = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _frozenBeforeSlot = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Boxes the slot being walked found nothing for, and boxes it found something for. Both are
         /// per slot, and the observation kept is the difference — see <see cref="RecordEmptyObservations"/>.
         /// </summary>
-        private readonly HashSet<CssBox> _emptyHereThisSlot = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _emptyHereThisSlot = [with(ReferenceEqualityComparer.Instance)];
 
         /// <inheritdoc cref="_emptyHereThisSlot"/>
-        private readonly HashSet<CssBox> _producedSomethingThisSlot = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssBox> _producedSomethingThisSlot = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// One <see cref="InvalidationHistory"/> per top-level section (see <see cref="ScopeOwnerOf"/>),
@@ -1007,7 +1007,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// (over-)catching boxes elsewhere that a mover never touched.
         /// </summary>
         private readonly Dictionary<CssBox, InvalidationHistory> _invalidationHistoryByScope =
-            new(ReferenceEqualityComparer.Instance);
+            [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// The <see cref="InvalidationHistory"/> scoped to <paramref name="scopeOwner"/>, created empty on
@@ -1162,7 +1162,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// <c>PageBreakTableKeepWithNextIntegrationTests.GapOneThenGapTwo_BothPrechecksFireForSameTable_ComposeWithoutDoubleCounting</c>,
         /// which the pruning-parity oracle caught this against.
         /// </remarks>
-        private readonly Dictionary<CssBox, int> _emptySincePass = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, int> _emptySincePass = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Keeps, as a candidate observation, the part of this slot's walk that found nothing — everything

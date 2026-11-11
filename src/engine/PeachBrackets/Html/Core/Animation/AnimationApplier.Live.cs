@@ -47,7 +47,7 @@ namespace PeachBrackets.Html.Animation
             }
 
             /// <summary>The keyframes of each property, with the implicit ends filled in, kept while the value the box has without the animation is the same.</summary>
-            internal Dictionary<string, (string? Underlying, List<(double Offset, string Value, string? Easing)> Frames)> FrameCache { get; } = new(StringComparer.OrdinalIgnoreCase);
+            internal Dictionary<string, (string? Underlying, List<(double Offset, string Value, string? Easing)> Frames)> FrameCache { get; } = [with(StringComparer.OrdinalIgnoreCase)];
 
             /// <summary>Time the animation has run, not counting time it was paused.</summary>
             public double Elapsed { get; set; }

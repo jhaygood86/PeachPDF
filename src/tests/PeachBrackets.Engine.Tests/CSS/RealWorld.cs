@@ -42,11 +42,11 @@ namespace PeachBrackets.Engine.Tests.CSS
 
             var newParser = new StylesheetParser();
 
-            StyleRule r = new StyleRule(newParser);
+            StyleRule r = new(newParser);
             r.SelectorText = "h1";
             r.Style.BackgroundColor = "red";
 
-            StyleRule r2 = new StyleRule(newParser);
+            StyleRule r2 = new(newParser);
             r2.SelectorText = "h2";
             r2.Style.BackgroundColor = "green";
 

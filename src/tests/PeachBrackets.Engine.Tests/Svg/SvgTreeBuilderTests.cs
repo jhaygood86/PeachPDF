@@ -1277,7 +1277,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var prefetched = new System.Collections.Generic.Dictionary<string, SvgTreeBuilder.SvgImageResource>
             {
-                ["https://example.com/junk.png"] = new(new byte[] { 1, 2, 3, 4 }, IsSvg: false),
+                ["https://example.com/junk.png"] = new([1, 2, 3, 4], IsSvg: false),
             };
 
             var root = XDocument.Parse("""<svg xmlns="http://www.w3.org/2000/svg"><image width="10" height="10" href="https://example.com/junk.png"/></svg>""").Root!;

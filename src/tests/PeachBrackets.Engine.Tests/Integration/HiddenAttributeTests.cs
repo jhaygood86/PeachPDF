@@ -26,7 +26,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 FragmentPaintHarness.PaintPage(container, g, page);
             }
 
-            return g.DrawStringCalls.Select(c => c.Text.Trim()).ToList();
+            return [.. g.DrawStringCalls.Select(c => c.Text.Trim())];
         }
 
         private static async Task<CssBox> BoxAsync(string body, string id = "x")

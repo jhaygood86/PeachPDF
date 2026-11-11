@@ -545,7 +545,7 @@ internal sealed class HintingEngine
 
         outline.ContourList.Capacity = hinted.ContourEnds.Length;
 
-        List<GlyphOutlineDecoder.RawPoint> points = s_contourPoints ?? new List<GlyphOutlineDecoder.RawPoint>(64);
+        List<GlyphOutlineDecoder.RawPoint> points = s_contourPoints ?? [with(64)];
         s_contourPoints = null; // taken: a contour that throws leaves nothing half-used behind
 
         ReadOnlySpan<int> xs = hinted.X;

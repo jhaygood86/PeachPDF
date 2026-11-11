@@ -10,8 +10,8 @@ namespace PeachBrackets.Css
     /// <summary>The CSS Borders 4 corner longhand names (physical top-left first, then flow-relative start-start first).</summary>
     internal static class CornerNames
     {
-        public static readonly string[] PhysicalCorners = { "top-left", "top-right", "bottom-right", "bottom-left" };
-        public static readonly string[] LogicalCorners = { "start-start", "start-end", "end-start", "end-end" };
+        public static readonly string[] PhysicalCorners = ["top-left", "top-right", "bottom-right", "bottom-left"];
+        public static readonly string[] LogicalCorners = ["start-start", "start-end", "end-start", "end-end"];
 
         public static string Shape(string corner) => "corner-" + corner + "-shape";
 
@@ -40,7 +40,7 @@ namespace PeachBrackets.Css
     {
         // Side name -> the two corners it covers, in the order the shorthand's two values apply to them.
         private static readonly (string Side, string First, string Second, bool Logical)[] Sides =
-        {
+        [
             ("top", "top-left", "top-right", false),
             ("right", "top-right", "bottom-right", false),
             ("bottom", "bottom-left", "bottom-right", false),
@@ -49,7 +49,7 @@ namespace PeachBrackets.Css
             ("block-end", "end-start", "end-end", true),
             ("inline-start", "start-start", "end-start", true),
             ("inline-end", "start-end", "end-end", true),
-        };
+        ];
 
         /// <summary>Hands every shorthand to <paramref name="add"/> as (name, converter, longhands, logical).</summary>
         public static void Register(Action<string, IValueConverter, string[], bool> add)
@@ -101,7 +101,7 @@ namespace PeachBrackets.Css
                 add("corner-" + corner, WithAny(
                         CornerShapeConverter.Option().For(shape),
                         Converters.BorderRadiusConverter.Option().For(radius)).OrDefault(),
-                    new[] { shape, radius }, Array.IndexOf(CornerNames.LogicalCorners, corner) >= 0);
+                    [shape, radius], Array.IndexOf(CornerNames.LogicalCorners, corner) >= 0);
             }
         }
 

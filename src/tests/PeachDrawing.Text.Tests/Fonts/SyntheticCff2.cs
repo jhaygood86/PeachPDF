@@ -39,7 +39,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 }
             }
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         /// <summary>An operator: its byte, or two for an escaped one.</summary>
@@ -72,7 +72,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             var bytes = new List<byte>();
             AddU32(bytes, (uint)objects.Count);
             if (objects.Count == 0)
-                return bytes.ToArray();
+                return [.. bytes];
 
             bytes.Add((byte)offSize);
             int offset = 1;
@@ -86,7 +86,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             foreach (var item in objects)
                 bytes.AddRange(item);
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         /// <summary>
@@ -126,7 +126,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             var withLength = new List<byte>();
             AddU16(withLength, store.Count);
             withLength.AddRange(store);
-            return withLength.ToArray();
+            return [.. withLength];
         }
 
         /// <summary>An FDSelect of format 0, 3 or 4 that gives glyph <c>i</c> the Font DICT <paramref name="fontOfGlyph"/>[i].</summary>
@@ -137,7 +137,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             {
                 foreach (int font in fontOfGlyph)
                     bytes.Add((byte)font);
-                return bytes.ToArray();
+                return [.. bytes];
             }
 
             var ranges = new List<(int First, int Font)>();
@@ -170,7 +170,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 AddU32(bytes, (uint)fontOfGlyph.Length);
             }
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         /// <summary>
@@ -213,7 +213,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                     localIndexes.Add([]);
                 }
 
-                privates.Add(privateDict.ToArray());
+                privates.Add([.. privateDict]);
             }
 
             byte[] TopDict(int charStringsAt, int fdArrayAt, int fdSelectAt, int vstoreAt)
@@ -233,7 +233,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                     top.Add(24);
                 }
 
-                return top.ToArray();
+                return [.. top];
             }
 
             int topLength = TopDict(0, 0, 0, 0).Length;
@@ -250,7 +250,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             int fdArrayOffset = at;
             var fontDictEntries = new List<byte[]>();
             // A Font DICT is the Private operator with its two five-byte operands: eleven bytes each.
-            int fdArrayLength = Index(Enumerable.Repeat(new byte[11], fonts.Length).ToArray(), 3).Length;
+            int fdArrayLength = Index([.. Enumerable.Repeat(new byte[11], fonts.Length)], 3).Length;
             int privateAt = fdArrayOffset + fdArrayLength;
             var privateBlocks = new List<byte>();
             for (int i = 0; i < fonts.Length; i++)
@@ -271,7 +271,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 // With sharePrivate every Font DICT names the first one's Private DICT (and so its Local Subrs), which a real font never does.
                 entry.AddRange(Fixed(privateAt + (sharePrivate ? 0 : privateBlocks.Count)));
                 entry.Add(18);
-                fontDictEntries.Add(entry.ToArray());
+                fontDictEntries.Add([.. entry]);
                 if (!sharePrivate || i == 0)
                 {
                     privateBlocks.AddRange(privateDict);
@@ -292,7 +292,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             table.AddRange(fdSelectBytes);
             table.AddRange(fdArray);
             table.AddRange(privateBlocks);
-            return table.ToArray();
+            return [.. table];
         }
 
         private static byte[] Fixed(int value) => [29, (byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value];

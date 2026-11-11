@@ -379,7 +379,7 @@ internal static class PdfImageXObject
         U32(0);                                          // no further IFD
         for (int i = 0; i < 4; i++) U16(8);
         o.AddRange(cmyk);
-        return o.ToArray();
+        return [.. o];
     }
 
     // ------------------------------------------------------------ PNG

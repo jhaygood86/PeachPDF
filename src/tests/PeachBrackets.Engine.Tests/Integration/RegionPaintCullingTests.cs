@@ -44,9 +44,7 @@ public class RegionPaintCullingTests
 
     // Every word the canvas was asked to draw (a draw call may carry one word or several).
     private static List<string> Words(RecordingGraphics canvas) =>
-        canvas.Log.Where(op => op.Kind == PaintOpKind.DrawString)
-            .SelectMany(op => op.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries))
-            .ToList();
+        [.. canvas.Log.Where(op => op.Kind == PaintOpKind.DrawString).SelectMany(op => op.Text!.Split(' ', StringSplitOptions.RemoveEmptyEntries))];
 
     [Fact]
     public async Task AStripOfALongPage_DrawsItsOwnWords_AndNotTheRestOfThePage()

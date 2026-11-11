@@ -54,7 +54,7 @@ internal sealed class PdfToUnicodeMap : PdfDictionary
         // CharacterToGlyphIndex, keyed by Unicode scalar value); a GSUB ligature glyph (from
         // LigatureGlyphToText, populated by CharacterMapInfo.AddShapedText) has no single scalar value
         // to key on, so its multi-character source text is carried directly instead.
-        Dictionary<int, string> glyphIndexToText = new Dictionary<int, string>();
+        Dictionary<int, string> glyphIndexToText = [];
         int lowIndex = 65536, hiIndex = -1;
         foreach (KeyValuePair<int, int> entry in _characterMapInfo.CharacterToGlyphIndex)
         {

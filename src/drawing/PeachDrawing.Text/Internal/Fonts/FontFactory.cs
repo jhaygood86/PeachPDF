@@ -263,7 +263,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// Maps font typeface key to font resolver info.
         /// </summary>
         //static readonly Dictionary<string, FontResolverInfo> FontResolverInfosByTypefaceKey = new Dictionary<string, FontResolverInfo>(StringComparer.OrdinalIgnoreCase);
-        static readonly Dictionary<string, FontResolverInfo> FontResolverInfosByName = new Dictionary<string, FontResolverInfo>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, FontResolverInfo> FontResolverInfosByName = [with(StringComparer.OrdinalIgnoreCase)];
 
         ///// <summary>
         ///// Maps font resolver info key to font resolver info.
@@ -274,7 +274,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// Maps typeface key or font name to font source.
         /// </summary>
         //static readonly Dictionary<string, FontFileData> FontSourcesByTypefaceKey = new Dictionary<string, FontFileData>(StringComparer.OrdinalIgnoreCase);
-        static readonly Dictionary<string, FontFileData> FontSourcesByName = new Dictionary<string, FontFileData>(StringComparer.OrdinalIgnoreCase);
+        static readonly Dictionary<string, FontFileData> FontSourcesByName = [with(StringComparer.OrdinalIgnoreCase)];
 
         ///// <summary>
         ///// Maps font name to font source.
@@ -284,6 +284,6 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <summary>
         /// Maps font source key to font source.
         /// </summary>
-        static readonly Dictionary<FontContentHash, FontFileData> FontSourcesByKey = new Dictionary<FontContentHash, FontFileData>();
+        static readonly Dictionary<FontContentHash, FontFileData> FontSourcesByKey = [];
     }
 }

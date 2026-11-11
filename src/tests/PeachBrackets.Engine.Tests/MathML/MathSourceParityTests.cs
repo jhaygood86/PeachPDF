@@ -151,7 +151,7 @@ namespace PeachBrackets.Engine.Tests.MathML
                     var found = new List<CssBoxMath>();
                     Collect(root, found);
 
-                    return found.Select(math => math.SerializedSource).ToList();
+                    return [.. found.Select(math => math.SerializedSource)];
                 }
                 finally
                 {

@@ -455,8 +455,10 @@ namespace PeachBrackets.Html.Handlers
                 return stops;
 
             const int kSamples = 15;
-            var result = new List<(PaintColor, double)>(stops.Length * (kSamples + 1));
-            result.Add(stops[0]);
+            var result = new List<(PaintColor, double)>(stops.Length * (kSamples + 1))
+            {
+                stops[0]
+            };
             for (int i = 1; i < stops.Length; i++)
             {
                 var (c1, p1) = stops[i - 1];
@@ -477,7 +479,7 @@ namespace PeachBrackets.Html.Handlers
                 }
                 result.Add(stops[i]);
             }
-            return result.ToArray();
+            return [.. result];
         }
 
         private static (PaintColor[] Colors, double[] AnglesRad) ApplyConicColorSpaceInterpolation(
@@ -617,8 +619,8 @@ namespace PeachBrackets.Html.Handlers
             if (g.ColorSpace != GradientColorSpace.Srgb)
             {
                 var (csColors, csAngles) = ApplyConicColorSpaceInterpolation(colors, angles, g.ColorSpace, g.HueMethod);
-                colors = new List<PaintColor>(csColors);
-                angles = new List<double>(csAngles);
+                colors = [with(csColors)];
+                angles = [with(csAngles)];
             }
 
             if (g.IsRepeating && n >= 2)
@@ -689,7 +691,7 @@ namespace PeachBrackets.Html.Handlers
                 result.Insert(0, (SampleRepeatingColor(stops, tileStart, tileLen, 0.0), 0.0));
             if (result[^1].Position < 1.0 - eps)
                 result.Add((SampleRepeatingColor(stops, tileStart, tileLen, 1.0), 1.0));
-            return result.ToArray();
+            return [.. result];
         }
 
         private static PaintColor SampleRepeatingColor((PaintColor PaintColor, double Position)[] stops, double tileStart, double tileLen, double pos)
@@ -720,7 +722,7 @@ namespace PeachBrackets.Html.Handlers
         {
             var colorStops = stops.Where(s => !s.IsHint).ToArray();
             int n = colorStops.Length;
-            if (n == 0) return Array.Empty<(PaintColor, double)>();
+            if (n == 0) return [];
 
             var rawPos = new double?[n];
             for (int i = 0; i < n; i++)
@@ -803,7 +805,7 @@ namespace PeachBrackets.Html.Handlers
                     }
                 }
             }
-            return ApplyColorSpaceInterpolation(result.ToArray(), colorSpace, hueMethod);
+            return ApplyColorSpaceInterpolation([.. result], colorSpace, hueMethod);
         }
     }
 }

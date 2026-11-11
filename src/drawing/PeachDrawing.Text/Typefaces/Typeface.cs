@@ -531,7 +531,7 @@ namespace PeachDrawing.Text
         /// that is not variable.
         /// </summary>
         public IReadOnlyList<AxisSetting> AxisSettings => Face.Fontface.Variations is { } variations
-            ? SettingsOf(variations, Face.Variation?.UserValues ?? variations.Axes.Select(a => a.Default).ToArray())
+            ? SettingsOf(variations, Face.Variation?.UserValues ?? [.. variations.Axes.Select(a => a.Default)])
             : Array.Empty<AxisSetting>();
 
         private static IReadOnlyList<AxisSetting> SettingsOf(FontVariations variations, double[] values) =>

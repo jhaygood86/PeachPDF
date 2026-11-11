@@ -24,9 +24,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var fills = recording.Log.Where(op => op.Kind == PaintOpKind.FillRect).ToList();
 
             // The position in the paint log of the fill that is exactly this tall, per requested height.
-            return fillHeights
-                .Select(height => fills.FindIndex(op => System.Math.Abs(op.Bounds.Height - height) < 0.01))
-                .ToArray();
+            return [.. fillHeights.Select(height => fills.FindIndex(op => System.Math.Abs(op.Bounds.Height - height) < 0.01))];
         }
 
         [Theory]

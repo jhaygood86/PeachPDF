@@ -36,7 +36,7 @@ namespace PeachBrackets.Html
         /// <summary>The narrowest parent worth indexing.</summary>
         internal const int MinChildren = 16;
 
-        private static readonly ConditionalWeakTable<List<CssBox>, SiblingIndex> Cache = new();
+        private static readonly ConditionalWeakTable<List<CssBox>, SiblingIndex> Cache = [];
 
         private readonly List<CssBox> _children;
         private readonly int _childCount;
@@ -65,7 +65,7 @@ namespace PeachBrackets.Html
             }
 
             Elements = elements;
-            _childSlot = slots.ToArray();
+            _childSlot = [.. slots];
             _position = new Dictionary<CssBox, int>(elements.Count, ReferenceEqualityComparer.Instance);
             for (var i = 0; i < elements.Count; i++) _position[elements[i]] = i;
         }

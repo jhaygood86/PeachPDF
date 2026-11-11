@@ -14,8 +14,8 @@ namespace PeachBrackets.Html.Parse
     /// </remarks>
     internal sealed class PendingVarMap : Dictionary<string, string>
     {
-        private readonly Dictionary<string, int> _writtenAt = new();
-        private readonly Dictionary<string, int> _plainAt = new();
+        private readonly Dictionary<string, int> _writtenAt = [];
+        private readonly Dictionary<string, int> _plainAt = [];
         private int _clock;
 
         /// <summary>Defers a declaration whose value uses <c>var()</c>; a later one for the same property replaces it.</summary>

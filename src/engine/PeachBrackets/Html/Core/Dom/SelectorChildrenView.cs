@@ -26,7 +26,7 @@ namespace PeachBrackets.Html.Dom
     /// </remarks>
     internal sealed class SelectorChildrenView
     {
-        private static readonly ConditionalWeakTable<List<CssBox>, SelectorChildrenView> Cache = new();
+        private static readonly ConditionalWeakTable<List<CssBox>, SelectorChildrenView> Cache = [];
 
         private readonly int _count;
         private readonly CssBox? _first;

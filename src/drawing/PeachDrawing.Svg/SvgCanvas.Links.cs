@@ -10,7 +10,7 @@ public sealed partial class SvgCanvas
     // The links and destinations are kept until the document is written and then go after everything that was drawn, outside every group, so
     // they lie on top (what a pointer reaches first) and in the document's own coordinates whatever was pushed when they were added.
     private readonly List<string> _links = [];
-    private readonly HashSet<string> _destinations = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _destinations = [with(StringComparer.Ordinal)];
 
     // Pointer areas lie under the links: a link's area is reached first (and the browser shows its own pointer for it), so one that a cursor
     // area happens to cover is still clickable.

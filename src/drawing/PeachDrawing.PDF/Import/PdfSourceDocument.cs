@@ -25,11 +25,11 @@ internal sealed class PdfSourceDocument
 
     readonly byte[] _data;
     readonly PdfDocument _doc;
-    readonly Dictionary<int, XrefEntry> _xref = new();
-    readonly Dictionary<int, PdfReference> _refs = new();
-    readonly Dictionary<int, PdfItem> _loaded = new();
-    readonly HashSet<int> _loading = new();
-    readonly Dictionary<int, List<(int Number, PdfItem Item)>> _objectStreams = new();
+    readonly Dictionary<int, XrefEntry> _xref = [];
+    readonly Dictionary<int, PdfReference> _refs = [];
+    readonly Dictionary<int, PdfItem> _loaded = [];
+    readonly HashSet<int> _loading = [];
+    readonly Dictionary<int, List<(int Number, PdfItem Item)>> _objectStreams = [];
     bool _rebuilt;
     PdfDecryptor? _decryptor;
     int _encryptObjectNumber = -1;
@@ -591,7 +591,7 @@ internal sealed class PdfSourceDocument
         var pages = new List<PdfDictionary>();
         var root = Resolve(Trailer.GetRaw("Root")) as PdfDictionary ?? throw new InvalidDataException("The PDF has no document catalog.");
         var top = Resolve(root.GetRaw("Pages")) as PdfDictionary ?? throw new InvalidDataException("The PDF has no page tree.");
-        Walk(top, pages, new HashSet<PdfDictionary>(ReferenceEqualityComparer.Instance), 0);
+        Walk(top, pages, [with(ReferenceEqualityComparer.Instance)], 0);
         return pages;
     }
 

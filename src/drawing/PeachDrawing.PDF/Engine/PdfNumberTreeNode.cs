@@ -53,7 +53,7 @@ internal sealed class PdfNumberTreeNode : PdfDictionary
     /// </summary>
     public IEnumerable<PdfNumberTreeNode> Kids => _kids;
 
-    private readonly List<PdfNumberTreeNode> _kids = new();
+    private readonly List<PdfNumberTreeNode> _kids = [];
 
     private void Initialize()
     {

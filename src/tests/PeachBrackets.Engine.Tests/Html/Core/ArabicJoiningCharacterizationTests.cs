@@ -43,8 +43,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.Arabic);
 
         private static int[] ShapeGlyphIds(Typeface descriptor, string text, IReadOnlyList<ArabicJoiningForm> forms) =>
-            descriptor.ShapeGlyphs(text, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms))
-                .Select(g => g.GlyphIndex).ToArray();
+            [.. descriptor.ShapeGlyphs(text, new ShapeSettings(ScriptTag: "arab", JoiningForms: forms)).Select(g => g.GlyphIndex)];
 
         [Fact]
         public void Shape_SingleMirrorableGlyphWithJoiningFormsRequested_StillMirrorsForDisplay()

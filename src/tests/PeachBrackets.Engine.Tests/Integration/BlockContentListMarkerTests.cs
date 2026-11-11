@@ -273,15 +273,12 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         /// <summary>Every fragment <paramref name="box"/> produced, in fill order.</summary>
         private static List<BoxFragment> FragmentsOf(HtmlContainerInt container, CssBox box) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
-                .Where(f => ReferenceEquals(f.Box, box))
-                .ToList();
+                .Where(f => ReferenceEquals(f.Box, box))];
 
         private static List<CssBox> ListItems(CssBox root) =>
-            LayoutHarness.Descendants(root)
-                .Where(b => b.Display.Value == DisplayMode.ListItem)
-                .ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.ListItem)];
 
         private static string? Id(CssBox box) => box.HtmlTag?.TryGetAttribute("id");
 

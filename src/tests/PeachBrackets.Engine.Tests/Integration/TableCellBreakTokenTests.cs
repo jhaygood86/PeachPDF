@@ -46,7 +46,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         private static List<CssBox> CellsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableCell).ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableCell)];
 
         // ─── A table that paginates loses nothing and duplicates nothing ─────────────────────────
 

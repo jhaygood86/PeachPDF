@@ -131,7 +131,7 @@ namespace PeachBrackets.Html.Parse
         {
             if (!string.IsNullOrEmpty(stylesheet))
             {
-                await ParseStyle(cssData, stylesheet.AsMemory(), baseUri, new HashSet<string>());
+                await ParseStyle(cssData, stylesheet.AsMemory(), baseUri, []);
             }
         }
 
@@ -140,7 +140,7 @@ namespace PeachBrackets.Html.Parse
         {
             if (!stylesheet.IsEmpty)
             {
-                await ParseStyle(cssData, stylesheet, baseUri, new HashSet<string>());
+                await ParseStyle(cssData, stylesheet, baseUri, []);
             }
         }
 

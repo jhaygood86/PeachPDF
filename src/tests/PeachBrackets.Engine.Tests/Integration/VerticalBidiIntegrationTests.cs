@@ -16,10 +16,9 @@ namespace PeachBrackets.Engine.Tests.Integration
     public class VerticalBidiIntegrationTests
     {
         private static List<CssRectWord> WordsOf(CssBox box) =>
-            LayoutHarness.Descendants(box)
+            [.. LayoutHarness.Descendants(box)
                 .SelectMany(b => b.Words.OfType<CssRectWord>())
-                .Where(w => w.Text != "\n")
-                .ToList();
+                .Where(w => w.Text != "\n")];
 
         [Fact]
         public async Task VerticalRl_RtlParagraph_DigitRunWithNoSurroundingWhitespace_ReordersBetweenItsNeighborsAlongTop()

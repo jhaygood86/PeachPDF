@@ -27,7 +27,7 @@ internal sealed partial class PdfGraphics : IDisposable
     {
         PdfGraphicsStateToken? xState = null;
         xState = new PdfGraphicsStateToken();
-        InternalGraphicsState iState = new InternalGraphicsState(this, xState);
+        InternalGraphicsState iState = new(this, xState);
         iState.Transform = _transform;
         _gsStack.Push(iState);
 

@@ -40,7 +40,7 @@ public class GpuResidentImageTests
             for (var x = 0; x < 16; x++)
                 pixels.Add(scene.Px(x, y));
 
-        return pixels.ToArray();
+        return [.. pixels];
     }
 
     [Fact]

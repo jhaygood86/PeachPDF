@@ -282,7 +282,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var page = Assert.Single(container.FragmentTree!.Fragmentainers);
             Assert.NotNull(page.FootnoteAreas);
-            return page.FootnoteAreas!.OrderBy(a => a.DividerRect.X).ToList();
+            return [.. page.FootnoteAreas!.OrderBy(a => a.DividerRect.X)];
         }
 
         /// <summary>

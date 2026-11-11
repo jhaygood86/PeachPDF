@@ -182,10 +182,10 @@ internal class CharacterMapInfo
         return indices;
     }
 
-    public Dictionary<int, int> CharacterToGlyphIndex = new Dictionary<int, int>();
+    public Dictionary<int, int> CharacterToGlyphIndex = [];
     public HashSet<int> GlyphIndices { get; } = [];
 
     /// <summary>Glyph index to source text, for glyphs <see cref="AddShapedText"/> produced that
     /// represent more than one character (GSUB ligatures) or an astral codepoint.</summary>
-    public Dictionary<int, string> LigatureGlyphToText = new Dictionary<int, string>();
+    public Dictionary<int, string> LigatureGlyphToText = [];
 }

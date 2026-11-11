@@ -109,7 +109,7 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
-            return merged.Values.ToList();
+            return [.. merged.Values];
         }
 
         /// <summary>

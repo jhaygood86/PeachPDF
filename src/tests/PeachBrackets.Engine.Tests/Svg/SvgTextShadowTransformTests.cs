@@ -38,7 +38,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         private static TestRecordingGraphics.PushTransformCall[] GlyphPushes(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).ToArray();
+            [.. g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1)];
 
         [Fact]
         public void TextPath_Shadow_PaintsUnderEachGlyphOffsetInUserSpace()
@@ -50,7 +50,7 @@ namespace PeachBrackets.Engine.Tests.Svg
 
             Assert.Equal(4, g.DrawStringCalls.Count);
             // Shadow (red) then glyph (blue), per glyph.
-            Assert.Equal([255, 0, 255, 0], g.DrawStringCalls.Select(c => (int)c.PaintColor.R).ToArray());
+            Assert.Equal([255, 0, 255, 0], [.. g.DrawStringCalls.Select(c => (int)c.PaintColor.R)]);
             var pushes = GlyphPushes(g);
             Assert.Equal(4, pushes.Length);
             for (var i = 0; i < 4; i += 2)

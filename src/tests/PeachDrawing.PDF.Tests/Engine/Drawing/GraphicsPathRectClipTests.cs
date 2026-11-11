@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Drawing
             return path;
         }
 
-        private static List<PaintPoint> PointsOf(GraphicsPath path) => PathPoints.Of(path).ToList();
+        private static List<PaintPoint> PointsOf(GraphicsPath path) => [.. PathPoints.Of(path)];
 
         [Fact]
         public void EntirelyInsideRect_IsUnchanged()

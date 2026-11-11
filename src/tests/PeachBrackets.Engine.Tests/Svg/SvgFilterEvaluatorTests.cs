@@ -334,7 +334,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         public List<string> PageLog { get; }
 
         public FakeFilterGraphics(RenderContext renderContext, FakeImage? owner)
-            : this(renderContext, owner, new Dictionary<int, FakeImage>(), []) { }
+            : this(renderContext, owner, [], []) { }
 
         private FakeFilterGraphics(RenderContext renderContext, FakeImage? owner, Dictionary<int, FakeImage> tilesById, List<string> pageLog)
             : base(renderContext, new Rect(0, 0, double.MaxValue, double.MaxValue))
@@ -394,7 +394,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         public override void PopTransform() { }
         public override void PushBlendMode(PaintBlendMode mode) { }
         public override void PopBlendMode() { }
-        public override object SetAntiAliasSmoothingMode() => new object();
+        public override object SetAntiAliasSmoothingMode() => new();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         public override GraphicsPath GetGraphicsPath() => throw new NotSupportedException();
         public override void BeginMarkedContent(string structureType, int mcid) { }

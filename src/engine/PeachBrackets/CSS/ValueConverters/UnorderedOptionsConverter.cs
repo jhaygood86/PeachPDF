@@ -46,7 +46,7 @@ namespace PeachBrackets.Css
                 values[i] = value;
             }
 
-            result = new OptionsValue(values, Enumerable.Empty<Token>());
+            result = new OptionsValue(values, []);
 
             return result;
         }

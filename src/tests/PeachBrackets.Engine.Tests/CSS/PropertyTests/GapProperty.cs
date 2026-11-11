@@ -29,14 +29,14 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
                 return new[]
                 {
                     new object[] { "20px 10px" },
-                    new object[] { "1em 0.5em" },
-                    new object[] { "3vmin 2vmax" },
-                    new object[] { "3vmin" },
-                    new object[] { "0.5cm" },
-                    new object[] { "0.5cm 2mm" },
-                    new object[] { "16% 100%" },
-                    new object[] { "21px 82%" },
-                    new object[] { "normal" }
+                    ["1em 0.5em"],
+                    ["3vmin 2vmax"],
+                    ["3vmin"],
+                    ["0.5cm"],
+                    ["0.5cm 2mm"],
+                    ["16% 100%"],
+                    ["21px 82%"],
+                    ["normal"]
                 }.Union(LengthOrPercentOrGlobalTestValues.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance), ObjectArrayComparer.Instance);
             }
         }
@@ -48,16 +48,16 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
                 return new[]
                 {
                     new object[] { "20px 10px", "20px", "10px" },
-                    new object[] { "1em 0.5em", "1em", "0.5em" },
-                    new object[] { "3vmin 2vmax", "3vmin", "2vmax" },
-                    new object[] { "3vmin", "3vmin", "3vmin" },
-                    new object[] { "0.5cm", "0.5cm", "0.5cm" },
-                    new object[] { "0.5cm 2mm", "0.5cm", "2mm" },
-                    new object[] { "16% 100%", "16%", "100%" },
-                    new object[] { "21px 82%", "21px", "82%" },
-                    new object[] { "normal", "normal", "normal" },
-                    new object[] { "initial inherit", "initial", "inherit" },
-                    new object[] { "unset revert-layer", "unset", "revert-layer" },
+                    ["1em 0.5em", "1em", "0.5em"],
+                    ["3vmin 2vmax", "3vmin", "2vmax"],
+                    ["3vmin", "3vmin", "3vmin"],
+                    ["0.5cm", "0.5cm", "0.5cm"],
+                    ["0.5cm 2mm", "0.5cm", "2mm"],
+                    ["16% 100%", "16%", "100%"],
+                    ["21px 82%", "21px", "82%"],
+                    ["normal", "normal", "normal"],
+                    ["initial inherit", "initial", "inherit"],
+                    ["unset revert-layer", "unset", "revert-layer"],
                 };
             }
         }

@@ -63,7 +63,7 @@ namespace PeachBrackets.Css
                     values[i] = _converter.Construct(dummies);
                 }
 
-                result = new ListValue(values, Enumerable.Empty<Token>());
+                result = new ListValue(values, []);
             }
 
             return result;

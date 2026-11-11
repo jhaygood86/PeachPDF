@@ -413,13 +413,12 @@ public sealed partial class HtmlDocument : IDisposable
         var fragmentainers = _container.FragmentTree?.Fragmentainers ?? [];
         _painter?.Dispose();
         _painter = new PagePainter(_container, _renderContext);
-        _pages = fragmentainers
+        _pages = [.. fragmentainers
             .Select((fragmentainer, index) =>
             {
                 var extras = _painter.ResolvePrintExtras(fragmentainer, index + 1);
                 return new DocumentPage(index, fragmentainer.Geometry.SheetWidthPt, fragmentainer.Geometry.SheetHeightPt, extras.BleedPt, extras.OutsidePt);
-            })
-            .ToArray();
+            })];
 
         // A new layout puts fixed and sticky boxes back at the top; they are moved to where the host is showing the document.
         if (_viewport is not null)
@@ -601,7 +600,7 @@ public sealed partial class HtmlDocument : IDisposable
         if (!_recordTextRuns) return null;
         if (_selectedRanges.Count == 0 && _highlights.Count == 0 && !(_selection?.HasSelection ?? false)) return null;
 
-        return new CarriedTextState(RunKeys(TextRuns), _selectedRanges.ToArray(), [.. _highlights], _selection?.Anchor, _selection?.Focus);
+        return new CarriedTextState(RunKeys(TextRuns), [.. _selectedRanges], [.. _highlights], _selection?.Anchor, _selection?.Focus);
     }
 
     private void RestoreTextState(CarriedTextState? carried)
@@ -1153,7 +1152,7 @@ public sealed partial class HtmlDocument : IDisposable
     public IReadOnlyList<TextRun> GetTextRuns(int pageIndex)
     {
         ThrowIfNotAPage(pageIndex);
-        return TextRuns.Where(run => run.PageIndex == pageIndex).ToArray();
+        return [.. TextRuns.Where(run => run.PageIndex == pageIndex)];
     }
 
     /// <summary>
@@ -1447,7 +1446,7 @@ public sealed partial class HtmlDocument : IDisposable
     }
 
     /// <summary>The names of the highlights set, in the order they are painted.</summary>
-    public IReadOnlyList<string> HighlightNames => OrderedHighlights().Select(h => h.Name).ToArray();
+    public IReadOnlyList<string> HighlightNames => [.. OrderedHighlights().Select(h => h.Name)];
 
     private IEnumerable<(string Name, int Priority, int Order, TextRange[] Ranges)> OrderedHighlights() => _highlights
         .OrderBy(h => BuiltInHighlightRank(h.Name) is { } rank ? rank : int.MaxValue / 2)
@@ -2458,7 +2457,7 @@ public sealed partial class HtmlDocument : IDisposable
 
         if (regions is null)
         {
-            regions = new List<DirtyRegion>(_pages!.Count);
+            regions = [with(_pages!.Count)];
             for (var page = 0; page < _pages.Count; page++)
                 regions.Add(new DirtyRegion(page, new Rect(0, 0, _pages[page].WidthPoints, _pages[page].HeightPoints)));
         }

@@ -114,7 +114,7 @@ internal sealed class PdfColorSpace
 
     sealed record IccEntry(PdfColorSpace? Space);
 
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfDictionary, IccEntry> IccCache = new();
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfDictionary, IccEntry> IccCache = [];
 
     static readonly Lazy<PeachImage.IccColorProfile?> SRgbProfile =
         new(() => PeachImage.IccColorProfile.TryCreate(PdfAResources.SRgbIccProfile, out var p) ? p : null);

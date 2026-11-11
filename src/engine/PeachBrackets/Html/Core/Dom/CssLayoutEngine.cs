@@ -8411,7 +8411,7 @@ namespace PeachBrackets.Html.Dom
             return text.IsEmpty ? precedingCount + count : count;
         }
 
-        private static readonly string[] AsciiStrings = Enumerable.Range(0, 128).Select(c => ((char)c).ToString()).ToArray();
+        private static readonly string[] AsciiStrings = [.. Enumerable.Range(0, 128).Select(c => ((char)c).ToString())];
 
         internal static string UpdateTrailingGraphemeContext(string precedingContext, string text)
         {

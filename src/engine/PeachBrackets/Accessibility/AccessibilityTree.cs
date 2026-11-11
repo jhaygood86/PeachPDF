@@ -21,7 +21,7 @@ public sealed class AccessibilityTree
     {
         Root = root;
         _byBox = byBox;
-        Nodes = root.DescendantsAndSelf().ToArray();
+        Nodes = [.. root.DescendantsAndSelf()];
         _byId = new Dictionary<string, AccessibilityNode>(Nodes.Count, StringComparer.Ordinal);
         _documentPosition = new Dictionary<AccessibilityNode, int>(Nodes.Count, ReferenceEqualityComparer.Instance);
         for (var i = 0; i < Nodes.Count; i++)

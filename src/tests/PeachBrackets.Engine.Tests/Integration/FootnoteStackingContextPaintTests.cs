@@ -37,7 +37,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             }
 
             Assert.True(bodies > 0);
-            return g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text).ToList();
+            return [.. g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text)];
         }
 
         private const string Box = "display:inline-block;width:40pt;height:12pt;";

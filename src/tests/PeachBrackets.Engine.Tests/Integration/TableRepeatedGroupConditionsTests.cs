@@ -567,10 +567,9 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         /// <summary>Which fragmentainer slots hold <paramref name="text"/>, in slot order.</summary>
         private static List<int> SlotsDrawnOn(HtmlContainerInt container, string text) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .Where(f => Flatten(f.Root).SelectMany(b => b.Words).Any(w => w.Word.Text == text))
-                .Select(f => f.SlotIndex)
-                .ToList();
+                .Select(f => f.SlotIndex)];
 
         private static void AssertDrawnOnlyOn(HtmlContainerInt container, string text, int slot)
         {

@@ -9,7 +9,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Handlers
     {
         static CssBoxFormField MakeInput(string? type = null, Dictionary<string, string>? attributes = null, string? pdfFormField = null)
         {
-            var attrs = attributes ?? new Dictionary<string, string>();
+            var attrs = attributes ?? [];
             if (type != null) attrs["type"] = type;
             var box = new CssBoxFormField(null, new HtmlTag("input", true, attrs));
             if (pdfFormField != null) box.PdfFormField = pdfFormField;

@@ -40,7 +40,7 @@ namespace PeachPDF.Tests.Raster
             var bytes = new List<byte>();
             for (int y = 0; y < graphics.Surface.Height; y++)
                 bytes.AddRange(graphics.Surface.Row(y).ToArray());
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         private static async Task<byte[]> Render(TextHinting hinting, double fontSize = 12, string text = "Hxg", Matrix3x2? transform = null)

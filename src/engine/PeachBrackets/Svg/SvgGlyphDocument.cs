@@ -271,7 +271,7 @@ namespace PeachBrackets.Svg
                 return false;
             }
 
-            return Size(root, byId, sizes, new HashSet<XElement>()) <= MaxExpandedElements;
+            return Size(root, byId, sizes, []) <= MaxExpandedElements;
         }
 
         private static int Depth(XElement element, int depth)

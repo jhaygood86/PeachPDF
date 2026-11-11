@@ -160,7 +160,7 @@ namespace PeachBrackets.Html.Paint
 
                 if (isStackingContext || isLocalOrderingScope || isPlainFloatToClaim)
                 {
-                    yield return new StackingParticipant(childFragment, ancestorPath.ToArray());
+                    yield return new StackingParticipant(childFragment, [.. ancestorPath]);
                     if (isStackingContext) continue;
                 }
 

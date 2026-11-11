@@ -19,17 +19,15 @@ public class ShapeOutsideTests
             $"<div id='c' style='width:200pt;font:10pt/12pt Arial'><div style='float:{side};width:100pt;height:100pt;{floatStyle}'></div>{Text}</div>"));
         var c = FindById(root, "c")!;
         var origin = c.Location;
-        return Descendants(c).SelectMany(b => b.Words)
+        return [.. Descendants(c).SelectMany(b => b.Words)
             .GroupBy(w => (int)System.Math.Round(w.Top - origin.Y))
             .OrderBy(g => g.Key)
-            .Select(g => (g.Key, g.Min(w => w.Left) - origin.X))
-            .ToArray();
+            .Select(g => (g.Key, g.Min(w => w.Left) - origin.X))];
     }
 
-    private static (int Top, double Left)[] Parse(string chrome) => chrome.Split(' ')
+    private static (int Top, double Left)[] Parse(string chrome) => [.. chrome.Split(' ')
         .Select(p => p.Split(':'))
-        .Select(p => (int.Parse(p[0], CultureInfo.InvariantCulture), double.Parse(p[1], CultureInfo.InvariantCulture)))
-        .ToArray();
+        .Select(p => (int.Parse(p[0], CultureInfo.InvariantCulture), double.Parse(p[1], CultureInfo.InvariantCulture)))];
 
     [Theory]
     [InlineData("shape-outside:circle(50%)", "0:82.5 12:92.7 24:98.0 36:99.9 48:100.0 60:99.0 72:94.9 84:86.6 96:69.6")]
@@ -111,11 +109,10 @@ public class ShapeOutsideTests
         var (root, _) = await LayoutAsync(Wrap(
             $"<div id='c' style='width:200pt;font:10pt/12pt Arial'><div style='float:left;width:75pt;height:75pt;{style}'></div>{Text}</div>"));
         var c = FindById(root, "c")!;
-        return Descendants(c).SelectMany(b => b.Words)
+        return [.. Descendants(c).SelectMany(b => b.Words)
             .GroupBy(w => (int)System.Math.Round(w.Top - c.Location.Y))
             .OrderBy(g => g.Key)
-            .Select(g => (g.Key, g.Min(w => w.Left) - c.Location.X))
-            .ToArray();
+            .Select(g => (g.Key, g.Min(w => w.Left) - c.Location.X))];
     }
 
     private static void AssertLines((int Top, double Left)[] lines, string expected)

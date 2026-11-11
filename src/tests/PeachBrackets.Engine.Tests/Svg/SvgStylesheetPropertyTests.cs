@@ -174,7 +174,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         private static SvgGradientStop[] Stops(string rule, string stops) =>
-            Build(rule, $"<defs><linearGradient id=\"g\">{stops}</linearGradient></defs>").Gradients["g"].Stops.ToArray();
+            [.. Build(rule, $"<defs><linearGradient id=\"g\">{stops}</linearGradient></defs>").Gradients["g"].Stops];
 
         // Chrome: a rule overrides the presentation attribute; stop-opacity multiplies the colour's alpha.
         [Fact]

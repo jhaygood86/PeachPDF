@@ -22,7 +22,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var bytes = new List<byte> { 30 };
             for (int i = 0; i < text.Length; i += 2)
                 bytes.Add(Convert.ToByte(text.Substring(i, 2), 16));
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         private static byte[] Cat(params object[] parts)
@@ -39,7 +39,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                 }
             }
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         private static CffFontDict Top(byte[] dict)
@@ -196,7 +196,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                 bytes.Add(One(1));
             bytes.Add(6);
 
-            var priv = Private(bytes.ToArray());
+            var priv = Private([.. bytes]);
             Assert.Equal(CffPrivate.MaxBlueValues, priv.NumBlueValues);
             Assert.Equal(CffPrivate.MaxBlueValues << 16, priv.BlueValues[CffPrivate.MaxBlueValues - 1]);
         }
@@ -238,7 +238,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         [Fact]
         public void AnUnterminatedRealAtTheEndOfADictIsHarmless()
         {
-            var priv = Private(new byte[] { One(3), 10, 30, 0x12 });
+            var priv = Private([One(3), 10, 30, 0x12]);
             Assert.Equal(3, priv.StandardWidth);
         }
 
@@ -246,7 +246,7 @@ namespace PeachDrawing.Text.Tests.Hinting
         public void TheThreeAndFiveByteIntegersAreDecoded()
         {
             var priv = new CffPrivate();
-            CffParser.Run(new byte[] { 29, 0x00, 0x00, 0x01, 0x00, 10 }, 0, 6, CffParser.Kind.Private, null, priv);
+            CffParser.Run([29, 0x00, 0x00, 0x01, 0x00, 10], 0, 6, CffParser.Kind.Private, null, priv);
             Assert.Equal(256, priv.StandardWidth);
 
             var cut = new CffPrivate();
@@ -272,14 +272,14 @@ namespace PeachDrawing.Text.Tests.Hinting
             for (int i = 0; i < 100; i++)
                 bytes.Add(One(1));
             bytes.Add(10);
-            Assert.Throws<HintingException>(() => Private(bytes.ToArray()));
+            Assert.Throws<HintingException>(() => Private([.. bytes]));
 
             // an operator needs a stack slot of its own: one operand fewer than the stack holds still runs
             var full = new List<byte>();
             for (int i = 0; i < 95; i++)
                 full.Add(One(1));
             full.Add(6);
-            Assert.Equal(CffPrivate.MaxBlueValues, Private(full.ToArray()).NumBlueValues);
+            Assert.Equal(CffPrivate.MaxBlueValues, Private([.. full]).NumBlueValues);
         }
 
         [Fact]

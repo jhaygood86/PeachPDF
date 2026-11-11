@@ -253,7 +253,7 @@ namespace PeachBrackets.Html.Annotations
                 {
                     bounds = new Rect(bounds.X + (viewDx / ppp), bounds.Y + (viewDy / ppp), bounds.Width, bounds.Height);
                     if (quad is not null)
-                        quad = quad.Select(point => new PaintPoint(point.X + (viewDx / ppp), point.Y + (viewDy / ppp))).ToArray();
+                        quad = [.. quad.Select(point => new PaintPoint(point.X + (viewDx / ppp), point.Y + (viewDy / ppp)))];
                 }
             }
 
@@ -335,7 +335,7 @@ namespace PeachBrackets.Html.Annotations
         private static List<string> Tokens(string? raw) =>
             string.IsNullOrWhiteSpace(raw) || raw.Trim() == Keywords.Auto
                 ? []
-                : raw.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries).ToList();
+                : [.. raw.Split([' ', '\t', '\r', '\n'], StringSplitOptions.RemoveEmptyEntries)];
 
         /// <summary>Strips the quotes (and escapes) of a stored <c>&lt;string&gt;</c>; null for <c>none</c>, an unset value or an empty string.</summary>
         internal static string? Text(string? raw)
@@ -431,7 +431,7 @@ namespace PeachBrackets.Html.Annotations
             void Flush()
             {
                 if (current.Count > 1)
-                    strokes.Add(current.ToArray());
+                    strokes.Add([.. current]);
                 current = [];
             }
 

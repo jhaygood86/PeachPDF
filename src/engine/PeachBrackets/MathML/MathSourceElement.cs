@@ -140,7 +140,7 @@ namespace PeachBrackets.MathML
 
                 return _elements = _children.Count(c => c.Tag is not null) == _children.Count
                     ? _children
-                    : _children.Where(c => c.Tag is not null).ToList();
+                    : [.. _children.Where(c => c.Tag is not null)];
             }
         }
 

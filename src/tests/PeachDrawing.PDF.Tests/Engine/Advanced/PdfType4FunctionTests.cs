@@ -164,7 +164,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced
                 var stack = new List<object>(inputs.Select(v => (object)(double)v));
                 Execute(body, stack);
 
-                return stack.Select(v => (double)v).ToArray();
+                return [.. stack.Select(v => (double)v)];
             }
 
             private static List<object> Parse(Queue<string> tokens)

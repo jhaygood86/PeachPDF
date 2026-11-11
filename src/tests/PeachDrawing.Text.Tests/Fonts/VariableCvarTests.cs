@@ -35,7 +35,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         private static AxisSetting[] Settings(JsonElement location) =>
-            location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble())).ToArray();
+            [.. location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble()))];
 
         /// <summary>The control values (26.6, before any size scales them) the hinting engine starts from at a typeface's location.</summary>
         private static int[] Cvt(Typeface typeface) =>

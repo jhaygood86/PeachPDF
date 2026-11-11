@@ -1655,23 +1655,21 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// </summary>
         private static List<IGrouping<double, BandInfo>> FacesByPosition(
             List<BandInfo> bands, Func<BandInfo, double> position) =>
-            bands.GroupBy(b => Math.Round(position(b), 2)).OrderBy(f => f.Key).ToList();
+            [.. bands.GroupBy(b => Math.Round(position(b), 2)).OrderBy(f => f.Key)];
 
         /// <summary>Every horizontal (top/bottom edge) band, ordered top to bottom.</summary>
         private static List<BandInfo> HorizontalBands(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+            [.. g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
                 .Select(Band)
                 .Where(b => b.Width > b.Height)
-                .OrderBy(b => b.Top)
-                .ToList();
+                .OrderBy(b => b.Top)];
 
         /// <summary>Every vertical (left/right edge) band, ordered left to right.</summary>
         private static List<BandInfo> VerticalBands(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
+            [.. g.Log.OfType<TestRecordingGraphics.DrawPolygonCall>()
                 .Select(Band)
                 .Where(b => b.Height > b.Width)
-                .OrderBy(b => b.Left)
-                .ToList();
+                .OrderBy(b => b.Left)];
 
         private static double LeftOf(CssBox box) => box.Location.X;
 

@@ -27,7 +27,7 @@ namespace PeachBrackets.Css
         public IPropertyValue Construct(Property[] properties)
         {
             var value = _converter.Construct(properties);
-            return value != null ? CreateFrom(value, Enumerable.Empty<Token>()) : null;
+            return value != null ? CreateFrom(value, []) : null;
         }
 
         private IPropertyValue CreateFrom(IPropertyValue value, IEnumerable<Token> tokens)

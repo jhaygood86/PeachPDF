@@ -9,9 +9,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public void ADeferredDeclaration_IsReadBack_AndOrderedByWhenItWasWritten()
         {
-            var map = new PendingVarMap();
-            map["background"] = "linear-gradient(red, var(--x))";
-            map["color"] = "var(--c)";
+            var map = new PendingVarMap
+            {
+                ["background"] = "linear-gradient(red, var(--x))",
+                ["color"] = "var(--c)"
+            };
 
             Assert.Equal("var(--c)", map["color"]);
             Assert.True(map.OrderOf("background") < map.OrderOf("color"));
@@ -25,8 +27,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public void APlainDeclarationAfterADeferredOne_ReplacesIt_AndWinsOverALaterlyExpandedShorthand()
         {
-            var map = new PendingVarMap();
-            map["background"] = "linear-gradient(red, var(--x))";
+            var map = new PendingVarMap
+            {
+                ["background"] = "linear-gradient(red, var(--x))"
+            };
             var shorthandAt = map.OrderOf("background");
 
             map.NotePlain("background-clip");

@@ -21,7 +21,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(XDocument.Parse(markup).Root!), RenderContext);
             var g = new TestRecordingGraphics();
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 200, 100));
-            return g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Select(p => p.Stroked).ToArray();
+            return [.. g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Select(p => p.Stroked)];
         }
 
         [Theory]

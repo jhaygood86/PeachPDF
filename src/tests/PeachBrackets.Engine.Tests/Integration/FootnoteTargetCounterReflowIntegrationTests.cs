@@ -61,7 +61,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 prepare: box => box.HtmlContainer!.PageNumberOffset = offset);
 
             var text = string.Concat(Descendants(root).SelectMany(b => b.Words).Select(w => w.Text));
-            return int.Parse(new string(text.Where(char.IsDigit).ToArray()));
+            return int.Parse(new string([.. text.Where(char.IsDigit)]));
         }
 
         [Fact]

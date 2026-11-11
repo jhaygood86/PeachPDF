@@ -45,10 +45,10 @@ namespace PeachBrackets.Html.Paint
         {
             public BoxFragment Root { get; } = root;
 
-            public Dictionary<BoxFragment, List<Rect>> CellAreasByTrack { get; } = new(ReferenceEqualityComparer.Instance);
+            public Dictionary<BoxFragment, List<Rect>> CellAreasByTrack { get; } = [with(ReferenceEqualityComparer.Instance)];
 
             public Dictionary<BoxFragment, List<(CssBox Track, BoxFragment? TrackFragment, Rect CellArea)>> TracksByCell { get; } =
-                new(ReferenceEqualityComparer.Instance);
+                [with(ReferenceEqualityComparer.Instance)];
         }
 
         /// <summary>

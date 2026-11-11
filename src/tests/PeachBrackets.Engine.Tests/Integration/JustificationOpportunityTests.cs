@@ -64,7 +64,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             $"text-align:justify;{extraStyle}\">{content}</div></body></html>";
 
         private static IReadOnlyList<double> GapsOn(CssLineBox line) =>
-            line.Words.Skip(1).Select((word, index) => word.Left - line.Words[index].Right).ToList();
+            [.. line.Words.Skip(1).Select((word, index) => word.Left - line.Words[index].Right)];
 
         private static async Task<CssBox> BlockOfAsync(string document)
         {

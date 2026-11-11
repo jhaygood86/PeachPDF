@@ -174,7 +174,7 @@ namespace PeachBrackets.Html.Animation
 
             if (value is null) return;
 
-            box.CustomProperties ??= new Dictionary<string, string>();
+            box.CustomProperties ??= [];
             box.CustomProperties[property] = value;
         }
 

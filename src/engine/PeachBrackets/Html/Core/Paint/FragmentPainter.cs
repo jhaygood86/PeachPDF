@@ -50,7 +50,7 @@ namespace PeachBrackets.Html.Paint
         /// time. Reference identity is deliberate: two structurally equal fragments (a rowspan cell
         /// shown in each row it spans) are genuinely separate things to paint.
         /// </summary>
-        private readonly HashSet<BoxFragment> _painted = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<BoxFragment> _painted = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Lines whose <c>text-overflow: ellipsis</c> truncation has already been painted this page. A
@@ -61,14 +61,14 @@ namespace PeachBrackets.Html.Paint
         /// Cleared per page implicitly: a new <see cref="FragmentPainter"/> instance paints each page (see
         /// <c>FragmentPaintHarness.PaintPage</c>/production's own per-page construction).
         /// </summary>
-        private readonly HashSet<CssLineBox> _linesAlreadyTruncated = new(ReferenceEqualityComparer.Instance);
+        private readonly HashSet<CssLineBox> _linesAlreadyTruncated = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// Where each <c>text-overflow: ellipsis</c> line is cut (null for one that is not), asked by the
         /// text decoration painter - see <see cref="EllipsisCutOf"/>. Filled lazily, so a page with no
         /// decorated text never builds the index below (one walk of the page's fragment tree otherwise).
         /// </summary>
-        private readonly Dictionary<CssLineBox, EllipsisCut?> _ellipsisCuts = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssLineBox, EllipsisCut?> _ellipsisCuts = [with(ReferenceEqualityComparer.Instance)];
 
         private Dictionary<CssLineBox, List<BoxFragment>>? _ellipsisLineFragments;
 

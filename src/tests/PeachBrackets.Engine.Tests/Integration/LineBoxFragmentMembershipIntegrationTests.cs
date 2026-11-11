@@ -291,10 +291,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<int> SlotsClaiming(HtmlContainerInt container, CssRect word) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .Where(f => Flatten(f.Root).SelectMany(b => b.Words).Any(w => ReferenceEquals(w.Word, word)))
-                .Select(f => f.SlotIndex)
-                .ToList();
+                .Select(f => f.SlotIndex)];
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {

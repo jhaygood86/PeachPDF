@@ -39,7 +39,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 			return result;
 		}
 
-		internal static readonly PeachDrawing.Text.Brotli.Internal.Transform[] Transforms = new PeachDrawing.Text.Brotli.Internal.Transform[] { new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, string.Empty), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, 
+		internal static readonly PeachDrawing.Text.Brotli.Internal.Transform[] Transforms = [ new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, string.Empty), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, 
 			PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, " "), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, " "), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.OmitFirst1, string.Empty), new PeachDrawing.Text.Brotli.Internal.Transform
 			(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseFirst, " "), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, " the "), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity
 			, string.Empty), new PeachDrawing.Text.Brotli.Internal.Transform("s ", PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, " "), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.Identity, " of "), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType
@@ -85,7 +85,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 			(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseAll, ","), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseAll, "("), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.
 			UppercaseAll, ". "), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseAll, "."), new PeachDrawing.Text.Brotli.Internal.Transform(string.Empty, PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseAll, "='"), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType
 			.UppercaseAll, ". "), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseFirst, "=\""), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType.UppercaseAll, "='"), new PeachDrawing.Text.Brotli.Internal.Transform(" ", PeachDrawing.Text.Brotli.Internal.WordTransformType
-			.UppercaseFirst, "='") };
+			.UppercaseFirst, "='") ];
 
 		internal static int TransformDictionaryWord(byte[] dst, int dstOffset, byte[] word, int wordOffset, int len, PeachDrawing.Text.Brotli.Internal.Transform transform)
 		{

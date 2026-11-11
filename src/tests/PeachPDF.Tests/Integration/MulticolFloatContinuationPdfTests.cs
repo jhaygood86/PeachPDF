@@ -52,7 +52,7 @@ namespace PeachPDF.Tests.Integration
 
             var fill = new Regex(@"(?<![\d.])1 0 0 rg\s+(?:/\S+ gs\s+)?\S+ \S+ \S+ \S+ re\s+f", RegexOptions.CultureInvariant);
             Assert.Equal(expectedPages, file.Pages.Count);
-            return Enumerable.Range(0, file.Pages.Count).Where(i => fill.IsMatch(file.ContentText(file.Pages[i]))).ToList();
+            return [.. Enumerable.Range(0, file.Pages.Count).Where(i => fill.IsMatch(file.ContentText(file.Pages[i])))];
         }
 
         // #2312: bare text right after the float shares the container with it; the paragraph behind both is drawn on the page the column continues on.

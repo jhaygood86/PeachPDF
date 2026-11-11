@@ -34,10 +34,9 @@ namespace PeachPDF.Tests.PdfBackendTests
         [InlineData(typeof(PeachPDF.PdfEncryptionOptions), typeof(PeachDrawing.PDF.PdfEncryptionOptions))]
         public void MirroredOptionClass_HasTheSamePublicProperties(Type original, Type mirror)
         {
-            static string[] Properties(Type t) => t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            static string[] Properties(Type t) => [.. t.GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Select(p => p.Name)
-                .OrderBy(n => n, StringComparer.Ordinal)
-                .ToArray();
+                .OrderBy(n => n, StringComparer.Ordinal)];
 
             Assert.Equal(Properties(original), Properties(mirror));
         }

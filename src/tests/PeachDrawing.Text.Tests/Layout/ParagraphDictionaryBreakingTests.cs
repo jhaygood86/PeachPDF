@@ -31,7 +31,7 @@ namespace PeachDrawing.Text.Tests.Layout
             }
 
             var layout = builder.AddText(text).Build().Layout(ems * Size + 1);
-            return layout.Lines.Select(line => text.Substring(line.Range.Start, line.Range.Length).TrimEnd()).ToArray();
+            return [.. layout.Lines.Select(line => text.Substring(line.Range.Start, line.Range.Length).TrimEnd())];
         }
 
         [Fact]

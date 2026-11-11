@@ -317,7 +317,7 @@ internal sealed partial class ColorGlyphPainter
         Dictionary<int, PaintColor>? overrides = null;
         if (_overrides is { Count: > 0 })
         {
-            overrides = new Dictionary<int, PaintColor>(_overrides.Count);
+            overrides = [with(_overrides.Count)];
             foreach (var (entry, colour) in _overrides)
                 overrides[entry] = colour.ToRgbColor();
         }

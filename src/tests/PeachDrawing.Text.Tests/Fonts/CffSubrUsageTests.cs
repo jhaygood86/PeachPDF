@@ -16,14 +16,14 @@ namespace PeachDrawing.Text.Tests.Fonts
             Assert.Contains(0, shortBias.GlobalSubrs);
             Assert.Contains(0, shortBias.LocalSubrsForFd(0));
 
-            byte[][] mediumSubrs = Enumerable.Repeat(new byte[] { 11 }, 1240).ToArray();
+            byte[][] mediumSubrs = [.. Enumerable.Repeat(new byte[] { 11 }, 1240)];
             var mediumBias = new CffSubrUsage(mediumSubrs, _ => mediumSubrs);
             mediumBias.Add([28, 0xFB, 0x95, 10, 14], 0); // -1131 + bias(1240) = 0
 
             Assert.True(mediumBias.Complete);
             Assert.Contains(0, mediumBias.LocalSubrsForFd(0));
 
-            byte[][] largeSubrs = Enumerable.Repeat(new byte[] { 11 }, 33900).ToArray();
+            byte[][] largeSubrs = [.. Enumerable.Repeat(new byte[] { 11 }, 33900)];
             var largeBias = new CffSubrUsage(largeSubrs, _ => largeSubrs);
             largeBias.Add([28, 0x80, 0x00, 29, 14], 0); // -32768 + bias(33900) = 0
 
@@ -59,11 +59,10 @@ namespace PeachDrawing.Text.Tests.Fonts
             truncatedEscape.Add([12], 0);
             Assert.False(truncatedEscape.Complete);
 
-            byte[][] recursiveSubrs = Enumerable.Range(0, 11)
+            byte[][] recursiveSubrs = [.. Enumerable.Range(0, 11)
                 .Select(index => index == 10
                     ? new byte[] { 11 }
-                    : new byte[] { (byte)(33 + index), 10 })
-                .ToArray(); // a chain longer than the scanner's maximum depth
+                    : [(byte)(33 + index), 10])]; // a chain longer than the scanner's maximum depth
             var recursive = new CffSubrUsage([], _ => recursiveSubrs);
             recursive.Add([32, 10], 0);
             Assert.False(recursive.Complete);

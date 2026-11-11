@@ -169,7 +169,7 @@ namespace PeachBrackets.Css
                         if (toks[i].Type != TokenType.Ident) return null; // only idents inside [ ]
                         var name = toks[i].Data.ToString();
                         if (!lineNames.TryGetValue(name, out var set))
-                            lineNames[name] = set = new SortedSet<int>();
+                            lineNames[name] = set = [];
                         set.Add(lineIndex);
                         i++;
                     }
@@ -215,7 +215,7 @@ namespace PeachBrackets.Css
                 AutoRepeatInsertIndex = autoRepeatIndex < 0 ? 0 : autoRepeatIndex,
                 LineNames = lineNames.ToDictionary(
                     kv => kv.Key,
-                    kv => (IReadOnlyList<int>)kv.Value.ToList())
+                    kv => (IReadOnlyList<int>)[.. kv.Value])
             };
         }
 
@@ -241,7 +241,7 @@ namespace PeachBrackets.Css
                     if (toks[i].Type != TokenType.Ident) return null;
                     var name = toks[i].Data.ToString();
                     if (!lineNames.TryGetValue(name, out var set))
-                        lineNames[name] = set = new SortedSet<int>();
+                        lineNames[name] = set = [];
                     set.Add(lineIndex);
                     i++;
                 }
@@ -255,7 +255,7 @@ namespace PeachBrackets.Css
                 IsSubgrid = true,
                 LineNames = lineNames.ToDictionary(
                     kv => kv.Key,
-                    kv => (IReadOnlyList<int>)kv.Value.ToList())
+                    kv => (IReadOnlyList<int>)[.. kv.Value])
             };
         }
 
@@ -318,7 +318,7 @@ namespace PeachBrackets.Css
             }
 
             // repeat(N, body) — expand N copies now.
-            tracks = new List<GridTrackSize>(body.Count * countTokens);
+            tracks = [with(body.Count * countTokens)];
             for (var r = 0; r < countTokens; r++)
                 tracks.AddRange(body);
             return true;
@@ -388,7 +388,7 @@ namespace PeachBrackets.Css
         private static bool TryParseMinmax(Token fn, out GridTrackSize track)
         {
             track = null;
-            var groups = SplitByComma(fn.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace).ToArray());
+            var groups = SplitByComma([.. fn.ArgumentTokens.Where(t => t.Type != TokenType.Whitespace)]);
             if (groups.Count != 2 || groups[0].Count != 1 || groups[1].Count != 1) return false;
 
             if (!TryParseBreadth(groups[0][0], out var min)) return false;
@@ -450,7 +450,7 @@ namespace PeachBrackets.Css
                 if (token.Type == TokenType.Comma)
                 {
                     groups.Add(current);
-                    current = new List<Token>();
+                    current = [];
                 }
                 else
                 {

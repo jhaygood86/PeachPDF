@@ -223,9 +223,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static System.Collections.Generic.List<bool> HyphenatedLineFlags(CssBox block) =>
-            block.LineBoxes
-                .Select(line => line.Words.Count > 0 && line.Words[^1].Text is { Length: > 0 } t && t.EndsWith('-'))
-                .ToList();
+            [.. block.LineBoxes.Select(line => line.Words.Count > 0 && line.Words[^1].Text is { Length: > 0 } t && t.EndsWith('-'))];
 
         // ─── hyphenate-limit-last (cascade only - see HyphenateLimitLastEnforcementTests and ───────
         // ─── HyphenateLimitLastPaginationIntegrationTests for its layout effect, issue #723) ─────

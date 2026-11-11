@@ -27,7 +27,7 @@ internal partial class PdfDictionary
     {
         internal DictionaryElements(PdfDictionary ownerDictionary)
         {
-            _elements = new Dictionary<string, PdfItem>();
+            _elements = [];
             _ownerDictionary = ownerDictionary;
         }
 

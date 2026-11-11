@@ -84,8 +84,8 @@ namespace PeachDrawing.Text.Tests.Layout
             }
         }
 
-        public static TheoryData<string> Cases => new()
-        {
+        public static TheoryData<string> Cases =>
+        [
             "plain",
             "indent-first",
             "indent-hanging-each-line",
@@ -105,7 +105,7 @@ namespace PeachDrawing.Text.Tests.Layout
             "line-height",
             "nowrap",
             "last-line-limit",
-        };
+        ];
 
         private static Paragraph CaseParagraph(string name)
         {

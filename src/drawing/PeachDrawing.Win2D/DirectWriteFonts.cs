@@ -17,7 +17,7 @@ internal sealed class DirectWriteFonts : IDisposable
 {
     private readonly Win2dRenderContext _context;
     private readonly Lock _gate = new();
-    private readonly Dictionary<string, List<AddedFace>> _added = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, List<AddedFace>> _added = [with(StringComparer.OrdinalIgnoreCase)];
     private string? _folder;
     private bool _disposed;
 

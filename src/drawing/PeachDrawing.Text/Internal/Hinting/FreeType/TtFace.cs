@@ -590,7 +590,7 @@ internal sealed class TtFace
 
         // The records must be already sorted by ppem but it does not hurt to make sure so that the binary search works later.
         records.Sort((x, y) => Data[x] - Data[y]);
-        return records.ToArray();
+        return [.. records];
     }
 
     /// <summary>

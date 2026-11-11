@@ -199,7 +199,7 @@ internal sealed class PdfImageTable : PdfResourceTable
     /// <summary>
     /// Map from ImageSelector to PdfImage.
     /// </summary>
-    readonly Dictionary<ImageSelector, PdfImage> _images = new Dictionary<ImageSelector, PdfImage>();
+    readonly Dictionary<ImageSelector, PdfImage> _images = [];
 
     /// <summary>
     /// A collection of information that uniquely identifies a particular PdfImage. When a resize

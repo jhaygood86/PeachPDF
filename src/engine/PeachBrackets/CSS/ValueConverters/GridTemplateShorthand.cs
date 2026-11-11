@@ -32,7 +32,7 @@ namespace PeachBrackets.Css
 
             foreach (var token in value)
             {
-                if (token.Type == TokenType.Delim && token.Data.Is("/")) groups.Add(new List<Token>());
+                if (token.Type == TokenType.Delim && token.Data.Is("/")) groups.Add([]);
                 else groups[^1].Add(token);
             }
 
@@ -40,7 +40,7 @@ namespace PeachBrackets.Css
         }
 
         internal static Token[] Significant(IEnumerable<Token> tokens) =>
-            tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
+            [.. tokens.Where(t => t.Type != TokenType.Whitespace)];
 
         /// <summary>
         /// Validates one axis of the <c>&lt;rows&gt; / &lt;columns&gt;</c> form — a <c>&lt;track-list&gt;</c> or
@@ -150,8 +150,8 @@ namespace PeachBrackets.Css
         /// </summary>
         private static bool TryScanAreasForm(Token[] toks, out List<Token> rowsOut, out List<Token> areaStrings)
         {
-            rowsOut = new List<Token>();
-            areaStrings = new List<Token>();
+            rowsOut = [];
+            areaStrings = [];
             var sawString = false;
 
             var i = 0;

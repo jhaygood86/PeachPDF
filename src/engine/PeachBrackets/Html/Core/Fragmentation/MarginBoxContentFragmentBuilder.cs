@@ -101,9 +101,7 @@ namespace PeachBrackets.Html.Fragmentation
                 return [new LineFragment(box.Bounds, null, new SliceGeometry(box.Bounds, box.Bounds, true, true))];
             }
 
-            return box.Rectangles
-                .Select(kv => new LineFragment(kv.Value, kv.Key, new SliceGeometry(kv.Value, kv.Value, true, true)))
-                .ToList();
+            return [.. box.Rectangles.Select(kv => new LineFragment(kv.Value, kv.Key, new SliceGeometry(kv.Value, kv.Value, true, true)))];
         }
     }
 }

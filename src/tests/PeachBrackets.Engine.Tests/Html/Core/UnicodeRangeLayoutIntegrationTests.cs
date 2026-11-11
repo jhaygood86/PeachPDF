@@ -275,7 +275,7 @@ p {{ width: 400px; }}
 
             // Coarse stand-in for L4/L2's reversal - what matters here is that Text now starts with a
             // different character than OriginalText does, not reproducing bidi's own algorithm.
-            word.ReplaceText(new string(word.Text!.Reverse().ToArray()));
+            word.ReplaceText(new string([.. word.Text!.Reverse()]));
             var fontAfterMirror = CssBox.ResolveWordFont(word, word.OwnerBox);
 
             Assert.Same(fontBeforeMirror, fontAfterMirror);

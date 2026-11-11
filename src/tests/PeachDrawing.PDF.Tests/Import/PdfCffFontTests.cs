@@ -27,7 +27,7 @@ namespace PeachDrawing.PDF.Tests.Import
             var name = "probe-" + Guid.NewGuid().ToString("N");
             context.AddFontFromBytes(name, otf).GetAwaiter().GetResult();
             var typeface = context.GetFont(name, 20, PaintFontStyle.Regular)!.Typeface!;
-            return Enumerable.Range(0, 400).Where(g => typeface.TryGetOutline((ushort)g, out var o) && !o.IsEmpty).ToList();
+            return [.. Enumerable.Range(0, 400).Where(g => typeface.TryGetOutline((ushort)g, out var o) && !o.IsEmpty)];
         }
 
         // ------------------------------------------------------------ glyph names

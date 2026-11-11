@@ -303,7 +303,7 @@ internal sealed class PdfShading : PdfDictionary
         PaintColor color1 = ColorSpaceHelper.EnsureColorMode(colorMode, allColors[0]);
         PaintColor color2 = ColorSpaceHelper.EnsureColorMode(colorMode, allColors[allColors.Length - 1]);
 
-        PdfDictionary function = new PdfDictionary();
+        PdfDictionary function = new();
 
         Elements[Keys.ShadingType] = new PdfInteger(2);
         if (colorMode != PdfColorMode.Cmyk)
@@ -557,7 +557,7 @@ internal sealed class PdfShading : PdfDictionary
         double yMin = vc.Y - R, yMax = vc.Y + R;
 
         PaintColor[] colors = StopColors(brush.Stops);
-        double[] angles = brush.AnglesRadians.ToArray();
+        double[] angles = [.. brush.AnglesRadians];
 
         PdfColorMode colorMode = ResolveShadingColorMode(colors);
         var cmyk = colorMode == PdfColorMode.Cmyk;
@@ -619,7 +619,7 @@ internal sealed class PdfShading : PdfDictionary
             }
         }
 
-        return data.ToArray();
+        return [.. data];
     }
 
     private static void AppendConicVertex(System.Collections.Generic.List<byte> data, int flag,

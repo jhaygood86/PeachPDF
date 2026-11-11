@@ -39,10 +39,9 @@ namespace PeachPDF.SourceGenerators.Tests
         /// depending on what a given test's stub source happens to use).
         /// </summary>
         private static readonly MetadataReference[] CoreReferences =
-            ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+            [.. ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
                 .Split(System.IO.Path.PathSeparator)
-                .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))
-                .ToArray();
+                .Select(path => (MetadataReference)MetadataReference.CreateFromFile(path))];
 
         public static CSharpCompilation BuildCompilation(string? extraSource = null, bool includePeachPdfReference = false)
         {
@@ -50,7 +49,7 @@ namespace PeachPDF.SourceGenerators.Tests
             if (includePeachPdfReference) references.Add(PeachPdfReference);
 
             var syntaxTrees = extraSource is null
-                ? ImmutableArray<SyntaxTree>.Empty
+                ? []
                 : ImmutableArray.Create<SyntaxTree>(CSharpSyntaxTree.ParseText(extraSource));
 
             return CSharpCompilation.Create(

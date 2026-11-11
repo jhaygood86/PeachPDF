@@ -948,7 +948,7 @@ public class HtmlViewTests
             return (marked.GetAttributeValue(40019), marked.GetAttributeValue(40018), plain.GetAttributeValue(40019), plain.GetAttributeValue(40018));
         });
 
-        Assert.Equal(new object[] { 1, 1, 0, 0 }, new[] { facts.Item1, facts.Item2, facts.Item3, facts.Item4 });
+        Assert.Equal(new object[] { 1, 1, 0, 0 }, [facts.Item1, facts.Item2, facts.Item3, facts.Item4]);
     }
 
     [Fact]

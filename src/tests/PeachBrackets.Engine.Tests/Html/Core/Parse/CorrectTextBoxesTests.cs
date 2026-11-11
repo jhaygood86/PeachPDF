@@ -15,7 +15,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<div id='d'>{innerHtml}</div>"));
             var div = LayoutHarness.FindById(root, "d")!;
 
-            return div.Boxes.Select(b => b.HtmlTag?.Name ?? (string.IsNullOrWhiteSpace(b.Text) ? "ws" : "text")).ToList();
+            return [.. div.Boxes.Select(b => b.HtmlTag?.Name ?? (string.IsNullOrWhiteSpace(b.Text) ? "ws" : "text"))];
         }
 
         [Fact]

@@ -198,11 +198,10 @@ namespace PeachBrackets.Engine.Tests.Integration
                        $"</head><body>{body}</body></html>";
             var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: 300, pageHeight: PageHeight, margin: Margin);
 
-            return container.FragmentTree!.Fragmentainers
+            return [.. container.FragmentTree!.Fragmentainers
                 .SelectMany((page, index) => Flatten(page.Root).SelectMany(f => f.Words)
                     .Select(w => (index, w.Word.Text ?? "", w.Rect.Top, w.Rect.Bottom)))
-                .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))
-                .ToList();
+                .Where(w => w.Item2.Length > 1 && w.Item2[0] == 'W' && char.IsDigit(w.Item2[1]))];
         }
 
         private static void AssertEachDrawnOnceInsideABand(List<(int Page, string Text, double Top, double Bottom)> placed, int count)
@@ -236,7 +235,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 .Where(t => t.StartsWith(prefix, StringComparison.Ordinal) && t.Length > prefix.Length
                             && char.IsDigit(t[prefix.Length]));
 
-            return (distinct ? matching.Distinct() : matching).ToList();
+            return [.. (distinct ? matching.Distinct() : matching)];
         }
 
         // Every string drawn with some part of it inside all the rectangle clips in force when it was drawn.

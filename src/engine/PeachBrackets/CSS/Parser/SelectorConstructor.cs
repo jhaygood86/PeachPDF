@@ -495,7 +495,7 @@ namespace PeachBrackets.Css
             if (Forgiving)
                 _kept++;
 
-            _group ??= new ListSelector();
+            _group ??= [];
 
             if (_complex != null)
             {
@@ -508,7 +508,7 @@ namespace PeachBrackets.Css
                 _group.Add(_temp);
             }
 
-            _leadingCombinators ??= new List<Combinator>();
+            _leadingCombinators ??= [];
             _leadingCombinators.Add(_pendingLeadingCombinator);
             _pendingLeadingCombinator = Combinator.Descendent;
 
@@ -521,7 +521,7 @@ namespace PeachBrackets.Css
             {
                 if (_combinators.Count == 0)
                 {
-                    var compound = _temp as CompoundSelector ?? new CompoundSelector { _temp };
+                    var compound = _temp as CompoundSelector ?? [_temp];
 
                     compound.Add(selector);
                     _temp = compound;

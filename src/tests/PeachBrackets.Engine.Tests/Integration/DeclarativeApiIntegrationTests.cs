@@ -430,7 +430,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 {
                     c.UnorderedList(list =>
                     {
-                        list.MarkerImage(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0 });
+                        list.MarkerImage([0x89, 0x50, 0x4E, 0x47, 0, 0, 0, 0]);
                         list.Item();
                     });
                 }), properties);
@@ -442,7 +442,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var byStreamDescriptor = DocumentBuilder.BuildPage(page =>
                 page.Content(c => c.UnorderedList(list =>
                 {
-                    list.MarkerImage(new MemoryStream(new byte[] { 0xFF, 0xD8, 0xFF }));
+                    list.MarkerImage(new MemoryStream([0xFF, 0xD8, 0xFF]));
                     list.Item();
                 })), properties);
             var byStreamImage = Assert.IsType<CssImage.Url>(Assert.Single(byStreamDescriptor.Page.Root.Box.Boxes).ListStyleImage);

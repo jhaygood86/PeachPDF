@@ -72,7 +72,7 @@ public class PdfStringLiteralTests
         return Encoding.Latin1.GetBytes(pdf.ToString());
     }
 
-    public static TheoryData<int> Lengths() => new() { 1, 2, 3, 4, 7, 8, 23, 24, 25, 46, 47, 48, 49, 50, 95, 96, 97, 98, 255, 256, 1000 };
+    public static TheoryData<int> Lengths() => [1, 2, 3, 4, 7, 8, 23, 24, 25, 46, 47, 48, 49, 50, 95, 96, 97, 98, 255, 256, 1000];
 
     [Theory]
     [MemberData(nameof(Lengths))]

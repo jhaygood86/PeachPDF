@@ -27,7 +27,7 @@ namespace PeachPDF.Tests.Html.Core
         private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.CcmpLigature);
 
         private static int[] Shape(string text) =>
-            Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
+            [.. Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex)];
 
         [Fact]
         public void CcmpLigature_AppliesWithoutAnyLigatureFeatureRequested()

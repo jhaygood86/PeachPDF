@@ -19,7 +19,7 @@ internal static partial class PaintedWords
     private static partial Regex WordPattern();
 
     public static IReadOnlyList<string> InMarkup(string markup) =>
-        WordPattern().Matches(markup).Select(m => m.Value).Order().ToList();
+        [.. WordPattern().Matches(markup).Select(m => m.Value).Order()];
 
     public static async Task<(IReadOnlyList<string> Painted, int Pages)> LayOutAndPaintAsync(string html)
     {
