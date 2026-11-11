@@ -264,5 +264,35 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(FindById(root, "a")!.Location.Y, FindById(root, "c")!.Location.Y, 0.5);
             Assert.Equal(100, FindById(root, "b")!.ActualBoxSizingWidth, 0.5);
         }
+
+        [Fact]
+        public async Task AnItemWithAZeroBasisThatWrapsOntoItsOwnLineIsRaisedToItsWord()
+        {
+            // The break puts the item on a line of its own (its word does not fit beside the 60pt item); with no growing item and
+            // no overflow on that line it was left at its basis of 0 and laid out empty.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-wrap:wrap;width:150pt;font-size:12pt'><div id='a' style='width:60pt'>s1</div>"
+                + "<div id='b' style='flex:0'>Lwwwwwwwwwwwwwwwwwwwwwwww</div></div>"));
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(b.Location.Y > a.Location.Y + 1, $"b starts a second line, a.Y={a.Location.Y} b.Y={b.Location.Y}");
+            Assert.True(b.ActualBoxSizingWidth > 100, $"b is raised to its word's width, was {b.ActualBoxSizingWidth}");
+        }
+
+        [Fact]
+        public async Task ABlockWithADefiniteWidthContributesItsMinAndMaxWidthClampedWidthAndItsMargins()
+        {
+            string Item(string id, string style) =>
+                $"<div id='{id}' style='flex:none'><div style='height:10pt;{style}'></div></div>";
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;width:600pt'>"
+                + Item("min", "width:100pt;min-width:150pt") + Item("max", "width:300pt;max-width:80pt") + Item("margin", "width:90pt;margin:0 10pt")
+                + "</div>"));
+
+            Assert.Equal(150, FindById(root, "min")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(80, FindById(root, "max")!.ActualBoxSizingWidth, 0.5);
+            Assert.Equal(110, FindById(root, "margin")!.ActualBoxSizingWidth, 0.5);
+        }
     }
 }

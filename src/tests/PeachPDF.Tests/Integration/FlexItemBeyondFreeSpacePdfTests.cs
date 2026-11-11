@@ -154,5 +154,29 @@ namespace PeachPDF.Tests.Integration
             Assert.True(Math.Abs(rects["1 0 0"].H - 60) < 0.5, $"the first item is {rects["1 0 0"].H}pt tall, not 60pt");
             Assert.True(Math.Abs(rects["0 1 0"].H - 60) < 0.5, $"the second item is {rects["0 1 0"].H}pt tall, not 60pt");
         }
+
+        [Fact]
+        public async Task AWrappingRowItemWithAZeroBasis_IsRaisedToItsWordOnTheLineItWrapsOnto()
+        {
+            var rects = await FillsOf(
+                "<div style='display:flex;flex-wrap:wrap;width:200px'><div style='width:80px;background:#0f0'>s1</div>" +
+                "<div style='flex:0;background:#f00'>Lmmmmmmmmmmmmmmmmmmmm</div></div>");
+
+            Assert.True(rects["1 0 0"].W > 80, $"the wrapped item is {rects["1 0 0"].W}pt wide; it was laid out empty at 0");
+            Assert.True(rects["1 0 0"].Y < rects["0 1 0"].Y - 1, "the wrapped item is below the first");
+        }
+
+        [Fact]
+        public async Task ABlockWithADefiniteWidth_ContributesItsMinWidthMaxWidthAndMargins()
+        {
+            string Item(string color, string style) => $"<div style='flex:none;background:{color}'><div style='height:10px;{style}'></div></div>";
+            var rects = await FillsOf(
+                "<div style='display:flex;width:800px'>" + Item("#f00", "width:100px;min-width:200px") + Item("#0f0", "width:400px;max-width:100px")
+                + Item("#00f", "width:100px;margin:0 20px") + "</div>");
+
+            Assert.True(Math.Abs(rects["1 0 0"].W - 150) < 0.5, $"min-width: {rects["1 0 0"].W}pt, not 150pt");
+            Assert.True(Math.Abs(rects["0 1 0"].W - 75) < 0.5, $"max-width: {rects["0 1 0"].W}pt, not 75pt");
+            Assert.True(Math.Abs(rects["0 0 1"].W - 105) < 0.5, $"margins: {rects["0 0 1"].W}pt, not 105pt");
+        }
     }
 }

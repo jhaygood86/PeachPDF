@@ -1143,7 +1143,12 @@ namespace PeachBrackets.Html.Dom
             // resolved like an overflowing one (so is a line that exactly fills its container, once a minimum raises an item).
             // A line that neither overflows nor grows has nothing to floor.
             var grows = !overflows && line.Items.Any(i => ParseFloat(i.Box.FlexGrow) > 0);
-            if (!overflows && !grows) return;
+
+            // A wrapping row has already broken its lines on the floored sizes (LineBreakingSize), so an item moved to a line of
+            // its own because its minimum did not fit the one before is floored on that line too; left at its basis (0 for
+            // `flex: 0`) it would be laid out empty.
+            var raisedByWrap = _isWrap && _mainAxisIsPhysicalX;
+            if (!overflows && !grows && !raisedByWrap) return;
 
             if (!_mainAxisIsPhysicalX)
             {

@@ -9945,8 +9945,21 @@ namespace PeachBrackets.Html.Dom
                 && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
             {
                 var explicitContentWidth = CssValueParser.ParseLength(box.Width, 0, box);
+
+                // The box's own min-width and max-width bound the width it contributes (css-sizing-3 section 5.1: the
+                // contribution is the size the box ends up with). A percentage one has nothing to resolve against here.
+                if (HasDefiniteWidthContribution(box))
+                {
+                    if (CssValueParser.IsValidLength(box.MaxWidth) && !box.MaxWidth.EndsWith('%'))
+                        explicitContentWidth = Math.Min(explicitContentWidth, CssValueParser.ParseLength(box.MaxWidth, 0, box));
+                    if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth) && !box.MinWidth.EndsWith('%'))
+                        explicitContentWidth = Math.Max(explicitContentWidth, CssValueParser.ParseLength(box.MinWidth, 0, box));
+                }
+
+                // A box that opens its own line carries its margins (and its ancestors') in marginSum, where the walk seeds
+                // an auto-width one from it; an inline-level box had them added to maxSum before this call.
                 var explicitSum = startsNewLine
-                    ? explicitContentWidth
+                    ? marginSum + explicitContentWidth
                     : maxSumBeforeBox + explicitContentWidth;
                 var explicitDecoration = startsNewLine
                     ? descendantDecoration
