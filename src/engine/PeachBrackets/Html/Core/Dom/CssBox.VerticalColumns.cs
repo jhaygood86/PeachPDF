@@ -115,9 +115,7 @@ namespace PeachBrackets.Html.Dom
                 ? Math.Max(1, container.PageSize.Height)
                 : Math.Max(1, CssLayoutEngine.DefiniteContentHeight(this));
 
-            var gap = FlexColumnGap.Value is { IsValue: true, Value: { } gapLength }
-                ? CssValueParser.ParseLength(gapLength, inline, this)
-                : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), inline, this);
+            var gap = CssLayoutEngineColumns.ColumnGap(this, inline);
 
             var (count, columnSize) = CssLayoutEngineColumns.ResolveColumns(this, inline, gap);
             if (count < 2 || columnSize <= 0) return false;
