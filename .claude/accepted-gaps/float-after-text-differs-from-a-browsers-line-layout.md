@@ -11,6 +11,11 @@ run; `FloatAfterTextMatchesBrowserTests` keeps a slice): 790 of 6,925 words diff
 - **Inside a multi-column container** the line is closed and the float opens the next one, as before (`blockBox.HtmlContainer.CurrentFragmentainer.HasOwnBand`). A
   float placed below a line that goes on does not fit the column fill's own bookkeeping (`FloatsPlacedOnThisLine`, the crowded-line shift's refusals):
   `LineBelowACrowdingFloat_WithNegativeMarginBottom_ClearsItsBorderBox` draws words over the float when it is tried. A `nowrap` line there is left as it is.
+- **A float placed on a column's own line that is wider than the column** (`<div style="columns:2;width:347px">w1 w2 w3 w4 <div style="float:left;width:260px;height:40px">F</div> w5 w6 w7 w8</div>`):
+  the float moves to the next column and the words after it overlap it, the last one starting 64px past the container, where a browser puts the float
+  below the text of its own column. The crowded-line shift refuses for a float of the line itself (`ShiftEmptyLineBelowCrowdingFloats`, `FloatsPlacedOnThisLine`),
+  which is also what keeps a multi-column container in a table cell from being divided into columns (see
+  [the table-cell gap](a-multicol-container-with-a-float-in-a-table-cell-is-not-columnized.md)). With a margin on the float, or a right float, the document is placed correctly.
 - **`shape-outside` is not supported by the shift rule** (#1785). Text wraps around the float's rectangle where a shaped float is involved, because the line's
   words are moved against the rectangle. A shape-aware line extent in `ExtentBesideFloats` would be needed.
 - **Whitespace-only text nodes on both sides of a float** (`<span>a</span> <div style="float:left"></div> <span>b</span>`) lose their space: the two words are

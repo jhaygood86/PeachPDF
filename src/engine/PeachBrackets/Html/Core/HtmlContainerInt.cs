@@ -1617,6 +1617,7 @@ namespace PeachBrackets.Html
             TopFloatAreaHeightsByColumn = [];
             BottomFloatAreaHeightsByColumn = [];
             PageFloatColumns.Clear();
+            FloatColumns.Clear();
             // Keyed by CssBox, same reference-leak reason as the footnote dictionaries above.
             PageFloatPlacements = [];
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
@@ -2116,6 +2117,10 @@ namespace PeachBrackets.Html
 
         private async ValueTask PerformLayoutOnePass(Canvas g)
         {
+            // The column each float was placed in is a fact of one pass: a float that lands in another column in the next pass, or in none during a measurement
+            // pass, must not be compared against the column an earlier pass put it in (CSS 2.1 section 9.5.1 rule 5 per column).
+            FloatColumns.Clear();
+
             ActualSize = Size.Empty;
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;

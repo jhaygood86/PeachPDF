@@ -628,6 +628,7 @@ namespace PeachBrackets.Html.Dom
             try
             {
                 await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
+                LowerFloatsDeferredBelowTheLine(coordinates);
             }
             finally
             {
@@ -5503,9 +5504,16 @@ namespace PeachBrackets.Html.Dom
                 // margin-bottom would leave the line below the margin edge and still beside the float.
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(leftFloat.FlowBottomEdgeIn(box), leftFloat.FlowBottomEdgeIn(box) + leftFloat.ActualMarginBottom));
+                {
+                    var leftBottom = leftFloat.FlowBottomEdgeIn(box);
+                    nextY = Math.Min(nextY, Math.Max(leftBottom, leftBottom + leftFloat.ActualMarginBottom));
+                }
+
                 if (rightFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(rightFloat.FlowBottomEdgeIn(box), rightFloat.FlowBottomEdgeIn(box) + rightFloat.ActualMarginBottom));
+                {
+                    var rightBottom = rightFloat.FlowBottomEdgeIn(box);
+                    nextY = Math.Min(nextY, Math.Max(rightBottom, rightBottom + rightFloat.ActualMarginBottom));
+                }
 
                 // The cursor stays where the first lookup left it unless the line really moves down.
                 if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
@@ -5643,9 +5651,29 @@ namespace PeachBrackets.Html.Dom
         /// content-specific work on either side of that boundary (speculative extent rollback,
         /// line-clamp, first-line remeasurement, float intersection, and leading decorations).
         /// </summary>
+        /// <summary>
+        /// A float that did not fit beside the words of a line goes below it, and the line goes on after the float: it was placed at the bottom of the line as
+        /// it stood, which words after it can make taller. When the line closes, the floats are moved down to where the line ended.
+        /// </summary>
+        private static void LowerFloatsDeferredBelowTheLine(CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.FloatsDeferredBelowTheLine is not { Count: > 0 } deferred) return;
+
+            coordinates.FloatsDeferredBelowTheLine = null;
+
+            foreach (var floated in deferred)
+            {
+                var lineBottom = coordinates.MaxBottom;
+                var top = floated.Location.Y - floated.ActualMarginTop;
+
+                if (lineBottom > top + DomUtils.FloatFitTolerance) floated.OffsetTop(lineBottom - top);
+            }
+        }
+
         private static void OpenNextLine(CssBox blockBox, CssLineBoxCoordinates coordinates,
             double lineSpacing, double lineStartX, int startOrdinal, bool followsForcedBreak, bool isRtl)
         {
+            LowerFloatsDeferredBelowTheLine(coordinates);
             coordinates.ConsecutiveHyphenatedLines =
                 coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
             coordinates.CurrentLineHyphenated = false;
@@ -5787,6 +5815,7 @@ namespace PeachBrackets.Html.Dom
                     // line is not closed, so a line that cannot wrap is left as one too.
                     coordinates.InlineFloats?.Remove(b);
                     await PlaceFloatAtLineTop(g, blockBox, b, coordinates, coordinates.MaxBottom);
+                    (coordinates.FloatsDeferredBelowTheLine ??= []).Add(b);
                 }
             }
 

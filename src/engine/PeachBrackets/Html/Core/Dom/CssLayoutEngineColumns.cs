@@ -134,7 +134,13 @@ namespace PeachBrackets.Html.Dom
                 if (resume is null
                     && beside.Right - beside.Left < MinimumRoomBesideAFloat
                     && floatsBottom is { } clearOfFloats
-                    && clearOfFloats > columnsBox.Location.Y + 0.5)
+                    && clearOfFloats > columnsBox.Location.Y + 0.5
+                    // Only while it stays on the page it was placed on: the parent decided the page this container starts on, and a move across the foot
+                    // would leave its content to no fragmentainer.
+                    && (!htmlContainer.HasRealPageGrid
+                        || (htmlContainer.SlotStartingAt(clearOfFloats) == htmlContainer.SlotStartingAt(columnsBox.Location.Y)
+                            && clearOfFloats < htmlContainer.PageBottomOf(htmlContainer.SlotStartingAt(columnsBox.Location.Y))
+                                - htmlContainer.TotalBandEndReservationFor(htmlContainer.SlotStartingAt(columnsBox.Location.Y)))))
                 {
                     columnsBox.Location = columnsBox.Location with { Y = clearOfFloats };
                     boxTop = columnsBox.ClientTop;

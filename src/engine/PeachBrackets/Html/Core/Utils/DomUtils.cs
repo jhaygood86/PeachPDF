@@ -1110,7 +1110,7 @@ namespace PeachBrackets.Html.Utils
 
             for (; reference.ParentBox is { } parent; reference = parent)
             {
-                if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) break;
+                if (ClimbStopsAt(reference, isStartingLevel)) break;
 
                 isStartingLevel = false;
 
@@ -1130,6 +1130,10 @@ namespace PeachBrackets.Html.Utils
             return lowest;
         }
 
+        /// <summary>Whether the climb of <see cref="GetLowestEarlierFloatTop"/> ends at <paramref name="reference"/>: past a formatting context of its own, which the box being placed is not inside of.</summary>
+        private static bool ClimbStopsAt(CssBox reference, bool isStartingLevel) =>
+            !isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null);
+
         /// <summary>Whether the climb of <see cref="GetLowestEarlierFloatTop"/> reaches a multi-column container before it leaves the formatting context.</summary>
         private static bool ClimbReachesMultiColumnContainer(CssBox reference)
         {
@@ -1137,7 +1141,7 @@ namespace PeachBrackets.Html.Utils
 
             for (; reference.ParentBox is { } parent; reference = parent)
             {
-                if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) return false;
+                if (ClimbStopsAt(reference, isStartingLevel)) return false;
                 if (parent.EstablishesMultiColumnContext) return true;
 
                 isStartingLevel = false;
