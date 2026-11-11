@@ -1193,6 +1193,12 @@ namespace PeachBrackets.Html.Dom
                         return;
 
                     default:
+                        // A grid's or flexbox's items are parallel flows like a table's cells, each continuing from the record it stopped at.
+                        foreach (var continuation in token.FanOutContinuations)
+                        {
+                            AddBoxesBeyond(continuation, beyond);
+                        }
+
                         return;
                 }
             }
