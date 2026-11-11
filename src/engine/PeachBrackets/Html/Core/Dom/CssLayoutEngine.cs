@@ -6084,6 +6084,16 @@ namespace PeachBrackets.Html.Dom
         {
             var found = LeftFloatAtCore(coordinates, reference);
 
+            // A float of another column does not narrow a line of this one (css-multicol-1 section 2: a float belongs to the column box it appears in):
+            // a float in the next column of an earlier page, still ending below a line's top where a later page starts, found a line of the first column
+            // by its Y alone, and the line was started at the float's far edge, past the container.
+            if (found is not null && reference.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } }
+                && (found.FlowRightEdgeIn(reference) + found.ActualMarginRight <= coordinates.Line.ContentLeft
+                    || found.FlowLeftEdgeIn(reference) - found.ActualMarginLeft >= coordinates.Line.ContentRight))
+            {
+                found = null;
+            }
+
             // A float with a shape-outside narrows only the lines its shape reaches, and only until the cursor is past the
             // shape's edge at this line's band: past it, the float no longer collides with the cursor (css-shapes-1 §2.1).
             return found is not null && g is not null && FloatShapeOutline.HasShape(found)

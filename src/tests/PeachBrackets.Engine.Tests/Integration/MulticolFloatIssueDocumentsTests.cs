@@ -11,7 +11,7 @@ public class MulticolFloatIssueDocumentsTests
 """, "2316-1")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:300pt 250pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body> w1002_141 <div style="columns:2"><p style=""> w1002_146 w1002_147 w1002_148 w1002_149 w1002_150 w1002_151 w1002_152 w1002_153 w1002_154 w1002_155 w1002_156 w1002_157 w1002_158 w1002_159 </p><p style=""> w1002_160 w1002_161 w1002_162 w1002_163 w1002_164 w1002_165 w1002_166 w1002_167 w1002_168 w1002_169 w1002_170 w1002_171 w1002_172 w1002_173 w1002_174 </p><p style=""> w1002_175 w1002_176 w1002_177 w1002_178 w1002_179 w1002_180 w1002_181  w1002_182 w1002_183 w1002_184 w1002_185 </p><div style="float:right"> w1002_186 w1002_187 w1002_188  w1002_197 w1002_198 w1002_199 w1002_200 w1002_201 w1002_202 w1002_203 w1002_204 w1002_205  w1002_206 </div><div style="float:left"><p style=""> w1002_236 w1002_237 w1002_238 w1002_239 w1002_240 w1002_241 w1002_242 w1002_243 w1002_244 </p><p style=""> w1002_247 w1002_248 w1002_249 w1002_250 w1002_251 w1002_252 w1002_253  w1002_254 w1002_255 w1002_256 w1002_257 w1002_258  w1002_259  w1002_260 w1002_261 w1002_262  w1002_269  w1002_270 w1002_271 w1002_272  w1002_273 </p> w1002_274  w1002_275  w1002_276 w1002_277 w1002_278 w1002_279 w1002_280 w1002_281 w1002_282 w1002_283 w1002_284 </div><div style="clear:both"></div><p style=""> w1002_292 </p></div></body></html>
-""", "2317-1", Skip = "#2317: open, the document still loses or doubles a word")]
+""", "2317-1", Skip = "#2317: open, the left float placed below a continuing right float starts its first fragment above the page content")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:200pt 200pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="columns:2"><div style="float:left"><p style=""> w6048_1059 w6048_1060 w6048_1061 w6048_1062 w6048_1063 w6048_1064 w6048_1065 w6048_1066 w6048_1067 w6048_1068 w6048_1069 w6048_1070 w6048_1071 w6048_1072 w6048_1073 w6048_1074 w6048_1075 w6048_1076 w6048_1077 w6048_1078 </p></div><div style="columns:3"><p style=""> w6048_1186 </p></div></div></body></html>
 """, "2318-1", Skip = "#2318: open, the document still loses or doubles a word")]
@@ -37,5 +37,22 @@ public class MulticolFloatIssueDocumentsTests
 
         Assert.True(lost.Count == 0, $"{name}: lost {string.Join(' ', lost)}");
         Assert.True(doubled.Count == 0, $"{name}: doubled {string.Join(' ', doubled)}");
+    }
+
+    // A paragraph after a tall float that fills its column, on a page after the float's: the float's box (the column it is in on the earlier
+    // page) still ends below the line's top, and the line, in the other column, was started at the float's far edge past the container, where
+    // it is clipped. The fuzz-found reduction of the first of #2317's two mechanisms (the other, the float's own first fragment, is the skipped row).
+    [Fact]
+    public async Task ALineInAnotherColumnIsNotStartedAtAFloatOfTheNextColumn()
+    {
+        static string W(int p, int n) => string.Join(' ', Enumerable.Range(0, n).Select(i => $"w{p}_{p * 1000 + i}"));
+        var body = $"<div style=\"columns:2\"><p>{W(10, 15)}</p><div style=\"float:left\"><p>{W(30, 40)}</p></div><p>{W(40, 1)}</p></div>";
+        var html = "<!doctype html><html><head><meta charset=\"utf-8\"><style>@page{size:300pt 250pt;margin:20pt}body{margin:0;font:12pt Arial}</style></head><body>" + body + "</body></html>";
+
+        var (painted, _) = await PaintedWords.LayOutAndCollectVisibleAsync(html);
+        var (lost, doubled) = PaintedWords.Diff(html, painted);
+
+        Assert.Empty(lost);
+        Assert.Empty(doubled);
     }
 }
