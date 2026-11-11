@@ -179,6 +179,10 @@ namespace PeachBrackets.Html.Fragmentation
             {
                 if (Left is not { } left || Right is not { } right) return true;
 
+                // A column the gaps left no width (a narrow container with several columns): the text laid out in it overflows, as in a browser, and
+                // belongs to the column it starts in. No width means no overlap with any word, so the start decides.
+                if (right - left <= BandOverlapEpsilon) return rect.Left >= left - EdgeEpsilon && rect.Left <= right + EdgeEpsilon;
+
                 return rect.Width > BandOverlapEpsilon
                     ? Math.Min(rect.Right, right) - Math.Max(rect.Left, left) > BandOverlapEpsilon
                     : rect.Left >= left - EdgeEpsilon && rect.Left <= right + EdgeEpsilon;
@@ -5055,8 +5059,31 @@ namespace PeachBrackets.Html.Fragmentation
         {
             if (own.ContextRoot is not { } root || own.Region is not { Left: { } left, Right: { } right } region) return false;
             if (!TryGetWordRect(box, wordIndex, own.Geometry, out var ownRect)) return false;
-            if (ownRect.Left >= left - EdgeEpsilon && ownRect.Left < right) return false;
             if (!_capturedInstances.TryGetValue((root, slotIndex), out var instances)) return false;
+
+            // A column the gaps left no width: a word starting in it belongs to it (the text overflows, as in a browser), and the same container's
+            // fill under another outer column has a column at the same place that holds the word as well. The first of them draws it.
+            if (right - left <= BandOverlapEpsilon)
+            {
+                foreach (var other in instances)
+                {
+                    if (ReferenceEquals(other.Self, own.Self)) return false;
+
+                    if (other.Region is { Left: { } otherLeft, Right: { } otherRight } otherRegion
+                        && otherRight - otherLeft <= BandOverlapEpsilon
+                        && TryGetWordRect(box, wordIndex, other.Geometry, out var otherRect)
+                        && Math.Min(otherRect.Bottom, otherRegion.Bottom) - Math.Max(otherRect.Top, otherRegion.Top) > BandOverlapEpsilon
+                        && otherRect.Left >= otherLeft - EdgeEpsilon && otherRect.Left <= otherRight + EdgeEpsilon
+                        && other.Geometry.Holds(box))
+                    {
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+
+            if (ownRect.Left >= left - EdgeEpsilon && ownRect.Left < right) return false;
 
             foreach (var other in instances)
             {
@@ -5070,7 +5097,9 @@ namespace PeachBrackets.Html.Fragmentation
                 // band the word lies in: a different band is a different place the word could be drawn.
                 if (TryGetWordRect(box, wordIndex, other.Geometry, out var otherRect)
                     && Math.Min(otherRect.Bottom, otherRegion.Bottom) - Math.Max(otherRect.Top, otherRegion.Top) > BandOverlapEpsilon
-                    && otherRect.Left >= otherLeft - EdgeEpsilon && otherRect.Left < otherRight
+                    && otherRect.Left >= otherLeft - EdgeEpsilon
+                    // A column with no width holds the words that start at its position.
+                    && (otherRight - otherLeft <= BandOverlapEpsilon ? otherRect.Left <= otherRight + EdgeEpsilon : otherRect.Left < otherRight)
                     && other.Geometry.Holds(box))
                 {
                     return true;

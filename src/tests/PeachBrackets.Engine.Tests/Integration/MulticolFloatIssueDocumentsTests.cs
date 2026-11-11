@@ -20,7 +20,7 @@ public class MulticolFloatIssueDocumentsTests
 """, "2318-2")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:400pt 200pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="float:right;width:60%;height:230pt"></div><div style="columns:4"><div style="columns:4"><p style=""></p><div style="float:right"><p style=""> w5071_146 </p></div><p style=""> w5071_161 </p><p style=""> w5071_185 w5071_186 </p></div></div></body></html>
-""", "2318-3", Skip = "#2318: open, a right float wider than a one-pixel inner column starts left of the page (x = -28pt) and is not visible")]
+""", "2318-3")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:200pt 250pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="columns:2"><div style="float:right"> w5064_86 w5064_87 w5064_88 w5064_89 w5064_90 w5064_91 w5064_92 </div><p style=""></p><div style="float:left;width:50%"><span style="display:inline-block"> w5064_108 </span> w5064_115 </div><p style=""> w5064_129 w5064_130 </p></div></body></html>
 """, "2326-1")]
