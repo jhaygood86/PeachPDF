@@ -37,7 +37,7 @@
 	<Import Project="..\ApiReferenceLinks.props" />
 	<ItemGroup>
 		<PackageReference Include="DefaultDocumentation" PrivateAssets="all" IncludeAssets="build" />
-		<PackageReference Include="MimeKit" />
+		<PackageReference Include="MimeKit.Core" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PDF/Drawing/PeachImageSource.cs). Replaced
