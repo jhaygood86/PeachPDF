@@ -5737,10 +5737,15 @@ namespace PeachBrackets.Html.Dom
             // they are (CSS 2.1 section 9.5.1 rule 6 puts the float below the line only when it does not fit beside it).
             var floatIsBesideTheLine = b.Location.Y - b.ActualMarginTop < coordinates.MaxBottom - DomUtils.FloatFitTolerance;
 
-            if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
-                && ((floatIsBesideTheLine && FloatOverlapsLineWords(b, coordinates.Line)) || overlapsLineBox))
+            // A line that cannot wrap (white-space: nowrap or pre) stays one line: when the float fits beside the words so far the line moves right, as in a
+            // browser, and when it does not the line is left alone and no new one is opened (that drew its words twice or on top of each other).
+            var lineCanWrap = coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping);
+
+            if (!IsAtLineStart(coordinates)
+                && ((floatIsBesideTheLine && (FloatOverlapsLineWords(b, coordinates.Line) || FloatOverlapsMovableAtomics(b, coordinates.Line)))
+                    || (overlapsLineBox && lineCanWrap)))
             {
-                if (overlapsLineBox)
+                if (overlapsLineBox && lineCanWrap)
                 {
                     // A box already placed on the line cannot be moved beside the float as its words can, so a right float over one goes below the
                     // line, and the line stays as it is: what follows the float in the source goes on after the box, as in a browser.
@@ -5754,14 +5759,34 @@ namespace PeachBrackets.Html.Dom
                         word.Left += shift;
                     }
 
+                    // An inline-block with no content of a box's own moves with the words (its text is among them), or by itself when it has none.
+                    foreach (var atomic in MovableAtomics(coordinates.Line))
+                    {
+                        atomic.Location = atomic.Location with { X = atomic.Location.X + shift };
+                        var rectangle = coordinates.Line.Rectangles[atomic];
+                        coordinates.Line.Rectangles[atomic] = new Rect(rectangle.X + shift, rectangle.Y, rectangle.Width, rectangle.Height);
+                    }
+
                     coordinates.CurrentX += shift;
+                }
+                else if (blockBox.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } })
+                {
+                    // Inside a column the float and the line it follows are tied together by the column fill and the crowded-line shift, which a float placed
+                    // below a line that goes on does not fit (a float's own line is what the refusals there name): the line is closed and the float opens the next.
+                    if (lineCanWrap)
+                    {
+                        coordinates.InlineFloats?.Remove(b);
+                        OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
+                            followsForcedBreak: false, isRtl);
+                        await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                    }
                 }
                 else
                 {
+                    // The words cannot be moved beside the float: it goes below the line they are on, which goes on after them, as in a browser. The
+                    // line is not closed, so a line that cannot wrap is left as one too.
                     coordinates.InlineFloats?.Remove(b);
-                    OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
-                        followsForcedBreak: false, isRtl);
-                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates, coordinates.MaxBottom);
                 }
             }
 
@@ -5826,6 +5851,33 @@ namespace PeachBrackets.Html.Dom
             return false;
         }
 
+        /// <summary>The atomic inline-blocks on <paramref name="line"/> whose content is in the line's own words (or that have none), which a shift beside a float can move.</summary>
+        private static List<CssBox> MovableAtomics(CssLineBox line)
+        {
+            List<CssBox> found = [];
+
+            foreach (var box in line.Rectangles.Keys)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock && !HasBlockLevelDescendant(box)) found.Add(box);
+            }
+
+            return found;
+        }
+
+        private static bool FloatOverlapsMovableAtomics(CssBox floated, CssLineBox line)
+        {
+            var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
+            var right = floated.FlowRightEdge + floated.ActualMarginRight;
+
+            foreach (var box in MovableAtomics(line))
+            {
+                var rectangle = line.Rectangles[box];
+                if (rectangle.X < right - DomUtils.FloatFitTolerance && rectangle.X + rectangle.Width > left + DomUtils.FloatFitTolerance) return true;
+            }
+
+            return false;
+        }
+
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {
             var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
@@ -5839,8 +5891,23 @@ namespace PeachBrackets.Html.Dom
         private static double? ShiftLineBesideFloat(CssBox blockBox, CssBox floated, CssLineBoxCoordinates coordinates)
         {
             var line = coordinates.Line;
-            var firstLeft = line.Words.Min(w => w.Left);
-            var lastRight = line.Words.Max(w => w.Right);
+            var firstLeft = double.PositiveInfinity;
+            var lastRight = double.NegativeInfinity;
+
+            foreach (var word in line.Words)
+            {
+                firstLeft = Math.Min(firstLeft, word.Left);
+                lastRight = Math.Max(lastRight, word.Right);
+            }
+
+            foreach (var atomic in MovableAtomics(line))
+            {
+                var rectangle = line.Rectangles[atomic];
+                firstLeft = Math.Min(firstLeft, rectangle.X);
+                lastRight = Math.Max(lastRight, rectangle.X + rectangle.Width);
+            }
+
+            if (double.IsPositiveInfinity(firstLeft)) return null;
 
             if (floated.EffectiveFloatSide == Floating.Right)
             {

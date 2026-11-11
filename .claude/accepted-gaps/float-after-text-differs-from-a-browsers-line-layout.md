@@ -1,14 +1,19 @@
-# A float after text lands differently from a browser's re-laid line (#1784, #1785)
+# A float after text differs from a browser's line layout inside columns, and `shape-outside` is not applied everywhere (#1784, #1785)
 
-**Gap:** two float cases still differ from Chrome in word position. Measured by laying the same numbered words out in both and comparing every word's position (3pt across, 6pt down).
+Outside a multi-column container a float placed after text now lands where a browser puts it: the line moves beside the float when the words so far fit
+beside it (a `white-space: nowrap` line too), and otherwise the float goes below the line while the text after it carries on along the line it was on
+(`CssLayoutEngine.FlowFloatChild`: `ShiftLineBesideFloat`, then `PlaceFloatAtLineTop` at the line's bottom). Measured against Chromium on 294 generated documents
+(a float of three widths and two heights on either side, after 3 to 20 words and before 3 to 25, with and without `white-space: nowrap`, and two left floats after one
+run; `FloatAfterTextMatchesBrowserTests` keeps a slice): 790 of 6,925 words differed before and none do now.
 
-- **A float that follows text on its line shifts the words rather than re-laying the line** (#1784). `CssLayoutEngine.FlowFloatChild` places the float at the line top, then `ShiftLineBesideFloat` moves the words already on the line beside it when they fit; otherwise the float starts the next line and the words after it start that line too, where a browser keeps them on the current one. Under `white-space: nowrap` a browser keeps the run on one line (30 words differ on `main` and now alike). Two left floats after the same text: 64 of 70 words differ now, against 61 on `main`. A float that reaches the middle of the line is better than on `main` (41 words differ now, 76 on `main`).
-- **`shape-outside` is not supported** (#1785). Text wraps around the float's rectangle (on the reviewed documents 7 words differ on `main` and 15 now, because the shift rule moves words against the float's rectangle). It matters here only because a shaped float leaves the shift rule above working against a rectangle the browser does not use.
+**Still different:**
 
-**Why out of scope:** re-laying the line with the float placed first is a rewrite of the inline flow around floats, not a fix to the box generation this change makes (a box-generation step that lets the columns engine see text). The shift rule means a float never covers a word, which `main` allowed. `shape-outside` needs a shape-aware line extent in `ExtentBesideFloats`.
-
-**Overall:** on the reviewer's 324 generated float-among-text documents, compared with Chrome by word position, the shift rule was better on 139, worse on 22 and equal on 143.
-
-**Text after a float that is wider than its line:** the rule that puts the following text below such a float is closer to Chrome overall (on 60 documents compared by word position: better on 19, worse on 8, equal on 33; mismatched words 1,310 on `main`, 1,070 now), but where Chrome keeps the following text on the current line when the float drops below it, the text is pushed below the float (`wide_55_plain`: 2 mismatched words become 40 from a 2-word shift). Part of #1784.
+- **Inside a multi-column container** the line is closed and the float opens the next one, as before (`blockBox.HtmlContainer.CurrentFragmentainer.HasOwnBand`). A
+  float placed below a line that goes on does not fit the column fill's own bookkeeping (`FloatsPlacedOnThisLine`, the crowded-line shift's refusals):
+  `LineBelowACrowdingFloat_WithNegativeMarginBottom_ClearsItsBorderBox` draws words over the float when it is tried. A `nowrap` line there is left as it is.
+- **`shape-outside` is not supported by the shift rule** (#1785). Text wraps around the float's rectangle where a shaped float is involved, because the line's
+  words are moved against the rectangle. A shape-aware line extent in `ExtentBesideFloats` would be needed.
+- **Whitespace-only text nodes on both sides of a float** (`<span>a</span> <div style="float:left"></div> <span>b</span>`) lose their space: the two words are
+  glued with no break opportunity between them, where a browser keeps one space. Running text and words with their own spaces are unaffected.
 
 **Crowded lines:** the post-wrap `ShiftEmptyLineBelowCrowdingFloats` call fires whenever a wrapped line is crowded by floats, not only by floats wider than the line. On the reviewer's float-first documents (320) and scroll containers with block children and floats (160), 84 and 43 differ from `main`. The net effect is positive (words over a float 760 to 561, word loss 70 to 0; 5 float-first documents and 1 scroll document get worse). Documents with floats up to 45% of the container are identical to `main`.
