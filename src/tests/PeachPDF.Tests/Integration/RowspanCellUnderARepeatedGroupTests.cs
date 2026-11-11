@@ -176,6 +176,73 @@ namespace PeachPDF.Tests.Integration
         }
 
         /// <summary>
+        /// The review's case: a page-tall middle row under a repeated group, the cell's own row on the first page and the last
+        /// row moved to the third, with a background on the row group. On the second page the rows end above the foot of the
+        /// page, and the cell runs on past them; wherever the group's background shows in the cell's column, the cell's own
+        /// fill covers it.
+        /// </summary>
+        [Theory]
+        [InlineData("<thead><tr><th>HEAD1</th><th>HEAD2</th></tr></thead>", "#fcc")]
+        [InlineData("<thead><tr><th>HEAD1</th><th>HEAD2</th></tr></thead>", "rgba(255,0,0,.5)")]
+        [InlineData("<thead><tr><th>HEAD1</th><th>HEAD2</th></tr></thead><tfoot><tr><td>FOOT1</td><td>FOOT2</td></tr></tfoot>", "#fcc")]
+        public async Task TheSpanningCellsFill_CoversItsColumnOfTheRowGroupOnEveryPage(string groups, string fill)
+        {
+            var html = "<!DOCTYPE html><html><head><style>@page{size:300px 400px;margin:20px} body{margin:0;font:10px/12px Arial} " +
+                "td,th{padding:2px;vertical-align:top} table{table-layout:fixed;width:260px;border-spacing:0}</style></head><body>" +
+                $"<table><colgroup><col style='width:100px'><col style='width:160px'></colgroup>{groups}<tbody style='background:#bbffbb'>" +
+                $"<tr><td rowspan='3' style='background:{fill}'>CW1</td><td style='height:40px'>R0</td></tr>" +
+                "<tr><td style='height:600px'>R1</td></tr><tr><td style='height:40px'>R2</td></tr></tbody></table></body></html>";
+
+            var renderContext = new HtmlRenderContext();
+            var options = new HtmlDocumentOptions { PageWidthPoints = 225, PageHeightPoints = 300 };
+            options.SetMargins(15);
+            using var document = await HtmlDocument.LoadAsync(html, renderContext, options);
+            using (var measure = PdfCanvas.CreateMeasuring(renderContext, new Size(225, 300)))
+                await document.LayoutAsync(measure);
+
+            Assert.True(document.Pages.Count >= 3, "the span has to cross a whole page, or this asserts nothing");
+
+            for (var page = 0; page < document.Pages.Count; page++)
+            {
+                using var graphics = new RecordingGraphics(renderContext);
+                await document.PaintPageAsync(page, graphics);
+
+                List<Rect> group = [];
+                List<Rect> cell = [];
+                Stack<Rect?> clips = [];
+
+                foreach (var op in graphics.Log)
+                {
+                    switch (op.Kind)
+                    {
+                        case PaintOpKind.PushClip: clips.Push(op.Bounds); break;
+                        case PaintOpKind.PushClipPath: clips.Push(null); break;
+                        case PaintOpKind.PopClip: clips.Pop(); break;
+                        case PaintOpKind.FillRect when op.Brush is SolidBrush { PaintColor: var color }:
+                            var shown = clips.Aggregate(op.Bounds, (r, clip) => clip is { } c ? Rect.Intersect(r, c) : r);
+                            if (shown is not { Width: > 0, Height: > 0 }) break;
+                            if (color is { R: 0xbb, G: 0xff, B: 0xbb }) group.Add(shown);
+                            else if (color is { R: 255, G: 0xcc or 0 }) cell.Add(shown);
+                            break;
+                    }
+                }
+
+                if (cell.Count == 0) continue;
+
+                // The cell's column, where its fill is drawn across: the group's background there is covered top to bottom.
+                var left = cell.Min(r => r.Left);
+                var right = cell.Max(r => r.Right);
+                var column = group.Select(r => Rect.Intersect(r, new Rect(left, r.Top, right - left, r.Height)))
+                    .Where(r => r is { Width: > 0.5, Height: > 0.5 }).ToList();
+
+                Assert.NotEmpty(column);
+                Assert.True(cell.Min(r => r.Top) <= column.Min(r => r.Top) + 0.5 && cell.Max(r => r.Bottom) >= column.Max(r => r.Bottom) - 0.5,
+                    $"page {page + 1}: the cell is drawn from {cell.Min(r => r.Top)} to {cell.Max(r => r.Bottom)}, the group beside it from " +
+                    $"{column.Min(r => r.Top)} to {column.Max(r => r.Bottom)}");
+            }
+        }
+
+        /// <summary>
         /// The visible part of each translucent fill (the spanning cell's), of each fill in the repeated group's colour, and of
         /// each fill of the cells beside the spanning one, on one page's paint log.
         /// </summary>

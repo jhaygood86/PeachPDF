@@ -279,14 +279,35 @@ namespace PeachPDF.Tests.Integration
                 $"the spanning cell is drawn down to {spanning.Max(r => r.Bottom)}, the rows beside it to {beside.Max(r => r.Bottom)}");
         }
 
-        /// <summary>The reference walk the pruning check builds starts from no spanning cell drawn, as the pruned walk did.</summary>
+        public static TheoryData<string, double, double, double> ContinuingSpans() =>
+        [
+            .. new[]
+            {
+                ("thead", "15,300", "0"), ("thead", "15,300", "4pt"), ("thead2", "15,300", "0"), ("tfoot", "15,300", "2pt"),
+                ("none", "15,300", "0"), ("thead", "300,15", "0"), ("thead2", "300,15", "4pt"), ("tfoot", "300,15", "0"),
+                ("thead", "15,300,15", "0"), ("thead", "300,15,15", "0"), ("thead", "250,250", "0"), ("thead", "220,220", "0"),
+                ("none", "300,300", "0"), ("tfoot", "15,300,15", "0"), ("thead", "15,15,300,15", "0"),
+            }.Select(c => new TheoryDataRow<string, double, double, double>(Page(SpanningTableBesideTallRows(c.Item1, c.Item2, c.Item3)), 300, 250, 20)),
+            .. SpanningCellsUnderARepeatedGroup().Select(row => new TheoryDataRow<string, double, double, double>(row.Data.Item2, 225, 300, 15)),
+            // The review's: a page-tall middle row under a repeated header, sized by the cells' own height, the cell's own row
+            // left behind on the first page and the last row moved to the third.
+            new TheoryDataRow<string, double, double, double>("<!DOCTYPE html><html><head><style>@page{size:300px 400px;margin:20px} body{margin:0;font:10px/12px Arial} td,th{padding:2px;vertical-align:top} " +
+            "table{table-layout:fixed;width:260px;border-spacing:0}</style></head><body><table><thead><tr><th>HEAD1</th><th>HEAD2</th></tr></thead><tbody>" +
+            "<tr><td rowspan='3' style='background:#fcc'>CW1</td><td style='height:40px'>R0</td></tr><tr><td style='height:600px'>R1</td></tr>" +
+            "<tr><td style='height:40px'>R2</td></tr></tbody></table></body></html>", 225, 300, 15),
+        ];
+
+        /// <summary>
+        /// The pruned walk builds the same tree as the full one. A spanning cell built in parts is reached through several rows,
+        /// and the one a walk reaches first builds every part, so the parts must not depend on which rows a walk skips, and a
+        /// row whose visit built them must not be skipped on a later page.
+        /// </summary>
         [Theory]
-        [InlineData("300,15")]
-        [InlineData("15,300")]
-        public async Task ARowspanCellContinuingUnderARepeatedHeader_PrunesWithoutChangingTheTree(string heights)
+        [MemberData(nameof(ContinuingSpans))]
+        public async Task ARowspanCellContinuingOntoLaterPages_PrunesWithoutChangingTheTree(string html, double width, double height, double margin)
         {
-            var (_, container) = await LayoutHarness.LayoutAsync(
-                Page(SpanningTableBesideTallRows("thead", heights, "0")), pageHeight: 250, margin: 20,
+            // The harness lays out on the sheet it is given, not the document's @page.
+            var (_, container) = await LayoutHarness.LayoutAsync(html, pageWidth: width, pageHeight: height, margin: margin,
                 prepare: root => root.HtmlContainer!.VerifyFragmentPruningOverride = true);
 
             Assert.True(container.FragmentTree!.Fragmentainers.Count >= 2, "the cell has to continue onto a second page, or this asserts nothing");
@@ -328,6 +349,10 @@ namespace PeachPDF.Tests.Integration
 
             // Collapsed borders put a row's top on a half pixel, where two parts of the fill meet.
             { "collapsed, header only, tall row second", TranslucentSpanningTable("collapse", TranslucentHead, [40, 600, 40], "top", "CW1") },
+            // A run of rows reaches the next sliced row's top across the page break, on half a pixel.
+            { "collapsed, both groups, two tall rows", TranslucentSpanningTable("collapse", TranslucentHead + TranslucentFoot, [40, 600, 600], "top", "CW1") },
+            // The second row's first slice is stated down to its own bottom, under the repeated footer.
+            { "both groups, two rows of most of a page", TranslucentSpanningTable("separate", TranslucentHead + TranslucentFoot, [330, 330], "top", "CW1") },
         };
 
         /// <summary>

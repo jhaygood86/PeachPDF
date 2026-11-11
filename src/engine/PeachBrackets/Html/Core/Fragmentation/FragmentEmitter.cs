@@ -2276,12 +2276,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// that stands in for the cell reach it, but its content has one position, so it is drawn once.</summary>
         private readonly HashSet<FragmentKey> _rowSpanningCellsThisWalk = [];
 
-        /// <summary>The rows a rowspan cell's decoration was already built through in this walk, on a slot where a row of
-        /// its span is sliced across bands (see <see cref="AddRowSpanningCell"/>).</summary>
-        private readonly HashSet<(FragmentKey Cell, CssBox Row)> _rowSpanningCellStripsThisWalk = [];
-
-        /// <summary>The rows each rowspan cell spans, in order, and which of them each row or placeholder that reaches the
-        /// cell is. Kept for the emitter's lifetime: which rows a cell spans is the box tree's structure, which layout does
+        /// <summary>The rows each rowspan cell spans, in order, and the index of each among them. Kept for the emitter's lifetime: which rows a cell spans is the box tree's structure, which layout does
         /// not change.</summary>
         private readonly Dictionary<CssBox, SpannedRows> _rowSpanningCellRows = new(ReferenceEqualityComparer.Instance);
 
@@ -2289,7 +2284,7 @@ namespace PeachBrackets.Html.Fragmentation
         /// indices, in order; empty where none is).</summary>
         private readonly Dictionary<CssBox, int[]> _rowSpanningCellSlicedThisWalk = new(ReferenceEqualityComparer.Instance);
 
-        /// <summary>The rows a <c>rowspan</c> cell spans, and the index among them of each row and placeholder reaching it.</summary>
+        /// <summary>The rows a <c>rowspan</c> cell spans, and the index of each among them.</summary>
         private sealed class SpannedRows(CssBox[] rows, Dictionary<CssBox, int> indexOf)
         {
             public CssBox[] Rows { get; } = rows;
@@ -2301,18 +2296,38 @@ namespace PeachBrackets.Html.Fragmentation
         private CssBox? _decorationOnly;
 
         /// <summary>
-        /// Content built in this walk for rowspan cells whose decoration is built in parts, by the row group whose rows
-        /// they span: each joins that group's children after its rows, so it paints over every part of the decoration.
+        /// The parts built in this walk of rowspan cells built in parts whose own row is sliced here, by the row group whose
+        /// rows they span: each cell's decoration strips join that group's children before the first row of its span, and
+        /// its content after every row, so the content paints over every strip.
         /// </summary>
-        private readonly Dictionary<CssBox, List<Draft>> _rowSpanningCellContentThisWalk = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, List<(SpannedRows Spanned, List<Draft> Decoration, Draft? Content)>> _rowSpanningCellPartsThisWalk =
+            new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>Places the <paramref name="parts"/> <see cref="_rowSpanningCellPartsThisWalk"/> holds for a row group among its <paramref name="children"/>.</summary>
+        private static void PlaceRowSpanningCellParts(List<(SpannedRows Spanned, List<Draft> Decoration, Draft? Content)> parts, List<Draft> children)
+        {
+            var rows = children.Count;
+
+            foreach (var (spanned, decoration, _) in parts)
+            {
+                var at = children.FindIndex(0, rows, child => spanned.IndexOf.ContainsKey(child.Box));
+                if (at < 0) at = rows;
+                children.InsertRange(at, decoration);
+                rows += decoration.Count;
+            }
+
+            foreach (var (_, _, content) in parts)
+            {
+                if (content is not null) children.Add(content);
+            }
+        }
 
         private void ClearRowSpanningCellsThisWalk()
         {
-            // Content is queued only while its row group is being walked, which always ends by taking it.
-            System.Diagnostics.Debug.Assert(_rowSpanningCellContentThisWalk.Count == 0, "rowspan cell content left unplaced by a walk");
-            _rowSpanningCellContentThisWalk.Clear();
+            // Parts are queued only while their row group is being walked, which always ends by taking them.
+            System.Diagnostics.Debug.Assert(_rowSpanningCellPartsThisWalk.Count == 0, "rowspan cell parts left unplaced by a walk");
+            _rowSpanningCellPartsThisWalk.Clear();
             _rowSpanningCellsThisWalk.Clear();
-            _rowSpanningCellStripsThisWalk.Clear();
             _rowSpanningCellSlicedThisWalk.Clear();
         }
 
@@ -2339,14 +2354,15 @@ namespace PeachBrackets.Html.Fragmentation
         /// <item>its content (words and child boxes) is built once, in its own row's coordinates (that row's displacement
         /// on this slot, if any), without decoration: the cell's text belongs to its own row, and shifting it by a later
         /// row's displacement draws it a second time, under the repeated header;</item>
-        /// <item>its decoration (background and borders) is built once for each row of the span reaching it here, without
-        /// content, confined to that row's band where the row is sliced, and to the row's own extent otherwise (from the
-        /// cell's top for its own row, to the cell's bottom for its last), so the strips meet without overlapping and never
-        /// reach under a repeated group.</item>
+        /// <item>its decoration (background and borders) is built without content, once for each sliced row, confined to
+        /// that row's band, and once for each run of rows between them, confined to their extent (from the cell's top for
+        /// the row it starts in, to the cell's bottom for the row ending the span), so the strips meet without overlapping
+        /// and never reach under a repeated group. The lowest reaches the foot of what the cell covers on this page.</item>
         /// </list>
         /// <para>
-        /// Each is decided before it is built, so a cell spanning thousands of rows costs one build per row on the slot
-        /// rather than one per row it spans.
+        /// The first visit builds every part, whichever row it comes through, and the parts never go into a placeholder's
+        /// row, so a pruned walk, which may skip rows a full walk reaches first, builds the same tree. Each part is decided
+        /// before it is built, so a cell spanning thousands of rows costs a strip per sliced row on the slot, not one per row.
         /// </para>
         /// </remarks>
         private void AddRowSpanningCell(
@@ -2357,16 +2373,17 @@ namespace PeachBrackets.Html.Fragmentation
         {
             var key = new FragmentKey(cell, instance, capture?.Self,
                 capture is { DetachedSourceRoot: not null } ? capture.Value.Self : null);
-            var spanned = RowsSpannedBy(cell);
 
+            // Asked first: a cell spanning thousands of rows is visited once per row, and only the first visit builds.
+            if (_rowSpanningCellsThisWalk.Contains(key)) return;
+
+            var spanned = RowsSpannedBy(cell);
             var sliced = SlicedIn(cell, spanned, slot);
 
             // Building in parts moves the content out from under the cell's own row (see below), so a row whose effects
             // reach its cells - opacity, a transform, a filter, a blend, a relative offset - keeps the cell whole beneath it.
             if (sliced.Length == 0 || cell.ParentBox is not { } ownRowBox || KeepsItsCellsWhole(ownRowBox))
             {
-                if (_rowSpanningCellsThisWalk.Contains(key)) return;
-
                 if (BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
                         displacement, fixedOffset) is { } whole)
                 {
@@ -2377,117 +2394,184 @@ namespace PeachBrackets.Html.Fragmentation
                 return;
             }
 
-            var ownRow = ReferenceEquals(via, cell.ParentBox);
+            // Every part is built by the first visit, whichever row it comes through, and none of them goes into a
+            // placeholder's row: what the slot shows then never depends on which of the rows a pruned walk reached first.
+            _rowSpanningCellsThisWalk.Add(key);
 
-            if (_rowSpanningCellsThisWalk.Add(key))
+            List<Draft> decorations = [];
+            var content = BuildContentOf(cell, via, snapshot, slot, capture, instance, ref hasPrintableContent,
+                ref subtreePrunable, displacement, fixedOffset);
+
+            var region = capture is null ? PageRegionOf(isFixed: false, slot) : capture.Value.Region;
+            var rows = spanned.Rows;
+
+            // Where the cell's box closed at the foot of an earlier page, layout states what it covers here as a
+            // continuation shell, in this page's own coordinates: the strips are cut from that, unshifted, rather than
+            // from the box, which ends above this page. On a page in the middle of the span it runs to the foot of the
+            // band; on the page the span ends on, to the bottom of the row that ends it, in that row's own coordinates, so
+            // where that row is itself sliced here, that bottom lies the row's shift above where the row is drawn. (Shifting
+            // the foot of a middle page's band as well drew the cell under the repeated footer.)
+            var shell = _frozen.Contains(cell) ? ShellIn(cell, region) : null;
+            if (shell is { } stated && Math.Abs(stated.Bottom - rows[^1].ActualBottom) < 0.01
+                && DisplacementIn(rows[^1], slot.Index) is { Shift: var endShift and not 0 })
             {
-                var own = ownRow ? displacement : DisplacementIn(cell.ParentBox!, slot.Index);
+                shell = new Rect(stated.X, stated.Y, stated.Width, stated.Height + endShift);
+            }
 
-                if (BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
-                        own, fixedOffset) is { } content)
+            // A sliced row has a strip in its own band; the rows between two sliced ones share one, so a cell spanning
+            // thousands of rows costs a strip per sliced row here, not one per row.
+            List<(CssBox Root, double Shift, Rect Band)> strips = [];
+            var next = 0;
+            foreach (var at in sliced)
+            {
+                if (at > next) AddStrip(next, at - 1, sliced: false);
+                AddStrip(at, at, sliced: true);
+                next = at + 1;
+            }
+
+            if (next < rows.Length) AddStrip(next, rows.Length - 1, sliced: false);
+
+            // The lowest strip on a page the cell runs on past reaches the foot of the band the cell is stated to cover,
+            // not only the foot of its rows: the row after them can start on the next page, and the rows end above the
+            // foot, where the cell (and a row group's background beside it) still is. Measured as the group's background
+            // showing below the cell's fill on the page before the last row of the span. Only to a foot on this page: on the
+            // page the row ending the span starts on, the shell runs to that row's bottom pages later, through the repeated
+            // footer, and the row's own band already reaches the foot.
+            if (shell is { } covered && strips.Count > 0 && strips[^1].Band is var lowest
+                && covered.Bottom > lowest.Bottom && covered.Bottom <= region.Bottom + 0.01)
+                strips[^1] = strips[^1] with { Band = new Rect(lowest.X, lowest.Y, lowest.Width, covered.Bottom - lowest.Y) };
+
+            // Nor below the repeated footer's top: the first slice of a row taller than what is left of a page is stated
+            // down to the row's own bottom there, under the footer, where the strip was measured drawn over its label.
+            if (RepeatedFooterTopIn(cell.ParentBox?.ParentBox?.ParentBox, region) is { } footerTop)
+            {
+                for (var i = strips.Count - 1; i >= 0; i--)
                 {
-                    content.DropDecoration();
-
-                    // The content paints over the cell's decoration, which the rows after this one may still be about to
-                    // build: it joins the row group's children once all its rows have been built, so it follows every
-                    // strip. Measured as the cell's own fill drawn over its text. It leaves its row's paint for its group's,
-                    // which is the same paint wherever the row has no effect of its own (KeepsItsCellsWhole).
-                    if (cell.ParentBox?.ParentBox is { } group)
-                    {
-                        if (!_rowSpanningCellContentThisWalk.TryGetValue(group, out var pending))
-                            _rowSpanningCellContentThisWalk[group] = pending = [];
-                        pending.Add(content);
-                    }
-                    else
-                    {
-                        children.Add(content);
-                    }
+                    var band = strips[i].Band;
+                    if (band.Bottom <= footerTop) break;
+                    if (band.Top >= footerTop) strips.RemoveAt(i);
+                    else strips[i] = strips[i] with { Band = new Rect(band.X, band.Y, band.Width, footerTop - band.Y) };
                 }
             }
 
-            // The row this visit came through: the cell's own, or the one holding the placeholder.
-            if (!spanned.IndexOf.TryGetValue(via, out var index)) return;
-
-            // A sliced row draws the strip in its own band; the rows between two sliced ones draw one strip together, built
-            // by the first of them to reach the cell.
-            var rows = spanned.Rows;
-            var at = Array.BinarySearch(sliced, index);
-            var first = at >= 0 ? index : ~at == 0 ? 0 : sliced[~at - 1] + 1;
-            var last = at >= 0 ? index : ~at == sliced.Length ? rows.Length - 1 : sliced[~at] - 1;
-            var row = rows[first];
-            if (!_rowSpanningCellStripsThisWalk.Add((key, row))) return;
-
-            var region = capture is null ? PageRegionOf(isFixed: false, slot) : capture.Value.Region;
-
-            // Where the cell's box closed at the foot of an earlier page, layout states what it covers here as a
-            // continuation shell, in this page's own coordinates: the strip is cut from that, unshifted, rather than
-            // from the box, which ends above this page. Its bottom is the bottom of the row that ends the span, in that
-            // row's own coordinates, so where that row is itself sliced here, it lies that row's shift above where the
-            // row is drawn.
-            var shell = _frozen.Contains(cell) ? ShellIn(cell, region) : null;
-            if (shell is { } stated && DisplacementIn(rows[^1], slot.Index) is { Shift: var endShift and not 0 })
-                shell = new Rect(stated.X, stated.Y, stated.Width, stated.Height + endShift);
-
-            (CssBox Root, double Shift, Rect Band)? strip = at >= 0 && DisplacementIn(row, slot.Index) is { } slice
-                ? shell is null ? slice : (row, 0d, slice.Band)
-                : StripOf(cell, rows, first, last) is { } extent ? (row, 0d, extent) : null;
-
-            if (strip is not { Band: var band } || band.Bottom <= region.Top || band.Top >= region.Bottom) return;
-
-            strip = strip.Value with { Band = SnapSharedEdges(band, rows, first, last, region, slot) };
+            SnapSharedEdges(strips, slot);
 
             _decorationOnly = cell;
 
             try
             {
-                if (BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
-                        strip, fixedOffset) is { } decoration)
+                foreach (var strip in strips)
                 {
-                    decoration.DropContent();
-                    if (shell is not null) decoration.ShellRect = shell;
-                    children.Add(decoration);
+                    if (BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
+                            strip, fixedOffset) is { } decoration)
+                    {
+                        decoration.DropContent();
+                        if (shell is not null) decoration.ShellRect = shell;
+                        decorations.Add(decoration);
+                    }
                 }
             }
             finally
             {
                 _decorationOnly = null;
             }
+
+            if (content is null && decorations.Count == 0) return;
+
+            // The row this visit came through holds none of what it built, so it must not be taken for a row with nothing
+            // here: a later walk would skip it, and the cell would be built through another row or not at all. Measured by
+            // the pruning check, which found the cell's own row skipped on the page after one where its content had gone
+            // to the group.
+            subtreePrunable = false;
+
+            // The decoration is the cell's own background and borders, which paint beneath its content, so every strip goes
+            // before the content: measured as the cell's own fill drawn over its text when a later row's strip followed it.
+            // Reached through its own row, unsliced here, the parts stay where the whole cell would be, in that row.
+            if ((ReferenceEquals(via, cell.ParentBox) && displacement is null) || cell.ParentBox?.ParentBox is not { } group)
+            {
+                children.AddRange(decorations);
+                if (content is not null) children.Add(content);
+                return;
+            }
+
+            // Otherwise that row is sliced to a band here, which would cut every other part away, or not reached at all.
+            // The strips go before the first row of the span its group holds here, and the content after all of its rows.
+            // They leave the cell's row for its group, which is the same paint wherever the row has no effect of its own
+            // (KeepsItsCellsWhole); tagged, the painter re-enters the row's element for them.
+            if (!_rowSpanningCellPartsThisWalk.TryGetValue(group, out var pending))
+                _rowSpanningCellPartsThisWalk[group] = pending = [];
+            pending.Add((spanned, decorations, content));
+
+            void AddStrip(int first, int last, bool sliced)
+            {
+                (CssBox Root, double Shift, Rect Band)? strip = sliced && DisplacementIn(rows[first], slot.Index) is { } slice
+                    ? shell is null ? slice : (rows[first], 0d, slice.Band)
+                    : StripOf(cell, rows, first, last, region.Top) is { } extent ? (rows[first], 0d, extent) : null;
+
+                if (strip is { Band: var band } && band.Bottom > region.Top && band.Top < region.Bottom)
+                    strips.Add(strip.Value);
+            }
         }
 
         /// <summary>
-        /// <paramref name="band"/>, the clip of the decoration strip beside rows <paramref name="first"/> to
-        /// <paramref name="last"/>, with each edge it shares with the strip of the row before or after it on this page moved to
-        /// the nearest CSS pixel.
+        /// The content of <paramref name="cell"/> (its words and child boxes) without its decoration, in its own row's
+        /// coordinates: that row's displacement on this slot, or none.
+        /// </summary>
+        private Draft? BuildContentOf(
+            CssBox cell, CssBox via, BoxGeometrySnapshot? snapshot, Slot slot, CapturedInstance? capture, int instance,
+            ref bool hasPrintableContent, ref bool subtreePrunable,
+            (CssBox Root, double Shift, Rect Band)? displacement, (double Dx, double Dy) fixedOffset)
+        {
+            var own = ReferenceEquals(via, cell.ParentBox) ? displacement : DisplacementIn(cell.ParentBox!, slot.Index);
+
+            var content = BuildDraft(cell, snapshot, slot, capture, instance, ref hasPrintableContent, ref subtreePrunable,
+                own, fixedOffset);
+            content?.DropDecoration();
+            return content;
+        }
+
+        /// <summary>
+        /// Moves each edge two consecutive <paramref name="strips"/> of a cell share on this page to the nearest CSS pixel.
         /// </summary>
         /// <remarks>
         /// Two strips meet where a row starts, which can fall halfway across a pixel. Each then paints its half of that pixel,
         /// and a translucent fill composited twice there shows as a darker line (measured in collapsed tables, where a row's
-        /// half of a collapsed border puts its top on a half pixel). Both strips round the same edge the same way, so they meet
-        /// on a CSS pixel boundary instead, counted from the page's top: a device pixel at 96 dpi with whole-pixel margins, and
-        /// never a gap or an overlap at any resolution. An edge against anything else - the repeated group, the page - is left
-        /// where it is.
+        /// half of a collapsed border puts its top on a half pixel). Both strips take the same edge, so they meet on a CSS pixel
+        /// boundary instead, counted from the page's top: a device pixel at 96 dpi with whole-pixel margins, and never a gap or
+        /// an overlap at any resolution. An edge against anything else - the repeated group, the page - is left where it is.
+        /// Decided over the strips themselves, not over the rows: a run of rows can reach a sliced row's top across the page
+        /// break, and snapping its edge alone overlapped the sliced row's strip by half a pixel.
         /// </remarks>
-        private Rect SnapSharedEdges(Rect band, CssBox[] rows, int first, int last, FragmentRegion region, Slot slot)
+        private static void SnapSharedEdges(List<(CssBox Root, double Shift, Rect Band)> strips, Slot slot)
         {
-            const double Epsilon = 0.01;
+            for (var i = 1; i < strips.Count; i++)
+            {
+                var upper = strips[i - 1].Band;
+                var lower = strips[i].Band;
+                if (Math.Abs(upper.Bottom - lower.Top) >= 0.01) continue;
 
-            var top = band.Top;
-            var bottom = band.Bottom;
+                var edge = slot.LocalOriginY + Math.Round((lower.Top - slot.LocalOriginY) / Length.PointsPerPx) * Length.PointsPerPx;
+                strips[i - 1] = strips[i - 1] with { Band = new Rect(upper.X, upper.Y, upper.Width, edge - upper.Y) };
+                strips[i] = strips[i] with { Band = new Rect(lower.X, edge, lower.Width, lower.Bottom - edge) };
+            }
+        }
 
-            if (first > 0 && Math.Abs(top - rows[first].Location.Y) < Epsilon && OnThisSlot(rows[first - 1]))
-                top = Snapped(top);
+        /// <summary>The top of the repeated footer <paramref name="table"/> draws in <paramref name="region"/>, if it draws one there.</summary>
+        private static double? RepeatedFooterTopIn(CssBox? table, FragmentRegion region)
+        {
+            if (table is null) return null;
 
-            if (last + 1 < rows.Length && Math.Abs(bottom - rows[last + 1].Location.Y) < Epsilon && OnThisSlot(rows[last + 1]))
-                bottom = Snapped(bottom);
+            // The repeats are the table's last children, one header and one footer per page.
+            for (var i = table.Boxes.Count - 1; i >= 0 && table.Boxes[i] is CssProxyBox proxy; i--)
+            {
+                if (proxy.DerivedStyle.ActualDisplay == Keywords.TableFooterGroup
+                    && proxy.Location.Y >= region.Top - 0.01 && proxy.Location.Y < region.Bottom)
+                {
+                    return proxy.Location.Y;
+                }
+            }
 
-            return new Rect(band.X, top, band.Width, bottom - top);
-
-            bool OnThisSlot(CssBox row) =>
-                DisplacementIn(row, slot.Index) is not null
-                || (row.Location.Y >= region.Top - Epsilon && row.Location.Y < region.Bottom - Epsilon);
-
-            double Snapped(double y) =>
-                slot.LocalOriginY + Math.Round((y - slot.LocalOriginY) / Length.PointsPerPx) * Length.PointsPerPx;
+            return null;
         }
 
         /// <summary>
@@ -2515,13 +2599,6 @@ namespace PeachBrackets.Html.Fragmentation
                     if (row.Display.Value != DisplayMode.TableRow) continue;
 
                     indexOf[row] = rows.Count;
-
-                    foreach (var placeholder in row.Boxes)
-                    {
-                        if (placeholder is CssSpacingBox { ExtendedBox: var extended } && ReferenceEquals(extended, cell))
-                            indexOf[placeholder] = rows.Count;
-                    }
-
                     rows.Add(row);
                 }
             }
@@ -2550,14 +2627,32 @@ namespace PeachBrackets.Html.Fragmentation
 
         /// <summary>
         /// The part of <paramref name="cell"/> beside the rows <paramref name="first"/> to <paramref name="last"/> of
-        /// <paramref name="rows"/>, none of them sliced: from the first one's top (the cell's own, for the row it starts in)
-        /// to the top of the row after the last (the lower of the last row's and the cell's bottom, for the row ending the
-        /// span: a cell that closes at a page foot carries on as a stated continuation shell, beside the rows below it),
-        /// opened wide on the inline axis since only the block axis is being confined.
+        /// <paramref name="rows"/>, none of them sliced, on the page whose region starts at <paramref name="pageTop"/>: from
+        /// the top of the first of them reaching that page (the cell's own, for the row it starts in) to the top of the row
+        /// after the last (the lower of the last row's and the cell's bottom, for the row ending the span: a cell that closes
+        /// at a page foot carries on as a stated continuation shell, beside the rows below it), opened wide on the inline
+        /// axis since only the block axis is being confined. None where none of them reaches it.
         /// </summary>
-        private static Rect? StripOf(CssBox cell, CssBox[] rows, int first, int last)
+        /// <remarks>
+        /// Not from the first row's top wherever it is: under a repeated group, the rows on a page start below the group, and
+        /// a strip from a row on an earlier page reaches them only across the page break, through the repeated group, where it
+        /// was measured drawn over the group's label.
+        /// </remarks>
+        private static Rect? StripOf(CssBox cell, CssBox[] rows, int first, int last, double pageTop)
         {
-            var top = first == 0 ? cell.Location.Y : rows[first].Location.Y;
+            // The rows are in order, so the first reaching the page is found by halving: a run can be thousands of rows.
+            var lo = first;
+            var hi = last + 1;
+            while (lo < hi)
+            {
+                var mid = lo + (hi - lo) / 2;
+                if (rows[mid].ActualBottom > pageTop + 0.01) hi = mid;
+                else lo = mid + 1;
+            }
+
+            if (lo > last) return null;
+
+            var top = lo == 0 ? cell.Location.Y : rows[lo].Location.Y;
             var bottom = last + 1 < rows.Length ? rows[last + 1].Location.Y : Math.Max(rows[last].ActualBottom, cell.ActualBottom);
             if (bottom <= top) return null;
 
@@ -3523,9 +3618,9 @@ namespace PeachBrackets.Html.Fragmentation
                 }
             }
 
-            // The content of the rowspan cells among this group's rows, built in parts, after every row (AddRowSpanningCell).
-            if (_rowSpanningCellContentThisWalk.Count > 0 && _rowSpanningCellContentThisWalk.Remove(box, out var spanningContent))
-                children.AddRange(spanningContent);
+            // The rowspan cells among this group's rows built in parts out of their own row (AddRowSpanningCell).
+            if (_rowSpanningCellPartsThisWalk.Count > 0 && _rowSpanningCellPartsThisWalk.Remove(box, out var spanningParts))
+                PlaceRowSpanningCellParts(spanningParts, children);
 
             // A box with no per-line rectangles still needs its bounds tested somewhere, and the draft has to
             // exist for that test to be run at all. Only its *current* bounds are available here, which is
