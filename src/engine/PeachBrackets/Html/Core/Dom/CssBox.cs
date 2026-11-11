@@ -3302,6 +3302,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private double? _resumeTopOverride;
 
+        /// <summary>The layout generation a parent stated <see cref="_resumeTopOverride"/> in for a box not yet reached in it, so that the reset on the box's first pass of the generation keeps it.</summary>
+        private int _resumeTopOverrideStatedIn = -1;
+
         /// <summary>
         /// Whether <see cref="PerformLayoutPrologue"/> has already run for this box in the current
         /// layout. It runs once per box per layout, not once per fragmentainer pass.
@@ -4414,10 +4417,13 @@ namespace PeachBrackets.Html.Dom
 
             if (_layoutGeneration != generation)
             {
+                // A target the parent stated for this box in this generation, before the box was first reached in it, is not left over from an earlier one.
+                var statedBeforeTheFirstPass = _resumeTopOverrideStatedIn == generation ? _resumeTopOverride : null;
+
                 _layoutGeneration = generation;
                 _prologueDone = false;
                 _incomingToken = null;
-                _resumeTopOverride = null;
+                _resumeTopOverride = statedBeforeTheFirstPass;
                 _escapedForcedBreakPending = false;
                 _escapedForcedBreakBlankSlot = null;
                 _orphansBreakTaken = false;
@@ -5411,6 +5417,7 @@ namespace PeachBrackets.Html.Dom
                         && IsPlainBlockFlowUpTo(resumedColumn.ContextRoot))
                     {
                         childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
+                        childBox._resumeTopOverrideStatedIn = HtmlContainer.LayoutGeneration;
                     }
 
                     if (!TakesNoPartInTheFlow(childBox)) inFlowChildPlacedByThisFill = true;
