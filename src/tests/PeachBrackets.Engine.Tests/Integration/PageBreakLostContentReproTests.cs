@@ -237,8 +237,12 @@ body { margin: 0; font-family: Arial; font-size: 10pt; line-height: 12pt; } p,h3
             var paragraphs = string.Concat(Enumerable.Range(1, 4).Select(p =>
                 "<p style='margin:0 0 6pt'>" + string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{p}_{i:000}")) + "</p>"));
             var content = innerColumns ? $"<div style='columns:3;column-gap:8pt'>{paragraphs}</div>" : paragraphs;
+            // A multi-column container's minimum width is its column repeated (three words and two gaps here), so a flex item holding
+            // one cannot shrink to the outer column by itself, as in a browser, and its text would run off this page; the test is about
+            // the item's move, not its width, so the item is let shrink.
+            var itemMinWidth = innerColumns ? ";min-width:0" : "";
             await AssertEveryWordIsVisibleOnceAsync(Document(Page300x200,
-                $"<div style='columns:3;column-gap:8pt'><div style='display:flex;gap:4pt'><div style='flex:1'>{content}</div></div></div>"));
+                $"<div style='columns:3;column-gap:8pt'><div style='display:flex;gap:4pt'><div style='flex:1{itemMinWidth}'>{content}</div></div></div>"));
         }
 
         [Fact]

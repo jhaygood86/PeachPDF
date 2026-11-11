@@ -9153,7 +9153,18 @@ namespace PeachBrackets.Html.Dom
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
         /// <param name="minWidth">The minimum width the content must be so it won't overflow (largest word + padding).</param>
         /// <param name="maxWidth">The total width the content can take without line wrapping (with padding).</param>
-        internal void GetMinMaxWidth(Canvas g, out double minWidth, out double maxWidth)
+        internal void GetMinMaxWidth(Canvas g, out double minWidth, out double maxWidth) =>
+            MeasureContentWidth(g, columnContent: false, out minWidth, out maxWidth);
+
+        /// <summary>
+        /// The shared body of <see cref="GetMinMaxWidth"/>; <paramref name="columnContent"/> is the one extra input.
+        /// </summary>
+        /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
+        /// <param name="columnContent">Measure this multi-column container's contents as the one column they are laid out in, instead of
+        /// as the container (whose width is that column repeated - see <see cref="TryMeasureMulticolWidth"/>).</param>
+        /// <param name="minWidth">The width the content must be so it won't overflow.</param>
+        /// <param name="maxWidth">The width the content takes without line wrapping.</param>
+        private void MeasureContentWidth(Canvas g, bool columnContent, out double minWidth, out double maxWidth)
         {
             double min = 0f;
             double minDecoration = 0f;
@@ -9180,7 +9191,7 @@ namespace PeachBrackets.Html.Dom
             GetMinMaxSumWords(g, this, ref min, ref minDecoration, ref maxSum, ref paddingSum,
                 ref marginSum, ref widestLine, ref trailingSpace, ref atLineStart, ref previousWord,
                 ref unbreakableRunWidth, ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
-                inheritedDecoration: 0, includeExplicitWidth: false);
+                inheritedDecoration: 0, includeExplicitWidth: false, columnContent: columnContent);
             UpdateMinWidth(ref min, ref minDecoration, unbreakableRunWidth, paddingSum);
 
             // The document runs out here, so the line in progress ends here too and its trailing
@@ -9446,6 +9457,69 @@ namespace PeachBrackets.Html.Dom
             };
 
         /// <summary>
+        /// The intrinsic content width of a multi-column container (its own border and padding left out), or <c>false</c> when it lays out as one
+        /// ordinary column. Measured against headless Chrome, which css-multicol-1 does not specify (it leaves the used width to the sizing
+        /// specs): with <c>M</c>/<c>m</c> the contents' max-/min-content width as one column, <c>N</c> the <c>column-count</c> (1 when auto),
+        /// <c>W</c> the <c>column-width</c> (0 when auto) and <c>gap</c> the column gap,
+        /// max-content is <c>N * max(W, M) + (N - 1) * gap</c>, and min-content is <c>min(m, W)</c> when a <c>column-width</c> is given (the
+        /// columns can drop to one, and the result is at least 1px) and <c>N * m + (N - 1) * gap</c> otherwise. A percentage gap has nothing to
+        /// resolve against here and is 0. A <c>column-span: all</c> child is left out of the column and instead sets a floor on the result: the
+        /// container is at least as wide as the widest spanner. css-multicol-1 states none of this (it leaves the used width to the sizing specs;
+        /// an unadopted css-multicol-2 proposal agrees with the formulas above), so Chrome's numbers are the reference.
+        /// </summary>
+        private static bool TryMeasureMulticolWidth(Canvas g, CssBox box, out double min, out double max)
+        {
+            min = max = 0;
+
+            // Only a box layout hands to the columns engine: `columns` does nothing on an inline box, a replaced element, a flex or grid
+            // container or a table, which measure as they always did.
+            if (box.IsImage || box.WritingMode.Value.IsVertical()
+                || box.DerivedStyle.ActualDisplay is Keywords.Inline or Keywords.Flex or Keywords.InlineFlex or Keywords.Grid
+                    or Keywords.InlineGrid or Keywords.Table or Keywords.InlineTable or Keywords.None)
+                return false;
+
+            var columnCount = box.ColumnCount.Value;
+            var columnWidth = box.ColumnWidth.Value;
+            var count = columnCount.IsValue ? Math.Max(1, columnCount.Value.GetValueOrDefault()) : 1;
+            var hasWidth = columnWidth.IsValue;
+            if (count < 2 && !hasWidth) return false;
+
+            var width = hasWidth ? CssValueParser.ParseLength(columnWidth.Value.GetValueOrDefault(), 0, box) : 0;
+            var gap = CssLayoutEngineColumns.ColumnGap(box, 0);
+
+            // Measured with the box's own border and padding in, as every top-level measure is; they belong to the container, not to each column.
+            box.MeasureContentWidth(g, columnContent: true, out var contentMin, out var contentMax);
+            var decoration = box.ActualBorderLeftWidth + box.ActualBorderRightWidth + box.ActualPaddingLeft + box.ActualPaddingRight;
+            contentMin = Math.Max(0, contentMin - decoration);
+            contentMax = Math.Max(0, contentMax - decoration);
+
+            max = count * Math.Max(width, contentMax) + (count - 1) * gap;
+
+            // With a column-width the container can drop to one column, but never below 1px (Chrome).
+            min = hasWidth ? Math.Max(Length.PointsPerPx, Math.Min(contentMin, width)) : count * contentMin + (count - 1) * gap;
+
+            // A spanner is as wide as the container, so the container is at least as wide as the widest of them, however narrow the columns.
+            foreach (var child in box.Boxes)
+            {
+                if (child.ColumnSpan.Value != ColumnSpanMode.All || child.IsAbsolutelyPositioned
+                    || child.DerivedStyle.ActualDisplay == Keywords.None)
+                    continue;
+
+                child.GetMinMaxWidth(g, out var spanMin, out var spanMax);
+                if (CssValueParser.IsValidLength(child.Width) && !child.Width.EndsWith('%'))
+                {
+                    spanMin = spanMax = CssValueParser.ParseLength(child.Width, 0, child) + child.ActualBoxSizeIncludedWidth;
+                }
+
+                var spanMargins = child.ActualMarginLeft + child.ActualMarginRight;
+                max = Math.Max(max, spanMax + spanMargins);
+                min = Math.Max(min, spanMin + spanMargins);
+            }
+
+            return true;
+        }
+
+        /// <summary>
         /// Get the <paramref name="min"/> and <paramref name="maxSum"/> of the box words content and <paramref name="paddingSum"/>.<br/>
         /// </summary>
         /// <param name="g">Graphics context used for lazy intrinsic text measurement.</param>
@@ -9464,13 +9538,14 @@ namespace PeachBrackets.Html.Dom
         /// <param name="trailingGraphemeContext">the final grapheme context across inline owners.</param>
         /// <param name="inheritedDecoration">decoration from the current box's containing chain.</param>
         /// <param name="includeExplicitWidth">whether this recursive child contributes its declared width.</param>
+        /// <param name="columnContent">measure a multi-column <paramref name="box"/> as the one column its contents lay out in rather than as the container; only ever set for the box a measure starts at, never for its descendants.</param>
         /// <returns></returns>
         private static void GetMinMaxSumWords(Canvas g, CssBox box, ref double min,
             ref double minDecoration, ref double maxSum, ref double paddingSum, ref double marginSum,
             ref double widestLine, ref double trailingSpace, ref bool atLineStart,
             ref CssRect? previousWord, ref double unbreakableRunWidth,
             ref int trailingRegionalIndicatorCount, ref string trailingGraphemeContext,
-            double inheritedDecoration, bool includeExplicitWidth)
+            double inheritedDecoration, bool includeExplicitWidth, bool columnContent)
         {
             var startsNewLine = StartsNewLine(box);
             var maxSumBeforeBox = maxSum;
@@ -9616,6 +9691,15 @@ namespace PeachBrackets.Html.Dom
                 UpdateMinWidth(ref min, ref minDecoration, gridMin, paddingSum);
                 trailingSpace = 0;
             }
+            else if (!columnContent && box.EstablishesMultiColumnContext
+                     && TryMeasureMulticolWidth(g, box, out var multicolMin, out var multicolMax))
+            {
+                // A multi-column container is its column repeated side by side, so its intrinsic width is the column's times the
+                // columns, plus the gaps between them - not the one running line the flat walk below would carry.
+                maxSum += multicolMax;
+                UpdateMinWidth(ref min, ref minDecoration, multicolMin, paddingSum);
+                trailingSpace = 0;
+            }
             else if (box.Words.Count > 0)
             {
                 // calculate the min and max sum for all the words in the box
@@ -9726,6 +9810,10 @@ namespace PeachBrackets.Html.Dom
                 foreach (var childBox in box.Boxes)
                 {
                     if (childBox.DerivedStyle.ActualDisplay == Keywords.None) continue;
+
+                    // A column-span: all child is not part of the column (css-multicol-1 §3): it spans them. TryMeasureMulticolWidth measures it
+                    // on its own and sets it beside the columns' width.
+                    if (columnContent && childBox.ColumnSpan.Value == ColumnSpanMode.All) continue;
 
                     // An absolutely positioned box contributes nothing to its containing block's intrinsic
                     // size (CSS 2.1 §10.3.7 sizes it against that block, not the other way round). Walked
@@ -9928,7 +10016,7 @@ namespace PeachBrackets.Html.Dom
                         ref paddingSum, ref marginSum, ref widestLine, ref trailingSpace,
                         ref atLineStart, ref previousWord, ref unbreakableRunWidth,
                         ref trailingRegionalIndicatorCount, ref trailingGraphemeContext,
-                        descendantDecoration, includeExplicitWidth: true);
+                        descendantDecoration, includeExplicitWidth: true, columnContent: false);
 
                     marginSum -= childBox.ActualMarginLeft + childBox.ActualMarginRight;
                 }

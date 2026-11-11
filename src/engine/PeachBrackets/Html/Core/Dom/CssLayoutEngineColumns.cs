@@ -62,11 +62,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private static bool HasSeveralColumnsAt(CssBox columnsBox, double width)
         {
-            var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
-                ? CssValueParser.ParseLength(columnGapLength, width, columnsBox)
-                : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), width, columnsBox);
-
-            return ResolveColumns(columnsBox, width, gap).Count >= 2;
+            return ResolveColumns(columnsBox, width, ColumnGap(columnsBox, width)).Count >= 2;
         }
 
 
@@ -165,9 +161,7 @@ namespace PeachBrackets.Html.Dom
             // initial value "normal" (CSS Box Alignment Module Level 3 §8.3) behaves differently per
             // layout mode — flex/grid resolve it to 0, multicol resolves it to exactly 1em (the value
             // the spec itself mandates for "normal" in a multi-column container).
-            var gap = columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
-                ? CssValueParser.ParseLength(columnGapLength, containerWidth, columnsBox)
-                : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), containerWidth, columnsBox);
+            var gap = ColumnGap(columnsBox, containerWidth);
 
             var (columnCount, columnWidth) = ResolveColumns(columnsBox, containerWidth, gap);
 
@@ -1539,6 +1533,16 @@ namespace PeachBrackets.Html.Dom
 
             return (i - startIndex, maxColumnHeight);
         }
+
+        /// <summary>
+        /// The <c>column-gap</c> of a multi-column container, in points. Its initial value <c>normal</c> is exactly 1em here (css-multicol-1; flex
+        /// and grid resolve the same keyword to 0). <paramref name="percentageBasis"/> is what a percentage gap resolves against: 0 where the
+        /// width is still being worked out (intrinsic sizing), so a percentage counts as none.
+        /// </summary>
+        internal static double ColumnGap(CssBox columnsBox, double percentageBasis) =>
+            columnsBox.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength }
+                ? CssValueParser.ParseLength(columnGapLength, percentageBasis, columnsBox)
+                : CssValueParser.ParseLength(new Length(1f, Length.Unit.Em), percentageBasis, columnsBox);
 
         /// <summary>
         /// Resolves <c>column-count</c>/<c>column-width</c>/<c>columns</c> to a concrete (count, width)
