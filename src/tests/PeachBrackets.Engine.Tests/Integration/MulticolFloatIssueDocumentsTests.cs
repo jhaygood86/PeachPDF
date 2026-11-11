@@ -14,13 +14,13 @@ public class MulticolFloatIssueDocumentsTests
 """, "2317-1")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:200pt 200pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="columns:2"><div style="float:left"><p style=""> w6048_1059 w6048_1060 w6048_1061 w6048_1062 w6048_1063 w6048_1064 w6048_1065 w6048_1066 w6048_1067 w6048_1068 w6048_1069 w6048_1070 w6048_1071 w6048_1072 w6048_1073 w6048_1074 w6048_1075 w6048_1076 w6048_1077 w6048_1078 </p></div><div style="columns:3"><p style=""> w6048_1186 </p></div></div></body></html>
-""", "2318-1", Skip = "#2318: open, the document still loses or doubles a word")]
+""", "2318-1")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:300pt 160pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="columns:2"><p style="margin:0 0 3pt"> w5029_381 w5029_382 </p><div style="columns:3"><p style="margin:0 0 3pt"> w5029_548 w5029_549  w5029_552 w5029_553 w5029_554 w5029_555 w5029_556 w5029_557 w5029_558 w5029_559 w5029_560 w5029_561 w5029_562 </p><div style="float:right;height:90pt"></div><p style=""> w5029_623 </p></div><p style=""></p></div></body></html>
-""", "2318-2", Skip = "#2318: open, the document still loses or doubles a word")]
+""", "2318-2", Skip = "#2318: open, a multi-column container inside a column that is filled in two outer columns still loses its last paragraph")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:400pt 200pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="float:right;width:60%;height:230pt"></div><div style="columns:4"><div style="columns:4"><p style=""></p><div style="float:right"><p style=""> w5071_146 </p></div><p style=""> w5071_161 </p><p style=""> w5071_185 w5071_186 </p></div></div></body></html>
-""", "2318-3", Skip = "#2318: open, the document still loses or doubles a word")]
+""", "2318-3", Skip = "#2318: open, a multi-column container inside a column that is filled in two outer columns still loses its last paragraph")]
     [InlineData("""
 <!doctype html><html><head><meta charset="utf-8"><title> t </title><style> @page{size:200pt 250pt;margin:20pt}body{margin:0;font:12pt Arial} </style></head><body><div style="columns:2"><div style="float:right"> w5064_86 w5064_87 w5064_88 w5064_89 w5064_90 w5064_91 w5064_92 </div><p style=""></p><div style="float:left;width:50%"><span style="display:inline-block"> w5064_108 </span> w5064_115 </div><p style=""> w5064_129 w5064_130 </p></div></body></html>
 """, "2326-1")]

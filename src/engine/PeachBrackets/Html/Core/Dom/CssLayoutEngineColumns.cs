@@ -125,8 +125,24 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 var contentLeft = columnsBox.ClientLeft;
-                var beside = CssLayoutEngine.ExtentBesideFloats(columnsBox, columnsBox.ClientTop, contentLeft, contentLeft + containerWidth);
+                var (besideLeft, besideRight, floatsBottom) = CssLayoutEngine.ExtentBesideFloatsWithBottom(columnsBox, columnsBox.ClientTop, contentLeft, contentLeft + containerWidth);
+                var beside = (Left: besideLeft, Right: besideRight);
                 columnsBox.ColumnsBesideFloats = null;
+
+                // No room beside the floats at all: a box that establishes a formatting context may not overlap them and goes below them (CSS 2.1 section 9.5).
+                // Laid over them, the lines of its columns were pushed past the floats' far edge, past the container, where they were clipped (#2318).
+                if (resume is null
+                    && beside.Right - beside.Left < MinimumRoomBesideAFloat
+                    && floatsBottom is { } clearOfFloats
+                    && clearOfFloats > columnsBox.Location.Y + 0.5)
+                {
+                    columnsBox.Location = columnsBox.Location with { Y = clearOfFloats };
+                    boxTop = columnsBox.ClientTop;
+                    containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox, boxTop);
+                    contentLeft = columnsBox.ClientLeft;
+                    (besideLeft, besideRight, _) = CssLayoutEngine.ExtentBesideFloatsWithBottom(columnsBox, boxTop, contentLeft, contentLeft + containerWidth);
+                    beside = (Left: besideLeft, Right: besideRight);
+                }
 
                 if ((beside.Left > contentLeft || beside.Right < contentLeft + containerWidth)
                     && beside.Right - beside.Left >= MinimumRoomBesideAFloat
