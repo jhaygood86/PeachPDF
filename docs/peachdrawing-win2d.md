@@ -10,7 +10,7 @@ It is usable with **no PeachPDF reference at all**, and is versioned in lockstep
 dotnet add package PeachDrawing.Win2D
 ```
 
-It targets `net10.0-windows10.0.19041.0` (and `net11.0-windows10.0.19041.0` when built with the .NET 11 SDK) and uses Win2D 1.4, the Windows
+It targets `net10.0-windows10.0.19041.0` and `net11.0-windows10.0.19041.0` and uses Win2D 1.4, the Windows
 App SDK flavour. The application that uses it supplies the Win2D native binary by building for a platform (`x64`, `ARM64`) or publishing
 with a runtime identifier, as for any Win2D app.
 
@@ -245,8 +245,7 @@ frame that is drawn, and a change of frame writes the new pixels into the bitmap
 
 - **Blend modes.** A drawing session blends only by add and minimum, so `Plus` and `Darken` are exact and the other `PaintBlendMode`s
   (including `Lighten`) draw as `Normal`; `DrawImageBlendedOver` is exact. CSS `mix-blend-mode` is therefore not honored on this canvas.
-- **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, a two-circle radial gradient starts from a point focus, and a blur or shadow
-  with unequal x and y deviations uses their mean.
+- **Gradients.** A conic gradient of more than 16 stops is painted as aliased wedges, and a two-circle radial gradient starts from a point focus.
 - **Text inside a rounded or path clip** (`PushClip(GraphicsPath)`, `PushClipExclude`) is `Lcd` only on a canvas made by `FromRenderTarget`, which blends text on the GPU: such a clip
   draws into a render target of its own, copied from the target and composited back through the clip's shape when it is popped. On any other canvas (a host's session
   from `FromSession`, a composer's bitmap) Direct2D keeps what is drawn inside such a clip in a layer until the clip is popped, so the pixels behind the text cannot be

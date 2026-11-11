@@ -1,7 +1,6 @@
 using PeachDrawing.Core;
 using System;
 using System.Buffers;
-using System.Collections.Generic;
 
 namespace PeachDrawing;
 
@@ -63,20 +62,41 @@ internal static class ScanlineRasterizer
         if (maxY <= minY)
             return;
 
-        var edges = BuildEdges(polygons, minY, maxY);
-        if (edges.Length == 0)
+        // The edge list and the per-sample working arrays are reused from one fill to the next on a thread (a page fills thousands of small shapes);
+        // the scratch is taken for the duration of a fill, so a sink that fills again from inside Span gets a scratch of its own.
+        var scratch = t_scratch ?? new FillScratch();
+        t_scratch = null;
+        try
+        {
+            FillCore(scratch, polygons, evenOdd, clip, minY, maxY, ref sink, antiAlias);
+        }
+        finally
+        {
+            scratch.TrimForReuse();
+            t_scratch = scratch;
+        }
+    }
+
+    private static void FillCore<TSink>(FillScratch scratch, PolygonSet polygons, bool evenOdd, IntRect clip, int minY, int maxY, ref TSink sink, bool antiAlias)
+        where TSink : struct, ICoverageSink
+    {
+        var edgeCount = BuildEdges(polygons, minY, maxY, scratch);
+        if (edgeCount == 0)
             return;
 
-        Array.Sort(edges, static (a, c) => a.YTop.CompareTo(c.YTop));
+        var edges = scratch.Edges;
+        edges.AsSpan(0, edgeCount).Sort(static (a, c) => a.YTop.CompareTo(c.YTop));
 
         var width = clip.Width;
         var cover = ArrayPool<int>.Shared.Rent(width + 2);
         var delta = ArrayPool<int>.Shared.Rent(width + 2);
         var alpha = ArrayPool<byte>.Shared.Rent(width + 2);
-        var active = new int[Math.Min(edges.Length, 1024)];
+        // An edge is active at most once, so the arrays never need to hold more than the edge count.
+        scratch.EnsureActiveCapacity(edgeCount);
+        var active = scratch.Active;
         var activeCount = 0;
-        var xs = new double[active.Length];
-        var dirs = new int[active.Length];
+        var xs = scratch.Xs;
+        var dirs = scratch.Dirs;
         Array.Clear(cover, 0, width + 2);
         Array.Clear(delta, 0, width + 2);
 
@@ -91,17 +111,10 @@ internal static class ScanlineRasterizer
 
                 for (var k = 0; k < SubScanlines; k++)
                 {
-                    var sy = y + (k + 0.5) / SubScanlines;
+                    var sy = y + SampleOffsets[k];
 
-                    while (nextEdge < edges.Length && edges[nextEdge].YTop <= sy)
+                    while (nextEdge < edgeCount && edges[nextEdge].YTop <= sy)
                     {
-                        if (activeCount == active.Length)
-                        {
-                            Array.Resize(ref active, active.Length * 2);
-                            Array.Resize(ref xs, active.Length);
-                            Array.Resize(ref dirs, active.Length);
-                        }
-
                         active[activeCount++] = nextEdge++;
                     }
 
@@ -170,21 +183,38 @@ internal static class ScanlineRasterizer
 
                     // delta carries full-pixel runs, always starting after the row's first touched column,
                     // so nothing before `first` needs summing.
-                    for (var i = 0; i < count; i++)
+                    var i = 0;
+                    while (i < count)
                     {
                         var col = first + i;
-                        running += delta[col];
-                        var total = cover[col] + running;
-                        if (total > TotalPerPixel) total = TotalPerPixel;
-                        else if (total < 0) total = 0;
-
-                        // Same coverage number either way; only its quantization to an alpha byte differs.
-                        alpha[i] = antiAlias
-                            ? (byte)((total * 255 + TotalPerPixel / 2) / TotalPerPixel)
-                            : total * 2 >= TotalPerPixel ? (byte)255 : (byte)0;
+                        var edgeDelta = delta[col];
+                        var edgeCover = cover[col];
+                        running += edgeDelta;
+                        alpha[i] = ToAlpha(edgeCover + running, antiAlias);
 
                         cover[col] = 0;
                         delta[col] = 0;
+                        i++;
+
+                        // After a column no edge touched, the columns up to the next touched one all have the same coverage (the running sum),
+                        // so their alpha is worked out once and written as a run; they are already zero in both arrays.
+                        if ((edgeDelta | edgeCover) == 0 && count - i >= QuietRunMinimum)
+                        {
+                            var rest = count - i;
+                            var run = rest;
+                            var nextCover = cover.AsSpan(first + i, rest).IndexOfAnyExcept(0);
+                            if (nextCover >= 0)
+                                run = nextCover;
+                            var nextDelta = delta.AsSpan(first + i, run).IndexOfAnyExcept(0);
+                            if (nextDelta >= 0)
+                                run = nextDelta;
+
+                            if (run > 0)
+                            {
+                                alpha.AsSpan(i, run).Fill(ToAlpha(running, antiAlias));
+                                i += run;
+                            }
+                        }
                     }
 
                     // The run-end delta can sit one column past the last covered pixel.
@@ -255,9 +285,88 @@ internal static class ScanlineRasterizer
         if (last > rowMax) rowMax = last;
     }
 
-    private static Edge[] BuildEdges(PolygonSet polygons, int minY, int maxY)
+    /// <summary>
+    /// The alpha byte of an accumulated coverage (out of <see cref="TotalPerPixel"/>). Same coverage number either way; only its quantization to an
+    /// alpha byte differs between anti-aliased and thresholded output.
+    /// </summary>
+    private static byte ToAlpha(int total, bool antiAlias)
     {
-        var list = new List<Edge>(polygons.PointCount);
+        if (total > TotalPerPixel) total = TotalPerPixel;
+        else if (total < 0) total = 0;
+
+        // total is not negative here, and TotalPerPixel is 4096, so the rounded division by it is this shift.
+        return antiAlias
+            ? (byte)((uint)(total * 255 + TotalPerPixel / 2) >> 12)
+            : total * 2 >= TotalPerPixel ? (byte)255 : (byte)0;
+    }
+
+    /// <summary>Fewer columns than this left in a row are not worth looking ahead in for a run nothing touched.</summary>
+    private const int QuietRunMinimum = 16;
+
+    /// <summary>The offset of each sub-scanline's sample from the top of its pixel row.</summary>
+    private static readonly double[] SampleOffsets = CreateSampleOffsets();
+
+    private static double[] CreateSampleOffsets()
+    {
+        var offsets = new double[SubScanlines];
+        for (var k = 0; k < offsets.Length; k++)
+            offsets[k] = (k + 0.5) / SubScanlines;
+        return offsets;
+    }
+
+    [ThreadStatic]
+    private static FillScratch? t_scratch;
+
+    /// <summary>
+    /// The arrays a fill works in, kept between fills on a thread. Plain arrays rather than <see cref="ArrayPool{T}"/>: the pool over this private
+    /// struct is a generic instantiation over a type no precompiled code has, and a fill is the one place that needs it.
+    /// </summary>
+    private sealed class FillScratch
+    {
+        /// <summary>The most entries a scratch array keeps between fills; a larger one was made for a single enormous path and is let go.</summary>
+        private const int RetainedLimit = 1 << 16;
+
+        public Edge[] Edges = new Edge[64];
+        public int[] Active = new int[64];
+        public double[] Xs = new double[64];
+        public int[] Dirs = new int[64];
+
+        public void EnsureEdgeCapacity(int count)
+        {
+            if (Edges.Length < count)
+                Edges = new Edge[Math.Max(count, Edges.Length * 2)];
+        }
+
+        public void EnsureActiveCapacity(int count)
+        {
+            if (Active.Length >= count)
+                return;
+
+            var size = Math.Max(count, Active.Length * 2);
+            Active = new int[size];
+            Xs = new double[size];
+            Dirs = new int[size];
+        }
+
+        public void TrimForReuse()
+        {
+            if (Edges.Length > RetainedLimit)
+                Edges = new Edge[64];
+            if (Active.Length > RetainedLimit)
+            {
+                Active = new int[64];
+                Xs = new double[64];
+                Dirs = new int[64];
+            }
+        }
+    }
+
+    private static int BuildEdges(PolygonSet polygons, int minY, int maxY, FillScratch scratch)
+    {
+        // Each point starts at most one edge, so the point count is the most there can be.
+        scratch.EnsureEdgeCapacity(polygons.PointCount);
+        var edges = scratch.Edges;
+        var count = 0;
         for (var c = 0; c < polygons.ContourCount; c++)
         {
             var (start, end) = polygons.GetContour(c);
@@ -286,17 +395,17 @@ internal static class ScanlineRasterizer
                 if (y1 <= minY || y0 >= maxY)
                     continue;
 
-                list.Add(new Edge
+                edges[count++] = new Edge
                 {
                     YTop = y0,
                     YBottom = y1,
                     X0 = x0,
                     DxDy = (x1 - x0) / (y1 - y0),
                     Direction = dir,
-                });
+                };
             }
         }
 
-        return list.ToArray();
+        return count;
     }
 }

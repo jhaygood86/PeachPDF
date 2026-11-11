@@ -81,9 +81,6 @@ jobs:
 
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
-      with:
-        # macOS skips the RC SDK (and so net11.0): net11.0 is exercised on Windows and Linux.
-        include-net11: ${{ matrix.os != 'macos-latest' }}
 
     - name: Install fonts (Linux)
       if: runner.os == 'Linux'
@@ -133,11 +130,11 @@ jobs:
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net10.0 --report-trx --report-trx-filename engine-tests-results-net10.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net10.0 --results-directory coverage
 
     - name: Test (net11.0)
-      if: matrix.suite == 'main' && matrix.os != 'macos-latest'
+      if: matrix.suite == 'main'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachPDF.Tests/PeachPDF.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename test-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix test-results-net11.0 --results-directory coverage
 
     - name: Test HTML engine (net11.0)
-      if: matrix.suite == 'main' && matrix.os != 'macos-latest'
+      if: matrix.suite == 'main'
       run: dotnet test --project ${{ github.workspace }}/src/tests/PeachBrackets.Engine.Tests/PeachBrackets.Engine.Tests.csproj --no-build --configuration Release --framework net11.0 --report-trx --report-trx-filename engine-tests-results-net11.0.trx --coverlet --coverlet-output-format cobertura --coverlet-exclude-by-file "**/PeachPdfProductInfo.g.cs" --coverlet-exclude-by-file "**/PeachPDF.Cli/Program.cs" --coverlet-file-prefix engine-tests-results-net11.0 --results-directory coverage
 
     # ---- engine -----------------------------------------------------------------------------
@@ -287,8 +284,8 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        # global.json pins SDK 10.0.100, so the tool install needs the 10 SDK.
-        dotnet-version: 10.0.x
+        # global.json pins the 11 SDK, so the tool install needs it.
+        dotnet-version: 11.0.x
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -315,7 +312,14 @@ jobs:
       run: |
         git fetch origin ${{ github.base_ref }}
         $coverageFiles = (Get-ChildItem -Path coverage -Filter "*.coverage.cobertura.*.xml" -Recurse | ForEach-Object FullName)
-        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 --format html:diff-cover-report.html
+
+        # The 256-bit (AVX) forms of the vectorized kernels live in *.Vector256.cs files. The macOS runners are ARM64, where 256-bit vectors are not hardware
+        # accelerated and those forms never run (their tests skip), so those files are left out of the macOS gate; the 128-bit forms (NEON there) are what it
+        # measures. Windows and Linux run both forms and gate them.
+        $exclude = @()
+        if ($env:RUNNER_OS -eq 'macOS') { $exclude = @('--exclude', '*.Vector256.cs') }
+
+        diff-cover $coverageFiles --compare-branch=origin/${{ github.base_ref }} --fail-under=90 @exclude --format html:diff-cover-report.html
 
     - name: Upload coverage reports
       uses: actions/upload-artifact@v4
@@ -366,8 +370,6 @@ jobs:
 
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
-      with:
-        include-net11: 'false'
 
     - name: Setup Java
       uses: actions/setup-java@v4

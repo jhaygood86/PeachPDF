@@ -1,6 +1,7 @@
 using PeachDrawing.Core;
 using System;
 using System.Collections.Generic;
+using System.Runtime.Intrinsics;
 
 namespace PeachDrawing;
 
@@ -9,7 +10,7 @@ namespace PeachDrawing;
 /// <c>sepia()</c>, <c>saturate()</c>, <c>hue-rotate()</c> and friends, including the cross-channel ones a PDF
 /// transfer function cannot express.
 /// </summary>
-public static class ColorMatrixFilter
+public static partial class ColorMatrixFilter
 {
     /// <summary>Returns a new bitmap with <paramref name="matrix"/> applied to <paramref name="source"/>.</summary>
     internal static Bitmap Apply(Bitmap source, in ColorMatrix matrix)
@@ -43,7 +44,28 @@ public static class ColorMatrixFilter
             stages[s] = matrices[s];
 
         var pixels = surface.Pixels;
-        for (var i = 0; i + 3 < pixels.Length; i += 4)
+        var done = 0;
+        if (Vector128.IsHardwareAccelerated && pixels.Length >= 16 && AllVectorSafe(stages))
+            done = ApplyVector128(pixels, pixels, stages);
+
+        ApplyStagesScalar(pixels, stages, done);
+    }
+
+    private static bool AllVectorSafe(ColorMatrix[] stages)
+    {
+        foreach (ref readonly var stage in stages.AsSpan())
+        {
+            if (!IsVectorSafe(stage))
+                return false;
+        }
+
+        return true;
+    }
+
+    /// <summary>The scalar reference for the multi-stage <c>ApplyInPlace</c>, from byte <paramref name="start"/> (a multiple of four).</summary>
+    internal static void ApplyStagesScalar(Span<byte> pixels, ColorMatrix[] stages, int start = 0)
+    {
+        for (var i = start; i + 3 < pixels.Length; i += 4)
         {
             int a8 = pixels[i + 3];
             float r, g, b, a = a8 / 255f;
@@ -90,10 +112,20 @@ public static class ColorMatrixFilter
     /// </remarks>
     public static void Apply(ReadOnlySpan<byte> source, Span<byte> destination, in ColorMatrix matrix)
     {
+        var done = 0;
+        if (Vector128.IsHardwareAccelerated && source.Length >= 16 && destination.Length >= source.Length / 16 * 16 && IsVectorSafe(matrix))
+            done = ApplyVector128(source, destination, [matrix]);
+
+        ApplyScalar(source, destination, matrix, done);
+    }
+
+    /// <summary>The scalar reference for <see cref="Apply(ReadOnlySpan{byte}, Span{byte}, in ColorMatrix)"/>, from byte <paramref name="start"/> (a multiple of four).</summary>
+    internal static void ApplyScalar(ReadOnlySpan<byte> source, Span<byte> destination, in ColorMatrix matrix, int start = 0)
+    {
         var m = matrix.Linear;
         var o = matrix.Offset;
 
-        for (var i = 0; i + 3 < source.Length; i += 4)
+        for (var i = start; i + 3 < source.Length; i += 4)
         {
             int a8 = source[i + 3];
             float r, g, b, a = a8 / 255f;

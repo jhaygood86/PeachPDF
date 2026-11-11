@@ -40,8 +40,6 @@ jobs:
 
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
-      with:
-        include-net11: 'false'
 
     - name: Install the macos and ios workloads
       run: dotnet workload install macos ios

@@ -17,7 +17,23 @@ public static partial class FilterOps
         var w = source.Width;
         var h = source.Height;
         var stride = w * 4;
-        var temp = new byte[w * h * 4];
+        // The horizontal pass writes every byte of the first w * h * 4 before the vertical pass reads any, so a rented buffer needs no clearing.
+        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(w * h * 4);
+        try
+        {
+            MorphologyVectorCore(source, destination, radiusX, radiusY, dilate, temp);
+        }
+        finally
+        {
+            System.Buffers.ArrayPool<byte>.Shared.Return(temp);
+        }
+    }
+
+    private static void MorphologyVectorCore(RasterSurface source, RasterSurface destination, int radiusX, int radiusY, bool dilate, byte[] temp)
+    {
+        var w = source.Width;
+        var h = source.Height;
+        var stride = w * 4;
         var ps = source.Pixels;
         var pd = destination.Pixels;
 

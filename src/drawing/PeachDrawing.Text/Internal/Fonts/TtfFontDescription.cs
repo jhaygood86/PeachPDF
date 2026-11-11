@@ -120,20 +120,20 @@ namespace PeachDrawing.Text.Internal.Fonts
             for (int i = 0; i < numTables; i++)
             {
                 stream.ReadExactly(buf4);
-                var tag = Encoding.ASCII.GetString(buf4);
+                var tag = ReadUInt32BE(buf4);
                 stream.ReadExactly(buf4); // checkSum
                 stream.ReadExactly(buf4);
                 uint tableOffset = ReadUInt32BE(buf4);
                 stream.ReadExactly(buf4);
                 uint tableLength = ReadUInt32BE(buf4);
 
-                if (tag == "bhed")
+                if (tag == 0x62686564u)
                     isBitmapFont = true;
-                else if (tag == "name")
+                else if (tag == 0x6E616D65u)
                     nameTableOffset = tableOffset;
-                else if (tag == "OS/2")
+                else if (tag == 0x4F532F32u)
                     os2TableOffset = tableOffset;
-                else if (tag == "fvar")
+                else if (tag == 0x66766172u)
                 {
                     fvarTableOffset = tableOffset;
                     fvarTableLength = tableLength;

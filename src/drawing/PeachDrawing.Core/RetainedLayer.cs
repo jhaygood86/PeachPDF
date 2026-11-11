@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 
 namespace PeachDrawing.Core
@@ -12,7 +13,7 @@ namespace PeachDrawing.Core
     /// <remarks>
     /// <para>
     /// Begin one with <see cref="Canvas.CreateRetainedLayer"/>, draw its content onto <see cref="Recorder"/> in the coordinates of the
-    /// canvas that created it, call <see cref="Seal"/>, and then <see cref="Draw"/> it. The content is recorded once, so it must not
+    /// canvas that created it, call <see cref="Seal"/>, and then <see cref="Draw(Canvas, double)"/> it. The content is recorded once, so it must not
     /// depend on anything that changes between draws: opacity is the one thing a draw supplies, and the transform is the target's.
     /// </para>
     /// <para>
@@ -46,7 +47,7 @@ namespace PeachDrawing.Core
 
         /// <summary>Whether <paramref name="target"/> can draw this layer.</summary>
         /// <param name="target">the canvas that would draw it</param>
-        /// <returns><see langword="true"/> when <see cref="Draw"/> on <paramref name="target"/> will show the recorded content</returns>
+        /// <returns><see langword="true"/> when <see cref="Draw(Canvas, double)"/> on <paramref name="target"/> will show the recorded content</returns>
         public abstract bool CanDraw(Canvas target);
 
         /// <summary>Draws the sealed layer onto <paramref name="target"/> under its current transform, at <see cref="Bounds"/>.</summary>
@@ -54,6 +55,45 @@ namespace PeachDrawing.Core
         /// <param name="opacity">how opaque the layer is drawn, from 0 (invisible) to 1</param>
         /// <exception cref="InvalidOperationException">the layer is not sealed</exception>
         public abstract void Draw(Canvas target, double opacity = 1.0);
+
+        /// <summary>
+        /// Draws the sealed layer like <see cref="Draw(Canvas, double)"/>, with <paramref name="effects"/> (a blur, a shadow, a color transform) applied to
+        /// it as a whole before it is composited at <paramref name="opacity"/>. The content stays recorded once: only the effect is applied again, so an animation
+        /// of a blur radius or a shadow costs a composite per frame, not a repaint of the content. Where the canvas applies effects on a GPU the recorded group is
+        /// still a texture and the effect runs there.
+        /// </summary>
+        /// <param name="target">the canvas to draw onto</param>
+        /// <param name="opacity">how opaque the layer is drawn, from 0 (invisible) to 1</param>
+        /// <param name="effects">the effects to apply, in order, or <see langword="null"/> or empty for none (the same as the two-argument draw)</param>
+        /// <exception cref="InvalidOperationException">the layer is not sealed</exception>
+        /// <remarks>
+        /// The effect needs room to spread into, so the group is composited from a region larger than <see cref="Bounds"/> by the effects' ink margin; a target
+        /// that cannot make an effect layer (a canvas that cannot apply effects at all) draws the layer without them, as <see cref="Canvas.BeginLayer"/> says.
+        /// The default builds the effect from <see cref="Canvas.BeginLayer"/>, so it works on any canvas; a layer with something better overrides it.
+        /// </remarks>
+        public virtual void Draw(Canvas target, double opacity, IReadOnlyList<LayerEffect>? effects)
+        {
+            if (effects is not { Count: > 0 })
+            {
+                Draw(target, opacity);
+                return;
+            }
+
+            if (!IsSealed)
+                throw new InvalidOperationException("The layer is not sealed.");
+
+            var (marginX, marginY) = LayerEffectMargins.InkMargin(effects);
+            var region = new Rect(Bounds.X - marginX, Bounds.Y - marginY, Bounds.Width + 2 * marginX, Bounds.Height + 2 * marginY);
+
+            using var layer = target.BeginLayer(new LayerOptions(Opacity: opacity, Effects: effects, Bounds: region));
+            if (layer is null)
+            {
+                Draw(target, opacity);
+                return;
+            }
+
+            Draw(layer.Canvas, 1.0);
+        }
 
         /// <summary>Releases what the layer holds.</summary>
         public abstract void Dispose();

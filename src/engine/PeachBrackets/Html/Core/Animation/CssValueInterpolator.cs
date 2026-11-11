@@ -39,32 +39,29 @@ namespace PeachBrackets.Html.Animation
         /// </summary>
         private readonly record struct Token(TokenKind Kind, string Raw, double Number = 0, string Unit = "", double[]? Rgba = null, bool InOklab = false, double[]? Oklab = null, int OklabMissing = 0);
 
-        private static readonly HashSet<string> LengthUnits = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> LengthUnits = [with(StringComparer.OrdinalIgnoreCase),
             "px", "pt", "pc", "in", "cm", "mm", "q", "em", "rem", "ex", "ch", "vw", "vh", "vmin", "vmax", "%"
-        };
+        ];
 
         /// <summary>
         /// Every function that is a colour. Scanned whole and resolved to sRGB, never as a function of plain numbers:
         /// a hue or a lab component mixed like a length gives the wrong colour (red to lime through the wrong hues). A
         /// colour the parser cannot resolve stays text and flips half way.
         /// </summary>
-        private static readonly HashSet<string> ColorFunctions = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> ColorFunctions = [with(StringComparer.OrdinalIgnoreCase),
             "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color", "color-mix"
-        };
+        ];
 
-        private static readonly HashSet<string> SpacingProperties = new(StringComparer.OrdinalIgnoreCase) { "letter-spacing", "word-spacing" };
+        private static readonly HashSet<string> SpacingProperties = [with(StringComparer.OrdinalIgnoreCase), "letter-spacing", "word-spacing"];
 
         // The opacities: a percentage is the number it stands for (CSS Color 4 section 3.2), which Interpolate puts in before mixing.
-        private static readonly HashSet<string> OpacityProperties = new(StringComparer.OrdinalIgnoreCase) { "opacity", "fill-opacity", "stroke-opacity", "stop-opacity" };
+        private static readonly HashSet<string> OpacityProperties = [with(StringComparer.OrdinalIgnoreCase), "opacity", "fill-opacity", "stroke-opacity", "stop-opacity"];
 
         /// <summary>
         /// Properties whose value may not be negative. An easing that overshoots can take the mix below zero, where the
         /// property's range clamps it (CSS Values 4 §10.1: a mixed value is clamped to the range the property allows).
         /// </summary>
-        private static readonly HashSet<string> NonNegativeProperties = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> NonNegativeProperties = [with(StringComparer.OrdinalIgnoreCase),
             "width", "height", "min-width", "min-height", "max-width", "max-height",
             "padding-top", "padding-right", "padding-bottom", "padding-left",
             "padding-block-start", "padding-block-end", "padding-inline-start", "padding-inline-end", "column-rule-width",
@@ -72,7 +69,7 @@ namespace PeachBrackets.Html.Animation
             "border-top-left-radius", "border-top-right-radius", "border-bottom-right-radius", "border-bottom-left-radius",
             "font-size", "line-height", "column-width", "row-gap", "column-gap", "flex-grow", "flex-shrink", "stroke-width",
             "r", "rx", "ry"
-        };
+        ];
 
         /// <summary>
         /// Properties that take a number or a length, where a bare <c>0</c> is the number: against a calc() of lengths it is not a zero length, and
@@ -80,15 +77,13 @@ namespace PeachBrackets.Html.Animation
         /// </summary>
         internal static bool ZeroIsANumber(string property) => ZeroIsANumberProperties.Contains(property);
 
-        private static readonly HashSet<string> ZeroIsANumberProperties = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> ZeroIsANumberProperties = [with(StringComparer.OrdinalIgnoreCase),
             "line-height", "tab-size", "border-image-width", "border-image-outset"
-        };
+        ];
 
-        private static readonly HashSet<string> IntegerProperties = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> IntegerProperties = [with(StringComparer.OrdinalIgnoreCase),
             "z-index", "order", "column-count", "orphans", "widows"
-        };
+        ];
 
         private static bool IsBareZero(string value) => value is "0" or "0.0" or "+0" or "-0";
 

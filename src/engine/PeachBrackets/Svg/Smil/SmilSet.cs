@@ -30,12 +30,11 @@ namespace PeachBrackets.Svg.Smil
 
         // The properties the builder resolves through the CSS cascade (ResolveStyledAttr), where SMIL sits above the declarations and the CSS animations: they are animated there,
         // over the value that gives. Every other attribute is animated where the builder reads it.
-        private static readonly HashSet<string> PresentationProperties = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> PresentationProperties = [with(StringComparer.Ordinal),
             "fill", "stroke", "stroke-width", "opacity", "fill-opacity", "stroke-opacity", "stroke-dasharray", "stroke-dashoffset", "stroke-linecap", "stroke-linejoin",
             "stroke-miterlimit", "fill-rule", "clip-rule", "color", "display", "visibility", "stop-color", "stop-opacity", "flood-color", "flood-opacity", "lighting-color",
             "font-size", "font-family", "font-weight", "font-style", "letter-spacing", "word-spacing", "text-anchor", "clip-path", "mask", "filter"
-        };
+        ];
 
         /// <summary>Whether <paramref name="name"/> is a property the SVG builder resolves through the CSS cascade.</summary>
         internal static bool IsPresentationProperty(string name) => PresentationProperties.Contains(name);

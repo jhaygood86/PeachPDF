@@ -24,21 +24,18 @@ namespace PeachBrackets.Css
         private const string Hue = "hue";
 
         // Exactly the keywords Html.Core's CssValueParser.ParseColorSpaceName binds to a GradientColorSpace.
-        private static readonly HashSet<string> ColorSpaces = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> ColorSpaces = [with(StringComparer.OrdinalIgnoreCase),
             "srgb", "srgb-linear", "display-p3", "lab", "oklab", "xyz", "xyz-d65", "xyz-d50",
             "hsl", "hwb", "lch", "oklch",
-        };
+        ];
 
-        private static readonly HashSet<string> PolarColorSpaces = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> PolarColorSpaces = [with(StringComparer.OrdinalIgnoreCase),
             "hsl", "hwb", "lch", "oklch",
-        };
+        ];
 
-        private static readonly HashSet<string> HueDirections = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> HueDirections = [with(StringComparer.OrdinalIgnoreCase),
             "shorter", "longer", "increasing", "decreasing",
-        };
+        ];
 
         public static bool IsColorSpace(string name) => name != null && ColorSpaces.Contains(name);
 

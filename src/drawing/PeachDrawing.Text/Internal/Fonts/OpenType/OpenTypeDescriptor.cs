@@ -748,6 +748,11 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             if (value > 0xFFFF || cmap4 is null)
                 return FontFace.cmap.cmap12?.MapCodeToGlyph(value) ?? 0;
 
+            // Repeat lookups are answered from the font's table of pages; only a font whose page cannot be built (-1) is searched here.
+            int cached = cmap4.LookupCached(value);
+            if (cached >= 0)
+                return cached;
+
             try
             {
                 int segCount = cmap4.segCountX2 / 2;

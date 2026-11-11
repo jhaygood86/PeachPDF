@@ -10,7 +10,7 @@ it lays the document out for the view's width, paints only what is in view, turn
 dotnet add package PeachBrackets.Android
 ```
 
-It targets `net10.0-android` (and `net11.0-android` when built with the .NET 11 SDK), API level 24 and later, and builds with the `android`
+It targets `net10.0-android` and `net11.0-android`, API level 24 and later, and builds with the `android`
 workload (`dotnet workload install android`). Because of that it is not in `PeachPDF.slnx`: build it by project.
 
 > **Status: pre-1.0.** The public surface is `HtmlView` and its event argument types: `HtmlLinkTappedEventArgs`, `HtmlTouchStartedEventArgs`,

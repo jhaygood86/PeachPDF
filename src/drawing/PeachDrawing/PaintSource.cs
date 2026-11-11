@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using System;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics;
 
 namespace PeachDrawing;
 
@@ -9,7 +10,7 @@ namespace PeachDrawing;
 /// Produces the source colour for each pixel of a fill or stroke: a constant, a gradient, or a bitmap.
 /// Pixels are premultiplied RGBA8, evaluated at pixel centres.
 /// </summary>
-internal abstract class PaintSource
+internal abstract partial class PaintSource
 {
     /// <summary>True when every pixel has the same colour, so callers can use the cheaper solid kernels.</summary>
     public virtual bool IsSolid => false;
@@ -87,6 +88,10 @@ internal abstract class PaintSource
         private readonly float[] _positions;
         private readonly float[] _r, _g, _b, _a;
 
+        // What interpolating between stop i and stop i + 1 needs that does not depend on the position: the same floats the interpolation would
+        // compute for every pixel (premultiplied start, and the premultiplied difference to the end), worked out once.
+        private readonly float[] _span, _da, _pr0, _dpr, _pg0, _dpg, _pb0, _dpb;
+
         public Stops(System.Collections.Generic.IReadOnlyList<GradientStop> stops)
         {
             var n = stops.Count;
@@ -106,6 +111,29 @@ internal abstract class PaintSource
                 _g[i] = cg;
                 _b[i] = cb;
                 _a[i] = stops[i].PaintColor.A / 255f;
+            }
+
+            var segments = Math.Max(n - 1, 0);
+            _span = new float[segments];
+            _da = new float[segments];
+            _pr0 = new float[segments];
+            _dpr = new float[segments];
+            _pg0 = new float[segments];
+            _dpg = new float[segments];
+            _pb0 = new float[segments];
+            _dpb = new float[segments];
+            for (var i = 0; i < segments; i++)
+            {
+                var a0 = _a[i];
+                var a1 = _a[i + 1];
+                _span[i] = _positions[i + 1] - _positions[i];
+                _da[i] = a1 - a0;
+                _pr0[i] = _r[i] * a0;
+                _dpr[i] = _r[i + 1] * a1 - _pr0[i];
+                _pg0[i] = _g[i] * a0;
+                _dpg[i] = _g[i + 1] * a1 - _pg0[i];
+                _pb0[i] = _b[i] * a0;
+                _dpb[i] = _b[i + 1] * a1 - _pb0[i];
             }
         }
 
@@ -127,9 +155,39 @@ internal abstract class PaintSource
             while (i < n - 1 && _positions[i] < t)
                 i++;
 
-            var span = _positions[i] - _positions[i - 1];
-            var f = span > 0 ? (t - _positions[i - 1]) / span : 1f;
-            return Pack(i - 1, f, i);
+            var seg = i - 1;
+            var span = _span[seg];
+            var f = span > 0 ? (t - _positions[seg]) / span : 1f;
+            return Interpolate(seg, f);
+        }
+
+        /// <summary>
+        /// The premultiplied color a fraction <paramref name="f"/> of the way from stop <paramref name="seg"/> to the next, interpolated
+        /// premultiplied as CSS Images 3 §3.5.1 requires: the arithmetic of <see cref="Pack"/> with the segment's constants taken from the tables.
+        /// </summary>
+        private uint Interpolate(int seg, float f)
+        {
+            var a = _a[seg] + _da[seg] * f;
+            var pr = _pr0[seg] + _dpr[seg] * f;
+            var pg = _pg0[seg] + _dpg[seg] * f;
+            var pb = _pb0[seg] + _dpb[seg] * f;
+            float r, g, b;
+            if (a == 1f)
+            {
+                // Dividing by exactly one changes nothing, so an opaque stretch skips the three divisions.
+                r = pr; g = pg; b = pb;
+            }
+            else if (a > 0)
+            {
+                r = pr / a; g = pg / a; b = pb / a;
+            }
+            else
+            {
+                r = g = b = 0;
+            }
+
+            Premultiply(r, g, b, a, out var qr, out var qg, out var qb, out var qa);
+            return PixelKernels.Pack(qr, qg, qb, qa);
         }
 
         private uint Pack(int i, float f, int j = -1)
@@ -318,7 +376,7 @@ internal abstract class PaintSource
         }
     }
 
-    private sealed class RadialPaint : PaintSource
+    internal sealed partial class RadialPaint : PaintSource
     {
         private readonly Affine _deviceToUser;
         private readonly Stops _stops;
@@ -381,7 +439,83 @@ internal abstract class PaintSource
 
         public override void FillSpan(int x0, int y, int count, Span<byte> destination)
         {
-            for (var i = 0; i < count; i++)
+            var i = 0;
+            if (_focalRadius == 0 && count >= 4)
+            {
+                if (Vector256.IsHardwareAccelerated)
+                    i = FillSpanVector256(x0, y, count, destination);
+                else if (Vector128.IsHardwareAccelerated)
+                    i = FillSpanVector128(x0, y, count, destination);
+            }
+
+            FillSpanScalar(x0, y, count, destination, i);
+        }
+
+        /// <summary>
+        /// Four pixels at a time, as two 128-bit vectors (SSE2 on x64, NEON on ARM64): the same double-precision multiplies, adds, divisions and square root as
+        /// <see cref="FillSpanScalar"/>, one pixel per lane (each is correctly rounded, so a lane holds what the scalar code computes); the position along the
+        /// gradient is then finished, wrapped and looked up one pixel at a time exactly as there. Returns how many pixels it handled (the caller does the rest);
+        /// only for a gradient with no focal radius.
+        /// </summary>
+        internal int FillSpanVector128(int x0, int y, int count, Span<byte> destination)
+        {
+            var i = 0;
+            var m = _deviceToUser;
+            var yc = y + 0.5;
+            var yTermX = Vector128.Create(yc * m.M21);
+            var yTermY = Vector128.Create(yc * m.M22);
+            var m11 = Vector128.Create(m.M11);
+            var m12 = Vector128.Create(m.M12);
+            var offsetX = Vector128.Create(m.OffsetX);
+            var offsetY = Vector128.Create(m.OffsetY);
+            var cx = Vector128.Create(_cx);
+            var cy = Vector128.Create(_cy);
+            var rx = Vector128.Create(_rx);
+            var ry = Vector128.Create(_ry);
+            var fx = Vector128.Create(_fx);
+            var fy = Vector128.Create(_fy);
+            var a = Vector128.Create(_a);
+            var lanes = Vector128.Create(0.0, 1.0);
+
+            Vector128<double> Position(Vector128<double> x)
+            {
+                var ux = x * m11 + yTermX + offsetX;
+                var uy = x * m12 + yTermY + offsetY;
+                var px = (ux - cx) / rx;
+                var py = (uy - cy) / ry;
+                var qx = px - fx;
+                var qy = py - fy;
+                var qf = qx * fx + qy * fy;
+                var q2 = qx * qx + qy * qy;
+                return (qf + Vector128.Sqrt(qf * qf + a * q2)) / a;
+            }
+
+            for (; i + 4 <= count; i += 4)
+            {
+                var x = Vector128.Create((double)(x0 + i) + 0.5) + lanes;
+                var tLow = Position(x);
+                var tHigh = Position(x + Vector128.Create(2.0));
+
+                for (var k = 0; k < 4; k++)
+                {
+                    var t = (float)(k < 2 ? tLow.GetElement(k) : tHigh.GetElement(k - 2));
+                    if (_innerRatio > 0)
+                        t = (float)((t - _innerRatio) / (1 - _innerRatio));
+
+                    if (_repeating)
+                        t = _stops.Wrap(t);
+
+                    Write(destination, i + k, _stops.At(t));
+                }
+            }
+
+            return i;
+        }
+
+        /// <summary>The per-pixel reference for <see cref="FillSpan"/>, from pixel <paramref name="start"/>.</summary>
+        internal void FillSpanScalar(int x0, int y, int count, Span<byte> destination, int start = 0)
+        {
+            for (var i = start; i < count; i++)
             {
                 var (ux, uy) = _deviceToUser.Apply(x0 + i + 0.5, y + 0.5);
                 var px = (ux - _cx) / _rx;

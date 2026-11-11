@@ -31,7 +31,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 	<ItemGroup>
-		<PackageReference Include="MimeKit" />
+		<PackageReference Include="MimeKit.Core" />
 	</ItemGroup>
 	<!--
 		Raster image decode/encode (PDF/Drawing/PeachImageSource.cs). Replaced

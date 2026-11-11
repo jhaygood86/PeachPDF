@@ -77,6 +77,12 @@ static int RunImportRoundTrip(string inputDir, string outputDir)
 var positionalArgs = new List<string>();
 var benchmarkMode = false;
 var benchmarkIterations = 10;
+// --benchmark-filter slug[,slug...]: with --benchmark, only these showcases are measured (an exact slug match).
+// --benchmark-json <file>: with --benchmark, also writes the per-showcase results as JSON, so a baseline run on one
+// build can be diffed against a run on another (see the performance workflow in docs/testing.md).
+var rasterBenchmark = false;
+HashSet<string>? benchmarkFilter = null;
+string? benchmarkJsonPath = null;
 // --svg [--svg-text]: alongside every HTML showcase's PDF, also renders the same HTML through the SVG backend
 // (PeachDrawing.Svg) and writes {slug}.svg (one more file, {slug}-pN.svg, per further page) - a direct look at what the SVG
 // canvas does with real documents; the docs site links it from the showcase card. --svg-text writes selectable <text> with
@@ -93,6 +99,12 @@ for (var i = 0; i < args.Length; i++)
     {
         benchmarkMode = true;
     }
+    else if (args[i] == "--raster-benchmark")
+    {
+        // Same measurement as --benchmark, but each render is HtmlDocument -> RasterCanvas (CPU) instead of GeneratePdf + Save.
+        benchmarkMode = true;
+        rasterBenchmark = true;
+    }
     else if (args[i] == "--html-only")
     {
         htmlOnlyMode = true;
@@ -105,6 +117,18 @@ for (var i = 0; i < args.Length; i++)
     {
         svgMode = true;
         svgTextMode = PeachDrawing.Svg.SvgTextMode.Text;
+    }
+    else if (args[i] == "--benchmark-filter" && i + 1 < args.Length)
+    {
+        benchmarkFilter = new HashSet<string>(
+            args[i + 1].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+            StringComparer.Ordinal);
+        i++;
+    }
+    else if (args[i] == "--benchmark-json" && i + 1 < args.Length)
+    {
+        benchmarkJsonPath = Path.GetFullPath(args[i + 1]);
+        i++;
     }
     else if (args[i] == "--benchmark-iterations" && i + 1 < args.Length
         && int.TryParse(args[i + 1], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedIterations)
@@ -362,15 +386,33 @@ async Task SaveStatesShowcaseAsync(string slug, string category, string cardTitl
 // Renders sourceHtml the same way a real caller would - GeneratePdf, then Save to a stream - without
 // writing anything to disk. This, not just GeneratePdf alone, is what --benchmark times/measures: PDF
 // serialization is a real, distinct cost a caller always pays, not an artifact of the showcase harness.
+// How long the last render spent in GeneratePdf (parse, layout, paint) and in Save (serialize, compress), for the benchmark report.
+double lastGenerateMs = 0, lastSaveMs = 0;
+
 async Task RenderOnceAsync(string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    if (rasterBenchmark)
+    {
+        await RasterShowcaseRenderer.RenderPagesAsync(sourceHtml, renderConfig);
+        return;
+    }
+
+    var started = Stopwatch.GetTimestamp();
     var document = await generator.GeneratePdf(sourceHtml, renderConfig);
+    var generated = Stopwatch.GetTimestamp();
     using var stream = new MemoryStream();
     document.Save(stream);
+    lastSaveMs = Stopwatch.GetElapsedTime(generated).TotalMilliseconds;
+    lastGenerateMs = Stopwatch.GetElapsedTime(started, generated).TotalMilliseconds;
 }
 
 async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateConfig renderConfig)
 {
+    if (benchmarkFilter is not null && !benchmarkFilter.Contains(slug))
+    {
+        return;
+    }
+
     // Warm: JIT the whole render path (parser, cascade, layout, PDF writer) before anything is
     // counted - the first render of any process pays a one-time JIT/tiering cost that would otherwise
     // swamp a real per-render number.
@@ -378,6 +420,9 @@ async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateCon
 
     var wallTimesMs = new double[benchmarkIterations];
     var allocatedBytes = new long[benchmarkIterations];
+    var gcPauseMs = new double[benchmarkIterations];
+    var gcCollections = new int[benchmarkIterations];
+    var saveMs = new double[benchmarkIterations];
 
     for (var i = 0; i < benchmarkIterations; i++)
     {
@@ -389,16 +434,21 @@ async Task BenchmarkShowcaseAsync(string slug, string sourceHtml, PdfGenerateCon
         // it also captures allocation on any thread-pool continuation the async render hops onto,
         // which a per-thread counter would miss.
         var before = GC.GetTotalAllocatedBytes(precise: true);
+        var pauseBefore = GC.GetTotalPauseDuration();
+        var collectionsBefore = GC.CollectionCount(0);
         var stopwatch = Stopwatch.StartNew();
         await RenderOnceAsync(sourceHtml, renderConfig);
         stopwatch.Stop();
         var after = GC.GetTotalAllocatedBytes(precise: true);
+        gcPauseMs[i] = (GC.GetTotalPauseDuration() - pauseBefore).TotalMilliseconds;
+        gcCollections[i] = GC.CollectionCount(0) - collectionsBefore;
+        saveMs[i] = lastSaveMs;
 
         wallTimesMs[i] = stopwatch.Elapsed.TotalMilliseconds;
         allocatedBytes[i] = after - before;
     }
 
-    benchmarkResults.Add(new BenchmarkResult(slug, wallTimesMs, allocatedBytes));
+    benchmarkResults.Add(new BenchmarkResult(slug, wallTimesMs, allocatedBytes, gcPauseMs, gcCollections, saveMs));
     Console.WriteLine($"Benchmarked {slug} ({benchmarkIterations} iterations)");
 }
 
@@ -406,12 +456,12 @@ void PrintBenchmarkReport()
 {
     Console.WriteLine();
     Console.WriteLine($"=== Benchmark report ({benchmarkResults.Count} showcases x {benchmarkIterations} iterations) ===");
-    Console.WriteLine($"{"Showcase",-40} {"Mean ms",10} {"Median ms",10} {"Mean KB",10} {"Median KB",10}");
+    Console.WriteLine($"{"Showcase",-40} {"Mean ms",10} {"Median ms",10} {"Mean KB",10} {"Median KB",10} {"GC ms",8} {"GCs",6} {"Save ms",8}");
 
     foreach (var result in benchmarkResults.OrderBy(r => r.Slug, StringComparer.Ordinal))
     {
         Console.WriteLine($"{result.Slug,-40} {result.MeanWallTimeMs,10:F2} {result.MedianWallTimeMs,10:F2} " +
-            $"{result.MeanAllocatedBytes / 1024.0,10:F1} {result.MedianAllocatedBytes / 1024.0,10:F1}");
+            $"{result.MeanAllocatedBytes / 1024.0,10:F1} {result.MedianAllocatedBytes / 1024.0,10:F1} {result.MeanGcPauseMs,8:F1} {result.MeanGcCollections,6:F1} {result.MeanSaveMs,8:F1}");
     }
 
     // Totals sum each showcase's own mean, rather than averaging per-iteration numbers across
@@ -425,6 +475,39 @@ void PrintBenchmarkReport()
     Console.WriteLine($"{"TOTAL (one corpus pass)",-40} {totalMeanMs,10:F2} {"",10} " +
         $"{totalMeanBytes / 1024.0,10:F1} {"",10}");
     Console.WriteLine($"Total: {totalMeanMs:F2} ms, {totalMeanBytes / 1024.0 / 1024.0:F2} MB per pass over the corpus.");
+
+    if (benchmarkFilter is not null)
+    {
+        var missing = benchmarkFilter.Where(s => benchmarkResults.All(r => r.Slug != s)).ToArray();
+        if (missing.Length > 0)
+        {
+            Console.WriteLine($"WARNING: --benchmark-filter named no matching showcase for: {string.Join(", ", missing)}");
+        }
+    }
+
+    if (benchmarkJsonPath is not null)
+    {
+        var json = JsonSerializer.Serialize(
+            new
+            {
+                iterations = benchmarkIterations,
+                showcases = benchmarkResults.OrderBy(r => r.Slug, StringComparer.Ordinal).Select(r => new
+                {
+                    slug = r.Slug,
+                    meanMs = r.MeanWallTimeMs,
+                    medianMs = r.MedianWallTimeMs,
+                    meanBytes = r.MeanAllocatedBytes,
+                    medianBytes = r.MedianAllocatedBytes,
+                    meanGcPauseMs = r.MeanGcPauseMs,
+                    meanGen0Collections = r.MeanGcCollections,
+                    meanSaveMs = r.MeanSaveMs
+                })
+            },
+            new JsonSerializerOptions { WriteIndented = true });
+        Directory.CreateDirectory(Path.GetDirectoryName(benchmarkJsonPath)!);
+        File.WriteAllText(benchmarkJsonPath, json);
+        Console.WriteLine($"Wrote {benchmarkJsonPath}");
+    }
 }
 
 static string Swatch(string desc, string css) =>
@@ -16992,8 +17075,11 @@ static class ShowcaseSourceKind
 }
 
 /// <summary>One showcase's --benchmark measurements: one wall-time (ms) and one allocated-bytes sample per iteration.</summary>
-record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes)
+record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes, double[] GcPauseMs, int[] GcCollections, double[] SaveMs)
 {
+    public double MeanSaveMs => SaveMs.Average();
+    public double MeanGcPauseMs => GcPauseMs.Average();
+    public double MeanGcCollections => GcCollections.Average();
     public double MeanWallTimeMs => WallTimesMs.Average();
     public double MedianWallTimeMs => Median(WallTimesMs);
     public double MeanAllocatedBytes => AllocatedBytes.Average(b => (double)b);

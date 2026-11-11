@@ -526,14 +526,22 @@ public sealed partial class RasterCanvas : Canvas
         if (count <= 0)
             return;
 
-        var work = RentCoverageScratch(count);
-        coverage.Slice(start - x0, count).CopyTo(work);
+        // The pixel scratch grows with the coverage scratch, so it is asked for either way.
+        var scratch = RentCoverageScratch(count);
+        ReadOnlySpan<byte> work = coverage.Slice(start - x0, count);
 
-        if (clip.Mask is { } mask)
-            PixelKernels.MultiplyCoverage(work, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
+        // Coverage is only copied when a mask or the opacity has to change it; the rasterizer's own row is read as it is otherwise.
+        if (clip.Mask is not null || opacity < 255)
+        {
+            work.CopyTo(scratch);
+            if (clip.Mask is { } mask)
+                PixelKernels.MultiplyCoverage(scratch, mask.AsSpan((y - bounds.Top) * bounds.Width + (start - bounds.Left), count));
 
-        if (opacity < 255)
-            PixelKernels.ScaleCoverage(work, opacity);
+            if (opacity < 255)
+                PixelKernels.ScaleCoverage(scratch, opacity);
+
+            work = scratch;
+        }
 
         var dst = _surface.Row(y).Slice(start * 4, count * 4);
 
@@ -606,12 +614,8 @@ public sealed partial class RasterCanvas : Canvas
         if (!TryGetBitmap(image, out var bitmap, out _, out _) || !TryGetBitmap(maskImage, out var mask, out _, out _))
             return;
 
-        var result = Combine(bitmap, mask, static (int r, int g, int b, int a, int mr, int mg, int mb, int ma) =>
-        {
-            // Luminosity of the mask composited over black: premultiplied colour is already that.
-            var lum = (77 * mr + 151 * mg + 28 * mb + 128) >> 8;
-            return (PixelKernels.Div255(r * lum), PixelKernels.Div255(g * lum), PixelKernels.Div255(b * lum), PixelKernels.Div255(a * lum));
-        });
+        // The luminosity of the mask composited over black: its premultiplied color already is that.
+        var result = ApplyMask(bitmap, mask, luminance: true, invert: false);
 
         DrawBitmap(result, image.Width, image.Height, destRect, null, image.Interpolate, 255, _blend);
     }
@@ -622,11 +626,7 @@ public sealed partial class RasterCanvas : Canvas
         if (!TryGetBitmap(image, out var bitmap, out _, out _) || !TryGetBitmap(maskImage, out var mask, out _, out _))
             return;
 
-        var result = Combine(bitmap, mask, (int r, int g, int b, int a, int mr, int mg, int mb, int ma) =>
-        {
-            var k = invert ? 255 - ma : ma;
-            return (PixelKernels.Div255(r * k), PixelKernels.Div255(g * k), PixelKernels.Div255(b * k), PixelKernels.Div255(a * k));
-        });
+        var result = ApplyMask(bitmap, mask, luminance: false, invert: invert);
 
         DrawBitmap(result, image.Width, image.Height, destRect, null, image.Interpolate, 255, _blend);
     }
@@ -723,28 +723,50 @@ public sealed partial class RasterCanvas : Canvas
         FillPolygons(polygon, evenOdd: false, new BitmapPaint(bitmap, deviceToBitmap, smooth, bicubic: sampling == ImageSampling.Bicubic), opacity, mode);
     }
 
-    /// <summary>Builds a new bitmap the size of <paramref name="a"/>, combining each pixel with the (nearest) pixel of <paramref name="b"/>.</summary>
-    private static Bitmap Combine(Bitmap a, Bitmap b,
-        Func<int, int, int, int, int, int, int, int, (int R, int G, int B, int A)> combine)
+    /// <summary>
+    /// Builds a new bitmap the size of <paramref name="image"/>: each pixel multiplied, every channel, by the value its (nearest) pixel of
+    /// <paramref name="mask"/> gives - the mask's luminance over black, or its alpha (or one minus it when <paramref name="invert"/>). A mask of another size
+    /// is read at the pixel each image pixel maps onto, so a row of the mask is first gathered to the image's width.
+    /// </summary>
+    private static Bitmap ApplyMask(Bitmap image, Bitmap mask, bool luminance, bool invert)
     {
-        var result = new byte[a.Width * a.Height * 4];
-        for (var y = 0; y < a.Height; y++)
+        var width = image.Width;
+        var height = image.Height;
+        var result = new byte[width * height * 4];
+        var sameSize = mask.Width == width && mask.Height == height;
+        var mapped = sameSize ? null : new byte[width * 4];
+        var columns = sameSize ? null : new int[width];
+        if (columns is not null)
         {
-            var by = Math.Min(b.Height - 1, y * b.Height / a.Height);
-            for (var x = 0; x < a.Width; x++)
-            {
-                var bx = Math.Min(b.Width - 1, x * b.Width / a.Width);
-                var p = (y * a.Width + x) * 4;
-                var q = (by * b.Width + bx) * 4;
-                var (r, g, bl, al) = combine(a.Pixels[p], a.Pixels[p + 1], a.Pixels[p + 2], a.Pixels[p + 3],
-                    b.Pixels[q], b.Pixels[q + 1], b.Pixels[q + 2], b.Pixels[q + 3]);
-                result[p] = (byte)Math.Clamp(r, 0, 255);
-                result[p + 1] = (byte)Math.Clamp(g, 0, 255);
-                result[p + 2] = (byte)Math.Clamp(bl, 0, 255);
-                result[p + 3] = (byte)Math.Clamp(al, 0, 255);
-            }
+            for (var x = 0; x < width; x++)
+                columns[x] = Math.Min(mask.Width - 1, x * mask.Width / width) * 4;
         }
 
-        return new Bitmap(a.Width, a.Height, result);
+        for (var y = 0; y < height; y++)
+        {
+            var row = y * width * 4;
+            ReadOnlySpan<byte> maskRow;
+            if (sameSize)
+            {
+                maskRow = mask.Pixels.AsSpan(row, width * 4);
+            }
+            else
+            {
+                var source = Math.Min(mask.Height - 1, y * mask.Height / height) * mask.Width * 4;
+                for (var x = 0; x < width; x++)
+                    mask.Pixels.AsSpan(source + columns![x], 4).CopyTo(mapped.AsSpan(x * 4, 4));
+
+                maskRow = mapped;
+            }
+
+            var imageRow = image.Pixels.AsSpan(row, width * 4);
+            var resultRow = result.AsSpan(row, width * 4);
+            if (luminance)
+                PixelKernels.MaskLuminance(imageRow, maskRow, resultRow);
+            else
+                PixelKernels.MaskAlpha(imageRow, maskRow, resultRow, invert);
+        }
+
+        return new Bitmap(width, height, result);
     }
 }

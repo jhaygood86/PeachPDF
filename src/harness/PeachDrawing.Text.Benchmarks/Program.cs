@@ -1,4 +1,5 @@
 using BenchmarkDotNet.Running;
+using PeachDrawing.Text;
 using PeachDrawing.Text.Benchmarks;
 using PeachDrawing.Text.Outlines;
 
@@ -70,6 +71,32 @@ if (args.Length == 1 && args[0] == "--quick")
         Console.WriteLine($"{font}: {glyphs}, {milliseconds[0]:F2} / {milliseconds[milliseconds.Count / 2]:F2} ms, {allocated / 1024.0:F0} KB");
     }
 
+    return;
+}
+
+if (args.Length >= 1 && args[0] == "--cold-start")
+{
+    // The first use of each subsystem in a fresh process: the system-font scan, and the load of each Unicode table from the embedded data.
+    // BenchmarkDotNet measures the steady state, which hides all of this, so it is timed once per process here (run the command several times and
+    // compare the least; `--cold-start` takes no other argument). Each line is milliseconds and KB allocated for that first call alone.
+    static void Step(string name, Action action)
+    {
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        long start = System.Diagnostics.Stopwatch.GetTimestamp();
+        action();
+        double elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(start).TotalMilliseconds;
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        Console.WriteLine($"{name,-34} {elapsed,9:F2} ms {allocated / 1024.0,10:F0} KB");
+    }
+
+    Step("system font scan (family names)", () => _ = FontSet.InstalledFamilyNames.Count());
+    Step("load bundled font", () => _ = FontFiles.Load("LiberationSans"));
+    Step("Scripts.Of (script table)", () => _ = PeachDrawing.Text.Unicode.Scripts.Of(0x41));
+    Step("Bidi.ClassOf (bidi table)", () => _ = PeachDrawing.Text.Unicode.Bidi.ClassOf(new System.Text.Rune(0x41)));
+    Step("LineBreaker (line-break data)", () => _ = PeachDrawing.Text.Unicode.LineBreaker.FindOpportunities("Hello world"));
+    Step("Segmenter graphemes", () => _ = PeachDrawing.Text.Unicode.Segmenter.FindGraphemeBoundaries("Hello world"));
+    Step("Segmenter words", () => _ = PeachDrawing.Text.Unicode.Segmenter.FindWordBoundaries("Hello world"));
+    Step("Bidi.Analyze", () => _ = PeachDrawing.Text.Unicode.Bidi.Analyze("Hello world", PeachDrawing.Text.Unicode.BaseDirection.Ltr));
     return;
 }
 

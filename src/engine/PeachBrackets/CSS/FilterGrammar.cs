@@ -41,10 +41,9 @@ namespace PeachBrackets.Css
         private const string Saturate = "saturate";
         private const string Sepia = "sepia";
 
-        private static readonly HashSet<string> KnownFunctionNames = new(StringComparer.OrdinalIgnoreCase)
-        {
+        private static readonly HashSet<string> KnownFunctionNames = [with(StringComparer.OrdinalIgnoreCase),
             Blur, Brightness, Contrast, DropShadow, Grayscale, HueRotate, Invert, Opacity, Saturate, Sepia,
-        };
+        ];
 
         /// <summary>
         /// One parsed <c>&lt;filter-function&gt;</c>. <see cref="Name"/> is the lowercased function name.
@@ -160,7 +159,7 @@ namespace PeachBrackets.Css
                 lengths[1].ToValue(),
                 lengths.Count == 3 ? lengths[2].ToValue() : "0",
                 color,
-            ];
+        ];
             return true;
         }
 

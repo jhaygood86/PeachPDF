@@ -37,8 +37,6 @@ jobs:
 
     - name: Setup .NET
       uses: ./.github/actions/setup-dotnet
-      with:
-        include-net11: 'false'
 
     - name: Build the example app
       run: dotnet build src/examples/PeachBrackets.WinUI.Example/PeachBrackets.WinUI.Example.csproj --configuration Release -p:Platform=x64

@@ -10,7 +10,7 @@ opens links, and handles selection and copy.
 dotnet add package PeachBrackets.Apple
 ```
 
-It targets `net10.0-macos` (macOS 11 and later) and `net10.0-ios` (iOS 15 and later; the edit menu after a long press needs iOS 16) (and the `net11.0` ones when built with the .NET 11 SDK) and builds with the `macos` and `ios` workloads
+It targets `net10.0-macos` (macOS 11 and later) and `net10.0-ios` (iOS 15 and later; the edit menu after a long press needs iOS 16) (and the matching `net11.0` ones) and builds with the `macos` and `ios` workloads
 (`dotnet workload install macos ios`) on a Mac. Because of that it is not in `PeachPDF.slnx`: build it by project. On macOS `HtmlView` is an `NSScrollView`;
 on iOS it is a `UIScrollView`. The two have the same members where the platforms allow, and differ where they do not (below).
 
