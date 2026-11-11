@@ -2068,7 +2068,7 @@ page edge without manual, page-aware absolute positioning.
 - A page float resolves against the page unless it says `float-reference: column`: the initial
   `inline` reference is not treated as a distinct one.
 - A `float-reference: column` float as tall as its column overflows it rather than reserving the whole column,
-  and one in a multi-column container that holds nothing but out-of-flow children resolves against the page.
+  and one in a multi-column container that holds nothing but out-of-flow children is placed against that container's first column, the column it is in.
 - Prince's own extensions on top of this keyword set (`-prince-float-reference`, `-prince-float-policy`,
   `top-corner`/`bottom-corner`, `sidenote`/`wide` reference targets, `align-top`/`align-bottom`,
   `inline-footnote`) are not implemented.

@@ -487,6 +487,28 @@ namespace PeachBrackets.Html.Dom
                 var nestedInAColumn = htmlContainer?.CurrentFragmentainer is { HasOwnBand: true };
                 var outerColumn = nestedInAColumn ? htmlContainer!.DetachFragmentainer() : null;
 
+                // A page float that takes the column it is in for its reference (`float-reference: column`) needs that column to exist: with nothing to arrange
+                // into columns there is no fill to make one, so it falls back to the page, which css-page-floats-3 section 3.1 allows only for an anchor that is not
+                // inside a column. The first column, the one the float is in, is made here the way a fill makes it (#1356).
+                Fragmentation.FragmentainerContext? firstColumn = null;
+                Fragmentation.FragmentainerContext? previousContext = null;
+
+                if (!nestedInAColumn && htmlContainer is { HasRealPageGrid: true }
+                    && columnsBox.Boxes.Any(b => b.IsPageFloated && b.FloatReference.Value == PeachBrackets.Css.FloatReference.Column))
+                {
+                    var boxTop = columnsBox.ClientTop;
+                    var slot = htmlContainer.SlotStartingAt(boxTop);
+                    var bandBottom = Math.Max(boxTop, htmlContainer.PageBottomOf(slot) - htmlContainer.TotalBandEndReservationFor(slot));
+                    firstColumn = new Fragmentation.FragmentainerContext(htmlContainer, columnsBox, slot, (boxTop, bandBottom), inheritsSuppression: true);
+                    firstColumn.ColumnKey = Fragmentation.ColumnAreaKey.For(columnsBox, slot, 0, columnLeft);
+
+                    if (htmlContainer.ColumnPageFloatTopInsetFor(firstColumn.ColumnKey.Value) is > 0 and var topInset) firstColumn.ReserveBandStart(slot, topInset);
+
+                    htmlContainer.RecordColumnFragmentainer(new Fragmentation.ColumnFragmentainerRecord(
+                        columnsBox, slot, 0, columnLeft, columnLeft + columnWidth, boxTop, bandBottom));
+                    previousContext = htmlContainer.EnterNestedFragmentainer(firstColumn);
+                }
+
                 try
                 {
                     foreach (var childBox in columnsBox.Boxes.Where(IsLaidOutHere))
@@ -496,6 +518,8 @@ namespace PeachBrackets.Html.Dom
                 }
                 finally
                 {
+                    if (firstColumn is not null) htmlContainer!.LeaveNestedFragmentainer(previousContext);
+
                     if (nestedInAColumn) htmlContainer!.RestoreFragmentainer(outerColumn);
 
                     PlaceColumn(columnsBox, columnLeft, containerWidth);
