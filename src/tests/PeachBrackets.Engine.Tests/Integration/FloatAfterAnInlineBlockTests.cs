@@ -3,6 +3,7 @@ using PeachBrackets.Html.Dom;
 using PeachDrawing.Core;
 using PeachDrawing.PDF;
 using PeachPDF.Rendering;
+using PeachPDF.Tests.TestSupport;
 
 namespace PeachBrackets.Engine.Tests.Integration;
 
@@ -30,6 +31,7 @@ public class FloatAfterAnInlineBlockTests
     {
         var html = $"<!DOCTYPE html><html><head><style>body {{ margin: 0; font: 13px Arial }}</style></head><body>{body}</body></html>";
         var renderContext = new HtmlRenderContext();
+        await BundledFonts.PinSansSerifAsync(renderContext);
         var container = new HtmlContainerInt(renderContext) { MediaType = MediaType.Screen };
         await container.SetHtml(html, null);
 

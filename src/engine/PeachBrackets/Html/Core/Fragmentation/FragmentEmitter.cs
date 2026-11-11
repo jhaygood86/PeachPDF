@@ -5059,13 +5059,14 @@ namespace PeachBrackets.Html.Fragmentation
         {
             if (own.ContextRoot is not { } root || own.Region is not { Left: { } left, Right: { } right } region) return false;
             if (!TryGetWordRect(box, wordIndex, own.Geometry, out var ownRect)) return false;
-            if (!_capturedInstances.TryGetValue((root, slotIndex), out var instances)) return false;
 
             // A column the gaps left no width: a word starting in it belongs to it (the text overflows, as in a browser), and the same container's
             // fill under another outer column has a column at the same place that holds the word as well. The first of them draws it.
             if (right - left <= BandOverlapEpsilon)
             {
-                foreach (var other in instances)
+                if (!_capturedInstances.TryGetValue((root, slotIndex), out var sameWidthInstances)) return false;
+
+                foreach (var other in sameWidthInstances)
                 {
                     if (ReferenceEquals(other.Self, own.Self)) return false;
 
@@ -5084,6 +5085,7 @@ namespace PeachBrackets.Html.Fragmentation
             }
 
             if (ownRect.Left >= left - EdgeEpsilon && ownRect.Left < right) return false;
+            if (!_capturedInstances.TryGetValue((root, slotIndex), out var instances)) return false;
 
             foreach (var other in instances)
             {
