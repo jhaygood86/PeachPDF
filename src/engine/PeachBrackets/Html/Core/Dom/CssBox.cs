@@ -3302,6 +3302,9 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         private double? _resumeTopOverride;
 
+        /// <summary>The layout generation a parent stated <see cref="_resumeTopOverride"/> in for a box not yet reached in it, so that the reset on the box's first pass of the generation keeps it.</summary>
+        private int _resumeTopOverrideStatedIn = -1;
+
         /// <summary>
         /// Whether <see cref="PerformLayoutPrologue"/> has already run for this box in the current
         /// layout. It runs once per box per layout, not once per fragmentainer pass.
@@ -4414,10 +4417,13 @@ namespace PeachBrackets.Html.Dom
 
             if (_layoutGeneration != generation)
             {
+                // A target the parent stated for this box in this generation, before the box was first reached in it, is not left over from an earlier one.
+                var statedBeforeTheFirstPass = _resumeTopOverrideStatedIn == generation ? _resumeTopOverride : null;
+
                 _layoutGeneration = generation;
                 _prologueDone = false;
                 _incomingToken = null;
-                _resumeTopOverride = null;
+                _resumeTopOverride = statedBeforeTheFirstPass;
                 _escapedForcedBreakPending = false;
                 _escapedForcedBreakBlankSlot = null;
                 _orphansBreakTaken = false;
@@ -5411,6 +5417,7 @@ namespace PeachBrackets.Html.Dom
                         && IsPlainBlockFlowUpTo(resumedColumn.ContextRoot))
                     {
                         childBox._resumeTopOverride = ContentTopOfTheContainingBlockIn(resumedColumn, childBox.ContainingBlock);
+                        childBox._resumeTopOverrideStatedIn = HtmlContainer.LayoutGeneration;
                     }
 
                     if (!TakesNoPartInTheFlow(childBox)) inFlowChildPlacedByThisFill = true;
@@ -5727,7 +5734,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     DeferredFloatsOnly = true;
                     PendingBreakToken = new BlockBreakToken(
-                        this, lastColumn.SlotIndex, Boxes.IndexOf(deferredFloats[^1]), null, IsBreakBefore: true, null);
+                        this, lastColumn.SlotIndex, Boxes.IndexOf(deferredFloats[^1]), null, IsBreakBefore: true, null, OwesOnlyDeferredFloats: true);
                     return true;
                 }
             }
@@ -7761,6 +7768,47 @@ namespace PeachBrackets.Html.Dom
         internal double FlowTopEdge => Location.Y - RelativeOffsetY;
         internal double FlowRightEdge => ActualRight - RelativeOffsetX;
         internal double FlowBottomEdge => ActualBottom - RelativeOffsetY;
+
+        private void NoteRelativeOffset()
+        {
+            if (HtmlContainer is { } container) container.HasRelativeOffsets = true;
+        }
+
+        /// <summary>
+        /// How far this box and every box it lies in have been moved by relative positioning, which is how far a box drawn here is from where it is in flow.
+        /// </summary>
+        private (double X, double Y) RelativeChainOffset(bool includeSelf)
+        {
+            double x = 0, y = 0;
+
+            for (var current = includeSelf ? this : ParentBox; current is not null; current = current.ParentBox)
+            {
+                x += current.RelativeOffsetX;
+                y += current.RelativeOffsetY;
+            }
+
+            return (x, y);
+        }
+
+        /// <summary>
+        /// What to add to this float's <see cref="FlowLeftEdge"/>/<see cref="FlowTopEdge"/> (which take off its own offset) so that it is in the frame the lines of
+        /// <paramref name="reader"/> are laid out in: the float is drawn with the offsets of every box it lies in, the reader's lines with those of every box
+        /// the reader lies in, and the ones the two share cancel (CSS 2.1 §9.4.3: relative positioning is visual only, so text goes by where the float is in flow).
+        /// Zero while no box in the document is relatively positioned.
+        /// </summary>
+        internal (double X, double Y) FrameDeltaFor(CssBox reader)
+        {
+            if (reader.HtmlContainer is not { HasRelativeOffsets: true }) return (0, 0);
+
+            var above = RelativeChainOffset(includeSelf: false);
+            var readers = reader.RelativeChainOffset(includeSelf: true);
+            return (readers.X - above.X, readers.Y - above.Y);
+        }
+
+        internal double FlowLeftEdgeIn(CssBox reader) => FlowLeftEdge + FrameDeltaFor(reader).X;
+        internal double FlowRightEdgeIn(CssBox reader) => FlowRightEdge + FrameDeltaFor(reader).X;
+        internal double FlowTopEdgeIn(CssBox reader) => FlowTopEdge + FrameDeltaFor(reader).Y;
+        internal double FlowBottomEdgeIn(CssBox reader) => FlowBottomEdge + FrameDeltaFor(reader).Y;
 
 
         /// <summary>

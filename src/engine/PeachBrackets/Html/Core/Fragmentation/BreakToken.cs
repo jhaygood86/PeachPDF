@@ -61,6 +61,10 @@ namespace PeachBrackets.Html.Fragmentation
     /// partially laid out and continues. A break-before child runs its full prologue on resume; a
     /// partially laid-out one must not.
     /// </param>
+    /// <param name="OwesOnlyDeferredFloats">
+    /// whether every in-flow child was placed in the column that made this record and only the floats it deferred (<see cref="CssBox.DeferredFloats"/>) are owed to
+    /// the next one, so the children after the float in the source are not below the break.
+    /// </param>
     /// <param name="ResumeTopOverride">
     /// the document Y to place a break-before child at, when it is not simply the next fragmentainer's
     /// band top. Set by the margin-truncation and keep-with-next paths, which have already computed an
@@ -92,7 +96,8 @@ namespace PeachBrackets.Html.Fragmentation
         bool IsBreakBefore,
         double? ResumeTopOverride,
         bool EscapesNestedFragmentainer = false,
-        bool IsColumnSpanHandoff = false) : BreakToken(Box, ResumeSlotIndex);
+        bool IsColumnSpanHandoff = false,
+        bool OwesOnlyDeferredFloats = false) : BreakToken(Box, ResumeSlotIndex);
 
     /// <summary>
     /// A block container's inline flow stopped part-way through its content.

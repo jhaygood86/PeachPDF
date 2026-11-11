@@ -1093,6 +1093,13 @@ namespace PeachBrackets.Html.Utils
         /// </remarks>
         internal static double GetLowestEarlierFloatTop(CssBox reference)
         {
+            // Inside a multi-column container a Y is measured from the top of its own column, so only the floats of the column the one being placed is in
+            // can be compared with it; one in another column must not hold this one down.
+            // A container holding nothing but floats lays them out in its first column with no fragmentainer, so they all have no column and are
+            // compared with each other.
+            var columnScoped = ClimbReachesMultiColumnContainer(reference);
+            var column = columnScoped ? reference.HtmlContainer?.CurrentFragmentainer?.ColumnKey : null;
+
             var lowest = double.NegativeInfinity;
             var isStartingLevel = true;
 
@@ -1103,13 +1110,7 @@ namespace PeachBrackets.Html.Utils
 
             for (; reference.ParentBox is { } parent; reference = parent)
             {
-                if (!isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null)) break;
-
-                // Inside a multi-column container a Y is measured from the top of its own column, so the tops of floats in different
-                // columns are not comparable and an earlier column's float must not hold this one down. A block that spans columns has
-                // the same trouble, so what was found below this level is dropped too. After the formatting-context stop above: a root
-                // of its own directly inside the container has its own coordinates, and what was found inside it stands.
-                if (parent.EstablishesMultiColumnContext) return double.NegativeInfinity;
+                if (ClimbStopsAt(reference, isStartingLevel)) break;
 
                 isStartingLevel = false;
 
@@ -1117,8 +1118,11 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < index; i++)
                 {
-                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], -frameOffsetY));
+                    lowest = Math.Max(lowest, LowestFloatTopIn(parent.Boxes[i], -frameOffsetY, columnScoped, column));
                 }
+
+                // The container is a formatting context of its own: what lies outside it does not hold a float inside it down.
+                if (parent.EstablishesMultiColumnContext) break;
 
                 frameOffsetY += parent.RelativeOffsetY;
             }
@@ -1126,16 +1130,43 @@ namespace PeachBrackets.Html.Utils
             return lowest;
         }
 
+        /// <summary>Whether the climb of <see cref="GetLowestEarlierFloatTop"/> ends at <paramref name="reference"/>: past a formatting context of its own, which the box being placed is not inside of.</summary>
+        private static bool ClimbStopsAt(CssBox reference, bool isStartingLevel) =>
+            !isStartingLevel && (EstablishesIndependentFormattingContext(reference) || reference.ColumnsBesideFloats is not null);
+
+        /// <summary>Whether the climb of <see cref="GetLowestEarlierFloatTop"/> reaches a multi-column container before it leaves the formatting context.</summary>
+        private static bool ClimbReachesMultiColumnContainer(CssBox reference)
+        {
+            var isStartingLevel = true;
+
+            for (; reference.ParentBox is { } parent; reference = parent)
+            {
+                if (ClimbStopsAt(reference, isStartingLevel)) return false;
+                if (parent.EstablishesMultiColumnContext) return true;
+
+                isStartingLevel = false;
+            }
+
+            return false;
+        }
+
         /// <param name="box">The box to look in.</param>
         /// <param name="offsetAbove">How far the boxes between <paramref name="box"/> and the earlier sibling the search started from have been moved by relative positioning.</param>
-        private static double LowestFloatTopIn(CssBox box, double offsetAbove)
+        /// <param name="columnScoped">Whether only the floats placed in <paramref name="column"/> count (a multi-column container's floats of other columns are not comparable).</param>
+        /// <param name="column">The column the float being placed is in, or null when it is in none.</param>
+        private static double LowestFloatTopIn(CssBox box, double offsetAbove, bool columnScoped, Fragmentation.ColumnAreaKey? column)
         {
             // The static position: a relative offset moves where a float is drawn, not where later floats go (CSS 2.1 §9.4.3). The offset of
             // every box the float lies in has moved it too, since a box's contents are moved along with it.
             var offset = offsetAbove + box.RelativeOffsetY;
 
             // A float is a formatting context of its own, so its contents are not looked into, but it counts itself.
-            if (box.IsFloated) return box.Location.Y - offset - box.ActualMarginTop;
+            if (box.IsFloated)
+            {
+                if (columnScoped && box.HtmlContainer?.ColumnOfFloat(box) != column) return double.NegativeInfinity;
+
+                return box.Location.Y - offset - box.ActualMarginTop;
+            }
 
             if (EstablishesIndependentFormattingContext(box)) return double.NegativeInfinity;
 
@@ -1143,7 +1174,7 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var child in box.Boxes)
             {
-                lowest = Math.Max(lowest, LowestFloatTopIn(child, offset));
+                lowest = Math.Max(lowest, LowestFloatTopIn(child, offset, columnScoped, column));
             }
 
             return lowest;
@@ -1265,6 +1296,7 @@ namespace PeachBrackets.Html.Utils
                     ReferenceWidth = 0,
                     Right = coordinates.MaxRight,
                     LeftFloatsOnly = true,
+                    Reader = box,
                     SeekPastGap = Math.Abs(coordinates.CurrentX - coordinates.Line.ContentLeft) < 0.01
                 };
 
@@ -1275,7 +1307,7 @@ namespace PeachBrackets.Html.Utils
                     break;
                 }
 
-                left = intersectingFloat.FlowRightEdge + intersectingFloat.ActualMarginRight;
+                left = intersectingFloat.FlowRightEdgeIn(box) + intersectingFloat.ActualMarginRight;
                 lastIntersectingFloat = intersectingFloat;
             }
 
@@ -1483,6 +1515,7 @@ namespace PeachBrackets.Html.Utils
         {
             CssBox? narrowest = null;
             var narrowestLeft = double.PositiveInfinity;
+            var reader = reference;
 
             while (reference.ParentBox is not null)
             {
@@ -1507,7 +1540,7 @@ namespace PeachBrackets.Html.Utils
 
                 for (var i = 0; i < currentBoxIdx; i++)
                 {
-                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                    ScanForNarrowestRightFloatBox(reference.ParentBox.Boxes[i], reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
                 }
 
                 reference = reference.ParentBox;
@@ -1516,7 +1549,7 @@ namespace PeachBrackets.Html.Utils
             return narrowest;
         }
 
-        private static void ScanForNarrowestRightFloatBox(CssBox box, double top, double lineLeft, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
+        private static void ScanForNarrowestRightFloatBox(CssBox box, CssBox reader, double top, double lineLeft, ref CssBox? narrowest, ref double narrowestLeft, ref int boxesVisited)
         {
             boxesVisited++;
 
@@ -1524,10 +1557,16 @@ namespace PeachBrackets.Html.Utils
             // reachable in a multi-column container, where the float sits in an earlier column but covers
             // the same block-axis rows as a line in a later one (css-multicol-1 §2: a float belongs to the
             // column box it appears in).
-            if (box.EffectiveFloatSide == Floating.Right && box.Location.Y <= top && top < box.ActualBottom
-                && box.ActualRight + box.ActualMarginRight > lineLeft)
+            // Where the float is in flow, in the frame of the line being laid out (CSS 2.1 section 9.4.3), not where it is drawn.
+            var delta = box.IsFloated ? box.FrameDeltaFor(reader) : default;
+            var flowX = box.FlowLeftEdge + delta.X;
+            var flowTop = box.FlowTopEdge + delta.Y;
+            var flowBottom = box.FlowBottomEdge + delta.Y;
+
+            if (box.EffectiveFloatSide == Floating.Right && flowTop <= top && top < flowBottom
+                && flowX + (box.ActualRight - box.Location.X) + box.ActualMarginRight > lineLeft)
             {
-                var left = box.Location.X - box.ActualMarginLeft;
+                var left = flowX - box.ActualMarginLeft;
 
                 if (left < narrowestLeft)
                 {
@@ -1538,7 +1577,7 @@ namespace PeachBrackets.Html.Utils
 
             foreach (var childBox in box.Boxes)
             {
-                ScanForNarrowestRightFloatBox(childBox, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
+                ScanForNarrowestRightFloatBox(childBox, reader, top, lineLeft, ref narrowest, ref narrowestLeft, ref boxesVisited);
             }
         }
 
@@ -2069,10 +2108,12 @@ namespace PeachBrackets.Html.Utils
             }
             else if (box.IsFloated)
             {
-                // The line flow's lookup does not take the offsets of the boxes a float lies in (its callers measure against the border boxes as laid
-                // out), but a float's own offset is its own, and the text beside it goes by where it is in flow, not by where it is drawn.
-                offsetX += box.RelativeOffsetX;
-                offsetY += box.RelativeOffsetY;
+                // The line flow's lookup measures against the border boxes as laid out, in the frame of the lines it reads for: the text beside a float
+                // goes by where the float is in flow, not by where it is drawn, so its own offset comes off, and so do those of the boxes it lies in that the
+                // reader's lines do not (a float in a relatively positioned box before the reader is drawn with that box's offset, the reader's text is not).
+                var delta = coordinates.Reader is { } reader ? box.FrameDeltaFor(reader) : default;
+                offsetX += box.RelativeOffsetX - delta.X;
+                offsetY += box.RelativeOffsetY - delta.Y;
             }
 
             if (IsFloatIntersecting(coordinates, floatProp, box, offsetX, offsetY))

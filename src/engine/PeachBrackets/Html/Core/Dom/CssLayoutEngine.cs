@@ -628,6 +628,7 @@ namespace PeachBrackets.Html.Dom
             try
             {
                 await FlowBox(g, blockBox, blockBox, 0, startX, coordinates);
+                LowerFloatsDeferredBelowTheLine(coordinates);
             }
             finally
             {
@@ -2748,6 +2749,7 @@ namespace PeachBrackets.Html.Dom
                     // (collision scanning, line wrapping, shrink-to-fit, "floats share the line") reads
                     // EffectiveFloatSide rather than the raw Float value, so it applies to all four the
                     // same way.
+                    box.HtmlContainer?.NoteFloatColumn(box);
                     startY = NotAboveAnEarlierFloat(box, startY);
 
                     if (box.EffectiveFloatSide == Floating.Right) FloatBoxRight(box, containingBox, startX, startY);
@@ -5234,7 +5236,7 @@ namespace PeachBrackets.Html.Dom
             var rightFloat = RightFloatAt(coordinates, box);
             if (rightFloat is not null)
             {
-                actualLimitRight = FloatRightEdge(g, rightFloat, coordinates);
+                actualLimitRight = FloatRightEdge(g, rightFloat, coordinates, box);
             }
 
             if (isRtl)
@@ -5278,7 +5280,7 @@ namespace PeachBrackets.Html.Dom
             var leftFloat = LeftFloatAt(coordinates, box, g);
             if (leftFloat is not null)
             {
-                coordinates.CurrentX = FloatLeftEdge(g, leftFloat, coordinates);
+                coordinates.CurrentX = FloatLeftEdge(g, leftFloat, coordinates, box);
             }
 
             coordinates.CurrentX += leftSpacing + (clonesDecorations
@@ -5442,8 +5444,8 @@ namespace PeachBrackets.Html.Dom
 
             CssBox? InThisColumn(CssBox? floated) =>
                 !inColumn || floated is null
-                || (floated.FlowLeftEdge - floated.ActualMarginLeft < columnRight
-                    && floated.FlowRightEdge + floated.ActualMarginRight > columnLeft)
+                || (floated.FlowLeftEdgeIn(blockBox) - floated.ActualMarginLeft < columnRight
+                    && floated.FlowRightEdgeIn(blockBox) + floated.ActualMarginRight > columnLeft)
                     ? floated
                     : null;
 
@@ -5472,7 +5474,7 @@ namespace PeachBrackets.Html.Dom
             // once the cursor is already beyond it.
             coordinates.CurrentX = baseX;
             var firstLeft = InThisColumn(LeftFloatAt(coordinates, box));
-            var firstEdge = firstLeft is null ? baseX : firstLeft.ActualRight + firstLeft.ActualMarginRight;
+            var firstEdge = firstLeft is null ? baseX : firstLeft.FlowRightEdgeIn(box) + firstLeft.ActualMarginRight;
             var inset = Math.Max(0, arrivedAtX - Math.Max(firstEdge, baseX));
             coordinates.CurrentX = arrivedAtX;
 
@@ -5482,10 +5484,10 @@ namespace PeachBrackets.Html.Dom
                 var leftFloat = InThisColumn(LeftFloatAt(coordinates, box));
                 var rightFloat = InThisColumn(RightFloatAt(coordinates, box));
 
-                var startX = (leftFloat is null ? baseX : leftFloat.FlowRightEdge + leftFloat.ActualMarginRight) + inset;
+                var startX = (leftFloat is null ? baseX : leftFloat.FlowRightEdgeIn(box) + leftFloat.ActualMarginRight) + inset;
                 var limitRight = rightFloat is null
                     ? coordinates.Line.ContentRight
-                    : rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft - rightSpacing;
+                    : rightFloat.FlowLeftEdgeIn(box) - rightFloat.ActualMarginLeft - rightSpacing;
                 if (isRtl)
                 {
                     limitRight -= GetLineTextIndent(blockBox, coordinates.Line.Equals(blockBox.LineBoxes[0]),
@@ -5502,9 +5504,16 @@ namespace PeachBrackets.Html.Dom
                 // margin-bottom would leave the line below the margin edge and still beside the float.
                 var nextY = double.PositiveInfinity;
                 if (leftFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(leftFloat.FlowBottomEdge, leftFloat.FlowBottomEdge + leftFloat.ActualMarginBottom));
+                {
+                    var leftBottom = leftFloat.FlowBottomEdgeIn(box);
+                    nextY = Math.Min(nextY, Math.Max(leftBottom, leftBottom + leftFloat.ActualMarginBottom));
+                }
+
                 if (rightFloat is not null)
-                    nextY = Math.Min(nextY, Math.Max(rightFloat.FlowBottomEdge, rightFloat.FlowBottomEdge + rightFloat.ActualMarginBottom));
+                {
+                    var rightBottom = rightFloat.FlowBottomEdgeIn(box);
+                    nextY = Math.Min(nextY, Math.Max(rightBottom, rightBottom + rightFloat.ActualMarginBottom));
+                }
 
                 // The cursor stays where the first lookup left it unless the line really moves down.
                 if (fits || double.IsPositiveInfinity(nextY) || nextY <= coordinates.CurrentY)
@@ -5525,9 +5534,9 @@ namespace PeachBrackets.Html.Dom
                 // Only for a line of the page-level flow, and a float outside every multi-column container: fragments of a page-level float are told
                 // apart by the page they are on, but the columns of a container share one band, so a float continuing from one column into the next
                 // has no geometry of its own there, and a line deferred out of a column fill takes the container's carry with it.
-                var floatsEndInALaterFragmentainer = !inColumn && (leftFloat is not null || rightFloat is not null)
-                    && (leftFloat is null || ColumnsContainerOf(leftFloat) is null)
-                    && (rightFloat is null || ColumnsContainerOf(rightFloat) is null)
+                var floatsEndInALaterFragmentainer = (leftFloat is not null || rightFloat is not null)
+                    && (leftFloat is null || ColumnsContainerOf(leftFloat) == (inColumn ? ColumnsContainerOf(blockBox) : null))
+                    && (rightFloat is null || ColumnsContainerOf(rightFloat) == (inColumn ? ColumnsContainerOf(blockBox) : null))
                     && !(coordinates.FloatsPlacedOnThisLine?.Contains(leftFloat!) == true || coordinates.FloatsPlacedOnThisLine?.Contains(rightFloat!) == true);
 
                 if (!floatsEndInALaterFragmentainer
@@ -5642,9 +5651,29 @@ namespace PeachBrackets.Html.Dom
         /// content-specific work on either side of that boundary (speculative extent rollback,
         /// line-clamp, first-line remeasurement, float intersection, and leading decorations).
         /// </summary>
+        /// <summary>
+        /// A float that did not fit beside the words of a line goes below it, and the line goes on after the float: it was placed at the bottom of the line as
+        /// it stood, which words after it can make taller. When the line closes, the floats are moved down to where the line ended.
+        /// </summary>
+        private static void LowerFloatsDeferredBelowTheLine(CssLineBoxCoordinates coordinates)
+        {
+            if (coordinates.FloatsDeferredBelowTheLine is not { Count: > 0 } deferred) return;
+
+            coordinates.FloatsDeferredBelowTheLine = null;
+
+            foreach (var floated in deferred)
+            {
+                var lineBottom = coordinates.MaxBottom;
+                var top = floated.Location.Y - floated.ActualMarginTop;
+
+                if (lineBottom > top + DomUtils.FloatFitTolerance) floated.OffsetTop(lineBottom - top);
+            }
+        }
+
         private static void OpenNextLine(CssBox blockBox, CssLineBoxCoordinates coordinates,
             double lineSpacing, double lineStartX, int startOrdinal, bool followsForcedBreak, bool isRtl)
         {
+            LowerFloatsDeferredBelowTheLine(coordinates);
             coordinates.ConsecutiveHyphenatedLines =
                 coordinates.CurrentLineHyphenated ? coordinates.ConsecutiveHyphenatedLines + 1 : 0;
             coordinates.CurrentLineHyphenated = false;
@@ -5736,10 +5765,15 @@ namespace PeachBrackets.Html.Dom
             // they are (CSS 2.1 section 9.5.1 rule 6 puts the float below the line only when it does not fit beside it).
             var floatIsBesideTheLine = b.Location.Y - b.ActualMarginTop < coordinates.MaxBottom - DomUtils.FloatFitTolerance;
 
-            if (!IsAtLineStart(coordinates) && coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping)
-                && ((floatIsBesideTheLine && FloatOverlapsLineWords(b, coordinates.Line)) || overlapsLineBox))
+            // A line that cannot wrap (white-space: nowrap or pre) stays one line: when the float fits beside the words so far the line moves right, as in a
+            // browser, and when it does not the line is left alone and no new one is opened (that drew its words twice or on top of each other).
+            var lineCanWrap = coordinates.Line.Words.All(w => w.OwnerBox.WhiteSpacePermitsWrapping);
+
+            if (!IsAtLineStart(coordinates)
+                && ((floatIsBesideTheLine && (FloatOverlapsLineWords(b, coordinates.Line) || FloatOverlapsMovableAtomics(b, coordinates.Line)))
+                    || (overlapsLineBox && lineCanWrap)))
             {
-                if (overlapsLineBox)
+                if (overlapsLineBox && lineCanWrap)
                 {
                     // A box already placed on the line cannot be moved beside the float as its words can, so a right float over one goes below the
                     // line, and the line stays as it is: what follows the float in the source goes on after the box, as in a browser.
@@ -5753,14 +5787,35 @@ namespace PeachBrackets.Html.Dom
                         word.Left += shift;
                     }
 
+                    // An inline-block with no content of a box's own moves with the words (its text is among them), or by itself when it has none.
+                    foreach (var atomic in MovableAtomics(coordinates.Line))
+                    {
+                        atomic.Location = atomic.Location with { X = atomic.Location.X + shift };
+                        var rectangle = coordinates.Line.Rectangles[atomic];
+                        coordinates.Line.Rectangles[atomic] = new Rect(rectangle.X + shift, rectangle.Y, rectangle.Width, rectangle.Height);
+                    }
+
                     coordinates.CurrentX += shift;
+                }
+                else if (blockBox.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } })
+                {
+                    // Inside a column the float and the line it follows are tied together by the column fill and the crowded-line shift, which a float placed
+                    // below a line that goes on does not fit (a float's own line is what the refusals there name): the line is closed and the float opens the next.
+                    if (lineCanWrap)
+                    {
+                        coordinates.InlineFloats?.Remove(b);
+                        OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
+                            followsForcedBreak: false, isRtl);
+                        await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                    }
                 }
                 else
                 {
+                    // The words cannot be moved beside the float: it goes below the line they are on, which goes on after them, as in a browser. The
+                    // line is not closed, so a line that cannot wrap is left as one too.
                     coordinates.InlineFloats?.Remove(b);
-                    OpenNextLine(blockBox, coordinates, lineSpacing, lineStartX, coordinates.WordOrdinal,
-                        followsForcedBreak: false, isRtl);
-                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates);
+                    await PlaceFloatAtLineTop(g, blockBox, b, coordinates, coordinates.MaxBottom);
+                    (coordinates.FloatsDeferredBelowTheLine ??= []).Add(b);
                 }
             }
 
@@ -5825,6 +5880,33 @@ namespace PeachBrackets.Html.Dom
             return false;
         }
 
+        /// <summary>The atomic inline-blocks on <paramref name="line"/> whose content is in the line's own words (or that have none), which a shift beside a float can move.</summary>
+        private static List<CssBox> MovableAtomics(CssLineBox line)
+        {
+            List<CssBox> found = [];
+
+            foreach (var box in line.Rectangles.Keys)
+            {
+                if (box.DerivedStyle.ActualDisplay == Keywords.InlineBlock && !HasBlockLevelDescendant(box)) found.Add(box);
+            }
+
+            return found;
+        }
+
+        private static bool FloatOverlapsMovableAtomics(CssBox floated, CssLineBox line)
+        {
+            var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
+            var right = floated.FlowRightEdge + floated.ActualMarginRight;
+
+            foreach (var box in MovableAtomics(line))
+            {
+                var rectangle = line.Rectangles[box];
+                if (rectangle.X < right - DomUtils.FloatFitTolerance && rectangle.X + rectangle.Width > left + DomUtils.FloatFitTolerance) return true;
+            }
+
+            return false;
+        }
+
         private static bool FloatOverlapsLineWords(CssBox floated, CssLineBox line)
         {
             var left = floated.FlowLeftEdge - floated.ActualMarginLeft;
@@ -5838,21 +5920,36 @@ namespace PeachBrackets.Html.Dom
         private static double? ShiftLineBesideFloat(CssBox blockBox, CssBox floated, CssLineBoxCoordinates coordinates)
         {
             var line = coordinates.Line;
-            var firstLeft = line.Words.Min(w => w.Left);
-            var lastRight = line.Words.Max(w => w.Right);
+            var firstLeft = double.PositiveInfinity;
+            var lastRight = double.NegativeInfinity;
+
+            foreach (var word in line.Words)
+            {
+                firstLeft = Math.Min(firstLeft, word.Left);
+                lastRight = Math.Max(lastRight, word.Right);
+            }
+
+            foreach (var atomic in MovableAtomics(line))
+            {
+                var rectangle = line.Rectangles[atomic];
+                firstLeft = Math.Min(firstLeft, rectangle.X);
+                lastRight = Math.Max(lastRight, rectangle.X + rectangle.Width);
+            }
+
+            if (double.IsPositiveInfinity(firstLeft)) return null;
 
             if (floated.EffectiveFloatSide == Floating.Right)
             {
                 var move = floated.FlowLeftEdge - floated.ActualMarginLeft - lastRight;
                 var leftFloat = LeftFloatAt(coordinates, blockBox);
-                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.FlowRightEdge + leftFloat.ActualMarginRight;
+                var leftLimit = leftFloat is null ? line.ContentLeft : leftFloat.FlowRightEdgeIn(blockBox) + leftFloat.ActualMarginRight;
 
                 return firstLeft + move >= leftLimit - LineFitTolerance ? move : null;
             }
 
             var shift = floated.FlowRightEdge + floated.ActualMarginRight - firstLeft;
             var rightFloat = RightFloatAt(coordinates, blockBox);
-            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft;
+            var rightLimit = rightFloat is null ? line.ContentRight : rightFloat.FlowLeftEdgeIn(blockBox) - rightFloat.ActualMarginLeft;
 
             return lastRight + shift <= rightLimit + LineFitTolerance ? shift : null;
         }
@@ -6040,11 +6137,11 @@ namespace PeachBrackets.Html.Dom
                 var rightFloat = RightFloatAt(coordinates, block);
 
                 double? bottom = null;
-                if (leftFloat is not null) bottom = leftFloat.ActualBottom + leftFloat.ActualMarginBottom;
-                if (rightFloat is not null) bottom = Math.Max(bottom ?? double.NegativeInfinity, rightFloat.ActualBottom + rightFloat.ActualMarginBottom);
+                if (leftFloat is not null) bottom = leftFloat.FlowBottomEdgeIn(block) + leftFloat.ActualMarginBottom;
+                if (rightFloat is not null) bottom = Math.Max(bottom ?? double.NegativeInfinity, rightFloat.FlowBottomEdgeIn(block) + rightFloat.ActualMarginBottom);
 
-                return (leftFloat is null ? left : Math.Max(left, leftFloat.FlowRightEdge + leftFloat.ActualMarginRight),
-                    rightFloat is null ? right : Math.Min(right, rightFloat.FlowLeftEdge - rightFloat.ActualMarginLeft), bottom);
+                return (leftFloat is null ? left : Math.Max(left, leftFloat.FlowRightEdgeIn(block) + leftFloat.ActualMarginRight),
+                    rightFloat is null ? right : Math.Min(right, rightFloat.FlowLeftEdgeIn(block) - rightFloat.ActualMarginLeft), bottom);
             }
             finally
             {
@@ -6053,12 +6150,12 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>The x a line at <paramref name="coordinates"/> must start at to clear the left float <paramref name="floatBox"/>: its margin edge, or its <c>shape-outside</c> edge over the line's band.</summary>
-        private static double FloatLeftEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
-            FloatShapeOutline.LeftEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentLeft);
+        private static double FloatLeftEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates, CssBox reader) =>
+            FloatShapeOutline.LeftEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentLeft, reader);
 
         /// <summary>The right-float counterpart of <see cref="FloatLeftEdge"/>: the x a line must end at.</summary>
-        private static double FloatRightEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates) =>
-            FloatShapeOutline.RightEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentRight);
+        private static double FloatRightEdge(Canvas g, CssBox floatBox, CssLineBoxCoordinates coordinates, CssBox reader) =>
+            FloatShapeOutline.RightEdge(g, floatBox, coordinates.CurrentY, coordinates.Line.OwnerBox.ActualLineHeight, coordinates.Line.ContentRight, reader);
 
         /// <summary>
         /// The more restrictive of the last LEFT float intersecting the line at <paramref name="reference"/>'s
@@ -6083,10 +6180,20 @@ namespace PeachBrackets.Html.Dom
         {
             var found = LeftFloatAtCore(coordinates, reference);
 
+            // A float of another column does not narrow a line of this one (css-multicol-1 section 2: a float belongs to the column box it appears in):
+            // a float in the next column of an earlier page, still ending below a line's top where a later page starts, found a line of the first column
+            // by its Y alone, and the line was started at the float's far edge, past the container.
+            if (found is not null && reference.HtmlContainer is { CurrentFragmentainer: { HasOwnBand: true } }
+                && (found.FlowRightEdgeIn(reference) + found.ActualMarginRight <= coordinates.Line.ContentLeft
+                    || found.FlowLeftEdgeIn(reference) - found.ActualMarginLeft >= coordinates.Line.ContentRight))
+            {
+                found = null;
+            }
+
             // A float with a shape-outside narrows only the lines its shape reaches, and only until the cursor is past the
             // shape's edge at this line's band: past it, the float no longer collides with the cursor (css-shapes-1 §2.1).
             return found is not null && g is not null && FloatShapeOutline.HasShape(found)
-                   && coordinates.CurrentX >= FloatLeftEdge(g, found, coordinates) - 0.01
+                   && coordinates.CurrentX >= FloatLeftEdge(g, found, coordinates, reference) - 0.01
                 ? null
                 : found;
         }
@@ -6101,8 +6208,8 @@ namespace PeachBrackets.Html.Dom
             if (ancestorFloat is null) return inlineFloat;
             if (inlineFloat is null) return ancestorFloat;
 
-            return inlineFloat.FlowRightEdge + inlineFloat.ActualMarginRight
-                   > ancestorFloat.FlowRightEdge + ancestorFloat.ActualMarginRight
+            return inlineFloat.FlowRightEdgeIn(reference) + inlineFloat.ActualMarginRight
+                   > ancestorFloat.FlowRightEdgeIn(reference) + ancestorFloat.ActualMarginRight
                 ? inlineFloat
                 : ancestorFloat;
         }
@@ -6154,8 +6261,8 @@ namespace PeachBrackets.Html.Dom
             if (ancestorFloat is null) return inlineFloat;
             if (inlineFloat is null) return ancestorFloat;
 
-            return inlineFloat.FlowLeftEdge - inlineFloat.ActualMarginLeft
-                   < ancestorFloat.FlowLeftEdge - ancestorFloat.ActualMarginLeft
+            return inlineFloat.FlowLeftEdgeIn(reference) - inlineFloat.ActualMarginLeft
+                   < ancestorFloat.FlowLeftEdgeIn(reference) - ancestorFloat.ActualMarginLeft
                 ? inlineFloat
                 : ancestorFloat;
         }
@@ -7073,7 +7180,7 @@ namespace PeachBrackets.Html.Dom
 
                 if (lastLeftIntersectingFloatBox is not null)
                 {
-                    coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
+                    coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates, box) + appliedLeftSpacing;
                 }
 
                 // Where b's own content box starts on this line, after every branch above that can
@@ -7221,7 +7328,7 @@ namespace PeachBrackets.Html.Dom
 
                         if (lastRightIntersectingFloatBox is not null)
                         {
-                            var floatEdge = FloatRightEdge(g, lastRightIntersectingFloatBox, coordinates);
+                            var floatEdge = FloatRightEdge(g, lastRightIntersectingFloatBox, coordinates, box);
                             actualLimitRight = floatEdge - rightSpacing;
                             coordinates.Line.FloatLimitRight = Math.Min(coordinates.Line.FloatLimitRight ?? floatEdge, floatEdge);
                         }
@@ -7388,7 +7495,7 @@ namespace PeachBrackets.Html.Dom
 
                             if (lastLeftIntersectingFloatBox is not null)
                             {
-                                coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + leftSpacing;
+                                coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates, b) + leftSpacing;
 
                                 // The line the word wrapped onto may have no room beside that float, as when the float is wider
                                 // than the line; the word goes below it, as it would have had it been about to open the line.
@@ -7490,7 +7597,7 @@ namespace PeachBrackets.Html.Dom
                             var emergencyRightFloat = RightFloatAt(coordinates, box);
                             if (emergencyRightFloat is not null)
                             {
-                                emergencyLimitRight = emergencyRightFloat.FlowLeftEdge
+                                emergencyLimitRight = emergencyRightFloat.FlowLeftEdgeIn(box)
                                                       - emergencyRightFloat.ActualMarginLeft - rightSpacing;
                             }
 
@@ -7527,7 +7634,7 @@ namespace PeachBrackets.Html.Dom
 
                         if (lastLeftIntersectingFloatBox is not null)
                         {
-                            coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates) + appliedLeftSpacing;
+                            coordinates.CurrentX = FloatLeftEdge(g, lastLeftIntersectingFloatBox, coordinates, box) + appliedLeftSpacing;
                         }
 
                         // A preserved tab (CssRect.OriginalText - stable even though CssBox.MeasureWordsSize/

@@ -48,6 +48,28 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ColumnTopFloat_InAContainerHoldingNothingElse_SitsAtTheTopOfItsFirstColumn()
+        {
+            // A multi-column container with no in-flow content arranges nothing into columns, but the float is still in its first column (css-page-floats-3
+            // section 3.1: the page is the reference only when the anchor is not inside a column), so the strip it takes is the column's, not the page's.
+            var (root, _) = await Lay(Document("float: top; float-reference: column", linesBefore: 0, linesAfter: 0));
+            var f = FindById(root, "f")!;
+
+            Assert.Equal(0, f.Location.X, 1);
+            Assert.Equal(ColumnBandTop, f.Location.Y, 1);
+        }
+
+        [Fact]
+        public async Task ColumnBottomFloat_InAContainerHoldingNothingElse_SitsAtTheBottomOfItsFirstColumn()
+        {
+            var (root, _) = await Lay(Document("float: bottom; float-reference: column", linesBefore: 0, linesAfter: 0));
+            var f = FindById(root, "f")!;
+
+            Assert.Equal(0, f.Location.X, 1);
+            Assert.Equal(PageBottom - FloatHeight, f.Location.Y, 1);
+        }
+
+        [Fact]
         public async Task ColumnTopFloat_PushesOnlyItsOwnColumnsContentDown()
         {
             var (root, _) = await Lay(Document("float: top; float-reference: column", linesBefore: 20));

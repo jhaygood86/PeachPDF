@@ -76,6 +76,16 @@ namespace PeachBrackets.Html.Fragmentation
                     inline.Box.DiscardLineBoxesFrom(inline.CompletedLineCount);
                     break;
 
+                // Only the floats a column deferred are owed: every child after the float was placed there and is not laid out again by this pass, so
+                // resetting it would leave its words awaiting a fragmentainer nothing gives them (#2318).
+                case BlockBreakToken { OwesOnlyDeferredFloats: true } owed:
+                    if (owed.Box.DeferredFloats is { } deferred)
+                    {
+                        foreach (var floated in deferred) floated.ResetForRefill();
+                    }
+
+                    break;
+
                 // A break-before names a child the pass lays out from the start, so it is reset like any
                 // other rather than descended into: there is no deeper link to follow.
                 case BlockBreakToken block:

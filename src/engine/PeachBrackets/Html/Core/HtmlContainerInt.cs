@@ -236,6 +236,21 @@ namespace PeachBrackets.Html
             }
         }
 
+        /// <summary>The column each float was last placed in, for the comparison CSS 2.1 §9.5.1 rule 5 makes between the tops of floats of one column (a <c>Y</c> there is measured from the column's own top).</summary>
+        private readonly Dictionary<CssBox, Fragmentation.ColumnAreaKey> FloatColumns = [];
+
+        /// <summary>Records the column <paramref name="box"/> is being placed in, or forgets it when it is placed outside any column. A measurement pass has no fragmentainer and leaves the record alone.</summary>
+        internal void NoteFloatColumn(CssBox box)
+        {
+            if (CurrentFragmentainer is not { } filling) return;
+
+            if (filling.ColumnKey is { } key) FloatColumns[box] = key;
+            else FloatColumns.Remove(box);
+        }
+
+        internal Fragmentation.ColumnAreaKey? ColumnOfFloat(CssBox box) =>
+            FloatColumns.TryGetValue(box, out var key) ? key : null;
+
         /// <summary>
         /// Whether <paramref name="box"/> is a page float that resolves against the column it sits in
         /// (<c>float-reference: column</c>, laid out inside one of <paramref name="columnsBox"/>'s columns)
@@ -860,6 +875,9 @@ namespace PeachBrackets.Html
         /// the common case of a document with no floated content at all.
         /// </summary>
         internal bool HasFloatedBoxes { get; private set; }
+
+        /// <summary>Whether any box has been given a <c>position: relative</c> offset. Monotone: while false, the float lookups skip working out the offsets of the boxes a float lies in (CSS 2.1 §9.4.3).</summary>
+        internal bool HasRelativeOffsets { get; set; }
 
         /// <summary>
         /// How many float-intersection lookups (<see cref="Utils.DomUtils.GetFirstIntersectingFloatBox"/>)
@@ -1599,6 +1617,7 @@ namespace PeachBrackets.Html
             TopFloatAreaHeightsByColumn = [];
             BottomFloatAreaHeightsByColumn = [];
             PageFloatColumns.Clear();
+            FloatColumns.Clear();
             // Keyed by CssBox, same reference-leak reason as the footnote dictionaries above.
             PageFloatPlacements = [];
             // Keyed by CssBox/CssBoxFootnoteCall, same reason ClearBlankSlotReservations() below is -
@@ -2098,6 +2117,10 @@ namespace PeachBrackets.Html
 
         private async ValueTask PerformLayoutOnePass(Canvas g)
         {
+            // The column each float was placed in is a fact of one pass: a float that lands in another column in the next pass, or in none during a measurement
+            // pass, must not be compared against the column an earlier pass put it in (CSS 2.1 section 9.5.1 rule 5 per column).
+            FloatColumns.Clear();
+
             ActualSize = Size.Empty;
             FloatScanCalls = 0;
             FloatScanBoxVisits = 0;

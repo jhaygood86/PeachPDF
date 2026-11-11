@@ -221,9 +221,9 @@ public class FloatAgainstRelativelyPositionedBlockersTests
     }
 
     // The line flow reads the same blockers: text after an offset box that holds a float is neither stacked nor pushed off the page, whatever
-    // the offset (a box hidden by a large negative `left` is a common idiom). The text is placed against the float's drawn position, which
-    // is a known difference from a browser (it flows around the float where it is in the flow), so the paragraph is compared with one that
-    // has no float at all and one around a float 45pt tall: it is at least as tall as the first and not taller than the float can make it.
+    // the offset (a box hidden by a large negative `left` is a common idiom). The text flows around the float where it is in the flow (CSS 2.1
+    // section 9.4.3), as in a browser, so the paragraph is compared with one that has no float at all and one around a float 45pt tall: it is
+    // at least as tall as the first and not taller than the float can make it.
     // How many lines the text wraps to depends on the font, so the numbers are not compared with the same layout without the offset.
     [Theory]
     [InlineData("left:-9999px")]

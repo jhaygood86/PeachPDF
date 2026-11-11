@@ -1,4 +1,5 @@
 ﻿using System;
+using PeachBrackets.Html.Dom;
 
 namespace PeachBrackets.Html.Entities
 {
@@ -72,6 +73,9 @@ namespace PeachBrackets.Html.Entities
         /// exactly (two floats leaving no room between them) pushed the cursor across it to its far edge.
         /// </summary>
         public bool LeftFloatsOnly { get; init; }
+
+        /// <summary>The box whose lines a <see cref="LeftFloatsOnly"/> lookup is made for: the frame the floats found are compared in.</summary>
+        public CssBox? Reader { get; init; }
 
         /// <summary>
         /// Set by the line-flow cursor lookup when the cursor is at the line's start (kept on across the whole chain of hops): a left float that

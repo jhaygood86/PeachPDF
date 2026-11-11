@@ -80,17 +80,18 @@ namespace PeachPDF.Tests.Integration
             Assert.Single(pages);
         }
 
-        // #2320: a float inside a grid inside a table cell. The column top is not where the grid item's content starts, so the paragraph after
-        // the float is left where the grid placed it; it was moved to the column top, away from its box, and its words drawn on no page.
+        // #2320: a float inside a grid inside a table cell, the reduced document of the issue. The paragraph after the float used to be painted twice (its
+        // words on two pages), and its background on two more pages as a rectangle a thousand points tall, because the grid item's content that the next page
+        // continues was still held by the page before it. It is drawn once, on the page the column continues on, and its background is the size of its text.
         [Fact]
-        public async Task TheParagraphAfterAFloatInAGridInATableCell_IsDrawn()
+        public async Task TheParagraphAfterAFloatInAGridInATableCell_IsDrawnOnceWhereTheColumnContinues()
         {
             var pages = await PagesWithMarkerAsync(
                 "@page { size: 300pt 250pt; margin: 20pt } body { margin: 0; font: 10pt 'FAMILY' }",
-                $"<div style='columns:3'><table><tbody><tr><td><div style='display:grid'><div><div style='float:right'><p>{Words(757, 12)}</p><p>{Words(769, 35)}</p><p>{Words(804, 40)}</p></div><p style='background:#f00'>w9000_848</p></div></div></td></tr></tbody></table></div>",
-                2);
+                "<div style='columns:3'><table style=''><tbody><tr><td style=''><div style='display:grid'><div style='border:1pt dotted #888'><div style='float:right'><p style=''> w6045_757 w6045_758 w6045_759 w6045_760 w6045_761 w6045_762 w6045_763  w6045_764 w6045_765 w6045_766 w6045_767 w6045_768 </p><p style=''> w6045_769 w6045_770 w6045_771 w6045_772 w6045_773 w6045_774 w6045_775 w6045_776 w6045_777 w6045_778 w6045_779 w6045_780  w6045_781  w6045_782 w6045_783 w6045_784 w6045_785 w6045_786 w6045_787 w6045_788 w6045_789  w6045_790 w6045_791 w6045_792 w6045_793 w6045_794 w6045_795 w6045_796 w6045_797 w6045_798 w6045_799 w6045_800 w6045_801 w6045_802 w6045_803 </p><p style='margin:0 0 3pt'> w6045_804 w6045_805 w6045_806  w6045_807 w6045_808 w6045_809 w6045_810  w6045_811 w6045_812  w6045_815 w6045_816 w6045_817 w6045_818 w6045_819 w6045_820 w6045_821 w6045_822 w6045_823 w6045_824 w6045_825 w6045_826 w6045_827 w6045_828  w6045_829  w6045_830 w6045_831 w6045_832 w6045_833 w6045_834 w6045_835 w6045_836 w6045_837  w6045_838 w6045_839 w6045_840  w6045_841 w6045_842 w6045_843  w6045_844 </p></div><p style='background:#f00'> w6045_848  w6045_872 </p></div></div></td></tr></tbody></table></div>",
+                7);
 
-            Assert.Single(pages);
+            Assert.Equal([2], pages);
         }
     }
 }

@@ -93,10 +93,7 @@ public class MulticolContentLossTests
         var (lost, doubled) = PaintedWords.Diff(html, painted);
 
         Assert.True(lost.Count == 0, $"{name}: lost {string.Join(' ', lost)}");
-
-        // The table-cell document draws one word twice on main as well (the cell is placed again after the columns settle): a separate
-        // defect from the loss this row guards.
-        if (!name.EndsWith("-doubles")) Assert.True(doubled.Count == 0, $"{name}: doubled {string.Join(' ', doubled)}");
+        Assert.True(doubled.Count == 0, $"{name}: doubled {string.Join(' ', doubled)}");
     }
 
     // #1554: a float wider than its column, in a multi-column container inside another one. The lines beside it have

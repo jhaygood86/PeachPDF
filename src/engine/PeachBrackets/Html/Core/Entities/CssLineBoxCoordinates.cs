@@ -162,6 +162,9 @@ namespace PeachBrackets.Html.Entities
         /// </summary>
         internal List<CssBox>? FloatsPlacedOnThisLine { get; set; }
 
+        /// <summary>The floats of the line in progress that did not fit beside its words and were placed below it, which move down if the line grows (<see cref="CssLayoutEngine.FlowBox"/>).</summary>
+        internal List<CssBox>? FloatsDeferredBelowTheLine { get; set; }
+
         /// <summary>
         /// The floats this pass placed on the line it last closed. When the flow stops right after that line they are the floats
         /// that follow its last word: placed in the fragmentainer being left, though their position in the flow is that of the

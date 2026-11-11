@@ -30,27 +30,30 @@ namespace PeachBrackets.Html.Utils
         /// right edge of its margin box, or of its shape when it has one. When the shape does not reach the band the line is
         /// not narrowed, and <paramref name="clearX"/> (the line's own start) is returned.
         /// </summary>
-        public static double LeftEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX)
+        public static double LeftEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX, CssBox? reader = null)
         {
-            var marginRight = floatBox.FlowRightEdge + floatBox.ActualMarginRight;
+            // In the frame of the lines of reader, when given: where the float is in flow, not drawn (CSS 2.1 section 9.4.3). A shape is not moved vertically.
+            var dx = reader is null ? 0 : floatBox.FrameDeltaFor(reader).X;
+            var marginRight = floatBox.FlowRightEdge + dx + floatBox.ActualMarginRight;
             if (g is null || !HasShape(floatBox)) return marginRight;
 
             // No outline at all (an image that has not loaded, a shape that does not resolve) leaves the rectangle; an outline that
             // misses this band leaves the line unnarrowed.
             if (Resolve(g, floatBox) is not { } outline) return marginRight;
             var edge = outline.Extent(top, Math.Max(height, 0.01), left: true);
-            return edge is null ? clearX : Math.Min(edge.Value, marginRight);
+            return edge is null ? clearX : Math.Min(edge.Value + dx, marginRight);
         }
 
         /// <summary>The mirror of <see cref="LeftEdge"/> for a right float: the x a line must end at (<paramref name="clearX"/> when the shape misses the band).</summary>
-        public static double RightEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX)
+        public static double RightEdge(Canvas? g, CssBox floatBox, double top, double height, double clearX, CssBox? reader = null)
         {
-            var marginLeft = floatBox.FlowLeftEdge - floatBox.ActualMarginLeft;
+            var dx = reader is null ? 0 : floatBox.FrameDeltaFor(reader).X;
+            var marginLeft = floatBox.FlowLeftEdge + dx - floatBox.ActualMarginLeft;
             if (g is null || !HasShape(floatBox)) return marginLeft;
 
             if (Resolve(g, floatBox) is not { } outline) return marginLeft;
             var edge = outline.Extent(top, Math.Max(height, 0.01), left: false);
-            return edge is null ? clearX : Math.Max(edge.Value, marginLeft);
+            return edge is null ? clearX : Math.Max(edge.Value + dx, marginLeft);
         }
 
         private static Outline? Resolve(Canvas g, CssBox floatBox)

@@ -121,8 +121,30 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 var contentLeft = columnsBox.ClientLeft;
-                var beside = CssLayoutEngine.ExtentBesideFloats(columnsBox, columnsBox.ClientTop, contentLeft, contentLeft + containerWidth);
+                var (besideLeft, besideRight, floatsBottom) = CssLayoutEngine.ExtentBesideFloatsWithBottom(columnsBox, columnsBox.ClientTop, contentLeft, contentLeft + containerWidth);
+                var beside = (Left: besideLeft, Right: besideRight);
                 columnsBox.ColumnsBesideFloats = null;
+
+                // No room beside the floats at all: a box that establishes a formatting context may not overlap them and goes below them (CSS 2.1 section 9.5).
+                // Laid over them, the lines of its columns were pushed past the floats' far edge, past the container, where they were clipped (#2318).
+                if (resume is null
+                    && beside.Right - beside.Left < MinimumRoomBesideAFloat
+                    && floatsBottom is { } clearOfFloats
+                    && clearOfFloats > columnsBox.Location.Y + 0.5
+                    // Only while it stays on the page it was placed on: the parent decided the page this container starts on, and a move across the foot
+                    // would leave its content to no fragmentainer.
+                    && (!htmlContainer.HasRealPageGrid
+                        || (htmlContainer.SlotStartingAt(clearOfFloats) == htmlContainer.SlotStartingAt(columnsBox.Location.Y)
+                            && clearOfFloats < htmlContainer.PageBottomOf(htmlContainer.SlotStartingAt(columnsBox.Location.Y))
+                                - htmlContainer.TotalBandEndReservationFor(htmlContainer.SlotStartingAt(columnsBox.Location.Y)))))
+                {
+                    columnsBox.Location = columnsBox.Location with { Y = clearOfFloats };
+                    boxTop = columnsBox.ClientTop;
+                    containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox, boxTop);
+                    contentLeft = columnsBox.ClientLeft;
+                    (besideLeft, besideRight, _) = CssLayoutEngine.ExtentBesideFloatsWithBottom(columnsBox, boxTop, contentLeft, contentLeft + containerWidth);
+                    beside = (Left: besideLeft, Right: besideRight);
+                }
 
                 if ((beside.Left > contentLeft || beside.Right < contentLeft + containerWidth)
                     && beside.Right - beside.Left >= MinimumRoomBesideAFloat
@@ -465,6 +487,28 @@ namespace PeachBrackets.Html.Dom
                 var nestedInAColumn = htmlContainer?.CurrentFragmentainer is { HasOwnBand: true };
                 var outerColumn = nestedInAColumn ? htmlContainer!.DetachFragmentainer() : null;
 
+                // A page float that takes the column it is in for its reference (`float-reference: column`) needs that column to exist: with nothing to arrange
+                // into columns there is no fill to make one, so it falls back to the page, which css-page-floats-3 section 3.1 allows only for an anchor that is not
+                // inside a column. The first column, the one the float is in, is made here the way a fill makes it (#1356).
+                Fragmentation.FragmentainerContext? firstColumn = null;
+                Fragmentation.FragmentainerContext? previousContext = null;
+
+                if (!nestedInAColumn && htmlContainer is { HasRealPageGrid: true }
+                    && columnsBox.Boxes.Any(b => b.IsPageFloated && b.FloatReference.Value == PeachBrackets.Css.FloatReference.Column))
+                {
+                    var boxTop = columnsBox.ClientTop;
+                    var slot = htmlContainer.SlotStartingAt(boxTop);
+                    var bandBottom = Math.Max(boxTop, htmlContainer.PageBottomOf(slot) - htmlContainer.TotalBandEndReservationFor(slot));
+                    firstColumn = new Fragmentation.FragmentainerContext(htmlContainer, columnsBox, slot, (boxTop, bandBottom), inheritsSuppression: true);
+                    firstColumn.ColumnKey = Fragmentation.ColumnAreaKey.For(columnsBox, slot, 0, columnLeft);
+
+                    if (htmlContainer.ColumnPageFloatTopInsetFor(firstColumn.ColumnKey.Value) is > 0 and var topInset) firstColumn.ReserveBandStart(slot, topInset);
+
+                    htmlContainer.RecordColumnFragmentainer(new Fragmentation.ColumnFragmentainerRecord(
+                        columnsBox, slot, 0, columnLeft, columnLeft + columnWidth, boxTop, bandBottom));
+                    previousContext = htmlContainer.EnterNestedFragmentainer(firstColumn);
+                }
+
                 try
                 {
                     foreach (var childBox in columnsBox.Boxes.Where(IsLaidOutHere))
@@ -474,6 +518,8 @@ namespace PeachBrackets.Html.Dom
                 }
                 finally
                 {
+                    if (firstColumn is not null) htmlContainer!.LeaveNestedFragmentainer(previousContext);
+
                     if (nestedInAColumn) htmlContainer!.RestoreFragmentainer(outerColumn);
 
                     PlaceColumn(columnsBox, columnLeft, containerWidth);
@@ -860,6 +906,13 @@ namespace PeachBrackets.Html.Dom
                 var columnBottom = boxTop;
 
                 var columnStart = FirstChildIndexOf(carry, children);
+
+                // A column that only lays out the floats an earlier one deferred (every in-flow child was placed there) holds none of the children: the ones
+                // after the float in the source keep that column's geometry, and capturing them here put the same boxes in two instances (#2318).
+                if (carry is BlockBreakToken { OwesOnlyDeferredFloats: true })
+                {
+                    columnStart = children.Count;
+                }
                 var columnInlineLeft = columnLeft + col * pitch;
                 IReadOnlyList<CssBox> markedAtColumnStart = [];
 
@@ -1115,7 +1168,8 @@ namespace PeachBrackets.Html.Dom
                     {
                         var from = link.IsBreakBefore ? link.ResumeChildIndex : link.ResumeChildIndex + 1;
 
-                        beyond.AddFrom(link.Box.Boxes, from);
+                        // Only deferred floats are owed (every child was placed in this column): what follows the float in the source is here, not beyond.
+                        if (!link.OwesOnlyDeferredFloats) beyond.AddFrom(link.Box.Boxes, from);
 
                         // Floats the column could not hold, laid out here and again by the next column, which is the only one that
                         // holds them.
@@ -1163,6 +1217,12 @@ namespace PeachBrackets.Html.Dom
                         return;
 
                     default:
+                        // A grid's or flexbox's items are parallel flows like a table's cells, each continuing from the record it stopped at.
+                        foreach (var continuation in token.FanOutContinuations)
+                        {
+                            AddBoxesBeyond(continuation, beyond);
+                        }
+
                         return;
                 }
             }
@@ -1280,6 +1340,10 @@ namespace PeachBrackets.Html.Dom
         private static int PlacedBelow(BreakToken? token, List<CssBox> children)
         {
             if (token is not BlockBreakToken block) return children.Count;
+
+            // Every child was placed in this column and only a float deferred to the next one is owed (the record names that float alone, and a float is not
+            // among the in-flow children): the children after the float in the source are here too, not below the break (#2318).
+            if (block.OwesOnlyDeferredFloats) return children.Count;
 
             var boundary = block.Box.Boxes[block.ResumeChildIndex];
             var index = children.IndexOf(boundary);
