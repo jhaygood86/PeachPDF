@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -18,7 +19,7 @@ internal static class PhaseTimings
 
     private sealed record Request(string Url, string Cache, string Status, double Milliseconds);
 
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly Dictionary<string, Total> Totals = [];
     private static readonly List<Request> Requests = [];
     private static bool _started;

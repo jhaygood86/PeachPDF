@@ -1,3 +1,4 @@
+using System.Threading;
 using Android.Provider;
 using Android.Views;
 using PeachBrackets.Android.Logic;
@@ -40,7 +41,7 @@ public sealed partial class HtmlView
     public event EventHandler<HtmlAnimationEventsEventArgs>? AnimationEvents;
 
     // The document is stepped on the main thread and painted on the graphics thread, one at a time.
-    private readonly object _documentLock = new();
+    private readonly Lock _documentLock = new();
 
     private bool _animating;
     private bool _stepping;

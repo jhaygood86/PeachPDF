@@ -247,7 +247,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 }
             });
 
-            Monitor.Enter(face.SyncRoot);
+            face.SyncRoot.Enter();
             try
             {
                 thread.Start();
@@ -257,7 +257,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             }
             finally
             {
-                Monitor.Exit(face.SyncRoot);
+                face.SyncRoot.Exit();
             }
 
             Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "reader did not resume after the monitor was released");

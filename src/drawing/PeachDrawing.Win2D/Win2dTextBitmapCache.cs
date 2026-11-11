@@ -1,5 +1,6 @@
 using Microsoft.Graphics.Canvas;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Win2D;
@@ -18,7 +19,7 @@ internal sealed class Win2dTextBitmapCache(Win2dResourceCounts counts)
 
     private sealed record Entry(Key Key, CanvasBitmap Bitmap, long Bytes);
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<Key, LinkedListNode<Entry>> _entries = [];
     private readonly LinkedList<Entry> _order = new();
     private object? _device;

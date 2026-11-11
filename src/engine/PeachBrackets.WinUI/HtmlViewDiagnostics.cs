@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Diagnostics;
 
@@ -10,7 +11,7 @@ namespace PeachBrackets.WinUI;
 /// </summary>
 internal static class HtmlViewDiagnostics
 {
-    private static readonly object Gate = new();
+    private static readonly Lock Gate = new();
     private static readonly List<(double Milliseconds, double Pixels, int Regions, long AllocatedBytes)> Events = [];
 
     private static readonly List<(double IntervalMs, double AdvanceMs, int Regions, long AllocatedBytes)> AnimationFrames = [];

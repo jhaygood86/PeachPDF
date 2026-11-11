@@ -2,6 +2,7 @@ using Microsoft.Graphics.Canvas.Text;
 using PeachDrawing.Core;
 using PeachDrawing.Text;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 
@@ -15,7 +16,7 @@ namespace PeachDrawing.Win2D;
 internal sealed class DirectWriteFonts : IDisposable
 {
     private readonly Win2dRenderContext _context;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<string, List<AddedFace>> _added = new(StringComparer.OrdinalIgnoreCase);
     private string? _folder;
     private bool _disposed;

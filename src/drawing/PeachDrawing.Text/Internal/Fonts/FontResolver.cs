@@ -811,8 +811,8 @@ namespace PeachDrawing.Text.Internal.Fonts
             double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
 
             var values = faces.Select(Measure).Distinct().ToList();
-            var above = values.Where(v => v > target).OrderBy(v => v);
-            var below = values.Where(v => v > 0 && v < target).OrderByDescending(v => v);
+            var above = values.Where(v => v > target).Order();
+            var below = values.Where(v => v > 0 && v < target).OrderDescending();
             var leaning = (target >= ItalicAsObliqueAngle ? above.Concat(below) : below.Concat(above)).ToList();
             if (leaning.Count == 0)
                 return [];
@@ -830,7 +830,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         {
             var mirror = angle < 0 ? -1.0 : 1.0;
             double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
-            var chosen = faces.Select(Measure).Where(v => v <= 0).OrderByDescending(v => v).First();
+            var chosen = faces.Select(Measure).Where(v => v <= 0).OrderDescending().First();
 
             return faces.Where(f => Measure(f) == chosen).ToList();
         }
@@ -1112,12 +1112,12 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (target <= WidthClasses.Normal)
                 {
-                    return availableWidths.Where(s => s < target).OrderByDescending(s => s)
-                        .Concat(availableWidths.Where(s => s > target).OrderBy(s => s));
+                    return availableWidths.Where(s => s < target).OrderDescending()
+                        .Concat(availableWidths.Where(s => s > target).Order());
                 }
 
-                return availableWidths.Where(s => s > target).OrderBy(s => s)
-                    .Concat(availableWidths.Where(s => s < target).OrderByDescending(s => s));
+                return availableWidths.Where(s => s > target).Order()
+                    .Concat(availableWidths.Where(s => s < target).OrderDescending());
             }
 
             return Search().First();
@@ -1140,19 +1140,19 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (target is >= 400 and <= 500)
                 {
-                    return availableWeights.Where(w => w >= target && w <= 500).OrderBy(w => w)
-                        .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w))
-                        .Concat(availableWeights.Where(w => w > 500).OrderBy(w => w));
+                    return availableWeights.Where(w => w >= target && w <= 500).Order()
+                        .Concat(availableWeights.Where(w => w < target).OrderDescending())
+                        .Concat(availableWeights.Where(w => w > 500).Order());
                 }
 
                 if (target < 400)
                 {
-                    return availableWeights.Where(w => w < target).OrderByDescending(w => w)
-                        .Concat(availableWeights.Where(w => w > target).OrderBy(w => w));
+                    return availableWeights.Where(w => w < target).OrderDescending()
+                        .Concat(availableWeights.Where(w => w > target).Order());
                 }
 
-                return availableWeights.Where(w => w > target).OrderBy(w => w)
-                    .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w));
+                return availableWeights.Where(w => w > target).Order()
+                    .Concat(availableWeights.Where(w => w < target).OrderDescending());
             }
 
             return Search().First();

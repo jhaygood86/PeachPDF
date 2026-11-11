@@ -32,6 +32,7 @@
 #define VERBOSE_
 
 using System;
+using System.Threading;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Buffers.Binary;
@@ -700,7 +701,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// result without throwing. Reentrant (a plain object + `lock`), since a paint/lookup read can
         /// recurse into another read of the same fontface on the same thread.
         /// </summary>
-        internal readonly object SyncRoot = new();
+        internal readonly Lock SyncRoot = new();
 
         /// <summary>
         /// The variation tables of a variable font, parsed once on first use, or <see langword="null"/> for a font that is not variable.

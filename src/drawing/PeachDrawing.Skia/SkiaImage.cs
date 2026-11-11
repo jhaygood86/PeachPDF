@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using PeachImage;
 using SkiaSharp;
 using System;
+using System.Threading;
 using System.IO;
 
 namespace PeachDrawing.Skia;
@@ -16,7 +17,7 @@ internal sealed class SkiaImage : PeachDrawing.Core.Image
 {
     private readonly byte[]? _premultipliedRgba;
     private readonly SkiaResourceCounts _counts;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private SKImage? _raster;
     private SKImage? _texture;
     private GRContext? _textureContext;

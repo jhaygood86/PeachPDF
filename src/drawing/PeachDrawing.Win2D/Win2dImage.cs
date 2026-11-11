@@ -2,6 +2,7 @@ using Microsoft.Graphics.Canvas;
 using PeachDrawing.Core;
 using PeachImage;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -21,7 +22,7 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
 {
     private byte[]? _premultipliedRgba;
     private readonly byte[]? _encoded;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private CanvasBitmap? _bitmap;
     private CanvasDevice? _bitmapDevice;
     private bool _disposed;

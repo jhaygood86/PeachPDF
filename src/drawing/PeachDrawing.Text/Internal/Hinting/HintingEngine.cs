@@ -64,7 +64,7 @@ internal sealed class HintingEngine
     // for another's if an engine is ever shared.
     private readonly string? _variationKey;
 
-    private readonly object _faceLock = new();
+    private readonly Lock _faceLock = new();
     private TtFace? _face;
     private bool _faceRead; // written last, with release semantics, so a reader that sees it true sees _face
 

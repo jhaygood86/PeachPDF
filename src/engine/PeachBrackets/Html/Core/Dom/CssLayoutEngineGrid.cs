@@ -505,7 +505,7 @@ namespace PeachBrackets.Html.Dom
                 .ToList();
 
             var endingAt = BoxesByEndRow(placements);
-            var endRows = endingAt.Keys.OrderBy(row => row).ToList();
+            var endRows = endingAt.Keys.Order().ToList();
 
             var groups = new List<LineGroup>(rows.Count);
 

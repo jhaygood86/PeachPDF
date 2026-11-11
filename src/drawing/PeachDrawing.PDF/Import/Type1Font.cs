@@ -449,7 +449,7 @@ internal sealed class Type1Font
         var order = new List<string> { ".notdef" };
         var codes = new List<int>();
         var seen = new HashSet<string> { ".notdef" };
-        foreach (var code in encoding.Keys.OrderBy(k => k))
+        foreach (var code in encoding.Keys.Order())
         {
             var glyph = encoding[code];
             if (!_charStrings.ContainsKey(glyph) || !seen.Add(glyph)) continue;

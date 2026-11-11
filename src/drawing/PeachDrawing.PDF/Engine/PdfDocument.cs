@@ -554,67 +554,71 @@ internal sealed class PdfDocument : PdfObject, IDisposable
     {
         var images = ImageInfo.FindAll(this);
 
-        var mapHashcodeToMd5 = new Dictionary<int, string>();
-        var mapMd5ToPdfItem = new Dictionary<string, PdfItem>();
+        var mapXObjectToIdentity = new Dictionary<PdfDictionary, ImageIdentity>(ReferenceEqualityComparer.Instance);
+        var mapIdentityToPdfItem = new Dictionary<ImageIdentity, PdfItem>();
 
-        // Calculate MD5 for each image XObject and build lookups for all images.
+        // Work out an identity for each image XObject and build lookups for all images.
         foreach (ImageInfo img in images)
         {
-            mapHashcodeToMd5[img.XObject.GetHashCode()] = img.XObjectMD5;
-            mapMd5ToPdfItem[img.XObjectMD5] = img.Item.Value;
+            mapXObjectToIdentity[img.XObject] = img.Identity;
+            mapIdentityToPdfItem[img.Identity] = img.Item.Value;
         }
 
-        // Set the PdfItem for each image to the one chosen for the MD5.
+        // Set the PdfItem for each image to the one chosen for its identity.
         foreach (ImageInfo img in images)
         {
-            string md5 = mapHashcodeToMd5[img.XObject.GetHashCode()];
-            img.XObjects.Elements[img.Item.Key] = mapMd5ToPdfItem[md5];
+            img.XObjects.Elements[img.Item.Key] = mapIdentityToPdfItem[mapXObjectToIdentity[img.XObject]];
         }
     }
 
-    internal class ImageInfo
+    /// <summary>
+    /// Everything that affects how an image XObject renders: its content-stream bytes, the dictionary attributes
+    /// that give those bytes meaning (/ColorSpace, /Width, /Height, /BitsPerComponent, /Decode, /Interpolate - the
+    /// same attributes <see cref="Advanced.PdfImageTable"/>'s own embed-time selector treats as part of an image's
+    /// identity) and any /SMask (recursively, since the mask is itself an image XObject that can differ the same
+    /// way). Two images are safe to consolidate only when the whole identity matches - matching content stream
+    /// bytes alone is not enough, since e.g. the same base color stream with and without an /SMask must not be
+    /// merged, or one page silently loses (or gains) transparency.
+    /// <para>
+    /// Equality compares the bytes themselves rather than a digest of them, so two different images can never be
+    /// taken for one another, and nothing here depends on a hash algorithm the host may not permit.
+    /// </para>
+    /// </summary>
+    internal sealed class ImageIdentity : IEquatable<ImageIdentity>
     {
-        public PdfDictionary XObjects { get; }
-        public KeyValuePair<string, PdfItem> Item { get; }
-        public PdfDictionary XObject { get; }
-        public string XObjectMD5 { get; }
+        // How many bytes at each end of a stream feed the bucket hash; equality still compares every byte.
+        private const int HashedBytes = 64;
 
-        private static readonly MD5 Hasher = MD5.Create();
+        private readonly byte[] _data;
+        private readonly string _attributes;
+        private readonly List<byte[]> _referencedStreams;
+        private readonly ImageIdentity? _softMask;
 
-        public ImageInfo(PdfDictionary xObjects, KeyValuePair<string, PdfItem> item, PdfDictionary xObject)
+        private ImageIdentity(byte[] data, string attributes, List<byte[]> referencedStreams, ImageIdentity? softMask)
         {
-            XObjects = xObjects;
-            Item = item;
-            XObject = xObject;
-            XObjectMD5 = ComputeIdentity(xObject);
+            _data = data;
+            _attributes = attributes;
+            _referencedStreams = referencedStreams;
+            _softMask = softMask;
         }
 
-        /// <summary>
-        /// Computes an identity signature for an image XObject covering everything that affects how it
-        /// actually renders: the content-stream bytes plus the dictionary attributes that give those
-        /// bytes meaning (/ColorSpace, /Width, /Height, /BitsPerComponent, /Decode, /Interpolate - the
-        /// same attribute <see cref="Advanced.PdfImageTable"/>'s own embed-time selector already
-        /// treats as part of an image's identity) and any /SMask (recursively, since the mask is itself
-        /// an image XObject that can differ the same way). Two images are safe to consolidate only when
-        /// this whole signature matches - matching content stream bytes alone is not enough, since e.g.
-        /// the same base color stream with and without an /SMask must not be merged, or one page
-        /// silently loses (or gains) transparency.
-        /// </summary>
-        private static string ComputeIdentity(PdfDictionary xObject)
+        public static ImageIdentity Of(PdfDictionary xObject)
         {
+            var referencedStreams = new List<byte[]>();
             var sb = new StringBuilder();
-            sb.Append(ComputeMD5(xObject.Stream?.Value ?? []));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/ColorSpace"]));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Width"]));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Height"]));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/BitsPerComponent"]));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Decode"]));
-            sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"]));
+            sb.Append(DescribeItem(xObject.Elements["/ColorSpace"], referencedStreams));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Width"], referencedStreams));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Height"], referencedStreams));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/BitsPerComponent"], referencedStreams));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Decode"], referencedStreams));
+            sb.Append('|').Append(DescribeItem(xObject.Elements["/Interpolate"], referencedStreams));
 
             var softMask = xObject.Elements.GetDictionary("/SMask");
-            sb.Append('|').Append(softMask is not null ? ComputeIdentity(softMask) : "«none»");
-
-            return sb.ToString();
+            return new ImageIdentity(
+                xObject.Stream?.Value ?? [],
+                sb.ToString(),
+                referencedStreams,
+                softMask is not null ? Of(softMask) : null);
         }
 
         /// <summary>
@@ -623,25 +627,76 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         /// whenever the referenced content differs. Dereferences through PdfReference and recurses into
         /// array elements and referenced streams so two distinct objects that describe the same content
         /// (e.g. two indirect but byte-identical ICC profiles) still compare equal, rather than being
-        /// compared by object identity.
+        /// compared by object identity. A referenced stream's bytes are what matters for identity, not
+        /// which object number holds them, so they are collected into <paramref name="streams"/> in the
+        /// order met and stood for in the text by their position there.
         /// </summary>
-        private static string DescribeItem(PdfItem? item)
+        private static string DescribeItem(PdfItem? item, List<byte[]> streams)
         {
             switch (item)
             {
                 case null:
                     return "«null»";
                 case PdfReference reference:
-                    return DescribeItem(reference.Value);
+                    return DescribeItem(reference.Value, streams);
                 case PdfArray array:
-                    return "[" + string.Join(",", array.Select(DescribeItem)) + "]";
+                    return "[" + string.Join(",", array.Select(element => DescribeItem(element, streams))) + "]";
                 case PdfDictionary dict:
-                    // A referenced stream object (e.g. an /ICCBased profile) - its bytes are what
-                    // matters for identity, not which object number holds them.
-                    return dict.Stream is not null ? ComputeMD5(dict.Stream.Value) : "«dict»";
+                    if (dict.Stream is null)
+                        return "«dict»";
+                    streams.Add(dict.Stream.Value);
+                    return "«stream#" + (streams.Count - 1) + "»";
                 default:
                     return item.ToString() ?? "«null»";
             }
+        }
+
+        public bool Equals(ImageIdentity? other)
+        {
+            if (ReferenceEquals(this, other))
+                return true;
+            if (other is null
+                || _attributes != other._attributes
+                || _referencedStreams.Count != other._referencedStreams.Count
+                || !_data.AsSpan().SequenceEqual(other._data))
+                return false;
+
+            for (int i = 0; i < _referencedStreams.Count; i++)
+            {
+                if (!_referencedStreams[i].AsSpan().SequenceEqual(other._referencedStreams[i]))
+                    return false;
+            }
+
+            return Equals(_softMask, other._softMask);
+        }
+
+        public override bool Equals(object? obj) => obj is ImageIdentity other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            var hash = new HashCode();
+            hash.Add(_attributes);
+            hash.Add(_data.Length);
+            hash.AddBytes(_data.AsSpan(0, Math.Min(HashedBytes, _data.Length)));
+            hash.AddBytes(_data.AsSpan(Math.Max(0, _data.Length - HashedBytes)));
+            hash.Add(_softMask);
+            return hash.ToHashCode();
+        }
+    }
+
+    internal class ImageInfo
+    {
+        public PdfDictionary XObjects { get; }
+        public KeyValuePair<string, PdfItem> Item { get; }
+        public PdfDictionary XObject { get; }
+        public ImageIdentity Identity { get; }
+
+        public ImageInfo(PdfDictionary xObjects, KeyValuePair<string, PdfItem> item, PdfDictionary xObject)
+        {
+            XObjects = xObjects;
+            Item = item;
+            XObject = xObject;
+            Identity = ImageIdentity.Of(xObject);
         }
 
         /// <summary>
@@ -659,27 +714,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
                     select new ImageInfo(xObjects, item, xObject)
                 )
                 .ToList();
-
-        /// <summary>
-        /// Compute and return the MD5 hash of the input data.
-        /// </summary>
-        internal static string ComputeMD5(byte[] input)
-        {
-            byte[] hashBytes;
-            lock (Hasher)
-            {
-                hashBytes = Hasher.ComputeHash(input);
-                Hasher.Initialize();
-            }
-
-            var sb = new StringBuilder();
-            foreach (var x in hashBytes)
-            {
-                sb.Append(x.ToString("x2"));
-            }
-
-            return sb.ToString();
-        }
     }
 
     internal PdfTrailer _trailer = null!;

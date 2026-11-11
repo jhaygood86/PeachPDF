@@ -129,7 +129,7 @@ public static class HostResourceLoader
     private static TimeSpan _cacheLifetime = TimeSpan.FromMinutes(5);
     private const int MaxCachedBytes = 8 * 1024 * 1024;
     private const long CacheBudget = 64L * 1024 * 1024;
-    private static readonly object CacheGate = new();
+    private static readonly Lock CacheGate = new();
     private static readonly Dictionary<string, CachedResponse> Cache = [];
     private static long _cachedBytes;
 
