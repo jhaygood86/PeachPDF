@@ -5526,9 +5526,9 @@ namespace PeachBrackets.Html.Dom
                 // Only for a line of the page-level flow, and a float outside every multi-column container: fragments of a page-level float are told
                 // apart by the page they are on, but the columns of a container share one band, so a float continuing from one column into the next
                 // has no geometry of its own there, and a line deferred out of a column fill takes the container's carry with it.
-                var floatsEndInALaterFragmentainer = !inColumn && (leftFloat is not null || rightFloat is not null)
-                    && (leftFloat is null || ColumnsContainerOf(leftFloat) is null)
-                    && (rightFloat is null || ColumnsContainerOf(rightFloat) is null)
+                var floatsEndInALaterFragmentainer = (leftFloat is not null || rightFloat is not null)
+                    && (leftFloat is null || ColumnsContainerOf(leftFloat) == (inColumn ? ColumnsContainerOf(blockBox) : null))
+                    && (rightFloat is null || ColumnsContainerOf(rightFloat) == (inColumn ? ColumnsContainerOf(blockBox) : null))
                     && !(coordinates.FloatsPlacedOnThisLine?.Contains(leftFloat!) == true || coordinates.FloatsPlacedOnThisLine?.Contains(rightFloat!) == true);
 
                 if (!floatsEndInALaterFragmentainer
