@@ -9475,6 +9475,7 @@ namespace PeachBrackets.Html.Dom
             var startsNewLine = StartsNewLine(box);
             var maxSumBeforeBox = maxSum;
             var paddingSumBeforeBox = paddingSum;
+            var widestLineBeforeBox = widestLine;
             double? oldSum = null;
             double? oldPaddingSum = null;
 
@@ -9944,14 +9945,39 @@ namespace PeachBrackets.Html.Dom
                 && !(box.DerivedStyle.ActualDisplay == Keywords.Inline && box.Words.Count == 0))
             {
                 var explicitContentWidth = CssValueParser.ParseLength(box.Width, 0, box);
+
+                // The box's own min-width and max-width bound the width it contributes (css-sizing-3 section 5.1: the
+                // contribution is the size the box ends up with). A percentage one has nothing to resolve against here.
+                if (HasDefiniteWidthContribution(box))
+                {
+                    if (CssValueParser.IsValidLength(box.MaxWidth) && !box.MaxWidth.EndsWith('%'))
+                        explicitContentWidth = Math.Min(explicitContentWidth, CssValueParser.ParseLength(box.MaxWidth, 0, box));
+                    if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth) && !box.MinWidth.EndsWith('%'))
+                        explicitContentWidth = Math.Max(explicitContentWidth, CssValueParser.ParseLength(box.MinWidth, 0, box));
+                }
+
+                // A box that opens its own line carries its margins (and its ancestors') in marginSum, where the walk seeds
+                // an auto-width one from it; an inline-level box had them added to maxSum before this call.
                 var explicitSum = startsNewLine
-                    ? explicitContentWidth
+                    ? marginSum + explicitContentWidth
                     : maxSumBeforeBox + explicitContentWidth;
                 var explicitDecoration = startsNewLine
                     ? descendantDecoration
                     : paddingSumBeforeBox + boxDecoration;
 
-                if (explicitSum + explicitDecoration > maxSum + paddingSum)
+                if (HasDefiniteWidthContribution(box))
+                {
+                    // A definite width IS the box's contribution (css-sizing-3 §5.1: the contribution is the outer size
+                    // that results from the box's own width), whatever its text would measure: the text wraps inside
+                    // it. Reading the width as only a floor made a 230px block holding a 305px line contribute 305px,
+                    // so a `flex: none` item (which no longer shrinks) was laid out 75px too wide. A `<br>` inside the
+                    // box closed a line into widestLine, which belongs to the content discarded here.
+                    maxSum = explicitSum;
+                    paddingSum = explicitDecoration;
+                    widestLine = widestLineBeforeBox;
+                    trailingSpace = 0;
+                }
+                else if (explicitSum + explicitDecoration > maxSum + paddingSum)
                 {
                     maxSum = explicitSum;
                     paddingSum = explicitDecoration;
@@ -9993,6 +10019,16 @@ namespace PeachBrackets.Html.Dom
                 trailingSpace = 0;
             }
         }
+
+        /// <summary>
+        /// Whether a box's definite <c>width</c> is its whole intrinsic contribution rather than a floor under it: a
+        /// block-level or inline-level box that sizes itself from the property. A table (its columns cannot be narrower
+        /// than their content), a table cell and a replaced box (whose width is its content) keep the floor reading.
+        /// </summary>
+        private static bool HasDefiniteWidthContribution(CssBox box) =>
+            !box.IsImage
+            && box.DerivedStyle.ActualDisplay is not (Keywords.Table or Keywords.InlineTable or Keywords.TableCell
+                or Keywords.TableCaption or Keywords.Inline);
 
         private static void UpdateMinWidth(ref double min, ref double minDecoration,
             double candidate, double candidateDecoration)
