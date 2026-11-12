@@ -379,7 +379,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         // CssLayoutEngineColumns at all - so excluding every multi-column box from suppression, rather
         // than only one that will actually dispatch to that engine, wrongly left this shape unsuppressed.
         [Fact]
-        public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsStillSuppressed()
+        public async Task ScrollContainerEstablishingColumnsButHoldingOnlyInlineContent_IsFragmentedLikeOneHoldingBlocks()
         {
             var html = LayoutHarness.Wrap(
                 "<div id='card' style='overflow:scroll;height:660pt;columns:2;margin:0;line-height:22pt;font-size:10pt'>" +
@@ -391,15 +391,19 @@ namespace PeachBrackets.Engine.Tests.Integration
             var card = LayoutHarness.FindById(root, "card")!;
             Assert.True(card.EstablishesMultiColumnContext, "fixture must establish a multi-column context");
 
-            // A single, unbroken pass - the same signature genuinely monolithic content gets - rather than
-            // the several real per-fragmentainer passes ordinary (suppressed-or-not) inline content would
-            // otherwise resume across.
-            Assert.Equal(1, container.FragmentainerPasses);
-            Assert.Equal(card.Location.Y + 30 * 22, card.ActualBottom, 2);
+            // The text is wrapped for the columns engine (#1849), which fragments like it does for the same container holding blocks, so it
+            // takes several real passes rather than the single one monolithic content gets.
+            Assert.Contains(card.Boxes, b => b.IsInlineRunWrapper);
+            Assert.True(container.FragmentainerPasses > 1);
 
-            var top = container.PageIndexOf(card.Location.Y + HtmlContainerInt.PageBoundaryEpsilon);
-            var bottom = container.PageIndexOf(card.ActualBottom - HtmlContainerInt.PageBoundaryEpsilon);
-            Assert.True(bottom > top, "fixture must actually span more than one page");
+            var g = new TestRecordingGraphics();
+            for (var page = 0; page < container.FragmentTree!.Fragmentainers.Count; page++)
+                FragmentPaintHarness.PaintPage(container, g, page);
+
+            for (var i = 0; i < 30; i++)
+            {
+                Assert.Single(g.DrawStringCalls, c => c.Text.Trim() == $"Line{i}");
+            }
         }
 
         // ── helpers ───────────────────────────────────────────────────────────

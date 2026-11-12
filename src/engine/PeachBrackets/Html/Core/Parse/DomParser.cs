@@ -4346,7 +4346,6 @@ namespace PeachBrackets.Html.Parse
                 && DomUtils.ContainsInlinesOnly(box)
                 && box.Boxes.Any(b => !b.IsFloated && !b.IsAbsolutelyPositioned && JoinsTheInlineRun(b))
                 && !box.WritingMode.Value.IsVertical()
-                && !IsHeightBoundedScrollContainer(box)
                 && !(box.Boxes.Any(b => b.IsFloated) && IsInsideTableCell(box));
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
