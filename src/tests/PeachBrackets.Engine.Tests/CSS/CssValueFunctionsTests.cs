@@ -231,11 +231,59 @@ namespace PeachBrackets.Engine.Tests.CSS
             Assert.Equal(100, WidthOf(FindById(root, "box")!), 3);
         }
 
-        [Fact]
-        public async Task ABlockAxisKeywordBasisBehavesAsAuto()
+        private static double HeightOf(PeachBrackets.Html.Dom.CssBox box) => box.ActualBottom - box.Location.Y;
+
+        [Theory]
+        [InlineData("auto")]
+        [InlineData("min-content")]
+        [InlineData("max-content")]
+        [InlineData("fit-content")]
+        public async Task ABlockAxisKeywordBasisIsTheContentHeight(string keyword)
         {
-            var box = await BoxAsync("<div id='box' style='height: calc-size(auto, size + 100pt)'>x</div>");
-            Assert.True(box.ActualBottom - box.Location.Y < 50);
+            var plain = HeightOf(await BoxAsync("<div id='box'>x</div>"));
+            var box = await BoxAsync($"<div id='box' style='height: calc-size({keyword}, size + 100pt)'>x</div>");
+            Assert.Equal(plain + 100, HeightOf(box), 2);
+        }
+
+        [Fact]
+        public async Task ABlockAxisKeywordBasisScalesTheContentHeight()
+        {
+            var plain = HeightOf(await BoxAsync("<div id='box'>x</div>"));
+            var box = await BoxAsync("<div id='box' style='height: calc-size(auto, size * 3)'>x</div>");
+            Assert.Equal(plain * 3, HeightOf(box), 2);
+        }
+
+        [Fact]
+        public async Task ABlockAxisKeywordBasisExcludesPaddingAndBorderFromTheBasis()
+        {
+            var plain = HeightOf(await BoxAsync("<div id='box' style='padding: 5pt; border: 2pt solid'>x</div>"));
+            var box = await BoxAsync("<div id='box' style='padding: 5pt; border: 2pt solid; height: calc-size(auto, size + 30pt)'>x</div>");
+            Assert.Equal(plain + 30, HeightOf(box), 2);
+        }
+
+        [Fact]
+        public async Task ABlockAxisKeywordBasisInMinHeightGrowsTheBox()
+        {
+            var plain = HeightOf(await BoxAsync("<div id='box'>x</div>"));
+            var box = await BoxAsync("<div id='box' style='min-height: calc-size(min-content, size + 40pt)'>x</div>");
+            Assert.Equal(plain + 40, HeightOf(box), 2);
+        }
+
+        [Fact]
+        public async Task ABlockAxisKeywordBasisInMaxHeightShrinksTheBox()
+        {
+            var plain = HeightOf(await BoxAsync("<div id='box'><p style='margin:0'>a</p><p style='margin:0'>b</p></div>"));
+            var box = await BoxAsync("<div id='box' style='max-height: calc-size(max-content, size / 2)'><p style='margin:0'>a</p><p style='margin:0'>b</p></div>");
+            Assert.Equal(plain / 2, HeightOf(box), 2);
+        }
+
+        [Fact]
+        public async Task ABlockAxisKeywordBasisHeightFlowsIntoTheParent()
+        {
+            var (root, _) = await LayoutAsync(Wrap("<div id='outer'><div id='inner' style='height: calc-size(auto, size + 50pt)'>x</div></div>"));
+            var inner = FindById(root, "inner")!;
+            Assert.Equal(HeightOf(inner), HeightOf(FindById(root, "outer")!), 2);
+            Assert.True(HeightOf(inner) > 50);
         }
 
         [Fact]

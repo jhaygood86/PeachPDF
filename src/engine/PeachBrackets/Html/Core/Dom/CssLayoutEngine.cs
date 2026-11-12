@@ -4066,6 +4066,8 @@ namespace PeachBrackets.Html.Dom
 
         public static void ApplyHeight(CssBox box)
         {
+            box.ResolveCalcSizeHeights();
+
             var boxHeight = GetBoxHeight(box);
             var height = boxHeight ?? 0;
 
