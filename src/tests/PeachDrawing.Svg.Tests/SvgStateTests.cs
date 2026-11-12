@@ -7,6 +7,71 @@ namespace PeachDrawing.Svg.Tests;
 
 public class SvgStateTests
 {
+    private static (string X, string Y, string W, string H) ClipRect(SvgScene scene)
+    {
+        var rect = Assert.Single(Assert.Single(scene.Defs()).Elements());
+        return (Attr(rect, "x"), Attr(rect, "y"), Attr(rect, "width"), Attr(rect, "height"));
+    }
+
+    [Fact]
+    public void AClipLargerThanTheSurfaceIsWrittenCutToTheSurface()
+    {
+        using var scene = Create(200, 100);
+        scene.Canvas.PushClip(new Rect(10, 20, 100_000, 99_930));
+        scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 0, 0, 5, 5);
+        scene.Canvas.PopClip();
+
+        Assert.Equal(("10", "20", "190", "80"), ClipRect(scene));
+    }
+
+    [Fact]
+    public void AClipInsideTheSurfaceIsWrittenAsItWas()
+    {
+        using var scene = Create(200, 100);
+        scene.Canvas.PushClip(new Rect(10.5, 20.25, 30, 40));
+        scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 0, 0, 5, 5);
+        scene.Canvas.PopClip();
+
+        Assert.Equal(("10.5", "20.25", "30", "40"), ClipRect(scene));
+    }
+
+    [Fact]
+    public void AClipUnderATranslateAndScaleIsCutToTheSurfaceInTheCoordinatesItIsPushedIn()
+    {
+        using var scene = Create(200, 100);
+        scene.Canvas.PushTransform(new Matrix3x2(2, 0, 0, 2, 10, 20));
+        // The surface in these coordinates is x -5..95, y -10..40.
+        scene.Canvas.PushClip(new Rect(0, 0, 10_000, 10_000));
+        scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 0, 0, 5, 5);
+        scene.Canvas.PopClip();
+        scene.Canvas.PopTransform();
+
+        Assert.Equal(("0", "0", "95", "40"), ClipRect(scene));
+    }
+
+    [Fact]
+    public void AClipUnderARotationIsWrittenAsItWas()
+    {
+        using var scene = Create(200, 100);
+        scene.Canvas.PushTransform(Matrix3x2.CreateRotation(0.5f));
+        scene.Canvas.PushClip(new Rect(0, 0, 10_000, 10_000));
+        scene.Canvas.DrawRectangle(scene.Solid(0, 0, 0), 0, 0, 5, 5);
+        scene.Canvas.PopClip();
+        scene.Canvas.PopTransform();
+
+        Assert.Equal(("0", "0", "10000", "10000"), ClipRect(scene));
+    }
+
+    [Fact]
+    public void AClipThatMissesTheSurfaceIsWrittenAsItWasAndStillPops()
+    {
+        using var scene = Create(200, 100);
+        scene.Canvas.PushClip(new Rect(500, 500, 10, 10));
+        Assert.Equal(new Rect(500, 500, 10, 10), scene.Canvas.GetClip());
+        scene.Canvas.PopClip();
+        Assert.Equal(new Rect(0, 0, 200, 100), scene.Canvas.GetClip());
+    }
+
     [Fact]
     public void ATransformIsAGroupWithItsMatrixAndTheDrawingIsInsideIt()
     {

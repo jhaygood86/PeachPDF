@@ -79,7 +79,7 @@ files in a browser.
 | `LinearGradientBrush`, `RadialGradientBrush` | `<linearGradient>`, `<radialGradient>` in user space: `Pad` and `Repeat` spread, the focus and focus radius, and an elliptical radius or a brush transform as a `gradientTransform` |
 | `TileBrush`, `HatchBrush` | `<pattern>` carrying the brush's transform; a tile made by `CreateTile` stays vector content |
 | `ConicGradientBrush` | no SVG equivalent: a fan of 360 thin wedges clipped to the shape |
-| `PushClip`, `PushClipExclude` | `<clipPath>` and a group that uses it; an exclusion is an even-odd path of everything but the rectangle. While something is blended the clip is not a group (a clipped group would isolate the blend from the page behind it): each element carries the clip itself |
+| `PushClip`, `PushClipExclude` | `<clipPath>` and a group that uses it; a rectangle larger than the surface is written cut to it (while the transform is a translation and scale), since nothing outside the surface is visible; an exclusion is an even-odd path of everything but the rectangle. While something is blended the clip is not a group (a clipped group would isolate the blend from the page behind it): each element carries the clip itself |
 | `PushTransform` | `<g transform="matrix(...)">` |
 | `PushBlendMode` | `mix-blend-mode` on each shape drawn while it is pushed |
 | `BeginLayer` | `<g opacity mix-blend-mode filter>` as an isolated group; `BlurEffect`, `DropShadowEffect` and `ColorMatrixEffect` are `feGaussianBlur`, `feDropShadow` and `feColorMatrix` primitives of one `<filter>` |
