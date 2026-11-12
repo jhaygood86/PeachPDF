@@ -71,3 +71,7 @@ Result on Ars (Release bench): peak private 680 -> 390 MB, peak GPU dedicated 51
 `GpuTextTests.TextInsideASurfaceClip_IsDrawnWhereItWouldBeWithoutTheClip...` pins the coordinate shift (nested transforms, 96 and 144 dpi; it fails when the base is not shifted).
 `PEACH_NO_WARM=1` switches painting ahead off, to tell what it costs from what a page does (+34 MB GPU at idle on Ars). **Not done:** the CanvasVirtualControl surface itself and driver
 watermarks (the remaining ~100 MB GPU above the no-clip experiment); the region target (`_regionTarget`, 16 MB) and idle trimming of it.
+
+**Replaced pictures.** `ReplacedFragmentPainter` now gives the clip it pushes around a loaded `<img>` the same no-text hint. It does not move the Ars counts (surface clips 4,854 -> 4,822 per run, 2,111 still holding no text), so
+the rest of those are not picture clips; the counters cannot say which painter pushes them (a count by caller is the next thing to add). With warming off the 34 slow cold paints still total about 1.2 s: text masks 27%,
+text flushes 20%, surface clips 20%, images 18%. Load time on Ars (layout 1.5 s, cascade 0.6 s, fetch 4.4 s summed over 186 requests) is a separate piece of work from scrolling.

@@ -50,6 +50,18 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.NotEmpty(g.ClipPaths);
         }
 
+        private const string Png = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
+
+        [Fact]
+        public async Task A_rounded_clip_around_a_loaded_picture_is_pushed_for_shapes()
+        {
+            // The picture's own clip (an `overflow: hidden` rounded box around an image) holds a background, a border and the picture.
+            var g = await PaintAsync($"<div style='{Card}'><img src='{Png}' style='display: block; width: 60pt; height: 40pt; border-radius: 6pt; overflow: hidden'></div>");
+
+            Assert.True(g.ShapeOnlyClipCount > 0, "no clip around the picture was given the no-text hint");
+            Assert.Equal(g.ClipPaths.Count, g.ShapeOnlyClipCount);
+        }
+
         [Fact]
         public async Task A_picture_and_a_caption_in_one_card_are_clipped_each_as_what_they_are()
         {

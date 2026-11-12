@@ -67,7 +67,7 @@ namespace PeachBrackets.Html.Paint
         /// (see <see cref="Canvas.PushClipAroundShapes"/>); a wrong "true" costs a little speed, a wrong "false" costs text quality, so anything not
         /// understood answers true.
         /// </summary>
-        private bool FragmentMayDrawText(BoxFragment fragment)
+        internal bool FragmentMayDrawText(BoxFragment fragment)
         {
             if (_mayDrawText.TryGetValue(fragment, out var known)) return known;
 
