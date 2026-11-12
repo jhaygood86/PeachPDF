@@ -76,7 +76,7 @@ public class ValueFunctionMeasuredTests
     [InlineData("height: calc-size(30pt, size + 10pt); width: 6pt", 38)]
     [InlineData("height: 8pt; min-height: calc-size(30pt, size + 10pt); width: 6pt", 38)]
     [InlineData("height: 90pt; max-height: calc-size(30pt, size + 10pt); width: 6pt", 38)]
-    [InlineData("height: 20pt; width: 6pt; height: calc-size(auto, size + 100pt)", 0)]
+    [InlineData("height: 20pt; width: 6pt; height: calc-size(auto, size + 100pt)", 98)]
     [InlineData("width: 6pt; min-height: calc-size(max-content, size + 10pt); max-height: calc-size(fit-content, size)", 0)]
     public async Task AFunctionSizesTheBoxVertically(string style, int expectedHeight)
     {
