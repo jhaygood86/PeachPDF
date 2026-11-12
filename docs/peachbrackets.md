@@ -609,6 +609,9 @@ Most of the first document's time is the .NET JIT compiler, not the engine's own
 takes about 1.6 s the first time in a process that is not compiled ahead of time. Three things change that, in the order they are worth doing:
 
 - **Compile ahead of time** when you publish the application (`PublishReadyToRun`, or Native AOT as the `peachpdf` command-line tool is): the same first load took about 0.85 s.
+- **A self-contained application can let the ahead-of-time compiler see the framework too**
+  (`<PublishReadyToRunCrossgen2ExtraArgs>--inputbubble</PublishReadyToRunCrossgen2ExtraArgs>` beside `SelfContained` and `PublishReadyToRun`), which precompiles the framework's generic
+  collections over the engine's own types: about 0.89 s down to 0.74 s. The compiled code is only valid for the exact framework it was compiled against, so this is for an application that ships its own runtime.
 - **`HtmlDocument.WarmUpAsync()`** runs a small document through load, layout and painting on a thread-pool thread, once per process, and returns the same task to every caller. Call it
   when the application starts, or before it fetches the first page, so the compilation happens while the network is busy: the first load above fell from about 1.65 s to about 1.03 s
   when it had a few hundred milliseconds to run in. An application that is compiled ahead of time gains little from it, and `HtmlView` calls it for you.

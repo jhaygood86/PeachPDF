@@ -89,3 +89,8 @@ so the page was made repeatable instead: the HTML with its four style sheets inl
   that crossgen cannot precompile outside the framework's version bubble (see [keyword maps stop jitting at startup](2026-10-13-keyword-maps-stop-jitting-at-startup.md)); that is the next place a startup gain is, not flex layout or the cascade.
 - The demo sets `<TieredPGO>false</TieredPGO>`; the guidance for hosts is in docs/peachbrackets.md ("The first document is slow").
 Not done: a startup warm-up for `PdfGenerator` (print paths differ), and trimming the generic instantiations above.
+
+**Trimming the JIT'd generics: measured, and not worth the refactor.** In a ReadyToRun run 2,257 methods are still JIT-compiled, 1,094 of them generic framework code over our types (`List<Token>` 113, `Stack<Rect>`/`Dictionary<_, Rect>` 102,
+`CssKeywordOrValue<int,int>` 75, `Dictionary<_, Color>` 49, `SortedDictionary<int, (Slot, ...)>` 45...), each family a handful of milliseconds. The most that removing *all* of them could give was measured by compiling the same app with
+`--inputbubble` (the compiler sees the framework, so crossgen precompiles those instantiations): self-contained R2R 0.89 s -> 0.74 s cold, about 17%. A code-wide change of collection and struct types for part of that 0.15 s, only for hosts that are
+already ahead-of-time compiled, was not taken; the option is documented for hosts that ship their own runtime instead (docs/peachbrackets.md, "The first document is slow"). If it is revisited, start with `List<Token>` (the CSS tokenizer) and `Stack<Rect>` (clip stacks).
