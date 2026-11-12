@@ -35,7 +35,14 @@ namespace PeachBrackets.Engine.Tests.Integration
         private const double PageHeight = 300;
         private const double Margin = 20;
 
-        private static string TallFirstRowTable(double tallPt) => LayoutHarness.Wrap($@"
+        /// <summary>
+        /// Wraps <paramref name="body"/> with the cells' default 1px padding switched off: these tests pin row and page-band
+        /// geometry to the point, which is the thing under test, and a cell's own padding would shift every figure by a
+        /// constant that has nothing to do with it.
+        /// </summary>
+        private static string UnpaddedWrap(string body) => LayoutHarness.Wrap("<style>td, th { padding: 0 }</style>" + body);
+
+        private static string TallFirstRowTable(double tallPt) => UnpaddedWrap($@"
             <table style='width:100%'>
               <tr><td><div style='height:{tallPt}pt'>tall</div></td></tr>
               <tr><td>second row</td></tr>
@@ -130,7 +137,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"<tr><td><div style='height:30pt'>row {i}</div></td></tr>"));
 
             var (root, _) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: 842, margin: 0);
 
             var table = TableOf(root);
@@ -153,7 +160,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"<tr><td><div style='height:40pt'>row {i}</div></td></tr>"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             var placed = RowsOf(root);
@@ -182,7 +189,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"<tr><td><div style='height:40pt'>row {i}</div></td></tr>"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             var table = TableOf(root);
@@ -209,7 +216,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 $"<tr><td style='height:14pt'>Row {i}</td></tr>"));
 
             var (root, _) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap(
+                UnpaddedWrap(
                     "<table style='width:100%;border-collapse:collapse'>"
                     + "<thead><tr><th>HEADERMARKER</th></tr></thead>"
                     + $"<tbody>{rows}</tbody></table>"),
@@ -258,7 +265,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                         : $"<tr><td colspan='2'><div style='height:40pt'>row {i}</div></td></tr>"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             var placed = RowsOf(root);
@@ -310,7 +317,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData(1400)]
         public async Task ContentAfterABandJumpingTable_SeesATruthfulCursor(double tall)
         {
-            var html = LayoutHarness.Wrap($@"
+            var html = UnpaddedWrap($@"
                 <table style='width:100%'>
                   <tr><td><div style='height:{tall}pt'>tall</div></td></tr>
                   <tr><td>second row</td></tr>
@@ -333,7 +340,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var rows = string.Concat(Enumerable.Range(1, 40).Select(i =>
                 $"<tr><td><div style='height:30pt'>row {i}</div></td></tr>"));
 
-            var html = LayoutHarness.Wrap(
+            var html = UnpaddedWrap(
                 $"<table style='width:100%;border-collapse:collapse'>{rows}</table>"
                 + "<p>content after the table</p>");
 
@@ -356,7 +363,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task ContentAfterAWholeTableRelocation_SeesATruthfulCursor()
         {
-            var html = LayoutHarness.Wrap(
+            var html = UnpaddedWrap(
                 "<div style='height:250pt'>filler</div>"
                 + "<table style='width:100%'>"
                 + "<tr><td>first row label</td></tr>"
@@ -393,7 +400,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                     : $"<tr><td style='vertical-align:top'><div style='height:50pt'>row {i}</div></td></tr>"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             var placed = RowsOf(root);

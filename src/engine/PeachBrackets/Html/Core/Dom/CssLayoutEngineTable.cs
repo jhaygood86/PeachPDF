@@ -515,12 +515,18 @@ namespace PeachBrackets.Html.Dom
                         columns += GetSpan(box);
                         break;
                     case Keywords.TableRowGroup:
+                    case Keywords.TableHeaderGroup:
+                    case Keywords.TableFooterGroup:
                         {
-                            foreach (var cr in tableBox.Boxes)
+                            foreach (var cr in box.Boxes)
                             {
                                 count++;
                                 if (cr.DerivedStyle.ActualDisplay == Keywords.TableRow)
                                     columns = Math.Max(columns, cr.Boxes.Count);
+
+                                // The cap below bounds the rows read, not only the groups: a table body can hold thousands of rows.
+                                if (count > 30)
+                                    break;
                             }
 
                             break;

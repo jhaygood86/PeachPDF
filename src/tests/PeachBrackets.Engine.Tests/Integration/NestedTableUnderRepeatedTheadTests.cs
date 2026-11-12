@@ -11,9 +11,11 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// </summary>
     public class NestedTableUnderRepeatedTheadTests
     {
+        // Cell padding is off: a cell's padding sits at its start only, so the first page's gap under the header would be larger than
+        // the continuation pages' (css-break-3 section 5.1, box-decoration-break: slice), and the room the repeated header takes is the subject.
         private static string Document(int rows) =>
             "<!DOCTYPE html><html><head><style>@page{size:300pt 100pt;margin:20pt} " +
-            "body{margin:0;font:10pt Arial} table{width:100%;border-collapse:collapse}</style></head><body>" +
+            "body{margin:0;font:10pt Arial} table{width:100%;border-collapse:collapse} td,th{padding:0}</style></head><body>" +
             "<table><thead><tr><th>HEADER</th></tr></thead><tbody><tr><td><table>" +
             string.Concat(Enumerable.Range(0, rows).Select(i => $"<tr><td>Row {i}</td></tr>")) +
             "</table></td></tr></tbody></table></body></html>";

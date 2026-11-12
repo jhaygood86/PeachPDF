@@ -19,11 +19,12 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// </summary>
     public class TableDeclaredCellWidthTests
     {
-        // Chrome 152, first column's width in points: 84.75 padded, 77.25 bare, 76.5 border-box.
+        // Chrome 152, first column's width in points: 84.75 padded, 77.25 bare, 76.5 border-box. The bare cell was measured with the browser's default
+        // 1px padding; it says padding:0 here so that it is the unpadded case the tests below compare against, whatever the default is.
         private const string Padded =
             "<td id='c' style='width:100px; padding:3px 5px; border:1px solid black'>x</td>";
         private const string Bare =
-            "<td id='c' style='width:100px'>x</td>";
+            "<td id='c' style='width:100px; padding:0'>x</td>";
         private const string BorderBox =
             "<td id='c' style='width:100px; padding:3px 5px; border:1px solid black; box-sizing:border-box'>x</td>";
 

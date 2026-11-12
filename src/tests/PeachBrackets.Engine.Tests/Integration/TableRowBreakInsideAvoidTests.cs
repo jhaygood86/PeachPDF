@@ -24,13 +24,21 @@ namespace PeachPDF.Tests.Integration
     /// </remarks>
     public class TableRowBreakInsideAvoidTests
     {
+
+        /// <summary>
+        /// Wraps <paramref name="body"/> with the cells' default 1px padding switched off: these tests pin row and page-band
+        /// geometry to the point, which is the thing under test, and a cell's own padding would shift every figure by a
+        /// constant that has nothing to do with it.
+        /// </summary>
+        private static string UnpaddedWrap(string body) => LayoutHarness.Wrap("<style>td, th { padding: 0 }</style>" + body);
+
         private const double PageHeight = 300;
         private const double Margin = 20;
 
         private static string Words(int row, int count) =>
             string.Join(' ', Enumerable.Range(1, count).Select(i => $"w{row}_{i}"));
 
-        private static string LongTable(string rowStyle, string before = "", string selector = "tr.r") => LayoutHarness.Wrap(
+        private static string LongTable(string rowStyle, string before = "", string selector = "tr.r") => UnpaddedWrap(
             $"<style>{selector} {{ {rowStyle} }}</style>{before}" +
             "<table style='width:300pt'><thead><tr><th>Id</th><th>Text</th></tr></thead><tbody>" +
             string.Concat(Enumerable.Range(1, 30).Select(r => $"<tr class='r'><td>w{r}_0</td><td>{Words(r, 24)}</td></tr>")) +
@@ -117,7 +125,7 @@ namespace PeachPDF.Tests.Integration
                 "<style>tr.r { break-inside: avoid }</style><table style='width:300pt'><thead><tr><th>Id</th><th>Text</th></tr></thead><tbody>" +
                 string.Concat(Enumerable.Range(1, 3).Select(r => $"<tr class='r'><td>w{r}_0</td><td>{Words(r, 6)}</td></tr>")) +
                 "</tbody></table>";
-            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: PageHeight, margin: Margin);
+            var (_, container) = await LayoutHarness.LayoutAsync(UnpaddedWrap(body), pageHeight: PageHeight, margin: Margin);
 
             Assert.Single(container.FragmentTree!.Fragmentainers);
         }
@@ -170,7 +178,7 @@ namespace PeachPDF.Tests.Integration
         [InlineData(400, 4)]
         public async Task RowsThatAvoidBreaksInAColumn_AreLeftToTheColumns(double pageHeight, int everyNthRowAvoids)
         {
-            string InColumns(string rowStyle) => LayoutHarness.Wrap(
+            string InColumns(string rowStyle) => UnpaddedWrap(
                 $"<style>body {{ font: 10pt sans-serif }} tr.r {{ {rowStyle} }}</style><div style='columns: 2; column-gap: 10pt'><table style='width:100%'><thead><tr><th>Id</th><th>T</th></tr></thead><tbody>" +
                 string.Concat(Enumerable.Range(1, 30).Select(r => $"<tr{(r % everyNthRowAvoids == 0 ? " class='r'" : "")}><td>w{r}_0</td><td>{Words(r, 12 + r % 5 * 4)}</td></tr>")) +
                 "</tbody></table></div>");
@@ -286,7 +294,7 @@ namespace PeachPDF.Tests.Integration
                 $"<tr class='r'><td>w4_0</td><td>{Words(4, 400)}</td></tr>" +
                 $"<tr class='r'><td>w5_0</td><td>{Words(5, 24)}</td></tr>" +
                 "</tbody></table>";
-            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: PageHeight, margin: Margin);
+            var (_, container) = await LayoutHarness.LayoutAsync(UnpaddedWrap(body), pageHeight: PageHeight, margin: Margin);
 
             var pages = WordsPerPage(container);
             var bodyWords = pages.SelectMany(p => p).Where(w => !w.StartsWith("wh_")).ToList();
@@ -311,7 +319,7 @@ namespace PeachPDF.Tests.Integration
                     $"<tr class='r'><td rowspan='2'>w{p}_0</td><td>{Words(p, 24)}</td></tr>" +
                     $"<tr class='r'><td>{string.Join(' ', Enumerable.Range(1, 24).Select(i => $"w{p}_{100 + i}"))}</td></tr>")) +
                 "</tbody></table>";
-            var (_, container) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: PageHeight, margin: Margin);
+            var (_, container) = await LayoutHarness.LayoutAsync(UnpaddedWrap(body), pageHeight: PageHeight, margin: Margin);
 
             var laidOut = WordsPerPage(container).SelectMany(p => p).ToList();
 
@@ -336,7 +344,7 @@ namespace PeachPDF.Tests.Integration
                     : $"<tr><td><div style='height:50pt'>row {i}</div></td></tr>"));
 
             var (root, container) = await LayoutHarness.LayoutAsync(
-                LayoutHarness.Wrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
+                UnpaddedWrap($"<table style='width:100%;border-collapse:collapse'>{rows}</table>"),
                 pageHeight: PageHeight, margin: Margin);
 
             Assert.Equal(1, container.SlotStartingAt(LayoutHarness.FindById(root, "after")!.Location.Y));
