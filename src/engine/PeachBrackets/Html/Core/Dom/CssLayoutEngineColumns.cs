@@ -310,13 +310,14 @@ namespace PeachBrackets.Html.Dom
             // height (css-multicol-1 §7.1: a constrained height fixes the column height) - the rest of the
             // content continues in columns to the right, which the clip hides. Without this cap, balancing
             // grows the columns until every word fits, and the clip then hides lines from the middle of the
-            // text instead of its tail (#1818). Only the fragment that starts the container: a resumed one
-            // is a continuation of a box that already spans pages.
+            // text instead of its tail (#1818). A container that does not clip takes the same column height (#2238),
+            // so content that does not fit one column starts the next; what does not fit the last column continues
+            // on the next page as before (css-multicol-1 §3.3's overflow columns are not made). Only the fragment
+            // that starts the container: a resumed one is a continuation of a box that already spans pages.
             var containerTop = boxTop;
             var heightCap = double.MaxValue / 4;
 
             if (resume is null
-                && (columnsBox.Overflow.Value != Overflow.Visible || columnsBox.ClipsWithoutScrolling)
                 && columnsBox.ResolveDefiniteHeightPt() is { } definiteHeight)
             {
                 heightCap = Math.Max(1, definiteHeight - columnsBox.ActualBoxSizeIncludedHeight);
@@ -442,7 +443,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             // What the height cap left over is clipped, not continued: the box is exactly that tall on every page.
-            if (cappedByHeight) carry = null;
+            if (cappedByHeight && (columnsBox.Overflow.Value != Overflow.Visible || columnsBox.ClipsWithoutScrolling)) carry = null;
 
             // Accumulated, not assigned: this container is laid out once per page fragment, and the last
             // fragment's rules are not the only ones drawn.
@@ -632,6 +633,14 @@ namespace PeachBrackets.Html.Dom
             double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer,
             double originalRight, int recordedBefore)
         {
+            // A float or inline-block container lays its content out apart from the page (CssLayoutEngine.LayoutContentUnbroken,
+            // FlowAtomicBlockContentChild), so no fragmentainer is current when it is reached. Its columns are its own to break
+            // and nothing outside reads a break out of them, so the fill is bounded by the continuous band, never by the page (#2341).
+            if (RootsItsOwnFormattingContext(columnsBox, htmlContainer))
+            {
+                pageBudget = HtmlContainerInt.ContinuousBandPoints;
+            }
+
             // Phase 1 (measurement): lay out every child of this run as one tall, single virtual column at
             // the resolved column width, reusing ordinary block layout untouched. Breaking stays
             // suppressed here - these are provisional positions spanning many page bands, and a token
@@ -838,6 +847,15 @@ namespace PeachBrackets.Html.Dom
         }
 
         /// <summary>
+        /// Whether <paramref name="columnsBox"/> is a float or an <c>inline-block</c> reached with no fragmentainer current: the
+        /// box is the root of the detached scope, so its columns may break where the enclosing flow could not.
+        /// </summary>
+        private static bool RootsItsOwnFormattingContext(CssBox columnsBox, HtmlContainerInt htmlContainer) =>
+            htmlContainer.CurrentFragmentainer is null
+            && htmlContainer.HasRealPageGrid
+            && (columnsBox.IsFloated || columnsBox.DerivedStyle.ActualDisplay == Keywords.InlineBlock);
+
+        /// <summary>
         /// Fills this container's columns once at <paramref name="target"/>, returning what would not fit,
         /// how far down the content reached, and how many columns it took.
         /// </summary>
@@ -846,6 +864,7 @@ namespace PeachBrackets.Html.Dom
             double boxTop, double target, double columnLeft, double pitch, double columnWidth,
             double containerWidth, int columnCount, int startSlot, HtmlContainerInt htmlContainer)
         {
+            var inheritsSuppression = !RootsItsOwnFormattingContext(columnsBox, htmlContainer);
             var carry = resume;
             var contentBottom = boxTop;
             var filledColumns = 0;
@@ -856,7 +875,7 @@ namespace PeachBrackets.Html.Dom
                 // A column's own inline span is applied by placing it, below.
                 var column = new FragmentainerContext(
                     htmlContainer, columnsBox, startSlot, (boxTop, boxTop + target),
-                    inheritsSuppression: true);
+                    inheritsSuppression: inheritsSuppression);
 
                 var columnInlineLeftForKey = columnLeft + col * pitch;
                 var columnKey = ColumnAreaKey.For(columnsBox, startSlot, col, columnInlineLeftForKey);

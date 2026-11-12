@@ -7104,6 +7104,22 @@ var multicolHtml = "<!DOCTYPE html><html><head>" + MulticolCss + "</head><body>"
         "<div style=\"float:left;width:200pt;height:24pt;background:#d68910\"></div>" +
         "</div></div>") +
 
+    // A multi-column container of any formatting context: a float and an inline-block balance their columns and the
+    // inline-block shrink-wraps them, a container of definite height fills columns of that height, and the text after
+    // an absolutely positioned inline box stays in its column.
+    McSection("15 &mdash; columns in floats, inline-blocks and fixed heights",
+        "<div class=\"frame\"><div class=\"label\">float: left; columns: 2 &mdash; the two blocks are side by side, the container is one block tall</div>" +
+        "<div style=\"float:left;width:300pt;columns:2;column-gap:10pt;background:#d6eaf8\">" +
+        "<div style=\"width:100pt;height:30pt;background:#d68910\"></div><div style=\"width:100pt;height:30pt;background:#27ae60\"></div></div><div style=\"clear:both\"></div></div>" +
+        "<div class=\"frame\"><div class=\"label\">display: inline-block; columns: 2; no width &mdash; the box is as wide as its columns, not the line</div>" +
+        "<div style=\"display:inline-block;columns:2;column-gap:10pt;background:#d6eaf8\">" +
+        "<div style=\"width:100pt;height:30pt;background:#d68910\"></div><div style=\"width:100pt;height:30pt;background:#27ae60\"></div></div></div>" +
+        "<div class=\"frame\"><div class=\"label\">columns: 2; column-fill: auto; height: 90pt &mdash; the fourth block does not fit the first column and starts the second</div>" +
+        "<div style=\"columns:2;column-gap:10pt;column-fill:auto;height:90pt;width:300pt;background:#d6eaf8\">" +
+        "<div style=\"height:30pt;background:#d68910\"></div><div style=\"height:30pt;background:#27ae60\"></div><div style=\"height:30pt;background:#2e86c1\"></div><div style=\"height:30pt;background:#a569bd\"></div></div></div>" +
+        "<div class=\"frame\"><div class=\"label\">an absolutely positioned inline box between words &mdash; the text after it stays on the line</div>" +
+        "<div class=\"mc\" style=\"columns:2;column-gap:20px\">first <span style=\"position:absolute\"></span> second words in the first column</div></div>") +
+
     "</body></html>";
 
 await SaveShowcaseAsync("multicol", "Layout", "Multi-column Layout",

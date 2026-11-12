@@ -2155,18 +2155,18 @@ namespace PeachBrackets.Engine.Tests.Integration
             }
         }
 
-        // Text laid out in a scroll container of bounded height keeps the inline flow it had (#1849).
+        // Text in a scroll container of bounded height is wrapped for the columns engine like any other multi-column container's (#1849).
         [Theory]
         [InlineData("overflow:hidden; height:100px")]
         [InlineData("overflow:auto; max-height:100px")]
         [InlineData("overflow:clip; height:100px")]
-        public async Task TextOnlyScrollContainerOfBoundedHeight_IsNotWrappedForColumns(string containerStyle)
+        public async Task TextOnlyScrollContainerOfBoundedHeight_IsWrappedForColumns(string containerStyle)
         {
             var text = string.Join(" ", Enumerable.Range(1, 40).Select(i => $"w{i:D5}"));
             var html = Wrap($"<div id='mc' style='width:300px; columns:3; {containerStyle}'>{text}</div>");
             var (root, _) = await BuildAndLayout(html, pageHeight: 800);
 
-            Assert.DoesNotContain(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
+            Assert.Contains(FindById(root, "mc")!.Boxes, b => b.IsInlineRunWrapper);
         }
 
         // A clipping container of definite height fills columns of that height (css-multicol-1 §7.1), so each

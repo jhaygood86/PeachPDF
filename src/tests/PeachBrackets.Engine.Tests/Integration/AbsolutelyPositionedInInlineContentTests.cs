@@ -830,6 +830,21 @@ namespace PeachBrackets.Engine.Tests.Integration
             });
         }
 
+        [Fact]
+        public async Task AbsolutelyPositionedChild_InAMultiColumnContainer_DoesNotMoveTheTextAfterItToTheNextColumn()
+        {
+            var (root, _) = await LayoutAsync(
+                "<div id='c' style='columns:2;column-gap:10pt;width:410pt;font:10pt Arial'>" +
+                "aaa <span id='a' style='position:absolute'>x</span> <span id='b'>bbb</span></div>");
+
+            var container = Find(root, "c");
+            var after = Assert.Single(Find(root, "b").Rectangles.Values);
+
+            // Both words are in the first column (200pt wide), on the same line.
+            Assert.True(after.Left < container.Location.X + 200, $"text after the abs box started at x={after.Left}");
+            Assert.InRange(after.Top, container.Location.Y - 1, container.Location.Y + 1);
+        }
+
         private static Task<(CssBox Root, HtmlContainerInt Container)> LayoutAsync(string body, double pageHeight = 842) =>
             LayoutHarness.LayoutAsync(LayoutHarness.Wrap(body), pageHeight: pageHeight);
 

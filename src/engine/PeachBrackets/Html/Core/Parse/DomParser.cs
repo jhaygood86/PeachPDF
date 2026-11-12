@@ -4344,9 +4344,8 @@ namespace PeachBrackets.Html.Parse
                 box.EstablishesMultiColumnContext
                 && box.Boxes.Count > 0
                 && DomUtils.ContainsInlinesOnly(box)
-                && box.Boxes.Any(b => !b.IsFloated && JoinsTheInlineRun(b))
+                && box.Boxes.Any(b => !b.IsFloated && !b.IsAbsolutelyPositioned && JoinsTheInlineRun(b))
                 && !box.WritingMode.Value.IsVertical()
-                && !IsHeightBoundedScrollContainer(box)
                 && !(box.Boxes.Any(b => b.IsFloated) && IsInsideTableCell(box));
 
             // A flex or grid container establishes no inline formatting context, so CSS 2.1 §9.2.1.1's
@@ -4548,12 +4547,12 @@ namespace PeachBrackets.Html.Parse
 
         /// <summary>
         /// Whether an absolutely positioned <paramref name="box"/> stays among the inline content around it
-        /// (#1299) rather than standing as a block-level sibling. Everywhere but in a multi-column container:
-        /// the columns engine takes its children as block-level column content, so inline content beside an
-        /// absolutely positioned child there still needs the anonymous block it has always been given.
+        /// (#1299, #2247) rather than standing as a block-level sibling, in a multi-column container too. A
+        /// container holding nothing but absolutely positioned children is not wrapped (see
+        /// <c>wrapsInlineRunForColumns</c>), so they stay block-level children of the columns engine.
         /// </summary>
         private static bool JoinsAsOutOfFlow(CssBox box) =>
-            box.IsAbsolutelyPositioned && box.ParentBox is not { EstablishesMultiColumnContext: true };
+            box.IsAbsolutelyPositioned;
 
         /// <summary>
         /// Collapses a collapsible white space run that continues across an inline element boundary with

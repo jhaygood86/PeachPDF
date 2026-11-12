@@ -1,3 +1,0 @@
-# `column-fill: auto` with a fixed height does not start the next column when the first is full
-
-In a multi-column container with `column-fill: auto` and a definite `height`, content that does not fit the first column stays in it, below the container's bottom edge, instead of starting the second (css-multicol-1 section 7; four 100px blocks in a 300px container: the fourth is at y=300 in the first column, Chrome has it at the top of the second). The same holds for a block taller than the column and for text, which Chrome continues in overflow columns (section 3.3). With `column-fill: balance` and with an explicit `break-before: column` the columns are used as expected, so the fill of a column of fixed height is what is missing (tracking issue #2238).
