@@ -32,6 +32,4 @@ flex or grid container or a table, so `TryMeasureMulticolWidth` returns `false` 
 float is the two gaps wide, as in Chrome. An unadopted css-multicol-2 proposal (csswg-drafts #4952) agrees with the formulas, apart from forced
 column breaks and a constrained height, which Chrome (and this) ignore.
 
-**Not done.** A multi-column container in a vertical `writing-mode` is left as it was (its inline axis is not the width). (An `inline-block` with `columns` and no `width` now shrink-wraps too: `CssLayoutEngine.GetBoxWidth` gives it the float's fit-content branch, #2343.) Columns
-inside a float or inline-block are not balanced (#2341): the container is now wide enough for its columns, but the content still stacks in the
-first. The container's available width still caps the result as for any shrink-to-fit box.
+**Not done.** A multi-column container in a vertical `writing-mode` is left as it was (its inline axis is not the width). (An `inline-block` with `columns` and no `width` now shrink-wraps too: `CssLayoutEngine.GetBoxWidth` gives it the float's fit-content branch, #2343.) Columns inside a float or inline-block balance too (#2341, see the 2026-11-12 entry). The container's available width still caps the result as for any shrink-to-fit box.
