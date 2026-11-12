@@ -39,6 +39,26 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(157.5, width, 0.01);
         }
 
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("display:inline-block")]
+        [InlineData("overflow:hidden")]
+        [InlineData("")]
+        public async Task AnAutoHeightContainer_BalancesItsColumns_WhateverFormattingContextItIs(string kind)
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                $"<div id='f' style='{kind};width:300pt;columns:2;column-gap:10pt'>" +
+                "<div id='a' style='width:100pt;height:40pt'></div><div id='b' style='width:100pt;height:40pt'></div></div>"));
+
+            var f = FindById(root, "f")!;
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.Equal(a.Location.Y, b.Location.Y, 0.01);
+            Assert.Equal(155, b.Location.X - a.Location.X, 0.01);
+            Assert.Equal(40, f.ActualBottom - f.Location.Y, 0.5);
+        }
+
         [Fact]
         public async Task TwoColumns_AreTwiceTheColumnPlusTheGap()
         {
