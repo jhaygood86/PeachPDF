@@ -7145,7 +7145,17 @@ namespace PeachBrackets.Html.Dom
                 // A resumed flow is continuing this block, so the per-line rectangles bubbled into
                 // inline boxes by the fragmentainers already filled must survive - resetting them here
                 // would blank out their backgrounds, borders and text decoration on those pages.
-                if (coordinates.ResumeOrdinal == 0) b.RectanglesReset();
+                if (coordinates.ResumeOrdinal == 0)
+                {
+                    b.RectanglesReset();
+
+                    // The flow never places a plain inline box itself, only its rectangles and words, so its Location is nothing the flow
+                    // writes: it holds whatever an ancestor's translation (cell alignment, a flex or grid item's move, a repeated header)
+                    // added to it on an earlier pass, and the next pass adds to that again. Starting it from the origin, where the flow
+                    // starts its rectangles, keeps a repeated layout from accumulating the translation (#1440).
+                    if (b.IsInline && !DomUtils.IsAtomicInline(b) && !excludedFromLineSpacing)
+                        b.Location = default;
+                }
                 await b.MeasureWordsSize(g);
 
                 // Still on blockBox's first formatted line and a ::first-line rule applies to it -
