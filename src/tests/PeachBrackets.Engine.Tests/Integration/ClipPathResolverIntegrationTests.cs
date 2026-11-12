@@ -386,8 +386,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var g = new TestRecordingGraphics { PixelsPerPointOverride = 2.0 };
             var reference = new Rect(100, 200, 300, 400);
 
-            // Halved coordinates of Path_ResolvesPxCoordinatesAgainstReferenceBoxOrigin_NoAxisScaling's
-            // (100,200)/(175,200)/(100,275).
+            // The reference box origin is halved, but 100px is still 75pt: the path data is a true size, not shrunk by ppp.
             var built = CssClipPathResolver.TryBuildClipPath(
                 g, """path("M0 0 L100 0 L0 100 Z")""", reference, box, out var path, out _);
 
@@ -397,10 +396,10 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(3, points.Count);
             Assert.Equal(50, points[0].X, 3);
             Assert.Equal(100, points[0].Y, 3);
-            Assert.Equal(87.5, points[1].X, 3);
+            Assert.Equal(125, points[1].X, 3);
             Assert.Equal(100, points[1].Y, 3);
             Assert.Equal(50, points[2].X, 3);
-            Assert.Equal(137.5, points[2].Y, 3);
+            Assert.Equal(175, points[2].Y, 3);
         }
     }
 }

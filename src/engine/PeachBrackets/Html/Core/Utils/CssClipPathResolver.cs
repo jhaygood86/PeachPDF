@@ -279,7 +279,8 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         private static void BuildPath(GraphicsPath path, BasicShapeGrammar.ParsedBasicShape shape, Rect referenceBox, double ppp)
         {
-            const double px = Length.PointsPerPx;
+            // The reference box is in layout space (points x ppp), so a path-data pixel is 0.75 * ppp layout units.
+            var px = Length.PointsPerPx * ppp;
 
             foreach (var segment in shape.PathSegments)
             {
@@ -331,7 +332,7 @@ namespace PeachBrackets.Html.Utils
             const double px = Length.PointsPerPx;
 
             var unitsMatrix = clipDefinition.ClipPathUnitsUserSpaceOnUse
-                ? new Matrix3x2((float)(px / ppp), 0, 0, (float)(px / ppp), (float)(referenceBox.X / ppp), (float)(referenceBox.Y / ppp))
+                ? new Matrix3x2((float)px, 0, 0, (float)px, (float)(referenceBox.X / ppp), (float)(referenceBox.Y / ppp))
                 : new Matrix3x2((float)(referenceBox.Width / ppp), 0, 0, (float)(referenceBox.Height / ppp), (float)(referenceBox.X / ppp), (float)(referenceBox.Y / ppp));
 
             var path = SvgRenderer.BuildClipPath(g, clipDefinition, unitsMatrix);

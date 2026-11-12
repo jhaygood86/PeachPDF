@@ -1207,7 +1207,7 @@ var shapeHtml = "<!DOCTYPE html><html><head><meta charset='utf-8'><style>" +
     ShapeBox("ellipse(40pt 45pt)", "shape-outside: ellipse(40pt 45pt at 40% 50%); clip-path: ellipse(40pt 45pt at 40% 50%)") +
     ShapeBox("polygon(0 0, 100% 0, 50% 100%)", "shape-outside: polygon(0 0, 100% 0, 50% 100%); clip-path: polygon(0 0, 100% 0, 50% 100%)") +
     ShapeBox("inset(0 round 30pt)", "shape-outside: inset(0 round 30pt); border-radius: 30pt") +
-    ShapeBox("path('M 0 0 L 90 90 L 0 90 Z') (px)", "shape-outside: path(&quot;M 0 0 L 120 120 L 0 120 Z&quot;); clip-path: polygon(0 0, 100% 100%, 0 100%)") +
+    ShapeBox("path('M 0 0 L 120 120 L 0 120 Z') (px)", "shape-outside: path(&quot;M 0 0 L 120 120 L 0 120 Z&quot;); clip-path: polygon(0 0, 100% 100%, 0 100%)") +
     ShapeBox("url(image) + shape-image-threshold", "shape-outside: url(" + ShapeTriangleDataUri + "); shape-image-threshold: 0.5; background: url(" + ShapeTriangleDataUri + ") 0 0 / 100% 100%") +
     ShapeBox("float: right, circle(50%)", "float: right; margin: 0 0 0 6pt; shape-outside: circle(50%); border-radius: 50%") +
     "</body></html>";

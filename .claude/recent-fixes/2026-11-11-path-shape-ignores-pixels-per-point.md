@@ -1,0 +1,3 @@
+# path() shapes were shrunk by PixelsPerPoint
+
+`CssClipPathResolver.BuildPath` (and `BuildUrl`'s userSpaceOnUse matrix) added raw points (0.75 per px) to a layout-space reference box, then divided by `PixelsPerPoint`. At ppp = 1 (PDF) that is right; in the WinUI/Apple hosts (ppp = 96/72) the path came out 75% size. Visible in the Shape Outside showcase: text wrapped around a triangle smaller than the float. Fix: a path pixel is `0.75 * ppp` layout units before the final divide. `Path_NonDefaultPixelsPerPoint_DividesFinalCoordinates` had the bug encoded in its expected values and was corrected.
