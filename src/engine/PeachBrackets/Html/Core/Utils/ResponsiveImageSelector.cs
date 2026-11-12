@@ -90,22 +90,48 @@ namespace PeachBrackets.Html.Utils
 
             if (picture?.HtmlTag is { Name: HtmlConstants.Picture })
             {
-                // A block <img> inside an inline <picture> that is itself inside an inline (a logo in a link, with `img { display: block }`) is
-                // the block-in-inline correction's problem, and it leaves the <source> elements - which hold no content - in front of the picture
-                // instead of inside it. They are still the picture's own.
-                if (picture.ParentBox is { } holder)
-                {
-                    var index = holder.Boxes.IndexOf(picture);
-                    var first = index;
-                    while (first > 0 && holder.Boxes[first - 1].HtmlTag is { Name: HtmlConstants.Source }) first--;
-                    for (var i = first; i < index; i++) sources.Add(holder.Boxes[i]);
-                }
-
                 Collect(picture, img, sources);
             }
 
+            // A block <img> in an inline <picture> inside an inline (a logo in a link, with `img { display: block }`) is the block-in-inline
+            // correction's problem: it moves the <source> elements, which hold no content, out of the picture - in front of it, or with the
+            // picture box gone altogether - so they are found as the boxes just before the img, or before whatever now holds it.
+            if (sources.Count == 0) CollectPrecedingSources(img, sources);
+
             return sources;
         }
+
+        /// <summary>
+        /// Climbs from <paramref name="img"/> through the anonymous and <c>&lt;picture&gt;</c> boxes around it and collects the run of
+        /// <c>&lt;source&gt;</c> boxes directly in front of the box it has climbed to (blank anonymous boxes between them do not end the run).
+        /// </summary>
+        private static void CollectPrecedingSources(CssBox img, List<CssBox> sources)
+        {
+            var current = img;
+            while (current.ParentBox is { } parent)
+            {
+                var index = parent.Boxes.IndexOf(current);
+                var run = new List<CssBox>();
+                for (var i = index - 1; i >= 0; i--)
+                {
+                    var before = parent.Boxes[i];
+                    if (before.HtmlTag is { Name: HtmlConstants.Source }) run.Insert(0, before);
+                    else if (!IsBlankAnonymous(before)) break;
+                }
+
+                if (run.Count > 0)
+                {
+                    sources.AddRange(run);
+                    return;
+                }
+
+                if (parent.HtmlTag is not (null or { Name: HtmlConstants.Picture })) return;
+                current = parent;
+            }
+        }
+
+        private static bool IsBlankAnonymous(CssBox box) =>
+            box.HtmlTag is null && string.IsNullOrWhiteSpace(box.Text) && box.Boxes.All(IsBlankAnonymous);
 
         private static bool Collect(CssBox parent, CssBox stop, List<CssBox> sources)
         {

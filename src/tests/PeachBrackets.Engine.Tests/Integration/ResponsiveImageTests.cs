@@ -83,16 +83,16 @@ namespace PeachBrackets.Engine.Tests.Integration
         [InlineData("img { display: block }", "<a href='#'>", "</a>")]
         [InlineData("img { display: block }", "<div>", "</div>")]
         [InlineData("img { display: block }", "", "")]
+        [InlineData("a { display: inline-block } img { display: block; max-width: 100% }", "<a href='#'>\n  ", "\n</a>")]
         public async Task Picture_WithABlockImg_StillSeesItsSources(string css, string open, string close)
         {
             // `img { display: block }` in a reset style sheet makes the <img> a block inside the inline <picture>, which the block-in-inline
-            // correction splits - and moves the <source> elements out in front of the picture. A logo in a link then always took the <img>
-            // fallback, so a site's dark-scheme logo was never chosen.
-            var matching = $"<style>{css}</style>{open}<picture><source media='(min-width: 100px)' srcset='{Large}'><img id='i' src='{Small}'></picture>{close}";
-            Assert.Equal(300, await WidthOfAsync(matching), 3);
+            // correction splits - and moves the <source> elements out of it (in front of the picture, or with the picture box gone). A logo in
+            // a link then always took the <img> fallback, so a site's dark-scheme logo was never chosen.
+            string Page(string media) => $"<style>{css}</style>{open}<picture>\n  <source media='{media}' srcset='{Large}' />\n  <img id='i' src='{Small}' />\n</picture>{close}";
 
-            var skipped = $"<style>{css}</style>{open}<picture><source media='(min-width: 99999px)' srcset='{Large}'><img id='i' src='{Small}'></picture>{close}";
-            Assert.Equal(75, await WidthOfAsync(skipped), 3);
+            Assert.Equal(300, await WidthOfAsync(Page("(min-width: 100px)")), 3);
+            Assert.Equal(75, await WidthOfAsync(Page("(min-width: 99999px)")), 3);
         }
 
         [Fact]
