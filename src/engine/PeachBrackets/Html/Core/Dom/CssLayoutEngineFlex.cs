@@ -54,10 +54,9 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Resolves which physical axis is this container's main axis, and which physical end its
-        /// main-start/cross-start land on, from the container's own resolved <c>writing-mode</c> (assuming
-        /// <c>ltr</c> for the inline axis - this engine has no <c>direction: rtl</c> support at all yet,
-        /// for either axis, so extending only the vertical-writing-mode case to honor it would leave row
-        /// direction inconsistently direction-aware between physical axes). "Row" means main = inline axis
+        /// main-start/cross-start land on, from the container's own resolved <c>writing-mode</c> and
+        /// <c>direction</c> (CSS Flexbox 1 §5.1: a row's main-start is the inline-start side, the right edge
+        /// for <c>rtl</c>; a column's cross-start is too). "Row" means main = inline axis
         /// (CSS Flexbox 1 §3); which physical axis and end that is comes from
         /// <see cref="LogicalPropertyResolver"/>, the same abstract-to-physical table
         /// <see cref="WritingModeFrame"/> reuses, rather than a second independently-derived mapping.
@@ -65,12 +64,13 @@ namespace PeachBrackets.Html.Dom
         private void ComputeAxisMapping()
         {
             var writingMode = _flexBox.WritingMode.Value;
+            var direction = _flexBox.Direction.Value;
             var mainStartSide = _isRow
-                ? LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr)
+                ? LogicalPropertyResolver.InlineStart(writingMode, direction)
                 : LogicalPropertyResolver.BlockStart(writingMode);
             var crossStartSide = _isRow
                 ? LogicalPropertyResolver.BlockStart(writingMode)
-                : LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr);
+                : LogicalPropertyResolver.InlineStart(writingMode, direction);
 
             _mainAxisIsPhysicalX = mainStartSide is PhysicalSide.Left or PhysicalSide.Right;
             _mainStartIsAtMax = mainStartSide is PhysicalSide.Right or PhysicalSide.Bottom;
