@@ -994,7 +994,7 @@ namespace PeachBrackets.Html.Dom
                     double totalGrow = line.Items.Sum(i => ParseFloat(i.Box.FlexGrow));
                     var grow = ParseFloat(item.Box.FlexGrow);
                     final = totalGrow > 0
-                        ? item.HypotheticalMainSize + freeSpace * (grow / totalGrow)
+                        ? item.HypotheticalMainSize + ScaleByFactorSum(freeSpace, freeSpace, totalGrow) * (grow / totalGrow)
                         : item.HypotheticalMainSize;
                 }
                 else if (hasAutoMinimum)
@@ -1005,9 +1005,10 @@ namespace PeachBrackets.Html.Dom
                 {
                     double totalShrink = line.Items.Sum(i =>
                         ParseFloat(i.Box.FlexShrink) * i.HypotheticalMainSize);
+                    var totalShrinkFactor = line.Items.Sum(i => ParseFloat(i.Box.FlexShrink));
                     var shrinkFactor = ParseFloat(item.Box.FlexShrink) * item.HypotheticalMainSize;
                     final = totalShrink > 0
-                        ? Math.Max(0, item.HypotheticalMainSize + freeSpace * (shrinkFactor / totalShrink))
+                        ? Math.Max(0, item.HypotheticalMainSize + ScaleByFactorSum(freeSpace, freeSpace, totalShrinkFactor) * (shrinkFactor / totalShrink))
                         : item.HypotheticalMainSize;
                 }
                 else
@@ -1034,6 +1035,23 @@ namespace PeachBrackets.Html.Dom
                     item.Box.ShrunkByFlexBelowContent = final < item.NaturalMainSize - 0.5;
                 }
             }
+        }
+
+        /// <summary>
+        /// CSS Flexbox 1 §9.7 step 4c: when the unfrozen items' flex factors (the raw <c>flex-grow</c> or <c>flex-shrink</c> values, not the
+        /// shrink weights scaled by the base size) add up to less than one, only that fraction of the initial free space is shared out,
+        /// provided it is smaller in magnitude than what remains.
+        /// </summary>
+        /// <param name="initialFreeSpace">The free space of the line before any item was resolved.</param>
+        /// <param name="remainingFreeSpace">The free space left with the frozen items at their target sizes.</param>
+        /// <param name="factorSum">The sum of the unfrozen items' flex factors.</param>
+        /// <returns>The free space to distribute.</returns>
+        private static double ScaleByFactorSum(double initialFreeSpace, double remainingFreeSpace, double factorSum)
+        {
+            if (factorSum <= 0 || factorSum >= 1) return remainingFreeSpace;
+
+            var fraction = initialFreeSpace * factorSum;
+            return Math.Abs(fraction) < Math.Abs(remainingFreeSpace) ? fraction : remainingFreeSpace;
         }
 
         /// <summary>
@@ -1069,18 +1087,22 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            double initialFreeSpace = 0;
             for (var pass = 0; pass <= items.Count; pass++)
             {
-                double frozenSpace = 0, unfrozenHypothetical = 0, totalShrink = 0;
+                double frozenSpace = 0, unfrozenHypothetical = 0, totalShrink = 0, totalShrinkFactor = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
                     var margins = items[i].MarginBefore + items[i].MarginAfter;
                     if (frozen[i]) { frozenSpace += sizes[i] + margins; continue; }
                     unfrozenHypothetical += items[i].HypotheticalMainSize + margins;
                     totalShrink += ParseFloat(items[i].Box.FlexShrink) * items[i].HypotheticalMainSize;
+                    totalShrinkFactor += ParseFloat(items[i].Box.FlexShrink);
                 }
 
                 var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
+                if (pass == 0) initialFreeSpace = remaining;
+                remaining = ScaleByFactorSum(initialFreeSpace, remaining, totalShrinkFactor);
                 double totalViolation = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
@@ -1134,6 +1156,7 @@ namespace PeachBrackets.Html.Dom
             var minViolated = new bool[items.Count];
             var maxViolated = new bool[items.Count];
 
+            double initialFreeSpace = 0;
             for (var pass = 0; pass <= items.Count; pass++)
             {
                 double frozenSpace = 0, unfrozenHypothetical = 0, totalGrow = 0;
@@ -1146,6 +1169,8 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
+                if (pass == 0) initialFreeSpace = remaining;
+                remaining = ScaleByFactorSum(initialFreeSpace, remaining, totalGrow);
                 double totalViolation = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
