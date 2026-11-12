@@ -700,12 +700,10 @@ namespace PeachBrackets.Html.Dom
                 // (container width).
                 double naturalMain = _mainAxisIsPhysicalX ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
 
-                if (ParseFloat(box.FlexGrow) > 0)
-                {
-                    // flex-grow items: hypothetical=0 so all free space is distributed via growth.
-                    hypothetical = 0;
-                }
-                else if (_mainAxisIsPhysicalX)
+                // An item that grows starts from its content size too (css-flexbox-1 §9.2: an `auto` flex-basis is the
+                // item's content size), and the free space is shared on top of it. `flex: 1` is `1 1 0%`, a
+                // basis of its own, so it never gets here.
+                if (_mainAxisIsPhysicalX)
                 {
                     // Main axis physical X, no flex-grow: derive max-content width from inline word measurements.
                     // Block items fill the container on layout, so naturalMain = container width.
@@ -788,14 +786,18 @@ namespace PeachBrackets.Html.Dom
                             minContent,
                             Math.Min(maxIntrinsicWidth, naturalMain));
                     }
-                    // min-width constrains content width; outer minimum = min-width + padding + border
-                    if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                    // min-width constrains content width; outer minimum = min-width + padding + border. An item that grows keeps
+                    // its content size as the flex base size, however small: the minimum is applied to the size it ends up
+                    // with (ClampMainAxis in DistributeFlex), not to what the free space is shared on top of (§9.2 and §9.7).
+                    if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth) && ParseFloat(box.FlexGrow) <= 0)
                     {
-                        double minOuter = CssValueParser.ParseLength(box.MinWidth, mainSize, box)
-                            + box.ActualPaddingLeft + box.ActualPaddingRight
-                            + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+                        double minOuter = CssValueParser.ParseLength(box.MinWidth, mainSize, box) + MainBoxSizeIncluded(box);
                         maxContent = Math.Max(maxContent, minOuter);
                     }
+                    // A growing item whose content is wider than its max-width is that wide (its hypothetical size, §9.2), which is what
+                    // decides that the line grows rather than shrinks; the loop in GrowAgainstAutoMinimums then holds it there.
+                    if (ParseFloat(box.FlexGrow) > 0 && CssValueParser.IsValidLength(box.MaxWidth))
+                        maxContent = Math.Min(maxContent, CssValueParser.ParseLength(box.MaxWidth, mainSize, box) + MainBoxSizeIncluded(box));
                     hypothetical = maxContent;
                 }
                 else
@@ -886,6 +888,9 @@ namespace PeachBrackets.Html.Dom
 
         // ─── Phase 4: flexible length resolution ──────────────────────────────────
 
+        /// <summary>Whether <paramref name="box"/> has a definite maximum size on the main axis (<c>max-width</c> or <c>max-height</c>).</summary>
+        private bool HasMainMaximum(CssBox box) => CssValueParser.IsValidLength(_mainAxisIsPhysicalX ? box.MaxWidth : box.MaxHeight);
+
         /// <summary>
         /// Whether <paramref name="item"/>'s automatic minimum size lies above its hypothetical size: on a line that has free
         /// space on the flex base sizes this is the item the minimum raises, which §9.7 treats as frozen at its minimum.
@@ -938,7 +943,12 @@ namespace PeachBrackets.Html.Dom
 
             // The same for a line that grows: an item whose share of the free space leaves it under its automatic minimum
             // is frozen at that minimum and the others take the rest (§9.7). Only items that would violate are marked.
-            var growsAgainstMinimum = freeSpace > 0 && !hasAutoMinimum && line.Items.Any(IsRaisedByMinimum);
+            // An explicit min-width above an item's flex base size can leave it under that minimum too, and an item whose share would
+            // take it past its max-width is held there and the rest is shared by the others, so either one sends the line through the
+            // same loop; a line with neither keeps the plain arithmetic.
+            var growsAgainstMinimum = freeSpace > 0 && !hasAutoMinimum && line.Items.Any(i => IsRaisedByMinimum(i)
+                || ClampMainAxis(i.Box, 0, mainSize) > i.HypotheticalMainSize + RaisedTolerance
+                || HasMainMaximum(i.Box));
             if (growsAgainstMinimum) GrowAgainstAutoMinimums(line, mainSize, mainSize - totalGapSpace);
 
             foreach (var item in line.Items)
@@ -1066,8 +1076,8 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// CSS Flexbox 1 §9.7's resolution of a line that has free space, for a line holding an item whose share would leave it
-        /// under its automatic minimum size: such an item is frozen at its minimum (a min violation) and the free space it
-        /// cannot use is shared by the items still free to grow.
+        /// under its minimum size (automatic or <c>min-width</c>) or over its maximum: the violating items are frozen at the limit
+        /// they hit and the free space they cannot use, or the room they leave, is shared by the items still free to grow.
         /// </summary>
         private void GrowAgainstAutoMinimums(FlexLine line, double mainSize, double availableForItems)
         {
@@ -1075,12 +1085,19 @@ namespace PeachBrackets.Html.Dom
             var frozen = new bool[items.Count];
             var sizes = new double[items.Count];
             var minimums = new double[items.Count];
+            var maximums = new double[items.Count];
 
             for (var i = 0; i < items.Count; i++)
             {
                 sizes[i] = items[i].HypotheticalMainSize;
                 minimums[i] = Math.Max(ClampMainAxis(items[i].Box, 0, mainSize), items[i].AutoMinMainSize);
+
+                // Where min and max conflict, min wins (ClampMainAxis).
+                maximums[i] = Math.Max(minimums[i], ClampMainAxis(items[i].Box, double.MaxValue, mainSize));
             }
+
+            var minViolated = new bool[items.Count];
+            var maxViolated = new bool[items.Count];
 
             for (var pass = 0; pass <= items.Count; pass++)
             {
@@ -1094,24 +1111,36 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
-                var violated = false;
+                double totalViolation = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
+                    minViolated[i] = false;
+                    maxViolated[i] = false;
                     if (frozen[i]) continue;
 
                     var tentative = totalGrow > 0 && remaining > 0
                         ? items[i].HypotheticalMainSize + remaining * (ParseFloat(items[i].Box.FlexGrow) / totalGrow)
                         : items[i].HypotheticalMainSize;
-                    sizes[i] = Math.Max(minimums[i], tentative);
-
-                    if (sizes[i] > tentative + 1e-9)
-                    {
-                        frozen[i] = true;
-                        violated = true;
-                    }
+                    sizes[i] = Math.Min(maximums[i], Math.Max(minimums[i], tentative));
+                    totalViolation += sizes[i] - tentative;
+                    minViolated[i] = sizes[i] > tentative + 1e-9;
+                    maxViolated[i] = sizes[i] < tentative - 1e-9;
                 }
 
-                if (!violated) break;
+                // §9.7 step 4: freeze the items that violated their minimum when the total violation is positive, those that violated
+                // their maximum when it is negative, and all of them when it is zero.
+                var freezeMinViolators = totalViolation > -1e-9;
+                var freezeMaxViolators = totalViolation < 1e-9;
+                var anyViolation = false;
+                for (var i = 0; i < items.Count; i++)
+                {
+                    if (frozen[i] || !(freezeMinViolators && minViolated[i] || freezeMaxViolators && maxViolated[i])) continue;
+
+                    frozen[i] = true;
+                    anyViolation = true;
+                }
+
+                if (!anyViolation) break;
             }
 
             for (var i = 0; i < items.Count; i++)
@@ -1158,10 +1187,10 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var item in line.Items)
             {
-                if (overflows && ParseFloat(item.Box.FlexShrink) <= 0) continue;
+                if (overflows && ParseFloat(item.Box.FlexShrink) <= 0 && ParseFloat(item.Box.FlexGrow) <= 0) continue;
 
                 if (await AutomaticMinimumWidth(g, item.Box, container) is { } minimum)
-                    RecordAutoMinimum(item, minimum, overflows);
+                    RecordAutoMinimum(item, minimum);
             }
         }
 
@@ -1239,21 +1268,16 @@ namespace PeachBrackets.Html.Dom
                 if (CssValueParser.IsValidLength(box.MaxHeight))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxHeight, container, box) + MainBoxSizeIncluded(box));
 
-                RecordAutoMinimum(item, minimum, overflows);
+                RecordAutoMinimum(item, minimum);
             }
         }
 
         /// <summary>
-        /// Stores <paramref name="minimum"/> as the item's automatic minimum. Against an overflowing line it is capped at the
-        /// hypothetical size (a larger one cannot matter when shrinking); against a growing line every item keeps its
-        /// minimum, and one above its hypothetical size is a violation (see <see cref="DistributeFlex"/>), so a line with
-        /// no violation keeps the plain arithmetic.
+        /// Stores <paramref name="minimum"/> as the item's automatic minimum. One above the item's flex base size raises it
+        /// (§9.7 step 3 freezes such an item at its minimum), on an overflowing line as on one with room to spare: a basis of 0
+        /// next to content that already fills the line still leaves the item its content (see <see cref="DistributeFlex"/>).
         /// </summary>
-        private static void RecordAutoMinimum(FlexItem item, double minimum, bool overflows)
-        {
-            if (overflows) item.AutoMinMainSize = Math.Min(minimum, item.HypotheticalMainSize);
-            else item.AutoMinMainSize = minimum;
-        }
+        private static void RecordAutoMinimum(FlexItem item, double minimum) => item.AutoMinMainSize = minimum;
 
         private async ValueTask ResizeItem(Canvas g, FlexItem item, double finalSize)
         {
@@ -2538,10 +2562,6 @@ namespace PeachBrackets.Html.Dom
             {
                 hypothetical = CssValueParser.ParseLength(authoredWidth!, mainSize, box) + MainBoxSizeIncluded(box);
             }
-            else if (ParseFloat(box.FlexGrow) > 0)
-            {
-                hypothetical = 0;
-            }
             else
             {
                 var marginBefore = IsMainMarginBeforeAuto(box) ? 0 : MainMarginBefore(box);
@@ -2551,13 +2571,17 @@ namespace PeachBrackets.Html.Dom
 
                 hypothetical = Math.Max(minContent, Math.Min(maxIntrinsicWidth, mainSize - marginBefore - marginAfter));
 
-                if (box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
+                // The same two rules for a growing item as MeasureItem: its base size is not raised by min-width, and is
+                // held to max-width.
+                var grows = ParseFloat(box.FlexGrow) > 0;
+                if (!grows && box.MinWidth != "0" && CssValueParser.IsValidLength(box.MinWidth))
                 {
-                    var minOuter = CssValueParser.ParseLength(box.MinWidth, mainSize, box)
-                        + box.ActualPaddingLeft + box.ActualPaddingRight
-                        + box.ActualBorderLeftWidth + box.ActualBorderRightWidth;
+                    var minOuter = CssValueParser.ParseLength(box.MinWidth, mainSize, box) + MainBoxSizeIncluded(box);
                     hypothetical = Math.Max(hypothetical, minOuter);
                 }
+
+                if (grows && CssValueParser.IsValidLength(box.MaxWidth))
+                    hypothetical = Math.Min(hypothetical, CssValueParser.ParseLength(box.MaxWidth, mainSize, box) + MainBoxSizeIncluded(box));
             }
 
             var item = new FlexItem(box, hypothetical, hypothetical)
@@ -2956,11 +2980,6 @@ namespace PeachBrackets.Html.Dom
                 ? 0
                 : CrossAfter(box.ActualMarginLeft, box.ActualMarginRight, box.ActualMarginTop, box.ActualMarginBottom);
 
-        private double MainPaddingBorder(CssBox box) =>
-            _mainAxisIsPhysicalX
-                ? box.ActualPaddingLeft + box.ActualPaddingRight + box.ActualBorderLeftWidth  + box.ActualBorderRightWidth
-                : box.ActualPaddingTop  + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
-
         // box.Width/Height must hold whatever CssBox.ActualBoxSizeIncludedWidth/Height's own box-sizing
         // contract expects: content-space for content-box (subtract the item's own main-axis padding/
         // border back out of the outer size), or the outer size directly for border-box
@@ -2980,11 +2999,11 @@ namespace PeachBrackets.Html.Dom
         {
             var maxRaw = _mainAxisIsPhysicalX ? box.MaxWidth : box.MaxHeight;
             if (CssValueParser.IsValidLength(maxRaw))
-                outerSize = Math.Min(outerSize, CssValueParser.ParseLength(maxRaw, mainSize, box) + MainPaddingBorder(box));
+                outerSize = Math.Min(outerSize, CssValueParser.ParseLength(maxRaw, mainSize, box) + MainBoxSizeIncluded(box));
 
             var minRaw = _mainAxisIsPhysicalX ? box.MinWidth : box.MinHeight;
             if (CssValueParser.IsValidLength(minRaw))
-                outerSize = Math.Max(outerSize, CssValueParser.ParseLength(minRaw, mainSize, box) + MainPaddingBorder(box));
+                outerSize = Math.Max(outerSize, CssValueParser.ParseLength(minRaw, mainSize, box) + MainBoxSizeIncluded(box));
 
             return outerSize;
         }

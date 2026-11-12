@@ -335,7 +335,7 @@ container.Column(column =>
 });
 ```
 
-`Grow(ratio)` maps to `flex-grow`; combine it with an explicit `Width`/`Height` on sibling items for a "fixed items plus one flexible item" layout.
+`Grow(ratio)` maps to `flex-grow`; combine it with an explicit `Width`/`Height` on sibling items for a "fixed items plus one flexible item" layout. A growing item starts from its content size and takes its share of the free space on top of it, as `flex-grow` with an `auto` `flex-basis` does in CSS, so two `Grow()` items holding different content are not the same width; give each the same `Width` (a percentage, say) for equal columns.
 
 `AlignLeft()`/`AlignCenter()`/`AlignRight()` position a container within its parent (with auto margins, so give it a `Width` narrower than the parent - or leave it auto-width, and it shrinks to its content). They work on both `Row` and `Column` items. Text inside a container is aligned separately, with `Alignment(...)` on the text (`t.Alignment(TextAlignment.Right)`).
 
