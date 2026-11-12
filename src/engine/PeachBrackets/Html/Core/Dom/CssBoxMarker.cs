@@ -115,12 +115,13 @@ namespace PeachBrackets.Html.Dom
             if (listStyleType.Equals(Keywords.DisclosureOpen, System.StringComparison.OrdinalIgnoreCase) ||
                 listStyleType.Equals(Keywords.DisclosureClosed, System.StringComparison.OrdinalIgnoreCase))
             {
-                // CSS Counter Styles Level 3 §6.3: a fixed symbol, not a counted numbering style - every
-                // item gets the same glyph regardless of its list-item index, so the counter value
-                // passed in is irrelevant (FormatCounterValue ignores it for these two styles) and isn't
-                // worth a real counter lookup. Suffix is a plain space, not the "." every other named
-                // style gets below.
-                Text = CssCounterEngine.FormatCounterValue(0, listStyleType) + " ";
+                // CSS Counter Styles Level 3 §6.3: a fixed symbol, not a counted numbering style - every item gets the
+                // same triangle regardless of its list-item index. Drawn as a vector shape like disc/circle/square, not
+                // as the U+25B8/U+25BE glyph: no font is promised to have those, and a document that embeds its fonts
+                // (PDF/A) cannot fall back to the placeholder glyph.
+                MarkerShape = listStyleType.ToLowerInvariant();
+                VerticalAlign = CssProperty<CssKeywordOrValue<VerticalAlignment, LengthOrCalc>>.FromValue(
+                    Keywords.Middle, new CssKeywordOrValue<VerticalAlignment, LengthOrCalc>(VerticalAlignment.Middle, null));
                 return;
             }
 
@@ -155,8 +156,18 @@ namespace PeachBrackets.Html.Dom
                 {
                     // Matches the disc/circle/square sizing math list markers have always used -
                     // centered within the line, not top-aligned like a text glyph.
-                    var shapeSize = ActualFont.Height * 0.35;
-                    Words.Add(new CssRectShape(this) { Width = shapeSize, Height = shapeSize });
+                    if (MarkerShape is Keywords.DisclosureOpen or Keywords.DisclosureClosed)
+                    {
+                        // The triangle, then the space a glyph marker would have had after it, which a summary's inside marker needs
+                        // (a list item's own marker has a margin for it).
+                        var triangle = ActualFont.Height * 0.5;
+                        Words.Add(new CssRectShape(this) { Width = triangle + (ActualFont.Height * 0.3), Height = triangle });
+                    }
+                    else
+                    {
+                        var shapeSize = ActualFont.Height * 0.35;
+                        Words.Add(new CssRectShape(this) { Width = shapeSize, Height = shapeSize });
+                    }
                 }
                 else if (ContentImage is not null && !_ownsContentImage && Words.Count == 0)
                 {

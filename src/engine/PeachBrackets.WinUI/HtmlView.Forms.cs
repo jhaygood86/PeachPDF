@@ -20,6 +20,36 @@ public sealed partial class HtmlView
         return result.Applied;
     }
 
+    // A click on a summary opens or closes its details, as a browser does; the document is laid out again, so the pages after it move.
+    internal bool ToggleDetailsAt(int page, double x, double y)
+    {
+        if (_document is not { } document || document.GetElementAt(page, x, y) is not { } element || document.GetDetailsToggledBy(element) is null)
+            return false;
+
+        QueueFocus(() => ToggleDetailsAsync(document, element));
+        return true;
+    }
+
+    private bool ToggleDetails(DocumentElement element)
+    {
+        if (_document is not { } document || document.GetDetailsToggledBy(element) is null)
+            return false;
+
+        QueueFocus(() => ToggleDetailsAsync(document, element));
+        return true;
+    }
+
+    private async Task ToggleDetailsAsync(PeachBrackets.HtmlDocument document, DocumentElement element)
+    {
+        if (_context is null || !ReferenceEquals(document, _document))
+            return;
+
+        using var measuring = new PeachDrawing.Win2D.Win2dComposer(_context, 1, 1);
+        var result = await document.ToggleDetailsAsync(element, measuring.Canvas);
+        if (ReferenceEquals(document, _document))
+            AfterControlChange(document, result);
+    }
+
     // A click on a submit button raises FormSubmitting.
     internal bool SubmitFormAt(int page, double x, double y) =>
         _document is { } document && document.GetElementAt(page, x, y) is { } element && SubmitForm(element, page, x, y);
@@ -62,7 +92,7 @@ public sealed partial class HtmlView
 
     /// <summary>Does what a click on a button does - resets its form or submits it - for a screen reader or the keyboard.</summary>
     internal bool InvokeButton(AccessibilityNode node) =>
-        _document is { } document && node.ElementId is { } id && document.GetElement(id) is { } element && (ResetForm(element) || SubmitForm(element));
+        _document is { } document && node.ElementId is { } id && document.GetElement(id) is { } element && (ResetForm(element) || SubmitForm(element) || ToggleDetails(element));
 
     /// <summary>Submits the form a button belongs to, for a screen reader or the keyboard.</summary>
     internal bool SubmitForm(AccessibilityNode node) =>

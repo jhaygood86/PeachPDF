@@ -318,6 +318,62 @@ public sealed partial class HtmlDocument
         return await RestyleAsync([tag.SourceOrdinal], measuringCanvas);
     }
 
+    /// <summary>
+    /// The <c>&lt;details&gt;</c> element a click on <paramref name="element"/> would open or close: the one whose first <c>&lt;summary&gt;</c>
+    /// holds it. A click on a link, button or form control inside the summary is that control's own, and does not toggle.
+    /// </summary>
+    /// <param name="element">the element that was clicked, as <see cref="GetElementAt(int, double, double)"/> returns it</param>
+    /// <returns>the <c>details</c> element, or null when the click is not on a summary</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="element"/> is null</exception>
+    public DocumentElement? GetDetailsToggledBy(DocumentElement element)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        for (var box = element.Box; box is not null; box = box.ParentBox)
+        {
+            if (box.HtmlTag is not { } tag)
+                continue;
+
+            if (IsInteractiveTag(tag))
+                return null;
+
+            if (tag.Name.Equals("summary", StringComparison.OrdinalIgnoreCase))
+            {
+                return box.ParentBox is { HtmlTag: { } parent } details && parent.Name.Equals("details", StringComparison.OrdinalIgnoreCase)
+                    ? new DocumentElement(details)
+                    : null;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Does what a click on a <c>&lt;summary&gt;</c> does: opens its <c>&lt;details&gt;</c> when it is closed and closes it when it is open
+    /// (<see cref="SetOpenAsync"/>).
+    /// </summary>
+    /// <param name="element">the element that was clicked</param>
+    /// <param name="measuringCanvas">a canvas to measure text on</param>
+    /// <returns>whether it was applied and the regions to repaint</returns>
+    /// <exception cref="ArgumentNullException">an argument is null</exception>
+    /// <exception cref="InvalidOperationException">the document has not been laid out</exception>
+    public ValueTask<UpdateResult> ToggleDetailsAsync(DocumentElement element, Canvas measuringCanvas)
+    {
+        ArgumentNullException.ThrowIfNull(element);
+        ArgumentNullException.ThrowIfNull(measuringCanvas);
+        if (GetDetailsToggledBy(element) is not { } details)
+            return ValueTask.FromResult(UpdateResult.NotApplied("The element is not in a summary."));
+
+        return SetOpenAsync(details, !details.Box.HtmlTag!.HasAttribute("open"), measuringCanvas);
+    }
+
+    private static bool IsInteractiveTag(HtmlTag tag) =>
+        tag.Name.ToLowerInvariant() switch
+        {
+            "a" or "area" => tag.HasAttribute("href"),
+            "button" or "input" or "select" or "textarea" or "label" => true,
+            _ => false,
+        };
+
     private static CssBox? ControlOf(DocumentElement element) =>
         element.Box is CssBoxFormField { HtmlTag: not null } field ? field : null;
 

@@ -245,7 +245,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
-        public async Task Marker_DisclosureListStyleTypes_RenderFixedGlyphRegardlessOfIndex()
+        public async Task Marker_DisclosureListStyleTypes_RenderFixedShapeRegardlessOfIndex()
         {
             var root = await BuildAndLayout(Wrap(
                 "<ol style='list-style-type: disclosure-open'><li id='a'>a</li><li id='b'>b</li></ol>" +
@@ -255,9 +255,10 @@ namespace PeachBrackets.Engine.Tests.Integration
             var b = (CssBoxMarker)FindById(root, "b")!.Boxes.Single(b => b.IsMarkerPseudoElement);
             var c = (CssBoxMarker)FindById(root, "c")!.Boxes.Single(b => b.IsMarkerPseudoElement);
 
-            Assert.Equal("▾ ", a.Text);
-            Assert.Equal("▾ ", b.Text);
-            Assert.Equal("▸ ", c.Text);
+            // A vector triangle, not a glyph that a font may lack.
+            Assert.Equal("disclosure-open", a.MarkerShape);
+            Assert.Equal("disclosure-open", b.MarkerShape);
+            Assert.Equal("disclosure-closed", c.MarkerShape);
         }
 
         [Fact]

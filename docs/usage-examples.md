@@ -656,6 +656,8 @@ With the flag on, each `<input>`/`<select>` above becomes a real AcroForm field:
 
 When `EnableInteractivePdfForms` is left at its default (`false`), none of this runs — no AcroForm object is created and the page's static rendering is unchanged.
 
+A `<details>` can be opened (or, if it starts open, collapsed) in a PDF reader with no setup: `PdfGenerateConfig.EnableInteractivePdfDetails` is on by default. See [Interactive details in PDF](html-css-support.md#interactive-details-in-pdf) for what it writes and its limits.
+
 The field-kind inference is CSS-driven and author-overridable via the `-peachpdf-pdf-form-field` custom property (plus three text-field-only sub-setting properties for auto-sizing, comb layout, and scroll behavior) — see [Interactive PDF Forms Support](html-css-support.md#interactive-pdf-forms-support) in HTML & CSS Support for the full property reference and default inference table.
 
 ## Generating PDF/A-conformant output

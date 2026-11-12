@@ -192,7 +192,7 @@ API (it needs a desktop session).
 
 The view asks the document to draw form controls with their look (`PaintFormControls`), so a check box, radio button, text field, button, drop-down
 and range are drawn from their own CSS like the rest of the page; no XAML widget is placed over it. A click on a check box or radio button toggles it
-(`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. The UI Automation peer of a check box, radio button or switch supports
+(`HtmlDocument.Activate`), and so do Space and Enter on one that has the focus. A click on a `<summary>` opens or closes its `<details>` (`HtmlDocument.ToggleDetailsAsync`), and so does the Invoke pattern of its peer. The UI Automation peer of a check box, radio button or switch supports
 the Toggle pattern, which does the same and reports the state.
 
 A click on a text field gives it the focus and puts the caret where the click was; the field shows its selection, the text an input method is composing

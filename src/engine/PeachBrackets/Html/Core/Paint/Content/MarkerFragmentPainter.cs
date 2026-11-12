@@ -63,12 +63,46 @@ namespace PeachBrackets.Html.Paint.Content
                 });
         }
 
+        // A triangle pointing right when closed and down when open, filling a little less than the marker's box (the path takes points).
+        private static void PaintDisclosureTriangle(Canvas g, CssBoxMarker box, Rect rect)
+        {
+            var ppp = g.PixelsPerPoint;
+            var left = rect.Left / ppp;
+            var top = rect.Top / ppp;
+            var height = rect.Height / ppp;
+            var width = height; // the box is wider than the triangle: the space after it is part of the marker
+
+            using var path = g.GetGraphicsPath();
+            if (box.MarkerShape == Keywords.DisclosureClosed)
+            {
+                path.Start(left + (width * 0.1), top);
+                path.LineTo(left + width, top + (height / 2));
+                path.LineTo(left + (width * 0.1), top + height);
+            }
+            else
+            {
+                path.Start(left, top + (height * 0.1));
+                path.LineTo(left + width, top + (height * 0.1));
+                path.LineTo(left + (width / 2), top + height);
+            }
+
+            path.CloseFigure();
+            using var brush = g.GetSolidBrush(box.ActualColor);
+            g.DrawPath(brush, path);
+        }
+
         private static void PaintShape(Canvas g, CssBoxMarker box, Rect rect)
         {
             if (box.MarkerShape == Keywords.Square)
             {
                 using var squareBrush = g.GetSolidBrush(box.ActualColor);
                 g.DrawRectangle(squareBrush, rect.X, rect.Y, rect.Width, rect.Height);
+                return;
+            }
+
+            if (box.MarkerShape is Keywords.DisclosureOpen or Keywords.DisclosureClosed)
+            {
+                PaintDisclosureTriangle(g, box, rect);
                 return;
             }
 

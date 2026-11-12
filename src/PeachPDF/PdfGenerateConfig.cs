@@ -312,6 +312,15 @@ namespace PeachPDF
         public bool EnableInteractivePdfForms { get; set; } = false;
 
         /// <summary>
+        /// When <c>true</c> (the default), a closed <c>&lt;details&gt;</c> can be opened in a PDF reader: its content is drawn into a hidden
+        /// form widget that a click on the summary shows over the page (and a click on it hides again), using PDF <c>Hide</c> actions
+        /// and no script. The page itself still shows the closed state, so printing and readers that do not run actions are unaffected. Nothing
+        /// reflows when it opens: the content covers what follows the summary. Skipped for a document that targets PDF/A, PDF/X or PDF/UA, which
+        /// do not allow these actions; set to <c>false</c> to leave closed <c>details</c> as only their summaries.
+        /// </summary>
+        public bool EnableInteractivePdfDetails { get; set; } = true;
+
+        /// <summary>
         /// The PDF/A (ISO 19005) conformance level to target. Defaults to <see cref="PeachPDF.PdfAConformance.None"/>
         /// - no PDF/A-specific work is done (see <see cref="PeachPDF.PdfAConformance.None"/> for exactly
         /// what that means). See <see cref="PeachPDF.PdfAConformance"/> for what each other level

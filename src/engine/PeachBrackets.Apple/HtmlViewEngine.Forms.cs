@@ -197,7 +197,7 @@ internal sealed partial class HtmlViewEngine
             return true;
         }
 
-        return SubmitForm(element, page, x, y);
+        return SubmitForm(element, page, x, y) || ToggleDetails(document, element);
     }
 
     /// <summary>Does what a click does on a control, for an assistive technology or the keyboard.</summary>
@@ -213,6 +213,9 @@ internal sealed partial class HtmlViewEngine
         }
 
         if (!IsControl(element) && SubmitForm(element))
+            return true;
+
+        if (ToggleDetails(document, element))
             return true;
 
         var result = document.Activate(element);
@@ -247,6 +250,26 @@ internal sealed partial class HtmlViewEngine
     {
         using var measuring = new CoreGraphicsComposer(_context!, 1, 1, 1, 1);
         return await work(measuring.Canvas);
+    }
+
+    // A click on a summary opens or closes its details, as a browser does; the document is laid out again, so what follows it moves.
+    private bool ToggleDetails(HtmlDocument document, DocumentElement element)
+    {
+        if (document.GetDetailsToggledBy(element) is null)
+            return false;
+
+        Queue(() => ToggleDetailsAsync(document, element));
+        return true;
+    }
+
+    private async Task ToggleDetailsAsync(HtmlDocument document, DocumentElement element)
+    {
+        if (_context is null || !ReferenceEquals(document, _document))
+            return;
+
+        var result = await WithMeasuringAsync(canvas => document.ToggleDetailsAsync(element, canvas));
+        if (ReferenceEquals(document, _document))
+            AfterControlChange(document, result);
     }
 
     private async Task ResetFormAsync(HtmlDocument document, DocumentElement element)
