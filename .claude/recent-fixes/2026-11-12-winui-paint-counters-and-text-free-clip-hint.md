@@ -44,6 +44,15 @@ place: `a:hover .icon`-style rules on the page's 129 inline SVG icons made `Inte
 scene graph was built from when a state rule styled one of its elements (`_stateBoxes`), and the restyler builds that graphic again (`RebuildForState`, the shape `StepAnimation` already used)
 after raising `StyleGeneration`, adding the graphic's rect to the dirty regions. Hover changes on Ars: 860-1,500 ms -> 106-133 ms. Tests: `InteractionStateTests` asserts `Incremental` and dirty regions
 for the sibling and descendant forms; Engine 19,715, PeachBrackets 1,200 pass.
-**Still reloading on Ars (400-570 ms):** hover changes on `<a>` and `<img>` whose new style differs in an area that is not paint-only; the reason now names the areas
-("content, font..."), but the pointer sweep stopped delivering events before it could be read. **Not done:** a graphic inside a recascaded root is not rebuilt for a changed `currentColor`
-by this path (unchanged behavior).
+
+## Hover over a card link or image no longer reloads the page either (same day)
+
+The remaining 450-570 ms hovers (`<a>`, `<img>`) were found by naming, in the fallback reason (`PEACH_PAINT_STATS=1`), the style areas and properties that differed: the cascade
+run again on one box does not redo what the load did to it afterwards. An `a` that holds a block (an absolutely positioned image gets a block wrapper) was made a block, and read back as
+inline; the image was wrapped and left `static`, and read back as `absolute`, with color, line-height and tab-size inherited through the wrapper's defaults. Every such box looked
+changed, so every hover over a card on Ars loaded the page again. **Fix (`InteractionRestyler`):** run the cascade under the old state first, then under the new, and let
+the state's doing be what differs between those two runs: a box keeps the style it has in every area the two agree on (`StateDelta`). The two text areas hold paint beside layout, so
+they are not taken whole: each property that differs is set on the box's own style by name. Measured on Ars with the real pointer: hover change median 450-1,500 ms -> 27 ms (p90 46-108 ms, max ~210 ms), no
+fallback in two 100+ hover sweeps. `IncrementalInteractionRestyleTests` checks three corrected boxes against a full reload (two fail without the change) and `InteractionStateTests` an inline-holds-block hover.
+**Trap:** the reason only said "a style area that holds more than paint changed" until it was made to name the area and the properties; the `display: block -> inline` in both directions (hover in and out)
+is what showed it was no hover's doing. **Not done:** a hover that really changes a layout property still loads the page again, by design.

@@ -212,6 +212,43 @@ public class InteractionStateTests
     }
 
     [Fact]
+    public async Task AHoverOnAnInlineThatTheLoadMadeABlockBecauseItHoldsOne_IsStillAppliedInPlace()
+    {
+        // An `a` around a block is made a block after the cascade, and cascading it again alone says inline: that is not the hover's doing,
+        // and used to send every hover over a card link on a news front page through a full load.
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><div style='width: 40px; height: 40px'></div></a>",
+            "<style>a { background: rgb(0,0,255) } a:hover { background: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.True(entered.Incremental, "the change loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).R);
+
+        var left = await document.ClearPointerStateAsync(measuring);
+        Assert.True(left.Incremental, "ending the hover loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+    }
+
+    [Fact]
+    public async Task AHoverThatChangesTheLayoutOfABoxAfterTheLoadCorrectedIt_StillLoadsTheDocumentAgain()
+    {
+        // The same box, but the hover itself changes its size: the corrected values it keeps must not hide that.
+        var (_, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><div style='height: 40px'></div></a>",
+            "<style>a { background: rgb(0,0,255) } a:hover { background: rgb(255,0,0); padding-left: 30px }</style>");
+        var (x, y) = Center(document, "link");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.False(entered.Incremental);
+    }
+
+    [Fact]
     public async Task AHoverOnAnElementNoRuleReachingAnInlineSvgCanMatch_KeepsTheFastPath()
     {
         // `a:hover + svg .fill` is a candidate for the SVG's shape, but the hovered <div> cannot be the `a` its state compound names.
