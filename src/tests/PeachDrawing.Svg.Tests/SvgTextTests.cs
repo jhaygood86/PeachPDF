@@ -311,13 +311,13 @@ public class SvgTextTests
     private static List<double> Coordinates(string d, int axis)
     {
         var numbers = System.Text.RegularExpressions.Regex.Matches(d, @"-?\d+(\.\d+)?").Select(m => double.Parse(m.Value)).ToList();
-        return numbers.Where((_, i) => i % 2 == axis).ToList();
+        return [.. numbers.Where((_, i) => i % 2 == axis)];
     }
 
     private static HashSet<string> SfntTables(byte[] font)
     {
         var count = BinaryPrimitives.ReadUInt16BigEndian(font.AsSpan(4));
-        return Enumerable.Range(0, count).Select(i => System.Text.Encoding.ASCII.GetString(font, 12 + 16 * i, 4)).ToHashSet();
+        return [.. Enumerable.Range(0, count).Select(i => System.Text.Encoding.ASCII.GetString(font, 12 + 16 * i, 4))];
     }
 
     private static uint Checksum(byte[] data)

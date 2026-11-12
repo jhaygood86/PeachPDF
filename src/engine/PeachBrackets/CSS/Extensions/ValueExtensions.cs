@@ -511,7 +511,7 @@ namespace PeachBrackets.Css
                 {
                     if (current.Count != 0)
                     {
-                        current = new List<Token>();
+                        current = [];
                         list.Add(current);
                     }
 
@@ -562,7 +562,7 @@ namespace PeachBrackets.Css
 
                 if (nested == 0 && token.Type == TokenType.Comma)
                 {
-                    current = new List<Token>();
+                    current = [];
                     list.Add(current);
                     continue;
                 }

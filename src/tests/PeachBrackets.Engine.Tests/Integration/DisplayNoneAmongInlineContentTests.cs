@@ -29,7 +29,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private static readonly string[] TextWords = Text.Split(' ');
 
         private static List<CssRect> WordsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).SelectMany(b => b.Words).ToList();
+            [.. LayoutHarness.Descendants(root).SelectMany(b => b.Words)];
 
         private static CssRect Word(CssBox root, string text) =>
             WordsOf(root).Single(w => w.Text?.Trim() == text);
@@ -44,7 +44,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 FragmentPaintHarness.PaintPage(container, g, page);
             }
 
-            return g.DrawStringCalls.Select(c => c.Text.Trim()).ToList();
+            return [.. g.DrawStringCalls.Select(c => c.Text.Trim())];
         }
 
         [Theory]

@@ -285,7 +285,7 @@ namespace PeachDrawing.Text.Layout
                 atoms.Add(new Atom(start, i, run, level, script, face is null ? style : style with { Typeface = face }));
             }
 
-            return atoms.ToArray();
+            return [.. atoms];
         }
 
         private static (string[] Scripts, ArabicJoiningForm[] Joining, UseCategory[]? Use, KhmerCategory[]? Khmer) ResolveScripts(string text)
@@ -654,7 +654,7 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            return first < start && points.Length > 0 ? points.Where(point => point > start).ToArray() : points;
+            return first < start && points.Length > 0 ? [.. points.Where(point => point > start)] : points;
         }
 
         /// <summary>The longest word hyphenation is tried on, in UTF-16 units: the patterns work on words, and a longer run of letters is not one.</summary>
@@ -681,7 +681,7 @@ namespace PeachDrawing.Text.Layout
                 }
             }
 
-            return points.ToArray();
+            return [.. points];
         }
 
         /// <summary>The hyphen a line ends with when it is broken at <paramref name="index"/>: its glyphs, its style (the face of the character before the break) and its width.</summary>

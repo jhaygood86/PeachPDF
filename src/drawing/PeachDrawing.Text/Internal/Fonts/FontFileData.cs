@@ -67,7 +67,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         // font path too - see FontResolver.cs) never pays that pass again just to recompute the very key
         // that would have found the existing cache entry. ConditionalWeakTable so a byte[] this process
         // stops referencing elsewhere doesn't keep its hash alive forever.
-        private static readonly ConditionalWeakTable<byte[], object> _hashCache = new();
+        private static readonly ConditionalWeakTable<byte[], object> _hashCache = [];
 
         /// <summary>
         /// The content hash of <paramref name="bytes"/>, computed once per buffer (by reference) and remembered for as long as the
@@ -103,7 +103,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         }
         public static FontFileData CreateCompiledFont(byte[] bytes)
         {
-            FontFileData fontSource = new FontFileData(bytes, default);
+            FontFileData fontSource = new(bytes, default);
             return fontSource;
         }
 

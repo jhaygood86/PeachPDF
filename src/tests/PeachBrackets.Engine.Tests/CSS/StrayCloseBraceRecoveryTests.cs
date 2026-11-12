@@ -15,7 +15,7 @@ public class StrayCloseBraceRecoveryTests
     private static async Task<Stylesheet> ParseAsync(string css) =>
         await new StylesheetParser().ParseAsync(css, TestContext.Current.CancellationToken);
 
-    private static List<string> SelectorsOf(Stylesheet sheet) => sheet.StyleRules.Select(r => r.SelectorText).ToList();
+    private static List<string> SelectorsOf(Stylesheet sheet) => [.. sheet.StyleRules.Select(r => r.SelectorText)];
 
     [Fact]
     public async Task RulesAfterAMalformedRule_StillApply()

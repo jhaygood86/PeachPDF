@@ -37,9 +37,9 @@ namespace PeachDrawing.PDF.Tests.Import
         {
             byte[] header = [1, 0, 4, 1];
             var nameIndex = Index("T"u8.ToArray());
-            var stringIndex = Index((o.Strings ?? []).Select(s => Encoding.ASCII.GetBytes(s)).ToArray());
+            var stringIndex = Index([.. (o.Strings ?? []).Select(s => Encoding.ASCII.GetBytes(s))]);
             var gsubrIndex = Index();
-            var charStrings = Index(Enumerable.Range(0, o.Glyphs).Select(_ => new byte[] { 14 }).ToArray());
+            var charStrings = Index([.. Enumerable.Range(0, o.Glyphs).Select(_ => new byte[] { 14 })]);
 
             byte[] TopDict(int charsetOffset, int encodingOffset, int charStringsOffset)
             {

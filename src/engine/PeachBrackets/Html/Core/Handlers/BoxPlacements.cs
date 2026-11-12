@@ -27,7 +27,7 @@ namespace PeachBrackets.Html.Handlers
     /// </remarks>
     internal sealed class BoxPlacements
     {
-        private readonly Dictionary<CssBox, List<Entry>> _byBox = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, List<Entry>> _byBox = [with(ReferenceEqualityComparer.Instance)];
 
         private readonly record struct Entry(BoxFragment Fragment, int Slot, Placement Placement);
 
@@ -46,7 +46,7 @@ namespace PeachBrackets.Html.Handlers
         {
             var box = fragment.Box;
             if (!_byBox.TryGetValue(box, out var entries))
-                _byBox[box] = entries = new List<Entry>(1);
+                _byBox[box] = entries = [with(1)];
 
             var entry = new Entry(fragment, slot, new Placement(map, hidden));
 

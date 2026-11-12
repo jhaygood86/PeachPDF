@@ -32,7 +32,7 @@ internal sealed class PdfShadingPattern : PdfDictionaryWithContentStream
     {
         ArgumentNullException.ThrowIfNull(brush);
 
-        PdfShading shading = new PdfShading(_document);
+        PdfShading shading = new(_document);
 
         if (brush is ConicGradientBrush)
         {

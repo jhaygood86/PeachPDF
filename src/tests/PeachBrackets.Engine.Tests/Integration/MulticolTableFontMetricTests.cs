@@ -63,7 +63,7 @@ public class MulticolTableFontMetricTests
             foreach (var child in fragment.Children) Collect(child, band);
         }
 
-        var (lost, doubled) = PaintedWords.Diff(html, emitted.Order().ToList());
+        var (lost, doubled) = PaintedWords.Diff(html, [.. emitted.Order()]);
 
         Assert.Empty(lost);
         Assert.Empty(doubled);

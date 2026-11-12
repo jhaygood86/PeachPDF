@@ -52,7 +52,7 @@ namespace PeachDrawing.PDF.Tests.Import
             Row(1, content4, 0);
             Row(1, objectStream, 0);
             Row(1, xrefOffset, 0);
-            var data = Encoding.Latin1.GetString(rows.ToArray());
+            var data = Encoding.Latin1.GetString([.. rows]);
             var index = withIndex ? "/Index [0 7]" : "";
             Write($"6 0 obj\n<< /Type /XRef /Size 7 /W [1 2 1] {index} /Root 1 0 R /Length {data.Length} >>\nstream\n{data}\nendstream\nendobj\n");
             Write($"startxref\n{xrefOffset}\n%%EOF\n");

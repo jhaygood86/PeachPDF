@@ -20,12 +20,12 @@ namespace PeachBrackets.Css
 
         private TokenValue(Token token)
         {
-            _tokens = new List<Token> { token };
+            _tokens = [token];
         }
 
         public TokenValue(IEnumerable<Token> tokens)
         {
-            _tokens = new List<Token>(tokens);
+            _tokens = [with(tokens)];
         }
 
         /// <summary>
@@ -43,7 +43,7 @@ namespace PeachBrackets.Css
         /// </remarks>
         public TokenValue(IReadOnlyList<Token> tokens)
         {
-            _tokens = new List<Token>(tokens.Count);
+            _tokens = [with(tokens.Count)];
             for (var i = 0; i < tokens.Count; i++)
             {
                 _tokens.Add(tokens[i]);

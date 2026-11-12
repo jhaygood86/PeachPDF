@@ -163,7 +163,7 @@ namespace PeachBrackets.Html.Utils
             });
         }
 
-        private static readonly ConditionalWeakTable<IReadOnlyList<(string Tag, int Value)>, IReadOnlyList<FeatureSetting>> ConvertedSettings = new();
+        private static readonly ConditionalWeakTable<IReadOnlyList<(string Tag, int Value)>, IReadOnlyList<FeatureSetting>> ConvertedSettings = [];
 
         /// <summary><c>false</c> only for <c>none</c> - both <c>auto</c> (the initial value) and
         /// <c>normal</c> mean "apply GPOS kerning when the font and script support it."</summary>

@@ -36,8 +36,8 @@ namespace PeachBrackets.Engine.Tests.Integration
             return skew;
         }
 
-        public static TheoryData<string> Matrices => new()
-        {
+        public static TheoryData<string> Matrices =>
+        [
             "translate",
             "rotate-z",
             "scale",
@@ -46,7 +46,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             "rotate-3d",
             "everything-3d",
             "mirrored-3d"
-        };
+        ];
 
         private static Matrix4x4 Build(string name)
         {

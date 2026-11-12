@@ -906,7 +906,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             public override void PushClip(GraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
             public override void PushClipExclude(Rect rect) { }
-            public override object SetAntiAliasSmoothingMode() => new object();
+            public override object SetAntiAliasSmoothingMode() => new();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override GraphicsPath GetGraphicsPath() => null!;
 

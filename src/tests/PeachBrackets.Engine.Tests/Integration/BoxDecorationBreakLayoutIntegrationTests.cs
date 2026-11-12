@@ -358,7 +358,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<Rect> Rectangles(CssBox box) =>
-            box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+            [.. box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X)];
 
         /// <summary>How many of a block's own text lines land in one page's content band.</summary>
         private static int LinesOnPage(CssBox root, HtmlContainerInt container, int page)

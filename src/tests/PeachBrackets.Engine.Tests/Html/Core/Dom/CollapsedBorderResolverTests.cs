@@ -42,7 +42,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
         [Fact]
         public void NoCandidates_ResolvesToNone()
         {
-            var result = CollapsedBorderResolver.Resolve(ReadOnlySpan<CollapsedBorderCandidate>.Empty, leftToRight: true);
+            var result = CollapsedBorderResolver.Resolve([], leftToRight: true);
 
             Assert.Equal(CollapsedBorder.None, result);
             Assert.False(result.IsPainted);

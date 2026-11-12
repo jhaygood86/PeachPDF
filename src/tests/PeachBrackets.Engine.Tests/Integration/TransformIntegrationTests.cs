@@ -721,17 +721,17 @@ namespace PeachBrackets.Engine.Tests.Integration
         // The guard every extra transform the painter pushes (the affine-after-perspective one, the no-raster fallback, the text
         // supplied over a warped bitmap) goes through.
 
-        public static TheoryData<Matrix3x2> PushableMatrices => new()
-        {
+        public static TheoryData<Matrix3x2> PushableMatrices =>
+        [
             Matrix3x2.Identity,
             Matrix3x2.CreateRotation(0.5f),
             Matrix3x2.CreateScale(0.001f),                // small but visible; its float determinant (1e-6) is still well clear
             Matrix3x2.CreateScale(-1f, 1f),               // a mirror
             Matrix3x2.CreateTranslation(1e6f, -1e6f),
-        };
+        ];
 
-        public static TheoryData<Matrix3x2> UnpushableMatrices => new()
-        {
+        public static TheoryData<Matrix3x2> UnpushableMatrices =>
+        [
             new Matrix3x2(),                              // all zero
             Matrix3x2.CreateScale(0f),
             Matrix3x2.CreateScale(1f, 0f),
@@ -741,7 +741,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             new Matrix3x2(1, 0, 0, 1, 0, float.PositiveInfinity),
             new Matrix3x2(float.NaN, 0, 0, 1, 0, 0),
             new Matrix3x2(float.MaxValue, 0, 0, float.PositiveInfinity, 0, 0),
-        };
+        ];
 
         [Theory]
         [MemberData(nameof(PushableMatrices))]
@@ -936,7 +936,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             public override void PushClip(GraphicsPath path) => _clipStack.Push(_clipStack.Peek());
             public override void PopClip() { if (_clipStack.Count > 1) _clipStack.Pop(); }
             public override void PushClipExclude(Rect rect) { }
-            public override object SetAntiAliasSmoothingMode() => new object();
+            public override object SetAntiAliasSmoothingMode() => new();
             public override void ReturnPreviousSmoothingMode(object? prevMode) { }
             public override GraphicsPath GetGraphicsPath() => null!;
 

@@ -182,8 +182,8 @@ public class TextShaperSeamTests
                 _shapers[font.Typeface] = shaper = new SkiaSharp.HarfBuzz.SKShaper(font.Typeface);
 
             var r = shaper.Shape(text, font);
-            return new SkiaShapedRun(Array.ConvertAll(r.Codepoints, g => (ushort)g), r.Points.Select(p => p.X).ToArray(),
-                r.Points.Select(p => p.Y).ToArray(), r.Clusters, r.Width);
+            return new SkiaShapedRun(Array.ConvertAll(r.Codepoints, g => (ushort)g), [.. r.Points.Select(p => p.X)],
+                [.. r.Points.Select(p => p.Y)], r.Clusters, r.Width);
         }
 
         public void Dispose()

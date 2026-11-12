@@ -178,7 +178,7 @@ internal static class ScrollBench
         report.AppendLine($"== {name}");
         double[] copy;
         lock (gate)
-            copy = latencies.OrderBy(v => v).ToArray();
+            copy = [.. latencies.Order()];
 
         report.AppendLine($"UI thread latency of a posted callback (n={copy.Length}): p50={Percentile(copy, 0.5):F1} p95={Percentile(copy, 0.95):F1} p99={Percentile(copy, 0.99):F1} max={copy.LastOrDefault():F1} ms; over 16 ms: {copy.Count(v => v > 16)}; over 50 ms: {copy.Count(v => v > 50)}; over 100 ms: {copy.Count(v => v > 100)}");
         Describe(report, "regions painted while scrolling", eventsWhileScrolling, scrollingMs);
@@ -194,7 +194,7 @@ internal static class ScrollBench
             return;
         }
 
-        var times = events.Select(e => e.Milliseconds).OrderBy(v => v).ToArray();
+        var times = events.Select(e => e.Milliseconds).Order().ToArray();
         var pixels = events.Sum(e => e.Pixels);
         report.AppendLine($"{what}: events={events.Count} regions={events.Sum(e => e.Regions)} total={times.Sum():F0} ms ({times.Sum() / windowMs:P0} of {windowMs:F0} ms) p50={Percentile(times, 0.5):F1} p95={Percentile(times, 0.95):F1} max={times[^1]:F1} ms; painted {pixels / 1e6:F2} Mpx ({times.Sum() / Math.Max(pixels / 1e6, 0.001):F0} ms per Mpx)");
     }

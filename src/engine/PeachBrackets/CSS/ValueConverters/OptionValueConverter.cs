@@ -28,7 +28,7 @@ namespace PeachBrackets.Css
             // entirely (matching real browser serialization of e.g. "border: 1px outset" - the never-
             // specified color must not round-trip as "1px outset initial"), the same as if this slot
             // had never been set at all.
-            return value is null || value.CssText == Keywords.Initial ? new OptionValue(Enumerable.Empty<Token>()) : value;
+            return value is null || value.CssText == Keywords.Initial ? new OptionValue([]) : value;
         }
 
         private sealed class OptionValue : IPropertyValue
@@ -68,7 +68,7 @@ namespace PeachBrackets.Css
             var value = _converter.Construct(properties);
             // See OptionValueConverter.Construct above for why the "initial" sentinel must be
             // suppressed here rather than serialized literally.
-            return value is null || value.CssText == Keywords.Initial ? new OptionValue(Enumerable.Empty<Token>()) : value;
+            return value is null || value.CssText == Keywords.Initial ? new OptionValue([]) : value;
         }
 
         private sealed class OptionValue : IPropertyValue

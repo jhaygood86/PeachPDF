@@ -14,7 +14,7 @@ namespace PeachBrackets.Svg.Smil
     internal sealed class SmilSet
     {
         private readonly Dictionary<object, List<SmilAnimation>> _byTarget = [];
-        private readonly Dictionary<string, ISmilNode> _elementsById = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ISmilNode> _elementsById = [with(StringComparer.Ordinal)];
 
         private SmilSet(List<SmilAnimation> animations)
         {

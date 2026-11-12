@@ -5,6 +5,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -49,7 +50,7 @@ internal sealed class NativeFace : IDisposable
 /// </summary>
 internal sealed class NativeFonts : IDisposable
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<string, List<NativeFace>> _registered = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<(string, int, bool), NativeFace?> _matched = [];
     private readonly List<NativeFace> _owned = [];

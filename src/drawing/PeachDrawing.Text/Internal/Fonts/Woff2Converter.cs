@@ -21,7 +21,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
         // WOFF2 known-tag list (W3C WOFF2 spec §5, Table 2)
         private static readonly uint[] KnownTags =
-        {
+        [
             Tag("cmap"), Tag("head"), Tag("hhea"), Tag("hmtx"), Tag("maxp"), Tag("name"),
             Tag("OS/2"), Tag("post"), Tag("cvt "), Tag("fpgm"), Tag("glyf"), Tag("loca"),
             Tag("prep"), Tag("CFF "), Tag("VORG"), Tag("EBDT"), Tag("EBLC"), Tag("gasp"),
@@ -33,7 +33,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             Tag("gvar"), Tag("hsty"), Tag("just"), Tag("lcar"), Tag("mort"), Tag("morx"),
             Tag("opbd"), Tag("prop"), Tag("trak"), Tag("Zapf"), Tag("Silf"), Tag("Glat"),
             Tag("Gloc"), Tag("Feat"), Tag("Sill"),
-        };
+        ];
 
         private static readonly uint GlyfTag = Tag("glyf");
         private static readonly uint LocaTag = Tag("loca");

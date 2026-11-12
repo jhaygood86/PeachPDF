@@ -36,7 +36,7 @@ namespace PeachBrackets.Svg
         // A form belongs to one PDF document. ConditionalWeakTable also lets a finished PDF and all
         // its cached forms be collected, even though each form refers back to its owning document.
         private static readonly ConditionalWeakTable<object, Dictionary<(SvgDocument Document, double Width,
-            double Height, double PixelsPerPoint), Image>> FormCaches = new();
+            double Height, double PixelsPerPoint), Image>> FormCaches = [];
 
         /// <summary>
         /// Paints a whole SVG from a document-local Form XObject. Position is only a placement concern;
@@ -80,7 +80,7 @@ namespace PeachBrackets.Svg
             var owner = g.TileCacheOwner;
             var key = (document, width, height, g.PixelsPerPoint);
             Dictionary<(SvgDocument Document, double Width, double Height, double PixelsPerPoint), Image>? cache =
-                owner is null ? null : FormCaches.GetValue(owner, _ => new());
+                owner is null ? null : FormCaches.GetValue(owner, _ => []);
             if (cache is not null && cache.TryGetValue(key, out var existing))
                 return existing;
 
@@ -691,11 +691,11 @@ namespace PeachBrackets.Svg
 
             var codeUnitOverrides = overrides.Count == 0
                 ? overrides
-                : overrides.Select(o => o with
+                : [.. overrides.Select(o => o with
                 {
                     Start = utf16Starts[o.Start],
                     Length = utf16Starts[o.Start + o.Length] - utf16Starts[o.Start],
-                }).ToList();
+                })];
 
             var result = Bidi.Analyze(paragraphText, direction, codeUnitOverrides);
 
@@ -3727,7 +3727,7 @@ namespace PeachBrackets.Svg
         private static Dictionary<SvgElement, Matrix3x2>? s_paintContextFramesField;
 
         private static Dictionary<SvgElement, Matrix3x2> s_paintContextFrames =>
-            s_paintContextFramesField ??= new Dictionary<SvgElement, Matrix3x2>(ReferenceEqualityComparer.Instance);
+            s_paintContextFramesField ??= [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>
         /// A paint with its context keywords replaced, when it is drawn inside a marker (the only place the tree builder leaves them, because the

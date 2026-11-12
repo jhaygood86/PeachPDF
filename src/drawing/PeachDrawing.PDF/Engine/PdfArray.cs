@@ -76,7 +76,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     /// </summary>
     public override string ToString()
     {
-        StringBuilder pdf = new StringBuilder();
+        StringBuilder pdf = new();
         pdf.Append("[ ");
         int count = Elements.Count;
         for (int idx = 0; idx < count; idx++)
@@ -104,7 +104,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
     {
         internal ArrayElements(PdfArray array)
         {
-            _elements = new List<PdfItem>();
+            _elements = [];
             _ownerArray = array;
         }
 
@@ -292,7 +292,7 @@ internal class PdfArray : PdfObject, IEnumerable<PdfItem>
         /// <summary>
         /// Gets all items of this array.
         /// </summary>
-        public PdfItem[] Items => _elements.ToArray();
+        public PdfItem[] Items => [.. _elements];
 
         /// <summary>
         /// Returns false.

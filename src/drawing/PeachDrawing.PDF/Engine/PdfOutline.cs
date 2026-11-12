@@ -162,7 +162,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         get => Elements.GetString(Keys.Title);
         set
         {
-            PdfString s = new PdfString(value, PdfStringEncoding.Unicode);
+            PdfString s = new(value, PdfStringEncoding.Unicode);
             Elements.SetValue(Keys.Title, s);
         }
     }

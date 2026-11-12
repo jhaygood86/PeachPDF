@@ -468,7 +468,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         private static async Task<List<PaintOp>> PaintTextAsync(
             string body, Func<string, Font, ShapeSettings?, Size>? measureString = null) =>
-            (await PaintAllAsync(body, measureString)).Where(o => o.Kind == PaintOpKind.DrawString).ToList();
+            [.. (await PaintAllAsync(body, measureString)).Where(o => o.Kind == PaintOpKind.DrawString)];
 
         /// <summary>
         /// Every <c>DrawString</c> with its bounds mapped through whatever transform is active at the

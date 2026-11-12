@@ -44,8 +44,7 @@ namespace PeachDrawing.Text.Tests.Text.Shaping.Use
         {
             var text = string.Concat(codepoints.Select(cp => new System.Text.Rune(cp).ToString()));
             var categories = codepoints.Select(cp => UseCategoryClassifier.Classify(cp)).ToList();
-            return descriptor.Shape(text, new ShapeSettings(ScriptTag: "deva", UseCategories: categories))
-                .Select(g => g.GlyphIndex).ToArray();
+            return [.. descriptor.Shape(text, new ShapeSettings(ScriptTag: "deva", UseCategories: categories)).Select(g => g.GlyphIndex)];
         }
 
         [Fact]

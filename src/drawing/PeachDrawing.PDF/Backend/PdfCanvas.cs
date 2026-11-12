@@ -247,7 +247,7 @@ namespace PeachDrawing.PDF
 
         // Smoothing has no meaning in PDF output, so there is no state to remember or restore.
         /// <inheritdoc />
-        public override object SetAntiAliasSmoothingMode() => new object();
+        public override object SetAntiAliasSmoothingMode() => new();
 
         /// <inheritdoc />
         public override void ReturnPreviousSmoothingMode(object? prevMode)

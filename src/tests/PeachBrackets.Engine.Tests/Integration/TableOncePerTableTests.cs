@@ -43,7 +43,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);
 
         private static List<CssProxyBox> ProxiesOf(CssBox table) =>
-            table.Boxes.OfType<CssProxyBox>().ToList();
+            [.. table.Boxes.OfType<CssProxyBox>()];
 
         /// <summary>
         /// A record standing for "an earlier pass laid part of this table out and stopped". Its contents

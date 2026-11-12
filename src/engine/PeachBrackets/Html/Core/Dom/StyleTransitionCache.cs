@@ -36,8 +36,8 @@ namespace PeachBrackets.Html.Dom
 
         private static readonly ConcurrentDictionary<object, byte> Roots = new(ReferenceEqualityComparer.Instance);
 
-        private readonly HashSet<object> _members = new(ReferenceEqualityComparer.Instance);
-        private readonly Dictionary<(object Source, Delegate Apply), object> _tables = new(new TableKeyComparer());
+        private readonly HashSet<object> _members = [with(ReferenceEqualityComparer.Instance)];
+        private readonly Dictionary<(object Source, Delegate Apply), object> _tables = [with(new TableKeyComparer())];
         private int _transitions;
 
         /// <summary>

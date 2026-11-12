@@ -11,7 +11,7 @@ namespace PeachBrackets.Css
     /// </summary>
     internal sealed class ContentFunctionConverter : IValueConverter
     {
-        private static readonly string[] ValidModes = { "text", "before", "after", "first-letter" };
+        private static readonly string[] ValidModes = ["text", "before", "after", "first-letter"];
 
         public IPropertyValue Convert(IReadOnlyList<Token> value)
         {

@@ -29,7 +29,7 @@ namespace PeachBrackets.Html
             public double Start { get; set; } = double.NaN;
         }
 
-        private readonly Dictionary<CssBox, Tween> _tweens = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, Tween> _tweens = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>Whether any container is gliding to a position.</summary>
         internal bool HasTweens => _tweens.Count > 0;

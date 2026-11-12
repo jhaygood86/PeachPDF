@@ -12,7 +12,7 @@ namespace PeachBrackets.Css
 
         public ComplexSelector()
         {
-            _selectors = new List<CombinatorSelector>();
+            _selectors = [];
         }
 
         public string Text => this.ToCss();

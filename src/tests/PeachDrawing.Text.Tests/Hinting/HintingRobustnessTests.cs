@@ -98,7 +98,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             var maxp = HostileFonts.TableBytes(original, "maxp");
             BinaryPrimitives.WriteUInt16BigEndian(maxp.AsSpan(20), 4000);
             BinaryPrimitives.WriteUInt16BigEndian(maxp.AsSpan(24), 1000);
-            var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "maxp", maxp), "fpgm", fpgm.ToArray()), "prep", prep);
+            var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "maxp", maxp), "fpgm", [.. fpgm]), "prep", prep);
             var face = FaceOf(font);
 
             WorkBounds.Case(() =>
@@ -128,7 +128,7 @@ namespace PeachDrawing.Text.Tests.Hinting
                 prep.AddRange(new byte[510]);
             }
 
-            var face = FaceOf(HostileFonts.WithTable(HostileFonts.Original(), "prep", prep.ToArray()));
+            var face = FaceOf(HostileFonts.WithTable(HostileFonts.Original(), "prep", [.. prep]));
             WorkBounds.Case(() =>
                 Assert.Throws<HintingException>(() => TtSize.Create(face, Size, TtInterpreterVersion.V40, TtRenderMode.Normal)));
         }
@@ -165,7 +165,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             for (int g = 0; g <= numGlyphs; g++)
                 BinaryPrimitives.WriteUInt32BigEndian(loca.AsSpan(g * 4), g <= 1 ? 0u : (uint)glyph.Count);
 
-            var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", glyph.ToArray());
+            var font = HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", [.. glyph]);
             var face = FaceOf(font);
 
             WorkBounds.Case(() =>
@@ -247,7 +247,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             for (int i = 0; i < starts.Count; i++)
                 BinaryPrimitives.WriteUInt32BigEndian(loca.AsSpan(i * 4), starts[i]);
 
-            return HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", glyf.ToArray());
+            return HostileFonts.WithTable(HostileFonts.WithTable(HostileFonts.WithTable(original, "head", head), "loca", loca), "glyf", [.. glyf]);
         }
 
         [Fact]

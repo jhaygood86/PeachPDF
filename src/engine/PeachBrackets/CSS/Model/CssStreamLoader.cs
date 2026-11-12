@@ -120,7 +120,7 @@ namespace PeachBrackets.Css
                 // stream) via the encoding's own DecoderFallback (replacement character by default) -
                 // degrades gracefully rather than throwing, matching this codebase's error-handling
                 // convention elsewhere in CSS parsing.
-                decoder.Convert(ReadOnlySpan<byte>.Empty, scratch, true, out _, out var finalChars, out _);
+                decoder.Convert([], scratch, true, out _, out var finalChars, out _);
                 if (finalChars > 0) sb.Append(scratch, 0, finalChars);
             }
         }

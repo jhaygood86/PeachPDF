@@ -1198,7 +1198,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
 
         NameRecord ReadNameRecord()
         {
-            NameRecord nrec = new NameRecord();
+            NameRecord nrec = new();
             nrec.platformID = _fontData.ReadUShort();
             nrec.encodingID = _fontData.ReadUShort();
             nrec.languageID = _fontData.ReadUShort();

@@ -92,7 +92,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<TextFragment> WordsIn(FragmentainerFragment fragmentainer) =>
-            Flatten(fragmentainer.Root).SelectMany(f => f.Words).ToList();
+            [.. Flatten(fragmentainer.Root).SelectMany(f => f.Words)];
 
         /// <summary>
         /// The header is drawn on every page of this document, and once on each — a second proxy for one

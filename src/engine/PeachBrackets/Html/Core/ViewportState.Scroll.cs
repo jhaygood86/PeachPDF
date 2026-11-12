@@ -30,7 +30,7 @@ namespace PeachBrackets.Html
     /// </summary>
     internal sealed partial class ViewportState
     {
-        private readonly Dictionary<CssBox, (double X, double Y)> _scroll = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, (double X, double Y)> _scroll = [with(ReferenceEqualityComparer.Instance)];
         private ScrollIndex? _scrollIndex;
 
         /// <summary>Whether any scroll container is scrolled away from its start.</summary>
@@ -450,7 +450,7 @@ namespace PeachBrackets.Html
 
             internal FragmentTree Tree { get; }
 
-            internal Dictionary<CssBox, Entry> Entries { get; } = new(ReferenceEqualityComparer.Instance);
+            internal Dictionary<CssBox, Entry> Entries { get; } = [with(ReferenceEqualityComparer.Instance)];
 
             internal static ScrollIndex Build(FragmentTree tree)
             {

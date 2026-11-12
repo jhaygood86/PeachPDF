@@ -25,7 +25,7 @@ namespace PeachBrackets.Css
 
             for (var i = 0; i < length; i++)
             {
-                var item = i < items.Count ? items[i] : (IReadOnlyList<Token>)System.Array.Empty<Token>();
+                var item = i < items.Count ? items[i] : (IReadOnlyList<Token>)[];
                 args[i] = _converters[i].Convert(item);
 
                 if (args[i] == null) return null;

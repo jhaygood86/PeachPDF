@@ -22,7 +22,7 @@ internal sealed class Win2dTextMaskCache
     /// <summary>The most bytes of coverage the cache keeps.</summary>
     private const long Budget = 48L * 1024 * 1024;
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<Key, LinkedListNode<Entry>> _entries = [];
     private readonly LinkedList<Entry> _order = new();
     private long _bytes;

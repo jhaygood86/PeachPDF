@@ -76,7 +76,7 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public static Dictionary<string, string>? SnapshotCustomProperties(CssBox box)
         {
-            return box.CustomProperties is { Count: > 0 } ? new Dictionary<string, string>(box.CustomProperties) : null;
+            return box.CustomProperties is { Count: > 0 } ? [with(box.CustomProperties)] : null;
         }
 
         /// <summary>

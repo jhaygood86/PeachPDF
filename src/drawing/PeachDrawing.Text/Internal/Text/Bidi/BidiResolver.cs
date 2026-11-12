@@ -278,8 +278,8 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             {
                 var o = overrides[idx];
                 if (o.Length <= 0) continue;
-                startsAt ??= new Dictionary<int, List<(EmbeddingSpan, int)>>();
-                endsAt ??= new Dictionary<int, List<EmbeddingSpan>>();
+                startsAt ??= [];
+                endsAt ??= [];
                 if (!startsAt.TryGetValue(o.Start, out var sl)) startsAt[o.Start] = sl = [];
                 sl.Add((o, idx));
                 if (!endsAt.TryGetValue(o.End, out var el)) endsAt[o.End] = el = [];
@@ -584,7 +584,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
             {
                 if (!IsIsolateInitiator(o.Push)) continue;
                 if (!runEndIndex.ContainsKey(o.Start)) continue;
-                syntheticChain ??= new Dictionary<int, int>();
+                syntheticChain ??= [];
                 syntheticChain[o.Start] = o.End;
             }
 
@@ -646,7 +646,7 @@ namespace PeachDrawing.Text.Internal.Text.Bidi
 
                     break;
                 }
-                sequences.Add(positions.ToArray());
+                sequences.Add([.. positions]);
             }
 
             return sequences;

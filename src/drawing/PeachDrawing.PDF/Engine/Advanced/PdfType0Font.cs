@@ -41,7 +41,7 @@ internal sealed class PdfType0Font : PdfFont
         FontDescriptor.FontName = BaseFont;
         _descendantFont.BaseFont = BaseFont;
 
-        PdfArray descendantFonts = new PdfArray(document);
+        PdfArray descendantFonts = new(document);
         Owner._irefTable.Add(_descendantFont);
         descendantFonts.Elements.Add(_descendantFont.RequiredReference);
         Elements[Keys.DescendantFonts] = descendantFonts;
@@ -61,7 +61,7 @@ internal sealed class PdfType0Font : PdfFont
 
         // Use GetGlyphIndices to create the widths array.
         Typeface typeface = FontDescriptor._typeface;
-        StringBuilder w = new StringBuilder("[");
+        StringBuilder w = new("[");
         if (_characterMapInfo is not null)
         {
             int[] glyphIndices = _characterMapInfo.GetGlyphIndices();

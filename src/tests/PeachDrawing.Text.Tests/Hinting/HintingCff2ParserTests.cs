@@ -13,7 +13,7 @@ namespace PeachDrawing.Text.Tests.Hinting
     {
         private static byte[] Int(int value) => value is >= -107 and <= 107 ? [(byte)(value + 139)] : [29, .. BitConverter.GetBytes(value).Reverse()];
 
-        private static byte[] Dict(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
+        private static byte[] Dict(params byte[][] parts) => [.. parts.SelectMany(p => p)];
 
         private const byte Blend = 23, VsIndex = 22, StdHw = 10;
 

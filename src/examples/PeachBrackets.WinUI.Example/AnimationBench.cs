@@ -112,9 +112,9 @@ internal static class AnimationBench
 
                 report.AppendLine();
                 report.AppendLine($"== {slug} (running={view.Document?.HasRunningAnimations})");
-                var intervals = frames.Select(f => f.IntervalMs).Where(v => v > 0).OrderBy(v => v).ToArray();
-                var advance = frames.Select(f => f.AdvanceMs).OrderBy(v => v).ToArray();
-                var paint = paints.Select(p => p.Milliseconds).OrderBy(v => v).ToArray();
+                var intervals = frames.Select(f => f.IntervalMs).Where(v => v > 0).Order().ToArray();
+                var advance = frames.Select(f => f.AdvanceMs).Order().ToArray();
+                var paint = paints.Select(p => p.Milliseconds).Order().ToArray();
                 var fps = intervals.Length == 0 ? 0 : 1000.0 / intervals.Average();
                 report.AppendLine($"frames={frames.Count} fps={fps:F1} interval p50={Percentile(intervals, 0.5):F1} p95={Percentile(intervals, 0.95):F1} p99={Percentile(intervals, 0.99):F1} max={(intervals.Length == 0 ? 0 : intervals[^1]):F1} ms; slower than 60 fps: {intervals.Count(v => v > 17.5)}");
                 report.AppendLine($"advance (document step) p50={Percentile(advance, 0.5):F2} p95={Percentile(advance, 0.95):F2} max={(advance.Length == 0 ? 0 : advance[^1]):F2} ms; regions per frame avg={(frames.Count == 0 ? 0 : frames.Average(f => f.Regions)):F1}");

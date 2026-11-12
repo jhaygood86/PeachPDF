@@ -99,7 +99,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         public static TableDirectoryEntry ReadFrom(OpenTypeFontface fontData)
         {
-            TableDirectoryEntry entry = new TableDirectoryEntry();
+            TableDirectoryEntry entry = new();
             entry.Tag = fontData.ReadTag();
             entry.CheckSum = fontData.ReadULong();
             entry.Offset = fontData.ReadLong();

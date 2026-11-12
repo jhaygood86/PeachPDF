@@ -3,7 +3,7 @@ namespace PeachBrackets.Engine.Tests.CSS
 {
     class ObjectArrayComparer : IEqualityComparer, IEqualityComparer<object[]>
     {
-        public static readonly ObjectArrayComparer Instance = new ObjectArrayComparer();
+        public static readonly ObjectArrayComparer Instance = new();
         public bool Equals(object[]? x, object[]? y)
         {
             if (ReferenceEquals(x, y))

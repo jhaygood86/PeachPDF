@@ -51,8 +51,7 @@ namespace PeachDrawing.Text.Tests.Text.Shaping.Khmer
         {
             var text = string.Concat(codepoints.Select(cp => new System.Text.Rune(cp).ToString()));
             var categories = codepoints.Select(cp => KhmerCategoryClassifier.Classify(cp)).ToList();
-            return descriptor.Shape(text, new ShapeSettings(ScriptTag: "khmr", KhmerCategories: categories))
-                .Select(g => g.GlyphIndex).ToArray();
+            return [.. descriptor.Shape(text, new ShapeSettings(ScriptTag: "khmr", KhmerCategories: categories)).Select(g => g.GlyphIndex)];
         }
 
         [Fact]

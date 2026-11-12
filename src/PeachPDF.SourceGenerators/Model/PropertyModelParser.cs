@@ -20,12 +20,13 @@ namespace PeachPDF.SourceGenerators.Model
         /// Hand-maintained on purpose (PPG012 is a shape check, not full symbol resolution) - kept
         /// in sync with that file, which changes rarely (adding a 17th area is itself a notable event).
         /// </summary>
-        private static readonly HashSet<string> KnownAreas = new(StringComparer.Ordinal)
-        {
+        private static readonly HashSet<string> KnownAreas =
+        [
+            with(StringComparer.Ordinal),
             "BorderArea", "VisualEffectsArea", "GeneratedContentArea", "BoxModelArea", "BreakArea",
             "PaginationArea", "BackgroundArea", "DisplayPositioningArea", "TableArea", "TextArea",
             "TextDecorationArea", "FontArea", "ListArea", "FlexArea", "GridArea", "MultiColumnArea",
-        };
+        ];
 
         public static (IReadOnlyList<PropertyEntry> Entries, IReadOnlyList<ModelDiagnostic> Diagnostics) Parse(JsonValue root)
         {
@@ -174,7 +175,7 @@ namespace PeachPDF.SourceGenerators.Model
                 }
                 else
                 {
-                    supportedValues = supportedValuesJson.ArrayItems.Select(v => v.StringValue ?? "").ToList();
+                    supportedValues = [.. supportedValuesJson.ArrayItems.Select(v => v.StringValue ?? "")];
                 }
             }
 
@@ -202,7 +203,7 @@ namespace PeachPDF.SourceGenerators.Model
                 supportsDataTypes = ParseDataTypes(name, supportsDataTypeJson, diagnostics);
 
                 if (json.TryGetProperty("supportsSupportedValues", out var supportsSupportedValuesJson) && supportsSupportedValuesJson.IsArray)
-                    supportsSupportedValues = supportsSupportedValuesJson.ArrayItems.Select(v => v.StringValue ?? "").ToList();
+                    supportsSupportedValues = [.. supportsSupportedValuesJson.ArrayItems.Select(v => v.StringValue ?? "")];
 
                 if (json.TryGetProperty("supportsKeywordComparison", out _))
                     supportsKeywordComparison = ParseKeywordComparison(json, "supportsKeywordComparison");

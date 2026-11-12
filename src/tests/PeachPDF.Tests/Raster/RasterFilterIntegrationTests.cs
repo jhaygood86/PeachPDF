@@ -52,11 +52,10 @@ namespace PeachPDF.Tests.Raster
         }
 
         private static List<Placed> Placements(string pdf) =>
-            Regex.Matches(pdf, @"q\s+([-\d.]+)\s+0\s+0\s+([-\d.]+)\s+[-\d.]+\s+[-\d.]+\s+cm\s+/I\d+\s+Do\s+Q")
+            [.. Regex.Matches(pdf, @"q\s+([-\d.]+)\s+0\s+0\s+([-\d.]+)\s+[-\d.]+\s+[-\d.]+\s+cm\s+/I\d+\s+Do\s+Q")
                 .Select(m => new Placed(
                     double.Parse(m.Groups[1].Value, CultureInfo.InvariantCulture),
-                    Math.Abs(double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture))))
-                .ToList();
+                    Math.Abs(double.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture))))];
 
         [Theory]
         [InlineData(72.0, 300.0)]

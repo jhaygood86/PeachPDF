@@ -31,12 +31,12 @@ namespace PeachDrawing.Core
         /// <summary>
         /// Allow to map not installed fonts to different
         /// </summary>
-        private readonly Dictionary<string, string> _fontsMapping = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, string> _fontsMapping = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         /// collection of all installed and added font families to check if font exists
         /// </summary>
-        private readonly Dictionary<string, FontFamily> _existingFontFamilies = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, FontFamily> _existingFontFamilies = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         /// cache of all the font used not to create same font again and again - keyed by (style, weight,
@@ -57,7 +57,7 @@ namespace PeachDrawing.Core
         /// whatever was laid out next.
         /// </para>
         /// </summary>
-        private readonly Dictionary<string, Dictionary<(double Size, double Scale), Dictionary<(PaintFontStyle Style, double Weight, double Stretch, double? ObliqueSkewSinus, string? Variations), Font?>>> _fontsCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, Dictionary<(double Size, double Scale), Dictionary<(PaintFontStyle Style, double Weight, double Stretch, double? ObliqueSkewSinus, string? Variations), Font?>>> _fontsCache = [with(StringComparer.OrdinalIgnoreCase)];
 
         #endregion
 
@@ -79,7 +79,7 @@ namespace PeachDrawing.Core
         /// codepoint-less path is completely unaffected. <c>Scale</c> is <see cref="RenderContext.LayoutUnitsPerPoint"/>;
         /// see <see cref="_fontsCache"/> for why a size alone is not a font's identity.
         /// </summary>
-        private readonly Dictionary<(string Family, double Size, double Scale, PaintFontStyle Style, double Weight, double Stretch, double? Oblique, int Codepoint, string? Variations), Font?> _codepointFontsCache = new();
+        private readonly Dictionary<(string Family, double Size, double Scale, PaintFontStyle Style, double Weight, double Stretch, double? Oblique, int Codepoint, string? Variations), Font?> _codepointFontsCache = [];
 
         /// <summary>
         /// Last-resort system-fallback font cache: (size, scale, style/weight/stretch/oblique, codepoint) →
@@ -88,7 +88,7 @@ namespace PeachDrawing.Core
         /// keyed by a declared family, it searches every one of them. <c>Scale</c> is
         /// <see cref="RenderContext.LayoutUnitsPerPoint"/>; see <see cref="_fontsCache"/>.
         /// </summary>
-        private readonly Dictionary<(double Size, double Scale, PaintFontStyle Style, double Weight, double Stretch, double? Oblique, int Codepoint, PeachDrawing.Text.Unicode.EmojiPresentation Presentation, string? Variations), Font?> _systemFallbackFontsCache = new();
+        private readonly Dictionary<(double Size, double Scale, PaintFontStyle Style, double Weight, double Stretch, double? Oblique, int Codepoint, PeachDrawing.Text.Unicode.EmojiPresentation Presentation, string? Variations), Font?> _systemFallbackFontsCache = [];
 
         public void ClearCache()
         {
@@ -270,7 +270,7 @@ namespace PeachDrawing.Core
             {
                 _fontsCache[family] = new Dictionary<(double Size, double Scale), Dictionary<(PaintFontStyle, double, double, double?, string?), Font?>>
                 {
-                    [sizeKey] = new()
+                    [sizeKey] = []
                 };
             }
             return font;

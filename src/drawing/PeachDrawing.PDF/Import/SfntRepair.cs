@@ -63,7 +63,7 @@ internal static class SfntRepair
     static byte[] BuildCmap(IReadOnlyDictionary<int, int> map)
     {
         // One segment per code: simple, and a font's names give a few hundred at most.
-        var codes = map.Keys.Where(c => c is >= 0 and < 0xFFFF).OrderBy(c => c).ToList();
+        var codes = map.Keys.Where(c => c is >= 0 and < 0xFFFF).Order().ToList();
         int segs = codes.Count + 1;
         int length = 16 + segs * 8;
         var d = new byte[12 + length];

@@ -80,9 +80,9 @@ internal sealed class PdfFontTable : PdfResourceTable
     /// Map from PdfFontSelector to PdfFont.
     /// </summary>
     /// <summary>Each typeface's embed key, worked out once however many sizes of it are drawn.</summary>
-    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Typeface, string> Selectors = new();
+    static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Typeface, string> Selectors = [];
 
-    readonly Dictionary<string, PdfFont> _fonts = new Dictionary<string, PdfFont>();
+    readonly Dictionary<string, PdfFont> _fonts = [];
 
     public void PrepareForSave()
     {

@@ -9,7 +9,7 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         {
             using var outputStream = new MemoryStream();
 
-            PdfDocument document = new PdfDocument(outputStream);
+            PdfDocument document = new(outputStream);
             document.AddPage();
 
             // Note: unlike the parameterless PdfDocument() constructor, this fork's

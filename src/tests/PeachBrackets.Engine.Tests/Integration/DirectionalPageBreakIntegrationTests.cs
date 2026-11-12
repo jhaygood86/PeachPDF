@@ -726,7 +726,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private static string[] ContentStreams(PeachPdfDocument document)
         {
             var file = document.Inspect();
-            return file.Pages.Select(file.ContentText).ToArray();
+            return [.. file.Pages.Select(file.ContentText)];
         }
 
         private static string TextOf(TextFragment word) => (word.Word.Text ?? "").Trim();

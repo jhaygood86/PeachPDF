@@ -14,7 +14,7 @@ namespace PeachDrawing.Core
         ///     Represents a color that is null.
         /// </summary>
         /// <filterpriority>1</filterpriority>
-        public static readonly PaintColor Empty = new PaintColor();
+        public static readonly PaintColor Empty = new();
 
         private readonly long _value;
 

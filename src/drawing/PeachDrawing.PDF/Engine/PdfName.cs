@@ -93,7 +93,7 @@ internal sealed class PdfName : PdfItem
     /// <summary>
     /// Represents the empty name.
     /// </summary>
-    public static readonly PdfName Empty = new PdfName("/");
+    public static readonly PdfName Empty = new("/");
 
     /// <summary>
     /// Writes the name including the leading slash.
@@ -107,7 +107,7 @@ internal sealed class PdfName : PdfItem
     /// <summary>
     /// Gets the comparer for this type.
     /// </summary>
-    public static PdfNameKeyComparer Comparer => new PdfNameKeyComparer();
+    public static PdfNameKeyComparer Comparer => new();
 
     /// <summary>
     /// Implements a comparer that compares PdfName objects.

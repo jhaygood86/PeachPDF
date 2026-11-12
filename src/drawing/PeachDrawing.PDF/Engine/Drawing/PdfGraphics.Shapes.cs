@@ -35,7 +35,7 @@ internal sealed partial class PdfGraphics : IDisposable
         ArgumentNullException.ThrowIfNull(pen);
 
         if (_renderer is not null)
-            _renderer.DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
+            _renderer.DrawLines(pen, [new PaintPoint(x1, y1), new PaintPoint(x2, y2)]);
     }
 
     // ----- DrawLines ----------------------------------------------------------------------------

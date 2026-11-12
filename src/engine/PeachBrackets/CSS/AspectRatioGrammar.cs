@@ -37,7 +37,7 @@ namespace PeachBrackets.Css
             ratio = null;
             hasAuto = false;
 
-            Token[] toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
+            Token[] toks = [.. tokens.Where(t => t.Type != TokenType.Whitespace)];
             if (toks.Length == 0) return false;
 
             var i = 0;
@@ -68,7 +68,7 @@ namespace PeachBrackets.Css
         {
             ratio = null;
 
-            Token[] toks = tokens.Where(t => t.Type != TokenType.Whitespace).ToArray();
+            Token[] toks = [.. tokens.Where(t => t.Type != TokenType.Whitespace)];
 
             var i = 0;
             if (!TryRatioCore(toks, ref i, out ratio)) return false;

@@ -86,7 +86,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
         public void SizesEqual_DifferentContainerCount_ReturnsFalse()
         {
             var a = Build(new ContainerQueryContext(400d, 200d, 400d, 200d, "none"));
-            var b = new ContainerQuerySizes(new Dictionary<uint, ContainerQueryContext>());
+            var b = new ContainerQuerySizes([]);
 
             Assert.False(a.SizesEqual(b));
         }

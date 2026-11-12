@@ -146,7 +146,7 @@ public class FloatBesideTextPaginationTests
         var expected = Tokens("s", 8, 14).Concat(Tokens("a", 5, 70)).Order().ToList();
 
         Assert.True(pages > 2, "the sidebar was expected to run over several pages");
-        Assert.Equal(expected, words.Select(w => w.Text).Order().ToList());
+        Assert.Equal(expected, [.. words.Select(w => w.Text).Order()]);
     }
 
     // The shape that reached the avoid mover in generated documents: lines of text ahead of a break-inside: avoid
@@ -168,7 +168,7 @@ public class FloatBesideTextPaginationTests
         var expected = new[] { "b1", "b2" }
             .Concat(Enumerable.Range(1, 80).Select(i => $"f{i}"))
             .Concat(Enumerable.Range(1, 60).Select(i => $"p{i}"));
-        Assert.Equal(expected.Order().ToList(), words.Select(w => w.Text).Order().ToList());
+        Assert.Equal(expected.Order().ToList(), [.. words.Select(w => w.Text).Order()]);
     }
 
     // Floats stacked down both sides, one inside a list item, on a page 190pt high. A sibling that follows a
@@ -192,7 +192,7 @@ public class FloatBesideTextPaginationTests
 
         var expected = new (string Prefix, int Count)[] { ("a", 12), ("b", 38), ("c", 15), ("d", 37), ("e", 15), ("f", 5), ("g", 11), ("h", 29) }
             .SelectMany(t => Enumerable.Range(1, t.Count).Select(i => $"{t.Prefix}{i}"));
-        Assert.Equal(expected.Order().ToList(), words.Select(w => w.Text).Order().ToList());
+        Assert.Equal(expected.Order().ToList(), [.. words.Select(w => w.Text).Order()]);
     }
 
     [Fact]

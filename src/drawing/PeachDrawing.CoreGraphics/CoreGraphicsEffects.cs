@@ -4,6 +4,7 @@ using Foundation;
 using Metal;
 using PeachDrawing.Core;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 
 namespace PeachDrawing.CoreGraphics;
@@ -14,7 +15,7 @@ namespace PeachDrawing.CoreGraphics;
 /// </summary>
 internal sealed class CoreGraphicsEffects : IDisposable
 {
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly IMTLDevice? _device;
     private CIContext? _context;
 

@@ -195,9 +195,7 @@ namespace PeachBrackets.Html.Parse
             if (!htmlContainer.Continuous)
             {
                 CascadeApplyPageStyles(htmlContainer, root, cssData);
-                htmlContainer.PageRules = cssData.EnumerateRulesRecursive()
-                    .OfType<PageRule>()
-                    .ToList();
+                htmlContainer.PageRules = [.. cssData.EnumerateRulesRecursive().OfType<PageRule>()];
             }
 
             // Collect @property registrations before the cascade runs — InheritStyle (step 2) and var()
@@ -211,7 +209,7 @@ namespace PeachBrackets.Html.Parse
             // are being sampled, so a document pays nothing for them otherwise.
             htmlContainer.Keyframes = htmlContainer.AnimationProgress is not null || htmlContainer.AnimationsEnabled
                 ? RegisteredKeyframes.BuildRegistry(cssData, media)
-                : new Dictionary<string, KeyframeSet>(StringComparer.Ordinal);
+                : [with(StringComparer.Ordinal)];
             htmlContainer.KeyframesUseRevert = htmlContainer.Keyframes.Values.Any(set => set.UsesRevert);
 
             // Collect @counter-style rules (consulted when formatting a counter()/list marker).
@@ -1551,7 +1549,7 @@ namespace PeachBrackets.Html.Parse
                 var colorIsImportant = false;
                 HashSet<string>? importantCustomProperties = null;
                 if (box.HtmlContainer.Keyframes.Count > 0)
-                    colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties, importantCustomProperties ??= new HashSet<string>(StringComparer.Ordinal));
+                    colorIsImportant = PreApplyImportantForAnimation(valueParser, box, authorImportant, inlineRule, pendingVarProperties, importantCustomProperties ??= [with(StringComparer.Ordinal)]);
 
                 AnimationApplier.Apply(valueParser, box, animationProgress, pendingVarProperties, uaSnapshot, colorIsImportant, importantCustomProperties);
             }
@@ -3112,7 +3110,7 @@ namespace PeachBrackets.Html.Parse
                 _ => prop.Value
             };
 
-            box.CustomProperties ??= new Dictionary<string, string>();
+            box.CustomProperties ??= [];
             if (rawValue is not null)
                 box.CustomProperties[prop.Name] = rawValue;
             else
@@ -3159,7 +3157,7 @@ namespace PeachBrackets.Html.Parse
                 : null;
 
             // In the order the declarations were written, so a later one wins as it does in the cascade.
-            var entries = (only is null ? pendingVarProperties.ToList() : pendingVarProperties.Where(entry => only(entry.Key)).ToList())
+            var entries = (only is null ? pendingVarProperties.ToList() : [.. pendingVarProperties.Where(entry => only(entry.Key))])
                 .OrderBy(entry => pendingVarProperties.OrderOf(entry.Key))
                 .ToList();
 

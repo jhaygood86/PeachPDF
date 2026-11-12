@@ -592,7 +592,7 @@ namespace PeachBrackets.Html.Paint
             // with `text` (see CharacterMapInfo.AddShapedText's own remarks) - the i-th rune painted from `text`
             // corresponds directly to logicalText's i-th rune, no reversal needed here.
             Rune[]? logicalRunes = logicalText != null && logicalText.Length == text.Length && logicalText != text
-                ? logicalText.EnumerateRunes().ToArray()
+                ? [.. logicalText.EnumerateRunes()]
                 : null;
 
             var index = 0;

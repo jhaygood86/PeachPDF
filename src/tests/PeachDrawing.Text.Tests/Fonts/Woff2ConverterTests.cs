@@ -78,7 +78,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             var concatenated = new List<byte>();
             foreach (var t in tables)
                 concatenated.AddRange(t.Content);
-            byte[] compressed = Brotli(concatenated.ToArray());
+            byte[] compressed = Brotli([.. concatenated]);
 
             var buf = new List<byte>();
             WriteUInt32BE(buf, 0x774F4632); // signature 'wOF2'
@@ -105,7 +105,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             }
 
             buf.AddRange(compressed);
-            return buf.ToArray();
+            return [.. buf];
         }
 
         [Fact]

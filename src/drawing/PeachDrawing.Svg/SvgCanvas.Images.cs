@@ -8,7 +8,7 @@ namespace PeachDrawing.Svg;
 public sealed partial class SvgCanvas
 {
     /// <summary>Images that did not come from this package (a raster canvas's tile, say), converted once to something that can be embedded.</summary>
-    private static readonly ConditionalWeakTable<Image, SvgImage> ForeignImages = new();
+    private static readonly ConditionalWeakTable<Image, SvgImage> ForeignImages = [];
 
     /// <summary>
     /// The id the document defines <paramref name="image"/> under: a decoded image as an <c>&lt;image&gt;</c> holding its encoded bytes, a

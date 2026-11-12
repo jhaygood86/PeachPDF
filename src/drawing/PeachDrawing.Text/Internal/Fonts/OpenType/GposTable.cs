@@ -500,7 +500,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                 catch (Exception ex) when (ex is IndexOutOfRangeException or ArgumentOutOfRangeException or OverflowException)
                 {
                     // A damaged script or feature list gives no lookups rather than failing the shaping of the text.
-                    return new SortedSet<int>();
+                    return [];
                 }
             }
         }

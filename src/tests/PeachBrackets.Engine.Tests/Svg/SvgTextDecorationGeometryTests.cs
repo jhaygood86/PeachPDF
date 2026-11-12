@@ -34,7 +34,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             return g;
         }
 
-        private static TestRecordingGraphics.DrawLineCall[] Lines(TestRecordingGraphics g) => g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToArray();
+        private static TestRecordingGraphics.DrawLineCall[] Lines(TestRecordingGraphics g) => [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>()];
 
         [Fact]
         public void Thickness_Length_SetsPenWidth()

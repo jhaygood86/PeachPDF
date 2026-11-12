@@ -110,6 +110,23 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
+        public void ConsolidateImages_StreamsDifferingInOneMiddleByte_AreNotMerged()
+        {
+            // The bucket hash looks only at the ends of a stream, so these land together; equality must still tell them apart.
+            var doc = new PdfDocument();
+            var colorBytes = new byte[10_000];
+            var differing = (byte[])colorBytes.Clone();
+            differing[5_000] = 1;
+
+            var image1 = CreateImageXObject(doc, colorBytes);
+            var image2 = CreateImageXObject(doc, differing);
+
+            var (resolved1, resolved2) = ConsolidateAndResolve(doc, image1, image2);
+
+            Assert.NotSame(resolved1, resolved2);
+        }
+
+        [Fact]
         public void ConsolidateImages_SameColorStreamOnlyOneHasSMask_AreNotMerged()
         {
             var doc = new PdfDocument();

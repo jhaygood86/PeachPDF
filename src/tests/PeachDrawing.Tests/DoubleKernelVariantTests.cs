@@ -28,7 +28,7 @@ public class DoubleKernelVariantTests
         return bytes;
     }
 
-    public static TheoryData<string> Forms => new() { "128", "256" };
+    public static TheoryData<string> Forms => ["128", "256"];
 
     private static bool Supported(string form) => form == "128" ? Vector128.IsHardwareAccelerated : Vector256.IsHardwareAccelerated;
 

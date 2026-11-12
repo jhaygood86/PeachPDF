@@ -168,7 +168,7 @@ namespace PeachBrackets.Html.Animation
                 i = runEnd - 1;
             }
 
-            easing = new EasingFunction(Kind.Points, 0, 0, 1, 1, 0, Jump.End, resolved, outputs.ToArray());
+            easing = new EasingFunction(Kind.Points, 0, 0, 1, 1, 0, Jump.End, resolved, [.. outputs]);
             return true;
         }
 

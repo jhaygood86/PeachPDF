@@ -64,7 +64,7 @@ internal sealed class HintingEngine
     // for another's if an engine is ever shared.
     private readonly string? _variationKey;
 
-    private readonly object _faceLock = new();
+    private readonly Lock _faceLock = new();
     private TtFace? _face;
     private bool _faceRead; // written last, with release semantics, so a reader that sees it true sees _face
 
@@ -545,7 +545,7 @@ internal sealed class HintingEngine
 
         outline.ContourList.Capacity = hinted.ContourEnds.Length;
 
-        List<GlyphOutlineDecoder.RawPoint> points = s_contourPoints ?? new List<GlyphOutlineDecoder.RawPoint>(64);
+        List<GlyphOutlineDecoder.RawPoint> points = s_contourPoints ?? [with(64)];
         s_contourPoints = null; // taken: a contour that throws leaves nothing half-used behind
 
         ReadOnlySpan<int> xs = hinted.X;

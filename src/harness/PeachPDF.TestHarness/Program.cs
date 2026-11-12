@@ -16793,7 +16793,7 @@ await SaveDeclarativeShowcaseAsync("declarative_api", "Document Building", "Decl
                         column.Item().Width(300).Height(160).Image(size =>
                         {
                             var barPlot = new Plot();
-                            barPlot.Add.Bars(new double[] { 42, 31, 27 });
+                            barPlot.Add.Bars([42, 31, 27]);
                             barPlot.Title("Q1 revenue by region ($k)");
                             return barPlot.GetImageBytes((int)size.Width * 2, (int)size.Height * 2, ImageFormat.Png);
                         });
@@ -17087,7 +17087,7 @@ record BenchmarkResult(string Slug, double[] WallTimesMs, long[] AllocatedBytes,
 
     private static double Median(IEnumerable<double> values)
     {
-        var sorted = values.OrderBy(v => v).ToArray();
+        var sorted = values.Order().ToArray();
         var mid = sorted.Length / 2;
         return sorted.Length % 2 == 0 ? (sorted[mid - 1] + sorted[mid]) / 2.0 : sorted[mid];
     }

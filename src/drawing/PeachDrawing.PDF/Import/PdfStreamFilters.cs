@@ -85,7 +85,7 @@ internal static class PdfStreamFilters
             if (hi < 0) hi = v; else { o.Add((byte)(hi * 16 + v)); hi = -1; }
         }
         if (hi >= 0) o.Add((byte)(hi * 16));
-        return o.ToArray();
+        return [.. o];
     }
 
     static byte[] Ascii85(byte[] data)
@@ -114,7 +114,7 @@ internal static class PdfStreamFilters
             for (int k = n; k < 5; k++) acc = unchecked(acc * 85 + 84);
             for (int k = 0; k < n - 1; k++) o.Add((byte)(acc >> (24 - 8 * k)));
         }
-        return o.ToArray();
+        return [.. o];
     }
 
     static byte[] RunLength(byte[] data)
@@ -137,7 +137,7 @@ internal static class PdfStreamFilters
                 for (int k = 0; k < 257 - len; k++) o.Add(v);
             }
         }
-        return o.ToArray();
+        return [.. o];
     }
 
     static byte[] Lzw(byte[] data, int earlyChange)
@@ -171,7 +171,7 @@ internal static class PdfStreamFilters
             int size = table.Count + earlyChange;
             bits = size >= 4096 ? 12 : size >= 2048 ? 12 : size >= 1024 ? 11 : size >= 512 ? 10 : 9;
         }
-        return o.ToArray();
+        return [.. o];
     }
 
     /// <summary>Undoes a TIFF (2) or PNG (10-15) predictor.</summary>

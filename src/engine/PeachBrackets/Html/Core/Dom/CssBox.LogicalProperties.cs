@@ -187,7 +187,7 @@ namespace PeachBrackets.Html.Dom
             return order.Of(physicalName) <= order.Of(logicalName);
         }
 
-        private static readonly string[] PhysicalCornerNames = { "top-left", "top-right", "bottom-right", "bottom-left" };
+        private static readonly string[] PhysicalCornerNames = ["top-left", "top-right", "bottom-right", "bottom-left"];
 
         private void ApplyCornerShape(int corner, string value, string logicalName)
         {

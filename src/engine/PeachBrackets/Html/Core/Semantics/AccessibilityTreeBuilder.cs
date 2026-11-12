@@ -20,12 +20,12 @@ namespace PeachBrackets.Html.Semantics
     internal sealed partial class AccessibilityTreeBuilder
     {
         private readonly HtmlContainerInt _container;
-        private readonly Dictionary<CssBox, List<AccessibilityBounds>> _bounds = new(ReferenceEqualityComparer.Instance);
-        private readonly Dictionary<string, CssBox> _byElementId = new(StringComparer.Ordinal);
-        private readonly Dictionary<string, List<CssBox>> _labelsFor = new(StringComparer.Ordinal);
-        private readonly Dictionary<AccessibilityNode, int> _textCounts = new(ReferenceEqualityComparer.Instance);
-        private readonly Dictionary<CssBox, AccessibilityNode> _nodeByBox = new(ReferenceEqualityComparer.Instance);
-        private readonly HashSet<CssBox> _visitedSources = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<CssBox, List<AccessibilityBounds>> _bounds = [with(ReferenceEqualityComparer.Instance)];
+        private readonly Dictionary<string, CssBox> _byElementId = [with(StringComparer.Ordinal)];
+        private readonly Dictionary<string, List<CssBox>> _labelsFor = [with(StringComparer.Ordinal)];
+        private readonly Dictionary<AccessibilityNode, int> _textCounts = [with(ReferenceEqualityComparer.Instance)];
+        private readonly Dictionary<CssBox, AccessibilityNode> _nodeByBox = [with(ReferenceEqualityComparer.Instance)];
+        private readonly HashSet<CssBox> _visitedSources = [with(ReferenceEqualityComparer.Instance)];
         private int _anonymous;
 
         private AccessibilityTreeBuilder(HtmlContainerInt container) => _container = container;

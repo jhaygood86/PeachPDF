@@ -1067,7 +1067,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 + "<tr><td>Gamma</td><td>three</td></tr></table></div>");
 
         private static List<CssRect> WordsIn(CssBox box) =>
-            LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
         /// <summary>
         /// A paragraph that breaks at the first page boundary, followed by two headings each chained to a

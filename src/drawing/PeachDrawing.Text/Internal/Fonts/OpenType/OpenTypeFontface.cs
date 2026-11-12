@@ -32,6 +32,7 @@
 #define VERBOSE_
 
 using System;
+using System.Threading;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Buffers.Binary;
@@ -113,7 +114,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// <summary>
         /// The dictionary of all font tables.
         /// </summary>
-        internal Dictionary<string, TableDirectoryEntry> TableDictionary = new Dictionary<string, TableDirectoryEntry>();
+        internal Dictionary<string, TableDirectoryEntry> TableDictionary = [];
 
         // Keep names identical to OpenType spec.
         // ReSharper disable InconsistentNaming
@@ -375,12 +376,12 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         public OpenTypeFontface CreateFontSubSet(Dictionary<int, object> glyphs, bool cidFont, Variations.VariationCoordinates? variation = null)
         {
             // Create new font image
-            OpenTypeFontface fontData = new OpenTypeFontface(this);
+            OpenTypeFontface fontData = new(this);
 
             // Create new loca and glyf table
-            IndexToLocationTable locaNew = new IndexToLocationTable();
+            IndexToLocationTable locaNew = new();
             locaNew.ShortIndex = loca.ShortIndex;
-            GlyphDataTable glyfNew = new GlyphDataTable();
+            GlyphDataTable glyfNew = new();
 
             // Add all required tables
             //fontData.AddTable(os2);
@@ -441,7 +442,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             Dictionary<int, (byte[] Data, int XMin)>? instanceGlyphs = null;
             if (variation is not null)
             {
-                instanceGlyphs = new Dictionary<int, (byte[], int)>(glyphCount);
+                instanceGlyphs = [with(glyphCount)];
                 foreach (int glyphId in glyphArray)
                 {
                     if (syntheticSelectionGlyphs?.Contains(glyphId) == true)
@@ -626,8 +627,8 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// </summary>
         void Compile()
         {
-            MemoryStream stream = new MemoryStream();
-            OpenTypeFontWriter writer = new OpenTypeFontWriter(stream);
+            MemoryStream stream = new();
+            OpenTypeFontWriter writer = new(stream);
 
             int tableCount = TableDictionary.Count;
             int selector = _entrySelectors[tableCount];
@@ -676,7 +677,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             FontSource = FontFileData.CreateCompiledFont(stream.ToArray());
         }
         // 2^entrySelector[n] <= n
-        static readonly int[] _entrySelectors = { 0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4 };
+        static readonly int[] _entrySelectors = [0, 0, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4];
 
         public int Position
         {
@@ -700,7 +701,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         /// result without throwing. Reentrant (a plain object + `lock`), since a paint/lookup read can
         /// recurse into another read of the same fontface on the same thread.
         /// </summary>
-        internal readonly object SyncRoot = new();
+        internal readonly Lock SyncRoot = new();
 
         /// <summary>
         /// The variation tables of a variable font, parsed once on first use, or <see langword="null"/> for a font that is not variable.

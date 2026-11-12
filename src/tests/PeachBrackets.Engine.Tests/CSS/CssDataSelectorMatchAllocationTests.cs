@@ -39,12 +39,14 @@ public class CssDataSelectorMatchAllocationTests
 
         // None of these match a <div>, so Any's loop runs to completion every call rather than
         // short-circuiting on the first alternative.
-        var list = new ListSelector();
-        list.Add(TypeSelector.Create("span"));
-        list.Add(TypeSelector.Create("p"));
-        list.Add(TypeSelector.Create("a"));
-        list.Add(TypeSelector.Create("ul"));
-        list.Add(TypeSelector.Create("table"));
+        var list = new ListSelector
+        {
+            TypeSelector.Create("span"),
+            TypeSelector.Create("p"),
+            TypeSelector.Create("a"),
+            TypeSelector.Create("ul"),
+            TypeSelector.Create("table")
+        };
 
         const int passes = 10_000;
         var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(list, box), passes);
@@ -65,11 +67,13 @@ public class CssDataSelectorMatchAllocationTests
         // say, ClassSelector): ClassSelector's own match allocates a Split() array regardless of this
         // fix, which would swamp the signal this test is isolating - TypeSelector's match is a plain
         // string compare with nothing else to allocate.
-        var compound = new CompoundSelector();
-        compound.Add(TypeSelector.Create("div"));
-        compound.Add(TypeSelector.Create("div"));
-        compound.Add(TypeSelector.Create("div"));
-        compound.Add(TypeSelector.Create("div"));
+        var compound = new CompoundSelector
+        {
+            TypeSelector.Create("div"),
+            TypeSelector.Create("div"),
+            TypeSelector.Create("div"),
+            TypeSelector.Create("div")
+        };
 
         const int passes = 10_000;
         var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(compound, box), passes);
@@ -89,9 +93,11 @@ public class CssDataSelectorMatchAllocationTests
         // pseudo-element branch); ::first-letter is used here (rather than ::before/::after/::marker)
         // because its side effect is an idempotent bool flag set, not box-tree synthesis, so it stays
         // safe to call thousands of times in a tight loop without mutating the fixture's box tree.
-        var compound = new CompoundSelector();
-        compound.Add(TypeSelector.Create("div"));
-        compound.Add(PseudoElementSelector.Create(PseudoElementNames.FirstLetter));
+        var compound = new CompoundSelector
+        {
+            TypeSelector.Create("div"),
+            PseudoElementSelector.Create(PseudoElementNames.FirstLetter)
+        };
 
         const int passes = 10_000;
         var allocated = AllocationProbe.Bytes(() => CssData.DoesSelectorMatch(compound, box), passes);

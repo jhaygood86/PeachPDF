@@ -78,7 +78,7 @@ internal class PdfTrailer : PdfDictionary  // Reference: 3.4.4  File Trailer / P
     /// </summary>
     internal PdfArray CreateNewDocumentIds()
     {
-        PdfArray array = new PdfArray(_document);
+        PdfArray array = new(_document);
         byte[] documentId = Guid.NewGuid().ToByteArray();
         string id = PdfEncoders.LatinOneByteEncoding.GetString(documentId, 0, documentId.Length);
         array.Elements.Add(new PdfString(id, PdfStringFlags.HexLiteral));

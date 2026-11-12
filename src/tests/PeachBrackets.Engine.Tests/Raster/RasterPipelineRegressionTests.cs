@@ -33,7 +33,7 @@ namespace PeachBrackets.Engine.Tests.Raster
             ColorMatrixFilter.ApplyInPlace(surface, functions);
 
             var white = new byte[4];
-            ColorMatrixFilter.Apply(new byte[] { 255, 255, 255, 255 }, white, functions[1]);
+            ColorMatrixFilter.Apply([255, 255, 255, 255], white, functions[1]);
             Assert.Equal(white, surface.Pixels.Slice(0, 4).ToArray());
         }
 

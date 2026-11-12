@@ -32,7 +32,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 		private int bufferOffset;
 
 		/// <summary>Decoder state.</summary>
-		private readonly PeachDrawing.Text.Brotli.Internal.State state = new PeachDrawing.Text.Brotli.Internal.State();
+		private readonly PeachDrawing.Text.Brotli.Internal.State state = new();
 
 		/// <summary>
 		/// Creates a

@@ -23,7 +23,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             return g;
         }
 
-        private static double[] Xs(TestRecordingGraphics g) => g.DrawStringCalls.Select(c => c.PaintPoint.X).ToArray();
+        private static double[] Xs(TestRecordingGraphics g) => [.. g.DrawStringCalls.Select(c => c.PaintPoint.X)];
 
         /// <summary>Left edge of the first glyph to the right edge of the last.</summary>
         private static double Span(TestRecordingGraphics g)
@@ -34,7 +34,7 @@ namespace PeachBrackets.Engine.Tests.Svg
 
         /// <summary>Every transform pushed for a glyph (the first push of a render is the viewBox mapping).</summary>
         private static TestRecordingGraphics.PushTransformCall[] GlyphPushes(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1).ToArray();
+            [.. g.Log.OfType<TestRecordingGraphics.PushTransformCall>().Skip(1)];
 
         [Fact]
         public void TextLength_StretchesTheRunToExactlyThatSpan()
@@ -90,10 +90,10 @@ namespace PeachBrackets.Engine.Tests.Svg
             var plain = Render("", "a<tspan>bcd</tspan>e");
             var g = Render("", "a<tspan textLength=\"100\">bcd</tspan>e");
 
-            Assert.Equal(["a", "bcd", "e"], plain.DrawStringCalls.Select(c => c.Text).ToArray());
+            Assert.Equal(["a", "bcd", "e"], [.. plain.DrawStringCalls.Select(c => c.Text)]);
             var natural = plain.DrawStringCalls[1].Size.Width;
 
-            Assert.Equal(["a", "b", "c", "d", "e"], g.DrawStringCalls.Select(c => c.Text).ToArray());
+            Assert.Equal(["a", "b", "c", "d", "e"], [.. g.DrawStringCalls.Select(c => c.Text)]);
             var tspanSpan = g.DrawStringCalls[3].PaintPoint.X + g.DrawStringCalls[3].Size.Width - g.DrawStringCalls[1].PaintPoint.X;
             Assert.Equal(100, tspanSpan, 3);
             Assert.Equal(plain.DrawStringCalls[2].PaintPoint.X + (100 - natural), g.DrawStringCalls[4].PaintPoint.X, 3);
@@ -158,7 +158,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var g = Render("", "a<tspan textLength=\"100\" lengthAdjust=\"spacingAndGlyphs\">bcd</tspan>e");
 
             var natural = plain.DrawStringCalls[1].Size.Width;
-            Assert.Equal(["a", "b", "c", "d", "e"], g.DrawStringCalls.Select(c => c.Text).ToArray());
+            Assert.Equal(["a", "b", "c", "d", "e"], [.. g.DrawStringCalls.Select(c => c.Text)]);
             var pushes = GlyphPushes(g);
             Assert.Equal(3, pushes.Length);
             Assert.All(pushes, p => Assert.Equal(100 / natural, p.Matrix.M11, 3));

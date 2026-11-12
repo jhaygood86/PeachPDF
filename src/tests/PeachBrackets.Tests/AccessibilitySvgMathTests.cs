@@ -38,7 +38,7 @@ public class AccessibilitySvgMathTests
 
         var svgs = tree.Nodes.Where(n => n.Role is AccessibilityRole.Image or AccessibilityRole.GraphicsDocument).ToArray();
         Assert.Equal([AccessibilityRole.Image, AccessibilityRole.GraphicsDocument], svgs.Select(s => s.Role).ToArray());
-        Assert.Equal(["Label wins", "Only a title"], svgs.Select(s => s.Name).ToArray());
+        Assert.Equal(["Label wins", "Only a title"], [.. svgs.Select(s => s.Name)]);
     }
 
     [Fact]
@@ -69,7 +69,7 @@ public class AccessibilitySvgMathTests
             + "<math aria-label='Aria label' alttext='ignored'><mi>y</mi></math>"
             + "<math><mi>z</mi></math>");
 
-        Assert.Equal(["Alt text", "Aria label", "z"], tree.Nodes.Where(n => n.Role == AccessibilityRole.Math).Select(n => n.Name).ToArray());
+        Assert.Equal(["Alt text", "Aria label", "z"], [.. tree.Nodes.Where(n => n.Role == AccessibilityRole.Math).Select(n => n.Name)]);
     }
 
     [Theory]

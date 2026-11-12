@@ -16,7 +16,7 @@ namespace PeachBrackets.Engine.Tests.CSS
         // delegation for every property, not just a hand-picked few.
         static PropertyInfo[] NamedCssProperties()
         {
-            return typeof(StyleDeclaration).GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            return [.. typeof(StyleDeclaration).GetProperties(BindingFlags.Public | BindingFlags.Instance)
                 .Where(p => p.PropertyType == typeof(string) && p.GetIndexParameters().Length == 0)
                 .Where(p => p.Name != nameof(StyleDeclaration.CssText))
                 // BorderImage: setting all of its longhands to "inherit" and reading the shorthand
@@ -24,8 +24,7 @@ namespace PeachBrackets.Engine.Tests.CSS
                 // ShorthandProperty.Stringify) -- a real, pre-existing bug in this fork's border-image
                 // shorthand re-serialization, found via this test. Not fixed here (out of scope for a
                 // coverage-focused change); excluded so the rest of the round-trip check can run.
-                .Where(p => p.Name != nameof(StyleDeclaration.BorderImage))
-                .ToArray();
+                .Where(p => p.Name != nameof(StyleDeclaration.BorderImage))];
         }
 
         [Fact]

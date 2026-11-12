@@ -24,7 +24,7 @@ internal sealed class PdfImportedFont
     readonly string _family;
     readonly RenderContext _context;
     readonly Dictionary<int, string> _toUnicode;
-    readonly Dictionary<int, double> _widths = new();
+    readonly Dictionary<int, double> _widths = [];
     readonly double _defaultWidth;
     readonly byte[]? _cidToGid;
     readonly Func<int, string?> _encodingText;
@@ -51,7 +51,7 @@ internal sealed class PdfImportedFont
     /// <summary>The font at <paramref name="size"/>, or null when the context cannot make it.</summary>
     public Font? GetFont(double size) => _context.GetFont(_family, size, PaintFontStyle.Regular);
 
-    static readonly ConditionalWeakTable<RenderContext, HashSet<string>> Registered = new();
+    static readonly ConditionalWeakTable<RenderContext, HashSet<string>> Registered = [];
 
     /// <summary>Loads <paramref name="fontDict"/>; returns null and a reason in <paramref name="why"/> when it cannot be drawn.</summary>
     public static PdfImportedFont? Load(PdfSourceDocument doc, PdfDictionary fontDict, RenderContext context, out string? why)

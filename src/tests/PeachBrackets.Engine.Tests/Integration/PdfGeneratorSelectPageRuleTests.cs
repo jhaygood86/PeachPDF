@@ -616,6 +616,6 @@ namespace PeachBrackets.Engine.Tests.Integration
         // ─── Helpers ─────────────────────────────────────────────────────────────
 
         private static List<PageRule> ParsePageRules(string css) =>
-            new StylesheetParser().Parse(css).Rules.OfType<PageRule>().ToList();
+            [.. new StylesheetParser().Parse(css).Rules.OfType<PageRule>()];
     }
 }

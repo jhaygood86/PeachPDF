@@ -190,7 +190,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             await Task.WhenAll(Enumerable.Range(0, results.Length).Select(worker => Task.Run(() =>
             {
                 // A fresh copy per lookup, so neither the buffer memo nor a shared reference can stand in for content identity.
-                results[worker] = contents.Select(content => FontFileData.GetOrCreateFrom((byte[])content.Clone())).ToArray();
+                results[worker] = [.. contents.Select(content => FontFileData.GetOrCreateFrom((byte[])content.Clone()))];
             })));
 
             for (int content = 0; content < contents.Count; content++)

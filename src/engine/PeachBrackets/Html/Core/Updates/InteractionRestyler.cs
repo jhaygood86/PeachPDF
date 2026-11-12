@@ -63,7 +63,7 @@ namespace PeachBrackets.Html.Updates
 
         // Every property the registry can read back: those with an initial value (the cascade resets all of them) and those the revert snapshots read.
         private static readonly string[] AllPropertyNames =
-            CssPropertyRegistry.InitialValues.Keys.Union(CssPropertyRegistry.SnapshotPropertyNames, StringComparer.OrdinalIgnoreCase).ToArray();
+            [.. CssPropertyRegistry.InitialValues.Keys.Union(CssPropertyRegistry.SnapshotPropertyNames, StringComparer.OrdinalIgnoreCase)];
 
         private static Dictionary<string, string?> ReadAll(CssBox box)
         {
@@ -327,7 +327,7 @@ namespace PeachBrackets.Html.Updates
         // Says why the box's new style cannot be kept (null when it can), and which properties differ.
         private static string? Classify(CssBox box, ComputedStyle old, out HashSet<string> names, out bool transformFlip, out List<(string Property, string? Old, string? New)> changes)
         {
-            names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            names = [with(StringComparer.OrdinalIgnoreCase)];
             transformFlip = false;
             changes = [];
 

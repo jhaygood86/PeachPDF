@@ -1850,7 +1850,7 @@ namespace PeachBrackets.Html.Dom
             {
                 if (line.Items.Count == 0) continue;
 
-                flowLines.Add(line.Items.Select(item => item.Box).ToList());
+                flowLines.Add([.. line.Items.Select(item => item.Box)]);
             }
 
             if (flowLines.Count == 0) return;
@@ -1965,11 +1965,11 @@ namespace PeachBrackets.Html.Dom
 
                 var pending = isResumedLine
                     ? seedUnfinished!.Select(u => (Box: u.Item, Resume: (BreakToken?)u.Token)).ToList()
-                    : lines[lineIndex].Select(box => (Box: box, Resume: (BreakToken?)null)).ToList();
+                    : [.. lines[lineIndex].Select(box => (Box: box, Resume: (BreakToken?)null))];
 
                 var finished = isResumedLine && seedFinished is not null
                     ? new List<CssBox>(seedFinished)
-                    : new List<CssBox>();
+                    : [];
                 var unfinished = new List<UnfinishedFlexItem>();
 
                 foreach (var (box, itemResume) in pending)
@@ -2069,7 +2069,7 @@ namespace PeachBrackets.Html.Dom
             var groups = BuildLineGroups(flowLines);
             var lastBottom = bottoms[^1];
 
-            LineRelocation.Relocate(container, groups.Skip(from).ToList());
+            LineRelocation.Relocate(container, [.. groups.Skip(from)]);
 
             for (var line = from; line < lines.Count; line++)
                 bottoms[line] = lines[line].Max(box => box.ActualBottom);
@@ -2231,7 +2231,7 @@ namespace PeachBrackets.Html.Dom
         {
             var flowLines = lines
                 .Where(line => line.Items.Count > 0)
-                .Select(line => (IReadOnlyList<CssBox>)line.Items.Select(item => item.Box).ToList())
+                .Select(line => (IReadOnlyList<CssBox>)[.. line.Items.Select(item => item.Box)])
                 .ToList();
 
             var ordered = new List<IReadOnlyList<CssBox>>(flowLines.Count);
@@ -2363,14 +2363,13 @@ namespace PeachBrackets.Html.Dom
             DistributeFlex(line, measure);
             ComputeMainOffsets(line, measure, indefiniteMainSize: false);
 
-            return items
+            return [.. items
                 .Select(item => (
                     item.Box,
                     X: _effectiveMainStartIsAtMax
                         ? _flexBox.ClientLeft + measure - item.MainOffset - item.FinalMainSize
                         : _flexBox.ClientLeft + item.MainOffset,
-                    Width: item.FinalMainSize))
-                .ToList();
+                    Width: item.FinalMainSize))];
         }
 
         /// <summary>
@@ -2586,14 +2585,13 @@ namespace PeachBrackets.Html.Dom
         /// (and its resumption) treat "next index" as "next down the page" unconditionally.
         /// </remarks>
         private List<IReadOnlyList<CssBox>> BuildColumnLines(List<FlexLine> lines) =>
-            lines
+            [.. lines
                 .Where(line => line.Items.Count > 0)
                 .Select(line =>
                 {
                     var boxes = line.Items.Select(item => item.Box);
-                    return (IReadOnlyList<CssBox>)(_isReverse ? boxes.Reverse().ToList() : boxes.ToList());
-                })
-                .ToList();
+                    return (IReadOnlyList<CssBox>)(_isReverse ? boxes.Reverse().ToList() : [.. boxes]);
+                })];
 
         /// <summary>
         /// Lays each column-direction line's items' content out for real, in block-axis order, with

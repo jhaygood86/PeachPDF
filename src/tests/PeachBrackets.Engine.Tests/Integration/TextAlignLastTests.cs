@@ -51,7 +51,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             line.Words.Count > 0 && line.Words[^1].Right > line.ContentRight - 1;
 
         private static IReadOnlyList<CssLineBox> NonEmpty(CssBox block) =>
-            block.LineBoxes.Where(line => line.Words.Any(w => !w.IsLineBreak)).ToList();
+            [.. block.LineBoxes.Where(line => line.Words.Any(w => !w.IsLineBreak))];
 
         /// <summary>
         /// Asserts <paramref name="line"/> is centred in its own measure, by the one font-independent

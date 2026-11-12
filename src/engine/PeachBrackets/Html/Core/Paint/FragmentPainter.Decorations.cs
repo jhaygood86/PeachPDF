@@ -250,7 +250,7 @@ namespace PeachBrackets.Html.Paint
             // visually on top.
             var layersToPaint = box.BackgroundImages != null
                 ? Enumerable.Range(0, box.BackgroundImages.Count).Reverse()
-                : Enumerable.Empty<int>();
+                : [];
 
             foreach (int layerIndex in layersToPaint)
             {

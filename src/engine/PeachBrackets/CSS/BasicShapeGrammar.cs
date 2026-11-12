@@ -347,7 +347,7 @@ namespace PeachBrackets.Css
                 }
             }
 
-            var horizontalTokens = slashIndex >= 0 ? tokens.Take(slashIndex).ToArray() : tokens.ToArray();
+            var horizontalTokens = slashIndex >= 0 ? tokens.Take(slashIndex).ToArray() : [.. tokens];
             var verticalTokens = slashIndex >= 0 ? tokens.Skip(slashIndex + 1).ToArray() : null;
 
             if (horizontalTokens.Length is < 1 or > 4) return null;
@@ -358,7 +358,7 @@ namespace PeachBrackets.Css
             var hValues = horizontalTokens.Select(t => t.ToValue()).ToArray();
             var (htl, htr, hbr, hbl) = ExpandFourValues(hValues);
 
-            var vValues = verticalTokens != null ? verticalTokens.Select(t => t.ToValue()).ToArray() : hValues;
+            var vValues = verticalTokens != null ? [.. verticalTokens.Select(t => t.ToValue())] : hValues;
             var (vtl, vtr, vbr, vbl) = ExpandFourValues(vValues);
 
             return new CornerRadii(htl, vtl, htr, vtr, hbr, vbr, hbl, vbl);
@@ -488,14 +488,14 @@ namespace PeachBrackets.Css
             {
                 if (tokens[i].Type == TokenType.Ident && tokens[i].Data.Isi(keyword))
                 {
-                    before = tokens.Take(i).ToArray();
-                    after = tokens.Skip(i + 1).ToArray();
+                    before = [.. tokens.Take(i)];
+                    after = [.. tokens.Skip(i + 1)];
                     found = true;
                     return after.Count > 0;
                 }
             }
 
-            before = tokens.ToArray();
+            before = [.. tokens];
             after = [];
             found = false;
             return true;
@@ -511,7 +511,7 @@ namespace PeachBrackets.Css
                 if (token.Type == TokenType.Comma)
                 {
                     groups.Add(current);
-                    current = new List<Token>();
+                    current = [];
                 }
                 else
                 {

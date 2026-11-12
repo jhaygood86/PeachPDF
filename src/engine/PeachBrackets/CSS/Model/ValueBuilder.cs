@@ -8,7 +8,7 @@ namespace PeachBrackets.Css
     {
         public ValueBuilder()
         {
-            _values = new List<Token>();
+            _values = [];
             Reset();
         }
 

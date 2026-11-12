@@ -54,7 +54,7 @@ namespace PeachBrackets.Svg
         /// </summary>
         private static bool ParseCore(string? d, out List<PathSegment> segments)
         {
-            segments = new List<PathSegment>();
+            segments = [];
 
             if (string.IsNullOrWhiteSpace(d))
                 return false;

@@ -37,15 +37,15 @@ namespace PeachDrawing.PDF
         /// <summary>The names an output file has taken so far, shared by every operation added to one composer so that they never collide.</summary>
         private sealed class AppendState
         {
-            public HashSet<string> DestinationNames { get; } = new(StringComparer.Ordinal);
+            public HashSet<string> DestinationNames { get; } = [with(StringComparer.Ordinal)];
 
-            public HashSet<string> FieldNames { get; } = new(StringComparer.Ordinal);
+            public HashSet<string> FieldNames { get; } = [with(StringComparer.Ordinal)];
 
             /// <summary>How many operations were added before this one; it keeps the generated link-target names of one operation from another's.</summary>
             public int Calls { get; set; }
         }
 
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfComposer, AppendState> States = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<PdfComposer, AppendState> States = [];
 
         /// <summary>
         /// Adds the pages of <paramref name="operation"/> after the pages the composer already has, with the navigation of the files they came

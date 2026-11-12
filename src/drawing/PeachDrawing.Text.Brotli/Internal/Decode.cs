@@ -36,18 +36,18 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		private const int CodeLengthCodes = 18;
 
-		private static readonly int[] CodeLengthCodeOrder = new int[] { 1, 2, 3, 4, 0, 5, 17, 6, 16, 7, 8, 9, 10, 11, 12, 13, 14, 15 };
+		private static readonly int[] CodeLengthCodeOrder = [1, 2, 3, 4, 0, 5, 17, 6, 16, 7, 8, 9, 10, 11, 12, 13, 14, 15];
 
 		private const int NumDistanceShortCodes = 16;
 
-		private static readonly int[] DistanceShortCodeIndexOffset = new int[] { 3, 2, 1, 0, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2 };
+		private static readonly int[] DistanceShortCodeIndexOffset = [3, 2, 1, 0, 3, 3, 3, 3, 3, 3, 2, 2, 2, 2, 2, 2];
 
-		private static readonly int[] DistanceShortCodeValueOffset = new int[] { 0, 0, 0, 0, -1, 1, -2, 2, -3, 3, -1, 1, -2, 2, -3, 3 };
+		private static readonly int[] DistanceShortCodeValueOffset = [0, 0, 0, 0, -1, 1, -2, 2, -3, 3, -1, 1, -2, 2, -3, 3];
 
 		/// <summary>Static Huffman code for the code length code lengths.</summary>
-		private static readonly int[] FixedTable = new int[] { unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003)), unchecked((int)(0x030002)), unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003
+		private static readonly int[] FixedTable = [ unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003)), unchecked((int)(0x030002)), unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003
 			)), unchecked((int)(0x040001)), unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003)), unchecked((int)(0x030002)), unchecked((int)(0x020000)), unchecked((int)(0x020004)), unchecked((int)(0x020003)), unchecked((int
-			)(0x040005)) };
+			)(0x040005)) ];
 
 		/// <summary>Decodes a number in the range [0..255], by reading 1 - 11 bits.</summary>
 		private static int DecodeVarLenUnsignedByte(PeachDrawing.Text.Brotli.Internal.BitReader br)
@@ -662,7 +662,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		internal static void SetCustomDictionary(PeachDrawing.Text.Brotli.Internal.State state, byte[] data)
 		{
-			state.customDictionary = (data == null) ? new byte[0] : data;
+			state.customDictionary = (data == null) ? [] : data;
 		}
 
 		/// <summary>Actual decompress implementation.</summary>

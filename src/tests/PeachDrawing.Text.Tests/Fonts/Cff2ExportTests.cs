@@ -186,7 +186,7 @@ namespace PeachDrawing.Text.Tests.Fonts
                 Assert.Equal(instance.GetAdvance(glyph), file.U16(hmtx + glyph * 4));
 
                 Assert.True(instance.TryGetOutline(glyph, out var outline));
-                double left = outline.Contours.SelectMany(c => new[] { c.Start }.Concat(c.Segments.SelectMany(s => s.IsCubic ? new[] { s.End, s.Control1, s.Control2 } : new[] { s.End }))).Min(p => p.X);
+                double left = outline.Contours.SelectMany(c => new[] { c.Start }.Concat(c.Segments.SelectMany(s => s.IsCubic ? new[] { s.End, s.Control1, s.Control2 } : [s.End]))).Min(p => p.X);
                 int leftBearing = (short)file.U16(hmtx + glyph * 4 + 2);
                 Assert.True(Math.Abs(leftBearing - left) <= 1.5, $"{GlyphNames[glyph]}: {leftBearing} against {left}");
             }

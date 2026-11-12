@@ -124,7 +124,7 @@ namespace PeachBrackets.Svg
             internal readonly HashSet<string>? Important = important;
         }
 
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssBox, MatchedStyle> MatchedStyles = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<CssBox, MatchedStyle> MatchedStyles = [];
 
         private MatchedStyle Matched()
         {

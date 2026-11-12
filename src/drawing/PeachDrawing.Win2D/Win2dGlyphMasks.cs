@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Shaping;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Win2D;
@@ -30,7 +31,7 @@ internal sealed class Win2dGlyphMaskCache
     // A glyph's coverage cut to its ink; the offsets are from the pixel the glyph's origin falls in.
     private sealed record Entry(Key Key, byte[] Samples, int OffsetX, int OffsetY, int Width, int Height);
 
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private readonly Dictionary<Key, LinkedListNode<Entry>> _entries = [];
     private readonly LinkedList<Entry> _order = new();
     private long _bytes;

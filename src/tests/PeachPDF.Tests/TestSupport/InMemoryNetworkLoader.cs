@@ -14,7 +14,7 @@ namespace PeachPDF.Tests.TestSupport
     /// </summary>
     internal sealed class InMemoryNetworkLoader(Uri baseUri, string primaryHtml) : RNetworkLoader
     {
-        private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = new();
+        private readonly Dictionary<string, (byte[] Bytes, string ContentType)> _resources = [];
 
         public override Uri? BaseUri { get; } = baseUri;
 

@@ -38,7 +38,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         private static List<TestRecordingGraphics.DrawPathCall> PathCalls(TestRecordingGraphics g)
-            => g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+            => [.. g.Log.OfType<TestRecordingGraphics.DrawPathCall>()];
 
         [Fact]
         public void GradientFillText_EmitsPathFill_AndNoTextShow()

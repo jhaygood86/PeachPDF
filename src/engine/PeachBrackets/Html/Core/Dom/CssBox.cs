@@ -1679,7 +1679,7 @@ namespace PeachBrackets.Html.Dom
 
         // Most boxes (every block, every box with no inline content of its own) have no per-line rectangles. The readers every box
         // goes through use these, which look without creating the dictionary; Rectangles above creates it for a writer.
-        private static readonly Dictionary<CssLineBox, Rect> NoRectangles = new();
+        private static readonly Dictionary<CssLineBox, Rect> NoRectangles = [];
 
         /// <summary>
         /// A read-only view of <see cref="Rectangles"/> that does not create the dictionary for a box that has none. Typed as the
@@ -2090,7 +2090,7 @@ namespace PeachBrackets.Html.Dom
                                     {
                                         var autoPoints = Hyphenator.FindBreakPoints(cleanWord, language);
                                         if (autoPoints.Count > 0)
-                                            hyphenationCandidates = new List<int>(autoPoints);
+                                            hyphenationCandidates = [with(autoPoints)];
                                     }
                                 }
                             }

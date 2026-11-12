@@ -19,7 +19,7 @@ public sealed partial class Win2dCanvas
         if (image is Win2dImage own)
             return own;
 
-        _converted ??= new Dictionary<PeachDrawing.Core.Image, Win2dImage>(ReferenceEqualityComparer.Instance);
+        _converted ??= [with(ReferenceEqualityComparer.Instance)];
         if (!_converted.TryGetValue(image, out var converted))
         {
             converted = image.GetPixels() is { } pixels

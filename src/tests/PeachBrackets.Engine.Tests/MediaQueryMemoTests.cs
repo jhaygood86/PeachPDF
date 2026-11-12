@@ -13,7 +13,7 @@ public class MediaQueryMemoTests
     {
         // One media list per nesting level, as the rule index keeps them: read back from the @media rules of a parsed style sheet.
         var parser = new StylesheetParser();
-        return queries.Select(q => ((MediaRule)parser.Parse("@media " + q + " { a { color: red } }").Rules[0]).Media).ToArray();
+        return [.. queries.Select(q => ((MediaRule)parser.Parse("@media " + q + " { a { color: red } }").Rules[0]).Media)];
     }
 
     private static MediaQueryContext Context(double widthPt, string mediaType = "screen") =>

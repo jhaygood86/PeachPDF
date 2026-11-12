@@ -412,10 +412,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, root, g);
 
-            return g.Log.OfType<TestRecordingGraphics.PushClipCall>()
+            return [.. g.Log.OfType<TestRecordingGraphics.PushClipCall>()
                 .Select(call => call.Rect)
-                .Where(rect => rect.Width < 1000 && rect.Height < 1000)
-                .ToList();
+                .Where(rect => rect.Width < 1000 && rect.Height < 1000)];
         }
 
         [Theory]

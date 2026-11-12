@@ -156,7 +156,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Word counts per row are compared with each other, not with fixed numbers: how many words fit a
             // row depends on the font's metrics, so the counts are related to each other.
             static List<int> WordsPerRow(IEnumerable<TestRecordingGraphics.DrawStringCall> words) =>
-                words.GroupBy(w => Math.Round(w.PaintPoint.Y)).OrderBy(r => r.Key).Select(r => r.Count()).ToList();
+                [.. words.GroupBy(w => Math.Round(w.PaintPoint.Y)).OrderBy(r => r.Key).Select(r => r.Count())];
 
             var inSecondColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.PaintPoint.X >= SecondColumnLeft - 0.5));
             var inFirstColumn = WordsPerRow(g.DrawStringCalls.Where(w => w.PaintPoint.X < SecondColumnLeft - 0.5));

@@ -25,7 +25,7 @@ namespace PeachPDF.SourceGenerators.Json
 
         public static bool TryParse(string text, out JsonValue? root, out List<JsonError> errors)
         {
-            errors = new List<JsonError>();
+            errors = [];
             var bytes = Encoding.UTF8.GetBytes(text);
             var reader = new Utf8JsonReader(bytes, Options);
 

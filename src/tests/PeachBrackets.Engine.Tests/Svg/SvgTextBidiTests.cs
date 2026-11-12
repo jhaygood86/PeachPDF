@@ -42,7 +42,7 @@ namespace PeachBrackets.Engine.Tests.Svg
 
             // L2 reverses the whole (uniform-level, since it's all strong-R plus a neutral space) run;
             // L4 would additionally mirror any bracket-like characters, of which this text has none.
-            var expected = new string(hebrew.Reverse().ToArray());
+            var expected = new string([.. hebrew.Reverse()]);
             Assert.Equal(expected, draw.Text);
         }
 
@@ -90,7 +90,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             // reversing the whole line also reverses the two words' relative order, the parenthesized
             // group (originally second/last) ends up first (see the equivalent HTML characterization in
             // ShapingCharacterizationTests).
-            var reversedOlam = new string("עולם".Reverse().ToArray());
+            var reversedOlam = new string([.. "עולם".Reverse()]);
             Assert.Contains($"({reversedOlam})", draw.Text);
         }
 
@@ -164,8 +164,8 @@ namespace PeachBrackets.Engine.Tests.Svg
             // ...while the isolated tspan's own two words reorder relative to each other: the second
             // logical word (עולם) ends up visually before the first (שלום).
             var hebrewCall = Assert.Single(texts, t => t.Contains('ם') || t.Contains('ש'));
-            var reversedOlam = new string("עולם".Reverse().ToArray());
-            var reversedShalom = new string("שלום".Reverse().ToArray());
+            var reversedOlam = new string([.. "עולם".Reverse()]);
+            var reversedShalom = new string([.. "שלום".Reverse()]);
             Assert.True(hebrewCall.IndexOf(reversedOlam, System.StringComparison.Ordinal) < hebrewCall.IndexOf(reversedShalom, System.StringComparison.Ordinal),
                 $"expected the isolated tspan's own words to reorder; text='{hebrewCall}'");
         }

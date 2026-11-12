@@ -182,8 +182,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             {
                 var recording = new RecordingGraphics(new PeachPDF.Rendering.HtmlRenderContext());
                 FragmentPaintHarness.PaintPage(container, recording, page);
-                pages.Add(recording.Log.Where(o => o.Kind == PaintOpKind.DrawString && o.Text is not null)
-                    .Select(o => o.Text!).ToList());
+                pages.Add([.. recording.Log.Where(o => o.Kind == PaintOpKind.DrawString && o.Text is not null).Select(o => o.Text!)]);
             }
 
             return pages;

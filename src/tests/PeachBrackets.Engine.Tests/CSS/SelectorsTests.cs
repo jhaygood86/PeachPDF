@@ -49,7 +49,7 @@ public class SelectorsTests
         Assert.Equal(7, list.Count());
     }
 
-    private static readonly string[] _standardPseudoElementNames = new[] {
+    private static readonly string[] _standardPseudoElementNames = [
         PseudoElementNames.After,
         PseudoElementNames.Before,
         PseudoElementNames.Content,
@@ -57,7 +57,7 @@ public class SelectorsTests
         PseudoElementNames.FirstLine,
         PseudoElementNames.Placeholder,
         PseudoElementNames.Selection
-    };
+    ];
 
     public static string[] StandardPseudoElementNames
     {

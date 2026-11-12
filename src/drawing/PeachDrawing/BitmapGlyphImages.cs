@@ -12,7 +12,7 @@ namespace PeachDrawing;
 /// </summary>
 internal static class BitmapGlyphImages
 {
-    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), DecodedImage>> Cache = new();
+    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), DecodedImage>> Cache = [];
 
     public static DecodedImage? Get(Typeface typeface, int glyphId, EmbeddedBitmap glyph)
     {

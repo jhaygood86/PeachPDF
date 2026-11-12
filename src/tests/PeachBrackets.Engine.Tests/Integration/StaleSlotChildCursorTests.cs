@@ -54,13 +54,13 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// all. The first three lose words against a build without the fix on this machine; the
         /// fourth does not, and is here as the case where nothing is disturbed.
         /// </summary>
-        public static TheoryData<int[]> ParagraphLengths => new()
-        {
+        public static TheoryData<int[]> ParagraphLengths =>
+        [
             new[] { 23, 16, 31, 38, 12, 8, 38, 24, 22, 20, 38, 38, 33, 17 },
             new[] { 16, 12, 24, 15, 39, 36, 38, 32, 21, 14, 39, 9, 32, 35 },
             new[] { 10, 35, 38, 8, 21, 37, 39, 25, 18, 10, 39, 28, 12, 23 },
             new[] { 36, 37, 36, 40, 20, 19, 40, 38, 19, 14, 36, 27, 17, 13 },
-        };
+        ];
 
         [Theory]
         [MemberData(nameof(ParagraphLengths))]
@@ -95,7 +95,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 + "</div>");
 
         private static List<CssRect> WordsIn(CssBox box) =>
-            LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
         private static HashSet<CssRect> ClaimedWords(HtmlContainerInt container) =>
             container.FragmentTree!.Fragmentainers

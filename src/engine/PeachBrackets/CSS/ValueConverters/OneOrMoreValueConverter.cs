@@ -46,14 +46,14 @@ namespace PeachBrackets.Css
 
                 for (var i = 0; i < properties.Length; i++)
                 {
-                    var value = _converter.Construct(new[] { properties[i] });
+                    var value = _converter.Construct([properties[i]]);
 
                     if (value == null) return null;
 
                     values[i] = value;
                 }
 
-                result = new MultipleValue(values, Enumerable.Empty<Token>());
+                result = new MultipleValue(values, []);
             }
 
             return result;

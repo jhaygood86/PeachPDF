@@ -38,7 +38,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             return (g, document);
         }
 
-        private static List<TestRecordingGraphics.DrawPathCall> Paths(TestRecordingGraphics g) => g.Log.OfType<TestRecordingGraphics.DrawPathCall>().ToList();
+        private static List<TestRecordingGraphics.DrawPathCall> Paths(TestRecordingGraphics g) => [.. g.Log.OfType<TestRecordingGraphics.DrawPathCall>()];
 
         [Theory]
         [InlineData("""<textPath href="#p" method="stretch">Hi</textPath>""", true)]

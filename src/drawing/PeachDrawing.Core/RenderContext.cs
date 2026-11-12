@@ -505,7 +505,7 @@ namespace PeachDrawing.Core
         /// </summary>
         private static void RejectMixedColorSpaceGradientStops(IEnumerable<PaintColor> colors)
         {
-            var list = colors as IReadOnlyCollection<PaintColor> ?? colors.ToList();
+            var list = colors as IReadOnlyCollection<PaintColor> ?? [.. colors];
             if (list.Any(c => c.IsCmyk) && list.Any(c => !c.IsCmyk))
             {
                 throw new NotSupportedException(

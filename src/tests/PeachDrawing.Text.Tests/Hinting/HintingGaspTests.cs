@@ -132,7 +132,7 @@ namespace PeachDrawing.Text.Tests.Hinting
 
         /// <summary>The design outline scaled to a size, in 26.6.</summary>
         private static List<(long X, long Y)> Scaled(GlyphOutline design, double ppem, int unitsPerEm) =>
-            Points(design).Select(p => ((long)Math.Round(p.X / 64.0 * ppem / unitsPerEm * 64), (long)Math.Round(p.Y / 64.0 * ppem / unitsPerEm * 64))).ToList();
+            [.. Points(design).Select(p => ((long)Math.Round(p.X / 64.0 * ppem / unitsPerEm * 64), (long)Math.Round(p.Y / 64.0 * ppem / unitsPerEm * 64)))];
 
         [Theory]
         [MemberData(nameof(Variants))]

@@ -44,7 +44,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
                     }
                 }
 
-                yield return new Case(lineNumber, text.ToString(), boundaries.ToArray(), line);
+                yield return new Case(lineNumber, text.ToString(), [.. boundaries], line);
             }
         }
 
@@ -97,7 +97,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
                     if (opportunities[i] != LineBreakOpportunity.Prohibited) breaks.Add(i);
                 }
 
-                return breaks.ToArray();
+                return [.. breaks];
             });
         }
     }

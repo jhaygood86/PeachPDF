@@ -15,7 +15,7 @@ public sealed partial class SkiaCanvas
         if (image is SkiaImage own)
             return own;
 
-        _converted ??= new Dictionary<PeachDrawing.Core.Image, SkiaImage>(ReferenceEqualityComparer.Instance);
+        _converted ??= [with(ReferenceEqualityComparer.Instance)];
         if (!_converted.TryGetValue(image, out var converted))
         {
             converted = image.GetPixels() is { } pixels

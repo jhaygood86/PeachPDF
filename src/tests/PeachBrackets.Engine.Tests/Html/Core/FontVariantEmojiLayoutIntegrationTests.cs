@@ -42,7 +42,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
                 var box = Box(id);
                 var words = new List<CssRectWord>();
                 Collect(box, words);
-                return words.Select(w => (CssBox.ResolveWordFont(w, w.OwnerBox)).Typeface!.FamilyName).ToList();
+                return [.. words.Select(w => (CssBox.ResolveWordFont(w, w.OwnerBox)).Typeface!.FamilyName)];
             }
 
             private static CssBox? Find(CssBox box, string id)

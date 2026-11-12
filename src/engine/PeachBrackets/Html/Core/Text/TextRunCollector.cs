@@ -59,7 +59,7 @@ namespace PeachBrackets.Html.TextGeometry
         {
             public CssLineBox? Line { get; } = line;
 
-            public Dictionary<CssRect, (Rect Rect, CssBox Box)> Entries { get; } = new(ReferenceEqualityComparer.Instance);
+            public Dictionary<CssRect, (Rect Rect, CssBox Box)> Entries { get; } = [with(ReferenceEqualityComparer.Instance)];
 
             public List<CssRect> Order { get; } = [];
         }
@@ -214,9 +214,9 @@ namespace PeachBrackets.Html.TextGeometry
                 var bounds = new Rect(current.Left, current.Top, current.Right - current.Left, current.Bottom - current.Top);
                 runs.Add(new TextRun(
                     pageIndex, current.Text.ToString(), bounds, current.Baseline, current.Ascent, current.Descent,
-                    current.Offsets.ToArray(), current.Boundaries.ToArray(), current.Rtl, blockId,
+                    [.. current.Offsets], [.. current.Boundaries], current.Rtl, blockId,
                     block.HtmlTag?.TryGetAttribute("id") is { Length: > 0 } id ? id : null, current.Link,
-                    lineId, followsForcedBreak && firstOfLine, current.Slices.ToArray())
+                    lineId, followsForcedBreak && firstOfLine, [.. current.Slices])
                 {
                     Owner = block,
                 });

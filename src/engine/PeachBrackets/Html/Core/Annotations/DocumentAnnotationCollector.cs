@@ -98,7 +98,7 @@ namespace PeachBrackets.Html.Annotations
                         {
                             bounds = new Rect(bounds.X + (viewDx / ppp), bounds.Y + (viewDy / ppp), bounds.Width, bounds.Height);
                             if (quad is not null)
-                                quad = quad.Select(point => new PaintPoint(point.X + (viewDx / ppp), point.Y + (viewDy / ppp))).ToArray();
+                                quad = [.. quad.Select(point => new PaintPoint(point.X + (viewDx / ppp), point.Y + (viewDy / ppp)))];
                         }
                     }
 

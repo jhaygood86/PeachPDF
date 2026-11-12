@@ -132,7 +132,7 @@ namespace PeachBrackets.Engine.Tests.Raster
             var matrix = FilterEffectResolver.OpacityMatrix(0.5);
             var result = new byte[4];
 
-            ColorMatrixFilter.Apply(new byte[] { 200, 100, 50, 255 }, result, matrix);
+            ColorMatrixFilter.Apply([200, 100, 50, 255], result, matrix);
 
             Assert.Equal(128, result[3]);
             Assert.InRange(result[0], 99, 101);

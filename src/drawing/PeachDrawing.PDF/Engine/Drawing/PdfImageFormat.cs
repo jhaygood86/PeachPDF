@@ -68,11 +68,11 @@ internal sealed class PdfImageFormat
     readonly Guid _guid;
 
     // #??? Why Guids?
-    private static readonly PdfImageFormat _png = new PdfImageFormat(new Guid("{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"));
-    private static readonly PdfImageFormat _gif = new PdfImageFormat(new Guid("{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}"));
-    private static readonly PdfImageFormat _jpeg = new PdfImageFormat(new Guid("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"));
-    private static readonly PdfImageFormat _tiff = new PdfImageFormat(new Guid("{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}"));
-    private static readonly PdfImageFormat _icon = new PdfImageFormat(new Guid("{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}"));
+    private static readonly PdfImageFormat _png = new(new Guid("{B96B3CAF-0728-11D3-9D7B-0000F81EF32E}"));
+    private static readonly PdfImageFormat _gif = new(new Guid("{B96B3CB0-0728-11D3-9D7B-0000F81EF32E}"));
+    private static readonly PdfImageFormat _jpeg = new(new Guid("{B96B3CAE-0728-11D3-9D7B-0000F81EF32E}"));
+    private static readonly PdfImageFormat _tiff = new(new Guid("{B96B3CB1-0728-11D3-9D7B-0000F81EF32E}"));
+    private static readonly PdfImageFormat _icon = new(new Guid("{B96B3CB5-0728-11D3-9D7B-0000F81EF32E}"));
     // not GDI+ conform
-    private static readonly PdfImageFormat _pdf = new PdfImageFormat(new Guid("{84570158-DBF0-4C6B-8368-62D6A3CA76E0}"));
+    private static readonly PdfImageFormat _pdf = new(new Guid("{84570158-DBF0-4C6B-8368-62D6A3CA76E0}"));
 }

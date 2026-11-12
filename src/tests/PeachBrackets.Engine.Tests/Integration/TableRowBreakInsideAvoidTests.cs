@@ -37,21 +37,17 @@ namespace PeachPDF.Tests.Integration
             "</tbody></table>");
 
         private static List<CssBox> BodyRowsOf(CssBox root) =>
-            LayoutHarness.Descendants(root)
-                .Where(b => b is not CssProxyBox && b.Display.Value == DisplayMode.TableRow && b.HtmlTag?.TryGetAttribute("class") == "r")
-                .ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b is not CssProxyBox && b.Display.Value == DisplayMode.TableRow && b.HtmlTag?.TryGetAttribute("class") == "r")];
 
         /// <summary>The words each fragmentainer holds, read off the fragment tree the painter walks.</summary>
         private static List<List<string>> WordsPerPage(HtmlContainerInt container) =>
-            container.FragmentTree!.Fragmentainers.Select(f => WordsOf(f.Root).ToList()).ToList();
+            [.. container.FragmentTree!.Fragmentainers.Select(f => WordsOf(f.Root).ToList())];
 
         private static IEnumerable<string> WordsOf(BoxFragment fragment) =>
             fragment.Words.Select(w => w.Word.Text ?? string.Empty).Concat(fragment.Children.SelectMany(WordsOf));
 
         private static List<CssBox> RowsCrossingTheirBand(CssBox root, HtmlContainerInt container) =>
-            BodyRowsOf(root)
-                .Where(row => HtmlContainerInt.FallsPast(row.ActualBottom, container.BandOfSlot(container.SlotStartingAt(row.Location.Y))))
-                .ToList();
+            [.. BodyRowsOf(root).Where(row => HtmlContainerInt.FallsPast(row.ActualBottom, container.BandOfSlot(container.SlotStartingAt(row.Location.Y))))];
 
         [Theory]
         [InlineData("break-inside: avoid")]

@@ -13,7 +13,7 @@ namespace PeachDrawing.PDF;
 /// </summary>
 internal static class BitmapGlyphImages
 {
-    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), PdfRasterImage>> Cache = new();
+    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int GlyphId, int Ppem), PdfRasterImage>> Cache = [];
 
     public static PdfRasterImage Get(Typeface typeface, int glyphId, EmbeddedBitmap glyph)
     {

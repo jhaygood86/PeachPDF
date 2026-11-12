@@ -4627,7 +4627,7 @@ namespace PeachBrackets.Html.Dom
                     // Deliberately inside the footer arm. Writing it for every stopping pass would tell
                     // CssBox.PaginatedItsOwnContentWithoutBreaking that every mid-cell-continuing table
                     // fragmented, which is a far wider change than this one.
-                    _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                    _tableBox.PageBreakBottoms ??= [];
                     _tableBox.PageBreakBottoms[leaving] = pageFooterProxy.ActualBottom;
 
                     GrowMaxRightFor(cursor, pageFooterProxy);
@@ -5626,7 +5626,7 @@ namespace PeachBrackets.Html.Dom
             // shared so a future correction to it can't be applied to one copy and missed in the others.
             double Reflect(double loc0, double right0) => (min + max - right0) - loc0;
 
-            var rows = placedRows as IReadOnlyCollection<CssBox> ?? placedRows.ToList();
+            var rows = placedRows as IReadOnlyCollection<CssBox> ?? [.. placedRows];
 
             var rowGroupFixups = new List<(CssBox Row, CssBox Group, double RowLoc0, double RowRight0, double GroupLoc0, double GroupRight0)>();
             var rowToGroup = new Dictionary<CssBox, CssBox>();
@@ -5860,7 +5860,7 @@ namespace PeachBrackets.Html.Dom
             // border up on a page whose slice did not end there. That was the second half of #432 - the
             // counter named band 0 while the slice bottom lay five bands below it - and it is right by
             // construction now that the band is the one the cursor reached rather than the one it counted.
-            _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+            _tableBox.PageBreakBottoms ??= [];
             _tableBox.PageBreakBottoms[slot] = pageBreakBottomY;
 
             // css-break-3 §4.3: the break moves the row to the *next* fragmentainer, which is the one
@@ -5939,7 +5939,7 @@ namespace PeachBrackets.Html.Dom
             // Where the table's slice on the band being left ends, which is under its last row - the same
             // record TakeBreakBeforeRow writes, and for the same reason: FragmentPainter clips the table's
             // bottom border to it, and without the entry that border is drawn across the rows below it.
-            _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+            _tableBox.PageBreakBottoms ??= [];
             _tableBox.PageBreakBottoms[slot] = cursor.MaxBottom;
 
             var target = slot + 1;
@@ -6305,7 +6305,7 @@ namespace PeachBrackets.Html.Dom
                         // nothing here, so a band it merely spans does not turn
                         // CssBox.PaginatedItsOwnContentWithoutBreaking into "this table fragmented" - which
                         // would send it down a relocation path it has never taken.
-                        _tableBox.PageBreakBottoms ??= new Dictionary<int, double>();
+                        _tableBox.PageBreakBottoms ??= [];
                         _tableBox.PageBreakBottoms[slot] = footerProxy.ActualBottom;
 
                         GrowMaxRightFor(cursor, footerProxy);

@@ -212,7 +212,7 @@ namespace PeachDrawing.PDF
         // Radio buttons sharing an HTML name attribute become widget-kids of one shared field rather
         // than independent fields (see PdfRadioButtonField's own doc comment) - keyed by name, scoped
         // to this one GeneratePdf call/document.
-        readonly Dictionary<string, PdfRadioButtonField> _radioGroupsByName = new();
+        readonly Dictionary<string, PdfRadioButtonField> _radioGroupsByName = [];
         int _unnamedRadioGroupCounter;
         int _generatedFieldNameCounter;
 

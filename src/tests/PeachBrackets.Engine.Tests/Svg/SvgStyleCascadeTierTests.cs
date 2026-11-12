@@ -18,7 +18,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var root = XDocument.Parse(markup).Root!;
             var cssData = SvgCssStyling.BuildStyleData(SvgCssStyling.CollectStyleText(root), new PeachPDF.Rendering.HtmlRenderContext());
             var document = SvgTreeBuilder.Build(new XElementSvgSourceNode(root, root, cssData, "print"), RenderContext);
-            return document.Gradients["g"].Stops.ToArray();
+            return [.. document.Gradients["g"].Stops];
         }
 
         private static readonly PaintColor Lime = PaintColor.FromArgb(255, 0, 255, 0);

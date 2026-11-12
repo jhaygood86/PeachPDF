@@ -277,7 +277,7 @@ namespace PeachDrawing.Text.Tests.Fonts
 
             foreach (var reversed in new[] { false, true })
             {
-                var declared = reversed ? new[] { ranges[1], ranges[0] } : ranges;
+                var declared = reversed ? [ranges[1], ranges[0]] : ranges;
                 var resolver = Build(Oblique(declared[0].Minimum, declared[0].Maximum), Oblique(declared[1].Minimum, declared[1].Maximum));
 
                 var info = resolver.ResolveFace(Family, Request(400, italic: true, obliqueAngle: angle));

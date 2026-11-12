@@ -39,7 +39,7 @@ public sealed class DocumentNode : IEquatable<DocumentNode>
     public DocumentNode? Parent => Box.ParentBox is { } parent ? new DocumentNode(parent, Context) : null;
 
     /// <summary>The node's children, in order.</summary>
-    public IReadOnlyList<DocumentNode> Children => Box.Boxes.Select(child => new DocumentNode(child, Context)).ToArray();
+    public IReadOnlyList<DocumentNode> Children => [.. Box.Boxes.Select(child => new DocumentNode(child, Context))];
 
     /// <summary>The name of the element the node stands for (<c>div</c>, <c>td</c>, <c>a</c>), or null for a node that is not an element.</summary>
     public string? TagName => Box.HtmlTag?.Name;
@@ -359,7 +359,7 @@ public sealed class DocumentNode : IEquatable<DocumentNode>
 
             var attributes = slotBox.HtmlTag?.Attributes is { } tagAttributes
                 ? new Dictionary<string, string>(tagAttributes, StringComparer.OrdinalIgnoreCase)
-                : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                : [with(StringComparer.OrdinalIgnoreCase)];
             var name = slotBox.HtmlTag?.TryGetAttribute("name", "") ?? "";
 
             var parent = slotBox.ParentBox!;

@@ -158,10 +158,9 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             var container = LayoutHarness.FindById(root, "d")!;
 
-            return LayoutHarness.Descendants(container)
+            return [.. LayoutHarness.Descendants(container)
                 .SelectMany(box => box.Words)
-                .OrderBy(word => word.Left)
-                .ToList();
+                .OrderBy(word => word.Left)];
         }
     }
 }

@@ -122,8 +122,8 @@ public class LangPseudoClassSelectorTests
     public void Matches_AncestorTwoLevelsUp_StillResolvesTheLanguage()
     {
         var grandparent = new CssBox(null, new HtmlTag("div", false, new Dictionary<string, string> { ["lang"] = "de" }));
-        var parent = new CssBox(grandparent, new HtmlTag("div", false, new Dictionary<string, string>()));
-        var child = new CssBox(parent, new HtmlTag("span", false, new Dictionary<string, string>()));
+        var parent = new CssBox(grandparent, new HtmlTag("div", false, []));
+        var child = new CssBox(parent, new HtmlTag("span", false, []));
 
         Assert.True(Matches(child, ":lang(de)"));
         Assert.False(Matches(child, ":lang(en)"));

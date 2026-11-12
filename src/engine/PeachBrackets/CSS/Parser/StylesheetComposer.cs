@@ -1189,7 +1189,7 @@ namespace PeachBrackets.Css
                                     // the referenced custom property's value is only known per-element, at cascade
                                     // time. Keep the shorthand declaration whole so cascade-time substitution +
                                     // shorthand expansion (CssUtils.SetPropertyValue) can handle it once resolved.
-                                    resolvedProperties = new Property[] { shorthandProperty };
+                                    resolvedProperties = [shorthandProperty];
                                 }
                                 else
                                 {

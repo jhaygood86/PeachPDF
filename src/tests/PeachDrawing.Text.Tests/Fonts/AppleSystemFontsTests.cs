@@ -114,7 +114,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         {
             // A virtual font's description is read from just the tables a description needs.
             var wanted = SystemFontStorage.DescriptionTables.Select(SfntAssembler.Tag).ToHashSet();
-            var partial = SfntAssembler.Build(ReadTables(FontBytes).Where(t => wanted.Contains(t.Tag)).ToList());
+            var partial = SfntAssembler.Build([.. ReadTables(FontBytes).Where(t => wanted.Contains(t.Tag))]);
 
             var expected = TtfFontDescription.LoadDescription(new MemoryStream(FontBytes));
             var actual = TtfFontDescription.LoadDescription(new MemoryStream(partial));

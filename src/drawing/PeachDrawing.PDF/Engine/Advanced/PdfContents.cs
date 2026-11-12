@@ -28,7 +28,7 @@ internal sealed class PdfContents : PdfArray
     {
         Debug.Assert(Owner is not null);
 
-        PdfContent content = new PdfContent(Owner);
+        PdfContent content = new(Owner);
         Owner._irefTable.Add(content);
         Debug.Assert(content.Reference is not null);
         Elements.Add(content.Reference);
@@ -42,7 +42,7 @@ internal sealed class PdfContents : PdfArray
     {
         Debug.Assert(Owner is not null);
 
-        PdfContent content = new PdfContent(Owner);
+        PdfContent content = new(Owner);
         Owner._irefTable.Add(content);
         Debug.Assert(content.Reference is not null);
         Elements.Insert(0, content.Reference);

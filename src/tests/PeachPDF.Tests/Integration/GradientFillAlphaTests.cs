@@ -117,9 +117,7 @@ namespace PeachPDF.Tests.Integration
         /// <c>/Pattern cs ... scn</c>, in the order written (a fill alpha reset and a soft mask are independent graphics-state keys, so either order is correct).
         /// </summary>
         private static System.Collections.Generic.List<System.Collections.Generic.List<string>> ExtGStatesBeforePatternFills(string pdfText) =>
-            Regex.Matches(pdfText, @"((?:/GS\d+ gs\r?\n)+)/Pattern cs\r?\n/Pa\d+ scn")
-                .Select(fill => Regex.Matches(fill.Groups[1].Value, @"/(GS\d+) gs").Select(gs => ResolveResourceObjectBody(pdfText, gs.Groups[1].Value)).ToList())
-                .ToList();
+            [.. Regex.Matches(pdfText, @"((?:/GS\d+ gs\r?\n)+)/Pattern cs\r?\n/Pa\d+ scn").Select(fill => Regex.Matches(fill.Groups[1].Value, @"/(GS\d+) gs").Select(gs => ResolveResourceObjectBody(pdfText, gs.Groups[1].Value)).ToList())];
 
         [Fact]
         public async Task TranslucentGradientFillAfterAFillOpacityShape_ResetsTheAmbientFillAlpha()

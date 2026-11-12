@@ -99,7 +99,7 @@ namespace PeachBrackets.Css
             var arms = new List<List<Token>> { new() };
             foreach (var token in args)
             {
-                if (token.Type == TokenType.Comma) arms.Add(new List<Token>());
+                if (token.Type == TokenType.Comma) arms.Add([]);
                 else if (token.Type != TokenType.Whitespace) arms[^1].Add(token);
             }
 

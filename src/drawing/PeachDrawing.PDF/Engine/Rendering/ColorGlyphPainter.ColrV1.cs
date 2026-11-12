@@ -150,7 +150,7 @@ internal sealed partial class ColorGlyphPainter
 
                 case SweepColorGlyphPaint sweep:
                     return new ConicGradientBrush(new PaintPoint(sweep.Center.X, sweep.Center.Y), sweep.Radius,
-                        ToStops(sweep.Colors, sweep.AnglesRadians.Select(angle => angle / (2 * Math.PI)).ToArray()), [.. sweep.AnglesRadians]);
+                        ToStops(sweep.Colors, [.. sweep.AnglesRadians.Select(angle => angle / (2 * Math.PI))]), [.. sweep.AnglesRadians]);
 
                 default:
                     throw new NotSupportedException("Unknown color glyph paint " + paint.GetType().Name);

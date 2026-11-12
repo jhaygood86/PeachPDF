@@ -89,6 +89,6 @@ internal static class PdfShading
             for (int i = 0; i < comps.Length; i++) comps[i] = i < values.Length ? values[i] : 0;
             stops.Add((space.ToColor(comps, alpha), p));
         }
-        return stops.ToArray();
+        return [.. stops];
     }
 }

@@ -48,7 +48,7 @@ namespace PeachBrackets.Svg
         private readonly RenderContext _renderContext;
         private readonly PaintColor _contextColor;
         private readonly IReadOnlyDictionary<string, SvgImageResource>? _prefetchedImages;
-        private readonly Dictionary<string, ISvgSourceNode> _nodesById = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ISvgSourceNode> _nodesById = [with(StringComparer.Ordinal)];
         private readonly List<FeImage> _feImageReferences = [];
         private readonly SvgDocument _document = new();
 
@@ -66,9 +66,9 @@ namespace PeachBrackets.Svg
         private readonly record struct DeferredDefinition(ISvgSourceNode Node, string Id, ISvgSourceNode[] Ancestors);
 
         private readonly List<DeferredDefinition> _deferredDefinitions = [];
-        private readonly Dictionary<string, ISvgSourceNode[]> _clipPathAncestors = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, ISvgSourceNode[]> _clipPathAncestors = [with(StringComparer.Ordinal)];
         private readonly List<ISvgSourceNode> _ancestorStack = [];
-        private readonly HashSet<string> _resolvingClipPaths = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _resolvingClipPaths = [with(StringComparer.Ordinal)];
 
         /// <summary>The root's own resolved inherited paint, the seed every definition's ancestor chain folds from.</summary>
         private InheritedPaint _rootPaint = InheritedPaint.Initial;
@@ -349,7 +349,7 @@ namespace PeachBrackets.Svg
             foreach (var href in hrefs)
             {
                 if (await PrefetchImageAsync(href, container, baseUriOverride, depth) is { } resource)
-                    (resources ??= new Dictionary<string, SvgImageResource>(StringComparer.Ordinal))[href] = resource;
+                    (resources ??= [with(StringComparer.Ordinal)])[href] = resource;
             }
 
             return resources;
@@ -604,7 +604,7 @@ namespace PeachBrackets.Svg
                         bytes = resource.Bytes;
 
                     if (bytes is not null && PeachImage.IccColorProfile.TryCreate(bytes, out var profile) && profile is not null)
-                        (_iccProfiles ??= new Dictionary<string, SvgIccColor>(StringComparer.Ordinal))[name.Trim().ToLowerInvariant()] =
+                        (_iccProfiles ??= [with(StringComparer.Ordinal)])[name.Trim().ToLowerInvariant()] =
                             new SvgIccColor(profile, SvgIccColor.ParseRenderingIntent(child.GetAttribute("rendering-intent")));
                 }
 
@@ -820,7 +820,7 @@ namespace PeachBrackets.Svg
         /// <summary>What an element's children inherit, and the viewport they sit in: one step of <see cref="ResolveAncestorContext"/>'s replay, kept so it isn't repeated.</summary>
         private readonly record struct AncestorContext(InheritedPaint Paint, FontContext Font, double? ViewportWidth, double? ViewportHeight);
 
-        private readonly Dictionary<ISvgSourceNode, AncestorContext> _ancestorContexts = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<ISvgSourceNode, AncestorContext> _ancestorContexts = [with(ReferenceEqualityComparer.Instance)];
 
         /// <summary>The paint and font <paramref name="node"/>'s children inherit: its own properties layered over its parent's.</summary>
         private (InheritedPaint Paint, FontContext Font) EnterDefinition(ISvgSourceNode node, InheritedPaint parentPaint, FontContext parentFont)
@@ -1773,7 +1773,7 @@ namespace PeachBrackets.Svg
             // animations of the ancestors in turn: on a deep tree of animated elements that doubles at every level. Within one lookup nothing changes, so what the walk
             // has found is kept until the outermost lookup is done.
             var outermost = _lookupCache is null;
-            if (outermost) _lookupCache = new Dictionary<(object, string), string?>();
+            if (outermost) _lookupCache = [];
 
             try
             {

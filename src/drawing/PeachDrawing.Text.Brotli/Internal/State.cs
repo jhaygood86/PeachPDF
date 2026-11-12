@@ -19,7 +19,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		internal int nextRunningState;
 
-		internal readonly PeachDrawing.Text.Brotli.Internal.BitReader br = new PeachDrawing.Text.Brotli.Internal.BitReader();
+		internal readonly PeachDrawing.Text.Brotli.Internal.BitReader br = new();
 
 		internal byte[] ringBuffer;
 
@@ -35,11 +35,11 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		internal bool isMetadata;
 
-		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup0 = new PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup();
+		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup0 = new();
 
-		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup1 = new PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup();
+		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup1 = new();
 
-		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup2 = new PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup();
+		internal readonly PeachDrawing.Text.Brotli.Internal.HuffmanTreeGroup hGroup2 = new();
 
 		internal readonly int[] blockLength = new int[3];
 
@@ -47,7 +47,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		internal readonly int[] blockTypeRb = new int[6];
 
-		internal readonly int[] distRb = new int[] { 16, 15, 11, 4 };
+		internal readonly int[] distRb = [16, 15, 11, 4];
 
 		internal int pos = 0;
 
@@ -103,7 +103,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		internal long expectedTotalSize = 0;
 
-		internal byte[] customDictionary = new byte[0];
+		internal byte[] customDictionary = [];
 
 		internal int bytesToIgnore = 0;
 

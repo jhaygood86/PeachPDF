@@ -14,11 +14,10 @@ namespace PeachDrawing.Text.Tests.PublicApi
         private static int[] Breaks(string text, LineBreakOptions options = default)
         {
             var opportunities = LineBreaker.FindOpportunities(text, options);
-            return opportunities
+            return [.. opportunities
                 .Select((o, i) => (o, i))
                 .Where(x => x.i > 0 && x.o != LineBreakOpportunity.Prohibited)
-                .Select(x => x.i)
-                .ToArray();
+                .Select(x => x.i)];
         }
 
         [Fact]
@@ -97,7 +96,7 @@ namespace PeachDrawing.Text.Tests.PublicApi
         [Fact]
         public void LineBreaks_TreatCrLfAsOneNewline()
         {
-            Assert.Equal([3], Breaks("a\r\nb").Where(i => i < 4).ToArray());
+            Assert.Equal([3], [.. Breaks("a\r\nb").Where(i => i < 4)]);
         }
 
         [Fact]

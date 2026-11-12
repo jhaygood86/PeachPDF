@@ -280,13 +280,13 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
 
         private CssBox CreateBox()
         {
-            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var tag = new HtmlTag("div", false, []);
             return new CssBox(null, tag);
         }
 
         private CssBox CreateBox(HtmlContainerInt container)
         {
-            var tag = new HtmlTag("div", false, new Dictionary<string, string>());
+            var tag = new HtmlTag("div", false, []);
             var box = new CssBox(null, tag);
             box.HtmlContainer = container;
             return box;

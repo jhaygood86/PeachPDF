@@ -50,7 +50,7 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         internal static string? Resolve(ICssDomNode node, string value, VarContext? context = null)
         {
-            var result = Substitute(node, value, new Dictionary<string, string>(), new HashSet<string>(), new HashSet<string>(), context);
+            var result = Substitute(node, value, [], [], [], context);
             return result.Success ? result.Value : null;
         }
 

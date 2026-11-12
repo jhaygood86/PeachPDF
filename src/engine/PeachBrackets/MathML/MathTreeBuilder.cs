@@ -46,7 +46,7 @@ namespace PeachBrackets.MathML
             // BuildNode's own "semantics" case below - there is no separate root-level special case for
             // it, since <math><semantics>...</semantics></math> is structurally no different from
             // <math><mrow>...</mrow></math> as far as this dispatch is concerned.
-            var root = BuildRowOrSingle(mathRoot.Children.ToArray(), context);
+            var root = BuildRowOrSingle([.. mathRoot.Children], context);
 
             return new MathDocument { Root = root, Display = display, ResolveFont = mathRoot.GetFontAtSize };
         }
@@ -93,7 +93,7 @@ namespace PeachBrackets.MathML
                 ScriptLevel = context.ScriptLevel,
                 PaintColor = children.Count > 0 ? ResolveColor(children[0], context) : PaintColor.Empty,
                 FontSizePt = context.FontSizePt,
-                Children = children.Select(c => BuildNode(c, context)).ToArray(),
+                Children = [.. children.Select(c => BuildNode(c, context))],
             };
         }
 
@@ -141,7 +141,7 @@ namespace PeachBrackets.MathML
             ScriptLevel = context.ScriptLevel,
             PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
-            Children = node.Children.Select(c => BuildNode(c, context)).ToArray(),
+            Children = [.. node.Children.Select(c => BuildNode(c, context))],
         };
 
         static MathTokenNode BuildToken(IMathSourceNode node, MathBuildContext context, MathTokenKind kind)
@@ -207,7 +207,7 @@ namespace PeachBrackets.MathML
         static MathNode BuildStyle(IMathSourceNode node, MathBuildContext context)
         {
             var styled = ApplyStyleAttributes(node, context);
-            return BuildRowOrSingle(node.Children.ToArray(), styled);
+            return BuildRowOrSingle([.. node.Children], styled);
         }
 
         static MathNode BuildFraction(IMathSourceNode node, MathBuildContext context)
@@ -458,7 +458,7 @@ namespace PeachBrackets.MathML
             ScriptLevel = context.ScriptLevel,
             PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
-            Content = BuildRowOrSingle(node.Children.ToArray(), context),
+            Content = BuildRowOrSingle([.. node.Children], context),
         };
 
         static MathNode BuildPadded(IMathSourceNode node, MathBuildContext context) => new MathPaddedNode
@@ -467,7 +467,7 @@ namespace PeachBrackets.MathML
             ScriptLevel = context.ScriptLevel,
             PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
-            Content = BuildRowOrSingle(node.Children.ToArray(), context),
+            Content = BuildRowOrSingle([.. node.Children], context),
             Width = node.GetAttribute("width"),
             Height = node.GetAttribute("height"),
             Depth = node.GetAttribute("depth"),
@@ -481,7 +481,7 @@ namespace PeachBrackets.MathML
             ScriptLevel = context.ScriptLevel,
             PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
-            Content = BuildRowOrSingle(node.Children.ToArray(), context),
+            Content = BuildRowOrSingle([.. node.Children], context),
             Notation = node.GetAttribute("notation") ?? "longdiv",
         };
 
@@ -491,7 +491,7 @@ namespace PeachBrackets.MathML
             ScriptLevel = context.ScriptLevel,
             PaintColor = ResolveColor(node, context),
             FontSizePt = context.FontSizePt,
-            Content = BuildRowOrSingle(node.Children.ToArray(), context),
+            Content = BuildRowOrSingle([.. node.Children], context),
         };
 
         /// <summary>Desugars <c>&lt;mfenced&gt;</c> (MathML 3 §3.3.9, dropped by MathML Core) into a

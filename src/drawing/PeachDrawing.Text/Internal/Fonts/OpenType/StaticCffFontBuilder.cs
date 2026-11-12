@@ -200,7 +200,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             Width();
             bytes.Add(14); // endchar
             leftBearing = minX == int.MaxValue ? 0 : minX;
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         /// <summary>Writes a charstring operand: one byte for -107 to 107, two for -1131 to 1131, else a 16-bit integer (its value is within it).</summary>
@@ -344,7 +344,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
             foreach (var item in objects)
                 bytes.AddRange(item);
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         // ---------------------------------------------------------------------------------------------------------------------------

@@ -125,8 +125,8 @@ namespace PeachBrackets.Html.Animation
             public int Ordinal { get; init; } = -1;
             public List<AnimationApplier.LiveTrack> Tracks { get; set; } = [];
             public List<TransitionRun> Transitions { get; } = [];
-            public Dictionary<string, string?> Base { get; } = new(StringComparer.OrdinalIgnoreCase);
-            public Dictionary<string, string?> Written { get; } = new(StringComparer.OrdinalIgnoreCase);
+            public Dictionary<string, string?> Base { get; } = [with(StringComparer.OrdinalIgnoreCase)];
+            public Dictionary<string, string?> Written { get; } = [with(StringComparer.OrdinalIgnoreCase)];
             public ComputedStyle? StyleAfterWrite { get; set; }
             public bool Promoted { get; set; }
             public bool Compositor { get; set; }
@@ -313,7 +313,7 @@ namespace PeachBrackets.Html.Animation
         {
             if (!PropertyFactory.IsCustomPropertyName(property)) return CssPropertyRegistry.TrySet(parser, box, property, value);
 
-            var copy = box.CustomProperties is { } existing ? new Dictionary<string, string>(existing) : new Dictionary<string, string>();
+            var copy = box.CustomProperties is { } existing ? new Dictionary<string, string>(existing) : [];
             copy[property] = value;
             box.CustomProperties = copy;
             return true;
@@ -371,7 +371,7 @@ namespace PeachBrackets.Html.Animation
         private bool _scrollDirty;
 
         // Where each box that a view timeline follows is, on the surface, in points; made again for each layout.
-        private readonly Dictionary<CssBox, Rect> _subjectRects = new(ReferenceEqualityComparer.Instance as IEqualityComparer<CssBox>);
+        private readonly Dictionary<CssBox, Rect> _subjectRects = [with(ReferenceEqualityComparer.Instance as IEqualityComparer<CssBox>)];
         private IReadOnlyList<FragmentainerFragment>? _subjectsFor;
 
         /// <summary>Tells the clock how the document is scrolled. The animations that run on a scroll or view timeline are worked out from it at the next step.</summary>
@@ -854,7 +854,7 @@ namespace PeachBrackets.Html.Animation
 
             IsRunning = running;
 
-            var events = _events.Count == 0 ? (IReadOnlyList<AnimationEventInfo>)[] : _events.ToArray();
+            var events = _events.Count == 0 ? (IReadOnlyList<AnimationEventInfo>)[] : [.. _events];
             _events.Clear();
             return new AnimationFrame(running, dirty, layoutChanged) { Events = events, OverlayChanged = overlayChanged };
         }
@@ -1723,7 +1723,7 @@ namespace PeachBrackets.Html.Animation
                 if (frame != image.CurrentFrame)
                 {
                     image.CurrentFrame = frame;
-                    (moved ??= new HashSet<Image>(ReferenceEqualityComparer.Instance)).Add(image);
+                    (moved ??= [with(ReferenceEqualityComparer.Instance)]).Add(image);
                 }
             }
 

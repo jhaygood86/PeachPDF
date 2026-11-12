@@ -202,7 +202,7 @@ internal sealed partial class PdfGraphicsRenderer
             ReadOnlySpan<char> text = literal[..literalLength];
 
             // Map absolute position to PDF world space.
-            PaintPoint pos = new PaintPoint(x, y);
+            PaintPoint pos = new(x, y);
             pos = WorldToView(pos);
 
             double verticalOffset = 0;

@@ -12,6 +12,7 @@
 
 #nullable enable
 
+using System.Threading;
 using PeachDrawing.Core;
 using System.Threading.Tasks;
 
@@ -40,7 +41,7 @@ namespace PeachBrackets.Html
     internal static class DefaultCssDataCache
     {
         private static Task<CssData>? _defaultCssDataTask;
-        private static readonly object _defaultCssDataLock = new();
+        private static readonly Lock _defaultCssDataLock = new();
 
         /// <summary>
         /// Get the default CSS stylesheet data, parsed (via <paramref name="renderContext"/>, for any

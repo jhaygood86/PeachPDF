@@ -7,7 +7,7 @@ namespace PeachPDF.SourceGenerators.Tests
     public class GeneratorDiagnosticTests
     {
         private static string[] IdsOf(GeneratorDriverRunResult result) =>
-            result.Diagnostics.Select(d => d.Id).ToArray();
+            [.. result.Diagnostics.Select(d => d.Id)];
 
         [Fact]
         public void PPG001_Fires_For_Malformed_Json_Syntax()

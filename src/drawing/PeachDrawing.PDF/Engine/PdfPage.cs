@@ -497,7 +497,7 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
         // -forced PdfColorMode.Cmyk (never set under Undefined).
         if (TransparencyUsed && !Elements.ContainsKey(Keys.Group))
         {
-            PdfDictionary group = new PdfDictionary();
+            PdfDictionary group = new();
             _elements["/Group"] = group;
             if (_document.Options.ColorMode != PdfColorMode.Cmyk)
                 group.Elements.SetName("/CS", "/DeviceRGB");

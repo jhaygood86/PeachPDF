@@ -69,7 +69,7 @@ namespace PeachBrackets.Html.Fragmentation
     {
         /// <inheritdoc />
         internal override IReadOnlyList<BreakToken> FanOutContinuations =>
-            UnfinishedCells.Select(cell => cell.Token).ToList();
+            [.. UnfinishedCells.Select(cell => cell.Token)];
 
         /// <summary>
         /// Compared by <b>contents</b>, because the driver's no-progress backstop is an equality test.

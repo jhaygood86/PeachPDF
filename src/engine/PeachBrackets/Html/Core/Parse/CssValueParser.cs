@@ -42,7 +42,7 @@ namespace PeachBrackets.Html.Parse
         /// Caches parsed inline <c>style=""</c> rules by their raw attribute text, since machine-generated
         /// markup often repeats the same attribute text across many elements.
         /// </summary>
-        private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = new();
+        private readonly Dictionary<string, StyleRule> _inlineStyleRuleCache = [];
 
         /// <summary>
         /// The computed style a text or anonymous box ends up with, by the style it had going into the cascade and its parent's:
@@ -51,7 +51,7 @@ namespace PeachBrackets.Html.Parse
         /// shared, and equal ones that are not the same instance would only miss.
         /// </summary>
         internal Dictionary<(ComputedStyle Before, ComputedStyle Parent), ComputedStyle> InheritedOnlyStyles { get; } =
-            new(StylePairReferenceComparer.Instance);
+            [with(StylePairReferenceComparer.Instance)];
 
         private sealed class StylePairReferenceComparer : IEqualityComparer<(ComputedStyle Before, ComputedStyle Parent)>
         {
@@ -1253,7 +1253,7 @@ namespace PeachBrackets.Html.Parse
             {
                 using var pooledTokens = GetCssTokensPooled(transformValue);
                 List<Token> tokens = pooledTokens;
-                functionTokens = tokens.Where(t => t.Type == TokenType.Function).ToList<Token>();
+                functionTokens = [.. tokens.Where(t => t.Type == TokenType.Function)];
             }
             catch
             {
@@ -1783,7 +1783,7 @@ namespace PeachBrackets.Html.Parse
             if (dirIdents.Count > 0 && dirIdents[0] == "to")
             {
                 // keyword direction: "to right", "to bottom left", etc.
-                angleRad = SideKeywordsToAngleRad(dirIdents.Skip(1).ToList());
+                angleRad = SideKeywordsToAngleRad([.. dirIdents.Skip(1)]);
                 stopOffset = 1;
             }
             else
@@ -1878,7 +1878,7 @@ namespace PeachBrackets.Html.Parse
             return new ParsedLinearGradient
             {
                 AngleRad = angleRad,
-                Stops = stops.ToArray(),
+                Stops = [.. stops],
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,
@@ -2129,7 +2129,7 @@ namespace PeachBrackets.Html.Parse
                 Size = sizeKeyword,
                 ExplicitRadiusX = explicitRadiusX,
                 ExplicitRadiusY = explicitRadiusY,
-                Stops = stops.ToArray(),
+                Stops = [.. stops],
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,
@@ -2300,7 +2300,7 @@ namespace PeachBrackets.Html.Parse
                 FromAngleRad = fromAngleRad,
                 CenterX = centerX,
                 CenterY = centerY,
-                Stops = stops.ToArray(),
+                Stops = [.. stops],
                 CurrentColorStops = currentColorStops.Count > 0 ? currentColorStops : null,
                 NestedCurrentColorStops = nestedCurrentColorStops.Count > 0 ? nestedCurrentColorStops : null,
                 IsRepeating = isRepeating,

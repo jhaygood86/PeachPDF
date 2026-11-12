@@ -48,7 +48,7 @@ internal abstract class PdfObject : PdfItem
     /// </summary>
     internal void SetObjectId(int objectNumber, int generationNumber)
     {
-        PdfObjectId objectId = new PdfObjectId(objectNumber, generationNumber);
+        PdfObjectId objectId = new(objectNumber, generationNumber);
 
         // TODO: check imported
         if (_iref is null)

@@ -93,7 +93,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var g = Render("", "a<tspan baseline-shift=\"5\">b<tspan baseline-shift=\"3\">c</tspan></tspan>d");
 
-            Assert.Equal(["a", "b", "c", "d"], g.DrawStringCalls.Select(c => c.Text).ToArray());
+            Assert.Equal(["a", "b", "c", "d"], [.. g.DrawStringCalls.Select(c => c.Text)]);
             var a = Y(g, 0);
             Assert.Equal(a - 5, Y(g, 1), 3);
             Assert.Equal(a - 8, Y(g, 2), 3);

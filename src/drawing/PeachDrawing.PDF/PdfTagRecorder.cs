@@ -34,12 +34,12 @@ namespace PeachDrawing.PDF
         readonly PdfDocument _document;
         readonly PdfStructureTreeRoot _root;
         readonly PdfStructureElement _documentElement;
-        readonly Dictionary<object, PdfStructureElement> _elementsByBox = new();
+        readonly Dictionary<object, PdfStructureElement> _elementsByBox = [];
 
         // A tagged <li> box needs TWO distinct structure elements of its own ("/LI" itself and its
         // "/LBody" - see OpenListItemBodyElement) - a second cache, keyed by the same node, avoids
         // colliding with the box's "/LI" entry in _elementsByBox.
-        readonly Dictionary<object, PdfStructureElement> _lbodyElementsByBox = new();
+        readonly Dictionary<object, PdfStructureElement> _lbodyElementsByBox = [];
 
         readonly Stack<PdfStructureElement> _parentStack = new();
 
@@ -47,11 +47,11 @@ namespace PeachDrawing.PDF
         // OpenContentElement's own element cache already returns the same PdfStructureElement for a
         // box painted again (e.g. a formula whose line spans a page break via CssRectMath's own
         // /MCR handling), but nothing else stops this method's own caller from running per-occurrence.
-        readonly HashSet<object> _mathMlAttached = new();
+        readonly HashSet<object> _mathMlAttached = [];
 
         // Per-StructParents-key (i.e. per page) ordered list of parent-tree entries, index == MCID, for the pages drawn since the last Finish.
         // Keys come from the structure tree root's running counter, which annotation keys share, so recording can resume after a Finish.
-        readonly Dictionary<int, List<PdfItem>> _parentTreeEntriesByKey = new();
+        readonly Dictionary<int, List<PdfItem>> _parentTreeEntriesByKey = [];
 
         PdfPage? _currentPage;
         int _currentPageStructParentsKey;
@@ -93,7 +93,7 @@ namespace PeachDrawing.PDF
             _nextMcidOnCurrentPage = 0;
             _currentPageStructParentsKey = _root.ParentTreeNextKey;
             _root.ParentTreeNextKey = _currentPageStructParentsKey + 1;
-            _parentTreeEntriesByKey[_currentPageStructParentsKey] = new List<PdfItem>();
+            _parentTreeEntriesByKey[_currentPageStructParentsKey] = [];
             page.Page.StructParents = _currentPageStructParentsKey;
         }
 
@@ -283,7 +283,7 @@ namespace PeachDrawing.PDF
         /// <returns><see langword="true"/> when it exists</returns>
         public bool HasElement(object key) => _elementsByBox.ContainsKey(key);
 
-        readonly HashSet<string> _idsInUse = new(StringComparer.Ordinal);
+        readonly HashSet<string> _idsInUse = [with(StringComparer.Ordinal)];
         readonly List<(string Id, PdfStructureElement Element)> _elementsById = [];
 
         PdfDictionary? _pdf2Namespace;
@@ -311,7 +311,7 @@ namespace PeachDrawing.PDF
         }
 
         // An element is opened once for every page its content reaches: it takes its details the first time.
-        readonly HashSet<PdfStructureElement> _detailed = new(ReferenceEqualityComparer.Instance);
+        readonly HashSet<PdfStructureElement> _detailed = [with(ReferenceEqualityComparer.Instance)];
 
         void ApplyDetailsOnce(PdfStructureElement element, PdfStructureDetails? details)
         {

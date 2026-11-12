@@ -107,7 +107,7 @@ namespace PeachBrackets.Css
                 values[i] = converter.Construct(dummies);
             }
 
-            return new ListValue(values, Enumerable.Empty<Token>(), _layerDefaults, _layerFallbacks);
+            return new ListValue(values, [], _layerDefaults, _layerFallbacks);
         }
 
         private sealed class ListValue : IPropertyValue
@@ -142,7 +142,7 @@ namespace PeachBrackets.Css
                     if (extracted is not { Count: > 0 } && _layerFallbacks is not null && _layerFallbacks.TryGetValue(name, out var fallbackName))
                         extracted = value.ExtractFor(fallbackName);
 
-                    layers.Add(extracted is { Count: > 0 } ? new List<Token>(extracted) : null);
+                    layers.Add(extracted is { Count: > 0 } ? [with(extracted)] : null);
                 }
 
                 // No layer names this longhand: it is left to its initial value, which an empty value stands for.

@@ -81,7 +81,7 @@ internal sealed class PdfNameDictionary : PdfDictionary
         destIndex--;
         PdfPage dest = Owner.Pages[destIndex];
 
-        PdfArray destination = new PdfArray(Owner,
+        PdfArray destination = new(Owner,
             new PdfLiteral("{0} 0 R {1}", dest.ObjectNumber, parameters));
         _dests.AddName(destinationName, destination);
     }

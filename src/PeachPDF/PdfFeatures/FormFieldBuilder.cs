@@ -37,7 +37,7 @@ namespace PeachPDF.PdfFeatures
                 Name = c.Name,
                 Value = c.Value,
                 IsChecked = c.Checked,
-                Options = c.Options.Select(o => new PdfFormOption(o.Value, o.Label, o.Selected)).ToList(),
+                Options = [.. c.Options.Select(o => new PdfFormOption(o.Value, o.Label, o.Selected))],
                 ReadOnly = c.Attributes.ReadOnly,
                 NoExport = c.Attributes.NoExport,
                 Required = c.Attributes.Required,

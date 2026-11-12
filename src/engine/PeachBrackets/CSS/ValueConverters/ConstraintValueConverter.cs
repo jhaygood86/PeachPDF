@@ -36,7 +36,7 @@ namespace PeachBrackets.Css
                 existing = value;
             }
 
-            var result = _converter.Construct(filtered.Take(1).ToArray());
+            var result = _converter.Construct([.. filtered.Take(1)]);
             return result != null ? new TransformationValueConverter(result, _labels) : null;
         }
 

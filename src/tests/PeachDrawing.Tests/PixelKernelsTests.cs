@@ -209,7 +209,7 @@ namespace PeachDrawing.Tests
         {
             var dst = new byte[] { 0, 0, 0, 255 };
 
-            PixelKernels.BlendSolid(dst, new byte[] { 128 }, PixelKernels.Pack(255, 255, 255, 255));
+            PixelKernels.BlendSolid(dst, [128], PixelKernels.Pack(255, 255, 255, 255));
 
             Assert.Equal(128, dst[0]);
             Assert.Equal(255, dst[3]);

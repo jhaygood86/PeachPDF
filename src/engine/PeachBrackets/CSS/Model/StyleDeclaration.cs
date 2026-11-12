@@ -152,7 +152,7 @@ namespace PeachBrackets.Css
                 properties.Add(property);
             }
 
-            return shortHand.Stringify(properties.ToArray());
+            return shortHand.Stringify([.. properties]);
         }
 
         public void SetPropertyValue(string propertyName, string propertyValue)

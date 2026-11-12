@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             {
                 PdfDict d => [d],
                 PdfArr a => a.Resolved.OfType<PdfDict>().ToList(),
-                _ => new List<PdfDict>(),
+                _ => [],
             };
 
             return dictionaries.Where(d => d.Name("/O") == "/List").Select(d => d.Name("/ListNumbering")).FirstOrDefault();
@@ -242,7 +242,7 @@ namespace PeachPDF.Tests.Integration
             static IReadOnlyList<string> Listed(StructElem cell)
             {
                 var a = cell.Dict["/A"];
-                var dictionaries = a switch { PdfDict d => [d], PdfArr arr => arr.Resolved.OfType<PdfDict>().ToList(), _ => new List<PdfDict>() };
+                var dictionaries = a switch { PdfDict d => [d], PdfArr arr => arr.Resolved.OfType<PdfDict>().ToList(), _ => [] };
                 return dictionaries.Select(d => d.Array("/Headers")).FirstOrDefault(h => h is not null)?.Resolved.OfType<PdfText>().Select(t => t.Value).ToList() ?? [];
             }
 

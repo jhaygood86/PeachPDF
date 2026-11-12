@@ -430,7 +430,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         private static double Right(CssBox box) => box.Rectangles.Values.Single().Right;
 
         private static List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1)];
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>";

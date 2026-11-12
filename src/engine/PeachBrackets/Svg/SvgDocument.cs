@@ -42,26 +42,26 @@ namespace PeachBrackets.Svg
         public SvgGroupElement? RootProjection { get; set; }
 
         /// <summary>Gradient definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
-        public Dictionary<string, SvgGradient> Gradients { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgGradient> Gradients { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>ClipPath definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
-        public Dictionary<string, SvgClipPath> ClipPaths { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgClipPath> ClipPaths { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>Marker definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
-        public Dictionary<string, SvgMarkerElement> Markers { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgMarkerElement> Markers { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>Pattern definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
-        public Dictionary<string, SvgPattern> Patterns { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgPattern> Patterns { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>Mask definitions keyed by <c>id</c> (ids are case-sensitive per XML).</summary>
-        public Dictionary<string, SvgMask> Masks { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgMask> Masks { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         /// Filter definitions keyed by <c>id</c> (ids are case-sensitive per XML). Only ever contains a
         /// <c>&lt;filter&gt;</c> whose whole primitive graph is natively representable - see
         /// <see cref="SvgFilter"/>'s remarks.
         /// </summary>
-        public Dictionary<string, SvgFilter> Filters { get; init; } = new(StringComparer.Ordinal);
+        public Dictionary<string, SvgFilter> Filters { get; init; } = [with(StringComparer.Ordinal)];
 
         /// <summary>
         /// True when a filter reads <c>BackgroundImage</c>/<c>BackgroundAlpha</c>. What such a filter shows depends on what was painted
