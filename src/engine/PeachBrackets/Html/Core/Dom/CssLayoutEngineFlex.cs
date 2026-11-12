@@ -386,7 +386,7 @@ namespace PeachBrackets.Html.Dom
                             // the ResolveFlexibleLengths path; this mirrors it for the mainSizeIndefinite one).
                             if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
 
-                            if (Math.Abs(final - item.NaturalMainSize) > 0.5)
+                            if (Math.Abs(final - item.CurrentMainSize) > 0.5)
                                 await ResizeItem(g, item, final);
                         }
                 }
@@ -939,7 +939,7 @@ namespace PeachBrackets.Html.Dom
             foreach (var item in line.Items)
             {
                 // Re-layout only when the final size differs from what was used during measurement
-                if (Math.Abs(item.FinalMainSize - item.NaturalMainSize) > 0.5)
+                if (Math.Abs(item.FinalMainSize - item.CurrentMainSize) > 0.5)
                     await ResizeItem(g, item, item.FinalMainSize);
             }
         }
@@ -1014,6 +1014,10 @@ namespace PeachBrackets.Html.Dom
                 {
                     final = item.HypotheticalMainSize;
                 }
+
+                // An item raised to its automatic minimum that still fits with the rest of its line is held there (§4.5, §9.7 step 2 freezes
+                // an item that cannot flex at its hypothetical size, which the minimum has clamped).
+                if (!growsAgainstMinimum && !hasAutoMinimum) final = Math.Max(final, item.AutoMinMainSize);
 
                 final = ClampMainAxis(item.Box, final, mainSize);
                 item.FinalMainSize = final;
@@ -1208,7 +1212,13 @@ namespace PeachBrackets.Html.Dom
             // its own because its minimum did not fit the one before is floored on that line too; left at its basis (0 for
             // `flex: 0`) it would be laid out empty.
             var raisedByWrap = _isWrap && _mainAxisIsPhysicalX;
-            if (!overflows && !grows && !raisedByWrap) return;
+
+            // A row whose items fit and none of which grows is floored too: §4.5 clamps each item's hypothetical size by its automatic
+            // minimum, and §9.7 compares the sum of those with the container, so an item shrunk to nothing beside a wide one is raised
+            // to its minimum and the line then gives that room back. A column is left alone: in an auto-height one every item is already
+            // its content height, so the minimum would only cost a second layout of each item.
+            var floorsAFittingRow = _mainAxisIsPhysicalX;
+            if (!overflows && !grows && !raisedByWrap && !floorsAFittingRow) return;
 
             if (!_mainAxisIsPhysicalX)
             {
@@ -1294,7 +1304,10 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var minimum = content;
-                if (heightIsDefinite && !box.Height.EndsWith('%'))
+                // A percentage height is a specified size only when its basis, the container's height, is definite (css-sizing-3: it
+                // behaves as auto otherwise, and an auto-height column has no height before its items are laid out), and then it is
+                // resolved against the container's main size like a length is (§4.5; Chromium ResolveMainBlockLength, Gecko IsAutoBSize).
+                if (heightIsDefinite && (!box.Height.EndsWith('%') || CssLayoutEngine.IsHeightDefinite(_flexBox)))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Height, container, box) + MainBoxSizeIncluded(box));
                 if (CssValueParser.IsValidLength(box.MaxHeight))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxHeight, container, box) + MainBoxSizeIncluded(box));
@@ -1335,6 +1348,8 @@ namespace PeachBrackets.Html.Dom
 
             if (_mainAxisIsPhysicalX) item.Box.Width  = saved;
             else                      item.Box.Height = saved;
+
+            item.LaidOutMainSize = finalSize;
         }
 
         // ─── Phase 4b: column cross-axis (width) shrink-to-fit ────────────────────
@@ -3164,6 +3179,13 @@ namespace PeachBrackets.Html.Dom
             public double  NaturalMainSize      { get; } = naturalMainSize;
             public double  HypotheticalMainSize { get; } = hypotheticalMainSize;
             public double  FinalMainSize        { get; set; } = hypotheticalMainSize;
+
+            // The main size the box was last laid out at when something other than the measurement did it (ResizeItem), so a later
+            // pass compares the size it resolves to against what the box really holds, not against what it was first measured at.
+            public double? LaidOutMainSize      { get; set; }
+
+            // The main size the box is laid out at now: where it was last resized to, else where it was measured.
+            public double  CurrentMainSize      => LaidOutMainSize ?? NaturalMainSize;
 
             // The size min-width: auto stops the item shrinking below (CSS Flexbox 1 §4.5); 0 when it has none.
             public double  AutoMinMainSize      { get; set; }
