@@ -90,6 +90,17 @@ namespace PeachBrackets.Html.Utils
 
             if (picture?.HtmlTag is { Name: HtmlConstants.Picture })
             {
+                // A block <img> inside an inline <picture> that is itself inside an inline (a logo in a link, with `img { display: block }`) is
+                // the block-in-inline correction's problem, and it leaves the <source> elements - which hold no content - in front of the picture
+                // instead of inside it. They are still the picture's own.
+                if (picture.ParentBox is { } holder)
+                {
+                    var index = holder.Boxes.IndexOf(picture);
+                    var first = index;
+                    while (first > 0 && holder.Boxes[first - 1].HtmlTag is { Name: HtmlConstants.Source }) first--;
+                    for (var i = first; i < index; i++) sources.Add(holder.Boxes[i]);
+                }
+
                 Collect(picture, img, sources);
             }
 

@@ -79,6 +79,22 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(300, await WidthOfAsync(html), 3);
         }
 
+        [Theory]
+        [InlineData("img { display: block }", "<a href='#'>", "</a>")]
+        [InlineData("img { display: block }", "<div>", "</div>")]
+        [InlineData("img { display: block }", "", "")]
+        public async Task Picture_WithABlockImg_StillSeesItsSources(string css, string open, string close)
+        {
+            // `img { display: block }` in a reset style sheet makes the <img> a block inside the inline <picture>, which the block-in-inline
+            // correction splits - and moves the <source> elements out in front of the picture. A logo in a link then always took the <img>
+            // fallback, so a site's dark-scheme logo was never chosen.
+            var matching = $"<style>{css}</style>{open}<picture><source media='(min-width: 100px)' srcset='{Large}'><img id='i' src='{Small}'></picture>{close}";
+            Assert.Equal(300, await WidthOfAsync(matching), 3);
+
+            var skipped = $"<style>{css}</style>{open}<picture><source media='(min-width: 99999px)' srcset='{Large}'><img id='i' src='{Small}'></picture>{close}";
+            Assert.Equal(75, await WidthOfAsync(skipped), 3);
+        }
+
         [Fact]
         public async Task Picture_NonMatchingMedia_IsSkipped()
         {
