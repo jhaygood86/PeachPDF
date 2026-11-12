@@ -23,6 +23,22 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task ANonShrinkingItemBesideAGrowerWithALongWordIsRaisedToItsAutomaticMinimum()
+        {
+            // `flex: 0 0 80px` holds a word wider than 80px and its sibling's word is as wide, so the line overflows once the grower counts at its
+            // content size. The first item is still raised to its word (Chrome: 260.4px each), or its word is drawn into the second item's.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;width:300px'><div id='a' style='flex:0 0 80px'>Lwmmmmmmmmmmmmmmmmmm</div>" +
+                "<div id='b' style='flex:1 1 auto'>Lwmmmmmmmmmmmmmmmmmm</div></div>"));
+
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(a.ActualBoxSizingWidth > 80 * 0.75 + 1, $"first item stayed at {a.ActualBoxSizingWidth}pt");
+            Assert.Equal(a.Location.X + a.ActualBoxSizingWidth, b.Location.X, 0.5);
+        }
+
+        [Fact]
         public async Task TheFreeSpaceIsSharedOnTopOfEachItemsContent()
         {
             // 400pt less 100pt and 40pt of content is 260pt, half to each.

@@ -1187,8 +1187,8 @@ namespace PeachBrackets.Html.Dom
 
             foreach (var item in line.Items)
             {
-                if (overflows && ParseFloat(item.Box.FlexShrink) <= 0 && ParseFloat(item.Box.FlexGrow) <= 0) continue;
-
+                // A non-shrinking item is raised to its automatic minimum too (§4.5 clamps the hypothetical size, which §9.7 freezes it at): skipped,
+                // `flex: 0 0 80px` beside a growing sibling with a long word was left at 80 and its word ran into the sibling's.
                 if (await AutomaticMinimumWidth(g, item.Box, container) is { } minimum)
                     RecordAutoMinimum(item, minimum);
             }
