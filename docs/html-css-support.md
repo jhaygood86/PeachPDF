@@ -2283,7 +2283,7 @@ A table assembled purely through CSS (`display: table` / `table-row` / `table-ce
 
 Besides its type and content, a structure element takes what the document's [accessibility tree](accessibility.md) knows about its element:
 
-- **Alternative text** (`/Alt`) of a `Figure` or `Formula`: the `alt` attribute (empty marks a picture decorative), or else the element's accessible name — an `aria-label`,
+- **Alternative text** (`/Alt`) of a `Figure` or `Formula`: the `alt` attribute (an empty or missing one marks an `<img>` decorative, so it is written as an artifact instead of a `Figure`), or else the element's accessible name — an `aria-label`,
   an `aria-labelledby` target, an inline SVG's `<title>`, a formula's `alttext` or spoken reading.
 - **Language** (`/Lang`) when the element sets one of its own with `lang`; the document's language is on the catalog.
 - **Table cells**: a `TH` has a `/Scope` (`Column` or `Row`, from `scope` or its place), and a cell that spans several columns or rows has `/ColSpan` and `/RowSpan`, as `Table`
