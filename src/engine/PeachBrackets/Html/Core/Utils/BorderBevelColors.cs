@@ -189,13 +189,6 @@ namespace PeachBrackets.Html.Utils
         /// WCAG 2 relative luminance. Alpha plays no part: Blink thresholds the declared color, not
         /// whatever it will end up composited over.
         /// </summary>
-        private static double RelativeLuminance(PaintColor c) =>
-            0.2126 * Linearize(c.R) + 0.7152 * Linearize(c.G) + 0.0722 * Linearize(c.B);
-
-        private static double Linearize(byte channel)
-        {
-            var s = channel / 255.0;
-            return s <= 0.04045 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
+        private static double RelativeLuminance(PaintColor c) => ColorSpaceMath.RelativeLuminance(c.R, c.G, c.B);
     }
 }

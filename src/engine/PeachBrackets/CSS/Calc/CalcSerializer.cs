@@ -15,16 +15,17 @@ namespace PeachBrackets.Css
         {
             if (category == CalcCategory.Number)
             {
-                var value = CalcTypeChecker.FoldNumber(node) ?? 0d;
-                return ((float)value).ToString(null, CultureInfo.InvariantCulture);
+                // A Number built from a length (sign(10px - 4px)) has no pure-number fold; keep its text.
+                return CalcTypeChecker.FoldNumber(node) is { } value
+                    ? ((float)value).ToString(null, CultureInfo.InvariantCulture)
+                    : SerializeExpression(node);
             }
 
-            if (category == CalcCategory.Angle)
+            if (category == CalcCategory.Angle && FoldAngle(node) is { } radians)
             {
                 // Unlike Length/Percentage, Angle never needs layout context to resolve - deg/grad/rad/turn
-                // all convert via fixed constants - so a valid Angle expression always folds fully here;
-                // there's no "defer to layout" text-preserving fallback needed the way there is below.
-                var radians = FoldAngle(node) ?? 0d;
+                // all convert via fixed constants - so a valid Angle expression folds fully here (an
+                // atan2() of em-relative lengths is the one exception, kept as text below).
                 var degrees = radians * (180.0 / System.Math.PI);
                 return new Angle((float)degrees, Angle.Unit.Deg).ToString(null, CultureInfo.InvariantCulture);
             }
@@ -41,7 +42,7 @@ namespace PeachBrackets.Css
         }
 
         /// <summary>Folds an Angle-category subtree to radians; always succeeds for a validated tree.</summary>
-        private static double? FoldAngle(CalcNode node) => node switch
+        internal static double? FoldAngle(CalcNode node) => node switch
         {
             AngleCalcNode angle => new Angle((float)angle.Value, angle.Unit).ToRadian(),
             UnaryCalcNode unary => FoldUnaryAngle(unary),
@@ -95,20 +96,22 @@ namespace PeachBrackets.Css
 
         private static double? FoldCallAngle(CallCalcNode call)
         {
+            // The functions that yield a Number never produce an angle.
+            if (!CalcMath.IsSameTypeFunction(call.Name) && call.Name is not (FunctionNames.Asin or FunctionNames.Acos or FunctionNames.Atan or FunctionNames.Atan2))
+                return null;
+
             var values = new List<double>(call.Arguments.Count);
             foreach (var argument in call.Arguments)
             {
-                var value = FoldAngle(argument);
+                // The inverse trigonometric functions take numbers (atan2: numbers or lengths) and give an angle.
+                var value = call.Name is FunctionNames.Asin or FunctionNames.Acos or FunctionNames.Atan or FunctionNames.Atan2
+                    ? CalcTypeChecker.FoldNumber(argument) ?? (TryFoldPixels(argument, out var px) ? px : null)
+                    : FoldAngle(argument);
                 if (value is null) return null;
                 values.Add(value.Value);
             }
 
-            if (call.Name.Isi(FunctionNames.Min)) return Min(values);
-            if (call.Name.Isi(FunctionNames.Max)) return Max(values);
-            if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                return values[0] > values[2] ? values[2] : System.Math.Clamp(values[1], values[0], values[2]);
-
-            return null;
+            return CalcMath.Apply(call.Name, call.Option, values);
         }
 
         private static string SerializeExpression(CalcNode node)
@@ -116,6 +119,7 @@ namespace PeachBrackets.Css
             if (node is CallCalcNode call)
             {
                 var args = new List<string>(call.Arguments.Count);
+                if (call.Option is not null) args.Add(call.Option);
                 foreach (var argument in call.Arguments) args.Add(SerializeOperand(argument, false, 0));
                 return $"{call.Name}({string.Join(", ", args)})";
             }
@@ -148,6 +152,9 @@ namespace PeachBrackets.Css
                 // Time/Resolution-category Serialize() (were one ever created) folds through neither the Number
                 // nor Angle branch nor TryFoldPixels, so it reaches SerializeExpression and re-serializes to
                 // normalized calc() text using these leaf renderings.
+                case AngleCalcNode angle:
+                    return new Angle((float)angle.Value, angle.Unit).ToString(null, CultureInfo.InvariantCulture);
+
                 case TimeCalcNode time:
                     return new Time((float)time.Value, time.Unit).ToString(null, CultureInfo.InvariantCulture);
 
@@ -234,6 +241,20 @@ namespace PeachBrackets.Css
 
                 case CallCalcNode call:
                 {
+                    // A Number-valued call (sin(30deg), pow(2, 3)) folds on its own.
+                    if (CalcTypeChecker.FoldNumber(call) is { } folded)
+                    {
+                        pixels = folded;
+                        return true;
+                    }
+
+                    // The inverse trig functions give an angle, never a length.
+                    if (call.Name is FunctionNames.Asin or FunctionNames.Acos or FunctionNames.Atan or FunctionNames.Atan2)
+                    {
+                        pixels = 0;
+                        return false;
+                    }
+
                     var values = new List<double>(call.Arguments.Count);
                     foreach (var argument in call.Arguments)
                     {
@@ -246,21 +267,9 @@ namespace PeachBrackets.Css
                         values.Add(value);
                     }
 
-                    if (call.Name.Isi(FunctionNames.Min))
+                    if (CalcMath.IsSameTypeFunction(call.Name) && CalcMath.Apply(call.Name, call.Option, values) is { } result)
                     {
-                        pixels = Min(values);
-                        return true;
-                    }
-
-                    if (call.Name.Isi(FunctionNames.Max))
-                    {
-                        pixels = Max(values);
-                        return true;
-                    }
-
-                    if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                    {
-                        pixels = values[0] > values[2] ? values[2] : System.Math.Clamp(values[1], values[0], values[2]);
+                        pixels = result;
                         return true;
                     }
 
@@ -272,20 +281,6 @@ namespace PeachBrackets.Css
                     pixels = 0;
                     return false;
             }
-        }
-
-        private static double Min(List<double> values)
-        {
-            var result = values[0];
-            for (var i = 1; i < values.Count; i++) if (values[i] < result) result = values[i];
-            return result;
-        }
-
-        private static double Max(List<double> values)
-        {
-            var result = values[0];
-            for (var i = 1; i < values.Count; i++) if (values[i] > result) result = values[i];
-            return result;
         }
     }
 }

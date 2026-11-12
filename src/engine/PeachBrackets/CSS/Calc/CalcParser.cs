@@ -32,28 +32,40 @@ namespace PeachBrackets.Css
                 return pos == tokens.Count ? node : null;
             }
 
-            if (name.Isi(FunctionNames.Min) || name.Isi(FunctionNames.Max))
+            var canonical = CalcMath.Canonical(name);
+            if (canonical is null) return null;
+
+            var groups = function.ArgumentTokens.ToList();
+            string option = null;
+
+            // round()'s optional leading rounding strategy keyword.
+            if (canonical == FunctionNames.Round && groups.Count > 0 && StrategyKeyword(groups[0]) is { } strategy)
             {
-                var args = ParseCommaSeparatedSums(function, variables, out var groupCount);
-                return groupCount >= 1 && args != null
-                    ? new CallCalcNode(name.Isi(FunctionNames.Min) ? FunctionNames.Min : FunctionNames.Max, args)
-                    : null;
+                option = strategy;
+                groups = groups.GetRange(1, groups.Count - 1);
             }
 
-            if (name.Isi(FunctionNames.Clamp))
-            {
-                var args = ParseCommaSeparatedSums(function, variables, out var groupCount);
-                return groupCount == 3 && args != null ? new CallCalcNode(FunctionNames.Clamp, args) : null;
-            }
+            if (!CalcMath.AcceptsArgumentCount(canonical, groups.Count)) return null;
 
-            return null;
+            var args = ParseCommaSeparatedSums(groups, variables);
+            return args is null ? null : new CallCalcNode(canonical, args, option);
         }
 
-        private static List<CalcNode> ParseCommaSeparatedSums(Token function, IReadOnlyDictionary<string, double> variables, out int groupCount)
+        private static string StrategyKeyword(List<Token> group)
         {
-            var groups = function.ArgumentTokens.ToList();
-            groupCount = groups.Count;
+            string found = null;
+            foreach (var token in group)
+            {
+                if (token.Type == TokenType.Whitespace) continue;
+                if (found is not null || token.Type != TokenType.Ident) return null;
+                found = token.Data.ToString().ToLowerInvariant();
+            }
 
+            return found is not null && CalcMath.IsRoundingStrategy(found) ? found : null;
+        }
+
+        private static List<CalcNode> ParseCommaSeparatedSums(List<List<Token>> groups, IReadOnlyDictionary<string, double> variables)
+        {
             var args = new List<CalcNode>(groups.Count);
             foreach (var group in groups)
             {
@@ -163,6 +175,15 @@ namespace PeachBrackets.Css
                     pos++;
                     return new NumberCalcNode(bound);
 
+                // The numeric constants of CSS Values 4 §10.8.
+                case TokenType.Ident when token.Data.Isi("pi"):
+                    pos++;
+                    return new NumberCalcNode(Math.PI);
+
+                case TokenType.Ident when token.Data.Isi("e"):
+                    pos++;
+                    return new NumberCalcNode(Math.E);
+
                 case TokenType.Dimension:
                 {
                     var unitToken = token;
@@ -258,12 +279,8 @@ namespace PeachBrackets.Css
                 Length.Unit.Dvmin or Length.Unit.Dvmax;
         }
 
-        /// <summary>Whether <paramref name="name"/> is one of calc/min/max/clamp (case-insensitive).</summary>
-        public static bool IsCalcFamily(ReadOnlySpan<char> name)
-        {
-            return name.Isi(FunctionNames.Calc) || name.Isi(FunctionNames.Min) ||
-                   name.Isi(FunctionNames.Max) || name.Isi(FunctionNames.Clamp);
-        }
+        /// <summary>Whether <paramref name="name"/> is a calc-family function (calc, min, max, clamp, round, mod, rem, the trigonometric, exponential, abs and sign functions; case-insensitive).</summary>
+        public static bool IsCalcFamily(ReadOnlySpan<char> name) => CalcMath.Canonical(name) is not null;
 
         private static void SkipWhitespace(List<Token> tokens, ref int pos)
         {

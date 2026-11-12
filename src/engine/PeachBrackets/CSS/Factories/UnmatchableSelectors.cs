@@ -108,8 +108,7 @@ namespace PeachBrackets.Css
             {
                 PseudoClassNames.Host,
                 PseudoClassNames.HostContext,
-                PseudoClassNames.State,
-                PseudoClassNames.Dir
+                PseudoClassNames.State
             }.ToFrozenSet(StringComparer.OrdinalIgnoreCase);
 
         /// <summary>

@@ -1644,7 +1644,7 @@ namespace PeachBrackets.Html.Parse
             }
             else if (sibling is { Eligible: true, Style: null } && box.Boxes.Count == boxesBefore
                 && (displayContentsShells?.Count ?? 0) == shellsBefore && box.MatchesFirstLetterSelector == firstLetterBefore
-                && box.CustomProperties is not { Count: > 0 })
+                && box.CustomProperties is not { Count: > 0 } && !box.UsesSiblingPosition)
             {
                 sibling.Style = box.ComputedStyle;
             }
@@ -2863,7 +2863,7 @@ namespace PeachBrackets.Html.Parse
 
                 if (value is null) continue;
 
-                if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                if (SubstitutionFunctions.InText(value))
                 {
                     pendingVarProperties[prop.Name] = value;
                 }
@@ -2981,7 +2981,7 @@ namespace PeachBrackets.Html.Parse
             foreach (var early in stylesheetRule.Style)
             {
                 if (early.IsImportant == importantPass && early.Name.Equals(PropertyNames.ColorScheme, StringComparison.OrdinalIgnoreCase)
-                    && !CssGlobalKeywords.TryParse(early.Value, out _) && !early.Value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                    && !CssGlobalKeywords.TryParse(early.Value, out _) && !SubstitutionFunctions.InText(early.Value))
                     CssUtils.SetPropertyValue(valueParser, box, early.Name, early.Value);
             }
 
@@ -3035,7 +3035,7 @@ namespace PeachBrackets.Html.Parse
                 // The 2009 flexbox container properties translate onto the standard flex properties (see LegacyBox).
                 if (LegacyBox.TryApply(valueParser, box, prop.Name, value)) continue;
 
-                if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+                if (SubstitutionFunctions.InText(value))
                 {
                     // Overwrites any earlier pending entry for this name (last write wins).
                     pendingVarProperties[prop.Name] = value;
@@ -3164,6 +3164,7 @@ namespace PeachBrackets.Html.Parse
             foreach (var (name, rawValue) in entries)
             {
                 var position = pendingVarProperties.OrderOf(name);
+                if (CssVarResolver.UsesSiblingPosition(rawValue)) box.UsesSiblingPosition = true;
                 var result = CssVarResolver.Substitute(box, rawValue, resolvedCache, resolving, cyclic, context);
                 var finalValue = result.Success ? result.Value : GetGuaranteedInvalidFallback(box, name);
 

@@ -11853,6 +11853,41 @@ await SaveShowcaseAsync("modern_colors", "Color", "Modern CSS Colors (oklch, col
     "checkerboard — the CSS Color 4/5 function set modern utility frameworks emit, resolved to real PDF colors.",
     modernColorHtml, pdfConfig);
 
+// ── CSS value functions: round()/hypot()/sin(), env(), sibling-index(), contrast-color(), calc-size() ──
+var valueFunctionsHtml =
+    "<html><head><style>" +
+    "body { font-family: sans-serif; margin: 24px; color: #1a1a1a; }" +
+    "h2 { font-size: 20px; margin: 0 0 4px; } h3 { font-size: 14px; margin: 18px 0 6px; }" +
+    ".bar { height: 18px; margin: 3px 0; background: #2563eb; color: #fff; font-size: 11px; line-height: 18px; padding-left: 6px; box-sizing: border-box; }" +
+    ".chip { display: inline-block; padding: 8px 14px; margin: 0 8px 8px 0; border-radius: 6px; font-size: 13px; }" +
+    ".stairs i { display: block; height: 14px; margin: 2px 0; background: #e11d48; width: calc(sibling-index() * 30px); }" +
+    ".sized { float: left; background: #0d9488; color: #fff; padding: 6px; margin-right: 8px; font-size: 12px; }" +
+    "</style></head><body>" +
+    "<h2>CSS value functions</h2>" +
+    "<h3>round(), hypot(), sin(), pow() sizing a bar</h3>" +
+    "<div class=\"bar\" style=\"width: round(up, 187px, 50px)\">round(up, 187px, 50px) = 200px</div>" +
+    "<div class=\"bar\" style=\"width: hypot(120px, 160px)\">hypot(120px, 160px) = 200px</div>" +
+    "<div class=\"bar\" style=\"width: calc(sin(30deg) * 400px)\">sin(30deg) * 400px = 200px</div>" +
+    "<div class=\"bar\" style=\"width: calc(pow(2, 7) * 1.5px)\">pow(2, 7) * 1.5px = 192px</div>" +
+    "<h3>sibling-index() staircase</h3>" +
+    "<div class=\"stairs\"><i></i><i></i><i></i><i></i><i></i></div>" +
+    "<h3>contrast-color() picks readable text</h3>" +
+    "<div><span class=\"chip\" style=\"background: #fde047; color: contrast-color(#fde047)\">on yellow</span>" +
+    "<span class=\"chip\" style=\"background: #1e3a8a; color: contrast-color(#1e3a8a)\">on navy</span>" +
+    "<span class=\"chip\" style=\"background: #dc2626; color: contrast-color(#dc2626)\">on red</span>" +
+    "<span class=\"chip\" style=\"background: #86efac; color: contrast-color(#86efac)\">on mint</span></div>" +
+    "<h3>env() with a fallback, calc-size()</h3>" +
+    "<div class=\"bar\" style=\"width: calc(200px + env(safe-area-inset-left, 40px))\">env(safe-area-inset-left) is 0 here</div>" +
+    "<div class=\"bar\" style=\"width: calc(160px + env(made-up-name, 40px))\">env(made-up-name, 40px) = 200px</div>" +
+    "<div style=\"overflow: hidden\"><div class=\"sized\">max-content</div><div class=\"sized\" style=\"width: calc-size(max-content, size + 40px)\">max-content + 40px</div>" +
+    "<div class=\"sized\" style=\"width: calc-size(auto, size)\">auto</div></div>" +
+    "</body></html>";
+
+await SaveShowcaseAsync("css_value_functions", "CSS Values & Functions", "CSS Value Functions",
+    "The math functions beyond calc() (round(), mod(), rem(), trigonometric, pow(), sqrt(), hypot(), log(), exp(), abs(), sign()), " +
+    "env() with fallbacks, sibling-index()/sibling-count(), contrast-color() and calc-size(), each resolved to real PDF geometry and colors.",
+    valueFunctionsHtml, pdfConfig);
+
 // ── @layer cascade layers: layer order beats specificity; unlayered beats layered ─────
 var cascadeLayerHtml =
     "<html><head><style>" +

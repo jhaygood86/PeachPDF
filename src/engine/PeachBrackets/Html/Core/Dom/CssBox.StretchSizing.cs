@@ -31,6 +31,8 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal void ResolveStretchSizes()
         {
+            ResolveCalcSizes();
+
             if (!IsStretchKeyword(Width) && !IsStretchKeyword(MinWidth) && !IsStretchKeyword(MaxWidth)
                 && !IsStretchKeyword(Height) && !IsStretchKeyword(MinHeight) && !IsStretchKeyword(MaxHeight))
             {

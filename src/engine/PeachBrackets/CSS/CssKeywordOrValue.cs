@@ -61,7 +61,7 @@ namespace PeachBrackets.Css
             if (CssGlobalKeywords.TryParse(value, out var globalKeyword))
                 return CssProperty<CssKeywordOrValue<TEnum, TValue>>.Global(globalKeyword);
 
-            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+            if (SubstitutionFunctions.InText(value))
                 return CssProperty<CssKeywordOrValue<TEnum, TValue>>.Unresolved(value);
 
             var trimmed = value.Trim();

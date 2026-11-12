@@ -248,6 +248,9 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter LightDarkConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.LightDark, new ColorPairValueConverter()));
         // https://www.w3.org/TR/css-color-4/#color-function - lenient like the group above: the predefined space and the components are read in the render layer.
+        // https://www.w3.org/TR/css-color-5/#contrast-color - lenient like color-mix(): the render layer resolves the operand and picks black or white.
+        public static readonly IValueConverter ContrastColorConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.ContrastColor, Any));
         public static readonly IValueConverter ColorFunctionConverter =
             Construct(() => new FunctionValueConverter(FunctionNames.ColorFunction, Any));
         // https://www.w3.org/TR/css-color-5/#device-cmyk - lenient like the space/lab/oklch group above:
@@ -652,6 +655,15 @@ namespace PeachBrackets.Css
         public static readonly IValueConverter AutoLengthOrPercentOrStretchConverter = AutoLengthOrPercentConverter.OrStretch();
         public static readonly IValueConverter OptionalLengthOrPercentOrStretchConverter = OptionalLengthOrPercentConverter.OrStretch();
         public static readonly IValueConverter LengthOrPercentOrStretchConverter = LengthOrPercentConverter.OrStretch();
+
+        // CSS Values 5's calc-size(): lenient like color-mix() - layout reads its basis and expression (CssBox.ResolveCalcSizes).
+        private static readonly IValueConverter CalcSizeConverter =
+            Construct(() => new FunctionValueConverter(FunctionNames.CalcSize, Any));
+
+        // width/height and their min/max: a length, a percentage, auto/none, stretch or calc-size(). (flex-basis keeps the narrower converters above.)
+        public static readonly IValueConverter AutoSizeConverter = AutoLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
+        public static readonly IValueConverter OptionalSizeConverter = OptionalLengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
+        public static readonly IValueConverter SizeConverter = LengthOrPercentOrStretchConverter.Or(CalcSizeConverter);
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
         public static readonly IValueConverter OptionalPercentOrNumberConverter =
@@ -754,6 +766,7 @@ namespace PeachBrackets.Css
             .Or(LchColorConverter.Or(OklchColorConverter))
             .Or(ColorMixConverter)
             .Or(LightDarkConverter)
+            .Or(ContrastColorConverter)
             .Or(ColorFunctionConverter)
             .Or(DeviceCmykColorConverter)
             .Or(RgbLenientConverter.Or(RgbaLenientConverter))
