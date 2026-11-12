@@ -248,6 +248,42 @@ public class GpuTextTests
     }
 
     [Fact]
+    public async Task TextInsideASurfaceClip_IsDrawnWhereItWouldBeWithoutTheClip_WhateverThePlaceOfTheClip()
+    {
+        using var context = await ContextAsync();
+
+        // The clip's surface is only as big as the clip and starts at its origin; the text in it is moved with it and must land on the same pixels.
+        foreach (var dpi in new[] { 96f, 144f })
+        {
+            var free = Render(context, gpu: true, (canvas, font) =>
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20)), dpi);
+            var clipped = Render(context, gpu: true, (canvas, font) =>
+            {
+                RoundedCard(canvas);
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+                canvas.PopClip();
+            }, dpi);
+            var nested = Render(context, gpu: true, (canvas, font) =>
+            {
+                RoundedCard(canvas);
+                canvas.PushTransform(Matrix3x2.CreateTranslation(3, 2));
+                canvas.PushClip(new Rect(0, 0, Width, Height));
+                canvas.PushTransform(Matrix3x2.CreateTranslation(-3, -2));
+                canvas.DrawString(Sample, font, PaintColor.White, new PaintPoint(16, 14), new Core.Size(290, 20));
+                canvas.PopTransform();
+                canvas.PopClip();
+                canvas.PopTransform();
+                canvas.PopClip();
+            }, dpi);
+
+            var (meanClipped, maxClipped, _) = Compare(free, clipped);
+            Assert.True(meanClipped < 0.05 && maxClipped <= 3, $"{dpi} dpi: mean {meanClipped:F3}, max {maxClipped}");
+            var (meanNested, maxNested, _) = Compare(free, nested);
+            Assert.True(meanNested < 0.05 && maxNested <= 3, $"{dpi} dpi nested: mean {meanNested:F3}, max {maxNested}");
+        }
+    }
+
+    [Fact]
     public async Task NestedAndExcludingClips_ReleaseTheirSurfaces_EvenWhenLeftOpen()
     {
         using var context = await ContextAsync();

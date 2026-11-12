@@ -27,6 +27,8 @@ internal sealed class Win2dTextMaskCache
     private readonly LinkedList<Entry> _order = new();
     private long _bytes;
 
+    internal long ByteCount => _bytes;
+
     internal readonly record struct Key(
         string Text, Typeface Typeface, double Size, SyntheticStyle Synthetic, double LetterSpacing, double Ppp, double ScaleX, double ScaleY,
         int SubPixels, FontPalette? Palette, ShapeSettings Features, int PhaseX, int PhaseY, int PhaseSteps, TextHinting Hinting, bool StemDarkening);

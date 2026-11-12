@@ -152,8 +152,7 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
             }
 
             // A bitmap of another (or a lost) device is of no use; release it before making the replacement.
-            _bitmap?.Dispose();
-            _bitmap = null;
+            ReleaseBitmap();
             _bitmapDevice = null;
 
             var made = 1.0;
@@ -175,9 +174,24 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
             _bitmapFrame = _currentFrame;
             _bitmapDevice = device;
             _bitmapScale = made;
+            _bitmapBytes = (long)_bitmap.SizeInPixels.Width * _bitmap.SizeInPixels.Height * 4;
+            Win2dPaintStatistics.ImageBitmap(_bitmapBytes);
             Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.ImageLoad, loadStarted);
             return _bitmap;
         }
+    }
+
+    private long _bitmapBytes;
+
+    private void ReleaseBitmap()
+    {
+        if (_bitmap is null)
+            return;
+
+        _bitmap.Dispose();
+        _bitmap = null;
+        Win2dPaintStatistics.ImageBitmap(-_bitmapBytes);
+        _bitmapBytes = 0;
     }
 
     /// <summary>How much of the image's size the bitmap <see cref="GetBitmap"/> returned has (1 for the full size).</summary>
@@ -292,8 +306,7 @@ internal sealed class Win2dImage : PeachDrawing.Core.Image
                 return;
 
             _disposed = true;
-            _bitmap?.Dispose();
-            _bitmap = null;
+            ReleaseBitmap();
             _bitmapDevice = null;
         }
     }

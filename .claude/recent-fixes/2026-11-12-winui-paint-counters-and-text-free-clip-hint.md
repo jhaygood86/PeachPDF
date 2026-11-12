@@ -56,3 +56,18 @@ they are not taken whole: each property that differs is set on the box's own sty
 fallback in two 100+ hover sweeps. `IncrementalInteractionRestyleTests` checks three corrected boxes against a full reload (two fail without the change) and `InteractionStateTests` an inline-holds-block hover.
 **Trap:** the reason only said "a style area that holds more than paint changed" until it was made to name the area and the properties; the `display: block -> inline` in both directions (hover in and out)
 is what showed it was no hover's doing. **Not done:** a hover that really changes a layout property still loads the page again, by design.
+
+## Memory: clip surfaces sized to the clip, pooled across paints (same day)
+
+The original complaint was memory. `PEACH_PAINT_STATS` now also writes a `(memory)` line (scratch targets, each text cache, image bitmaps, clip surfaces made); the cheap answer was
+an experiment, not a count: with surface clips switched off, a bench run on Ars peaked at ~345 MB private / ~370 MB GPU against ~680 MB / ~550 MB. **Every surface clip was a render target the size of
+the whole paint target (1536 x 2560 px = 15.7 MB), allocated and freed per clip: 834 targets, 533 MB, in one bench run** (image bitmaps were only 10 MB for 37 images; text caches 13 MB).
+- A clip surface is now as big as the clip's pixel bounds (rounded up to 64 px) and starts at its origin: `Win2dCanvas._deviceBase` is shifted for the clip's duration (everything that places
+  drawing reads it through `EffectiveTransform` or the session transform) and restored at the pop; the surface is composited back from its origin to the region's place.
+- `Win2dSurfacePool` (per render context, 24 MB budget, oldest out first, counted as in use only while a canvas has one) keeps them between paints: 834 allocations -> 34.
+- The LCD text blend's four scratch targets (60 MB at 96 dpi) are sized to the area a flush covers, not the target, and shrink after 48 flushes in a row that need under a quarter.
+Result on Ars (Release bench): peak private 680 -> 390 MB, peak GPU dedicated 516-586 -> 426-452 MB; fling/wheel painting unchanged (13-14 ms/Mpx).
+**Trap:** tests must not dispose `CanvasDevice.GetSharedDevice()` (two new tests did and broke unrelated ones in the same run).
+`GpuTextTests.TextInsideASurfaceClip_IsDrawnWhereItWouldBeWithoutTheClip...` pins the coordinate shift (nested transforms, 96 and 144 dpi; it fails when the base is not shifted).
+`PEACH_NO_WARM=1` switches painting ahead off, to tell what it costs from what a page does (+34 MB GPU at idle on Ars). **Not done:** the CanvasVirtualControl surface itself and driver
+watermarks (the remaining ~100 MB GPU above the no-clip experiment); the region target (`_regionTarget`, 16 MB) and idle trimming of it.

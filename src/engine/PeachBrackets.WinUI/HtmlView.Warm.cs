@@ -15,6 +15,9 @@ public sealed partial class HtmlView
     private HtmlDocument? _warmedDocument;
     private bool _warmFailed;
 
+    /// <summary>Whether painting ahead is switched off by the environment (<c>PEACH_NO_WARM</c>), for telling what it costs from what the page does.</summary>
+    private static readonly bool DisableWarming = Environment.GetEnvironmentVariable("PEACH_NO_WARM") is { Length: > 0 };
+
     /// <summary>How many bands have been painted ahead of the viewport for the loaded document, for a test to tell the work was done.</summary>
     internal int WarmedBandCount
     {
@@ -35,7 +38,7 @@ public sealed partial class HtmlView
     [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the choice of band is HtmlViewLogic.NextWarmBand, tested on its own.")]
     private void QueueWarm(int milliseconds = 120)
     {
-        if (_warmFailed || _document is null || _scrollMode == HtmlViewScrollMode.Disabled || _context is null)
+        if (DisableWarming || _warmFailed || _document is null || _scrollMode == HtmlViewScrollMode.Disabled || _context is null)
             return;
 
         _warmTimer ??= CreateWarmTimer();

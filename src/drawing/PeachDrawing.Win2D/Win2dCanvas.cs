@@ -37,20 +37,16 @@ public sealed partial class Win2dCanvas : Canvas
 
     /// <summary>A geometry clip drawn into a render target of its own (see <see cref="BeginSurfaceClip"/>), with what to put back when it is popped.</summary>
     private sealed record ClipSurface(CanvasRenderTarget Target, CanvasDrawingSession Session, CanvasDrawingSession ParentSession, CanvasRenderTarget ParentTarget, CanvasGeometry Geometry,
-        (int X, int Y, int Width, int Height) Region, long TextAtStart);
+        (int X, int Y, int Width, int Height) Region, long TextAtStart, Matrix3x2 SavedBase);
 
     private long _textRunsQueued;
-
-    // Surface-clip targets this canvas has finished with, kept for the next clip: a page of rounded cards opens hundreds of them in one paint, and a
-    // target the size of the whole view made and thrown away for each was most of what they cost. They are released when the canvas is.
-    private List<CanvasRenderTarget>? _surfacePool;
 
     private readonly Win2dRenderContext _context;
     private CanvasDrawingSession _session;
     private readonly bool _ownsSession;
     private readonly bool _isTile;
     private readonly double _ppp;
-    private readonly Matrix3x2 _deviceBase;
+    private Matrix3x2 _deviceBase;
     private readonly Matrix3x2 _originalTransform;
     private readonly CanvasBlend _originalBlend;
     private readonly CanvasAntialiasing _originalAntialiasing;
@@ -304,62 +300,33 @@ public sealed partial class Win2dCanvas : Canvas
         var parentSession = _session;
         parentSession.Flush();
         var size = parentTarget.SizeInPixels;
-        var target = TakeSurfaceTarget(parentSession, parentTarget);
 
         // Only what the geometry can show is copied (and composited back): text blended inside the clip reads the pixels behind it, and nothing outside the
-        // geometry survives the composite. The rest of the target is whatever an earlier clip left there, which nothing reads.
+        // geometry survives the composite. The target is that big and no bigger (a page of rounded cards opens hundreds, and one the size of the whole view each
+        // took most of the memory the page used); what is drawn into it is moved so that the region starts at its origin.
         var region = SurfaceRegion(geometry, parentSession.Transform, parentSession.Dpi, (int)size.Width, (int)size.Height);
+        var target = _context.SurfacePool.Take(parentSession.Device, parentTarget.Dpi, parentTarget.Format, Math.Max(1, region.Width), Math.Max(1, region.Height),
+            (int)size.Width, (int)size.Height);
         if (region.Width > 0 && region.Height > 0)
-            target.CopyPixelsFromBitmap(parentTarget, region.X, region.Y, region.X, region.Y, region.Width, region.Height);
+            target.CopyPixelsFromBitmap(parentTarget, 0, 0, region.X, region.Y, region.Width, region.Height);
 
         Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.SurfaceClip, surfaceStarted);
 
+        var unit = 96f / parentTarget.Dpi;
+        var shift = Matrix3x2.CreateTranslation(-region.X * unit, -region.Y * unit);
+        var savedBase = _deviceBase;
+        _deviceBase = savedBase * shift;
+
         var session = target.CreateDrawingSession();
         _context.Counts.Session(1);
-        session.Transform = parentSession.Transform;
+        session.Transform = parentSession.Transform * shift;
         session.Blend = parentSession.Blend;
         session.Antialiasing = parentSession.Antialiasing;
         session.TextAntialiasing = parentSession.TextAntialiasing;
 
         _session = session;
         _lcdTarget = target;
-        return new ClipSurface(target, session, parentSession, parentTarget, geometry, region, _textRunsQueued);
-    }
-
-    // A target like the one being drawn to: one this canvas has finished with if there is one, otherwise a new one.
-    private CanvasRenderTarget TakeSurfaceTarget(CanvasDrawingSession parentSession, CanvasRenderTarget parentTarget)
-    {
-        if (_surfacePool is { Count: > 0 } pool)
-        {
-            var last = pool[^1];
-            pool.RemoveAt(pool.Count - 1);
-            if (last.Dpi == parentTarget.Dpi && last.SizeInPixels.Width == parentTarget.SizeInPixels.Width && last.SizeInPixels.Height == parentTarget.SizeInPixels.Height
-                && last.Format == parentTarget.Format && ReferenceEquals(last.Device, parentSession.Device))
-            {
-                return last;
-            }
-
-            last.Dispose();
-            _context.Counts.ClipSurface(-1);
-        }
-
-        var target = new CanvasRenderTarget(parentSession.Device, (float)parentTarget.Size.Width, (float)parentTarget.Size.Height, parentTarget.Dpi, parentTarget.Format, CanvasAlphaMode.Ignore);
-        _context.Counts.ClipSurface(1);
-        return target;
-    }
-
-    private void ReleaseSurfacePool()
-    {
-        if (_surfacePool is null)
-            return;
-
-        foreach (var target in _surfacePool)
-        {
-            target.Dispose();
-            _context.Counts.ClipSurface(-1);
-        }
-
-        _surfacePool = null;
+        return new ClipSurface(target, session, parentSession, parentTarget, geometry, region, _textRunsQueued, savedBase);
     }
 
     // The pixels of the target (x, y, width, height) that a geometry drawn under a transform can touch, a little over, or all of it when the bounds cannot be told.
@@ -399,6 +366,7 @@ public sealed partial class Win2dCanvas : Canvas
         {
             _session = surface.ParentSession;
             _lcdTarget = surface.ParentTarget;
+            _deviceBase = surface.SavedBase;
             try
             {
                 // The geometry is in the user space the clip was pushed under, which is the parent session's transform still.
@@ -414,8 +382,8 @@ public sealed partial class Win2dCanvas : Canvas
 
                         // The target is at the session's resolution, so a pixel is 96 / dpi device-independent units.
                         var unit = 96f / surface.Target.Dpi;
-                        var part = new Windows.Foundation.Rect(surface.Region.X * unit, surface.Region.Y * unit, surface.Region.Width * unit, surface.Region.Height * unit);
-                        _session.DrawImage(surface.Target, (float)part.X, (float)part.Y, part);
+                        var part = new Windows.Foundation.Rect(0, 0, surface.Region.Width * unit, surface.Region.Height * unit);
+                        _session.DrawImage(surface.Target, surface.Region.X * unit, surface.Region.Y * unit, part);
                     }
                     finally
                     {
@@ -426,7 +394,7 @@ public sealed partial class Win2dCanvas : Canvas
             }
             finally
             {
-                (_surfacePool ??= []).Add(surface.Target);
+                _context.SurfacePool.Return(surface.Target);
             }
         }
     }
@@ -587,7 +555,6 @@ public sealed partial class Win2dCanvas : Canvas
         }
         finally
         {
-            ReleaseSurfacePool();
             _lcdEffect?.Dispose();
             _lcdEffect = null;
             AbandonLayers();
@@ -606,7 +573,10 @@ public sealed partial class Win2dCanvas : Canvas
             if (_isTile)
                 _context.Counts.Tile(-1);
             else
+            {
                 Win2dPaintStatistics.EndPaint();
+                Win2dPaintStatistics.NoteMemory(_context);
+            }
         }
 
         if (failure is not null)

@@ -17,6 +17,18 @@ internal sealed class Win2dLcdScratch(Win2dResourceCounts counts)
     private float _dpi;
     private int _width;
     private int _height;
+    private int _smallFlushes;
+
+    // A set of targets under this many pixels each is not worth making again for a smaller one.
+    private const long MinimumShrinkPixels = 512 * 512;
+
+    // How many flushes in a row needing a quarter of the targets or less it takes to make them smaller.
+    private const int ShrinkAfter = 48;
+
+    /// <summary>What the four targets take on the device, in bytes (zero before they are made).</summary>
+    internal long ByteCount => Backdrop is null ? 0 : 4L * _width * _height * 4;
+
+    internal string Describe() => Backdrop is null ? "none" : $"{_width}x{_height}px@{_dpi:F0}dpi";
 
     internal CanvasRenderTarget Backdrop { get; private set; } = null!;
 
@@ -30,7 +42,21 @@ internal sealed class Win2dLcdScratch(Win2dResourceCounts counts)
     internal void Ensure(CanvasDevice device, float dpi, int width, int height)
     {
         if (ReferenceEquals(_device, device) && _dpi == dpi && _width >= width && _height >= height)
-            return;
+        {
+            // Grown for one large flush, they would stay that size for good: a run of flushes that all need under a quarter of what is there lets them go.
+            if (_width * (long)_height > 4L * MinimumShrinkPixels && 4L * width * height < (long)_width * _height)
+            {
+                if (++_smallFlushes < ShrinkAfter)
+                    return;
+            }
+            else
+            {
+                _smallFlushes = 0;
+                return;
+            }
+        }
+
+        _smallFlushes = 0;
 
         Clear();
         _device = device;

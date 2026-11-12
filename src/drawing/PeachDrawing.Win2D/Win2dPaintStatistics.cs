@@ -55,6 +55,48 @@ internal static class Win2dPaintStatistics
             Write(line);
     }
 
+    private static long _lastMemoryNote;
+
+    // What the images' bitmaps on the device take, kept only to be shown in the memory line.
+    private static long _imageBytes;
+    private static long _imageCount;
+    private static long _surfaceMade;
+    private static long _surfaceMadeBytes;
+    private static long _surfaceMaxBytes;
+
+    /// <summary>A clip surface was allocated (not taken from the pool): how big.</summary>
+    internal static void SurfaceMade(long bytes)
+    {
+        Interlocked.Increment(ref _surfaceMade);
+        Interlocked.Add(ref _surfaceMadeBytes, bytes);
+        long seen;
+        while (bytes > (seen = Interlocked.Read(ref _surfaceMaxBytes)) && Interlocked.CompareExchange(ref _surfaceMaxBytes, bytes, seen) != seen)
+        {
+        }
+    }
+
+    internal static void ImageBitmap(long bytes)
+    {
+        Interlocked.Add(ref _imageBytes, bytes);
+        Interlocked.Add(ref _imageCount, Math.Sign(bytes));
+    }
+
+    /// <summary>About once a second, one line with what the render context holds on to: the text blend's scratch targets and each cache.</summary>
+    internal static void NoteMemory(Win2dRenderContext context)
+    {
+        if (!Enabled)
+            return;
+
+        var now = Stopwatch.GetTimestamp();
+        if (now - _lastMemoryNote < Stopwatch.Frequency)
+            return;
+
+        _lastMemoryNote = now;
+        static string Mb(long bytes) => $"{bytes / 1048576.0:F1}MB";
+        Write($"PEACH_PAINT_STATS(memory) lcdScratch={Mb(context.LcdScratch.ByteCount)} ({context.LcdScratch.Describe()}) textMasks={Mb(context.TextMasks.ByteCount)} " +
+            $"glyphMasks={Mb(context.GlyphMasks.ByteCount)} textBitmaps={Mb(context.TextBitmaps.ByteCount)} imageBitmaps={Mb(Interlocked.Read(ref _imageBytes))}/{Interlocked.Read(ref _imageCount)} surfacesMade={Interlocked.Read(ref _surfaceMade)} ({Mb(Interlocked.Read(ref _surfaceMadeBytes))} total, largest {Mb(Interlocked.Read(ref _surfaceMaxBytes))}) managed={Mb(GC.GetTotalMemory(false))}");
+    }
+
     internal static void Write(string line)
     {
         Debug.WriteLine(line);
