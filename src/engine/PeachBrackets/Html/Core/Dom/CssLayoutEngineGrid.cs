@@ -44,6 +44,13 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>Report-mode output: the child's self-sized per-subrow heights (one per adopted row).</summary>
         public double[]? ReportedRowSizes { get; set; }
+
+        /// <summary>The names of the parent's lines the subgrid spans, one entry per subgrid line (a span of <i>n</i> tracks has <i>n</i> + 1), which
+        /// the subgrid inherits in addition to its own (CSS Grid Level 2 §9.2). Null for an axis that is not subgridded.</summary>
+        public IReadOnlyList<IReadOnlyList<string>>? ColumnLineNames { get; set; }
+
+        /// <summary>The row-axis twin of <see cref="ColumnLineNames"/>.</summary>
+        public IReadOnlyList<IReadOnlyList<string>>? RowLineNames { get; set; }
     }
 
     /// <summary>
@@ -71,6 +78,13 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>Whether this is a <c>horizontal-tb</c> grid with <c>direction: rtl</c>, whose columns are numbered from the right.</summary>
         private bool _rtl;
+
+        /// <summary>
+        /// The margin, border and padding a subgrid has at each end of an adopted axis (CSS Grid Level 2 §9.2). The adopted tracks sit on the parent's
+        /// lines, at the subgrid's margin edge, so the items in the first and last track are inset by these instead of the tracks being moved. Zero for
+        /// an axis that is not subgridded (and in a vertical or <c>rtl</c> grid, whose axes this does not yet map).
+        /// </summary>
+        private double _colStartInset, _colEndInset, _rowStartInset, _rowEndInset;
 
         /// <summary>The right edge of the content box <c>direction: rtl</c> reflects about (narrower than the box for an inline-grid that shrinks to its tracks).</summary>
         private double _mirrorRight;
@@ -207,6 +221,20 @@ namespace PeachBrackets.Html.Dom
             var colSubgrid = colTemplate?.IsSubgrid == true && subgrid?.ColumnSizes is not null;
             var rowSubgrid = rowTemplate?.IsSubgrid == true && subgrid is not null;
 
+            if (!_vertical && !_rtl)
+            {
+                if (colSubgrid)
+                {
+                    _colStartInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
+                    _colEndInset = _gridBox.ActualMarginRight + _gridBox.ActualBorderRightWidth + _gridBox.ActualPaddingRight;
+                }
+                if (rowSubgrid)
+                {
+                    _rowStartInset = _gridBox.ActualMarginTop + _gridBox.ActualBorderTopWidth + _gridBox.ActualPaddingTop;
+                    _rowEndInset = _gridBox.ActualMarginBottom + _gridBox.ActualBorderBottomWidth + _gridBox.ActualPaddingBottom;
+                }
+            }
+
             // ── Explicit tracks + grid-auto-flow. Row flow (default) fixes the column count and grows rows;
             // column flow fixes the row count and grows columns. Implicit tracks cycle grid-auto-columns/rows.
             // A column template's repeat(auto-fill|auto-fit, …) is resolved to a concrete count here. A
@@ -238,6 +266,10 @@ namespace PeachBrackets.Html.Dom
             // grid-template-areas area contributes.
             var colLineNames = BuildLineNames(colTemplate);
             var rowLineNames = BuildLineNames(rowTemplate);
+
+            // A subgrid also has the parent's names for the lines it spans (§9.2), alongside the ones its own template declares.
+            if (colSubgrid && subgrid?.ColumnLineNames is { } inheritedColumnNames) AddInheritedNames(colLineNames, inheritedColumnNames);
+            if (rowSubgrid && subgrid?.RowLineNames is { } inheritedRowNames) AddInheritedNames(rowLineNames, inheritedRowNames);
 
             GridAreas? areas = null;
             if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None))
@@ -300,7 +332,7 @@ namespace PeachBrackets.Html.Dom
 
                 // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
                 (colMinContent, colMaxContent) =
-                    await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap);
+                    await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap, colLineNames);
 
                 // A vertical grid with an auto height has no inline space to fill: it is as long as its
                 // columns' max-content sizes (css-grid-2 section 11.1 with an indefinite available space).
@@ -347,14 +379,16 @@ namespace PeachBrackets.Html.Dom
             double SpanWidthOf(Placement placement)
             {
                 var (cols, gap) = ColumnsOf(placement);
-                return ColumnSpanWidth(cols, placement.ColStart, placement.ColSpan, gap);
+                return ColumnSpanWidth(cols, placement.ColStart, placement.ColSpan, gap)
+                    - (placement.ColStart == 0 ? _colStartInset : 0)
+                    - (placement.ColStart + placement.ColSpan >= cols.Length ? _colEndInset : 0);
             }
 
             for (var attempt = 0; ; attempt++)
             {
                 columnsByMeasure.Clear();
                 columns = columnsAdopted && subgrid is { ColumnSizes: { } adoptedColumnSizes, ColumnOffsets: { } adoptedColumnOffsets }
-                    ? BuildAdoptedTracks(adoptedColumnSizes, adoptedColumnOffsets, InlineOrigin, colCount)
+                    ? BuildAdoptedTracks(adoptedColumnSizes, adoptedColumnOffsets, InlineOrigin - _colStartInset, colCount)
                     : SizeColumnsAt(contentWidth, columnGap);
 
                 // The reflection `direction: rtl` applies is about the content box the tracks end up in: an
@@ -380,7 +414,7 @@ namespace PeachBrackets.Html.Dom
                 // explicit/implicit rows to their tallest item (measured at the item's column-span width).
                 if (rowSubgrid && subgrid is { RowSizes: { } adoptedRowSizes, RowOffsets: { } adoptedRowOffsets })
                 {
-                    rows = BuildAdoptedTracks(adoptedRowSizes, adoptedRowOffsets, BlockOrigin, rowCount);
+                    rows = BuildAdoptedTracks(adoptedRowSizes, adoptedRowOffsets, BlockOrigin - _rowStartInset, rowCount);
                 }
                 else
                 {
@@ -432,7 +466,7 @@ namespace PeachBrackets.Html.Dom
                     // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
                     // so the shared tracks size to fit every subgrid.
                     foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
-                        await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap);
+                        await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap, colLineNames, rowLineNames);
 
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
                         : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
@@ -443,7 +477,19 @@ namespace PeachBrackets.Html.Dom
                     // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
                     // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
                     if (rowSubgrid && subgrid is not null)
-                        subgrid.ReportedRowSizes = [.. rows.Take(subgrid.RowCount).Select(t => t.Size)];
+                        {
+                            var reportedRows = rows.Take(subgrid.RowCount).Select(t => t.Size).ToArray();
+
+                            // The rows the parent adopts must leave room for the padding and border at the subgrid's ends (§9.2 treats them as extra margin on the
+                            // items there, which grows an intrinsic track), or the items in the first and last row would be squeezed by it.
+                            if (reportedRows.Length > 0)
+                            {
+                                reportedRows[0] += _rowStartInset;
+                                reportedRows[^1] += _rowEndInset;
+                            }
+
+                            subgrid.ReportedRowSizes = reportedRows;
+                        }
                 }
 
                 // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
@@ -452,10 +498,11 @@ namespace PeachBrackets.Html.Dom
                 var inlineBaselineItems = new List<(Placement Placement, bool Last)>();
                 foreach (var p in placements)
                 {
-                    var cellX = ColumnsOf(p).Columns[p.ColStart].Position;
+                    var cellX = ColumnsOf(p).Columns[p.ColStart].Position + (p.ColStart == 0 ? _colStartInset : 0);
                     var cellWidth = SpanWidthOf(p);
-                    var cellY = rows[p.RowStart].Position;
-                    var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
+                    var cellY = rows[p.RowStart].Position + (p.RowStart == 0 ? _rowStartInset : 0);
+                    var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap)
+                        - (p.RowStart == 0 ? _rowStartInset : 0) - (p.RowStart + p.RowSpan >= rows.Length ? _rowEndInset : 0);
                     var justify = LogicalizePhysicalKeyword(
                         ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
                     var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
@@ -471,7 +518,7 @@ namespace PeachBrackets.Html.Dom
                         justify = last ? Keywords.End : Keywords.Start;
                     }
 
-                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
+                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames);
                     p.Box.SubgridContext = context;
                     try
                     {
@@ -530,7 +577,7 @@ namespace PeachBrackets.Html.Dom
             // remarks. Grid rows are already in block-axis order (RowStart ascending), so - unlike
             // flex's line ordering - no wrap-reverse-style reordering is needed here.
             var rowGroups = BuildRowGroups(placements);
-            var subgridContexts = BuildSubgridContextMap(placements, columns, rows);
+            var subgridContexts = BuildSubgridContextMap(placements, columns, rows, colLineNames, rowLineNames);
             if (!_vertical)
             await CommitItemContent(g, rowGroups, startRowIndex: 0, seedUnfinished: null, seedFinished: null,
                 subgridContexts, placementOrigin: _gridBox.Location);
@@ -717,12 +764,13 @@ namespace PeachBrackets.Html.Dom
         /// carries the row grouping rather than letting a resumed pass regroup it.
         /// </summary>
         private static IReadOnlyDictionary<CssBox, GridSubgridContext> BuildSubgridContextMap(
-            List<Placement> placements, Track[] columns, Track[] rows)
-        {
+            List<Placement> placements, Track[] columns, Track[] rows,
+            Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
+            {
             var map = new Dictionary<CssBox, GridSubgridContext>();
             foreach (var p in placements)
             {
-                if (BuildChildSubgridContext(p, columns, rows, adoptRows: true) is { } context)
+                if (BuildChildSubgridContext(p, columns, rows, adoptRows: true, colLineNames, rowLineNames) is { } context)
                     map[p.Box] = context;
             }
             return map;
@@ -1165,6 +1213,15 @@ namespace PeachBrackets.Html.Dom
             return total + (live > 1 ? gap * (live - 1) : 0);
         }
 
+        /// <summary>
+        /// The width an item has in its columns: the span, less the margin, border and padding this grid has at its own start or end when the item
+        /// sits in the first or last column of a subgridded axis (see <see cref="_colStartInset"/>).
+        /// </summary>
+        private double ItemColumnWidth(Track[] columns, Placement p, double gap) =>
+            ColumnSpanWidth(columns, p.ColStart, p.ColSpan, gap)
+            - (p.ColStart == 0 ? _colStartInset : 0)
+            - (p.ColStart + p.ColSpan >= columns.Length ? _colEndInset : 0);
+
         private static double ColumnSpanWidth(Track[] columns, int start, int span, double gap)
         {
             var last = Math.Min(start + span - 1, columns.Length - 1);
@@ -1398,8 +1455,8 @@ namespace PeachBrackets.Html.Dom
         /// intrinsic column no longer collapses to zero.</summary>
         private async ValueTask<(double[] MinContent, double[] MaxContent)> MeasureColumnIntrinsics(
             Canvas g, List<Placement> placements, IReadOnlyList<GridTrackSize> colDefs, int colCount,
-            double contentWidth, double gap)
-        {
+            double contentWidth, double gap, Dictionary<string, List<int>> colLineNames)
+            {
             var min = new double[colCount];
             var max = new double[colCount];
             if (!colDefs.Any(d => IsIntrinsic(d) || d.Kind == GridTrackKind.Flex)) return (min, max);
@@ -1439,10 +1496,94 @@ namespace PeachBrackets.Html.Dom
                     : await MeasureItemContribution(g, p.Box);
                 DistributeSpanContribution(min, colDefs, p, lastCol, intrinsicCols, mn, contentWidth, gap);
                 DistributeSpanContribution(max, colDefs, p, lastCol, intrinsicCols, mx, contentWidth, gap);
-            }
+                }
 
-            return (min, max);
-        }
+                // A column subgrid's own items take part in this grid's sizing of the columns it spans (§9.3), not the subgrid as one box: each item
+                // contributes to the parent column it sits over, with the subgrid's own edge added at its first and last column.
+                if (!_vertical && !_rtl)
+                {
+                    foreach (var p in placements.Where(p => IsSubgridItem(p.Box) && ChildColSubgrid(p.Box)))
+                    {
+                        var contributions = new List<SubgridContribution>();
+                        var child = new CssLayoutEngineGrid(p.Box);
+                        if (!await child.CollectSubgridColumnContributions(
+                                g, p.ColSpan, SpannedLineNames(colLineNames, p.ColStart, p.ColSpan), p.ColStart, contributions))
+                            continue;
+
+                        foreach (var c in contributions)
+                        {
+                            var lastCol = Math.Min(c.Start + c.Span, colCount);
+                            if (c.Start >= colCount) continue;
+
+                            var spanned = new Placement { Box = c.Box, ColStart = c.Start, ColSpan = c.Span };
+                            if (c.Span == 1)
+                            {
+                                if (!IsIntrinsic(colDefs[c.Start]) && colDefs[c.Start].Kind != GridTrackKind.Flex) continue;
+
+                                var mn = colDefs[c.Start].Kind == GridTrackKind.Flex ? AutoMinimumOf(c.Box, c.Min, contentWidth) + c.Edge : c.Min + c.Edge;
+                                min[c.Start] = Math.Max(min[c.Start], mn);
+                                max[c.Start] = Math.Max(max[c.Start], c.Max + c.Edge);
+                                continue;
+                            }
+
+                            var intrinsicCols = Enumerable.Range(c.Start, lastCol - c.Start).Where(i => IsIntrinsic(colDefs[i])).ToList();
+                            if (intrinsicCols.Count == 0) continue;
+                            DistributeSpanContribution(min, colDefs, spanned, lastCol, intrinsicCols, c.Min + c.Edge, contentWidth, gap);
+                            DistributeSpanContribution(max, colDefs, spanned, lastCol, intrinsicCols, c.Max + c.Edge, contentWidth, gap);
+                        }
+                    }
+                }
+
+                return (min, max);
+                }
+
+                /// <summary>One item of a column subgrid's contribution to the parent's columns: the parent column it starts in, how many it spans, its outer
+                /// min-content and max-content widths, and the subgrid's own margin, border and padding when the item sits at its first or last column.</summary>
+                private readonly record struct SubgridContribution(CssBox Box, int Start, int Span, double Min, double Max, double Edge);
+
+                /// <summary>
+                /// Called on the engine of a column subgrid: places the subgrid's items over its <paramref name="span"/> columns (with the line names it inherits
+                /// from its parent) and reports each one's contribution to the parent column <paramref name="offset"/> + its own start, flattening a nested column
+                /// subgrid the same way. Returns false for a subgrid whose items cannot be placed without a layout pass (named areas, column auto-flow), which then
+                /// contributes nothing, as before.
+                /// </summary>
+                private async ValueTask<bool> CollectSubgridColumnContributions(
+                    Canvas g, int span, IReadOnlyList<IReadOnlyList<string>> inheritedNames, int offset, List<SubgridContribution> into)
+                {
+                    if (!string.IsNullOrEmpty(_gridBox.GridTemplateAreas) && !_gridBox.GridTemplateAreas.Isi(Keywords.None)) return false;
+
+                    var flow = _gridBox.GridAutoFlow ?? Keywords.Row;
+                    if (flow.IndexOf(Keywords.Column, StringComparison.OrdinalIgnoreCase) >= 0) return false;
+
+                    var items = _gridBox.Boxes.Where(DomUtils.GeneratesFlexOrGridItem).ToList();
+                    var colNames = BuildLineNames(_gridBox.GridTemplateColumns.Value);
+                    AddInheritedNames(colNames, inheritedNames);
+                    var placements = PlaceItems(items, false, flow.IndexOf(Keywords.Dense, StringComparison.OrdinalIgnoreCase) >= 0, span,
+                        colNames, BuildLineNames(_gridBox.GridTemplateRows.Value));
+
+                    var startInset = _gridBox.ActualMarginLeft + _gridBox.ActualBorderLeftWidth + _gridBox.ActualPaddingLeft;
+                    var endInset = _gridBox.ActualMarginRight + _gridBox.ActualBorderRightWidth + _gridBox.ActualPaddingRight;
+
+                    foreach (var q in placements)
+                    {
+                        if (q.ColStart >= span) continue;
+                        var qSpan = Math.Min(q.ColSpan, span - q.ColStart);
+
+                        if (IsSubgridItem(q.Box) && ChildColSubgrid(q.Box))
+                        {
+                            var nested = new CssLayoutEngineGrid(q.Box);
+                            if (await nested.CollectSubgridColumnContributions(
+                                    g, qSpan, SpannedLineNames(colNames, q.ColStart, qSpan), offset + q.ColStart, into))
+                                continue;
+                        }
+
+                        var (mn, mx) = await MeasureItemContribution(g, q.Box);
+                        var edge = (q.ColStart == 0 ? startInset : 0) + (q.ColStart + qSpan >= span ? endInset : 0);
+                        into.Add(new SubgridContribution(q.Box, offset + q.ColStart, qSpan, mn, mx, edge));
+                    }
+
+                    return true;
+                }
 
         /// <summary>
         /// A grid container's min-content and max-content widths: the sum of its column track sizes plus
@@ -2150,7 +2291,8 @@ namespace PeachBrackets.Html.Dom
         /// <paramref name="adoptRows"/> is false the row sizes are omitted (report/measure mode: the child
         /// self-sizes its rows and reports them back).</summary>
         private static GridSubgridContext? BuildChildSubgridContext(
-            Placement p, Track[] columns, Track[] rows, bool adoptRows)
+        Placement p, Track[] columns, Track[] rows, bool adoptRows,
+        Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
         {
             if (!IsSubgridItem(p.Box)) return null;
 
@@ -2159,10 +2301,12 @@ namespace PeachBrackets.Html.Dom
             {
                 context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);
                 context.ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan);
-            }
-            if (ChildRowSubgrid(p.Box))
-            {
+                context.ColumnLineNames = SpannedLineNames(colLineNames, p.ColStart, p.ColSpan);
+                }
+                if (ChildRowSubgrid(p.Box))
+                {
                 context.RowCount = p.RowSpan;
+                context.RowLineNames = SpannedLineNames(rowLineNames, p.RowStart, p.RowSpan);
                 if (adoptRows)
                 {
                     context.RowSizes = SpannedSizes(rows, p.RowStart, p.RowSpan);
@@ -2194,18 +2338,19 @@ namespace PeachBrackets.Html.Dom
         /// content-fitting size. A column-only subgrid is measured as an ordinary item (with adopted columns).
         /// </summary>
         private async ValueTask MeasureSubgridItem(Canvas g, Placement p, Track[] columns, Track[] rows,
-            double columnGap, double rowGap)
+        double columnGap, double rowGap, Dictionary<string, List<int>> colLineNames, Dictionary<string, List<int>> rowLineNames)
         {
             var box = p.Box;
-            var columnWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
+            var columnWidth = ItemColumnWidth(columns, p, columnGap);
 
             if (ChildRowSubgrid(box))
             {
-                var context = new GridSubgridContext { RowCount = p.RowSpan };
+                var context = new GridSubgridContext { RowCount = p.RowSpan, RowLineNames = SpannedLineNames(rowLineNames, p.RowStart, p.RowSpan) };
                 if (ChildColSubgrid(box))
                 {
                     context.ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan);
                     context.ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan);
+                    context.ColumnLineNames = SpannedLineNames(colLineNames, p.ColStart, p.ColSpan);
                 }
 
                 box.SubgridContext = context;
@@ -2227,7 +2372,8 @@ namespace PeachBrackets.Html.Dom
                 var context = new GridSubgridContext
                 {
                     ColumnSizes = SpannedSizes(columns, p.ColStart, p.ColSpan),
-                    ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan)
+                    ColumnOffsets = SpannedOffsets(columns, p.ColStart, p.ColSpan),
+                    ColumnLineNames = SpannedLineNames(colLineNames, p.ColStart, p.ColSpan)
                 };
                 box.SubgridContext = context;
                 double natural;
@@ -2258,6 +2404,32 @@ namespace PeachBrackets.Html.Dom
                 foreach (var (name, lines) in names)
                     table[name] = [.. lines];
             return table;
+        }
+
+        /// <summary>
+        /// The names of the parent lines a subgrid spans: for <paramref name="span"/> tracks from the 0-based <paramref name="start"/> track, the
+        /// <paramref name="span"/> + 1 lines <paramref name="start"/> + 1 to <paramref name="start"/> + <paramref name="span"/> + 1 (1-based), each
+        /// with every name the parent's table gives it. The subgrid's own 0-based line <i>i</i> is the parent's line <paramref name="start"/> + <i>i</i> + 1.
+        /// </summary>
+        private static IReadOnlyList<IReadOnlyList<string>> SpannedLineNames(Dictionary<string, List<int>> table, int start, int span)
+        {
+            var lines = new List<string>[span + 1];
+            for (var i = 0; i <= span; i++) lines[i] = [];
+            foreach (var (name, parentLines) in table)
+                foreach (var line in parentLines)
+                {
+                    var local = line - 1 - start;
+                    if (local >= 0 && local <= span) lines[local].Add(name);
+                }
+            return lines;
+        }
+
+        /// <summary>Adds the names a subgrid inherits (see <see cref="SpannedLineNames"/>) to its own table, entry <i>i</i> being the 1-based line <i>i</i> + 1.</summary>
+        private static void AddInheritedNames(Dictionary<string, List<int>> table, IReadOnlyList<IReadOnlyList<string>> inherited)
+        {
+            for (var i = 0; i < inherited.Count; i++)
+                foreach (var name in inherited[i])
+                    AddLine(table, name, i + 1);
         }
 
         /// <summary>Adds a 1-based line number to a name's entry, keeping the list sorted and deduped.</summary>
