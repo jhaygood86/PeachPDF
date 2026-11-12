@@ -2243,11 +2243,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task GrowingItem_BorderBoxAndContentBox_SameOuterWidth()
         {
-            // Main-axis grow with an auto width and flex-grow>0 pins the hypothetical main size to 0
-            // (see the flex-grow branch of the hypothetical-size derivation), so the final outer width
-            // is independent of box-sizing before ResizeItem even runs - isolating ResizeItem's own
-            // box-sizing handling. box-sizing changes what an explicit width means, never the rendered
-            // footprint of grown/stretched sizing.
+            // Main-axis grow with an auto width starts from the item's content size (its padding and border here, the
+            // content being empty) and shares the rest, so the final outer width is the same whatever box-sizing says:
+            // box-sizing changes what an explicit width means, never the rendered footprint of grown/stretched sizing.
+            // 44pt of padding and border plus half of the other 256pt (171.5pt in Chrome).
             var contentBoxHtml = Wrap(@"
                 <div style='display:flex; width:300pt;'>
                     <div id='a' style='flex-grow:1; box-sizing:content-box; padding:20pt; border:2pt solid black; height:80pt;'></div>
@@ -2263,7 +2262,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var aContent = FindById(rootContent, "a")!;
             var aBorder = FindById(rootBorder, "a")!;
             Assert.Equal(aContent.ActualBoxSizingWidth, aBorder.ActualBoxSizingWidth, 0.5);
-            Assert.Equal(150, aContent.ActualBoxSizingWidth, 1.0);
+            Assert.Equal(172, aContent.ActualBoxSizingWidth, 1.0);
         }
 
         // ─── box-sizing:border-box flex-item cross-axis stretch (issue #832) ───────
