@@ -72,7 +72,12 @@ namespace PeachBrackets.Html.Handlers
             // copies the source's PdfTagType too (CssBox.InheritStyle's "everything"
             // path), so without this check it would resolve to the exact same structure type and
             // double-wrap the source's own struct element in a redundant duplicate.
-            if (box is CssProxyBox)
+            //
+            // A CssSpacingBox is the placeholder a rowspan cell leaves in each later row it spans: no element of the
+            // document, only the cell's way into that row. The cell's own structure element is opened by the cell (and
+            // parented under its own row, which reaches it first), so a placeholder that wraps a part of the cell, as a
+            // decoration strip under a repeated group does, would otherwise open an empty /Div of its own.
+            if (box is CssProxyBox or CssSpacingBox)
                 return StructureTagClassification.None;
 
             var pdfTagType = box.PdfTagType;

@@ -7206,6 +7206,22 @@ namespace PeachBrackets.Html.Dom
             if (_isVertical) cell.ActualRight = bottom;
             else cell.ActualBottom = bottom;
 
+            // The span closes on the row that ends it, which can be several fragmentainers after the ones already
+            // emitted with the cell at its opening height. Where a page lies strictly between the one its old bottom was
+            // on and the one being filled, that page was emitted without the cell reaching it, and it is re-opened from
+            // where the cell (and the content the alignment below moves down) changes: otherwise a page in the middle
+            // of the span keeps a cell that reached no further than its first row. A span crossing one break leaves no
+            // such page, and re-walking for it measured twice main's time on a long table of two-row spans. Not only up
+            // to the page the span closes on: under a repeated group, a sliced row's bottom is in its own coordinates,
+            // which leave out the groups' room, so that page is not known here. A vertical table's row loop never
+            // fragments (see above), so it has no such page.
+            if (!_isVertical && Math.Abs(bottom - previousBottom) > 0.001
+                && container is { HasRealPageGrid: true }
+                && Grid(container).SlotEndingAt(Math.Min(previousBottom, bottom)) < slot - 1)
+            {
+                container.InvalidateEmittedFragmentsFor(cell, Math.Min(previousBottom, bottom));
+            }
+
             var applied = CssLayoutEngine.ApplyCellVerticalAlignment(g, cell, _isVertical);
 
             cursor.RecordForeignWrite(cell, previousBottom, applied);

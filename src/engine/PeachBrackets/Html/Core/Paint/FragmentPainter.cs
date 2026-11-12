@@ -854,6 +854,11 @@ namespace PeachBrackets.Html.Paint
                 ? OpenPhantomAncestors(builder, lifted)
                 : null;
 
+            // A rowspan cell's parts can be painted with its row group rather than inside its row (FragmentEmitter
+            // .AddRowSpanningCell), and its element belongs in its row's either way. Re-entering the row it is painted in
+            // already changes nothing.
+            using var ownRow = box.IsRowSpanningCell && box.ParentBox is { } row ? OpenPhantomAncestors(builder, [row]) : null;
+
             var classification = StructureTagMapper.Classify(box);
             switch (classification.Kind)
             {
