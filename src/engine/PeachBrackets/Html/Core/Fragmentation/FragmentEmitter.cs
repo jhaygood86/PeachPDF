@@ -3728,6 +3728,10 @@ namespace PeachBrackets.Html.Fragmentation
                 // content past a flex-shrunk item (section 9.7) or past a clip (`overflow: hidden`, which makes the pinned size the item's real one) grow it.
                 && !(box.HeightBeforeItemPin is { } authoredHeight && CssValueParser.IsValidLength(authoredHeight))
                 && !box.ShrunkByFlexBelowContent
+                // A definite max-height caps the used height the same way (CSS 2.1 section 10.7; Flexbox 1 section 9.7 clamps the item to it before
+                // laying it out), so content past it is overflow. The item was measured with the cap already applied, so the shrink test above never
+                // sees the content that exceeds it.
+                && !CssValueParser.IsValidLength(box.MaxHeight)
                 && box.OverflowY.Value == Css.Overflow.Visible
                 && (children.Count > 0 || words.Count > 0);
 

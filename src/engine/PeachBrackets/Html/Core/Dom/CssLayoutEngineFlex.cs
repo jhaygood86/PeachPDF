@@ -54,10 +54,9 @@ namespace PeachBrackets.Html.Dom
 
         /// <summary>
         /// Resolves which physical axis is this container's main axis, and which physical end its
-        /// main-start/cross-start land on, from the container's own resolved <c>writing-mode</c> (assuming
-        /// <c>ltr</c> for the inline axis - this engine has no <c>direction: rtl</c> support at all yet,
-        /// for either axis, so extending only the vertical-writing-mode case to honor it would leave row
-        /// direction inconsistently direction-aware between physical axes). "Row" means main = inline axis
+        /// main-start/cross-start land on, from the container's own resolved <c>writing-mode</c> and
+        /// <c>direction</c> (CSS Flexbox 1 §5.1: a row's main-start is the inline-start side, the right edge
+        /// for <c>rtl</c>; a column's cross-start is too). "Row" means main = inline axis
         /// (CSS Flexbox 1 §3); which physical axis and end that is comes from
         /// <see cref="LogicalPropertyResolver"/>, the same abstract-to-physical table
         /// <see cref="WritingModeFrame"/> reuses, rather than a second independently-derived mapping.
@@ -65,12 +64,13 @@ namespace PeachBrackets.Html.Dom
         private void ComputeAxisMapping()
         {
             var writingMode = _flexBox.WritingMode.Value;
+            var direction = _flexBox.Direction.Value;
             var mainStartSide = _isRow
-                ? LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr)
+                ? LogicalPropertyResolver.InlineStart(writingMode, direction)
                 : LogicalPropertyResolver.BlockStart(writingMode);
             var crossStartSide = _isRow
                 ? LogicalPropertyResolver.BlockStart(writingMode)
-                : LogicalPropertyResolver.InlineStart(writingMode, DirectionMode.Ltr);
+                : LogicalPropertyResolver.InlineStart(writingMode, direction);
 
             _mainAxisIsPhysicalX = mainStartSide is PhysicalSide.Left or PhysicalSide.Right;
             _mainStartIsAtMax = mainStartSide is PhysicalSide.Right or PhysicalSide.Bottom;
@@ -386,7 +386,7 @@ namespace PeachBrackets.Html.Dom
                             // the ResolveFlexibleLengths path; this mirrors it for the mainSizeIndefinite one).
                             if (!_mainAxisIsPhysicalX) item.Box.AlgorithmicDefiniteHeight = final;
 
-                            if (Math.Abs(final - item.NaturalMainSize) > 0.5)
+                            if (Math.Abs(final - item.CurrentMainSize) > 0.5)
                                 await ResizeItem(g, item, final);
                         }
                 }
@@ -939,7 +939,7 @@ namespace PeachBrackets.Html.Dom
             foreach (var item in line.Items)
             {
                 // Re-layout only when the final size differs from what was used during measurement
-                if (Math.Abs(item.FinalMainSize - item.NaturalMainSize) > 0.5)
+                if (Math.Abs(item.FinalMainSize - item.CurrentMainSize) > 0.5)
                     await ResizeItem(g, item, item.FinalMainSize);
             }
         }
@@ -994,7 +994,7 @@ namespace PeachBrackets.Html.Dom
                     double totalGrow = line.Items.Sum(i => ParseFloat(i.Box.FlexGrow));
                     var grow = ParseFloat(item.Box.FlexGrow);
                     final = totalGrow > 0
-                        ? item.HypotheticalMainSize + freeSpace * (grow / totalGrow)
+                        ? item.HypotheticalMainSize + ScaleByFactorSum(freeSpace, freeSpace, totalGrow) * (grow / totalGrow)
                         : item.HypotheticalMainSize;
                 }
                 else if (hasAutoMinimum)
@@ -1005,15 +1005,20 @@ namespace PeachBrackets.Html.Dom
                 {
                     double totalShrink = line.Items.Sum(i =>
                         ParseFloat(i.Box.FlexShrink) * i.HypotheticalMainSize);
+                    var totalShrinkFactor = line.Items.Sum(i => ParseFloat(i.Box.FlexShrink));
                     var shrinkFactor = ParseFloat(item.Box.FlexShrink) * item.HypotheticalMainSize;
                     final = totalShrink > 0
-                        ? Math.Max(0, item.HypotheticalMainSize + freeSpace * (shrinkFactor / totalShrink))
+                        ? Math.Max(0, item.HypotheticalMainSize + ScaleByFactorSum(freeSpace, freeSpace, totalShrinkFactor) * (shrinkFactor / totalShrink))
                         : item.HypotheticalMainSize;
                 }
                 else
                 {
                     final = item.HypotheticalMainSize;
                 }
+
+                // An item raised to its automatic minimum that still fits with the rest of its line is held there (§4.5, §9.7 step 2 freezes
+                // an item that cannot flex at its hypothetical size, which the minimum has clamped).
+                if (!growsAgainstMinimum && !hasAutoMinimum) final = Math.Max(final, item.AutoMinMainSize);
 
                 final = ClampMainAxis(item.Box, final, mainSize);
                 item.FinalMainSize = final;
@@ -1030,6 +1035,23 @@ namespace PeachBrackets.Html.Dom
                     item.Box.ShrunkByFlexBelowContent = final < item.NaturalMainSize - 0.5;
                 }
             }
+        }
+
+        /// <summary>
+        /// CSS Flexbox 1 §9.7 step 4c: when the unfrozen items' flex factors (the raw <c>flex-grow</c> or <c>flex-shrink</c> values, not the
+        /// shrink weights scaled by the base size) add up to less than one, only that fraction of the initial free space is shared out,
+        /// provided it is smaller in magnitude than what remains.
+        /// </summary>
+        /// <param name="initialFreeSpace">The free space of the line before any item was resolved.</param>
+        /// <param name="remainingFreeSpace">The free space left with the frozen items at their target sizes.</param>
+        /// <param name="factorSum">The sum of the unfrozen items' flex factors.</param>
+        /// <returns>The free space to distribute.</returns>
+        private static double ScaleByFactorSum(double initialFreeSpace, double remainingFreeSpace, double factorSum)
+        {
+            if (factorSum <= 0 || factorSum >= 1) return remainingFreeSpace;
+
+            var fraction = initialFreeSpace * factorSum;
+            return Math.Abs(fraction) < Math.Abs(remainingFreeSpace) ? fraction : remainingFreeSpace;
         }
 
         /// <summary>
@@ -1065,18 +1087,22 @@ namespace PeachBrackets.Html.Dom
                 }
             }
 
+            double initialFreeSpace = 0;
             for (var pass = 0; pass <= items.Count; pass++)
             {
-                double frozenSpace = 0, unfrozenHypothetical = 0, totalShrink = 0;
+                double frozenSpace = 0, unfrozenHypothetical = 0, totalShrink = 0, totalShrinkFactor = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
                     var margins = items[i].MarginBefore + items[i].MarginAfter;
                     if (frozen[i]) { frozenSpace += sizes[i] + margins; continue; }
                     unfrozenHypothetical += items[i].HypotheticalMainSize + margins;
                     totalShrink += ParseFloat(items[i].Box.FlexShrink) * items[i].HypotheticalMainSize;
+                    totalShrinkFactor += ParseFloat(items[i].Box.FlexShrink);
                 }
 
                 var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
+                if (pass == 0) initialFreeSpace = remaining;
+                remaining = ScaleByFactorSum(initialFreeSpace, remaining, totalShrinkFactor);
                 double totalViolation = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
@@ -1130,6 +1156,7 @@ namespace PeachBrackets.Html.Dom
             var minViolated = new bool[items.Count];
             var maxViolated = new bool[items.Count];
 
+            double initialFreeSpace = 0;
             for (var pass = 0; pass <= items.Count; pass++)
             {
                 double frozenSpace = 0, unfrozenHypothetical = 0, totalGrow = 0;
@@ -1142,6 +1169,8 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var remaining = availableForItems - frozenSpace - unfrozenHypothetical;
+                if (pass == 0) initialFreeSpace = remaining;
+                remaining = ScaleByFactorSum(initialFreeSpace, remaining, totalGrow);
                 double totalViolation = 0;
                 for (var i = 0; i < items.Count; i++)
                 {
@@ -1208,7 +1237,13 @@ namespace PeachBrackets.Html.Dom
             // its own because its minimum did not fit the one before is floored on that line too; left at its basis (0 for
             // `flex: 0`) it would be laid out empty.
             var raisedByWrap = _isWrap && _mainAxisIsPhysicalX;
-            if (!overflows && !grows && !raisedByWrap) return;
+
+            // A row whose items fit and none of which grows is floored too: §4.5 clamps each item's hypothetical size by its automatic
+            // minimum, and §9.7 compares the sum of those with the container, so an item shrunk to nothing beside a wide one is raised
+            // to its minimum and the line then gives that room back. A column is left alone: in an auto-height one every item is already
+            // its content height, so the minimum would only cost a second layout of each item.
+            var floorsAFittingRow = _mainAxisIsPhysicalX;
+            if (!overflows && !grows && !raisedByWrap && !floorsAFittingRow) return;
 
             if (!_mainAxisIsPhysicalX)
             {
@@ -1294,7 +1329,10 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 var minimum = content;
-                if (heightIsDefinite && !box.Height.EndsWith('%'))
+                // A percentage height is a specified size only when its basis, the container's height, is definite (css-sizing-3: it
+                // behaves as auto otherwise, and an auto-height column has no height before its items are laid out), and then it is
+                // resolved against the container's main size like a length is (§4.5; Chromium ResolveMainBlockLength, Gecko IsAutoBSize).
+                if (heightIsDefinite && (!box.Height.EndsWith('%') || CssLayoutEngine.IsHeightDefinite(_flexBox)))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.Height, container, box) + MainBoxSizeIncluded(box));
                 if (CssValueParser.IsValidLength(box.MaxHeight))
                     minimum = Math.Min(minimum, CssValueParser.ParseLength(box.MaxHeight, container, box) + MainBoxSizeIncluded(box));
@@ -1335,6 +1373,8 @@ namespace PeachBrackets.Html.Dom
 
             if (_mainAxisIsPhysicalX) item.Box.Width  = saved;
             else                      item.Box.Height = saved;
+
+            item.LaidOutMainSize = finalSize;
         }
 
         // ─── Phase 4b: column cross-axis (width) shrink-to-fit ────────────────────
@@ -3164,6 +3204,13 @@ namespace PeachBrackets.Html.Dom
             public double  NaturalMainSize      { get; } = naturalMainSize;
             public double  HypotheticalMainSize { get; } = hypotheticalMainSize;
             public double  FinalMainSize        { get; set; } = hypotheticalMainSize;
+
+            // The main size the box was last laid out at when something other than the measurement did it (ResizeItem), so a later
+            // pass compares the size it resolves to against what the box really holds, not against what it was first measured at.
+            public double? LaidOutMainSize      { get; set; }
+
+            // The main size the box is laid out at now: where it was last resized to, else where it was measured.
+            public double  CurrentMainSize      => LaidOutMainSize ?? NaturalMainSize;
 
             // The size min-width: auto stops the item shrinking below (CSS Flexbox 1 §4.5); 0 when it has none.
             public double  AutoMinMainSize      { get; set; }

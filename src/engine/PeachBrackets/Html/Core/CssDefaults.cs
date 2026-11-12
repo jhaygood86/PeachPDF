@@ -77,6 +77,7 @@ namespace PeachBrackets.Html
             col             { display: table-column }
             colgroup        { display: table-column-group }
             td, th          { display: table-cell }
+            td, th          { padding: 1px }
             caption         { display: table-caption }
             th              { font-weight: bolder; text-align: center }
             caption         { text-align: center }

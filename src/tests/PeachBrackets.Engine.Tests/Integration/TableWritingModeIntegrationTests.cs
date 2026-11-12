@@ -24,6 +24,13 @@ namespace PeachBrackets.Engine.Tests.Integration
     /// </summary>
     public class TableWritingModeIntegrationTests
     {
+        /// <summary>
+        /// Wraps <paramref name="body"/> with the cells' default 1px padding switched off: these tests pin row and page-band
+        /// geometry to the point, which is the thing under test, and a cell's own padding would shift every figure by a
+        /// constant that has nothing to do with it.
+        /// </summary>
+        private static string UnpaddedWrap(string body) => LayoutHarness.Wrap("<style>td, th { padding: 0 }</style>" + body);
+
         [Fact]
         public async Task VerticalRl_Rows_StackRightToLeft_ColumnsStackTopToBottom()
         {
@@ -31,7 +38,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // from the table's own right edge), columns always run along the inline axis (physical Y).
             // Fixture dimensions are given directly in pt (not px) per this repo's testing convention, so
             // expected values read literally without a px->pt conversion factor.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 4pt">
                   <tr><td id="a1" style="height: 50pt; width: 30pt">A1</td><td id="b1" style="height: 50pt; width: 30pt">B1</td></tr>
                   <tr><td id="a2" style="height: 50pt; width: 30pt">A2</td><td id="b2" style="height: 50pt; width: 30pt">B2</td></tr>
@@ -76,7 +83,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             // block-start is the table's own left edge for vertical-lr - the mirror image of vertical-rl,
             // with no reflection pass needed (rows already grow forward from block-start).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-lr; border-spacing: 4pt">
                   <tr><td id="a1" style="height: 50pt; width: 30pt">A1</td><td id="b1" style="height: 50pt; width: 30pt">B1</td></tr>
                   <tr><td id="a2" style="height: 50pt; width: 30pt">A2</td><td id="b2" style="height: 50pt; width: 30pt">B2</td></tr>
@@ -120,7 +127,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // column axis's available space) came out smaller than the columns' combined content size -
             // an indefinite/zero available column-axis space, the common case for a vertical table with
             // no definite height anywhere up its containing-block chain.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <tr><td id="a0" style="height: 80pt; width: 20pt">A0</td><td id="a1" style="height: 20pt; width: 50pt">A1</td></tr>
                   <tr><td id="b0" style="height: 30pt; width: 20pt">B0</td><td id="b1" style="height: 60pt; width: 50pt">B1</td></tr>
@@ -162,7 +169,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // target, so it is nowhere near being the constraint doing the shrinking (and stays clear of
             // CSS 2.1 17.5.3's unshrinkable per-cell floor - see GetColumnMinWidths' own remarks - which
             // only a cell whose own height exceeds the target could ever hit).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; height: 100pt; border-spacing: 0">
                   <colgroup>
                     <col style="height: 200px">
@@ -190,7 +197,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // still lay out cleanly, splitting the explicit column-axis budget evenly across the auto
             // column - the same equal-share fallback this method always used here, before this issue's
             // fix added the (horizontal-only) interpolation branch.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; height: 300pt; border-spacing: 0">
                   <tr><td id="a1" style="width: 30pt">A1</td></tr>
                   <tr><td id="a2" style="width: 30pt">A2</td></tr>
@@ -220,7 +227,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // its column. The column's own extent is sized from the <col> declaration (150pt), well
             // above a0's own tiny single-word content height - if the fix regressed to "content height
             // only", this would read a0's own small content height instead of 150.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <colgroup>
                     <col style="height: 200px">
@@ -243,7 +250,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // column's assigned extent must not be clamped down to it - the fix's Math.Max, not a bare
             // overwrite, is what this asserts. a0's child block (80pt) needs far more than its column's
             // own 40pt (from the <col> declaration).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <colgroup>
                     <col style="height: 53px">
@@ -265,7 +272,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Regression guard: the ordinary horizontal-tb path (already covered exhaustively by the
             // pre-existing table test suite) still produces the same geometry through the new
             // _isVertical-gated fields.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="border-spacing: 4pt">
                   <tr><td id="a1" style="width: 50pt; height: 30pt">A1</td><td id="b1" style="width: 50pt; height: 30pt">B1</td></tr>
                 </table>
@@ -288,7 +295,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // (MonolithicContent.HasColumnPaginationExcludedFeature): a vertical table that is a flex or
             // grid item keeps the whole-table "move as one unit" treatment, because the flex line holding
             // it does its own relocation that the table's column pass knows nothing about.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <div style="display: flex">
                   <table id="t" style="writing-mode: vertical-rl; border-collapse: collapse">
                     <tr><td>Cell</td></tr>
@@ -314,7 +321,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // per-column pagination (issue #783) can relocate its content across page boundaries - this
             // table is far too small to actually need relocating, so the assertion is purely about the
             // policy, not about anything visibly different in the rendered output.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl">
                   <tr><td>Cell</td></tr>
                 </table>
@@ -336,7 +343,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             // Regression guard: an ordinary horizontal-tb table keeps its real per-row resumption
             // behavior (issue #464) - the new vertical-only monolithic rule must not catch it too.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t">
                   <tr><td>Cell</td></tr>
                 </table>
@@ -361,7 +368,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // A 60pt table starting at 160pt - 20pt above the first 200pt page's 180pt content-band
             // bottom (20pt margin) - straddles the boundary unless something forbids it, mirroring
             // MonolithicContentLayoutIntegrationTests' StraddleDocument fixture shape.
-            var html = LayoutHarness.Wrap(
+            var html = UnpaddedWrap(
                 "<div style='height:140pt'>filler</div>" +
                 $"<table id='card' style='writing-mode:{writingMode};border-spacing:0'>" +
                 "<tr><td style='height:60pt;width:20pt'>Cell</td></tr></table>");
@@ -390,7 +397,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             const int rowCount = 10;
             var rows = string.Join("", Enumerable.Range(0, rowCount)
                 .Select(i => $"<tr><td id=\"r{i}\" style=\"height: 20pt; width: 30pt\">R{i}</td></tr>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 2pt">{rows}</table>
                 """);
 
@@ -446,7 +453,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             const int rowCount = 10;
             var rows = string.Join("", Enumerable.Range(0, rowCount)
                 .Select(i => $"<tr><td id=\"r{i}\" style=\"height: 20pt; width: 30pt\">R{i}</td></tr>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 2pt">
                   <thead><tr><td id="h" style="height: 20pt; width: 20pt">H</td></tr></thead>
                   {rows}
@@ -487,7 +494,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // ReflectRowAxisForVerticalRl reads as `max` to mirror every row. A vertical-rl table with a
             // bottom caption left that edge stale/unset, corrupting every row's mirrored position (not
             // just the caption's own, already-disclosed-as-unconverted placement).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 4pt">
                   <caption style="caption-side: bottom">Caption</caption>
                   <tr><td id="a1" style="height: 50pt; width: 30pt">A1</td></tr>
@@ -527,7 +534,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // extent is driven by b1 (30pt), row 2's by b2 (40pt, deliberately different so the combined
             // total - 30 + 4 (spacing) + 40 = 74 - can't be mistaken for either row's own individual
             // extent or the spanning cell's own small natural width (10pt).
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
                   <tr>
                     <td id="span" rowspan="2" style="width: 10pt; height: 60pt">Span</td>
@@ -558,7 +565,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // via ReflectRowAxisForVerticalRl's per-row OffsetLeft cascade. b1 must still sit exactly
             // where it would in a table with no rowspan at all: flush (one border-spacing in) against
             // the table's own block-start edge.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
                   <tr>
                     <td rowspan="2" style="width: 10pt; height: 60pt">Span</td>
@@ -600,7 +607,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // this table's own row-axis extent) forces HasRealPageGrid true and exercises exactly that
             // path; the table stays monolithic regardless (MonolithicContent), so this only has to prove
             // the rowspan geometry itself still comes out right, not that pagination is honored.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
                   <tr>
                     <td id="span" rowspan="2" style="width: 10pt; height: 60pt">Span</td>
@@ -633,7 +640,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // own remarks), but not otherwise exercised together by any other test here. Three columns:
             // "span" occupies columns 0-1 across both rows (colspan=2, rowspan=2), leaving column 2 for
             // b1/b2 (one per row, matching the plain-rowspan tests' own shape).
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 4pt">
                   <tr>
                     <td id="span" rowspan="2" colspan="2" style="width: 10pt; height: 60pt">Span</td>
@@ -675,7 +682,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // sized across its full column axis (physical Y) - CSS 2.1 §17.4 reinterpreted through
             // css-tables-3's axis mapping, rather than the pre-fix "always physical Y, always full
             // physical-X width" placement.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
                   <caption id="top" style="caption-side: top">Top</caption>
                   <caption id="bottom" style="caption-side: bottom">Bottom</caption>
@@ -724,7 +731,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // axis's own start for a vertical table, not the row axis's) and never axis-swapped the
             // proxy's own PaintPoint construction, so a vertical table's header/footer proxies came out at
             // physically wrong positions.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
                   <thead><tr><td style="width: 20pt; height: 30pt">H</td></tr></thead>
                   <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
@@ -786,7 +793,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // first) must end up physically closer to the table's own block-start (physical-max, since
             // vertical-rl's row axis starts at the max edge) than H2 - the same relative order every
             // <tbody> row already gets.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <thead>
                     <tr><td id="h1" style="width: 20pt; height: 30pt">H1</td></tr>
@@ -843,7 +850,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // positioned ancestor of its own - which should stay put, resolved against the true document
             // root - would incorrectly receive the same per-row residual ReflectSubtree applies to
             // reverse a multi-row <thead>'s internal row order under vertical-rl (issue #784).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <thead>
                     <tr><td style="width: 20pt; height: 20pt">H1</td></tr>
@@ -888,7 +895,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // on grid row/column indices, never physical coordinates, so it needs no axis-specific
             // handling of its own. vertical-lr (not vertical-rl) so the assertions below read as direct,
             // forward-grown positions with no ReflectRowAxisForVerticalRl residual to account for.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-lr; border-spacing: 0">
                   <thead>
                     <tr><td id="a" rowspan="3" style="width: 20pt; height: 20pt">A</td>
@@ -936,7 +943,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Sibling regression guard for the fix above: ReflectRowAxisForVerticalRl only runs for
             // vertical-rl (_rowAxisStartIsAtMax), so vertical-lr's own forward-grown row order - already
             // correct, since vertical-lr's row axis genuinely grows left-to-right - must be unaffected.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-lr; border-spacing: 0">
                   <thead>
                     <tr><td id="h1" style="width: 20pt; height: 30pt">H1</td></tr>
@@ -963,7 +970,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task VerticalRl_MultiRowTfoot_InternalRowsReverseOrder()
         {
             // Same shape as the <thead> case above, for a multi-row <tfoot>.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <tbody><tr><td id="b1" style="width: 20pt; height: 30pt">B</td></tr></tbody>
                   <tfoot>
@@ -1012,7 +1019,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Widths 10/20/30 are deliberately distinct so the combined extent (20 + 4 + 30 = 54) can't be
             // mistaken for either individual row's own extent or the spanning cell's own small natural
             // width, mirroring VerticalTable_RowspanCell_SpansTheCombinedRowAxisExtentOfItsRows's own trick.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 4pt">
                   <thead>
                     <tr>
@@ -1052,7 +1059,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // must flip to false for these segments (BordersDrawHandler.DrawCollapsedSegment's own
             // isHorizontal parameter picks which physical draw primitive to use based on the rect's own
             // shape, not the grid line's topology).
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-collapse: collapse; border-spacing: 0">
                   <tr><td style="width: 30pt; height: 40pt; border: 2pt solid black">A1</td></tr>
                   <tr><td style="width: 30pt; height: 40pt; border: 2pt solid black">A2</td></tr>
@@ -1082,7 +1089,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // is charged to the row-axis-start/-end and column-axis-start/-end physical sides, not always
             // top/bottom/left/right - so a vertical table's own ClientLeft/ClientTop (row-axis-start/
             // column-axis-start) must inset by the resolved outer border, not stay at Location.X/Y.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-collapse: collapse; border-spacing: 0; border: 6pt solid black">
                   <tr><td style="width: 30pt; height: 40pt; border: 6pt solid black">A1</td></tr>
                 </table>
@@ -1116,7 +1123,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // room for vertical-align to move content into - two separate one-row tables, since 'v' and a
             // sibling in the *same* row would be different columns with a naturally-differing column-axis
             // (Y) position of their own, unrelated to vertical-align.
-            var htmlTop = LayoutHarness.Wrap($"""
+            var htmlTop = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; border-spacing: 0">
                   <tr>
                     <td style="width: 100pt; height: 20pt">Wide</td>
@@ -1124,7 +1131,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                   </tr>
                 </table>
                 """);
-            var htmlBottom = LayoutHarness.Wrap($"""
+            var htmlBottom = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; border-spacing: 0">
                   <tr>
                     <td style="width: 100pt; height: 20pt">Wide</td>
@@ -1161,7 +1168,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // produces) and reading an explicit (non-auto) width directly off a box that carries one -
             // the row-axis counterpart of the same two branches GetMaximumBottom already needs for
             // horizontal-tb (see VerticalAlignIntegrationTests' own explicit-height regression test).
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table style="writing-mode: vertical-rl; border-spacing: 0">
                   <tr>
                     <td style="width: 100pt; height: 20pt">Wide</td>
@@ -1201,7 +1208,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // column(s) instead of after them.
             var cells = string.Concat(Enumerable.Range(0, 8)
                 .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <tr>{cells}</tr>
                 </table>
@@ -1232,7 +1239,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // orientation) - both siblings must behave identically.
             var cells = string.Concat(Enumerable.Range(0, 8)
                 .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; border-spacing: 0">
                   <tr>{cells}</tr>
                 </table>
@@ -1284,7 +1291,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // no PageBreakBottoms entry is written.
             var cells = string.Concat(Enumerable.Range(0, 3)
                 .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <tr>{cells}</tr>
                 </table>
@@ -1309,7 +1316,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // must bail out unmodified, leaving even the earlier columns that would otherwise have fit
             // exactly where ordinary (non-relocated) layout placed them - "plan, then commit" means a
             // bail-out anywhere undoes nothing, since nothing was ever applied.
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                   <tr>
                     <td id="c0" style="height:40pt; width:20pt;">0</td>
@@ -1348,7 +1355,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // as every vertical table was before issue #783.
             var cells = string.Concat(Enumerable.Range(0, 8)
                 .Select(i => $"<td id='c{i}' style='height:40pt; width:20pt;'>{i}</td>"));
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <div style="display:flex">
                   <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                     <tr>{cells}</tr>
@@ -1380,7 +1387,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task PlainGridVerticalTable_AutoHeight_InsideADefiniteHeightAncestor_DoesNotShrinkColumnsTowardAPlaceholder()
         {
-            var html = LayoutHarness.Wrap("""
+            var html = UnpaddedWrap("""
                 <div style="height:400pt">
                   <table id="t" style="writing-mode: vertical-rl; border-spacing: 0">
                     <tr><td id="a" style="height:150pt; width:30pt">A</td></tr>
@@ -1413,7 +1420,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // candidates its computed row-axis extent (ActualRight - Location.X) is the maximum of,
             // mirroring CssLayoutEngineTableTests.TrHeight_StretchesEveryCellInTheRow's horizontal-tb
             // counterpart exactly, on the other axis.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; border-spacing: 0">
                   <tr id="row" style="width:80pt">
                     <td id="a" style="height:20pt">x</td>
@@ -1443,7 +1450,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             // min-width only ever raises the row's row-axis extent - a min-width smaller than the
             // content's own required width must not shrink the row below it.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; border-spacing: 0">
                   <tr id="row" style="min-width:1pt"><td style="height:20pt;width:60pt">x</td></tr>
                 </table>
@@ -1467,7 +1474,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // Height, not Width, for the column-axis/inline-size decision on a vertical table) - so it is
             // entirely free to drive the row-axis floor instead, exactly like an ordinary horizontal
             // table's `height` already does for its own (physical-Y) row axis.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; width:200pt; border-spacing: 0">
                   <tr id="row"><td style="height:20pt;width:10pt">x</td></tr>
                 </table>
@@ -1494,7 +1501,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // §17.5.3 makes the table's own row-axis size a maximum-of rule too, mirroring the row/cell
             // carve-out: an explicit width smaller than the rows' real content must never shrink the
             // table's own ActualRight below it.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; width:1pt; border-spacing: 0">
                   <tr><td style="height:20pt;width:60pt">x</td></tr>
                 </table>
@@ -1521,7 +1528,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // each row grows by a share of the surplus proportional to its own natural (pre-redistribution)
             // width, not equally.
             const string style = "border-spacing: 0";
-            var naturalHtml = LayoutHarness.Wrap($"""
+            var naturalHtml = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; {style}">
                   <tr id="short"><td style="height:20pt;width:20pt">s</td></tr>
                   <tr id="tall"><td style="height:20pt;width:60pt">t</td></tr>
@@ -1534,7 +1541,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var naturalTall = naturalTallRow.ActualRight - naturalTallRow.Location.X;
             var naturalTotal = naturalShort + naturalTall;
 
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table style="writing-mode: {writingMode}; width:{naturalTotal + 100}pt; {style}">
                   <tr id="short"><td style="height:20pt;width:20pt">s</td></tr>
                   <tr id="tall"><td style="height:20pt;width:60pt">t</td></tr>
@@ -1561,7 +1568,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             // A rowspan cell spanning both rows must still cover their combined (now wider, via
             // redistribution) row-axis extent - verifying the redo's fresh pass correctly re-closes a
             // spanning cell against the new row geometry rather than the pre-redistribution one.
-            var html = LayoutHarness.Wrap($"""
+            var html = UnpaddedWrap($"""
                 <table id="t" style="writing-mode: {writingMode}; width:200pt; border-spacing: 0">
                   <tr>
                     <td id="span" rowspan="2" style="height:20pt;width:10pt">span</td>
