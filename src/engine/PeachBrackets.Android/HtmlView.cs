@@ -1,3 +1,4 @@
+using System.Threading;
 using Android.Content;
 using Android.Content.Res;
 using Android.OS;
@@ -463,7 +464,7 @@ public sealed partial class HtmlView : FrameLayout
         }
     }
 
-    private static readonly object s_fontsGate = new();
+    private static readonly Lock s_fontsGate = new();
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<SkiaRenderContext, Task> s_fontsLoadedInto = new();
 
     // The height `vh` and a percentage root height resolve against, pinned when a document is loaded so it never follows the content.

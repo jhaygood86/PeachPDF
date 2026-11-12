@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
@@ -10,7 +11,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         // arrive for conversion once per rule. What a WOFF or WOFF2 file converts to depends only on its bytes, so the result is kept, by content, for the next
         // rule that names it. Bounded: when the kept results pass a budget they are dropped and start again.
         private const long CacheBudget = 64L * 1024 * 1024;
-        private static readonly object Gate = new();
+        private static readonly Lock Gate = new();
         private static readonly Dictionary<(int Length, ulong Hash), (byte[] Input, byte[] Output)> Converted = [];
         private static long _convertedBytes;
 

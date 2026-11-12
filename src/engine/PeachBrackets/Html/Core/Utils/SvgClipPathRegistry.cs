@@ -44,7 +44,7 @@ namespace PeachBrackets.Html.Utils
         {
             if (_clipPaths is not null) return;
 
-            _clipPaths = new Dictionary<string, SvgClipPath>(StringComparer.Ordinal);
+            _clipPaths = [with(StringComparer.Ordinal)];
 
             if (container.Root is { } root)
                 Walk(root);

@@ -46,9 +46,9 @@ namespace PeachPDF.Tests.Integration
         {
             var m = Regex.Match(pdf, @"/PatternType 1[\s\S]*?/Matrix \[([^\]]+)\]|/Matrix \[([^\]]+)\][\s\S]*?/PatternType 1");
             Assert.True(m.Success, "no tiling pattern with a matrix");
-            return (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
+            return [.. (m.Groups[1].Success ? m.Groups[1].Value : m.Groups[2].Value)
                 .Split(' ', StringSplitOptions.RemoveEmptyEntries)
-                .Select(n => double.Parse(n, CultureInfo.InvariantCulture)).ToArray();
+                .Select(n => double.Parse(n, CultureInfo.InvariantCulture))];
         }
 
         [Fact]

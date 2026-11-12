@@ -376,10 +376,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// <see cref="SlotsOf"/> cannot tell apart.
         /// </summary>
         private static List<BoxFragment> FragmentsOf(HtmlContainerInt container, CssBox box) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
-                .Where(f => ReferenceEquals(f.Box, box))
-                .ToList();
+                .Where(f => ReferenceEquals(f.Box, box))];
 
         /// <summary>
         /// A pass that <i>declines</i> to place the item — §5.2's margin truncation concluding the break
@@ -447,18 +446,15 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<CssBox> ListItems(CssBox root) =>
-            LayoutHarness.Descendants(root)
-                .Where(b => b.Display.Value == DisplayMode.ListItem)
-                .ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.ListItem)];
 
         private static string? Id(CssBox box) => box.HtmlTag?.TryGetAttribute("id");
 
         /// <summary>The pagination slots <paramref name="box"/> produced a fragment in, in order.</summary>
         private static List<int> SlotsOf(HtmlContainerInt container, CssBox box) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .Where(f => Flatten(f.Root).Any(x => ReferenceEquals(x.Box, box)))
-                .Select(f => f.SlotIndex)
-                .ToList();
+                .Select(f => f.SlotIndex)];
 
         private static Dictionary<CssRect, List<int>> ClaimsByWord(HtmlContainerInt container)
         {

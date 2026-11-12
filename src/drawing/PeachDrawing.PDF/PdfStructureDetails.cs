@@ -46,7 +46,7 @@ namespace PeachDrawing.PDF
         /// <param name="items">the values, in order</param>
         /// <returns>the value</returns>
         public static PdfStructureAttributeValue FromList(IEnumerable<PdfStructureAttributeValue> items) =>
-            new("list", null, (items ?? throw new ArgumentNullException(nameof(items))).ToList());
+            new("list", null, [.. (items ?? throw new ArgumentNullException(nameof(items)))]);
     }
 
     /// <summary>A set of attributes of one owner (<c>Table</c>, <c>List</c>, <c>Layout</c>...) on a structure element.</summary>

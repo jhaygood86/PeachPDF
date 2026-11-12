@@ -31,10 +31,9 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static double[][] AllBounds(string pdfText) =>
-            Regex.Matches(pdfText, @"/Bounds\s*\[([^\]]*)\]")
+            [.. Regex.Matches(pdfText, @"/Bounds\s*\[([^\]]*)\]")
                 .Select(m => m.Groups[1].Value.Split(' ', System.StringSplitOptions.RemoveEmptyEntries)
-                    .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray())
-                .ToArray();
+                    .Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray())];
 
         private static void AssertNonDecreasing(double[][] boundsLists)
         {
@@ -96,7 +95,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             CssImagePainter.ClampStopPositionsToRunningMaximum(positions, 1.0);
 
-            Assert.Equal(new double?[] { 0.4, null, 0.4, null }, positions);
+            Assert.Equal([0.4, null, 0.4, null], positions);
         }
 
         [Fact]

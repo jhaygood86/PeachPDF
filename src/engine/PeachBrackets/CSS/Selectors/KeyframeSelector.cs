@@ -9,7 +9,7 @@ namespace PeachBrackets.Css
 
         public KeyframeSelector(IEnumerable<Percent> stops)
         {
-            _stops = new List<Percent>(stops);
+            _stops = [with(stops)];
         }
 
         public override void ToCss(TextWriter writer, IStyleFormatter formatter)
@@ -42,7 +42,7 @@ namespace PeachBrackets.Css
 
         public PageSelector(IEnumerable<PageSelectorEntry> entries)
         {
-            _entries = new List<PageSelectorEntry>(entries);
+            _entries = [with(entries)];
         }
 
         public IReadOnlyList<PageSelectorEntry> Entries => _entries;

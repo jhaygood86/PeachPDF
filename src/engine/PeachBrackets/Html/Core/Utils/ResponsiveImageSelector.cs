@@ -200,7 +200,7 @@ namespace PeachBrackets.Html.Utils
             if (settings.Policy == ImageSelectionPolicy.HighestDensity)
             {
                 // Stable, so the earliest of equal densities wins as it always has.
-                return all.OrderByDescending(c => c.Choice.Density).ThenBy(c => c.Index).Select(c => c.Choice).ToList();
+                return [.. all.OrderByDescending(c => c.Choice.Density).ThenBy(c => c.Index).Select(c => c.Choice)];
             }
 
             var tolerance = settings.Tolerance >= 1 && double.IsFinite(settings.Tolerance) ? settings.Tolerance : 1.1;
@@ -217,7 +217,7 @@ namespace PeachBrackets.Html.Utils
             var rest = inBudget.Where(c => c.Choice.EffectiveDensity < threshold)
                 .OrderByDescending(c => c.Choice.EffectiveDensity).ThenBy(c => c.Index);
 
-            return sufficient.Concat(rest).Select(c => c.Choice).Concat(overBudget).ToList();
+            return [.. sufficient.Concat(rest).Select(c => c.Choice), .. overBudget];
         }
 
         /// <summary>The width over height given by the <c>&lt;img&gt;</c>'s <c>width</c>/<c>height</c> attributes, or 1 when they give none.</summary>

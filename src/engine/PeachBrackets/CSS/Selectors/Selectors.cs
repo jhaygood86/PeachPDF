@@ -12,7 +12,7 @@ namespace PeachBrackets.Css
 
         protected Selectors()
         {
-            _selectors = new List<ISelector>();
+            _selectors = [];
         }
 
         /// <summary>

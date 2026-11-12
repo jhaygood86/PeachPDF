@@ -38,7 +38,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
             var expected = Texts.Select(OnAFreshThread).ToArray();
 
             // Long before short, short before long, and the same text twice, so every text is broken over the leftovers of another.
-            foreach (var order in new[] { new[] { 2, 1, 0, 4, 3 }, new[] { 5, 4, 5, 1, 6, 0 }, new[] { 0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1, 0 } })
+            foreach (var order in new[] { new[] { 2, 1, 0, 4, 3 }, [5, 4, 5, 1, 6, 0], [0, 1, 2, 3, 4, 5, 6, 7, 6, 5, 4, 3, 2, 1, 0] })
             {
                 foreach (var index in order)
                 {

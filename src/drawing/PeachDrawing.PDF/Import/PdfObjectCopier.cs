@@ -40,22 +40,22 @@ sealed class PdfObjectCopier
     readonly PdfDocument _destination;
 
     // Source objects already copied, by identity, so a shared font is one object in the output.
-    readonly Dictionary<PdfItem, PdfReference> _copied = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<PdfItem, PdfReference> _copied = [with(ReferenceEqualityComparer.Instance)];
 
     // Pages of the source that the output contains: the source page dictionary to the page that stands for it (the first, if copied twice).
-    readonly Dictionary<PdfItem, PdfPage> _pages = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<PdfItem, PdfPage> _pages = [with(ReferenceEqualityComparer.Instance)];
 
     // The field names already used by the destination's form, so merged files whose fields share a name do not become one field.
     readonly HashSet<string> _fieldNames;
 
     // The output name of a named destination of the source, or null when it has none there (its page was not copied, or it is not defined).
     readonly Func<string, string?> _destinationName;
-    readonly HashSet<PdfItem> _fieldRoots = new(ReferenceEqualityComparer.Instance);
+    readonly HashSet<PdfItem> _fieldRoots = [with(ReferenceEqualityComparer.Instance)];
     readonly List<PdfDictionary> _newFieldRoots = [];
 
     // The widgets that were put on a page of the output; the rest of a field's widgets belong to pages that were not taken.
-    readonly HashSet<PdfDictionary> _placedWidgets = new(ReferenceEqualityComparer.Instance);
-    readonly HashSet<PdfItem> _widgetPages = new(ReferenceEqualityComparer.Instance);
+    readonly HashSet<PdfDictionary> _placedWidgets = [with(ReferenceEqualityComparer.Instance)];
+    readonly HashSet<PdfItem> _widgetPages = [with(ReferenceEqualityComparer.Instance)];
 
     public PdfObjectCopier(PdfSourceDocument source, PdfDocument destination, HashSet<string> fieldNames, Func<string, string?>? destinationName = null)
     {

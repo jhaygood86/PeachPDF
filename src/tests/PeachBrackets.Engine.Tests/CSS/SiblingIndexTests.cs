@@ -75,7 +75,7 @@ public class SiblingIndexTests
     }
 
     private static HashSet<int> Where(Func<int, bool> predicate) =>
-        Enumerable.Range(0, Width).Where(predicate).ToHashSet();
+        [.. Enumerable.Range(0, Width).Where(predicate)];
 
     [Fact]
     public async Task NthChild_AnPlusB_MatchesEveryThirdFromTwo() =>
@@ -248,7 +248,7 @@ public class SiblingIndexTests
         var div = Find(narrow, b => b.HtmlTag?.TryGetAttribute("id") == "n")!;
         Assert.Null(SiblingIndex.For(div.Boxes, StringComparison.OrdinalIgnoreCase));
 
-        IReadOnlyList<ICssDomNode> notABoxList = (await WideChildren()).Cast<ICssDomNode>().ToList();
+        IReadOnlyList<ICssDomNode> notABoxList = [.. (await WideChildren()).Cast<ICssDomNode>()];
         Assert.Null(SiblingIndex.For(notABoxList, StringComparison.OrdinalIgnoreCase));
     }
 

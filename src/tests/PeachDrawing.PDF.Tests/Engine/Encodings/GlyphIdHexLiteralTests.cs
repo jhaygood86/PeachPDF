@@ -15,7 +15,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Encodings
     {
         private static string ViaTheLongRoute(IReadOnlyList<PlacedGlyph> glyphs)
         {
-            var text = new string(glyphs.Select(g => (char)g.GlyphIndex).ToArray());
+            var text = new string([.. glyphs.Select(g => (char)g.GlyphIndex)]);
             var bytes = PdfEncoders.RawBigEndianUnicodeEncoding.GetBytes(text);
             bytes = PdfEncoders.FormatStringLiteral(bytes, true, false, true);
 

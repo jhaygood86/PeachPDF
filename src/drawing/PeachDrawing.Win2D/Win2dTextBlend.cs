@@ -81,7 +81,7 @@ internal static class Win2dTextBlend
         var table = CorrectionTable(color, lcd: true);
         var fir = new[] { FirOuter, FirInner, 1 - 2 * FirOuter - 2 * FirInner, FirInner, FirOuter };
         var (r, g, b) = color.ToRgb();
-        var ink = bgrStripes ? new[] { b, g, r } : new[] { r, g, b };
+        var ink = bgrStripes ? new[] { b, g, r } : [r, g, b];
         var width = mask.Width;
         var samples = mask.Samples;
         var rowLength = width * 3;

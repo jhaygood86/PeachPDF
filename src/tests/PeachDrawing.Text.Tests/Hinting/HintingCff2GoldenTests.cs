@@ -279,7 +279,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             if (ndv is null || variations is null || ndv.All(v => v == 0))
                 return glyph => descriptor.GlyphIndexToWidth(glyph);
 
-            var coordinates = new VariationCoordinates(new double[ndv.Length], ndv.Select(v => v / 65536.0).ToArray(), variations.Axes.Select(a => a.Tag).ToArray());
+            var coordinates = new VariationCoordinates(new double[ndv.Length], [.. ndv.Select(v => v / 65536.0)], [.. variations.Axes.Select(a => a.Tag)]);
             return glyph => descriptor.GlyphIndexToWidth(glyph) + FontVariations.Round(variations.GetAdvanceDelta(descriptor.FontFace, glyph, coordinates));
         }
     }

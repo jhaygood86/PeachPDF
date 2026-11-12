@@ -193,7 +193,7 @@ namespace PeachBrackets.Html.Fragmentation
         // column attempt that is redone - and the items were already moved by the first run: measured on a flex
         // item in a multi-column container, the second run moved them by the container's move a second time,
         // from x=20 to x=-158.
-        private static readonly ConditionalWeakTable<BreakToken, StrongBox<PaintPoint>> AppliedOrigins = new();
+        private static readonly ConditionalWeakTable<BreakToken, StrongBox<PaintPoint>> AppliedOrigins = [];
 
         /// <summary>
         /// Moves each of <paramref name="boxes"/> by <paramref name="delta"/> via a direct

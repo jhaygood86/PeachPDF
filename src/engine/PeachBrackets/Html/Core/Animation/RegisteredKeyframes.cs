@@ -31,7 +31,7 @@ namespace PeachBrackets.Html.Animation
 
             // Worked out once, here, from the declarations that survived: a `revert` a later declaration in the same
             // keyframe overrode is not counted.
-            DeclaredNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            DeclaredNames = [with(StringComparer.OrdinalIgnoreCase)];
             foreach (var stop in stops)
             {
                 foreach (var (name, value) in stop.Declarations)
@@ -100,7 +100,7 @@ namespace PeachBrackets.Html.Animation
 
                     // Keyframes at one offset combine; the later declaration of a property wins.
                     if (!byOffset.TryGetValue(offset, out var existing))
-                        byOffset[offset] = existing = new KeyframeStop(offset, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase), null, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+                        byOffset[offset] = existing = new KeyframeStop(offset, [with(StringComparer.OrdinalIgnoreCase)], null, [with(StringComparer.OrdinalIgnoreCase)]);
 
                     var easing = existing.Easing;
                     var composite = existing.Composite;
@@ -137,7 +137,7 @@ namespace PeachBrackets.Html.Animation
                 }
             }
 
-            return new KeyframeSet(byOffset.Values.Where(stop => stop.Declarations.Count > 0 || stop.Easing is not null).ToList());
+            return new KeyframeSet([.. byOffset.Values.Where(stop => stop.Declarations.Count > 0 || stop.Easing is not null)]);
         }
 
         /// <summary>

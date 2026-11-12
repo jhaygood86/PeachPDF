@@ -33,7 +33,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             SvgRenderer.RenderInto(g, document, new Rect(0, 0, 100, 100));
 
             var clip = Assert.Single(g.ClipPaths);
-            return clip.Points.ToArray();
+            return [.. clip.Points];
         }
 
         private static (double MinX, double MinY, double MaxX, double MaxY) Bounds(PaintPoint[] points)

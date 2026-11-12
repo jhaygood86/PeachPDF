@@ -251,7 +251,7 @@ internal sealed class PdfResources : PdfDictionary
     /// <summary>
     /// Maps all PDFsharp resources to their local resource names.
     /// </summary>
-    readonly Dictionary<PdfObject, string> _resources = new Dictionary<PdfObject, string>();
+    readonly Dictionary<PdfObject, string> _resources = [];
 
     /// <summary>
     /// Predefined keys of this dictionary.

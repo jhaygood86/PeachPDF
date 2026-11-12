@@ -21,7 +21,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static string[] WordTexts(CssBox box) =>
-            LayoutHarness.Descendants(box).SelectMany(b => b.Words).Select(w => w.Text).Where(t => !string.IsNullOrEmpty(t)).Select(t => t!).ToArray();
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words).Select(w => w.Text).Where(t => !string.IsNullOrEmpty(t)).Select(t => t!)];
 
         private static int Lines(CssBox box) =>
             box.LineBoxes.Count(line => line.Words.Any(word => !string.IsNullOrEmpty(word.Text)));
@@ -133,7 +133,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task SoftHyphen_IsNotABreakOpportunityOfItsOwn()
         {
             var box = await LayOut("width:400px", "hyphen&shy;ation");
-            var words = box.Words.Count > 0 ? box.Words : LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
+            var words = box.Words.Count > 0 ? box.Words : [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
             Assert.Single(words, w => !string.IsNullOrEmpty(w.Text));
         }

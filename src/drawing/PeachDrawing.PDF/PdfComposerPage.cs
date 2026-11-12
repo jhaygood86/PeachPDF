@@ -23,7 +23,7 @@ namespace PeachDrawing.PDF
         private readonly PdfPage _page;
         private readonly PdfGraphics _graphics;
         private readonly List<PdfCanvas> _canvases = [];
-        private readonly HashSet<string> _customStringDictionaries = new(StringComparer.Ordinal);
+        private readonly HashSet<string> _customStringDictionaries = [with(StringComparer.Ordinal)];
         private static readonly HashSet<string> ReservedPageKeys =
         [
             PdfPage.Keys.Type,
@@ -278,7 +278,7 @@ namespace PeachDrawing.PDF
         private PdfLink Complete(PdfLinkAnnotation annotation, IReadOnlyList<PaintPoint>? quad)
         {
             if (quad is { Count: > 0 } && _composer.Document.Version >= 16)
-                annotation.SetQuadPoints(quad.Select(corner => new PaintPoint(corner.X, HeightPoints - corner.Y)).ToArray());
+                annotation.SetQuadPoints([.. quad.Select(corner => new PaintPoint(corner.X, HeightPoints - corner.Y))]);
 
             return new PdfLink(annotation, this);
         }

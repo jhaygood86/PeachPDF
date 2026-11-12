@@ -74,7 +74,7 @@ namespace PeachDrawing.Text.Internal.Text
                 runs.Add(new Run(start, end, value));
             }
 
-            return runs.ToArray();
+            return [.. runs];
         }
     }
 }

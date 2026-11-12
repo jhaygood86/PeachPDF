@@ -120,7 +120,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Throws<ArgumentNullException>(() => DocumentMerge.Of((Action<IDocumentBuilder>[])null!));
             Assert.Throws<ArgumentNullException>(() => DocumentMerge.Of([null!]));
             Assert.Throws<ArgumentNullException>(() => DocumentMerge.Of(Report("a", 1)).Add(null!));
-            Assert.Equal(1, DocumentMerge.Of((IEnumerable<Action<IDocumentBuilder>>)new[] { Report("a", 1) }).Count);
+            Assert.Equal(1, DocumentMerge.Of((IEnumerable<Action<IDocumentBuilder>>)[Report("a", 1)]).Count);
             Assert.Throws<ArgumentNullException>(() => DocumentMerge.Of((IEnumerable<Action<IDocumentBuilder>>)null!));
         }
 

@@ -8,7 +8,7 @@ namespace PeachBrackets.Css
 {
     internal abstract class StylesheetNode : IStylesheetNode
     {
-        private readonly List<IStylesheetNode> _children = new();
+        private readonly List<IStylesheetNode> _children = [];
 
         protected void ReplaceAll(IStylesheetNode node)
         {

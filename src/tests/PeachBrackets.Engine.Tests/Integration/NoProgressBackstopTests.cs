@@ -466,11 +466,10 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static IReadOnlyList<string> WordsIn(HtmlContainerInt container) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .SelectMany(f => f.Words)
-                .Select(w => w.Word.Text!)
-                .ToList();
+                .Select(w => w.Word.Text!)];
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {

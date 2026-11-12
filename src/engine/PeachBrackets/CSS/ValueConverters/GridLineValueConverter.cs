@@ -15,7 +15,7 @@ namespace PeachBrackets.Css
         public IPropertyValue Convert(IReadOnlyList<Token> value)
         {
             var tokens = value.ToArray();
-            return GridLineGrammar.TryParse(tokens.Where(t => t.Type != TokenType.Whitespace).ToArray()) is null
+            return GridLineGrammar.TryParse([.. tokens.Where(t => t.Type != TokenType.Whitespace)]) is null
                 ? null
                 : new GridLineValue(tokens);
         }

@@ -149,7 +149,7 @@ namespace PeachBrackets.Html
 
                 var subjectOnly = stateful && text.AsSpan().IndexOfAny(" \t\r\n>+~()&[],") < 0;
 
-                return stable && subjects.Count == 0 && !stateful ? Plain : new RuleSharing(stable, subjects.Count > 0 ? subjects.ToArray() : null, stateful, subjectOnly);
+                return stable && subjects.Count == 0 && !stateful ? Plain : new RuleSharing(stable, subjects.Count > 0 ? [.. subjects] : null, stateful, subjectOnly);
             }
         }
 
@@ -323,9 +323,9 @@ namespace PeachBrackets.Html
         {
             // Qualified layer name -> its path of first-appearance indices from the root down (one entry
             // per name segment). Lexicographic comparison of these paths yields the nested layer order.
-            private readonly Dictionary<string, List<int>> _pathKeys = new(StringComparer.Ordinal);
+            private readonly Dictionary<string, List<int>> _pathKeys = [with(StringComparer.Ordinal)];
             // Parent qualified name ("" = top level) -> next child index to hand out (first-appearance order).
-            private readonly Dictionary<string, int> _childCount = new(StringComparer.Ordinal);
+            private readonly Dictionary<string, int> _childCount = [with(StringComparer.Ordinal)];
             private int _anonCounter;
 
             /// <summary>Registers an anonymous <c>@layer { }</c> as a distinct node and returns its unique key.</summary>
@@ -1180,7 +1180,7 @@ namespace PeachBrackets.Html
                 CollectGeneratedContentSubjects(indexed.Rule.Selector, subjects, ref any);
 
                 GeneratesOnAnyElement = any;
-                GeneratedContentSubjects = subjects.Count > 0 ? subjects.ToArray() : null;
+                GeneratedContentSubjects = subjects.Count > 0 ? [.. subjects] : null;
             }
 
             internal IndexedRule Indexed { get; }
@@ -1714,7 +1714,7 @@ namespace PeachBrackets.Html
         internal static void WithoutPseudoElementCreation(Action action)
         {
             var saved = _creationProbe;
-            _creationProbe = new HashSet<string>(StringComparer.Ordinal);
+            _creationProbe = [with(StringComparer.Ordinal)];
             try
             {
                 action();

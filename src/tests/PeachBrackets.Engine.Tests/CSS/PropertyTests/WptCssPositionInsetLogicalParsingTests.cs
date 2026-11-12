@@ -26,15 +26,15 @@ namespace PeachBrackets.Engine.Tests.CSS.PropertyTests
             return rule.Style.GetPropertyValue(property);
         }
 
-        public static readonly TheoryData<string> InsetLonghands = new()
-        {
+        public static readonly TheoryData<string> InsetLonghands =
+        [
             "inset-block-start", "inset-block-end", "inset-inline-start", "inset-inline-end",
-        };
+        ];
 
-        public static readonly TheoryData<string> InsetShorthands = new()
-        {
+        public static readonly TheoryData<string> InsetShorthands =
+        [
             "inset-block", "inset-inline",
-        };
+        ];
 
         // ─── Longhands: 'auto | <length-percentage>' ──────────────────────────────
 

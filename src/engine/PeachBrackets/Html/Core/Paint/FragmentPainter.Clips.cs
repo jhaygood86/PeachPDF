@@ -169,7 +169,7 @@ namespace PeachBrackets.Html.Paint
         }
 
         /// <summary>Memo for <see cref="HasEscapingDescendant"/>: whether a fragment's subtree holds any out-of-flow box.</summary>
-        private readonly Dictionary<BoxFragment, bool> _holdsOutOfFlow = new(ReferenceEqualityComparer.Instance);
+        private readonly Dictionary<BoxFragment, bool> _holdsOutOfFlow = [with(ReferenceEqualityComparer.Instance)];
 
         private bool HoldsOutOfFlowBox(BoxFragment fragment)
         {

@@ -4,7 +4,7 @@ namespace PeachPDF.Tests.PdfEngineTests.Advanced;
 
 public class BgraPixelsTests
 {
-    public static TheoryData<int> Widths() => new() { 0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100 };
+    public static TheoryData<int> Widths() => [0, 1, 2, 3, 7, 8, 9, 15, 16, 17, 31, 32, 33, 100];
 
     [Theory]
     [MemberData(nameof(Widths))]
@@ -85,7 +85,7 @@ public class BgraPixelsTests
         bool anyTransparent = true;
         bool anyPartlyTransparent = true;
 
-        BgraPixels.Classify(new byte[] { 255, 255 }, ref anyTransparent, ref anyPartlyTransparent);
+        BgraPixels.Classify([255, 255], ref anyTransparent, ref anyPartlyTransparent);
 
         Assert.True(anyTransparent);
         Assert.True(anyPartlyTransparent);

@@ -18,14 +18,13 @@ public class StyleContainmentTests
         var html = $"<!DOCTYPE html><html><head><style>{Css}</style></head><body style='margin:0'>{body}</body></html>";
         var (root, _) = await LayoutHarness.LayoutAsync(html);
 
-        return LayoutHarness.Descendants(root)
+        return [.. LayoutHarness.Descendants(root)
             .Where(b => b.IsBeforePseudoElement)
-            .Select(b => string.Concat(LayoutHarness.Descendants(b).Distinct().SelectMany(x => x.Words).Select(w => w.Text)).Trim())
-            .ToList();
+            .Select(b => string.Concat(LayoutHarness.Descendants(b).Distinct().SelectMany(x => x.Words).Select(w => w.Text)).Trim())];
     }
 
     private static int[] Numbers(IEnumerable<string> texts) =>
-        texts.SelectMany(t => System.Text.RegularExpressions.Regex.Matches(t, "[0-9]+").Select(m => int.Parse(m.Value))).ToArray();
+        [.. texts.SelectMany(t => System.Text.RegularExpressions.Regex.Matches(t, "[0-9]+").Select(m => int.Parse(m.Value)))];
 
     [Theory]
     // No containment: one counter all the way through.

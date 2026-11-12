@@ -110,7 +110,7 @@ internal sealed class PdfDecryptor
         input.AddRange(BitConverter.GetBytes(permissions));
         input.AddRange(id);
         if (!encryptMetadata) input.AddRange([0xFF, 0xFF, 0xFF, 0xFF]);
-        var hash = md5.ComputeHash(input.ToArray());
+        var hash = md5.ComputeHash([.. input]);
         for (int i = 0; i < 50; i++) hash = md5.ComputeHash(hash, 0, 16);
         return hash.AsSpan(0, 16).ToArray();
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -30,7 +31,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType.Hvgl
         private readonly void* _hvpm;
         private readonly void* _renderer;
         private readonly uint _glyphCount;
-        private readonly object _gate = new();
+        private readonly Lock _gate = new();
         private int _glyphsSinceClear;
         private bool _disposed;
 

@@ -65,7 +65,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
         _pdfForm = new PdfFormXObject(document, this);
         //_templateSize = size;
         _viewBox = viewBox;
-        PdfRectangle rect = new PdfRectangle(viewBox);
+        PdfRectangle rect = new(viewBox);
         _pdfForm.Elements.SetRectangle(PdfFormXObject.Keys.BBox, rect);
     }
 

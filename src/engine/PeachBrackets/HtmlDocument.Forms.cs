@@ -345,7 +345,7 @@ public sealed partial class HtmlDocument
             return;
 
         if (!_formChanges.TryGetValue(tag.SourceOrdinal, out var changes))
-            _formChanges[tag.SourceOrdinal] = changes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            _formChanges[tag.SourceOrdinal] = changes = [with(StringComparer.OrdinalIgnoreCase)];
 
         changes[name] = value;
 

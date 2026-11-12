@@ -48,7 +48,7 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
         if (id is null || id.Length != 16)
             return Guid.Empty;
 
-        StringBuilder guid = new StringBuilder();
+        StringBuilder guid = new();
         for (int idx = 0; idx < 16; idx++)
             guid.AppendFormat("{0:X2}", (byte)id[idx]);
 
@@ -185,7 +185,7 @@ internal sealed class PdfInternals  // TODO: PdfDocumentInternals... PdfPageInte
     public void WriteObject(Stream stream, PdfItem item)
     {
         // Never write an encrypted object
-        PdfWriter writer = new PdfWriter(stream);
+        PdfWriter writer = new(stream);
         writer.Options = PdfWriterOptions.OmitStream;
         item.WriteObject(writer);
     }

@@ -34,7 +34,7 @@ namespace PeachDrawing.Text.Brotli.Internal
 
 		private readonly int[] intBuffer = new int[IntBufferSize];
 
-		private readonly PeachDrawing.Text.Brotli.Internal.IntReader intReader = new PeachDrawing.Text.Brotli.Internal.IntReader();
+		private readonly PeachDrawing.Text.Brotli.Internal.IntReader intReader = new();
 
 		private System.IO.Stream input;
 

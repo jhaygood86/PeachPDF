@@ -42,14 +42,14 @@ namespace PeachBrackets.Css
     {
         /// <summary>The keywords, each with the K it is defined to equal (css-borders-4 §3.7).</summary>
         private static readonly (string Keyword, double K)[] Keywords =
-        {
+        [
             ("round", 1d),
             ("scoop", -1d),
             ("bevel", 0d),
             ("notch", double.NegativeInfinity),
             ("square", double.PositiveInfinity),
             ("squircle", 2d),
-        };
+        ];
 
         /// <summary>The initial value, <c>round</c>.</summary>
         public const string Initial = "round";

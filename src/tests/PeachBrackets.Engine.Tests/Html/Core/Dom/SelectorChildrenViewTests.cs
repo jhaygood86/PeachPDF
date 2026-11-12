@@ -10,7 +10,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom;
 /// </summary>
 public class SelectorChildrenViewTests
 {
-    private static CssBox Element(CssBox parent, string tag) => new(parent, new HtmlTag(tag, false, new Dictionary<string, string>()));
+    private static CssBox Element(CssBox parent, string tag) => new(parent, new HtmlTag(tag, false, []));
 
     private static CssBox Parent(int elements)
     {

@@ -209,7 +209,7 @@ namespace PeachBrackets.Html
                 }
             }
             items.Add(value[start..].Trim());
-            return items.Where(item => item.Length > 0).ToArray();
+            return [.. items.Where(item => item.Length > 0)];
         }
 
         private static bool BaseTypeMatches(string type, string value, CssValueParser valueParser, bool forInitialValue)

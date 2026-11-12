@@ -56,7 +56,7 @@ namespace PeachBrackets.Css
                 ? new TokenValue(widthTokens)
                 : new TokenValue(widthTokens.Concat(heightTokens));
 
-            return new ShorthandValue(new List<Token>(widthTokens), new List<Token>(heightTokens), original);
+            return new ShorthandValue([with(widthTokens)], [with(heightTokens)], original);
         }
 
         private sealed class ShorthandValue : IPropertyValue

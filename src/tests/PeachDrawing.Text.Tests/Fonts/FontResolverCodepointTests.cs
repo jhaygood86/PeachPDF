@@ -85,7 +85,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         /// ships "Noto Sans Cuneiform"; Windows ships "Segoe UI Historic") - a fixed hex range that
         /// merely "looked broad" was not actually safe against them.
         /// </summary>
-        private static List<RuneInterval> FullCuneiformRanges() => ScriptTable.RangesForScript("Cuneiform").ToList();
+        private static List<RuneInterval> FullCuneiformRanges() => [.. ScriptTable.RangesForScript("Cuneiform")];
 
         [Fact]
         public void FindFamilyCoveringCodepoint_FindsRegisteredFamily_NotJustTheDeclaredStack()

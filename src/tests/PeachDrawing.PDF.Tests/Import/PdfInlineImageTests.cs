@@ -6,7 +6,7 @@ namespace PeachDrawing.PDF.Tests.Import
     /// <summary>Inline images (<c>BI</c> ... <c>ID</c> ... <c>EI</c>) in a content stream: the picture is drawn and the stream carries on after it.</summary>
     public class PdfInlineImageTests
     {
-        private static string Bytes(params int[] values) => new(values.Select(v => (char)v).ToArray());
+        private static string Bytes(params int[] values) => new([.. values.Select(v => (char)v)]);
 
         private static (byte R, byte G, byte B, byte A) At(string content, int x, int yFromTop, out IReadOnlyCollection<string> unsupported)
         {

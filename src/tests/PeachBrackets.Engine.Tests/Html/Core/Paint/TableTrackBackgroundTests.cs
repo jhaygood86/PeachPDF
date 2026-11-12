@@ -39,7 +39,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Paint
         }
 
         private static List<Rect> Fills(IEnumerable<PaintOp> log) =>
-            log.Where(op => op.Kind == PaintOpKind.FillRect).Select(op => op.Bounds).ToList();
+            [.. log.Where(op => op.Kind == PaintOpKind.FillRect).Select(op => op.Bounds)];
 
         private static bool Same(Rect a, Rect b) =>
             Math.Abs(a.X - b.X) < 0.01 && Math.Abs(a.Y - b.Y) < 0.01
@@ -89,7 +89,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Paint
                 "<tr style='background:#cde'><td>r1</td></tr><tr><td>r2</td></tr></table>");
 
             var a = RectOf(root, "a");
-            var overA = Distinct(Fills(log).Where(f => Rect.Intersect(f, a) is { Width: > 0.01, Height: > 0.01 }).ToList());
+            var overA = Distinct([.. Fills(log).Where(f => Rect.Intersect(f, a) is { Width: > 0.01, Height: > 0.01 })]);
 
             // Only a's own fill lands on a: the stripe on the second row stays behind r1.
             Assert.Single(overA);

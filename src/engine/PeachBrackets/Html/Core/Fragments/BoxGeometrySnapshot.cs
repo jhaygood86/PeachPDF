@@ -30,7 +30,7 @@ namespace PeachBrackets.Html.Fragments
             internal PaintPoint Location { get; set; }
             internal double ActualRight { get; set; }
             internal double ActualBottom { get; set; }
-            internal Dictionary<CssLineBox, Rect> Rectangles { get; } = new(rectangleCapacity);
+            internal Dictionary<CssLineBox, Rect> Rectangles { get; } = [with(rectangleCapacity)];
 
             /// <summary>
             /// Where each of the box's words sat, or null for one that belongs to the <i>next</i>
@@ -45,7 +45,7 @@ namespace PeachBrackets.Html.Fragments
             /// time instead: by then the resumed pass has re-placed the word and cleared the flag, while this
             /// snapshot still holds where it used to be.
             /// </remarks>
-            internal List<PaintPoint?> WordOrigins { get; } = new(wordCapacity);
+            internal List<PaintPoint?> WordOrigins { get; } = [with(wordCapacity)];
 
             internal Rect Bounds => Rect.FromLTRB(Location.X, Location.Y, ActualRight, ActualBottom);
         }

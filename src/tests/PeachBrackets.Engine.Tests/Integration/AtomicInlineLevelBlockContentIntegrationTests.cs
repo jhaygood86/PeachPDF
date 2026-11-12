@@ -575,7 +575,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<string?> CollectWords(CssBox box) =>
-            EnumerateBoxes(box).SelectMany(b => b.Words.Select(w => w.Text)).ToList();
+            [.. EnumerateBoxes(box).SelectMany(b => b.Words.Select(w => w.Text))];
 
         private static CssRect FindWord(CssBox box, string text)
         {

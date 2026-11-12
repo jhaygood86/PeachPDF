@@ -80,7 +80,7 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         private sealed class ChildIndex
         {
-            private static readonly ConditionalWeakTable<List<CssBox>, ChildIndex> Cache = new();
+            private static readonly ConditionalWeakTable<List<CssBox>, ChildIndex> Cache = [];
 
             private readonly int _count;
             private readonly CssBox? _first;

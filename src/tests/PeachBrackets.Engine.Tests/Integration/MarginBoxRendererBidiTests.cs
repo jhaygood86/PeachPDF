@@ -20,7 +20,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             var result = MarginBoxRenderer.ResolveBidiText(hebrew, style, null, out var logicalText);
 
-            var expected = new string(hebrew.Reverse().ToArray());
+            var expected = new string([.. hebrew.Reverse()]);
             Assert.Equal(expected, result);
             // The whole string is a single RTL run (surrounding neutrals resolve to R), so it's a pure
             // whole-string reversal - the caller can recover the true logical-order source for ToUnicode
@@ -53,7 +53,7 @@ namespace PeachBrackets.Engine.Tests.Integration
 
             var result = MarginBoxRenderer.ResolveBidiText(hebrew, marginStyle, pageStyle, out var logicalText);
 
-            var expected = new string(hebrew.Reverse().ToArray());
+            var expected = new string([.. hebrew.Reverse()]);
             Assert.Equal(expected, result);
             Assert.Equal(expected, logicalText);
         }

@@ -118,7 +118,7 @@ internal sealed class PdfGraphicsState
 
                 case DashStyle.Custom:
                     {
-                        StringBuilder pdf = new StringBuilder("[", 256);
+                        StringBuilder pdf = new("[", 256);
                         int len = pen.DashPattern.Length;
                         for (int idx = 0; idx < len; idx++)
                         {
@@ -262,7 +262,7 @@ internal sealed class PdfGraphicsState
                 PaintPoint origin = Map(0, 0), unitX = Map(1, 0), unitY = Map(0, 1);
                 Matrix3x2 matrix = PdfMatrix.Create(unitX.X - origin.X, unitX.Y - origin.Y, unitY.X - origin.X, unitY.Y - origin.Y, origin.X, origin.Y);
 
-                PdfTilingPattern pattern = new PdfTilingPattern(_renderer.Owner);
+                PdfTilingPattern pattern = new(_renderer.Owner);
                 pattern.SetupFromBrush(tilingBrush, matrix);
                 string name = _renderer.Resources.AddPattern(pattern);
 
@@ -290,7 +290,7 @@ internal sealed class PdfGraphicsState
                 Debug.Assert(UnrealizedCtm.IsIdentity, "Must realize ctm first.");
                 Matrix3x2 matrix = _renderer.DefaultViewMatrix;
                 matrix = EffectiveCtm * matrix;
-                PdfShadingPattern pattern = new PdfShadingPattern(_renderer.Owner);
+                PdfShadingPattern pattern = new(_renderer.Owner);
                 pattern.SetupFromBrush(brush, matrix, _renderer);
                 string name = _renderer.Resources.AddPattern(pattern);
 

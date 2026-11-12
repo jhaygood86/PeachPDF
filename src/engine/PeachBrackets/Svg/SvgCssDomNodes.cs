@@ -66,7 +66,7 @@ namespace PeachBrackets.Svg
                 : new SvgCssBoxDomNode(box.ParentBox, svgRoot);
 
         public IReadOnlyList<ICssDomNode> Children =>
-            box.Boxes.Select(ICssDomNode (b) => new SvgCssBoxDomNode(b, svgRoot)).ToList();
+            [.. box.Boxes.Select(ICssDomNode (b) => new SvgCssBoxDomNode(b, svgRoot))];
 
         public bool IsRoot => false;
 
@@ -112,7 +112,7 @@ namespace PeachBrackets.Svg
                 : new SvgXmlDomNode(element.Parent, svgRoot);
 
         public IReadOnlyList<ICssDomNode> Children =>
-            element.Elements().Select(ICssDomNode (e) => new SvgXmlDomNode(e, svgRoot)).ToList();
+            [.. element.Elements().Select(ICssDomNode (e) => new SvgXmlDomNode(e, svgRoot))];
 
         public bool IsRoot => false;
 
@@ -291,7 +291,7 @@ namespace PeachBrackets.Svg
             Dictionary<string, string>? own = null;
             if (inherited is not null)
             {
-                own = new Dictionary<string, string>(inherited);
+                own = [with(inherited)];
                 if (registered is { Count: > 0 })
                     foreach (var (name, reg) in registered)
                         if (!reg.Inherits)
@@ -303,12 +303,12 @@ namespace PeachBrackets.Svg
                 foreach (var rule in cssData.GetAuthorStyleRules(MediaQueryContext.TypeOnly(media), node))
                     foreach (var property in rule.Style)
                         if (property.Name.StartsWith("--", StringComparison.Ordinal))
-                            (own ??= new Dictionary<string, string>())[property.Name] = property.Value;
+                            (own ??= [])[property.Name] = property.Value;
             }
 
             foreach (var (name, value) in SvgValueParsers.ParseStyleDeclarations(node.GetAttribute("style")))
                 if (name.StartsWith("--", StringComparison.Ordinal))
-                    (own ??= new Dictionary<string, string>())[name] = value;
+                    (own ??= [])[name] = value;
 
             node.CustomProperties = own;
 

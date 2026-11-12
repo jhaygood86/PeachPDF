@@ -43,7 +43,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             </table>");
 
         private static List<CssBox> RowsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow)];
 
         private static CssBox TableOf(CssBox root) =>
             LayoutHarness.Descendants(root).First(b => b.Display.Value == DisplayMode.Table);

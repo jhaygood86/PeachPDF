@@ -15,7 +15,7 @@ namespace PeachBrackets.Html.Dom
     {
         private static readonly FrozenSet<string> PhysicalEdgeNames = BuildPhysicalEdgeNames();
 
-        private readonly Dictionary<string, int> _stamps = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, int> _stamps = [with(StringComparer.Ordinal)];
         private int _next;
 
         internal static bool IsPhysicalEdgeName(string propName) => PhysicalEdgeNames.Contains(propName);

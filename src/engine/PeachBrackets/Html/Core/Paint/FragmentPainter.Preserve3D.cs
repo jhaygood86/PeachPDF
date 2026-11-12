@@ -73,9 +73,9 @@ namespace PeachBrackets.Html.Paint
             if (_composedContexts?.Contains(root) == true)
                 return true;
 
-            var planes = _planeScratch ?? new List<Plane>(16);
+            var planes = _planeScratch ?? [with(16)];
             _planeScratch = null;
-            var members = _contextMembers ??= new HashSet<BoxFragment>(ReferenceEqualityComparer.Instance);
+            var members = _contextMembers ??= [with(ReferenceEqualityComparer.Instance)];
 
             try
             {
@@ -89,7 +89,7 @@ namespace PeachBrackets.Html.Paint
                 if (!ComposeContext(g, CollectionsMarshal.AsSpan(planes)))
                     return false;
 
-                (_composedContexts ??= new HashSet<BoxFragment>(ReferenceEqualityComparer.Instance)).Add(root);
+                (_composedContexts ??= [with(ReferenceEqualityComparer.Instance)]).Add(root);
                 return true;
             }
             finally

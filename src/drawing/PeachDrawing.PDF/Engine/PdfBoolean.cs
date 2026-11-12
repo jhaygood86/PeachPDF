@@ -38,12 +38,12 @@ internal sealed class PdfBoolean : PdfItem
     /// <summary>
     /// A pre-defined value that represents <c>true</c>.
     /// </summary>
-    public static readonly PdfBoolean True = new PdfBoolean(true);
+    public static readonly PdfBoolean True = new(true);
 
     /// <summary>
     /// A pre-defined value that represents <c>false</c>.
     /// </summary>
-    public static readonly PdfBoolean False = new PdfBoolean(false);
+    public static readonly PdfBoolean False = new(false);
 
     /// <summary>
     /// Returns 'false' or 'true'.

@@ -153,7 +153,7 @@ public sealed partial class HtmlDocument
         else tag.SetAttribute(name, value);
 
         if (!_attributeChanges.TryGetValue(tag.SourceOrdinal, out var changes))
-            _attributeChanges[tag.SourceOrdinal] = changes = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            _attributeChanges[tag.SourceOrdinal] = changes = [with(StringComparer.OrdinalIgnoreCase)];
 
         changes[name] = value;
         return await RestyleAsync([tag.SourceOrdinal], measuringCanvas);
@@ -213,7 +213,7 @@ public sealed partial class HtmlDocument
         foreach (var (ordinal, values) in _attributeChanges)
         {
             if (!merged.TryGetValue(ordinal, out var into))
-                merged[ordinal] = into = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+                merged[ordinal] = into = [with(StringComparer.OrdinalIgnoreCase)];
 
             foreach (var (name, value) in values)
                 into[name] = value;

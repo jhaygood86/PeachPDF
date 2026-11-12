@@ -86,8 +86,8 @@ namespace PeachBrackets.Engine.Tests.MathML
             var document = $"<!DOCTYPE html><html lang='en'><body style='margin: 0'>{html}</body></html>";
             List<string> asSource = [], asBoxes = [];
 
-            await WithMathsAsync(document, maths => asSource = maths.Select(Dump).ToList());
-            await WithMathsAsync(document, maths => asBoxes = maths.Select(Dump).ToList(), asBoxes: true);
+            await WithMathsAsync(document, maths => asSource = [.. maths.Select(Dump)]);
+            await WithMathsAsync(document, maths => asBoxes = [.. maths.Select(Dump)], asBoxes: true);
 
             Assert.True(asBoxes.SequenceEqual(asSource), $"'{name}': {string.Join(" | ", asBoxes)} != {string.Join(" | ", asSource)}");
         }
@@ -339,7 +339,7 @@ namespace PeachBrackets.Engine.Tests.MathML
             Assert.Equal(fromBoxes.PaintColor, fromSource.PaintColor);
             Assert.Equal(fromBoxes.FontSizePt, fromSource.FontSizePt);
             Assert.Equal(fromBoxes.GetAttribute("mathvariant"), fromSource.GetAttribute("mathvariant"));
-            Assert.Equal(fromBoxes.Attributes.ToList(), fromSource.Attributes.ToList());
+            Assert.Equal(fromBoxes.Attributes.ToList(), [.. fromSource.Attributes]);
             Assert.Equal(fromBoxes.GetFontAtSize(10).Size, fromSource.GetFontAtSize(10).Size);
             Assert.Equal(fromBoxes.GetTextContent(), fromSource.GetTextContent());
         }

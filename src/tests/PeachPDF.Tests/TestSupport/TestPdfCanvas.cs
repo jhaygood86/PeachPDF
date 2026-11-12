@@ -37,7 +37,7 @@ namespace PeachPDF.Tests.TestSupport
         // scheme still resolves to null, preserving the existing "no real network access" behavior
         // other tests rely on.
         public override ValueTask<RNetworkResponse?> GetResourceStream(Uri uri) =>
-            new ValueTask<RNetworkResponse?>(uri.Scheme == "data" ? new RNetworkResponse(new MemoryStream([0]), null) : null);
+            new(uri.Scheme == "data" ? new RNetworkResponse(new MemoryStream([0]), null) : null);
 
         protected override PaintColor GetColorInt(string colorName) => PaintColor.Black;
 
@@ -59,9 +59,9 @@ namespace PeachPDF.Tests.TestSupport
 
         protected override bool FamilyHasExplicitUnicodeRangesInt(string family) => false;
 
-        protected override ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new ValueTask<bool>(false);
+        protected override ValueTask<bool> AddFontFromStream(string fontFamilyName, Stream stream, string? format, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new(false);
 
-        protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new ValueTask<bool>(false);
+        protected override ValueTask<bool> AddLocalFont(string fontFamilyName, string localFontFaceName, FontFaceDescriptors descriptors = default, IReadOnlyList<PeachDrawing.Text.RuneInterval>? unicodeRanges = null) => new(false);
     }
 
     /// <summary>A fixed-size image, independent of any real pixel decoding - see ImageFromStreamInt's
@@ -478,7 +478,7 @@ namespace PeachPDF.Tests.TestSupport
         public override void PushClipExclude(Rect rect) { }
         public override void PushBlendMode(PaintBlendMode mode) => Log.Add(new PushBlendModeCall(mode));
         public override void PopBlendMode() => Log.Add(new PopBlendModeCall());
-        public override object SetAntiAliasSmoothingMode() => new object();
+        public override object SetAntiAliasSmoothingMode() => new();
         public override void ReturnPreviousSmoothingMode(object? prevMode) { }
         public override GraphicsPath GetGraphicsPath() => new TestGraphicsPath();
 

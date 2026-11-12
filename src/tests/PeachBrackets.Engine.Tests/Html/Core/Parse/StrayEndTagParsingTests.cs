@@ -129,17 +129,15 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
         /// <c>element.children</c>, which is what the Chrome runs these are checked against report.
         /// </summary>
         private static List<string> ChildElementsOf(string bodyHtml, string id = "t") =>
-            FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), id)!
+            [.. FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), id)!
                 .Boxes
                 .Where(b => b.HtmlTag is not null)
-                .Select(b => b.HtmlTag!.Name.ToLowerInvariant())
-                .ToList();
+                .Select(b => b.HtmlTag!.Name.ToLowerInvariant())];
 
         private static List<CssBox> ParagraphsOf(string bodyHtml) =>
-            FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), "t")!
+            [.. FindById(HtmlParser.ParseDocument($"<!DOCTYPE html><html><body>{bodyHtml}</body></html>"), "t")!
                 .Boxes
-                .Where(b => b.HtmlTag?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true)
-                .ToList();
+                .Where(b => b.HtmlTag?.Name.Equals("p", StringComparison.OrdinalIgnoreCase) == true)];
 
         private static CssBox? FindById(CssBox box, string id)
         {

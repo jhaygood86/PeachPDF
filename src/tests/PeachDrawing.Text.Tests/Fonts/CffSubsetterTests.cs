@@ -35,9 +35,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             // The checked-in CFF is itself the small output of the original real-font
             // subset. Its unused glyphs are one-byte endchar programs; retain the glyphs
             // that still have outlines so repeated subsetting exercises real charstrings.
-            return Enumerable.Range(0, charStrings.Count)
-                .Where(glyph => charStrings[glyph].Length > 1)
-                .ToArray();
+            return [.. Enumerable.Range(0, charStrings.Count).Where(glyph => charStrings[glyph].Length > 1)];
         }
 
         [Fact]
@@ -91,7 +89,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         {
             var cff = LoadCff();
             var original = new CffTable(cff, 0);
-            var subset = CffSubsetter.Subset(cff, NonEmptyGlyphs(original.CharStrings).Take(1).ToArray());
+            var subset = CffSubsetter.Subset(cff, [.. NonEmptyGlyphs(original.CharStrings).Take(1)]);
 
             Assert.NotNull(subset);
 

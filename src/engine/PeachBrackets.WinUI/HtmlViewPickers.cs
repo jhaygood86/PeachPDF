@@ -41,19 +41,19 @@ internal static class HtmlViewPickers
 
             var mapped = token.ToLowerInvariant() switch
             {
-                "image/*" => new[] { ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff" },
-                "audio/*" => new[] { ".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac" },
-                "video/*" => new[] { ".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v" },
-                "text/*" => new[] { ".txt", ".csv", ".html", ".md" },
-                "image/png" => new[] { ".png" },
-                "image/jpeg" => new[] { ".jpg", ".jpeg" },
-                "image/gif" => new[] { ".gif" },
-                "image/webp" => new[] { ".webp" },
-                "application/pdf" => new[] { ".pdf" },
-                "application/json" => new[] { ".json" },
-                "text/plain" => new[] { ".txt" },
-                "text/csv" => new[] { ".csv" },
-                "text/html" => new[] { ".html", ".htm" },
+                "image/*" => [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".svg", ".tif", ".tiff"],
+                "audio/*" => [".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac"],
+                "video/*" => [".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v"],
+                "text/*" => [".txt", ".csv", ".html", ".md"],
+                "image/png" => [".png"],
+                "image/jpeg" => [".jpg", ".jpeg"],
+                "image/gif" => [".gif"],
+                "image/webp" => [".webp"],
+                "application/pdf" => [".pdf"],
+                "application/json" => [".json"],
+                "text/plain" => [".txt"],
+                "text/csv" => [".csv"],
+                "text/html" => [".html", ".htm"],
                 _ => Array.Empty<string>(),
             };
             extensions.AddRange(mapped);

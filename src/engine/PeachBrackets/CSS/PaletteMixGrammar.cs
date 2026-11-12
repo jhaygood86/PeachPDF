@@ -34,7 +34,7 @@ namespace PeachBrackets.Css
             if (SinglePaletteMixFunction(value) is not { } fn)
                 return null;
 
-            var groups = SplitTopLevelComma(new List<Token>(fn.ArgumentTokens));
+            var groups = SplitTopLevelComma([with(fn.ArgumentTokens)]);
             if (groups.Count != 3)
                 return null;
 
@@ -136,7 +136,7 @@ namespace PeachBrackets.Css
                 if (token.Type == TokenType.Whitespace)
                     continue;
                 if (token.Type == TokenType.Comma)
-                    groups.Add(new List<Token>());
+                    groups.Add([]);
                 else
                     groups[^1].Add(token);
             }

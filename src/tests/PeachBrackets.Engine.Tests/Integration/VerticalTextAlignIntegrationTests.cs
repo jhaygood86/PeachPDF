@@ -19,7 +19,7 @@ namespace PeachBrackets.Engine.Tests.Integration
     public class VerticalTextAlignIntegrationTests
     {
         private static List<CssRect> Words(CssBox el) =>
-            el.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && !w.IsSpaces).ToList();
+            [.. el.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak && !w.IsSpaces)];
 
         [Theory]
         [InlineData("left", false)]

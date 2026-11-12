@@ -27,14 +27,13 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static string[] WordTexts(CssBox box) =>
-            LayoutHarness.Descendants(box).SelectMany(b => b.Words).Select(w => w.Text).Where(t => !string.IsNullOrEmpty(t)).Select(t => t!).ToArray();
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words).Select(w => w.Text).Where(t => !string.IsNullOrEmpty(t)).Select(t => t!)];
 
         /// <summary>The text of each line, top to bottom.</summary>
         private static string[] LineTexts(CssBox box) =>
-            box.LineBoxes
+            [.. box.LineBoxes
                 .Select(line => string.Concat(line.Words.Select(word => word.Text)))
-                .Where(text => text.Length > 0)
-                .ToArray();
+                .Where(text => text.Length > 0)];
 
         private const string Style = "font-family:LineBreakTest; font-size:16pt; width:50pt; ";
 

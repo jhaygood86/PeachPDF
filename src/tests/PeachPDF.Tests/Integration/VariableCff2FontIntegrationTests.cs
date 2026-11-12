@@ -80,7 +80,7 @@ body {{ font-family: 'VC'; font-size: 24pt; }}
         private static IEnumerable<string> Tables(byte[] font)
         {
             int count = (font[4] << 8) | font[5];
-            return Enumerable.Range(0, count).Select(i => Encoding.ASCII.GetString(font, 12 + i * 16, 4)).ToArray();
+            return [.. Enumerable.Range(0, count).Select(i => Encoding.ASCII.GetString(font, 12 + i * 16, 4))];
         }
 
         [Fact]

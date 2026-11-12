@@ -303,7 +303,7 @@ public sealed partial class SvgCanvas : Canvas
     public override void PopBlendMode() => Pop(OpenKind.Blend);
 
     /// <inheritdoc/>
-    public override object SetAntiAliasSmoothingMode() => new object();
+    public override object SetAntiAliasSmoothingMode() => new();
 
     /// <inheritdoc/>
     public override void ReturnPreviousSmoothingMode(object? prevMode)

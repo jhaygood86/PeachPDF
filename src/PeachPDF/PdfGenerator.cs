@@ -115,7 +115,7 @@ namespace PeachPDF
             List<RuneInterval>? ranges = null;
             if (unicodeRanges is not null)
             {
-                ranges = new List<RuneInterval>(unicodeRanges.Count);
+                ranges = [with(unicodeRanges.Count)];
                 foreach (var range in unicodeRanges)
                     ranges.Add(new RuneInterval(range.Start, range.End));
             }

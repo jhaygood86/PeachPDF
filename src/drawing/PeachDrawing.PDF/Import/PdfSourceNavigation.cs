@@ -29,7 +29,7 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
         if (page is null) return -1;
         if (_pageIndexes is null)
         {
-            _pageIndexes = new Dictionary<PdfDictionary, int>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>);
+            _pageIndexes = [with(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>)];
             for (int i = 0; i < doc.Pages.Count; i++) _pageIndexes[doc.Pages[i]] = i;
         }
         return _pageIndexes.TryGetValue(page, out var index) ? index : -1;
@@ -111,7 +111,7 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
     Dictionary<string, PdfSourceDestination> Named()
     {
         if (_named is not null) return _named;
-        _named = new Dictionary<string, PdfSourceDestination>(StringComparer.Ordinal);
+        _named = [with(StringComparer.Ordinal)];
         if (Catalog is not { } catalog) return _named;
 
         if (doc.DictOf(catalog, "Names") is { } names && doc.DictOf(names, "Dests") is { } tree)
@@ -208,7 +208,7 @@ internal sealed class PdfSourceNavigation(PdfSourceDocument doc)
     {
         var entries = new List<PdfBookmark>();
         if (Catalog is { } catalog && doc.DictOf(catalog, "Outlines") is { } root)
-            WalkOutline(doc.Resolve(root.GetRaw("First")) as PdfDictionary, 1, entries, new HashSet<PdfDictionary>(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>));
+            WalkOutline(doc.Resolve(root.GetRaw("First")) as PdfDictionary, 1, entries, [with(ReferenceEqualityComparer.Instance as IEqualityComparer<PdfDictionary>)]);
         return entries;
     }
 

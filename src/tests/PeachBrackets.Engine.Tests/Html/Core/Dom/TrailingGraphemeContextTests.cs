@@ -48,7 +48,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
             var random = new Random(11);
             char[] alphabet = ['a', 'b', 'Z', '0', '9', ' ', '-', '.', '\t', '\r', '\n', '́', '‍', 'é', '\uD83D', '\uDE00'];
 
-            string Make() => new(Enumerable.Range(0, random.Next(0, 6)).Select(_ => alphabet[random.Next(alphabet.Length)]).ToArray());
+            string Make() => new([.. Enumerable.Range(0, random.Next(0, 6)).Select(_ => alphabet[random.Next(alphabet.Length)])]);
 
             for (var i = 0; i < 2000; i++)
             {

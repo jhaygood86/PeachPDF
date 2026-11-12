@@ -19,7 +19,7 @@ namespace PeachBrackets.Html.Utils
     /// </summary>
     internal static class FloatShapeOutline
     {
-        private static readonly ConditionalWeakTable<CssBox, Outline> Cache = new();
+        private static readonly ConditionalWeakTable<CssBox, Outline> Cache = [];
 
         /// <summary>Whether <paramref name="floatBox"/> declares a shape other than <c>none</c>.</summary>
         public static bool HasShape(CssBox floatBox) =>

@@ -5,6 +5,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Text;
 using PeachDrawing.Text.Unicode;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -33,7 +34,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
 {
     private readonly FontSet _fontSet;
     private int _syncedFontVersion = -1;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private bool _deviceIsOurs;
     private readonly Win2dTextEngine _textEngine;
     private readonly Win2dImageCodec _imageCodec;

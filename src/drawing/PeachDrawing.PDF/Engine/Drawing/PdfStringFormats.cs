@@ -28,7 +28,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Near;
             format.LineAlignment = PdfLineAlignment.BaseLine;
             return format;
@@ -43,7 +43,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Near;
             format.LineAlignment = PdfLineAlignment.Near;
             return format;
@@ -58,7 +58,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Near;
             format.LineAlignment = PdfLineAlignment.Center;
             return format;
@@ -73,7 +73,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Near;
             format.LineAlignment = PdfLineAlignment.Far;
             return format;
@@ -88,7 +88,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Center;
             format.LineAlignment = PdfLineAlignment.Near;
             return format;
@@ -103,7 +103,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Center;
             format.LineAlignment = PdfLineAlignment.Center;
             return format;
@@ -118,7 +118,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Center;
             format.LineAlignment = PdfLineAlignment.Far;
             return format;
@@ -133,7 +133,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Far;
             format.LineAlignment = PdfLineAlignment.Near;
             return format;
@@ -148,7 +148,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Far;
             format.LineAlignment = PdfLineAlignment.Center;
             return format;
@@ -163,7 +163,7 @@ internal static class PdfStringFormats
         get
         {
             // Create new format to allow changes.
-            PdfStringFormat format = new PdfStringFormat();
+            PdfStringFormat format = new();
             format.Alignment = PdfStringAlignment.Far;
             format.LineAlignment = PdfLineAlignment.Far;
             return format;

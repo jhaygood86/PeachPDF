@@ -163,7 +163,7 @@ namespace PeachPDF.Tests.TestSupport
                 {
                     PdfName name => [name.Value],
                     PdfArr array => array.Resolved.OfType<PdfName>().Select(n => n.Value).ToList(),
-                    _ => new List<string>(),
+                    _ => [],
                 };
 
                 var data = StoredBytes;
@@ -266,7 +266,7 @@ namespace PeachPDF.Tests.TestSupport
         private static double[] Box(PdfDict page)
         {
             var box = page.Array("/MediaBox") ?? (PdfArr?)Inherited(page, "/MediaBox");
-            return box is null ? [0, 0, 0, 0] : box.Resolved.Select(v => ((PdfNumber)v).Value).ToArray();
+            return box is null ? [0, 0, 0, 0] : [.. box.Resolved.Select(v => ((PdfNumber)v).Value)];
         }
 
         private static PdfValue? Inherited(PdfDict page, string key)
@@ -418,7 +418,7 @@ namespace PeachPDF.Tests.TestSupport
             Catalog.Dict("/AcroForm")?.Array("/Fields")?.Resolved.OfType<PdfDict>().ToList() ?? [];
 
         /// <summary>The interactive form's fields, in order.</summary>
-        public IReadOnlyList<FormField> FormFields => Fields.Select(d => new FormField(this, d)).ToList();
+        public IReadOnlyList<FormField> FormFields => [.. Fields.Select(d => new FormField(this, d))];
 
         /// <summary>The structure tree root (<c>/StructTreeRoot</c>), or null when the document is untagged.</summary>
         public PdfDict? StructureTreeRoot => Catalog.Dict("/StructTreeRoot");
@@ -769,7 +769,7 @@ namespace PeachPDF.Tests.TestSupport
                     }
                 }
 
-                return new PdfText(bytes.ToArray());
+                return new PdfText([.. bytes]);
             }
         }
     }
@@ -785,7 +785,7 @@ namespace PeachPDF.Tests.TestSupport
         public string? AlternateText => Dict.Text("/Alt");
 
         /// <summary>The element's child structure elements (marked-content and object references are not elements).</summary>
-        public IReadOnlyList<StructElem> Kids => file.StructureChildren(Dict).Select(d => new StructElem(file, d)).ToList();
+        public IReadOnlyList<StructElem> Kids => [.. file.StructureChildren(Dict).Select(d => new StructElem(file, d))];
 
         /// <summary>Every kid, including marked-content ids and object references, resolved.</summary>
         public IReadOnlyList<PdfValue> AllKids => file.StructureKids(Dict);

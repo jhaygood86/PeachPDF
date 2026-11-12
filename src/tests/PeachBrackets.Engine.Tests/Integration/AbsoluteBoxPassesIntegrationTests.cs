@@ -51,6 +51,6 @@ public class AbsoluteBoxPassesIntegrationTests
         }
 
         var expected = Regex.Matches(body, @"w\d+_\d+").Select(m => m.Value).Order().ToList();
-        Assert.Equal(expected, painted.Where(word => Regex.IsMatch(word, @"^w\d+_\d+$")).Order().ToList());
+        Assert.Equal(expected, [.. painted.Where(word => Regex.IsMatch(word, @"^w\d+_\d+$")).Order()]);
     }
 }

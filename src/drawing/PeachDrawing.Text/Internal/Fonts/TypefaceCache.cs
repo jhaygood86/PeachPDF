@@ -44,7 +44,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         // A FontResolver instance's own typeface-key-keyed glyph typeface cache, used only for its custom
         // (AddFont/@font-face) families so two PdfGenerators registering different bytes under one family name
         // never share a typeface. Held weakly against the resolver, so it is collected along with it.
-        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, LoadedTypeface>> InstanceCaches = new();
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<FontResolver, Dictionary<string, LoadedTypeface>> InstanceCaches = [];
 
         internal static Dictionary<string, LoadedTypeface> ForInstance(FontResolver resolver) => InstanceCaches.GetOrCreateValue(resolver);
 

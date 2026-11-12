@@ -117,7 +117,7 @@ namespace PeachPDF.PdfFeatures
                     var left = points.Min(p => p.X) - pad;
                     var top = points.Min(p => p.Y) - pad;
                     var rect = new Rect(left, top, points.Max(p => p.X) + pad - left, points.Max(p => p.Y) + pad - top);
-                    var local = annotation.Strokes.Select(stroke => (IReadOnlyList<PaintPoint>)stroke.Select(p => new PaintPoint(p.X - rect.X, p.Y - rect.Y)).ToArray()).ToArray();
+                    var local = annotation.Strokes.Select(stroke => (IReadOnlyList<PaintPoint>)[.. stroke.Select(p => new PaintPoint(p.X - rect.X, p.Y - rect.Y))]).ToArray();
                     Put("Ink", PdfAnnotationAppearance.Ink(local, color), rect, null, color, null, null, null, annotation.Strokes);
                     break;
                 }

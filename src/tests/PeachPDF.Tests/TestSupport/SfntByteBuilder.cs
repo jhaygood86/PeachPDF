@@ -61,6 +61,6 @@ namespace PeachPDF.Tests.TestSupport
             _bytes[at + 3] = (byte)value;
         }
 
-        public byte[] ToArray() => _bytes.ToArray();
+        public byte[] ToArray() => [.. _bytes];
     }
 }

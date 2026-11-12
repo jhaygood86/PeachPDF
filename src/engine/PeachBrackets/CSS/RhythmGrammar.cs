@@ -39,7 +39,7 @@ namespace PeachBrackets.Css
     internal static class RhythmGrammar
     {
         private static List<Token> Significant(IReadOnlyList<Token> tokens) =>
-            tokens.Where(t => t.Type != TokenType.Whitespace).ToList();
+            [.. tokens.Where(t => t.Type != TokenType.Whitespace)];
 
         private static bool IsIdent(Token token, string keyword) =>
             token.Type == TokenType.Ident && token.Data.Isi(keyword);

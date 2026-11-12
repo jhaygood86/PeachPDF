@@ -298,9 +298,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Utils
                 ? fragment with { Rect = newRect }
                 : fragment with
                 {
-                    Children = fragment.Children
-                        .Select(child => WithReplacedRect(child, target, newRect))
-                        .ToList()
+                    Children = [.. fragment.Children.Select(child => WithReplacedRect(child, target, newRect))]
                 };
     }
 }

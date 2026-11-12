@@ -377,7 +377,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             (HtmlRenderContext)container.RenderContext;
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1)];
 
         private static double GapWidth(System.Collections.Generic.IReadOnlyList<TestRecordingGraphics.DrawLineCall> lines)
         {

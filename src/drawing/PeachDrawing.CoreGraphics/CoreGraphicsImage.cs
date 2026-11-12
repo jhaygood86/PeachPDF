@@ -4,6 +4,7 @@ using ImageIO;
 using PeachDrawing.Core;
 using PeachImage;
 using System;
+using System.Threading;
 using System.IO;
 using System.Runtime.InteropServices;
 
@@ -19,7 +20,7 @@ internal sealed class CoreGraphicsImage : PeachDrawing.Core.Image
     private readonly byte[]? _premultipliedRgba;
     private readonly byte[]? _encoded;
     private readonly CoreGraphicsResourceCounts _counts;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private CGImage? _image;
     private bool _disposed;
 

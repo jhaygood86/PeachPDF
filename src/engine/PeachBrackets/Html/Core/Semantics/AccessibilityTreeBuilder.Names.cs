@@ -67,7 +67,7 @@ namespace PeachBrackets.Html.Semantics
         private string TextOf(CssBox box)
         {
             var text = new TextBuilder();
-            AppendContent(box, text, null, new HashSet<CssBox>(ReferenceEqualityComparer.Instance), asName: false);
+            AppendContent(box, text, null, [with(ReferenceEqualityComparer.Instance)], asName: false);
             return text.ToString();
         }
 
@@ -159,7 +159,7 @@ namespace PeachBrackets.Html.Semantics
             if (RoleResolver.NamesFromContent(role))
             {
                 var content = new TextBuilder();
-                AppendContent(box, content, null, new HashSet<CssBox>(ReferenceEqualityComparer.Instance), asName: true);
+                AppendContent(box, content, null, [with(ReferenceEqualityComparer.Instance)], asName: true);
                 if (content.ToString() is { Length: > 0 } fromContent)
                     return fromContent;
             }
@@ -186,7 +186,7 @@ namespace PeachBrackets.Html.Semantics
             }
 
             var text = new TextBuilder();
-            AppendContent(target, text, null, new HashSet<CssBox>(ReferenceEqualityComparer.Instance), asName: true);
+            AppendContent(target, text, null, [with(ReferenceEqualityComparer.Instance)], asName: true);
             return text.ToString();
         }
 
@@ -266,7 +266,7 @@ namespace PeachBrackets.Html.Semantics
         private string LabelText(CssBox label, CssBox control)
         {
             var text = new TextBuilder();
-            AppendContent(label, text, control, new HashSet<CssBox>(ReferenceEqualityComparer.Instance), asName: true);
+            AppendContent(label, text, control, [with(ReferenceEqualityComparer.Instance)], asName: true);
             return text.ToString();
         }
 
@@ -277,7 +277,7 @@ namespace PeachBrackets.Html.Semantics
                 if (child.HtmlTag is { } tag && IsTag(tag, name))
                 {
                     var text = new TextBuilder();
-                    AppendContent(child, text, null, new HashSet<CssBox>(ReferenceEqualityComparer.Instance), asName: true);
+                    AppendContent(child, text, null, [with(ReferenceEqualityComparer.Instance)], asName: true);
                     return text.ToString();
                 }
             }

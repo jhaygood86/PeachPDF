@@ -28,7 +28,7 @@ public class AccessibilityStructureTests
         Assert.Equal((0, 1), (Cell(tree, "B").RowIndex, Cell(tree, "B").ColumnIndex));
         Assert.Equal((1, 1), (Cell(tree, "b1").RowIndex, Cell(tree, "b1").ColumnIndex));
         Assert.Equal((2, 0), (Cell(tree, "a2").RowIndex, Cell(tree, "a2").ColumnIndex));
-        Assert.Equal([0, 1, 2], tree.Nodes.Where(n => n.Role == AccessibilityRole.Row).Select(n => n.RowIndex).ToArray());
+        Assert.Equal([0, 1, 2], [.. tree.Nodes.Where(n => n.Role == AccessibilityRole.Row).Select(n => n.RowIndex)]);
     }
 
     [Fact]
@@ -54,8 +54,8 @@ public class AccessibilityStructureTests
             "<table><tr><th></th><th>Col1</th><th>Col2</th></tr><tr><th scope=row>Row1</th><td>d11</td><td>d12</td></tr></table>");
 
         var cell = Cell(tree, "d12");
-        Assert.Equal(["Col2"], cell.ColumnHeaders.Select(h => h.Name).ToArray());
-        Assert.Equal(["Row1"], cell.RowHeaders.Select(h => h.Name).ToArray());
+        Assert.Equal(["Col2"], [.. cell.ColumnHeaders.Select(h => h.Name)]);
+        Assert.Equal(["Row1"], [.. cell.RowHeaders.Select(h => h.Name)]);
         Assert.Empty(Cell(tree, "Col1").ColumnHeaders);
     }
 
@@ -65,7 +65,7 @@ public class AccessibilityStructureTests
         var tree = await TreeAsync(
             "<table><tr><th id=a>A</th><th id=b>B</th></tr><tr><td headers='b'>x</td></tr></table>");
 
-        Assert.Equal(["B"], Cell(tree, "x").ColumnHeaders.Select(h => h.Name).ToArray());
+        Assert.Equal(["B"], [.. Cell(tree, "x").ColumnHeaders.Select(h => h.Name)]);
     }
 
     [Fact]
@@ -101,7 +101,7 @@ public class AccessibilityStructureTests
         var tree = await TreeAsync("<ul><li>one</li><li>two</li><li>three</li></ul><ol><li>solo</li></ol>");
 
         var items = tree.Nodes.Where(n => n.Role == AccessibilityRole.ListItem).ToArray();
-        Assert.Equal([(1, 3), (2, 3), (3, 3), (1, 1)], items.Select(i => (i.PositionInSet, i.SetSize)).ToArray());
+        Assert.Equal([(1, 3), (2, 3), (3, 3), (1, 1)], [.. items.Select(i => (i.PositionInSet, i.SetSize))]);
         Assert.Equal((0, 0), (Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.List && n.Children.Count == 3).PositionInSet, 0));
     }
 
@@ -128,20 +128,20 @@ public class AccessibilityStructureTests
             + "<div id=owner role=group aria-owns='owned'>x</div><span id=owned role=note>owned</span>");
 
         var button = Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.Button);
-        Assert.Equal(["Panel"], button.Controls.Select(n => n.Name).ToArray());
-        Assert.Equal(["Hint"], button.DescribedBy.Select(n => n.ReadingText).ToArray());
-        Assert.Equal(["More"], button.Details.Select(n => n.ReadingText).ToArray());
+        Assert.Equal(["Panel"], [.. button.Controls.Select(n => n.Name)]);
+        Assert.Equal(["Hint"], [.. button.DescribedBy.Select(n => n.ReadingText)]);
+        Assert.Equal(["More"], [.. button.Details.Select(n => n.ReadingText)]);
         // An id that is nowhere is left out.
-        Assert.Equal(["After"], button.FlowTo.Select(n => n.ReadingText).ToArray());
+        Assert.Equal(["After"], [.. button.FlowTo.Select(n => n.ReadingText)]);
 
         var input = Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.TextBox);
-        Assert.Equal(["Bad value"], input.ErrorMessages.Select(n => n.ReadingText).ToArray());
+        Assert.Equal(["Bad value"], [.. input.ErrorMessages.Select(n => n.ReadingText)]);
         Assert.True(input.Invalid);
 
         var listbox = Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.ListBox);
         Assert.Equal("2", listbox.ActiveDescendant!.Name);
 
-        Assert.Equal(["owned"], Assert.Single(tree.Nodes, n => n.ElementId == "owner").Owns.Select(n => n.ReadingText).ToArray());
+        Assert.Equal(["owned"], [.. Assert.Single(tree.Nodes, n => n.ElementId == "owner").Owns.Select(n => n.ReadingText)]);
     }
 
     [Fact]
@@ -151,7 +151,7 @@ public class AccessibilityStructureTests
 
         var named = tree.Nodes.Where(n => n.Role is AccessibilityRole.Region or AccessibilityRole.Group).ToArray();
         Assert.Equal(2, named.Length);
-        Assert.All(named, n => Assert.Equal(["Label text"], n.LabelledBy.Select(l => l.ReadingText).ToArray()));
+        Assert.All(named, n => Assert.Equal(["Label text"], [.. n.LabelledBy.Select(l => l.ReadingText)]));
     }
 
     [Fact]

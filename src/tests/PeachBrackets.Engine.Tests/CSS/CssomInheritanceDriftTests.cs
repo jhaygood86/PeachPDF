@@ -15,7 +15,7 @@ namespace PeachBrackets.Engine.Tests.CSS
         {
             var path = Path.GetFullPath(Path.Combine(SourceDirectory(), "..", "..", "..", "engine", "PeachBrackets", "css-properties.json"));
             using var doc = JsonDocument.Parse(File.ReadAllText(path), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip });
-            return doc.RootElement.GetProperty("properties").EnumerateArray().Select(e => e.Clone()).ToArray();
+            return [.. doc.RootElement.GetProperty("properties").EnumerateArray().Select(e => e.Clone())];
         }
 
         private static string SourceDirectory([CallerFilePath] string file = "") => Path.GetDirectoryName(file)!;

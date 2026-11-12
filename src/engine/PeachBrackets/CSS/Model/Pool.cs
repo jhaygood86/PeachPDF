@@ -41,7 +41,7 @@ namespace PeachBrackets.Css
         public static List<Token> NewTokenList()
         {
             var stack = _tokenList ??= new();
-            if (stack.Count == 0) return new List<Token>();
+            if (stack.Count == 0) return [];
             var list = stack.Pop();
             list.Clear();
             return list;
@@ -60,7 +60,7 @@ namespace PeachBrackets.Css
         public static Dictionary<string, IProperty> NewPropertyDictionary()
         {
             var stack = _propertyDictionary ??= new();
-            if (stack.Count == 0) return new Dictionary<string, IProperty>(StringComparer.OrdinalIgnoreCase);
+            if (stack.Count == 0) return [with(StringComparer.OrdinalIgnoreCase)];
             var dict = stack.Pop();
             dict.Clear();
             return dict;

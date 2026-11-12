@@ -367,15 +367,14 @@ namespace PeachPDF.Tests.Integration
         /// form XObject, a font) can never be picked up for a pattern that has none of its own.
         /// </summary>
         private static double[][] ShadingPatternMatrices(string pdfText) =>
-            pdfText.Split("endobj")
+            [.. pdfText.Split("endobj")
                 .Where(o => o.Contains("/PatternType 2"))
                 .Select(o => Regex.Match(o, @"/Matrix \[([^\]]*)\]"))
                 .Where(m => m.Success)
                 .Select(m => m.Groups[1].Value
                     .Split(' ', StringSplitOptions.RemoveEmptyEntries)
                     .Select(v => double.Parse(v, CultureInfo.InvariantCulture))
-                    .ToArray())
-                .ToArray();
+                    .ToArray())];
 
         private static string TransformedGradientHtml(string css, string transform) =>
             "<!DOCTYPE html><html><head><style>body { margin: 0 }" +

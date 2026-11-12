@@ -35,7 +35,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         }
 
         private static TestRecordingGraphics.DrawLineCall[] Lines(TestRecordingGraphics g)
-            => g.Log.OfType<TestRecordingGraphics.DrawLineCall>().ToArray();
+            => [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>()];
 
         [Fact]
         public void None_PaintsNoLine()

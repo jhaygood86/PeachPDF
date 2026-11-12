@@ -216,7 +216,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             var noForms = new Dictionary<int, ArabicJoiningForm>();
 
             GsubShaper.ApplyArabicJoiningFeatures(gsub, [], noForms, languageTag: null, scriptPreference: ["arab"]);
-            GsubShaper.ApplyArabicJoiningFeatures(gsub, new List<PlacedGlyph> { new(10, 0, 1) }, noForms, languageTag: null, scriptPreference: ["arab"]);
+            GsubShaper.ApplyArabicJoiningFeatures(gsub, [new(10, 0, 1)], noForms, languageTag: null, scriptPreference: ["arab"]);
         }
 
         [Fact]

@@ -94,10 +94,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var (root, _) = await LayoutAsync(Wrap(
                 $"<table style='{tableStyle} border-collapse:collapse'>{Cells}</table>"));
 
-            return new[] { "c0", "c1", "c2" }
+            return [.. new[] { "c0", "c1", "c2" }
                 .Select(id => FindById(root, id)!)
-                .Select(b => b.ActualRight - b.Location.X)
-                .ToArray();
+                .Select(b => b.ActualRight - b.Location.X)];
         }
     }
 }

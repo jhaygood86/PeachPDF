@@ -47,7 +47,7 @@ namespace PeachBrackets.Html.Utils
         /// </summary>
         public void Set(CssBox box, string propertyName, string value)
         {
-            (box.BuilderSetProperties ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(propertyName);
+            (box.BuilderSetProperties ??= [with(StringComparer.OrdinalIgnoreCase)]).Add(propertyName);
             CssUtils.SetPropertyValue(_parser, box, propertyName, value);
         }
 

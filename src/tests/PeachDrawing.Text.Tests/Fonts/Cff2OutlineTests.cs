@@ -33,7 +33,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         private static JsonElement Golden() => JsonDocument.Parse(File.ReadAllText(BundledFonts.VariableCff2TestGolden)).RootElement;
 
         private static AxisSetting[] Settings(JsonElement location) =>
-            location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble())).ToArray();
+            [.. location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble()))];
 
         /// <summary>Whether every axis of <paramref name="instance"/> is at an end of its range or its default.</summary>
         private static bool IsAtAMasterLocation(Typeface instance) =>

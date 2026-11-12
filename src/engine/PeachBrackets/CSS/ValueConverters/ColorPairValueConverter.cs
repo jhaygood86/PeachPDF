@@ -15,7 +15,7 @@ namespace PeachBrackets.Css
             var arms = new List<List<Token>> { new() };
             foreach (var token in value)
             {
-                if (token.Type == TokenType.Comma) arms.Add(new List<Token>());
+                if (token.Type == TokenType.Comma) arms.Add([]);
                 else arms[^1].Add(token);
             }
 

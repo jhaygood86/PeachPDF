@@ -67,7 +67,7 @@ internal sealed class PdfContentInterpreter
     int _formDepth;
     Matrix3x2 _streamBase = Matrix3x2.Identity;
     Matrix3x2 _tm = Matrix3x2.Identity, _tlm = Matrix3x2.Identity;
-    readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<PdfDictionary, PdfImportedFont?> _fonts = [with(ReferenceEqualityComparer.Instance)];
 
     /// <summary>Creates an interpreter that draws onto <paramref name="canvas"/>.</summary>
     /// <param name="doc">the document the content comes from</param>
@@ -354,7 +354,7 @@ internal sealed class PdfContentInterpreter
                     break;
                 }
                 if (comps.Count != space.Components) { _unsupported.Add(op + " (pattern or arity)"); break; }
-                if (fill) Cur.Fill = comps.ToArray(); else Cur.Stroke = comps.ToArray();
+                if (fill) Cur.Fill = [.. comps]; else Cur.Stroke = [.. comps];
                 break;
             }
 
@@ -534,7 +534,7 @@ internal sealed class PdfContentInterpreter
         (Cur.TextFont, Cur.Type3Font) = (font, null);
     }
 
-    readonly Dictionary<PdfDictionary, PdfType3Font?> _type3Fonts = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<PdfDictionary, PdfType3Font?> _type3Fonts = [with(ReferenceEqualityComparer.Instance)];
 
     /// <summary>Shows text in a Type 3 font: each glyph's own content stream is run under the font matrix, font size and text matrix.</summary>
     void ShowType3(IReadOnlyList<object> parts, PdfDictionary? res)
@@ -919,7 +919,7 @@ internal sealed class PdfContentInterpreter
         return ShadingBrush(shading, matrix, fill ? st.FillAlpha : st.StrokeAlpha, res);
     }
 
-    readonly Dictionary<(PdfDictionary Pattern, int Color, int Scale), Image> _tiles = new(new TileKeyComparer());
+    readonly Dictionary<(PdfDictionary Pattern, int Color, int Scale), Image> _tiles = [with(new TileKeyComparer())];
 
     sealed class TileKeyComparer : IEqualityComparer<(PdfDictionary Pattern, int Color, int Scale)>
     {
@@ -1099,7 +1099,7 @@ internal sealed class PdfContentInterpreter
 
     // ---------------------------------------------------------------- XObjects
 
-    readonly Dictionary<PdfDictionary, Image?> _images = new(ReferenceEqualityComparer.Instance);
+    readonly Dictionary<PdfDictionary, Image?> _images = [with(ReferenceEqualityComparer.Instance)];
 
     /// <summary>Draws an image XObject into the unit square of the current space (PDF 8.9.4).</summary>
     void DrawImage(PdfDictionary x, PdfDictionary? res)

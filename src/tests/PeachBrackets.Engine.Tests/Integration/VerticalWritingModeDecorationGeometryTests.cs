@@ -169,7 +169,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static System.Collections.Generic.List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.X1).ToList();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.X1)];
 
         private static string Wrap(string body) =>
             $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>";

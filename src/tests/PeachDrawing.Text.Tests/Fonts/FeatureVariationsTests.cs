@@ -25,7 +25,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         private static readonly Typeface Face = Load();
 
         private static int[] Glyphs(Typeface face, string text) =>
-            Shaper.Shape(face, text, ShapeSettings.Default).Glyphs.Select(g => g.GlyphIndex).ToArray();
+            [.. Shaper.Shape(face, text, ShapeSettings.Default).Glyphs.Select(g => g.GlyphIndex)];
 
         [Theory]
         [InlineData(400, A, B)]        // the default: no record applies
@@ -221,9 +221,9 @@ namespace PeachDrawing.Text.Tests.Fonts
 
         // ---- the table reader on its own -------------------------------------------------------------------------------------------
 
-        private static byte[] Table(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
+        private static byte[] Table(params byte[][] parts) => [.. parts.SelectMany(p => p)];
 
-        private static byte[] U16(params int[] values) => values.SelectMany(v => new[] { (byte)(v >> 8), (byte)v }).ToArray();
+        private static byte[] U16(params int[] values) => [.. values.SelectMany(v => new[] { (byte)(v >> 8), (byte)v })];
 
         private static byte[] U32(uint value) => [(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value];
 

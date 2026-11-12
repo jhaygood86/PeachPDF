@@ -38,10 +38,10 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         /// <summary>The top of every line of <paramref name="box"/>, in line order.</summary>
         private static List<double> LineTops(CssBox box) =>
-            box.LineBoxes.Select(l => l.Words.Min(w => w.Top)).ToList();
+            [.. box.LineBoxes.Select(l => l.Words.Min(w => w.Top))];
 
         private static List<double> LineLefts(CssBox box) =>
-            box.LineBoxes.Select(l => l.Words.Min(w => w.Left)).ToList();
+            [.. box.LineBoxes.Select(l => l.Words.Min(w => w.Left))];
 
         [Fact]
         public async Task VerticalRl_TwoColumns_AreStripsStackedDownTheInlineAxis_AndContentContinuesInTheNext()

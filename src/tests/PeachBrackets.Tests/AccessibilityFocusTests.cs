@@ -11,7 +11,7 @@ public class AccessibilityFocusTests
         return (context, document, context.CreateCanvas(1, 1));
     }
 
-    private static string[] Names(IEnumerable<AccessibilityNode> nodes) => nodes.Select(n => n.Name).ToArray();
+    private static string[] Names(IEnumerable<AccessibilityNode> nodes) => [.. nodes.Select(n => n.Name)];
 
     [Fact]
     public async Task TabVisitsWhatCanBeFocusedInDocumentOrder()

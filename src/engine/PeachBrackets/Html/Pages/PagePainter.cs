@@ -46,9 +46,9 @@ namespace PeachBrackets.Html.Pages
         // Margin-box `content: url(...)` images are cached by declaration text across the whole document, since the same margin rule - and so
         // the same image - repeats identically on every page; without this a multi-hundred-page document would re-decode (or re-fetch) the same
         // logo once per page. @page box background image layers and margin-box background image layers share the same shape and rationale.
-        private readonly Dictionary<string, CssImage?> marginBoxImageCache = new();
-        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> pageBackgroundImageCache = new();
-        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> marginBoxBackgroundImageCache = new();
+        private readonly Dictionary<string, CssImage?> marginBoxImageCache = [];
+        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> pageBackgroundImageCache = [];
+        private readonly Dictionary<string, IReadOnlyList<CssImage?>?> marginBoxBackgroundImageCache = [];
 
         private Func<CanvasLease> _lease = null!;
         private Func<double, double, IDisposable?> _shift = null!;

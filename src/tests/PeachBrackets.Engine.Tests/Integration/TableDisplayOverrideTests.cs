@@ -147,7 +147,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<string?> CollectWords(CssBox box) =>
-            EnumerateBoxes(box).SelectMany(b => b.Words.Select(w => w.Text)).ToList();
+            [.. EnumerateBoxes(box).SelectMany(b => b.Words.Select(w => w.Text))];
 
         private static async Task<(CssBox root, HtmlContainerInt container)> BuildAndLayout(string html)
         {

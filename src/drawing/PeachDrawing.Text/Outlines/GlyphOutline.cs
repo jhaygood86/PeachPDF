@@ -60,7 +60,7 @@ namespace PeachDrawing.Text.Outlines
         internal OutlineContour(OutlinePoint start, int segments)
         {
             Start = start;
-            SegmentList = new List<OutlineSegment>(segments);
+            SegmentList = [with(segments)];
         }
 
         /// <summary>Where the contour begins.</summary>

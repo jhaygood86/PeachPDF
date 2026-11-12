@@ -47,10 +47,10 @@ namespace PeachBrackets.Css
             var options = new IPropertyValue[_labels.Length];
 
             for (var i = 0; i < _labels.Length; i++)
-                options[i] = _converter.Construct(properties.Where(m => m.Name == _labels[i]).ToArray());
+                options[i] = _converter.Construct([.. properties.Where(m => m.Name == _labels[i])]);
 
             return options.All(opt => opt != null)
-                ? new PeriodicValue(options, Enumerable.Empty<Token>(), _labels)
+                ? new PeriodicValue(options, [], _labels)
                 : null;
         }
 
@@ -95,22 +95,22 @@ namespace PeachBrackets.Css
                         var left = _values[3].CssText;
 
                         if (!right.Is(left))
-                            return new[] { top, right, bottom, left };
+                            return [top, right, bottom, left];
 
                         if (!top.Is(bottom))
-                            return new[] { top, right, bottom };
+                            return [top, right, bottom];
 
                         return right.Is(top)
-                                   ? new[] { top }
-                                   : new[] { top, right };
+                                   ? [top]
+                                   : [top, right];
                     }
 
                     var first = _values[0].CssText;
                     var second = _values[1].CssText;
 
                     return first.Is(second)
-                               ? new[] { first }
-                               : new[] { first, second };
+                               ? [first]
+                               : [first, second];
                 }
             }
 

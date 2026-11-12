@@ -190,15 +190,15 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "row" },
-                    new object[] { "row-reverse" },
-                    new object[] { "column" },
-                    new object[] { "column-reverse" },
-                    new object[] { "nowrap" },
-                    new object[] { "wrap" },
-                    new object[] { "wrap-reverse" },
-                    new object[] { "row nowrap" },
-                    new object[] { "column wrap" },
-                    new object[] { "column-reverse wrap-reverse" },
+                    ["row-reverse"],
+                    ["column"],
+                    ["column-reverse"],
+                    ["nowrap"],
+                    ["wrap"],
+                    ["wrap-reverse"],
+                    ["row nowrap"],
+                    ["column wrap"],
+                    ["column-reverse wrap-reverse"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -210,13 +210,13 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "row nowrap", "row", "nowrap" },
-                    new object[] { "column wrap", "column", "wrap" },
-                    new object[] { "column-reverse wrap-reverse", "column-reverse", "wrap-reverse" },
+                    ["column wrap", "column", "wrap"],
+                    ["column-reverse wrap-reverse", "column-reverse", "wrap-reverse"],
                     // flex-flow is "<'flex-direction'> || <'flex-wrap'>" (CSS Flexbox 1 §5.1), so the two
                     // values are equally valid in the reverse order.
-                    new object[] { "nowrap row", "row", "nowrap" },
-                    new object[] { "wrap column", "column", "wrap" },
-                    new object[] { "wrap-reverse column-reverse", "column-reverse", "wrap-reverse" },
+                    ["nowrap row", "row", "nowrap"],
+                    ["wrap column", "column", "wrap"],
+                    ["wrap-reverse column-reverse", "column-reverse", "wrap-reverse"],
                 };
             }
         }
@@ -228,15 +228,15 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "auto" },
-                    new object[] { "initial" },
-                    new object[] { "none" },
-                    new object[] { "2" },
-                    new object[] { "10em" },
-                    new object[] { "30%" },
-                    new object[] { "min-content" },
-                    new object[] { "1 30px" },
-                    new object[] { "2 2" },
-                    new object[] { "2 2 10%" },
+                    ["initial"],
+                    ["none"],
+                    ["2"],
+                    ["10em"],
+                    ["30%"],
+                    ["min-content"],
+                    ["1 30px"],
+                    ["2 2"],
+                    ["2 2 10%"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -248,20 +248,20 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { Keywords.Center },
-                    new object[] { Keywords.Start },
-                    new object[] { Keywords.End },
-                    new object[] { Keywords.FlexStart },
-                    new object[] { Keywords.FlexEnd },
-                    new object[] { Keywords.Normal },
-                    new object[] { Keywords.Baseline },
-                    new object[] { $"{Keywords.First} {Keywords.Baseline}" },
-                    new object[] { $"{Keywords.Last} {Keywords.Baseline}" },
-                    new object[] { Keywords.SpaceBetween },
-                    new object[] { Keywords.SpaceAround },
-                    new object[] { Keywords.SpaceEvenly },
-                    new object[] { Keywords.Stretch },
-                    new object[] { $"{Keywords.Safe} {Keywords.Center}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Center}" },
+                    [Keywords.Start],
+                    [Keywords.End],
+                    [Keywords.FlexStart],
+                    [Keywords.FlexEnd],
+                    [Keywords.Normal],
+                    [Keywords.Baseline],
+                    [$"{Keywords.First} {Keywords.Baseline}"],
+                    [$"{Keywords.Last} {Keywords.Baseline}"],
+                    [Keywords.SpaceBetween],
+                    [Keywords.SpaceAround],
+                    [Keywords.SpaceEvenly],
+                    [Keywords.Stretch],
+                    [$"{Keywords.Safe} {Keywords.Center}"],
+                    [$"{Keywords.Unsafe} {Keywords.Center}"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -273,18 +273,18 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { Keywords.Auto },
-                    new object[] { Keywords.Stretch },
-                    new object[] { Keywords.Center },
-                    new object[] { Keywords.Start },
-                    new object[] { Keywords.End },
-                    new object[] { Keywords.FlexStart },
-                    new object[] { Keywords.FlexEnd },
-                    new object[] { Keywords.Normal },
-                    new object[] { Keywords.Baseline },
-                    new object[] { $"{Keywords.First} {Keywords.Baseline}" },
-                    new object[] { $"{Keywords.Last} {Keywords.Baseline}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.Center}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Center}" },
+                    [Keywords.Stretch],
+                    [Keywords.Center],
+                    [Keywords.Start],
+                    [Keywords.End],
+                    [Keywords.FlexStart],
+                    [Keywords.FlexEnd],
+                    [Keywords.Normal],
+                    [Keywords.Baseline],
+                    [$"{Keywords.First} {Keywords.Baseline}"],
+                    [$"{Keywords.Last} {Keywords.Baseline}"],
+                    [$"{Keywords.Safe} {Keywords.Center}"],
+                    [$"{Keywords.Unsafe} {Keywords.Center}"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -296,19 +296,19 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { Keywords.Center },
-                    new object[] { Keywords.Start },
-                    new object[] { Keywords.End },
-                    new object[] { Keywords.FlexStart },
-                    new object[] { Keywords.FlexEnd },
-                    new object[] { Keywords.Left },
-                    new object[] { Keywords.Right },
-                    new object[] { Keywords.Normal },
-                    new object[] { Keywords.SpaceBetween },
-                    new object[] { Keywords.SpaceAround },
-                    new object[] { Keywords.SpaceEvenly },
-                    new object[] { Keywords.Stretch },
-                    new object[] { $"{Keywords.Safe} {Keywords.Center}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Center}" },
+                    [Keywords.Start],
+                    [Keywords.End],
+                    [Keywords.FlexStart],
+                    [Keywords.FlexEnd],
+                    [Keywords.Left],
+                    [Keywords.Right],
+                    [Keywords.Normal],
+                    [Keywords.SpaceBetween],
+                    [Keywords.SpaceAround],
+                    [Keywords.SpaceEvenly],
+                    [Keywords.Stretch],
+                    [$"{Keywords.Safe} {Keywords.Center}"],
+                    [$"{Keywords.Unsafe} {Keywords.Center}"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -320,19 +320,19 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { Keywords.Normal },
-                    new object[] { Keywords.Stretch },
-                    new object[] { Keywords.Center },
-                    new object[] { Keywords.Start },
-                    new object[] { Keywords.End },
-                    new object[] { Keywords.FlexStart },
-                    new object[] { Keywords.FlexEnd },
-                    new object[] { Keywords.SelfStart },
-                    new object[] { Keywords.SelfEnd },
-                    new object[] { Keywords.Baseline },
-                    new object[] { $"{Keywords.First} {Keywords.Baseline}" },
-                    new object[] { $"{Keywords.Last} {Keywords.Baseline}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.Center}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Center}" },
+                    [Keywords.Stretch],
+                    [Keywords.Center],
+                    [Keywords.Start],
+                    [Keywords.End],
+                    [Keywords.FlexStart],
+                    [Keywords.FlexEnd],
+                    [Keywords.SelfStart],
+                    [Keywords.SelfEnd],
+                    [Keywords.Baseline],
+                    [$"{Keywords.First} {Keywords.Baseline}"],
+                    [$"{Keywords.Last} {Keywords.Baseline}"],
+                    [$"{Keywords.Safe} {Keywords.Center}"],
+                    [$"{Keywords.Unsafe} {Keywords.Center}"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -345,24 +345,24 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { $"{Keywords.Safe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexEnd}" },
+                    [$"{Keywords.Safe} {Keywords.End}"],
+                    [$"{Keywords.Safe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Safe} {Keywords.FlexEnd}"],
 
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexEnd}" },
+                    [$"{Keywords.Unsafe} {Keywords.Start}"],
+                    [$"{Keywords.Unsafe} {Keywords.End}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexEnd}"],
 
-                    new object[] { $"{Keywords.First} {Keywords.Start}" },
-                    new object[] { $"{Keywords.First} {Keywords.End}" },
-                    new object[] { $"{Keywords.First} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.First} {Keywords.FlexEnd}" },
+                    [$"{Keywords.First} {Keywords.Start}"],
+                    [$"{Keywords.First} {Keywords.End}"],
+                    [$"{Keywords.First} {Keywords.FlexStart}"],
+                    [$"{Keywords.First} {Keywords.FlexEnd}"],
 
-                    new object[] { $"{Keywords.Last} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Last} {Keywords.End}" },
-                    new object[] { $"{Keywords.Last} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Last} {Keywords.FlexEnd}" },
+                    [$"{Keywords.Last} {Keywords.Start}"],
+                    [$"{Keywords.Last} {Keywords.End}"],
+                    [$"{Keywords.Last} {Keywords.FlexStart}"],
+                    [$"{Keywords.Last} {Keywords.FlexEnd}"],
                 };
             }
         }
@@ -374,32 +374,32 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { $"{Keywords.Safe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.SelfEnd}" },
+                    [$"{Keywords.Safe} {Keywords.End}"],
+                    [$"{Keywords.Safe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Safe} {Keywords.FlexEnd}"],
+                    [$"{Keywords.Safe} {Keywords.SelfStart}"],
+                    [$"{Keywords.Safe} {Keywords.SelfEnd}"],
 
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.SelfEnd}" },
+                    [$"{Keywords.Unsafe} {Keywords.Start}"],
+                    [$"{Keywords.Unsafe} {Keywords.End}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexEnd}"],
+                    [$"{Keywords.Unsafe} {Keywords.SelfStart}"],
+                    [$"{Keywords.Unsafe} {Keywords.SelfEnd}"],
 
-                    new object[] { $"{Keywords.First} {Keywords.Start}" },
-                    new object[] { $"{Keywords.First} {Keywords.End}" },
-                    new object[] { $"{Keywords.First} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.First} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.First} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.First} {Keywords.SelfEnd}" },
+                    [$"{Keywords.First} {Keywords.Start}"],
+                    [$"{Keywords.First} {Keywords.End}"],
+                    [$"{Keywords.First} {Keywords.FlexStart}"],
+                    [$"{Keywords.First} {Keywords.FlexEnd}"],
+                    [$"{Keywords.First} {Keywords.SelfStart}"],
+                    [$"{Keywords.First} {Keywords.SelfEnd}"],
 
-                    new object[] { $"{Keywords.Last} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Last} {Keywords.End}" },
-                    new object[] { $"{Keywords.Last} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Last} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.Last} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.Last} {Keywords.SelfEnd}" }
+                    [$"{Keywords.Last} {Keywords.Start}"],
+                    [$"{Keywords.Last} {Keywords.End}"],
+                    [$"{Keywords.Last} {Keywords.FlexStart}"],
+                    [$"{Keywords.Last} {Keywords.FlexEnd}"],
+                    [$"{Keywords.Last} {Keywords.SelfStart}"],
+                    [$"{Keywords.Last} {Keywords.SelfEnd}"]
                 };
             }
         }
@@ -411,18 +411,18 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { $"{Keywords.Safe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.Safe} {Keywords.SelfEnd}" },
+                    [$"{Keywords.Safe} {Keywords.End}"],
+                    [$"{Keywords.Safe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Safe} {Keywords.FlexEnd}"],
+                    [$"{Keywords.Safe} {Keywords.SelfStart}"],
+                    [$"{Keywords.Safe} {Keywords.SelfEnd}"],
 
-                    new object[] { $"{Keywords.Unsafe} {Keywords.Start}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.End}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexStart}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.FlexEnd}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.SelfStart}" },
-                    new object[] { $"{Keywords.Unsafe} {Keywords.SelfEnd}" },
+                    [$"{Keywords.Unsafe} {Keywords.Start}"],
+                    [$"{Keywords.Unsafe} {Keywords.End}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexStart}"],
+                    [$"{Keywords.Unsafe} {Keywords.FlexEnd}"],
+                    [$"{Keywords.Unsafe} {Keywords.SelfStart}"],
+                    [$"{Keywords.Unsafe} {Keywords.SelfEnd}"],
                 };
             }
         }
@@ -434,7 +434,7 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "3" },
-                    new object[] { "0.6" }
+                    ["0.6"]
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -446,13 +446,13 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "10em" },
-                    new object[] { "3px" },
-                    new object[] { "50%" },
-                    new object[] { Keywords.MinContent },
-                    new object[] { Keywords.MaxContent },
-                    new object[] { Keywords.FitContent },
-                    new object[] { Keywords.Content },
-                    new object[] { Keywords.Auto }
+                    ["3px"],
+                    ["50%"],
+                    [Keywords.MinContent],
+                    [Keywords.MaxContent],
+                    [Keywords.FitContent],
+                    [Keywords.Content],
+                    [Keywords.Auto]
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }
@@ -464,7 +464,7 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "-1" },
-                    new object[] { "1" },
+                    ["1"],
                 }.Union(GlobalKeywordTestValues.ToObjectArray(), ObjectArrayComparer.Instance);
             }
         }

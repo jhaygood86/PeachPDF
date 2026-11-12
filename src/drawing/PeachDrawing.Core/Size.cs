@@ -34,7 +34,7 @@ namespace PeachDrawing.Core
         ///     value of 0.
         /// </returns>
         /// <filterpriority>1</filterpriority>
-        public static readonly Size Empty = new Size();
+        public static readonly Size Empty = new();
 
         /// <summary>
         ///     Initializes a new instance of the <see cref="Size" /> structure from the specified existing

@@ -29,7 +29,7 @@ namespace PeachPDF.Tests.TestSupport
                 }
             }
 
-            return points.ToArray();
+            return [.. points];
         }
 
         /// <summary>The number of separate contours in the path.</summary>

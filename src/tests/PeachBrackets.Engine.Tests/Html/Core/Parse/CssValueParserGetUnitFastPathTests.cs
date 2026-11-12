@@ -84,14 +84,14 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Parse
             Assert.Equal(CssValueParser.FastLengthKind.Inconclusive, kind);
         }
 
-        public static TheoryData<string> AgreementCorpus => new()
-        {
+        public static TheoryData<string> AgreementCorpus =>
+        [
             "0", "1", "12", "-12", "+12", "1.5", ".5", "-.5",
             "12px", "1.5em", "-3px", "+3px", ".5px", "0.5rem", "100vh", "1px", "0px",
             "50%", "100%", "0.5%",
             "auto", "10 px", "1\\65 m", "10px2", "1e2", "1e+2", "1em", "1e", "1e+", "10-foo",
             "px", "", "-", "+", ".",
-        };
+        ];
 
         [Theory]
         [MemberData(nameof(AgreementCorpus))]

@@ -98,7 +98,7 @@ public sealed record SkiaCursorArea(Rect Bounds, CursorShape Shape, IReadOnlyLis
 public sealed class SkiaLinkMap
 {
     private readonly List<SkiaLink> _links = [];
-    private readonly Dictionary<string, double> _destinations = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, double> _destinations = [with(StringComparer.Ordinal)];
     private readonly SkiaLinkOptions _options;
     private readonly double _unitsPerDevicePixel;
 

@@ -696,7 +696,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         /// the same values, so these read directly against what the painter recorded.
         /// </summary>
         private static List<Rect> OrderedRectangles(CssBox box) =>
-            box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X).ToList();
+            [.. box.Rectangles.Values.OrderBy(r => r.Y).ThenBy(r => r.X)];
 
         /// <summary>
         /// The rectangles a full-box gradient layer was filled into. The test adapter resolves a gradient

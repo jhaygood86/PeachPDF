@@ -39,7 +39,7 @@ public class AutoCodecTests
             for (var x = 0; x < 16; x++)
                 pixels.Add(scene.Px(x, y));
 
-        return pixels.ToArray();
+        return [.. pixels];
     }
 
     private static int Worst((int R, int G, int B, int A)[] left, (int R, int G, int B, int A)[] right)

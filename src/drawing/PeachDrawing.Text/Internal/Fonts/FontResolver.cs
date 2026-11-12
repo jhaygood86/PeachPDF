@@ -43,7 +43,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         private readonly Dictionary<string, FontFamilyModel> InstalledFonts;
 
         /// <summary>Per-family answer of <see cref="HasExplicitRanges"/> (the layout fast path asks it for every word); an entry is dropped when its family is re-registered.</summary>
-        private readonly Dictionary<string, bool> _hasExplicitRangesCache = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, bool> _hasExplicitRangesCache = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         /// Family names (lowercased, matching <see cref="InstalledFonts"/>'s own key convention)
@@ -56,7 +56,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// requests each with their own <c>@font-face</c> for the same CSS family), and must never share
         /// a cache slot for it.
         /// </summary>
-        private readonly HashSet<string> _customFamilyNames = new(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<string> _customFamilyNames = [with(StringComparer.OrdinalIgnoreCase)];
 
         /// <summary>
         /// Per-face cmap-coverage cache (face name → covered codepoint ranges), populated lazily the
@@ -64,7 +64,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// per-codepoint matching. Instance-scoped (like <see cref="_CustomFonts"/>) so it is collected
         /// with this resolver and never shared across <c>PdfGenerator</c> instances.
         /// </summary>
-        private readonly Dictionary<string, IReadOnlyList<RuneInterval>> _coverageCache = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, IReadOnlyList<RuneInterval>> _coverageCache = [with(StringComparer.Ordinal)];
 
         /// <summary>
         /// Last-resort system-fallback cache (codepoint value → winning family key, or null when no
@@ -72,14 +72,14 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// Instance-scoped for the same reason as <see cref="_coverageCache"/> - never shared across
         /// <c>PdfGenerator</c> instances/threads.
         /// </summary>
-        private readonly Dictionary<(int Codepoint, EmojiPresentation Presentation), string?> _systemFallbackCache = new();
+        private readonly Dictionary<(int Codepoint, EmojiPresentation Presentation), string?> _systemFallbackCache = [];
 
         /// <summary>
         /// This instance's own typeface-key-keyed resolver-info cache - the per-instance counterpart to
         /// <see cref="FontFactory"/>'s global <c>FontResolverInfosByName</c>, used only for custom
         /// families. See <see cref="InstanceFontResolverInfosByTypefaceKey"/>.
         /// </summary>
-        internal Dictionary<string, FontResolverInfo> InstanceFontResolverInfosByTypefaceKey { get; } = new();
+        internal Dictionary<string, FontResolverInfo> InstanceFontResolverInfosByTypefaceKey { get; } = [];
 
         /// <summary>
         /// Whether <paramref name="familyName"/> was registered via <see cref="AddFont(Stream, string)"/>
@@ -131,9 +131,7 @@ namespace PeachDrawing.Text.Internal.Fonts
 
             try
             {
-                return FontExtensions
-                    .SelectMany(pattern => Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))
-                    .ToArray();
+                return [.. FontExtensions.SelectMany(pattern => Directory.GetFiles(dir, pattern, SearchOption.AllDirectories))];
             }
             catch (UnauthorizedAccessException)
             {
@@ -183,10 +181,9 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 var candidateDirs = new[] { "/system/fonts", "/product/fonts", "/data/fonts" };
 
-                return candidateDirs
+                return [.. candidateDirs
                     .SelectMany(GetFontFiles)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToArray();
+                    .Distinct(StringComparer.OrdinalIgnoreCase)];
             }
 
             // The Apple platforms have one source: CoreText, which knows every installed font. Their font
@@ -214,7 +211,7 @@ namespace PeachDrawing.Text.Internal.Fonts
                 var appdataFontDir = System.Environment.ExpandEnvironmentVariables(@"%LOCALAPPDATA%\Microsoft\Windows\Fonts");
                 fontPaths.AddRange(GetFontFiles(appdataFontDir));
 
-                return fontPaths.ToArray();
+                return [.. fontPaths];
             }
 
             // Other platforms without system font discovery (tvOS, watchOS, browser/WASM,
@@ -703,7 +700,7 @@ namespace PeachDrawing.Text.Internal.Fonts
             face = null;
 
             List<FontFaceEntry> covering = request.Codepoint is Rune rune
-                ? family.Faces.Where(f => FaceCovers(f, rune)).ToList()
+                ? [.. family.Faces.Where(f => FaceCovers(f, rune))]
                 : family.Faces;
 
             if (covering.Count == 0)
@@ -789,7 +786,7 @@ namespace PeachDrawing.Text.Internal.Fonts
         /// <c>oblique 0deg</c> request makes before trying anything else.
         /// </summary>
         private static List<FontFaceEntry> UprightCandidates(List<FontFaceEntry> faces) =>
-            PreferStrictSlant(faces.Where(f => SlantMatches(f, false)).ToList(), false);
+            PreferStrictSlant([.. faces.Where(f => SlantMatches(f, false))], false);
 
         /// <summary>
         /// Of faces that all declare an oblique range, the ones that hold <paramref name="angle"/> or, when none does, the ones at the end of
@@ -811,14 +808,14 @@ namespace PeachDrawing.Text.Internal.Fonts
             double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
 
             var values = faces.Select(Measure).Distinct().ToList();
-            var above = values.Where(v => v > target).OrderBy(v => v);
-            var below = values.Where(v => v > 0 && v < target).OrderByDescending(v => v);
+            var above = values.Where(v => v > target).Order();
+            var below = values.Where(v => v > 0 && v < target).OrderDescending();
             var leaning = (target >= ItalicAsObliqueAngle ? above.Concat(below) : below.Concat(above)).ToList();
             if (leaning.Count == 0)
                 return [];
 
             var chosen = leaning[0];
-            return faces.Where(f => Measure(f) == chosen).ToList();
+            return [.. faces.Where(f => Measure(f) == chosen)];
         }
 
         /// <summary>
@@ -830,9 +827,9 @@ namespace PeachDrawing.Text.Internal.Fonts
         {
             var mirror = angle < 0 ? -1.0 : 1.0;
             double Measure(FontFaceEntry f) => mirror * f.Ranges.Oblique.Value.Clamp(angle);
-            var chosen = faces.Select(Measure).Where(v => v <= 0).OrderByDescending(v => v).First();
+            var chosen = faces.Select(Measure).Where(v => v <= 0).OrderDescending().First();
 
-            return faces.Where(f => Measure(f) == chosen).ToList();
+            return [.. faces.Where(f => Measure(f) == chosen)];
         }
 
         /// <summary>
@@ -1112,12 +1109,12 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (target <= WidthClasses.Normal)
                 {
-                    return availableWidths.Where(s => s < target).OrderByDescending(s => s)
-                        .Concat(availableWidths.Where(s => s > target).OrderBy(s => s));
+                    return availableWidths.Where(s => s < target).OrderDescending()
+                        .Concat(availableWidths.Where(s => s > target).Order());
                 }
 
-                return availableWidths.Where(s => s > target).OrderBy(s => s)
-                    .Concat(availableWidths.Where(s => s < target).OrderByDescending(s => s));
+                return availableWidths.Where(s => s > target).Order()
+                    .Concat(availableWidths.Where(s => s < target).OrderDescending());
             }
 
             return Search().First();
@@ -1140,19 +1137,19 @@ namespace PeachDrawing.Text.Internal.Fonts
             {
                 if (target is >= 400 and <= 500)
                 {
-                    return availableWeights.Where(w => w >= target && w <= 500).OrderBy(w => w)
-                        .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w))
-                        .Concat(availableWeights.Where(w => w > 500).OrderBy(w => w));
+                    return availableWeights.Where(w => w >= target && w <= 500).Order()
+                        .Concat(availableWeights.Where(w => w < target).OrderDescending())
+                        .Concat(availableWeights.Where(w => w > 500).Order());
                 }
 
                 if (target < 400)
                 {
-                    return availableWeights.Where(w => w < target).OrderByDescending(w => w)
-                        .Concat(availableWeights.Where(w => w > target).OrderBy(w => w));
+                    return availableWeights.Where(w => w < target).OrderDescending()
+                        .Concat(availableWeights.Where(w => w > target).Order());
                 }
 
-                return availableWeights.Where(w => w > target).OrderBy(w => w)
-                    .Concat(availableWeights.Where(w => w < target).OrderByDescending(w => w));
+                return availableWeights.Where(w => w > target).Order()
+                    .Concat(availableWeights.Where(w => w < target).OrderDescending());
             }
 
             return Search().First();

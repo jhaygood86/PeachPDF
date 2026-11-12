@@ -43,7 +43,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core.Dom
                 Assert.All(levels, level => Assert.Equal(0, level));
 
                 var codepoints = text.Select(c => (int)c).ToList();
-                var resolved = Scripts.ResolveLooked(codepoints.Select(Scripts.Of).ToList());
+                var resolved = Scripts.ResolveLooked([.. codepoints.Select(Scripts.Of)]);
                 var expected = text.Any(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z') ? "Latin" : "Common";
                 Assert.All(resolved, script => Assert.Equal(expected, script));
 

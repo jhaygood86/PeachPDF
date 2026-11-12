@@ -15,9 +15,9 @@ namespace PeachDrawing.Svg;
 internal sealed class SvgDefs(int precision)
 {
     private readonly StringBuilder _defs = new();
-    private readonly Dictionary<string, string> _byContent = new(StringComparer.Ordinal);
-    private readonly Dictionary<object, string> _byObject = new(ReferenceEqualityComparer.Instance);
-    private readonly Dictionary<Typeface, FontUse> _fonts = new();
+    private readonly Dictionary<string, string> _byContent = [with(StringComparer.Ordinal)];
+    private readonly Dictionary<object, string> _byObject = [with(ReferenceEqualityComparer.Instance)];
+    private readonly Dictionary<Typeface, FontUse> _fonts = [];
     private int _next;
 
     /// <summary>One typeface the document draws as <c>&lt;text&gt;</c>: its CSS family name and the glyphs of it used.</summary>
@@ -70,7 +70,7 @@ internal sealed class SvgDefs(int precision)
         return id;
     }
 
-    private readonly Dictionary<(Typeface Typeface, int Glyph, double Scale, double Skew), string> _glyphs = new();
+    private readonly Dictionary<(Typeface Typeface, int Glyph, double Scale, double Skew), string> _glyphs = [];
 
     /// <summary>The id of a glyph definition, built by <paramref name="build"/> (given the new id) the first time it is asked for.</summary>
     public string GlyphId(Typeface typeface, int glyph, double scale, double skew, Func<string, string> build)
@@ -140,7 +140,7 @@ internal sealed class SvgDefs(int precision)
         return buffer[..written];
     }
 
-    private static readonly string[] DecimalFormats = Enumerable.Range(0, 10).Select(n => n == 0 ? "0" : "0." + new string('#', n)).ToArray();
+    private static readonly string[] DecimalFormats = [.. Enumerable.Range(0, 10).Select(n => n == 0 ? "0" : "0." + new string('#', n))];
 
     /// <summary>A <c>matrix(...)</c> transform value for <paramref name="m"/>.</summary>
     public string Matrix(Matrix3x2Value m) =>

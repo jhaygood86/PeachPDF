@@ -21,7 +21,7 @@ namespace PeachPDF.Tests.Html.Core
         private static Typeface Descriptor() => TypefaceFixtures.Shared(BundledFonts.ColorEmojiSequences);
 
         private static int[] Shape(string text) =>
-            Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex).ToArray();
+            [.. Descriptor().ShapeGlyphs(text, ShapeSettings.Default).Select(g => g.GlyphIndex)];
 
         [Theory]
         [InlineData("\U0001F3F3️‍\U0001F308", "rainbow flag: ZWJ sequence carrying a VS16")]

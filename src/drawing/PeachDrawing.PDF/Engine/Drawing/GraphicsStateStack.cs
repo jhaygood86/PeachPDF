@@ -56,5 +56,5 @@ internal sealed class GraphicsStateStack
 
     readonly InternalGraphicsState _current;
 
-    readonly Stack<InternalGraphicsState> _stack = new Stack<InternalGraphicsState>();
+    readonly Stack<InternalGraphicsState> _stack = new();
 }

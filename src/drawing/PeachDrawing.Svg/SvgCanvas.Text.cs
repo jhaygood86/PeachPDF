@@ -172,7 +172,7 @@ public sealed partial class SvgCanvas
     /// <summary>Draws a bitmap colour glyph at a glyph origin (layout units), the way the PDF backend places it.</summary>
     private bool DrawBitmapGlyph(Typeface typeface, int glyphId, EmbeddedBitmap bitmap, double fontSize, double originX, double baselineY)
     {
-        if (BitmapImages.GetValue(typeface, _ => new Dictionary<(int, int), SvgImage?>()) is not { } cache)
+        if (BitmapImages.GetValue(typeface, _ => []) is not { } cache)
             return false;
 
         SvgImage? image;
@@ -193,7 +193,7 @@ public sealed partial class SvgCanvas
         return true;
     }
 
-    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int, int), SvgImage?>> BitmapImages = new();
+    private static readonly ConditionalWeakTable<Typeface, Dictionary<(int, int), SvgImage?>> BitmapImages = [];
 
     /// <summary>Draws a glyph's COLR/CPAL colour artwork through the shared painter, which targets this canvas as vector paths and gradients.</summary>
     private bool TryDrawColorGlyph(Typeface typeface, int glyphId, double fontSize, PaintColor color, int paletteIndex,

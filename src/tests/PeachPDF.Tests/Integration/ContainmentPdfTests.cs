@@ -51,13 +51,12 @@ namespace PeachPDF.Tests.Integration
             RegexOptions.CultureInvariant);
 
         private static List<(double W, double H)> ClipSizes(string content) =>
-            ClipPath.Matches(content)
+            [.. ClipPath.Matches(content)
                 .Select(m =>
                 {
                     double Num(string name) => double.Parse(m.Groups[name].Value, CultureInfo.InvariantCulture);
                     return (Math.Abs(Num("x3") - Num("x1")), Math.Abs(Num("y3") - Num("y1")));
-                })
-                .ToList();
+                })];
 
         private const string RedFloat = "<div style='float:left;width:75pt;height:45pt;background:#f00'></div>";
         private const string LimeBlock = "<div style='height:15pt;background:#0f0'></div>";

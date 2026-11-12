@@ -106,11 +106,11 @@ namespace PeachBrackets.Engine.Tests.CSS
                 return new[]
                 {
                     new object[] { "0" },
-                    new object[] { "20px" },
-                    new object[] { "1em" },
-                    new object[] { "3vmin" },
-                    new object[] { "0.5cm" },
-                    new object[] { "10%" }
+                    ["20px"],
+                    ["1em"],
+                    ["3vmin"],
+                    ["0.5cm"],
+                    ["10%"]
                 }.Union(GlobalKeywordTestValues.ToObjectArray());
             }
         }

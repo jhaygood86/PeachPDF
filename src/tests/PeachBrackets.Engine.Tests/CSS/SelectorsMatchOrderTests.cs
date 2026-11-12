@@ -18,9 +18,11 @@ public class SelectorsMatchOrderTests
         var expensive = ParseSelector(":has(.x)");
         var cheap = ParseSelector("#id");
 
-        var compound = new CompoundSelector();
-        compound.Add(expensive);
-        compound.Add(cheap);
+        var compound = new CompoundSelector
+        {
+            expensive,
+            cheap
+        };
 
         var order = compound.MatchOrder;
 
@@ -39,9 +41,11 @@ public class SelectorsMatchOrderTests
         var expensive = ParseSelector(":has(.x)");
         var cheap = ParseSelector(".cls");
 
-        var list = new ListSelector();
-        list.Add(expensive);
-        list.Add(cheap);
+        var list = new ListSelector
+        {
+            expensive,
+            cheap
+        };
 
         var order = list.MatchOrder;
 
@@ -56,10 +60,12 @@ public class SelectorsMatchOrderTests
     [Fact]
     public void MatchOrder_IsStableAcrossRepeatedAccess()
     {
-        var compound = new CompoundSelector();
-        compound.Add(ParseSelector(":has(.x)"));
-        compound.Add(ParseSelector("#id"));
-        compound.Add(ParseSelector(".cls"));
+        var compound = new CompoundSelector
+        {
+            ParseSelector(":has(.x)"),
+            ParseSelector("#id"),
+            ParseSelector(".cls")
+        };
 
         var first = compound.MatchOrder;
         var second = compound.MatchOrder;

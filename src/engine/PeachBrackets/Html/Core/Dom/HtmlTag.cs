@@ -127,7 +127,7 @@ namespace PeachBrackets.Html.Dom
         /// </summary>
         internal void SetAttribute(string name, string value)
         {
-            Attributes ??= new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Attributes ??= [with(StringComparer.OrdinalIgnoreCase)];
             Attributes[name] = value;
         }
 

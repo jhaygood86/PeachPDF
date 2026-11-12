@@ -106,7 +106,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static IReadOnlyList<MarginStyleRule> Margins(string marginBoxCss) =>
-            new StylesheetParser().Parse($"@page {{ {marginBoxCss} }}")
-                .Rules.OfType<PageRule>().Single().Margins.ToList();
+            [.. new StylesheetParser().Parse($"@page {{ {marginBoxCss} }}")
+                .Rules.OfType<PageRule>().Single().Margins];
     }
 }

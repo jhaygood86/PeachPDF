@@ -154,14 +154,13 @@ namespace PeachBrackets.Engine.Tests.Integration
                 "{F}", string.Join(" ", Enumerable.Range(0, wordCount).Select(i => $"w{i}"))));
 
         private static List<CssRect> WordsIn(CssBox box) =>
-            LayoutHarness.Descendants(box).SelectMany(b => b.Words).ToList();
+            [.. LayoutHarness.Descendants(box).SelectMany(b => b.Words)];
 
         private static List<CssRect> ClaimedWords(HtmlContainerInt container) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .SelectMany(f => Flatten(f.Root))
                 .SelectMany(f => f.Words)
-                .Select(w => w.Word)
-                .ToList();
+                .Select(w => w.Word)];
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {

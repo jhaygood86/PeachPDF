@@ -22,7 +22,7 @@ internal sealed class PdfDictionaryMetadata
             var attributes = field.GetCustomAttributes<PdfKeyAttribute>(false);
             foreach (var attribute in attributes)
             {
-                PdfKeyDescriptor descriptor = new PdfKeyDescriptor(attribute);
+                PdfKeyDescriptor descriptor = new(attribute);
                 descriptor.KeyValue = (string)field.GetValue(null)!;
                 _keyDescriptors[descriptor.KeyValue] = descriptor;
             }
@@ -41,5 +41,5 @@ internal sealed class PdfDictionaryMetadata
         }
     }
 
-    readonly Dictionary<string, PdfKeyDescriptor> _keyDescriptors = new Dictionary<string, PdfKeyDescriptor>();
+    readonly Dictionary<string, PdfKeyDescriptor> _keyDescriptors = [];
 }

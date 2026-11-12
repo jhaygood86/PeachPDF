@@ -15,7 +15,7 @@ namespace PeachBrackets.Css
         private const string CurrentDirectory = ".";
         private const string CurrentDirectoryAlternative = "%2e";
         private const string UpperDirectory = "..";
-        private static readonly string[] UpperDirectoryAlternatives = { "%2e%2e", ".%2e", "%2e." };
+        private static readonly string[] UpperDirectoryAlternatives = ["%2e%2e", ".%2e", "%2e."];
         private static readonly Url DefaultBase = new(string.Empty, string.Empty, string.Empty);
 
         private string _fragment;

@@ -36,7 +36,7 @@ namespace PeachDrawing.Text.Tests.Hinting
 
         /// <summary>The font without one of its tables.</summary>
         public static byte[] WithoutTable(byte[] font, string tag) =>
-            Assemble(font, Tables(font).Where(t => t.Tag != tag).Select(t => (t.Tag, font.AsSpan(t.Offset, t.Length).ToArray())).ToList());
+            Assemble(font, [.. Tables(font).Where(t => t.Tag != tag).Select(t => (t.Tag, font.AsSpan(t.Offset, t.Length).ToArray()))]);
 
         private static byte[] Assemble(byte[] font, List<(string Tag, byte[] Data)> parts)
         {

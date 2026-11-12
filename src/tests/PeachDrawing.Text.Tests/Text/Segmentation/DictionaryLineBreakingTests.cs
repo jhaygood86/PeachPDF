@@ -279,7 +279,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
 
             int found = dictionary.FindPrefixes(text, lengths);
 
-            var prefixes = Enumerable.Range(0, found).Select(i => new string(text.Take(lengths[i]).Select(c => (char)c).ToArray())).ToArray();
+            var prefixes = Enumerable.Range(0, found).Select(i => new string([.. text.Take(lengths[i]).Select(c => (char)c)])).ToArray();
             Assert.Contains("ประเทศ", prefixes);
             Assert.Contains("ประเทศไทย", prefixes);
             Assert.Equal(prefixes.OrderBy(p => p.Length), prefixes);
@@ -355,7 +355,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
                 bytes.AddRange(BitConverter.GetBytes(count));
                 bytes.AddRange(shared);
                 bytes.AddRange(suffixes);
-                return bytes.ToArray();
+                return [.. bytes];
             }
 
             // Two words, "กข" and "กฃ": the second shares one character with the first (a character is its code point less 0E00, plus one).
@@ -376,7 +376,7 @@ namespace PeachDrawing.Text.Tests.Text.Segmentation
             Assert.Null(WordDictionary.Parse(Payload(2, [0, 3], [2, 3, 0, 4, 0])));         // shares more than the word before has
             Assert.Null(WordDictionary.Parse(Payload(2, [1, 1], [2, 3, 0, 4, 0])));         // the first word shares
             Assert.Null(WordDictionary.Parse(Payload(2, [0, 0], [0, 4, 0])));              // an empty word
-            Assert.Null(WordDictionary.Parse(Payload(1, [0], Enumerable.Repeat((byte)1, 256).Append((byte)0).ToArray())));   // longer than 255
+            Assert.Null(WordDictionary.Parse(Payload(1, [0], [.. Enumerable.Repeat((byte)1, 256), (byte)0])));   // longer than 255
         }
 
         // ---- hostile input -----------------------------------------------------------------------------------------------------------

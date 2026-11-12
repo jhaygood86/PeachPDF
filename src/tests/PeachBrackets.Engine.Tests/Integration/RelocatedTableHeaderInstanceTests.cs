@@ -117,12 +117,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<int> CountPerPage(HtmlContainerInt container, string word) =>
-            container.FragmentTree!.Fragmentainers
+            [.. container.FragmentTree!.Fragmentainers
                 .OrderBy(f => f.SlotIndex)
                 .Select(f => Flatten(f.Root)
                     .SelectMany(b => b.Words)
-                    .Count(w => w.Word.Text == word))
-                .ToList();
+                    .Count(w => w.Word.Text == word))];
 
         private static IEnumerable<BoxFragment> Flatten(BoxFragment fragment)
         {

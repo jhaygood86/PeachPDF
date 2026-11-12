@@ -70,9 +70,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 after: (root, container, g) => continuePass(TableOf(root), container, g));
 
         private static List<CssBox> BodyRowsOf(CssBox table) =>
-            LayoutHarness.Descendants(table)
-                .Where(b => b.Display.Value == DisplayMode.TableRow)
-                .ToList();
+            [.. LayoutHarness.Descendants(table).Where(b => b.Display.Value == DisplayMode.TableRow)];
 
         private static string RowsTable(int rows) =>
             "<table style='width:150pt;font-size:10pt'>"

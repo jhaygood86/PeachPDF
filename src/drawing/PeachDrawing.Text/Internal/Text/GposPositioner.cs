@@ -43,7 +43,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         // GposTable instances are cached and shared process-wide, same rationale as GsubShaper's own
         // LookupIndexCache.
-        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<ShapeSettings, int[]>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GposTable, ConcurrentDictionary<ShapeSettings, int[]>> LookupIndexCache = [];
 
         public static void Apply(OpenTypeDescriptor descriptor, List<PlacedGlyph> glyphs, ShapeSettings features)
         {

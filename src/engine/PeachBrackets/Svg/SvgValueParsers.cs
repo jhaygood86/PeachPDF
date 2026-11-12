@@ -633,7 +633,7 @@ namespace PeachBrackets.Svg
                 {
                     declarations[property] = value;
                     if (isImportant)
-                        (important ??= new HashSet<string>(StringComparer.OrdinalIgnoreCase)).Add(property);
+                        (important ??= [with(StringComparer.OrdinalIgnoreCase)]).Add(property);
                     else
                         important?.Remove(property);
                 }

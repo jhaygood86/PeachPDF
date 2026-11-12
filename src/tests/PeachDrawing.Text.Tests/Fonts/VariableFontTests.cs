@@ -27,7 +27,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         internal static readonly string[] GlyphNames = [".notdef", "space", "A", "B", "C", "acute", "Aacute"];
 
         internal static AxisSetting[] Settings(JsonElement location) =>
-            location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble())).ToArray();
+            [.. location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble()))];
 
         [Fact]
         public void AVariableFont_DeclaresItsAxes()

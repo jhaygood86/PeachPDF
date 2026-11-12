@@ -67,7 +67,7 @@ namespace PeachDrawing.Text.Internal.Text
         // or <value> - 1 for an explicit font-feature-settings tag with an integer greater than 1, per
         // CSS Fonts Level 3's "the value selects the Nth glyph alternate" rule. A lookup of any other
         // type at that index ignores the paired value entirely.
-        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<ShapeSettings, KeyValuePair<int, int>[]>> LookupIndexCache = new();
+        private static readonly ConditionalWeakTable<GsubTable, ConcurrentDictionary<ShapeSettings, KeyValuePair<int, int>[]>> LookupIndexCache = [];
 
         // Every tag any font-variant-* longhand (ligatures/caps/numeric/east-asian) can itself
         // produce - an explicit font-feature-settings entry for one of these is always superseded by
@@ -163,7 +163,7 @@ namespace PeachDrawing.Text.Internal.Text
                 {
                     if (joiningForms[i] == ArabicJoiningForm.None)
                         continue;
-                    (formsByClusterStart ??= new Dictionary<int, ArabicJoiningForm>())[glyphs[i].ClusterStart] = joiningForms[i];
+                    (formsByClusterStart ??= [])[glyphs[i].ClusterStart] = joiningForms[i];
                 }
 
                 if (formsByClusterStart is not null)
@@ -364,11 +364,12 @@ namespace PeachDrawing.Text.Internal.Text
                 // Every tag here wants the default (first) glyph alternate if its lookup turns out to
                 // be Type 3 - only an explicit font-feature-settings value greater than 1 asks for a
                 // later one (collected into customAltIndexByTag below instead).
-                var defaultTags = new HashSet<string>();
-
-                // rvrn (Required Variation Alternates) is what a variable font's FeatureVariations use for glyph swaps at a region of
-                // its design space; it is on for every script and always applied first. A font that is not variable has no such feature.
-                defaultTags.Add("rvrn");
+                var defaultTags = new HashSet<string>
+                {
+                    // rvrn (Required Variation Alternates) is what a variable font's FeatureVariations use for glyph swaps at a region of
+                    // its design space; it is on for every script and always applied first. A font that is not variable has no such feature.
+                    "rvrn"
+                };
 
                 // ccmp (Glyph Composition/Decomposition) and locl (Localized Forms) are default-on for
                 // every script in the OpenType spec's own feature registry - not opt-in the way liga/dlig
@@ -448,7 +449,7 @@ namespace PeachDrawing.Text.Internal.Text
                             continue;
 
                         if (value >= 2)
-                            (customAltIndexByTag ??= new Dictionary<string, int>())[tag] = value - 1;
+                            (customAltIndexByTag ??= [])[tag] = value - 1;
                         else
                             defaultTags.Add(tag);
                     }
@@ -526,7 +527,7 @@ namespace PeachDrawing.Text.Internal.Text
                 if (!JoiningFormTags.TryGetValue(form, out var tag))
                     continue;
 
-                lookupsByTag ??= new Dictionary<string, IReadOnlyList<int>>();
+                lookupsByTag ??= [];
                 if (!lookupsByTag.TryGetValue(tag, out var lookupIndices))
                 {
                     var resolved = new List<int>(gsub.GetActiveLookupIndices(scriptPreference, languageTag, new HashSet<string> { tag }));

@@ -178,7 +178,7 @@ internal sealed class PdfString : PdfItem
     /// </summary>
     internal byte[] EncryptionValue
     {
-        get => _value is null ? new byte[0] : GetBytesFromEncoding();
+        get => _value is null ? [] : GetBytesFromEncoding();
         // BUG: May lead to trouble with the value semantics of PdfString
         set
         {
@@ -239,13 +239,13 @@ internal sealed class PdfString : PdfItem
                 throw new InvalidOperationException("DocEncoded string contains char greater 255.");
             }
         }
-        StringBuilder sb = new StringBuilder(length);
+        StringBuilder sb = new(length);
         for (int idx = 0; idx < length; idx++)
             sb.Append((char)bytes[idx]);
         return sb.ToString();
     }
     static readonly char[] Encode =
-    {
+    [
         '\x00', '\x01', '\x02', '\x03', '\x04', '\x05', '\x06', '\x07', '\x08', '\x09', '\x0A', '\x0B', '\x0C', '\x0D', '\x0E', '\x0F',
         '\x10', '\x11', '\x12', '\x13', '\x14', '\x15', '\x16', '\x17', '\x18', '\x19', '\x1A', '\x1B', '\x1C', '\x1D', '\x1E', '\x1F',
         '\x20', '\x21', '\x22', '\x23', '\x24', '\x25', '\x26', '\x27', '\x28', '\x29', '\x2A', '\x2B', '\x2C', '\x2D', '\x2E', '\x2F',
@@ -262,7 +262,7 @@ internal sealed class PdfString : PdfItem
         '\xD0', '\xD1', '\xD2', '\xD3', '\xD4', '\xD5', '\xD6', '\xD7', '\xD8', '\xD9', '\xDA', '\xDB', '\xDC', '\xDD', '\xDE', '\xDF',
         '\xE0', '\xE1', '\xE2', '\xE3', '\xE4', '\xE5', '\xE6', '\xE7', '\xE8', '\xE9', '\xEA', '\xEB', '\xEC', '\xED', '\xEE', '\xEF',
         '\xF0', '\xF1', '\xF2', '\xF3', '\xF4', '\xF5', '\xF6', '\xF7', '\xF8', '\xF9', '\xFA', '\xFB', '\xFC', '\xFD', '\xFE', '\xFF',
-    };
+    ];
 
     static void CheckRawEncoding(string s)
     {

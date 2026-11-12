@@ -17,7 +17,7 @@ namespace PeachBrackets.Css
         public static readonly string Blob = "blob";
 
         private static readonly string[] RelativeProtocols =
-        {
+        [
             Http,
             Https,
             Ftp,
@@ -25,17 +25,17 @@ namespace PeachBrackets.Css
             Ws,
             Wss,
             Gopher
-        };
+        ];
 
         private static readonly string[] OriginalableProtocols =
-        {
+        [
             Http,
             Https,
             Ftp,
             Ws,
             Wss,
             Gopher
-        };
+        ];
 
         public static bool IsRelative(string protocol)
         {

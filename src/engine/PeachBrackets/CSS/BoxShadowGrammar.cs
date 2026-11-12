@@ -115,8 +115,8 @@ namespace PeachBrackets.Css
             out bool inset, out List<Token> lengths, out List<Token> colorTokens)
         {
             inset = false;
-            lengths = new List<Token>();
-            colorTokens = new List<Token>();
+            lengths = [];
+            colorTokens = [];
             var lengthsClosed = false; // set once a non-length token appears after lengths have begun
 
             foreach (var token in group)

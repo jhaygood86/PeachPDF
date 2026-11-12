@@ -18,7 +18,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             public Writer U16(int v) { _bytes.Add((byte)(v >> 8)); _bytes.Add((byte)v); return this; }
             public Writer U32(uint v) { U16((int)(v >> 16)); U16((int)(v & 0xFFFF)); return this; }
             public Writer F2Dot14(double v) => U16((short)Math.Round(v * 16384));
-            public byte[] ToArray() => _bytes.ToArray();
+            public byte[] ToArray() => [.. _bytes];
         }
 
         /// <summary>One axis; regions 0 = (0, 1, 1) and 1 = (-1, -1, 0); two data sets, the second with long words.</summary>
@@ -349,10 +349,10 @@ namespace PeachDrawing.Text.Tests.Fonts
             {
                 var record = new Writer();
                 foreach (char c in tag) record.U8(c);
-                table = table.Concat(record.U16(outer).U16(inner).ToArray()).ToArray();
+                table = [.. table, .. record.U16(outer).U16(inner).ToArray()];
             }
 
-            table = table.Concat(store).ToArray();
+            table = [.. table, .. store];
 
             var mvar = MvarTable.TryParse(table);
 

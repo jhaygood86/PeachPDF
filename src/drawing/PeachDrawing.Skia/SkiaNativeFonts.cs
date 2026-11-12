@@ -2,6 +2,7 @@ using PeachDrawing.Core;
 using PeachDrawing.Text;
 using SkiaSharp;
 using System;
+using System.Threading;
 using System.Collections.Generic;
 
 namespace PeachDrawing.Skia;
@@ -35,8 +36,8 @@ internal sealed class NativeFonts(ISkiaTextShaper shaper) : IDisposable
 {
     private readonly record struct Registered(NativeFace Face, double Weight, bool Italic);
 
-    private readonly object _gate = new();
-    private readonly Dictionary<string, List<Registered>> _registered = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Lock _gate = new();
+    private readonly Dictionary<string, List<Registered>> _registered = [with(StringComparer.OrdinalIgnoreCase)];
     private readonly Dictionary<(string, int, bool, int), NativeFace> _matched = [];
     private readonly Dictionary<SKTypeface, NativeFace> _byTypeface = [];
     private readonly List<NativeFace> _owned = [];

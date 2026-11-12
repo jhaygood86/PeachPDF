@@ -194,7 +194,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         // ─── Text beside a float ───
 
         private static List<CssRect> WordsOf(CssBox box) =>
-            box.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak).ToList();
+            [.. box.LineBoxes.SelectMany(l => l.Words).Where(w => !w.IsLineBreak)];
 
         private const string Alpha =
             "Alpha Beta Gamma Delta Epsilon Zeta Eta Theta Iota Kappa Lambda Mu Nu Xi Omicron Pi Rho Sigma Tau Upsilon";

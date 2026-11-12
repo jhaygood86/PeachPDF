@@ -56,9 +56,7 @@ namespace PeachPDF.Tests.Integration
 
         /// <summary>Every glyph placement in the document, in order.</summary>
         private static List<(double Scale, double X, double Y, string Name)> Placements(string pdf) =>
-            Placement.Matches(pdf)
-                .Select(m => (Num(m.Groups[1].Value), Num(m.Groups[3].Value), Num(m.Groups[4].Value), m.Groups[5].Value))
-                .ToList();
+            [.. Placement.Matches(pdf).Select(m => (Num(m.Groups[1].Value), Num(m.Groups[3].Value), Num(m.Groups[4].Value), m.Groups[5].Value))];
 
         private static double Num(string s) => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture);
 

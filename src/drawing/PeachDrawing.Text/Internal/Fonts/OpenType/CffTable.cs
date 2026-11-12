@@ -41,7 +41,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
         private readonly byte[] _data;
         private readonly int[] _absoluteOffsets; // Count+1 entries; entry i spans [_absoluteOffsets[i], _absoluteOffsets[i+1])
 
-        public static readonly CffIndex Empty = new(Array.Empty<byte>(), [0]);
+        public static readonly CffIndex Empty = new([], [0]);
 
         private CffIndex(byte[] data, int[] absoluteOffsets)
         {
@@ -195,7 +195,7 @@ namespace PeachDrawing.Text.Internal.Fonts.OpenType
                             op = 1200 + data[p];
                             p++;
                         }
-                        dict._entries[op] = operands.ToArray();
+                        dict._entries[op] = [.. operands];
                         operands.Clear();
                         break;
 

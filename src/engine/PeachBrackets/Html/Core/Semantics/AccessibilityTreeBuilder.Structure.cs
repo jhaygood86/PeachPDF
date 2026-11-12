@@ -180,18 +180,14 @@ namespace PeachBrackets.Html.Semantics
                         .Select(id => byElementId.GetValueOrDefault(id)).OfType<AccessibilityNode>().Where(h => cells.Contains(h)).ToList();
                     if (named.Count > 0)
                     {
-                        cell.ColumnHeaders = named.Where(h => h.Role == AccessibilityRole.ColumnHeader).ToArray();
-                        cell.RowHeaders = named.Where(h => h.Role == AccessibilityRole.RowHeader).ToArray();
+                        cell.ColumnHeaders = [.. named.Where(h => h.Role == AccessibilityRole.ColumnHeader)];
+                        cell.RowHeaders = [.. named.Where(h => h.Role == AccessibilityRole.RowHeader)];
                         continue;
                     }
                 }
 
-                cell.ColumnHeaders = columnHeaders
-                    .Where(h => h.RowIndex < cell.RowIndex && h.ColumnIndex < cell.ColumnIndex + cell.ColumnSpan && h.ColumnIndex + h.ColumnSpan > cell.ColumnIndex)
-                    .ToArray();
-                cell.RowHeaders = rowHeaders
-                    .Where(h => h.ColumnIndex < cell.ColumnIndex && h.RowIndex < cell.RowIndex + cell.RowSpan && h.RowIndex + h.RowSpan > cell.RowIndex)
-                    .ToArray();
+                cell.ColumnHeaders = [.. columnHeaders.Where(h => h.RowIndex < cell.RowIndex && h.ColumnIndex < cell.ColumnIndex + cell.ColumnSpan && h.ColumnIndex + h.ColumnSpan > cell.ColumnIndex)];
+                cell.RowHeaders = [.. rowHeaders.Where(h => h.ColumnIndex < cell.ColumnIndex && h.RowIndex < cell.RowIndex + cell.RowSpan && h.RowIndex + h.RowSpan > cell.RowIndex)];
             }
         }
 

@@ -32,7 +32,7 @@ namespace PeachDrawing.Text.Tests.Fonts
         }
 
         private static AxisSetting[] Settings(JsonElement location) =>
-            location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble())).ToArray();
+            [.. location.EnumerateObject().Select(p => new AxisSetting(p.Name, p.Value.GetDouble()))];
 
         private static ushort Glyph(Typeface face, string name)
         {
@@ -287,7 +287,7 @@ namespace PeachDrawing.Text.Tests.Fonts
             public Writer U16(int v) { _bytes.Add((byte)(v >> 8)); _bytes.Add((byte)v); return this; }
             public Writer U32(uint v) { U16((int)(v >> 16)); U16((int)(v & 0xFFFF)); return this; }
             public Writer F2Dot14(double v) => U16((short)Math.Round(v * 16384));
-            public byte[] ToArray() => _bytes.ToArray();
+            public byte[] ToArray() => [.. _bytes];
         }
 
         /// <summary>A store with one axis and one region (0, 1, 1), one data set of three items whose one delta each is 100, -50 and 7.</summary>

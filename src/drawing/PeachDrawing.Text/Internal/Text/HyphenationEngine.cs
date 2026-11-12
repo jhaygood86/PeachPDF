@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Globalization;
@@ -49,7 +50,7 @@ namespace PeachDrawing.Text.Internal.Text
 
         private static HashSet<string>? _availableTags;
         private static Dictionary<string, string>? _languageTagMap;
-        private static readonly object InitLock = new();
+        private static readonly Lock InitLock = new();
 
         internal sealed record LanguagePatternSet(
             Dictionary<string, byte[]> Patterns,

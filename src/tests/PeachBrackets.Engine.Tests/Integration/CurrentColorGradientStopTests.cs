@@ -333,13 +333,11 @@ namespace PeachBrackets.Engine.Tests.Integration
 
         /// <summary>Every axial/radial shading's colours as <c>"c0 -> c1"</c>, read from the function dictionaries.</summary>
         private static List<string> ShadingColorPairs(string pdf) =>
-            System.Text.RegularExpressions.Regex.Matches(pdf, @"/C0\s*\[([^\]]*)\]\s*/C1\s*\[([^\]]*)\]")
-                .Select(m => $"{m.Groups[1].Value.Trim()} -> {m.Groups[2].Value.Trim()}").ToList();
+            [.. System.Text.RegularExpressions.Regex.Matches(pdf, @"/C0\s*\[([^\]]*)\]\s*/C1\s*\[([^\]]*)\]").Select(m => $"{m.Groups[1].Value.Trim()} -> {m.Groups[2].Value.Trim()}")];
 
         /// <summary>The bytes of every mesh shading stream (a conic gradient is a type 4 shading), which carry its colours.</summary>
         private static List<string> MeshShadingStreams(string pdf) =>
-            System.Text.RegularExpressions.Regex.Matches(pdf, @"/ShadingType 4.*?stream\r?\n(.*?)endstream", System.Text.RegularExpressions.RegexOptions.Singleline)
-                .Select(m => m.Groups[1].Value).ToList();
+            [.. System.Text.RegularExpressions.Regex.Matches(pdf, @"/ShadingType 4.*?stream\r?\n(.*?)endstream", System.Text.RegularExpressions.RegexOptions.Singleline).Select(m => m.Groups[1].Value)];
 
         [Theory]
         [InlineData("linear-gradient(to right, currentcolor, #ff0000)", "linear-gradient(to right, #0000ff, #ff0000)")]

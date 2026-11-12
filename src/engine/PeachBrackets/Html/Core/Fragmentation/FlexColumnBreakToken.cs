@@ -71,7 +71,7 @@ namespace PeachBrackets.Html.Fragmentation
     {
         /// <inheritdoc />
         internal override IReadOnlyList<BreakToken> FanOutContinuations =>
-            UnfinishedLines.Select(line => line.ItemToken).ToList();
+            [.. UnfinishedLines.Select(line => line.ItemToken)];
 
         /// <summary>
         /// Compared by <b>contents</b>, for the same reason <see cref="FlexBreakToken"/> states it — see

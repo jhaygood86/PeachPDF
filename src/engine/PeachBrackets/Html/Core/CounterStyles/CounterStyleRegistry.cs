@@ -42,7 +42,7 @@ namespace PeachBrackets.Html.CounterStyles
                 var style = CounterStyle.FromRule(rule);
                 if (style is null) continue;
 
-                (styles ??= new Dictionary<string, CounterStyle>(StringComparer.Ordinal))[rule.Name] = style;
+                (styles ??= [with(StringComparer.Ordinal)])[rule.Name] = style;
             }
 
             return styles is null ? null : new CounterStyleRegistry(styles);

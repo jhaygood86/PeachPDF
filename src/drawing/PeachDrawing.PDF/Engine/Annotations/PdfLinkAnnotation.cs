@@ -46,7 +46,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
         if (destinationPage < 1)
             throw new ArgumentException("Invalid destination page in call to CreateDocumentLink: page number is one-based and must be 1 or higher.", "destinationPage");
 
-        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        PdfLinkAnnotation link = new();
         link._linkType = LinkType.Document;
         link.Rectangle = rect;
         link._destPage = destinationPage;
@@ -107,7 +107,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
     /// </summary>
     public static PdfLinkAnnotation CreateWebLink(PdfRectangle rect, string url)
     {
-        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        PdfLinkAnnotation link = new();
         link._linkType = PdfLinkAnnotation.LinkType.Web;
         link.Rectangle = rect;
         link._url = url;
@@ -119,7 +119,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
     /// </summary>
     public static PdfLinkAnnotation CreateFileLink(PdfRectangle rect, string fileName)
     {
-        PdfLinkAnnotation link = new PdfLinkAnnotation();
+        PdfLinkAnnotation link = new();
         link._linkType = LinkType.File;
         // TODO: Adjust bleed box here (if possible)
         link.Rectangle = rect;

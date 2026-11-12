@@ -145,7 +145,7 @@ public class AccessibilityTreeTests
             + "<button>content only</button>");
 
         var buttons = tree.Nodes.Where(n => n.Role == AccessibilityRole.Button).ToArray();
-        Assert.Equal(["Alpha Beta", "Label", "content only"], buttons.Select(b => b.Name).ToArray());
+        Assert.Equal(["Alpha Beta", "Label", "content only"], [.. buttons.Select(b => b.Name)]);
         Assert.Equal("tip", buttons[1].Description);
     }
 
@@ -157,7 +157,7 @@ public class AccessibilityTreeTests
             + "<label>Second <input type=text id=second></label>"
             + "<input type=text placeholder='Only a placeholder'>");
 
-        Assert.Equal(["First name", "Second", "Only a placeholder"], tree.Nodes.Where(n => n.Role == AccessibilityRole.TextBox).Select(n => n.Name).ToArray());
+        Assert.Equal(["First name", "Second", "Only a placeholder"], [.. tree.Nodes.Where(n => n.Role == AccessibilityRole.TextBox).Select(n => n.Name)]);
     }
 
     [Fact]
@@ -172,7 +172,7 @@ public class AccessibilityTreeTests
         Assert.Equal("A picture", Only(tree, AccessibilityRole.Image).Name);
         Assert.Equal("Legend text", Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.Group).Name);
         Assert.Equal("Figure caption", Only(tree, AccessibilityRole.Figure).Name);
-        Assert.Equal(["Submit", "Clear"], tree.Nodes.Where(n => n.Role == AccessibilityRole.Button).Select(n => n.Name).ToArray());
+        Assert.Equal(["Submit", "Clear"], [.. tree.Nodes.Where(n => n.Role == AccessibilityRole.Button).Select(n => n.Name)]);
     }
 
     [Fact]
@@ -215,7 +215,7 @@ public class AccessibilityTreeTests
 
         Assert.Equal("Group label", Only(tree, AccessibilityRole.Group).Name);
         var options = tree.Nodes.Where(n => n.Role == AccessibilityRole.Option).ToArray();
-        Assert.Equal(["Option label", "Plain option"], options.Select(o => o.Name).ToArray());
+        Assert.Equal(["Option label", "Plain option"], [.. options.Select(o => o.Name)]);
         Assert.False(options[0].Selected);
         Assert.True(options[1].Selected);
         Assert.Contains(tree.Nodes, n => n.Role == AccessibilityRole.Button && n.Name == "Image button");
@@ -294,7 +294,7 @@ public class AccessibilityTreeTests
             "<p>shown</p><p aria-hidden='true'>aria-hidden</p><p hidden>hidden attribute</p><p style='display:none'>display none</p>"
             + "<div inert><p>inert</p></div><p style='visibility:hidden'>invisible</p>");
 
-        Assert.Equal(["shown"], tree.Nodes.Where(n => n.Role == AccessibilityRole.Text).Select(n => n.Name).ToArray());
+        Assert.Equal(["shown"], [.. tree.Nodes.Where(n => n.Role == AccessibilityRole.Text).Select(n => n.Name)]);
         // The elements themselves are not there either, not only their text.
         Assert.Single(tree.Nodes, n => n.Role == AccessibilityRole.Paragraph);
     }
@@ -352,7 +352,7 @@ public class AccessibilityTreeTests
         Assert.True(Named(tree, "a").IsFocusable);
         Assert.False(Named(tree, "b").IsFocusable);
         var groups = tree.Nodes.Where(n => n.Role == AccessibilityRole.Group).ToArray();
-        Assert.Equal([0, -1], groups.Select(g => g.TabIndex!.Value).ToArray());
+        Assert.Equal([0, -1], [.. groups.Select(g => g.TabIndex!.Value)]);
         Assert.All(groups, g => Assert.True(g.IsFocusable));
         Assert.False(Only(tree, AccessibilityRole.Paragraph).IsFocusable);
     }

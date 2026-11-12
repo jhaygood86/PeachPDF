@@ -13,7 +13,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
     {
         private sealed class PrefetchingContext : PdfRenderContext, IResourcePrefetcher
         {
-            public override Uri? BaseUri => new Uri("https://example.test/dir/");
+            public override Uri? BaseUri => new("https://example.test/dir/");
 
             public List<IReadOnlyList<Uri>> Calls { get; } = [];
 
@@ -44,7 +44,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
             var context = await LayOutAsync("<img src='a.png'><img src='/b.png'><img src='a.png'><div style='display:none'><img src='hidden.png'></div>");
 
             var call = Assert.Single(context.Calls);
-            Assert.Equal(["https://example.test/dir/a.png", "https://example.test/b.png", "https://example.test/dir/a.png"], call.Select(a => a.AbsoluteUri).ToArray());
+            Assert.Equal(["https://example.test/dir/a.png", "https://example.test/b.png", "https://example.test/dir/a.png"], [.. call.Select(a => a.AbsoluteUri)]);
         }
 
         [Fact]
@@ -54,7 +54,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
                 "<style>@font-face { font-family: A; src: url(https://fonts.test/a.woff2) } @font-face { font-family: B; src: local(Nope), url(https://fonts.test/b.woff2), url(https://fonts.test/b.woff) } @font-face { font-family: C; src: url(relative.woff2) }</style>");
 
             var call = Assert.Single(context.Calls);
-            Assert.Equal(["https://fonts.test/a.woff2", "https://fonts.test/b.woff2"], call.Select(a => a.AbsoluteUri).ToArray());
+            Assert.Equal(["https://fonts.test/a.woff2", "https://fonts.test/b.woff2"], [.. call.Select(a => a.AbsoluteUri)]);
         }
 
         [Fact]
@@ -64,7 +64,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
             var context = await LayOutAsync("<img data-src='x.png'><img src=''><img src='  '><img src='a.png'><img src='b.png'>");
 
             var call = Assert.Single(context.Calls);
-            Assert.Equal(["https://example.test/dir/a.png", "https://example.test/dir/b.png"], call.Select(a => a.AbsoluteUri).ToArray());
+            Assert.Equal(["https://example.test/dir/a.png", "https://example.test/dir/b.png"], [.. call.Select(a => a.AbsoluteUri)]);
         }
 
         [Fact]
@@ -74,7 +74,7 @@ namespace PeachBrackets.Engine.Tests.Html.Core
                 "<link rel='stylesheet' href='a.css'><link rel='preload' href='skip.css'><link rel='alternate stylesheet' href='/b.css'><link rel='icon' href='i.png'><link rel='stylesheet' href=''>");
 
             var call = Assert.Single(context.Calls);
-            Assert.Equal(["https://example.test/dir/a.css", "https://example.test/b.css"], call.Select(a => a.AbsoluteUri).ToArray());
+            Assert.Equal(["https://example.test/dir/a.css", "https://example.test/b.css"], [.. call.Select(a => a.AbsoluteUri)]);
         }
 
         [Fact]

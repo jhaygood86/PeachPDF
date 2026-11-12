@@ -25,7 +25,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static TestRecordingGraphics.DrawPathCall[] Strokes(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(c => c.Stroked).ToArray();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawPathCall>().Where(c => c.Stroked)];
 
         private static ShapeSettings Features(TestRecordingGraphics g, int i = 0) => g.DrawStringCalls[i].Features ?? ShapeSettings.Default;
 

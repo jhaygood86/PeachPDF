@@ -302,7 +302,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Single(s => s.Text == "…");
 
         private static List<TestRecordingGraphics.DrawLineCall> Lines(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1).ToList();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawLineCall>().OrderBy(l => l.Y1).ThenBy(l => l.X1)];
 
         private static string Page(string body) =>
             $"<!DOCTYPE html><html><head></head><body style='margin:0'>{body}</body></html>";

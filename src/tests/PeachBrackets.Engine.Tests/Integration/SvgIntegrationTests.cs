@@ -2065,9 +2065,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             var streamIdx = pdfText.LastIndexOf("\nstream\n", idx, StringComparison.Ordinal);
             var start = streamIdx >= 0 ? streamIdx + "\nstream\n".Length : Math.Max(0, idx - 240);
             var window = pdfText.Substring(start, idx - start);
-            return Regex.Matches(window, @"-?\d+(?:\.\d+)?")
-                .Select(m => double.Parse(m.Value, System.Globalization.CultureInfo.InvariantCulture))
-                .ToArray();
+            return [.. Regex.Matches(window, @"-?\d+(?:\.\d+)?").Select(m => double.Parse(m.Value, System.Globalization.CultureInfo.InvariantCulture))];
         }
 
         [Fact]

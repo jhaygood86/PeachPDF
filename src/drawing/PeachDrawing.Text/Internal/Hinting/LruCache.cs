@@ -17,7 +17,7 @@ internal sealed class LruCache<TKey, TValue>
     private readonly Dictionary<TKey, Making> _making = [];
     private Node? _first; // the most recently used
     private Node? _last; // the least recently used
-    private readonly object _lock = new();
+    private readonly Lock _lock = new();
 
     /// <param name="capacity">The most entries kept.</param>
     /// <param name="weigher">What an entry weighs, or null when entries are not weighed. It is called once for each value, outside the lock.</param>

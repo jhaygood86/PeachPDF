@@ -61,46 +61,46 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task CornerShapeTakesOneToFourValuesInCornerOrder()
         {
             var (_, one) = await RadiiOf("border-radius:10pt;corner-shape:bevel;");
-            Assert.Equal([0d, 0d, 0d, 0d], new[] { one.KTL, one.KTR, one.KBR, one.KBL });
+            Assert.Equal([0d, 0d, 0d, 0d], [one.KTL, one.KTR, one.KBR, one.KBL]);
 
             var (_, two) = await RadiiOf("border-radius:10pt;corner-shape:bevel scoop;");
-            Assert.Equal([0d, -1d, 0d, -1d], new[] { two.KTL, two.KTR, two.KBR, two.KBL });
+            Assert.Equal([0d, -1d, 0d, -1d], [two.KTL, two.KTR, two.KBR, two.KBL]);
 
             var (_, four) = await RadiiOf("border-radius:10pt;corner-shape:bevel scoop squircle notch;");
-            Assert.Equal([0d, -1d, 2d, double.NegativeInfinity], new[] { four.KTL, four.KTR, four.KBR, four.KBL });
+            Assert.Equal([0d, -1d, 2d, double.NegativeInfinity], [four.KTL, four.KTR, four.KBR, four.KBL]);
         }
 
         [Fact]
         public async Task SideShapeShorthandsSetTheirTwoCorners()
         {
             var (_, top) = await RadiiOf("border-radius:10pt;corner-top-shape:bevel scoop;");
-            Assert.Equal([0d, -1d, 1d, 1d], new[] { top.KTL, top.KTR, top.KBR, top.KBL });
+            Assert.Equal([0d, -1d, 1d, 1d], [top.KTL, top.KTR, top.KBR, top.KBL]);
 
             var (_, bottom) = await RadiiOf("border-radius:10pt;corner-bottom-shape:bevel scoop;");
-            Assert.Equal([1d, 1d, -1d, 0d], new[] { bottom.KTL, bottom.KTR, bottom.KBR, bottom.KBL });
+            Assert.Equal([1d, 1d, -1d, 0d], [bottom.KTL, bottom.KTR, bottom.KBR, bottom.KBL]);
 
             var (_, left) = await RadiiOf("border-radius:10pt;corner-left-shape:bevel scoop;");
-            Assert.Equal([0d, 1d, 1d, -1d], new[] { left.KTL, left.KTR, left.KBR, left.KBL });
+            Assert.Equal([0d, 1d, 1d, -1d], [left.KTL, left.KTR, left.KBR, left.KBL]);
 
             var (_, right) = await RadiiOf("border-radius:10pt;corner-right-shape:squircle;");
-            Assert.Equal([1d, 2d, 2d, 1d], new[] { right.KTL, right.KTR, right.KBR, right.KBL });
+            Assert.Equal([1d, 2d, 2d, 1d], [right.KTL, right.KTR, right.KBR, right.KBL]);
         }
 
         [Fact]
         public async Task SideRadiusShorthandsSetTheirTwoCorners()
         {
             var (_, top) = await RadiiOf("border-top-radius:5pt 10pt;");
-            Assert.Equal([5d, 10d, 0d, 0d], new[] { top.TLX, top.TRX, top.BRX, top.BLX });
+            Assert.Equal([5d, 10d, 0d, 0d], [top.TLX, top.TRX, top.BRX, top.BLX]);
 
             var (_, bottom) = await RadiiOf("border-bottom-radius:5pt 10pt / 2pt 4pt;");
-            Assert.Equal([0d, 0d, 10d, 5d], new[] { bottom.TLX, bottom.TRX, bottom.BRX, bottom.BLX });
-            Assert.Equal([0d, 0d, 4d, 2d], new[] { bottom.TLY, bottom.TRY, bottom.BRY, bottom.BLY });
+            Assert.Equal([0d, 0d, 10d, 5d], [bottom.TLX, bottom.TRX, bottom.BRX, bottom.BLX]);
+            Assert.Equal([0d, 0d, 4d, 2d], [bottom.TLY, bottom.TRY, bottom.BRY, bottom.BLY]);
 
             var (_, left) = await RadiiOf("border-left-radius:8pt;");
-            Assert.Equal([8d, 0d, 0d, 8d], new[] { left.TLX, left.TRX, left.BRX, left.BLX });
+            Assert.Equal([8d, 0d, 0d, 8d], [left.TLX, left.TRX, left.BRX, left.BLX]);
 
             var (_, right) = await RadiiOf("border-right-radius:6pt 3pt;");
-            Assert.Equal([0d, 6d, 3d, 0d], new[] { right.TLX, right.TRX, right.BRX, right.BLX });
+            Assert.Equal([0d, 6d, 3d, 0d], [right.TLX, right.TRX, right.BRX, right.BLX]);
         }
 
         [Fact]
@@ -115,11 +115,11 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(-1d, reversed.KBR);
 
             var (_, top) = await RadiiOf("corner-top:scoop 9pt;");
-            Assert.Equal([9d, 9d, 0d, 0d], new[] { top.TLX, top.TRX, top.BRX, top.BLX });
-            Assert.Equal([-1d, -1d, 1d, 1d], new[] { top.KTL, top.KTR, top.KBR, top.KBL });
+            Assert.Equal([9d, 9d, 0d, 0d], [top.TLX, top.TRX, top.BRX, top.BLX]);
+            Assert.Equal([-1d, -1d, 1d, 1d], [top.KTL, top.KTR, top.KBR, top.KBL]);
 
             var (_, all) = await RadiiOf("corner:notch 7pt;");
-            Assert.Equal([7d, 7d, 7d, 7d], new[] { all.TLX, all.TRX, all.BRX, all.BLX });
+            Assert.Equal([7d, 7d, 7d, 7d], [all.TLX, all.TRX, all.BRX, all.BLX]);
             Assert.True(all.KTL < -1e9 && all.KBR < -1e9);
         }
 
@@ -163,12 +163,12 @@ namespace PeachBrackets.Engine.Tests.Integration
         public async Task LogicalCornerShorthandsExpandToFlowRelativeCorners()
         {
             var (_, blockStart) = await RadiiOf("corner-block-start-shape:bevel scoop;border-block-end-radius:5pt 6pt;");
-            Assert.Equal([0d, -1d, 1d, 1d], new[] { blockStart.KTL, blockStart.KTR, blockStart.KBR, blockStart.KBL });
+            Assert.Equal([0d, -1d, 1d, 1d], [blockStart.KTL, blockStart.KTR, blockStart.KBR, blockStart.KBL]);
             Assert.Equal(5d, blockStart.BLX);
             Assert.Equal(6d, blockStart.BRX);
 
             var (_, inlineEnd) = await RadiiOf("corner-inline-end:square 4pt;");
-            Assert.Equal([0d, 4d, 4d, 0d], new[] { inlineEnd.TLX, inlineEnd.TRX, inlineEnd.BRX, inlineEnd.BLX });
+            Assert.Equal([0d, 4d, 4d, 0d], [inlineEnd.TLX, inlineEnd.TRX, inlineEnd.BRX, inlineEnd.BLX]);
         }
 
         [Fact]

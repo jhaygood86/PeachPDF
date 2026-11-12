@@ -224,7 +224,7 @@ namespace PeachDrawing.PDF
             }
         }
 
-        private readonly Dictionary<string, PdfFileSpecification> _specifications = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, PdfFileSpecification> _specifications = [with(StringComparer.Ordinal)];
 
         /// <summary>Finds the file specification written for the embedded file called <paramref name="fileName"/> (ordinal), once <see cref="Apply"/> has run.</summary>
         public bool TryGetSpecification(string fileName, out PdfFileSpecification specification)

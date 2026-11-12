@@ -126,7 +126,7 @@ namespace PeachBrackets.Engine.Tests.Integration
             LayoutHarness.Descendants(root).First(b => b.HtmlTag?.TryGetAttribute("id") == "span");
 
         private static List<CssBox> RowsOf(CssBox root) =>
-            LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow).ToList();
+            [.. LayoutHarness.Descendants(root).Where(b => b.Display.Value == DisplayMode.TableRow)];
 
         /// <summary>
         /// The row that ends a <c>rowspan</c> is carried onto the next band whole, like any other row. It

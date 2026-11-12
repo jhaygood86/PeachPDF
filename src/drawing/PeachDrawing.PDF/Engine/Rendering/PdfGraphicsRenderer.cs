@@ -92,7 +92,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// </summary>
     public void DrawLine(Pen pen, double x1, double y1, double x2, double y2)
     {
-        DrawLines(pen, new PaintPoint[] { new PaintPoint(x1, y1), new PaintPoint(x2, y2) });
+        DrawLines(pen, [new PaintPoint(x1, y1), new PaintPoint(x2, y2)]);
     }
 
     // ----- DrawLines ----------------------------------------------------------------------------
@@ -741,7 +741,7 @@ internal sealed partial class PdfGraphicsRenderer
     /// <summary>
     /// The graphical state stack.
     /// </summary>
-    readonly Stack<PdfGraphicsState> _gfxStateStack = new Stack<PdfGraphicsState>();
+    readonly Stack<PdfGraphicsState> _gfxStateStack = new();
 
     /// <summary>
     /// The height of the PDF page in point including the trim box.

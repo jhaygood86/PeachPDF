@@ -47,7 +47,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         private static List<string> Drawn(TestRecordingGraphics g) =>
-            g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text).ToList();
+            [.. g.Log.OfType<TestRecordingGraphics.DrawStringCall>().Select(d => d.Text)];
 
         [Fact]
         public async Task EllipsisOnAFootnoteBody_TruncatesAtTheBodysPaddingEdge()

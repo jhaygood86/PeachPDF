@@ -123,7 +123,7 @@ namespace PeachPDF.Tests.Integration
         // ─── Object-graph helpers (see the class remarks on why these don't round-trip through Save()) ─────────────────────
 
         static byte[] GetPageContentBytes(PdfFile document) =>
-            document.ContentStreams(document.Pages[0]).SelectMany(s => s.Decoded).ToArray();
+            [.. document.ContentStreams(document.Pages[0]).SelectMany(s => s.Decoded)];
 
         /// <summary>
         /// Resolves a field's "/AP /N" appearance - either a direct reference to one

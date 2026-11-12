@@ -45,7 +45,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             // Nabla only covers A E L P T; "g" must come from Recursive, in its own draw call with its own font.
             var (g, _, _) = await Render("NABLA, RECURSIVE", "Ag");
 
-            Assert.Equal(["A", "g"], g.DrawStringCalls.Select(c => c.Text).ToArray());
+            Assert.Equal(["A", "g"], [.. g.DrawStringCalls.Select(c => c.Text)]);
             Assert.NotSame(g.DrawStringCalls[0].Font, g.DrawStringCalls[1].Font);
             Assert.True(g.DrawStringCalls[1].Font.HasGlyph(new System.Text.Rune('g')));
         }

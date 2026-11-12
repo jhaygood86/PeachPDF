@@ -256,7 +256,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             else
                 BinaryPrimitives.WriteUInt16BigEndian(newLoca.AsSpan(2 * count), (ushort)(data.Count / 2));
 
-            return HostileFonts.WithTable(HostileFonts.WithTable(font, "glyf", data.ToArray()), "loca", newLoca);
+            return HostileFonts.WithTable(HostileFonts.WithTable(font, "glyf", [.. data]), "loca", newLoca);
         }
 
         [Fact]
@@ -310,10 +310,10 @@ namespace PeachDrawing.Text.Tests.Hinting
             // FreeType wants room in the table for the tuples' headers again after the data offset (a sanity test of the header)
             block.AddRange(new byte[4095 * 4]);
 
-            var fontBytes = HostileFonts.WithTable(main, "cvar", block.ToArray());
+            var fontBytes = HostileFonts.WithTable(main, "cvar", [.. block]);
             var fontface = new OpenTypeFontface(FontFileData.CreateCompiledFont(fontBytes));
             var tables = TtVarTables.For(fontface)!;
-            var blend = TtBlend.TryCreate(tables, new[] { 0x10000, 0x10000 }, isCff2: false)!;
+            var blend = TtBlend.TryCreate(tables, [0x10000, 0x10000], isCff2: false)!;
 
             // 4,095 tuples of 24 control values are within the bound (98,280 additions)
             Assert.Equal(TtVarError.Ok, blend.VaryCvt(new int[24]));
@@ -331,9 +331,11 @@ namespace PeachDrawing.Text.Tests.Hinting
             int records = 60000;
             int storeOffset = U16(mvar, 10);
 
-            var table = new List<byte>(mvar[..12]);
-            table[8] = (byte)(records >> 8);
-            table[9] = (byte)records;
+            var table = new List<byte>(mvar[..12])
+            {
+                [8] = (byte)(records >> 8),
+                [9] = (byte)records
+            };
             int newStoreOffset = 12 + 8 * records;
             table[10] = (byte)(newStoreOffset >> 8);
             table[11] = (byte)newStoreOffset;
@@ -345,7 +347,7 @@ namespace PeachDrawing.Text.Tests.Hinting
 
             table.AddRange(mvar[storeOffset..]);
 
-            var fontBytes = HostileFonts.WithTable(main, "MVAR", table.ToArray());
+            var fontBytes = HostileFonts.WithTable(main, "MVAR", [.. table]);
             Assert.True(WorkBounds.Case(() => Hint(fontBytes, 4), "60,000 MVAR values"));
         }
 
@@ -380,7 +382,7 @@ namespace PeachDrawing.Text.Tests.Hinting
             for (int r = 0; r < regions; r++)
                 U16Add(10);
 
-            return bytes.ToArray();
+            return [.. bytes];
         }
 
         [Fact]

@@ -41,7 +41,7 @@ namespace PeachPDF.Tests.TestSupport
         }
 
         public static List<int> References(string text) =>
-            Regex.Matches(text, @"(\d+)\s+0\s+R").Select(m => int.Parse(m.Groups[1].Value)).ToList();
+            [.. Regex.Matches(text, @"(\d+)\s+0\s+R").Select(m => int.Parse(m.Groups[1].Value))];
 
         /// <summary>The object numbers the catalog's <c>/AF</c> array lists, in order.</summary>
         public static List<int> AssociatedFiles(string pdf)

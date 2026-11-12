@@ -36,11 +36,10 @@ namespace PeachBrackets.Engine.Tests.Svg
 
         /// <summary>The painted lines: every draw call, grouped by baseline (top of the draw box), left to right, each with its text.</summary>
         private static (double Y, double Left, double Right, string Text)[] Lines(TestRecordingGraphics g) =>
-            g.DrawStringCalls
+            [.. g.DrawStringCalls
                 .GroupBy(c => c.PaintPoint.Y)
                 .OrderBy(group => group.Key)
-                .Select(group => (group.Key, group.Min(c => c.PaintPoint.X), group.Max(c => c.PaintPoint.X + c.Size.Width), string.Concat(group.OrderBy(c => c.PaintPoint.X).Select(c => c.Text))))
-                .ToArray();
+                .Select(group => (group.Key, group.Min(c => c.PaintPoint.X), group.Max(c => c.PaintPoint.X + c.Size.Width), string.Concat(group.OrderBy(c => c.PaintPoint.X).Select(c => c.Text))))];
 
         private const string FourWords = "word word word word";
 
@@ -50,7 +49,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var inline = WidthOf("word word") + 2;
             var lines = Lines(Render($"""inline-size="{Num(inline)}" """, FourWords));
 
-            Assert.Equal(["word word", "word word"], lines.Select(l => l.Text.TrimEnd()).ToArray());
+            Assert.Equal(["word word", "word word"], [.. lines.Select(l => l.Text.TrimEnd())]);
             Assert.All(lines, l => Assert.Equal(10, l.Left, 3));
             Assert.All(lines, l => Assert.True(l.Right - 10 <= inline + 0.01));
             Assert.True(lines[1].Y > lines[0].Y);
@@ -85,7 +84,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var lines = Lines(Render("""inline-size="5" """, "wide words"));
 
-            Assert.Equal(["wide", "words"], lines.Select(l => l.Text.TrimEnd()).ToArray());
+            Assert.Equal(["wide", "words"], [.. lines.Select(l => l.Text.TrimEnd())]);
         }
 
         [Fact]
@@ -132,7 +131,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             Assert.Equal(2, Lines(Render($"""inline-size="{Num(inline)}" """, "word word word")).Length);
 
             var indented = Lines(Render($"""inline-size="{Num(inline)}" text-indent="40px" """, "word word word"));
-            Assert.Equal(["word", "word word"], indented.Select(l => l.Text.TrimEnd()).ToArray());
+            Assert.Equal(["word", "word word"], [.. indented.Select(l => l.Text.TrimEnd())]);
         }
 
         [Fact]
@@ -208,7 +207,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var lines = Lines(Render("""inline-size="5" white-space="pre" """, "one two\nthree"));
 
-            Assert.Equal(["one two", "three"], lines.Select(l => l.Text).ToArray());
+            Assert.Equal(["one two", "three"], [.. lines.Select(l => l.Text)]);
         }
 
         [Fact]
@@ -217,7 +216,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var inline = WidthOf("word") + 1;
             var lines = Lines(Render($"""inline-size="{Num(inline)}" white-space="pre-wrap" """, "a  b\nword word"));
 
-            Assert.Equal(["a  b", "word", "word"], lines.Select(l => l.Text.TrimEnd()).ToArray());
+            Assert.Equal(["a  b", "word", "word"], [.. lines.Select(l => l.Text.TrimEnd())]);
         }
 
         [Fact]
@@ -225,7 +224,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var lines = Lines(Render("""inline-size="300" white-space="pre-line" """, "a   b  \n   c"));
 
-            Assert.Equal(["a b", "c"], lines.Select(l => l.Text.TrimEnd()).ToArray());
+            Assert.Equal(["a b", "c"], [.. lines.Select(l => l.Text.TrimEnd())]);
         }
 
         [Fact]
@@ -275,7 +274,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var inline = WidthOf("super-") + 1;
             var lines = Lines(Render($"""inline-size="{Num(inline)}" """, "super&#xAD;cali"));
 
-            Assert.Equal(["super-", "cali"], lines.Select(l => l.Text).ToArray());
+            Assert.Equal(["super-", "cali"], [.. lines.Select(l => l.Text)]);
         }
 
         [Fact]
@@ -283,7 +282,7 @@ namespace PeachBrackets.Engine.Tests.Svg
         {
             var lines = Lines(Render("""inline-size="300" """, "super&#xAD;cali"));
 
-            Assert.Equal(["supercali"], lines.Select(l => l.Text).ToArray());
+            Assert.Equal(["supercali"], [.. lines.Select(l => l.Text)]);
         }
 
         [Fact]
@@ -361,7 +360,7 @@ namespace PeachBrackets.Engine.Tests.Svg
             var inline = WidthOf("abc") + 1;
             var lines = Lines(Render($"""inline-size="{Num(inline)}" """, "abc אבג abc"));
 
-            Assert.Equal(["abc", "גבא", "abc"], lines.Select(l => l.Text.Trim()).ToArray());
+            Assert.Equal(["abc", "גבא", "abc"], [.. lines.Select(l => l.Text.Trim())]);
         }
 
         [Fact]
