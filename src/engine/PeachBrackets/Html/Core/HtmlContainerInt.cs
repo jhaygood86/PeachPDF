@@ -2220,7 +2220,9 @@ namespace PeachBrackets.Html
             if (HasFootnotes || HasPageFloats)
             {
                 var footnoteRootWidth = IcbWidthSeed(MaxSize.Width > 0 ? MaxSize.Width : Math.Ceiling(ActualSize.Width));
-                const int maxFootnotePasses = 6;
+                // Ten, not six: columns of a definite height (#2238) are as tall as that height, and the dense column-note sweep
+                // then needs up to nine passes to hold its floors (FootnoteColumnConvergenceIntegrationTests).
+                const int maxFootnotePasses = 10;
 
                 BeginFootnoteConvergence();
 
@@ -5102,7 +5104,7 @@ namespace PeachBrackets.Html
         /// a state whose shape is gone: a column note is resolved against the page before the columns exist to
         /// route it, and that page-level area must not outlive the state it belonged to. Nothing changes
         /// before the first repeated state, so a document that settles on its own is laid out exactly as
-        /// before; the six-pass cap remains as a backstop.
+        /// before; the pass cap remains as a backstop.
         /// </para>
         /// </remarks>
         private sealed class ColumnReservationGuard

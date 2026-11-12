@@ -301,13 +301,14 @@ namespace PeachBrackets.Html.Dom
             // height (css-multicol-1 §7.1: a constrained height fixes the column height) - the rest of the
             // content continues in columns to the right, which the clip hides. Without this cap, balancing
             // grows the columns until every word fits, and the clip then hides lines from the middle of the
-            // text instead of its tail (#1818). Only the fragment that starts the container: a resumed one
-            // is a continuation of a box that already spans pages.
+            // text instead of its tail (#1818). A container that does not clip takes the same column height (#2238),
+            // so content that does not fit one column starts the next; what does not fit the last column continues
+            // on the next page as before (css-multicol-1 §3.3's overflow columns are not made). Only the fragment
+            // that starts the container: a resumed one is a continuation of a box that already spans pages.
             var containerTop = boxTop;
             var heightCap = double.MaxValue / 4;
 
             if (resume is null
-                && (columnsBox.Overflow.Value != Overflow.Visible || columnsBox.ClipsWithoutScrolling)
                 && columnsBox.ResolveDefiniteHeightPt() is { } definiteHeight)
             {
                 heightCap = Math.Max(1, definiteHeight - columnsBox.ActualBoxSizeIncludedHeight);
@@ -433,7 +434,7 @@ namespace PeachBrackets.Html.Dom
             }
 
             // What the height cap left over is clipped, not continued: the box is exactly that tall on every page.
-            if (cappedByHeight) carry = null;
+            if (cappedByHeight && (columnsBox.Overflow.Value != Overflow.Visible || columnsBox.ClipsWithoutScrolling)) carry = null;
 
             // Accumulated, not assigned: this container is laid out once per page fragment, and the last
             // fragment's rules are not the only ones drawn.
