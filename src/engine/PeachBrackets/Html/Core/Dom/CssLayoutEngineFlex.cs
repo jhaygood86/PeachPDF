@@ -1015,6 +1015,10 @@ namespace PeachBrackets.Html.Dom
                     final = item.HypotheticalMainSize;
                 }
 
+                // An item raised to its automatic minimum that still fits with the rest of its line is held there (§4.5, §9.7 step 2 freezes
+                // an item that cannot flex at its hypothetical size, which the minimum has clamped).
+                if (!growsAgainstMinimum && !hasAutoMinimum) final = Math.Max(final, item.AutoMinMainSize);
+
                 final = ClampMainAxis(item.Box, final, mainSize);
                 item.FinalMainSize = final;
 
@@ -1208,7 +1212,13 @@ namespace PeachBrackets.Html.Dom
             // its own because its minimum did not fit the one before is floored on that line too; left at its basis (0 for
             // `flex: 0`) it would be laid out empty.
             var raisedByWrap = _isWrap && _mainAxisIsPhysicalX;
-            if (!overflows && !grows && !raisedByWrap) return;
+
+            // A row whose items fit and none of which grows is floored too: §4.5 clamps each item's hypothetical size by its automatic
+            // minimum, and §9.7 compares the sum of those with the container, so an item shrunk to nothing beside a wide one is raised
+            // to its minimum and the line then gives that room back. A column is left alone: in an auto-height one every item is already
+            // its content height, so the minimum would only cost a second layout of each item.
+            var floorsAFittingRow = _mainAxisIsPhysicalX;
+            if (!overflows && !grows && !raisedByWrap && !floorsAFittingRow) return;
 
             if (!_mainAxisIsPhysicalX)
             {
