@@ -133,6 +133,8 @@ public partial class FloatPlacementThroughHtmlDocumentTests
     [InlineData("<div style='width:300px'><div style='float:right;width:40px;height:20px'></div>w16_1 w16_2 <div style='float:left;width:60px;height:20px'></div>w16_3 w16_4 w16_5 w16_6 w16_7 w16_8 w16_9 w16_10</div>")]
     [InlineData("<div style='width:300px'><div style='float:left;width:40px;height:20px'></div>w17_1 <span style='display:inline-block;width:30px'>w17_2</span> <div style='float:right;width:60px;height:20px'></div>w17_3 w17_4 w17_5 w17_6 w17_7 w17_8</div>")]
     [InlineData("<div style='width:300px;direction:rtl'>w18_1 w18_2 <div style='float:left;width:60px;height:20px'></div>w18_3 w18_4 w18_5 w18_6 w18_7 w18_8 w18_9 w18_10 w18_11 w18_12</div>")]
+    [InlineData("<div style='width:300px'>w19_1 w19_2 <div style='float:left;width:100px;height:60px;shape-outside:path(\"M 0 0 L 80 80 L 0 80 Z\")'></div>w19_3 w19_4 w19_5 w19_6 w19_7 w19_8 w19_9 w19_10 w19_11 w19_12 w19_13 w19_14</div>")]
+    [InlineData("<svg width='0' height='0'><clipPath id='c19'><path d='M0 0 L40 0 L0 40 Z'/></clipPath></svg><div style='width:300px'>w20_1 w20_2 <div style='float:left;width:100px;height:60px;background:red;clip-path:url(#c19)'></div>w20_3 w20_4 w20_5 w20_6 w20_7 w20_8 w20_9 w20_10 w20_11 w20_12</div>")]
     public async Task AFloatAfterContentOnItsLine_DrawsEveryWordOnce(string body)
     {
         await AssertEveryWordOnceAsync($"<!DOCTYPE html><html><head><style>body {{ margin: 0; font: 13px Arial }}</style></head><body>{body}</body></html>", body);
