@@ -9626,13 +9626,15 @@ namespace PeachBrackets.Html.Dom
 
             var boxDecoration = box.ActualBorderLeftWidth + box.ActualBorderRightWidth
                 + box.ActualPaddingRight + box.ActualPaddingLeft;
-            paddingSum += boxDecoration;
-            var descendantDecoration = inheritedDecoration + boxDecoration;
-
-
-            // for tables the padding also contains the spacing between cells
-            if (box.DerivedStyle.ActualDisplay == Keywords.Table)
-                paddingSum += CssLayoutEngineTable.GetTableSpacing(box);
+            // The spacing between a table's cells and between them and its edge (css-tables-3 border-spacing) is part of its width the way its borders and
+            // padding are, so it travels in the decoration its descendants carry: every row opens a line of its own and restarts the running decoration from
+            // that (see startsNewLine above), so spacing added only to this box's running total was dropped as the first row opened, and a table in a cell was
+            // measured one border-spacing short on each of its sides.
+            var tableSpacing = box.DerivedStyle.ActualDisplay is Keywords.Table or Keywords.InlineTable
+                ? CssLayoutEngineTable.GetTableSpacing(box)
+                : 0;
+            paddingSum += boxDecoration + tableSpacing;
+            var descendantDecoration = inheritedDecoration + boxDecoration + tableSpacing;
 
             // A flex ROW's items sit side by side, so the row's intrinsic width is the SUM
             // of theirs, and each item's own content is measured in isolation. The flat walk below
@@ -10097,8 +10099,9 @@ namespace PeachBrackets.Html.Dom
                 var explicitSum = startsNewLine
                     ? marginSum + explicitContentWidth
                     : maxSumBeforeBox + explicitContentWidth;
+                // A declared table width is the whole table, its spacing inside it, so the spacing is not added to it.
                 var explicitDecoration = startsNewLine
-                    ? descendantDecoration
+                    ? descendantDecoration - tableSpacing
                     : paddingSumBeforeBox + boxDecoration;
 
                 if (HasDefiniteWidthContribution(box))

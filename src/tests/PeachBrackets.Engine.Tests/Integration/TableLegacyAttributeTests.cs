@@ -248,6 +248,42 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(left * Px, cell.ActualPaddingLeft, 2);
         }
 
+        // The browser's own default (HTML Standard section 15.3.12: td, th { padding: 1px }), which a table with no cellpadding attribute leaves in place.
+
+        [Theory]
+        [InlineData("td")]
+        [InlineData("th")]
+        public async Task ACellOfATableWithNoCellpaddingHasThe1pxDefaultPadding(string tag)
+        {
+            var cell = await CellAsync($"<table><tr><{tag} id='c'>x</{tag}></tr></table>");
+
+            AssertPadding(cell, 1, 1, 1, 1);
+        }
+
+        [Fact]
+        public async Task ACellpaddingOfZeroTakesTheDefaultAway()
+        {
+            var cell = await CellAsync("<table cellpadding='0'><tr><td id='c'>x</td></tr></table>");
+
+            AssertPadding(cell, 0, 0, 0, 0);
+        }
+
+        [Fact]
+        public async Task AnAuthorPaddingOfZeroTakesTheDefaultAway()
+        {
+            var cell = await CellAsync("<table><tr><td id='c' style='padding: 0'>x</td></tr></table>");
+
+            AssertPadding(cell, 0, 0, 0, 0);
+        }
+
+        [Fact]
+        public async Task ADivInsideACellHasNoPaddingOfItsOwn()
+        {
+            var cell = await CellAsync("<table><tr><td><div id='c'>x</div></td></tr></table>");
+
+            AssertPadding(cell, 0, 0, 0, 0);
+        }
+
         [Fact]
         public async Task Cellpadding_YieldsToTheCellsInlinePadding()
         {
@@ -317,11 +353,11 @@ namespace PeachBrackets.Engine.Tests.Integration
         [Fact]
         public async Task Cellpadding_OfAnOuterTable_DoesNotReachANestedTablesCells()
         {
-            // Only the nearest ancestor table's cellpadding counts; the nested table has none, so its cell keeps the UA's padding (none here; a browser's is 1px).
+            // Only the nearest ancestor table's cellpadding counts; the nested table has none, so its cell keeps the UA's default of 1px, not 20px.
             var cell = await CellAsync(
                 "<table cellpadding='20'><tr><td><table><tr><td id='c'>x</td></tr></table></td></tr></table>");
 
-            AssertPadding(cell, 0, 0, 0, 0);
+            AssertPadding(cell, 1, 1, 1, 1);
         }
 
         // ── border ────────────────────────────────────────────────────────────────
