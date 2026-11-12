@@ -63,6 +63,29 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task A_rounded_clip_around_a_graphic_is_pushed_the_ordinary_way_because_a_graphic_can_hold_text()
+        {
+            var g = await PaintAsync($"<div style='{Card}'><svg width='40' height='20' viewBox='0 0 40 20'><text x='2' y='14'>t</text></svg></div>");
+
+            Assert.NotEmpty(g.ClipPaths);
+            Assert.Equal(0, g.ShapeOnlyClipCount);
+        }
+
+        [Fact]
+        public async Task A_clip_held_back_for_a_box_that_escapes_it_is_pushed_around_the_rest_of_what_it_clips_the_ordinary_way()
+        {
+            // The absolutely positioned box belongs to the outer box, so the rounded clip must not clip it: the clip is held back, and pushed around the text beside it.
+            var g = await PaintAsync(
+                "<div style='position: relative; height: 80pt'>" +
+                $"<div style='{Card}; height: 50pt'><div style='opacity: .9'><p>inside the clip</p><span style='position: absolute; left: 150pt; top: 60pt'>escapes</span></div></div></div>");
+
+            Assert.Contains(g.WordDrawStringCalls, c => c.Text == "inside");
+            Assert.Contains(g.WordDrawStringCalls, c => c.Text == "escapes");
+            Assert.NotEmpty(g.ClipPaths);
+            Assert.Equal(0, g.ShapeOnlyClipCount);
+        }
+
+        [Fact]
         public async Task A_picture_and_a_caption_in_one_card_are_clipped_each_as_what_they_are()
         {
             var g = await PaintAsync(

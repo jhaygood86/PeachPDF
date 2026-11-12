@@ -18,22 +18,6 @@ public sealed partial class HtmlView
     /// <summary>Whether painting ahead is switched off by the environment (<c>PEACH_NO_WARM</c>), for telling what it costs from what the page does.</summary>
     private static readonly bool DisableWarming = Environment.GetEnvironmentVariable("PEACH_NO_WARM") is { Length: > 0 };
 
-    /// <summary>How many bands have been painted ahead of the viewport for the loaded document, for a test to tell the work was done.</summary>
-    internal int WarmedBandCount
-    {
-        get
-        {
-            var count = 0;
-            foreach (var warmed in _warmed)
-            {
-                if (warmed)
-                    count++;
-            }
-
-            return count;
-        }
-    }
-
     // Starts (or restarts) the wait for the view to be still. Every scroll step restarts it, so nothing is painted ahead while the user is moving.
     [ExcludeFromCodeCoverage(Justification = "Needs a window and a dispatcher; the choice of band is HtmlViewLogic.NextWarmBand, tested on its own.")]
     private void QueueWarm(int milliseconds = 120)

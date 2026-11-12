@@ -96,4 +96,50 @@ public class ImageDownscaleTests
         Assert.Equal(1.0 / 64, Win2dImage.ScaleFor(0.001));
         Assert.Equal(1.0, Win2dImage.ScaleFor(3));
     }
+
+    private static byte[] Jpeg(int size)
+    {
+        var raster = new RasterRenderContext();
+        using var canvas = raster.CreateCanvas(size, size);
+        canvas.DrawRectangle(raster.GetSolidBrush(PaintColor.FromArgb(255, 200, 30, 30)), 0, 0, size, size);
+        canvas.DrawRectangle(raster.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), size / 4, size / 4, size / 2, size / 2);
+        using var stream = new MemoryStream();
+        canvas.Save(stream, "jpeg", new PeachImage.Formats.Jpeg.JpegEncoderOptions());
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void AJpegDrawnSmall_IsDecodedSmallByWindowsAndDrawsTheSamePicture()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 40, 40);
+        using var image = Assert.IsType<Win2dImage>(context.ImageFromStream(new MemoryStream(Jpeg(1600))));
+
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40));
+
+        Assert.True(image.BitmapScale < 0.1, $"{image.BitmapScale}");
+
+        // The white square is the middle half of the picture, in the middle of what was drawn; the border is its red.
+        var middle = scene.Px(20, 20);
+        var edge = scene.Px(2, 2);
+        Assert.True(middle.R > 240 && middle.G > 240 && middle.B > 240, $"{middle}");
+        Assert.True(edge.R > 170 && edge.G < 80, $"{edge}");
+    }
+
+    [Fact]
+    public void AJpegThatOpensButCannotBeDecodedAtASmallerSize_StillDrawsWithoutThrowing()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 40, 40);
+        var whole = Jpeg(1600);
+
+        // The header and a part of the picture: it opens, and what it holds cannot all be read.
+        using var image = context.ImageFromStream(new MemoryStream(whole.AsSpan(0, whole.Length / 3).ToArray()));
+
+        var thrown = Record.Exception(() => scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40)));
+
+        Assert.Null(thrown);
+    }
 }

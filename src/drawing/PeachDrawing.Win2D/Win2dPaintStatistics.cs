@@ -14,7 +14,12 @@ internal static class Win2dPaintStatistics
 {
     internal enum Counter { TextFlush, RectClip, GeometryClip, SurfaceClip, SurfaceClipEnd, SurfaceClipWithText, SurfaceClipEmpty, CommandList, ImageLoad, ImageDraw, TextMask, ClipRelease }
 
-    internal static readonly bool Enabled = Environment.GetEnvironmentVariable("PEACH_PAINT_STATS") is { Length: > 0 };
+    /// <summary>Whether the statistics are kept: the environment variable, unless a test changes it.</summary>
+    internal static bool Enabled { get; set; } = Environment.GetEnvironmentVariable("PEACH_PAINT_STATS") is { Length: > 0 };
+
+    /// <summary>Told each line instead of the debugger output and the file, when set.</summary>
+    internal static Action<string>? Sink { get; set; }
+
     private static readonly long[] Ticks = new long[Enum.GetValues<Counter>().Length];
     private static readonly long[] Counts = new long[Enum.GetValues<Counter>().Length];
 
@@ -82,13 +87,13 @@ internal static class Win2dPaintStatistics
     }
 
     /// <summary>About once a second, one line with what the render context holds on to: the text blend's scratch targets and each cache.</summary>
-    internal static void NoteMemory(Win2dRenderContext context)
+    internal static void NoteMemory(Win2dRenderContext context, bool force = false)
     {
         if (!Enabled)
             return;
 
         var now = Stopwatch.GetTimestamp();
-        if (now - _lastMemoryNote < Stopwatch.Frequency)
+        if (!force && now - _lastMemoryNote < Stopwatch.Frequency)
             return;
 
         _lastMemoryNote = now;
@@ -99,6 +104,12 @@ internal static class Win2dPaintStatistics
 
     internal static void Write(string line)
     {
+        if (Sink is { } sink)
+        {
+            sink(line);
+            return;
+        }
+
         Debug.WriteLine(line);
         if (Environment.GetEnvironmentVariable("PEACH_PAINT_STATS_FILE") is { Length: > 0 } file)
         {

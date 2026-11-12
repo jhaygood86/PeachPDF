@@ -189,6 +189,27 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AGraphicThatCannotBeBuiltAgainInPlace_LeavesTheChangeToLoadingTheDocumentAgain()
+        {
+            var (document, canvas) = await LoadAsync(
+                "<!DOCTYPE html><html><head><style>.f { fill: rgb(0,0,255) } a:hover .f { fill: rgb(255,0,0) }</style></head><body>" +
+                "<a id=link href=#>link <svg width=20 height=20 viewBox='0 0 20 20'><rect class=f width=20 height=20 /></svg></a></body></html>");
+
+            // The graphic keeps the elements it was built from for a state rule that styles one of them; without them it cannot be built again.
+            var graphic = Walk(document.Container.Root!).OfType<CssBoxSvg>().Single();
+            Assert.True(graphic.CanRebuildForState);
+            typeof(CssBoxSvg).GetField("_stateBoxes", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.SetValue(graphic, null);
+            Assert.False(graphic.CanRebuildForState);
+
+            var bounds = document.GetElementBounds("link")!.Value;
+            var entered = await document.SetPointerStateAsync(0, bounds.X + 2, bounds.Y + 2, false, canvas);
+
+            Assert.True(entered.Applied);
+            Assert.False(entered.Incremental);
+            Assert.Contains("cannot be built again", document.LastRestyleFallbackReason);
+        }
+
+        [Fact]
         public async Task FocusMoves_AreRestyledTheSameAsLoadingAgain()
         {
             var (document, canvas) = await LoadAsync(Corpus, verify: true);

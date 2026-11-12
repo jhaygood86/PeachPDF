@@ -582,32 +582,25 @@ namespace PeachBrackets.Html.Updates
         // The properties whose value reads back differently (those the registry can read), for the same reason.
         private static string ChangedPropertyNames(CssBox box, ComputedStyle old, ComputedStyle current)
         {
+            Dictionary<string, string?> before;
+            box.AdoptComputedStyle(old);
             try
             {
-                Dictionary<string, string?> before;
-                box.AdoptComputedStyle(old);
-                try
-                {
-                    before = ReadAll(box);
-                }
-                finally
-                {
-                    box.AdoptComputedStyle(current);
-                }
-
-                var names = new List<string>();
-                foreach (var (name, value) in ReadAll(box))
-                {
-                    if (!before.TryGetValue(name, out var previous) || !string.Equals(previous, value, StringComparison.Ordinal))
-                        names.Add($"{name}: {previous} -> {value}");
-                }
-
-                return names.Count == 0 ? "no registry property differs" : string.Join(", ", names);
+                before = ReadAll(box);
             }
-            catch (Exception)
+            finally
             {
-                return "properties not readable";
+                box.AdoptComputedStyle(current);
             }
+
+            var names = new List<string>();
+            foreach (var (name, value) in ReadAll(box))
+            {
+                if (!before.TryGetValue(name, out var previous) || !string.Equals(previous, value, StringComparison.Ordinal))
+                    names.Add($"{name}: {previous} -> {value}");
+            }
+
+            return names.Count == 0 ? "no registry property differs" : string.Join(", ", names);
         }
 
         // The names of the areas LayoutAreasEqual finds different, for the reason a change is not applied in place.

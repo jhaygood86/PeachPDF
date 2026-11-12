@@ -212,6 +212,26 @@ public class InteractionStateTests
     }
 
     [Fact]
+    public async Task AHoverThatChangesABoxAndAShapeInsideAnInlineSvgAtOnce_IsAppliedInPlace()
+    {
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg></a>",
+            "<style>body { display: flex } a { display: block; width: 40px; height: 40px; background: rgb(0,255,0) } a:hover { background: rgb(255,255,0) } .fill { fill: rgb(0,0,255) } a:hover .fill { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.True(entered.Incremental, "the change loaded the document again");
+        Assert.NotEmpty(entered.DirtyRegions);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).R);
+
+        var left = await document.ClearPointerStateAsync(measuring);
+        Assert.True(left.Incremental, "ending the hover loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
+    }
+
+    [Fact]
     public async Task AHoverOnAnInlineThatTheLoadMadeABlockBecauseItHoldsOne_IsStillAppliedInPlace()
     {
         // An `a` around a block is made a block after the cascade, and cascading it again alone says inline: that is not the hover's doing,

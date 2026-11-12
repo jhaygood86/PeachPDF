@@ -332,16 +332,7 @@ public sealed partial class Win2dCanvas : Canvas
     // The pixels of the target (x, y, width, height) that a geometry drawn under a transform can touch, a little over, or all of it when the bounds cannot be told.
     private static (int X, int Y, int Width, int Height) SurfaceRegion(CanvasGeometry geometry, Matrix3x2 transform, float dpi, int width, int height)
     {
-        Windows.Foundation.Rect bounds;
-        try
-        {
-            bounds = geometry.ComputeBounds(transform);
-        }
-        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or System.Runtime.InteropServices.COMException)
-        {
-            return (0, 0, width, height);
-        }
-
+        var bounds = geometry.ComputeBounds(transform);
         var scale = dpi / 96.0;
         if (!double.IsFinite(bounds.X) || !double.IsFinite(bounds.Y) || !double.IsFinite(bounds.Width) || !double.IsFinite(bounds.Height))
             return (0, 0, width, height);

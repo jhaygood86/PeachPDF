@@ -37,12 +37,15 @@ public sealed partial class HtmlDocument
         <svg width="24" height="24" viewBox="0 0 24 24"><path d="M2 2h20v20H2z" fill="#09f"/></svg></body></html>
         """;
 
-    private static async Task WarmUpCoreAsync()
+    private static Task WarmUpCoreAsync() => WarmUpDocumentAsync(WarmUpHtml);
+
+    // The work, for a document: a seam for a test to show that a document that cannot be loaded does not escape.
+    internal static async Task WarmUpDocumentAsync(string html)
     {
         try
         {
             var context = new RasterRenderContext();
-            using var document = await LoadAsync(WarmUpHtml, context, new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 720, ViewportHeightPoints = 600 }).ConfigureAwait(false);
+            using var document = await LoadAsync(html, context, new HtmlDocumentOptions { MediaType = MediaType.Screen, PageWidthPoints = 720, ViewportHeightPoints = 600 }).ConfigureAwait(false);
             using var measuring = context.CreateCanvas(1, 1);
             await document.LayoutAsync(measuring).ConfigureAwait(false);
             if (document.Pages.Count > 0)

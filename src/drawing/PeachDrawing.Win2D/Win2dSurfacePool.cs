@@ -99,6 +99,7 @@ internal sealed class Win2dSurfacePool(Win2dResourceCounts counts)
 
     private static long Bytes(CanvasRenderTarget target) => (long)target.SizeInPixels.Width * target.SizeInPixels.Height * 4;
 
+    [System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverage(Justification = "Only a lost device makes a dispose throw; there is no device to lose in a test.")]
     private static void Release(CanvasRenderTarget target)
     {
         try
