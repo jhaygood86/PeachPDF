@@ -138,8 +138,9 @@ namespace PeachBrackets.Html.Updates
             // inside it (`a:hover .icon`, `a:hover + svg .icon`) cannot be restyled in place. When a rule that reads the state could match differently because of the
             // element whose state changed, wherever it sits, leave it to a full load. html and body are always among the changed and say nothing: a rule on them
             // reaches the SVG through the page's own boxes.
-            if (HasStatefulSvgRuleReaching(root, changed))
-                return Fail("The state changed on an element that a rule reading it styles an inline SVG's elements through, which the fast path does not restyle.");
+            var svgsToRebuild = new List<CssBoxSvg>();
+            if (!TryCollectStatefulSvgsReached(root, changed, svgsToRebuild))
+                return Fail("The state changed on an element that a rule reading it styles an inline SVG's elements through, and that graphic cannot be built again in place.");
 
             var roots = new List<CssBox>();
             try
@@ -172,7 +173,14 @@ namespace PeachBrackets.Html.Updates
             }
 
             if (roots.Count == 0)
-                return new Outcome(true, null, []);
+            {
+                if (svgsToRebuild.Count == 0)
+                    return new Outcome(true, null, []);
+
+                // Only graphics changed: they are built again, and the places they are drawn are painted again.
+                container.StyleGeneration++;
+                return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, RebuildGraphics(svgsToRebuild), fragmentainers));
+            }
 
             // A root under another root is restyled with it.
             var rootSet = new HashSet<CssBox>(roots);
@@ -246,6 +254,10 @@ namespace PeachBrackets.Html.Updates
             // declarations, see CssBoxSvgSourceNode) is stale now.
             container.StyleGeneration++;
 
+            // A graphic a state rule reaches is built from its elements again, under the new state, and painted again where it is.
+            foreach (var graphic in RebuildGraphics(svgsToRebuild))
+                extents[graphic.Key] = graphic.Value;
+
             return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
         }
 
@@ -260,7 +272,11 @@ namespace PeachBrackets.Html.Updates
 
         // Whether a rule that reads the state and was a candidate for an element inside an inline SVG could match differently because an element whose state
         // changed (other than html and body) is the one its state compound matches, wherever that element sits relative to the SVG.
-        private static bool HasStatefulSvgRuleReaching(CssBox root, HashSet<int> changed)
+        /// <summary>
+        /// Collects into <paramref name="reached"/> the inline SVGs an element whose state changed can restyle an element of through a rule that reads state.
+        /// False when one of them cannot be built again in place, which leaves the change to a full load.
+        /// </summary>
+        private static bool TryCollectStatefulSvgsReached(CssBox root, HashSet<int> changed, List<CssBoxSvg> reached)
         {
             var svgs = new List<CssBox>();
             var changedBoxes = new List<CssBox>();
@@ -270,14 +286,39 @@ namespace PeachBrackets.Html.Updates
             {
                 foreach (var selector in svg.SvgInnerStatefulSelectors!)
                 {
+                    var reaches = false;
                     foreach (var box in changedBoxes)
                     {
-                        if (CssData.StateCompoundCouldMatch(selector, box)) return true;
+                        if (CssData.StateCompoundCouldMatch(selector, box))
+                        {
+                            reaches = true;
+                            break;
+                        }
                     }
+
+                    if (!reaches) continue;
+
+                    if (svg is not CssBoxSvg graphic || !graphic.CanRebuildForState) return false;
+
+                    if (!reached.Contains(graphic)) reached.Add(graphic);
+                    break;
                 }
             }
 
-            return false;
+            return true;
+        }
+
+        // Builds each graphic again and says where it paints, as the extents the dirty regions are made from.
+        private static Dictionary<CssBox, ExtentChange> RebuildGraphics(List<CssBoxSvg> graphics)
+        {
+            var extents = new Dictionary<CssBox, ExtentChange>();
+            foreach (var graphic in graphics)
+            {
+                graphic.RebuildForState();
+                extents[graphic] = new ExtentChange(0, 0, false, false, Matrix3x2.Identity, Matrix3x2.Identity);
+            }
+
+            return extents;
         }
 
         private static void CollectSvgsAndChanged(CssBox box, HashSet<int> changed, List<CssBox> svgs, List<CssBox> changedBoxes)
@@ -339,7 +380,7 @@ namespace PeachBrackets.Html.Updates
             // that hold anything but paint must be equal, and in the ones that hold paint beside other things only the fields of the paint-only
             // properties may differ.
             if (!LayoutAreasEqual(old, current))
-                return $"A style area that holds more than paint changed on <{box.HtmlTag?.Name ?? "box"}>.";
+                return $"A style area that holds more than paint changed on <{box.HtmlTag?.Name ?? "box"}> ({ChangedLayoutAreas(old, current)}).";
 
             // The old style, read back the way the new one is.
             Dictionary<string, string?> oldValues;
@@ -439,6 +480,52 @@ namespace PeachBrackets.Html.Updates
             property.Equals("visibility", StringComparison.OrdinalIgnoreCase) && value is not null && value.Trim().Equals("collapse", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsNone(string? value) => string.IsNullOrEmpty(value) || value.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+        // The names of the areas LayoutAreasEqual finds different, for the reason a change is not applied in place.
+        private static string ChangedLayoutAreas(ComputedStyle a, ComputedStyle b)
+        {
+            var names = new List<string>();
+            void Check(bool equal, string name)
+            {
+                if (!equal) names.Add(name);
+            }
+
+            Check(a.GeneratedContent.Equals(b.GeneratedContent), "content");
+            Check(a.BoxModel.Equals(b.BoxModel), "box model");
+            Check(a.Break.Equals(b.Break), "break");
+            Check(a.Pagination.Equals(b.Pagination), "pagination");
+            Check(a.DisplayPositioning.Equals(b.DisplayPositioning), "display/position");
+            Check(a.Table.Equals(b.Table), "table");
+            Check(a.Font.Equals(b.Font), "font");
+            Check(a.List.Equals(b.List), "list");
+            Check(a.Flex.Equals(b.Flex), "flex");
+            Check(a.Grid.Equals(b.Grid), "grid");
+            Check(a.MultiColumn.Equals(b.MultiColumn with { ColumnRuleColor = a.MultiColumn.ColumnRuleColor }), "multicol");
+            Check(a.Background.Equals(b.Background with { BackgroundColor = a.Background.BackgroundColor }), "background");
+            Check(a.Border.Equals(b.Border with
+            {
+                BorderTopColor = a.Border.BorderTopColor,
+                BorderRightColor = a.Border.BorderRightColor,
+                BorderBottomColor = a.Border.BorderBottomColor,
+                BorderLeftColor = a.Border.BorderLeftColor,
+                BoxShadow = a.Border.BoxShadow,
+                OutlineColor = a.Border.OutlineColor,
+                OutlineStyle = a.Border.OutlineStyle,
+                OutlineWidth = a.Border.OutlineWidth,
+                OutlineOffset = a.Border.OutlineOffset,
+            }), "border");
+            Check(a.VisualEffects.Equals(b.VisualEffects with
+            {
+                Opacity = a.VisualEffects.Opacity,
+                Transform = a.VisualEffects.Transform,
+                Translate = a.VisualEffects.Translate,
+                Rotate = a.VisualEffects.Rotate,
+                Scale = a.VisualEffects.Scale,
+                Filter = a.VisualEffects.Filter,
+                MixBlendMode = a.VisualEffects.MixBlendMode,
+            }), "visual effects");
+            return string.Join(", ", names);
+        }
 
         private static bool LayoutAreasEqual(ComputedStyle a, ComputedStyle b) =>
             a.GeneratedContent.Equals(b.GeneratedContent) && a.BoxModel.Equals(b.BoxModel) && a.Break.Equals(b.Break) && a.Pagination.Equals(b.Pagination)

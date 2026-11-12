@@ -13,6 +13,9 @@ What still reloads (each gives `UpdateResult.Incremental == false` and `HtmlDocu
 - Any layout- or tree-affecting property in the diff: `display`, `content`, `position`, `float`,
   `visibility`, sizes, padding/margin, fonts, counters, list/table/flex/grid, `container-type`, and anything
   not on the paint-only list (so `hover:font-bold`, `hover:p-*`, `hover:hidden` reload).
+- (An inline SVG with a state-reading rule on one of its elements, `a:hover .icon`, is no longer one of these: the graphic keeps the children it was built from
+  and is built again in place, `CssBoxSvg.RebuildForState`. It reloaded the whole document before, about 0.6-1.5 s per hover change on the arstechnica.com front page,
+  now about 0.1 s.)
 - A new state that would add or mark a pseudo-element (`::before`/`::after`/`::marker`/`::first-letter`),
   and any document with a state-reading rule on another pseudo-element (`::first-line`, `::placeholder`,
   `::selection`...): those styles are resolved apart from the box's own and are not redone.

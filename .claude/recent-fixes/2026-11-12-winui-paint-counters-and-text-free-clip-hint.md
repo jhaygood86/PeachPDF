@@ -36,3 +36,14 @@ reaches them. Steady-drag region painting on Ars went 380 ms -> 127-154 ms (70 -
 scrolling during a warm can still wait one band. It stops for a document with transparency, viewport-mode backgrounds, a restyle in progress or a lost device.
 **Found on the way, not fixed:** in one run with the real mouse over the window, `pointer state` (hover restyle) took 955-1558 ms on the Ars page - a far larger hitch than any
 paint; the in-place restyle is evidently not covering it there.
+
+## Hover over an inline SVG icon no longer reloads the page (same day)
+
+The 1-1.5 s `pointer state` hitch was found with the real pointer over the bench window (SetCursorPos sweep) and `PEACH_PAINT_STATS=1`, which now notes why a restyle was not applied in
+place: `a:hover .icon`-style rules on the page's 129 inline SVG icons made `InteractionRestyler` give up and reload the document. A `CssBoxSvg` now keeps the children its
+scene graph was built from when a state rule styled one of its elements (`_stateBoxes`), and the restyler builds that graphic again (`RebuildForState`, the shape `StepAnimation` already used)
+after raising `StyleGeneration`, adding the graphic's rect to the dirty regions. Hover changes on Ars: 860-1,500 ms -> 106-133 ms. Tests: `InteractionStateTests` asserts `Incremental` and dirty regions
+for the sibling and descendant forms; Engine 19,715, PeachBrackets 1,200 pass.
+**Still reloading on Ars (400-570 ms):** hover changes on `<a>` and `<img>` whose new style differs in an area that is not paint-only; the reason now names the areas
+("content, font..."), but the pointer sweep stopped delivering events before it could be read. **Not done:** a graphic inside a recascaded root is not rebuilt for a changed `currentColor`
+by this path (unchanged behavior).

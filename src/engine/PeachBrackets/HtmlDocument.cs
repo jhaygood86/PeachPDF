@@ -1709,6 +1709,9 @@ public sealed partial class HtmlDocument : IDisposable
             _styleSnapshot = _container.AnimationsEnabled ? SnapshotStyles(_container.Root) : null;
             var outcome = InteractionRestyler.TryApply(_container, previous, next, changed, tree.Fragmentainers);
             LastRestyleFallbackReason = outcome.Reason;
+            if (!outcome.Applied)
+                PeachBrackets.Html.Paint.PaintStatistics.Note($"restyle not applied in place: {outcome.Reason}");
+
             if (outcome.Applied)
             {
                 _styleSnapshot = null;

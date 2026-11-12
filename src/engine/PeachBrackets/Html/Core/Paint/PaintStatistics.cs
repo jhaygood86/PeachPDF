@@ -29,6 +29,21 @@ namespace PeachBrackets.Html.Paint
                 Interlocked.Increment(ref counter);
         }
 
+        /// <summary>One line of free text in the same stream (why a restyle was not applied in place, say), when the statistics are on.</summary>
+        internal static void Note(string text)
+        {
+            if (!Enabled)
+                return;
+
+            var line = "PEACH_PAINT_STATS(note) " + text;
+            Debug.WriteLine(line);
+            if (Environment.GetEnvironmentVariable("PEACH_PAINT_STATS_FILE") is { Length: > 0 } file)
+            {
+                lock (typeof(PaintStatistics))
+                    System.IO.File.AppendAllText(file, line + Environment.NewLine);
+            }
+        }
+
         internal static void Report(double reachMs, double totalMs)
         {
             var line = $"PEACH_PAINT_STATS(engine) pageFragments={Interlocked.Exchange(ref ReachNodes, 0)} entered={Interlocked.Exchange(ref FragmentsEntered, 0)} " +
