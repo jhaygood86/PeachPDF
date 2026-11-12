@@ -10579,6 +10579,11 @@ namespace PeachBrackets.Html.Dom
         /// </remarks>
         internal static double? LastOwnLineBaselineOf(CssBox box)
         {
+            // A block-level replaced element (`img { display: block }`) is not a line box and has no baseline: the inline-block around it rests on its
+            // bottom margin edge, so the strut's descent stays below it - the logo in a header link, 72px of image in a 79px line. The line this
+            // engine gives such an image to lay it out on is not one of the inline-block's own.
+            if (box.IsReplacedBlockWrapper) return null;
+
             for (var i = box.Boxes.Count - 1; i >= 0; i--)
             {
                 var child = box.Boxes[i];

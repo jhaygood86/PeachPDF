@@ -43,6 +43,22 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(legal.ActualBoxSizingWidth >= p.ActualBoxSizingWidth + a.ActualBoxSizingWidth + gap - 0.5, $"legal {legal.ActualBoxSizingWidth}pt, p {p.ActualBoxSizingWidth}pt, a {a.ActualBoxSizingWidth}pt");
         }
 
+        [Theory]
+        [InlineData("<a id='h' style='display:inline-block'><img id='i' style='display:block;width:40pt;height:54pt' src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='></a>")]
+        [InlineData("<a id='h' style='display:inline-block'><span id='i' style='display:block;width:40pt;height:54pt'></span></a>")]
+        public async Task ABlockLevelBoxInAnInlineBlockSitsOnTheBaselineWithTheStrutBelowIt(string content)
+        {
+            // A logo link, `<a>` an inline-block around a block-level image: the block has no line box, so the inline-block rests on its bottom edge
+            // and the line keeps the descent of its strut under it (Chrome: 79px around a 72px image at 16px/1.6). Without it the logo touched
+            // the header's bottom border.
+            var (root, _) = await LayoutAsync(Wrap($"<div id='c' style='font:12pt/1.6 sans-serif'>{content}</div>"));
+
+            var container = FindById(root, "c")!;
+            var image = FindById(root, "i")!;
+
+            Assert.True(container.ActualBottom - image.ActualBottom > 3, $"only {container.ActualBottom - image.ActualBottom}pt below the block");
+        }
+
         [Fact]
         public async Task ANonShrinkingItemBesideAGrowerWithALongWordIsRaisedToItsAutomaticMinimum()
         {

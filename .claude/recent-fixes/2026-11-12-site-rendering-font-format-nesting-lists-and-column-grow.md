@@ -21,3 +21,7 @@ Both were a wrapping flex row (`.nav-list`, `.site-footer__legal`: `flex-wrap: w
 ## Large reductions on the Win2D canvas
 
 `DrawImage` used `CanvasImageInterpolation.Linear` (bilinear) at any scale, so a 4252px logo drawn 100px wide read 4 texels per output pixel and its thin strokes came out dotted. A reduction under 0.5 now uses the cubic mode, which pre-filters. Chrome showed the smooth result for the same file.
+
+## No strut under a logo that is a block image in a link
+
+`.logo a { display: inline-block }` around an `img { display: block }`: the engine wraps the block image in a synthetic block (`IsReplacedBlockWrapper`) that owns a line box holding the image, and `LastOwnLineBaselineOf` read it as the inline-block's own last line, so the baseline sat on the image's bottom and the line lost the strut's descent below it (73px against Chrome's 79 around a 72px image). With the header no longer made tall by a wrapped nav, the logo then touched the gradient border. A block-level image has no baseline, so the inline-block rests on its bottom margin edge and the strut stays.
