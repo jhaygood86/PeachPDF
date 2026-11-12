@@ -10354,7 +10354,10 @@ namespace PeachBrackets.Html.Dom
                     trailingSpace = 0;
                 }
 
-                UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
+                // A table cell's declared width is the width its column prefers, not one it cannot be narrower than: the column
+                // still shrinks to the cell's content (a nested table with a width="80" cell has a minimum of that cell's text, not 80).
+                if (box.DerivedStyle.ActualDisplay != Keywords.TableCell)
+                    UpdateMinWidth(ref min, ref minDecoration, explicitContentWidth, explicitDecoration);
             }
 
             // max sum (and its matching padding contribution) is the max of all the lines in the box

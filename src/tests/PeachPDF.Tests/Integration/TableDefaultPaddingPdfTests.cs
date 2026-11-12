@@ -81,6 +81,7 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(98, fills[Green].Width, 0.05);
             Assert.Equal(98, fills[Red].Width, 0.05);
         }
+
         [Fact]
         public async Task ACellHoldingATableOfManyRowsIsStillAsWideAsTheTable()
         {
@@ -92,6 +93,55 @@ namespace PeachPDF.Tests.Integration
 
             Assert.Equal(52, fills[Green].Width, 0.05);
             Assert.Equal(52, fills[Red].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task ASpanningCellHasTheSpacingBetweenItsColumnsAlreadyInItsWidth()
+        {
+            const string block60 = "<div style='display:inline-block;width:60px;height:10px'></div>";
+            const string block20 = "<div style='display:inline-block;width:20px;height:10px'></div>";
+
+            // The cell is its 60px of content and 1px of padding either side; the columns it spans and the spacing between them make that up, and the
+            // spacing is not added again (Chrome: 46.5pt, and a 16.5pt cell beside it).
+            var fills = await FillsAsync(
+                $"<table><tr><td rowspan='2' colspan='2' style='background:#fcc'>{block60}</td><td style='background:#cfc'>{block20}</td></tr><tr><td>{block20}</td></tr></table>");
+
+            Assert.Equal(46.5, fills[Red].Width, 0.05);
+            Assert.Equal(16.5, fills[Green].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData("padding:20px")]
+        [InlineData("padding:0")]
+        [InlineData("padding:20px;box-sizing:border-box")]
+        public async Task APercentageCellWidthIsTheCellsWholeShareOfTheTable(string cellStyle)
+        {
+            var fills = await FillsAsync(
+                $"<table style='width:600px;border-spacing:0'><tr><td style='background:#fcc;width:50%;{cellStyle}'>x</td><td style='background:#cfc;padding:0'>y</td></tr></table>");
+
+            Assert.Equal(225, fills[Red].Width, 0.05);
+            Assert.Equal(225, fills[Green].Width, 0.05);
+        }
+
+        [Fact]
+        public async Task APercentageCellWidthIsAShareOfTheGridWithoutItsSpacing()
+        {
+            var fills = await FillsAsync("<table style='width:600px'><tr><td style='background:#fcc;width:50%'>x</td><td style='background:#cfc'>y</td></tr></table>");
+
+            Assert.Equal(222.75, fills[Red].Width, 0.05);
+            Assert.Equal(222.75, fills[Green].Width, 0.05);
+        }
+
+        [Theory]
+        [InlineData(20, 61.5)]
+        [InlineData(120, 96)]
+        public async Task ADeclaredWidthOfANestedTablesCellIsNotAMinimumForTheOuterCell(int contentPx, double outerCell)
+        {
+            // The outer cell asks for 80px. The nested table would like more, but only content that cannot shrink holds a column wider than it asked.
+            var fills = await FillsAsync(
+                $"<table><tr><td width='80' style='background:#fcc'><table><tr><td width='80'><div style='display:inline-block;width:{contentPx}px;height:10px'></div></td></tr></table></td></tr></table>");
+
+            Assert.Equal(outerCell, fills[Red].Width, 0.05);
         }
 
         [Fact]

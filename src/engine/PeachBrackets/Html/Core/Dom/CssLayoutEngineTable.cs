@@ -2439,7 +2439,11 @@ namespace PeachBrackets.Html.Dom
                         // browser's by exactly its padding plus border, and handed the difference to
                         // whichever column was auto. Zero under border-box, where the declared size
                         // already covers them.
-                        len += CellInlineSizeExcludes(cell);
+                        //
+                        // A percentage is the exception: a browser takes a percentage cell width as the
+                        // cell's whole (border-box) share of the grid, so 50% beside an unsized cell
+                        // splits the table evenly whatever padding either has.
+                        if (!new CssLength(CellInlineSize(cell)).IsPercentage) len += CellInlineSizeExcludes(cell);
 
                         var colspan = GetColSpan(cell);
                         len /= Convert.ToSingle(colspan);
@@ -7706,7 +7710,10 @@ namespace PeachBrackets.Html.Dom
 
             if (spanned.Count == 0) return;
 
-            var shortfall = required - total;
+            // The cell's width is the spanned columns plus the border-spacing between them (a cell with
+            // colspan 2 fills the gap too), so that spacing is room the cell already has: only what is
+            // left of its need after both is a shortfall.
+            var shortfall = required - total - GetInteriorSpacing(col, colSpan);
             if (shortfall <= 0) return;
 
             foreach (var index in spanned)
