@@ -50,6 +50,46 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(50, FindById(root, "a")!.ActualBoxSizingWidth, 1);
         }
 
+        // An `auto` track is minmax(auto, auto) (section 7.2.3), so the same exemptions apply to its items' minimum contribution (section 6.6, 12.5):
+        // a scroll container and an authored min-width are not floored at their min-content.
+        [Theory]
+        [InlineData("overflow:hidden")]
+        [InlineData("min-width:0")]
+        public async Task AnAutoTrackIsNotFlooredByAnExemptItem(string firstItemStyle)
+        {
+            var (root, _) = await LayoutAsync(Grid("auto auto", firstItemStyle));
+            var a = FindById(root, "a")!;
+            var b = FindById(root, "b")!;
+
+            Assert.True(a.ActualBoxSizingWidth < 100, $"the track shrinks into the container, was {a.ActualBoxSizingWidth}");
+            Assert.Equal(100, a.ActualBoxSizingWidth + b.ActualBoxSizingWidth, 1);
+        }
+
+        [Fact]
+        public async Task AnAutoTrackStillKeepsAnOrdinaryItemsMinContent()
+        {
+            var (root, _) = await LayoutAsync(Grid("auto auto"));
+
+            Assert.True(FindById(root, "a")!.ActualBoxSizingWidth > 150);
+        }
+
+        [Fact]
+        public async Task AMinmaxAutoTrackIsNotFlooredByAScrollContainer()
+        {
+            var (root, _) = await LayoutAsync(Grid("minmax(auto, 300pt) auto", "overflow:hidden"));
+
+            Assert.True(FindById(root, "a")!.ActualBoxSizingWidth < 100);
+        }
+
+        [Fact]
+        public async Task AMinContentTrackIsStillFlooredAtItsContent()
+        {
+            var (root, _) = await LayoutAsync(Grid("min-content auto", "overflow:hidden"));
+
+            // A min-content track takes the item's min-content contribution, which the automatic minimum's exemptions do not touch.
+            Assert.True(FindById(root, "a")!.ActualBoxSizingWidth > 150);
+        }
+
         [Fact]
         public async Task TracksThatFitAreUnchanged()
         {

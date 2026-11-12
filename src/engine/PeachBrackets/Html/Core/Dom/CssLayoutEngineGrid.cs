@@ -438,10 +438,26 @@ namespace PeachBrackets.Html.Dom
                     // before PositionTracks fixes every row's final Position below, so AlignRowBaselines' later
                     // within-row shift never needs a second, cascading re-position pass (issue #280).
                     var baselineExtents = new Dictionary<int, (double MaxAscent, double MaxDescent)>();
+                    // With a definite container height the flexible rows are resolved by §12.7 further down, from their base sizes: for a bare
+                    // `fr` (minmax(auto, fr)) that is the items' automatic minimum (§6.6), for minmax(<length>, fr) the length. Until then such a row
+                    // holds its base, not its content, so the content cannot hold it open past its share. Without a definite height a flexible row
+                    // is content-sized as it always was.
+                    var expandsFlexRows = !_vertical && hasDefiniteBlock && rows.Any(t => IsFlexTrack(t.Def));
+                    if (expandsFlexRows)
+                    {
+                        foreach (var row in rows.Where(t => IsFlexTrack(t.Def)))
+                            row.Size = row.Def.Kind == GridTrackKind.Minmax && IsFixed(row.Def.Min)
+                                ? ResolveFixedLength(row.Def.Min, BlockContentSize)
+                                : 0;
+                    }
+
                     foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
                     {
                         var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
-                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+                        var rowBase = expandsFlexRows && IsFlexTrack(rows[p.RowStart].Def)
+                            ? FlexRowBaseContribution(rows[p.RowStart].Def, p.Box, natural)
+                            : natural;
+                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, rowBase);
 
                         if (!_vertical
                             && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))
@@ -467,6 +483,9 @@ namespace PeachBrackets.Html.Dom
                     // so the shared tracks size to fit every subgrid.
                     foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
                         await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap, colLineNames, rowLineNames);
+
+                if (expandsFlexRows)
+                    ExpandFlexibleRows(rows, BlockContentSize, rowGap);
 
                     var rowContainerSize = hasDefiniteBlock ? BlockContentSize
                         : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
@@ -1192,6 +1211,65 @@ namespace PeachBrackets.Html.Dom
                 row.Size += share;
         }
 
+        /// <summary>
+        /// A single-row item's contribution to the base size of a flexible row (CSS Grid §12.5): its automatic minimum size when the row's
+        /// minimum sizing function is <c>auto</c> (a bare <c>fr</c> or <c>minmax(auto, fr)</c>), its content when that function is
+        /// <c>min-content</c> or <c>max-content</c>, and nothing when it is a length (the length is the base).
+        /// </summary>
+        private double FlexRowBaseContribution(GridTrackSize def, CssBox box, double naturalOuter)
+        {
+            var min = def.Kind == GridTrackKind.Minmax ? def.Min : def;
+            if (IsFixed(min)) return 0;
+            return min.Kind is GridTrackKind.MinContent or GridTrackKind.MaxContent
+                ? naturalOuter
+                : AutoMinimumHeightOf(box, naturalOuter, BlockContentSize);
+        }
+
+        /// <summary>
+        /// A grid item's automatic minimum size in the block axis (CSS Grid §6.6): zero content for a scroll container, the item's own
+        /// <c>min-height</c> when it has one, and otherwise its content height (a definite <c>height</c> is already what it measures to).
+        /// </summary>
+        private static double AutoMinimumHeightOf(CssBox box, double naturalOuter, double basis)
+        {
+            var outerExtra = box.ActualMarginTop + box.ActualMarginBottom
+                + box.ActualPaddingTop + box.ActualPaddingBottom
+                + box.ActualBorderTopWidth + box.ActualBorderBottomWidth;
+
+            if (box.Overflow.Value != Css.Overflow.Visible) return outerExtra;
+
+            if (!string.Equals(box.MinHeight, Keywords.Auto, StringComparison.OrdinalIgnoreCase))
+                return CssValueParser.IsValidLength(box.MinHeight)
+                    ? CssValueParser.ParseLength(box.MinHeight, basis, box) + outerExtra
+                    : naturalOuter;
+
+            return naturalOuter;
+        }
+
+        /// <summary>
+        /// <see href="https://www.w3.org/TR/css-grid-1/#algo-flex-tracks">CSS Grid §12.7 "Expand Flexible Tracks"</see> for the row axis with
+        /// a definite container height: the space left once the other rows and the gaps are taken out is shared among the flexible rows by
+        /// their flex factors, a row whose share is under its base size being held at its base and the rest shared by the others.
+        /// </summary>
+        private static void ExpandFlexibleRows(Track[] rows, double containerHeight, double rowGap)
+        {
+            var bases = new double[rows.Length];
+            var flexes = new double[rows.Length];
+            double nonFlexSize = 0;
+            for (var i = 0; i < rows.Length; i++)
+            {
+                bases[i] = rows[i].Size;
+                flexes[i] = !IsFlexTrack(rows[i].Def) ? 0
+                    : rows[i].Def.Kind == GridTrackKind.Flex ? rows[i].Def.Flex : rows[i].Def.Max.Flex;
+                if (flexes[i] <= 0) nonFlexSize += rows[i].Size;
+            }
+
+            var gaps = rows.Length > 1 ? rowGap * (rows.Length - 1) : 0;
+            var frSize = FindFlexFraction(bases, flexes, Math.Max(0, containerHeight - nonFlexSize - gaps));
+            for (var i = 0; i < rows.Length; i++)
+                if (flexes[i] > 0)
+                    rows[i].Size = Math.Max(bases[i], flexes[i] * frSize);
+        }
+
         private static bool IsFlexTrack(GridTrackSize def) =>
             def.Kind == GridTrackKind.Flex || (def.Kind == GridTrackKind.Minmax && def.Max.Kind == GridTrackKind.Flex);
 
@@ -1474,7 +1552,7 @@ namespace PeachBrackets.Html.Dom
                 var (mn, mx) = _vertical
                     ? await MeasureInlineContributionVertical(g, p.Box)
                     : await MeasureItemContribution(g, p.Box);
-                if (colDefs[p.ColStart].Kind == GridTrackKind.Flex)
+                if (HasAutoMinimum(colDefs[p.ColStart]))
                     mn = _vertical ? AutoMinimumOfVertical(p.Box, mn, contentWidth) : AutoMinimumOf(p.Box, mn, contentWidth);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
@@ -1630,7 +1708,7 @@ namespace PeachBrackets.Html.Dom
             foreach (var p in placements.Where(p => p.ColSpan == 1 && !IsFixed(colDefs[p.ColStart]) && !IsSubgridItem(p.Box)))
             {
                 var (mn, mx) = MeasureItemContributionSync(g, p.Box);
-                if (colDefs[p.ColStart].Kind == GridTrackKind.Flex) mn = AutoMinimumOf(p.Box, mn, 0);
+                if (HasAutoMinimum(colDefs[p.ColStart])) mn = AutoMinimumOf(p.Box, mn, 0);
                 min[p.ColStart] = Math.Max(min[p.ColStart], mn);
                 max[p.ColStart] = Math.Max(max[p.ColStart], mx);
             }
@@ -1757,6 +1835,15 @@ namespace PeachBrackets.Html.Dom
             return minContentOuter;
         }
 
+        /// <summary>
+        /// Whether the track's minimum sizing function is <c>auto</c> (CSS Grid §12.4: <c>auto</c> is <c>minmax(auto, auto)</c> and a bare
+        /// <c>&lt;flex&gt;</c> is <c>minmax(auto, &lt;flex&gt;)</c>), so the items' minimum contribution is their automatic minimum size (§6.6,
+        /// §12.5) with its exemptions, not their min-content. A <c>min-content</c>/<c>max-content</c> minimum takes the content contribution itself.
+        /// </summary>
+        private static bool HasAutoMinimum(GridTrackSize def) =>
+            def.Kind is GridTrackKind.Flex or GridTrackKind.Auto
+            || (def.Kind == GridTrackKind.Minmax && def.Min.Kind == GridTrackKind.Auto);
+
         private static bool IsIntrinsic(GridTrackSize def) =>
             def.Kind is GridTrackKind.Auto or GridTrackKind.MinContent or GridTrackKind.MaxContent
                 or GridTrackKind.FitContent
@@ -1785,7 +1872,8 @@ namespace PeachBrackets.Html.Dom
 
                 if (remainingFlex <= 0) return 0;
 
-                var frSize = Math.Max(0, remainingSpace) / remainingFlex;
+                // §12.7.1: a flex factor sum under one counts as one, so `0.5fr` takes half the space rather than all of it.
+                var frSize = Math.Max(0, remainingSpace) / Math.Max(remainingFlex, 1);
 
                 var anyNewlyFrozen = false;
                 for (var i = 0; i < n; i++)
