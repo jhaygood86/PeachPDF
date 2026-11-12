@@ -122,8 +122,8 @@ namespace PeachBrackets.Css
 
                 if (rightRaw is not null)
                 {
-                    // The trailing columns are an <explicit-track-list> — a <track-list> with no repeat().
-                    if (right.Length == 0 || ContainsRepeat(right) || GridTrackListGrammar.TryParse(rightRaw) is null)
+                    // The trailing columns are an <explicit-track-list> — a <track-list> with no repeat(), and so no `subgrid` either.
+                    if (right.Length == 0 || ContainsRepeat(right) || GridTrackListGrammar.TryParse(rightRaw) is not { IsSubgrid: false })
                         return false;
                     columns = Trim(rightRaw);
                 }
