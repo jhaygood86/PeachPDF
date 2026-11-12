@@ -72,7 +72,15 @@ group emits exactly what `main` did.
   Decided over the strips, not over their rows: deciding each edge from its rows snapped a run's bottom but not the top of
   the sliced row below it, half a pixel of overlap.
 - **Tagged, parts placed with the row group keep the cell in its row.** The painter re-opens the cell's own row's element
-  around a rowspan cell (`OpenPhantomAncestors`); inside its row that changes nothing.
+  around a rowspan cell (`OpenPhantomAncestors`); inside its row that changes nothing. But where the own row is sliced on the
+  cell's first page, every part went to the group, so the cell's element was opened after the row's other cells: their
+  order in the structure tree was reversed where the content held an element of its own (an image, a link, a control). The
+  strip in the own row's band stays in that row, at the cell's place: it is confined to that band either way, and it opens
+  the cell's element in source order.
+- **With collapsed borders the table draws the cell's borders from its unshifted box.** A strip carrying a sliced row's
+  shift then ran its fill, and the row group's background painted beneath the cell's area, past the bottom border by that
+  shift. With collapsed borders the strips and the shell stay unshifted; and in either model no strip runs below where the
+  bottom border is drawn on the page (the shell's bottom, or the box's for collapsed borders).
 - **A placeholder is no element of the document.** Tagged, a strip under a placeholder opened it as an empty `/Div`; a
   `CssSpacingBox` now maps to no structure element (`StructureTagMapper.Classify`).
 - **The cell's box can end at the foot of an earlier page.** Where its content ends before the span does,
@@ -102,7 +110,7 @@ group emits exactly what `main` did.
 - Also #1950's (on `main` as here, added to #2313): a bottom-aligned cell under a repeated footer is aligned within the
   remainder of the band its row begins in, which runs under the footer, so its text is drawn under the footer's label.
 - On a page where the cell's own row is sliced, a row group's background in the cell's column is drawn with that row's
-  shift, so it runs a repeated header's height below the table. Not the cell's: its fill ends with the rows. 84 of the 864
+  shift, so it runs a repeated header's height below the table. Not the cell's: its fill ends with the rows. 48 of the 864
   sweep layouts, every one also on `main`, which has it in 348.
 - With `PEACHPDF_VERIFY_FRAGMENT_PRUNING=1` set for the whole engine suite, 14 tests fail, the same 14 on `main`.
 
@@ -123,8 +131,13 @@ group emits exactly what `main` did.
 - A second throwaway sweep, of 864 layouts (group none / `thead` / `tfoot` / both, both border models, `vertical-align` top /
   middle / bottom, short and page-tall content, nine row patterns including two page-tall rows, rows sized on the cell or on
   a `div`), with a `tbody` background and a translucent cell fill: pruning-oracle failures 0 (the previous head 72), doubled
-  fills 0, doubled words 0, fills over a repeated label 0 (`main` 360). The group's background shows beside the cell in 84,
+  fills 0, doubled words 0, fills over a repeated label 0 (`main` 360), fills below the cell's bottom border 0 (`main` 144).
+  The group's background shows beside the cell in 48,
   all also on `main` (see Not done).
+- A structure-tree sweep of 768 tagged documents (the four groupings, both border models, eight kinds of cell content from
+  plain text to an image, a link, a control and a list, six row patterns, the spanning cell first or second in its row):
+  element types, nesting, order and marked-content counts equal `main`'s in every one, empty `/Div`s aside; the previous
+  head differed in 70.
 - `RowspanCellUnderARepeatedGroupTests` (`PeachPDF.Tests`): the saved PDF shows the cell's word once and draws its text after
   every part of its fill; on every page its fill runs beside all its rows, once, never over the repeated group; tagged, no
   extra empty `/Div` and every cell element in a row. The text-order test fails on the previous head; the tagging one without

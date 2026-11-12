@@ -115,6 +115,43 @@ namespace PeachPDF.Tests.Integration
             Assert.True(cellParents.All(parent => parent == "/TR"), $"{layout}: a table cell's element is in {string.Join(", ", cellParents.Distinct())}");
         }
 
+        /// <summary>
+        /// The review's case: the first row is taller than a page, so the spanning cell's parts are placed with its row group,
+        /// and its content holds an element of its own. Tagged, the cell's element still comes first in its row, before the
+        /// cell beside it, as in the source: the structure tree is the reading order.
+        /// </summary>
+        [Theory]
+        [InlineData("CWA <img src='data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7' width='30' height='30' alt='dot'> CWB", "/Figure")]
+        [InlineData("CWA <a href='https://example.com/'>link</a> CWB", "/Link")]
+        public async Task Tagged_ACellBuiltInParts_KeepsItsPlaceInItsRow(string content, string element)
+        {
+            var html = "<!DOCTYPE html><html lang='en'><head><meta charset='utf-8'><title>T</title><style>@page{size:300px 400px;margin:20px} " +
+                "body{margin:0;font:10px/12px Arial} td,th{vertical-align:top;padding:2px} table{table-layout:fixed;width:260px;border-spacing:0}</style></head><body>" +
+                "<table><thead><tr><th>HEAD1</th><th>HEAD2</th></tr></thead><tbody>" +
+                $"<tr><td rowspan='3' style='background:#fcc;border:2px solid #006'>{content}</td><td style='height:600px'>R0</td></tr>" +
+                "<tr><td style='height:40px'>R1</td></tr><tr><td style='height:40px'>R2</td></tr></tbody></table></body></html>";
+
+            var pdf = (await new PdfGenerator().GeneratePdf(html, new PdfGenerateConfig { EnableTaggedPdf = true })).Inspect();
+
+            var rows = new List<StructElem>();
+            foreach (var root in pdf.StructureRoot) Collect(root);
+
+            // The header's row first, then the body's.
+            Assert.True(rows.Count >= 2, $"{rows.Count} /TR elements");
+            var cells = rows[1].Kids.Where(kid => kid.StructureType is "/TD" or "/TH").ToList();
+            Assert.Equal(2, cells.Count);
+            Assert.True(Contains(cells[0], element), $"the row's first cell has no {element}: the spanning cell is not first");
+            Assert.False(Contains(cells[1], element), $"the row's second cell has the {element}");
+
+            void Collect(StructElem e)
+            {
+                if (e.StructureType == "/TR") rows.Add(e);
+                foreach (var kid in e.Kids) Collect(kid);
+            }
+
+            static bool Contains(StructElem e, string type) => e.StructureType == type || e.Kids.Any(kid => Contains(kid, type));
+        }
+
         /// <summary>How many empty <c>/Div</c> elements the tagged document has, and the type of every table cell element's parent.</summary>
         private static async Task<(int EmptyDivisions, List<string?> CellParents)> StructureOf(string html)
         {

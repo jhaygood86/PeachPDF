@@ -2411,8 +2411,13 @@ namespace PeachBrackets.Html.Fragmentation
             // band; on the page the span ends on, to the bottom of the row that ends it, in that row's own coordinates, so
             // where that row is itself sliced here, that bottom lies the row's shift above where the row is drawn. (Shifting
             // the foot of a middle page's band as well drew the cell under the repeated footer.)
+            // With collapsed borders the table draws the cell's borders, from its own box, unshifted: so are its parts, or the fill
+            // and the group's background beneath it run past the bottom border by the shift of the sliced row ending the span.
+            var table = cell.ParentBox?.ParentBox?.ParentBox;
+            var collapsed = table is { BorderCollapse.Value: BorderCollapseMode.Collapse };
+
             var shell = _frozen.Contains(cell) ? ShellIn(cell, region) : null;
-            if (shell is { } stated && Math.Abs(stated.Bottom - rows[^1].ActualBottom) < 0.01
+            if (!collapsed && shell is { } stated && Math.Abs(stated.Bottom - rows[^1].ActualBottom) < 0.01
                 && DisplacementIn(rows[^1], slot.Index) is { Shift: var endShift and not 0 })
             {
                 shell = new Rect(stated.X, stated.Y, stated.Width, stated.Height + endShift);
@@ -2443,7 +2448,16 @@ namespace PeachBrackets.Html.Fragmentation
 
             // Nor below the repeated footer's top: the first slice of a row taller than what is left of a page is stated
             // down to the row's own bottom there, under the footer, where the strip was measured drawn over its label.
-            if (RepeatedFooterTopIn(cell.ParentBox?.ParentBox?.ParentBox, region) is { } footerTop)
+            // Nor below where the cell's bottom border is drawn on this page, which the band of a sliced row ending the span
+            // can run on past: the shell's bottom, or with collapsed borders, which the table draws from the cell's own box,
+            // the box's bottom. Measured as fill below the bottom border.
+            var foot = RepeatedFooterTopIn(table, region);
+            var border = shell?.Bottom
+                ?? (collapsed ? cell.ActualBottom : null);
+            if (border is { } bottom && bottom > region.Top && bottom <= region.Bottom + 0.01)
+                foot = Math.Min(foot ?? double.MaxValue, bottom);
+
+            if (foot is { } footerTop)
             {
                 for (var i = strips.Count - 1; i >= 0; i--)
                 {
@@ -2457,6 +2471,7 @@ namespace PeachBrackets.Html.Fragmentation
             SnapSharedEdges(strips, slot);
 
             _decorationOnly = cell;
+            Draft? ownRowsStrip = null;
 
             try
             {
@@ -2468,6 +2483,7 @@ namespace PeachBrackets.Html.Fragmentation
                         decoration.DropContent();
                         if (shell is not null) decoration.ShellRect = shell;
                         decorations.Add(decoration);
+                        if (ReferenceEquals(strip.Root, cell.ParentBox)) ownRowsStrip = decoration;
                     }
                 }
             }
@@ -2497,7 +2513,16 @@ namespace PeachBrackets.Html.Fragmentation
             // Otherwise that row is sliced to a band here, which would cut every other part away, or not reached at all.
             // The strips go before the first row of the span its group holds here, and the content after all of its rows.
             // They leave the cell's row for its group, which is the same paint wherever the row has no effect of its own
-            // (KeepsItsCellsWhole); tagged, the painter re-enters the row's element for them.
+            // (KeepsItsCellsWhole); tagged, the painter re-enters the row's element for them. But reached through its own
+            // row, the strip in that row's band stays in it, where the cell is among the row's cells: it is confined to that
+            // band either way, and tagged, it is what opens the cell's element, so the row's cells keep their source order.
+            // Measured as the cell's element after the cell beside it, where its content holds an element of its own.
+            if (ReferenceEquals(via, cell.ParentBox) && ownRowsStrip is not null)
+            {
+                decorations.Remove(ownRowsStrip);
+                children.Add(ownRowsStrip);
+            }
+
             if (!_rowSpanningCellPartsThisWalk.TryGetValue(group, out var pending))
                 _rowSpanningCellPartsThisWalk[group] = pending = [];
             pending.Add((spanned, decorations, content));
@@ -2505,7 +2530,7 @@ namespace PeachBrackets.Html.Fragmentation
             void AddStrip(int first, int last, bool sliced)
             {
                 (CssBox Root, double Shift, Rect Band)? strip = sliced && DisplacementIn(rows[first], slot.Index) is { } slice
-                    ? shell is null ? slice : (rows[first], 0d, slice.Band)
+                    ? shell is null && !collapsed ? slice : (rows[first], 0d, slice.Band)
                     : StripOf(cell, rows, first, last, region.Top) is { } extent ? (rows[first], 0d, extent) : null;
 
                 if (strip is { Band: var band } && band.Bottom > region.Top && band.Top < region.Bottom)

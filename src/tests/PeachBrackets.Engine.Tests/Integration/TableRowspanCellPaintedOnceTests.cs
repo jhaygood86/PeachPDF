@@ -353,6 +353,8 @@ namespace PeachPDF.Tests.Integration
             { "collapsed, both groups, two tall rows", TranslucentSpanningTable("collapse", TranslucentHead + TranslucentFoot, [40, 600, 600], "top", "CW1") },
             // The second row's first slice is stated down to its own bottom, under the repeated footer.
             { "both groups, two rows of most of a page", TranslucentSpanningTable("separate", TranslucentHead + TranslucentFoot, [330, 330], "top", "CW1") },
+            // Collapsed, the table draws the cell's bottom border from its box, above the band of the sliced row ending the span.
+            { "collapsed, header only, tall row last", TranslucentSpanningTable("collapse", TranslucentHead, [40, 600], "top", "CW1 CW2 CW3") },
         };
 
         /// <summary>
@@ -382,6 +384,16 @@ namespace PeachPDF.Tests.Integration
                         op.Kind is not (PaintOpKind.FillRect or PaintOpKind.Polygon) || op.Brush is SolidBrush { PaintColor.A: < 255 }))
                     .Where(r => r.Width > 0 && r.Height > 0).ToList();
                 var labels = graphics.Log.Where(op => op.Kind == PaintOpKind.DrawString && op.Text is "HEAD1" or "FOOT1").Select(op => op.Bounds).ToList();
+
+                // Where the cell's bottom border is drawn (3px, in the first column, below its top), its fill ends there.
+                if (fills.Count > 0)
+                {
+                    var bottomBorders = graphics.Log.Where(op => op.Kind == PaintOpKind.Polygon && op.Bounds.Height <= 3 && op.Bounds.Width > 10
+                        && op.Bounds.Left < fills.Max(f => f.Right) && op.Bounds.Top > fills.Min(f => f.Top) + 3).Select(op => op.Bounds).ToList();
+                    if (bottomBorders.Count > 0)
+                        Assert.True(fills.Max(f => f.Bottom) <= bottomBorders.Max(b => b.Bottom) + 0.5,
+                            $"{layout}, page {page + 1}: the cell's fill runs to {fills.Max(f => f.Bottom)}, below its bottom border at {bottomBorders.Max(b => b.Bottom)}");
+                }
 
                 for (var i = 0; i < fills.Count; i++)
                 {
