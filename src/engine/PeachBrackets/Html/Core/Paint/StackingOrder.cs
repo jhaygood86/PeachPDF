@@ -246,6 +246,16 @@ namespace PeachBrackets.Html.Paint
         /// inline (<see cref="System.Linq.Enumerable.All{T}"/> on an empty sequence is vacuously true).
         /// </summary>
         internal static bool ActsAsInline(CssBox box) =>
-            box.IsInline || (box.Boxes.Count > 0 && box.Boxes.All(b => b.IsInline));
+            !IsFlexOrGridItem(box) && (box.IsInline || (box.Boxes.Count > 0 && box.Boxes.All(b => b.IsInline)));
+
+        /// <summary>
+        /// Whether <paramref name="box"/> is an item of a flex or grid container. Such an item is block-level (CSS Display 3 §2.7) and paints as an
+        /// atomic unit, like an inline block, in the container's item order (CSS Flexbox 1 §4.3), so what it holds must not decide which pass it
+        /// paints in: a block of nothing but inline content and a flex container beside it would otherwise paint in different passes and swap places,
+        /// putting the later item's text ahead of the earlier one's in the page's reading order.
+        /// </summary>
+        private static bool IsFlexOrGridItem(CssBox box) =>
+            box.ParentBox?.DerivedStyle.ActualDisplay is Keywords.Flex or Keywords.InlineFlex or Keywords.Grid or Keywords.InlineGrid
+            && DomUtils.GeneratesFlexOrGridItem(box);
     }
 }
