@@ -2162,6 +2162,31 @@ await SaveShowcaseAsync("marker_styling", "Lists & Generated Content", "::marker
     "Styling list markers with the ::marker pseudo-element, including real per-item numbering via the list-item counter.",
     markerHtml, pdfConfig);
 
+// --- details / summary showcase ---
+
+var detailsHtml = """
+<!DOCTYPE html><html><head><style>
+@page { margin: 36pt }
+body { font-family: sans-serif; font-size: 12pt }
+details { border: 1px solid #888; border-radius: 4px; padding: 6pt 10pt; margin-bottom: 8pt; background: #f6f9fc }
+summary { font-weight: bold }
+details p { margin: 6pt 0 0 }
+.plain summary { list-style: none }
+.styled summary::marker { color: #c0392b }
+</style></head><body>
+<h2>Disclosure markers</h2>
+<details><summary>Closed (a click opens it in a reader that runs PDF actions)</summary><p>The content of the closed details. It is drawn over the page when a reader opens it; nothing reflows.</p></details>
+<details open><summary>Open</summary><p>This one is open on the page itself, so its marker points down.</p></details>
+<details class="plain"><summary>list-style: none removes the marker</summary><p>No triangle.</p></details>
+<details class="styled" open><summary>summary::marker { color } styles it</summary><p>A red triangle.</p></details>
+<p>Text after the details elements.</p>
+</body></html>
+""";
+
+await SaveShowcaseAsync("details_summary", "Lists & Generated Content", "details and summary",
+    "The disclosure triangle of a summary (closed and open), list-style: none and ::marker styling, and a closed details a PDF reader can open.",
+    detailsHtml, pdfConfig);
+
 // --- list-style-type value coverage showcase ---
 
 // Reuses SourceSans3 (already proven, via the font-variant-caps/bidi showcases above, to embed

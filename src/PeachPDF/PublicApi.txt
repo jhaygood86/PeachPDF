@@ -450,6 +450,7 @@ PeachPDF.PdfGenerateConfig : sealed class
   property Boolean BrotliCompression { get; set; }
   property Boolean CompressContentStreams { get; set; }
   property Boolean DownscaleImages { get; set; }
+  property Boolean EnableInteractivePdfDetails { get; set; }
   property Boolean EnableInteractivePdfForms { get; set; }
   property Boolean EnableTaggedPdf { get; set; }
   property Boolean EnableXmpMetadata { get; set; }

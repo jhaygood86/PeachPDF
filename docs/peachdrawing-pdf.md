@@ -240,6 +240,7 @@ and `Id`, and `Attributes`: a list of `PdfStructureAttributes` (an owner such as
 ## Interactive forms
 
 `composer.CreateFormBuilder(context)` returns a `PdfFormBuilder`; `AddField(page, definition)` places a `PdfFormFieldDefinition` on a page.
+`AddDisclosureAsync(page, definition)` adds a region a reader can open and close without script: a `PdfDisclosureDefinition` gives the heading's `ToggleBounds`, the `ContentBounds` the opened region covers and a `PaintContent` callback that draws it. It writes a hidden widget holding that drawing and a transparent button over the heading; the button's `Hide` action shows the widget, and clicking the widget hides it again. With `InitiallyOpen` the region starts open on the page instead: the button collapses it by showing `PaintHeading`'s collapsed heading and `PaintContent`'s drawing of what covers the page below it, and clicking the heading undoes that. Nothing reflows, and `Hide` actions are not allowed in PDF/A or PDF/X files, so leave it out of those.
 A definition has a `Kind` (`Text`, `Checkbox`, `Radio`, `Select`, `List`, `PushButton`, `Signature`), a `Name`, a `Value` (or `IsChecked`, or `Options` for a drop-down), the
 `Bounds` on the page in points, and the flags a field can carry (`ReadOnly`, `Required`, `Password`, `MaxLength`, `CombCells`, ...). The
 look of each state is drawn by your `IPdfFormAppearance`, which receives a `Canvas` the size of the control, so a field looks like the

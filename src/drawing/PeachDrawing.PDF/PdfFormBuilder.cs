@@ -192,7 +192,7 @@ namespace PeachDrawing.PDF
     /// buttons that share a name become the buttons of one field. Each field's look is drawn once per state by its
     /// <see cref="PdfFormFieldDefinition.Appearance"/> into an appearance stream, so a reader shows it as drawn until the user edits it.
     /// </remarks>
-    public sealed class PdfFormBuilder
+    public sealed partial class PdfFormBuilder
     {
         private readonly string _generatedNamePrefix;
 

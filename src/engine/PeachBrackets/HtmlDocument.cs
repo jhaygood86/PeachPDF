@@ -84,7 +84,11 @@ public sealed partial class HtmlDocument : IDisposable
     /// <param name="options">the page size, margins and style environment, or null for the defaults of <see cref="HtmlDocumentOptions"/></param>
     /// <returns>the loaded document</returns>
     /// <exception cref="ArgumentNullException"><paramref name="html"/> or <paramref name="renderContext"/> is null</exception>
-    public static async ValueTask<HtmlDocument> LoadAsync(string html, RenderContext renderContext, HtmlDocumentOptions? options = null)
+    public static ValueTask<HtmlDocument> LoadAsync(string html, RenderContext renderContext, HtmlDocumentOptions? options = null) =>
+        LoadWithOverridesAsync(html, renderContext, options, attributeOverrides: null);
+
+    private static async ValueTask<HtmlDocument> LoadWithOverridesAsync(
+        string html, RenderContext renderContext, HtmlDocumentOptions? options, IReadOnlyDictionary<int, Dictionary<string, string?>>? attributeOverrides)
     {
         ArgumentNullException.ThrowIfNull(html);
         ArgumentNullException.ThrowIfNull(renderContext);
@@ -143,6 +147,7 @@ public sealed partial class HtmlDocument : IDisposable
 
             document._source = html;
             document._options = options;
+            container.AttributeOverrides = attributeOverrides;
             await container.SetHtml(html, userStyles);
 
             // An @page { size } rule in the document replaces the configured sheet; the content area is what is left inside the margins.
@@ -403,6 +408,7 @@ public sealed partial class HtmlDocument : IDisposable
         var pageSize = Utils.ToPoints(_container.PageSize, _unitsPerPoint);
         _container.MaxSize = Utils.ToPixels(new Size(pageSize.Width, 0), _unitsPerPoint);
 
+        _disclosures = null;
         int? resumedSlot = null;
         if (changed is not null)
             resumedSlot = await _container.TryResumeLayoutAt(changed, measuringCanvas);
@@ -2538,6 +2544,8 @@ public sealed partial class HtmlDocument : IDisposable
 
         _disposed = true;
         _painter?.Dispose();
+        foreach (var twin in _disclosureTwins)
+            twin.Dispose();
         _container.Dispose();
     }
 

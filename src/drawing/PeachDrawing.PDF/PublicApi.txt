@@ -227,6 +227,15 @@ PeachDrawing.PDF.PdfComposerPage : sealed class
 PeachDrawing.PDF.PdfCopyMode : enum Int32
   ObjectCopy = 1
   Redraw = 0
+PeachDrawing.PDF.PdfDisclosureDefinition : sealed class
+  ctor()
+  property Boolean InitiallyOpen { get; init; }
+  property Double PixelsPerPoint { get; init; }
+  property Func<Canvas, ValueTask> PaintContent { get; init; }
+  property Func<Canvas, ValueTask> PaintHeading { get; init; }
+  property Rect ContentBounds { get; init; }
+  property Rect ToggleBounds { get; init; }
+  property String AccessibleName { get; init; }
 PeachDrawing.PDF.PdfEmbeddedFile : sealed class
   ctor()
   property Byte[] Data { get; set; }
@@ -264,6 +273,7 @@ PeachDrawing.PDF.PdfFileAttachment : sealed class
   property String Key { get; set; }
   property String MimeType { get; set; }
 PeachDrawing.PDF.PdfFormBuilder : sealed class
+  method ValueTask AddDisclosureAsync(PdfComposerPage page, PdfDisclosureDefinition disclosure)
   method Void AddField(PdfComposerPage page, PdfFormFieldDefinition field)
 PeachDrawing.PDF.PdfFormFieldDefinition : sealed class
   ctor()

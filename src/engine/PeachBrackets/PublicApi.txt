@@ -486,6 +486,7 @@ PeachBrackets.HtmlDocument : sealed class
   method Boolean IsScrollContainer(DocumentElement element)
   method Boolean RemoveHighlight(String name)
   method DocumentCursor GetCursorAt(Int32 pageIndex, Double x, Double y)
+  method DocumentElement GetDetailsToggledBy(DocumentElement element)
   method DocumentElement GetElement(String elementId)
   method DocumentElement GetElementAt(Int32 pageIndex, Double x, Double y)
   method DocumentElement GetElementAt(TextPosition position)
@@ -547,10 +548,13 @@ PeachBrackets.HtmlDocument : sealed class
   method UpdateResult SetStyle(DocumentElement element, String property, String value)
   method UpdateResult SetValue(DocumentElement element, String value)
   method ValueTask LayoutAsync(Canvas measuringCanvas)
+  method ValueTask PaintDisclosureAsync(PageDisclosure disclosure, Canvas canvas)
+  method ValueTask PaintDisclosureHeadingAsync(PageDisclosure disclosure, Canvas canvas)
   method ValueTask PaintPageAsync(Int32 pageIndex, Canvas canvas, DocumentPaintLayer layer = All)
   method ValueTask PaintPageRegionAsync(Int32 pageIndex, Canvas canvas, Rect region, DocumentPaintLayer layer = All)
   method ValueTask<AnimationFrame> AdvanceAnimationsAsync(TimeSpan now, Canvas measuringCanvas)
   method ValueTask<FocusMoveResult> MoveFocusAsync(Boolean forward, Canvas measuringCanvas)
+  method ValueTask<IReadOnlyList<PageDisclosure>> GetDisclosuresAsync(Canvas measuringCanvas)
   method ValueTask<TextEditResult> DeleteTextAsync(TextPosition from, TextPosition to, Canvas measuringCanvas)
   method ValueTask<TextEditResult> InsertTextAsync(DocumentElement element, String text, Canvas measuringCanvas)
   method ValueTask<TextEditResult> InsertTextAsync(TextPosition at, String text, Canvas measuringCanvas)
@@ -572,6 +576,7 @@ PeachBrackets.HtmlDocument : sealed class
   method ValueTask<UpdateResult> SetPointerStateAsync(Int32 pageIndex, Double x, Double y, Boolean pressed, Canvas measuringCanvas)
   method ValueTask<UpdateResult> SetPreferencesAsync(UserPreferences preferences, ColorSchemePreference colorScheme, Canvas measuringCanvas)
   method ValueTask<UpdateResult> ToggleClassAsync(DocumentElement element, String className, Canvas measuringCanvas)
+  method ValueTask<UpdateResult> ToggleDetailsAsync(DocumentElement element, Canvas measuringCanvas)
   method ValueTask<UpdateResult> UpdateContentVisibilityAsync(Canvas measuringCanvas)
   method ValueTask<UpdateResult> UpgradeImagesAsync()
   method ValueTuple<Int32, Int32>? GetEditLineRange(Canvas measuringCanvas, Int32 index)
@@ -704,6 +709,13 @@ PeachBrackets.InputCapabilities : sealed class
 PeachBrackets.MediaType : enum Int32
   Print = 0
   Screen = 1
+PeachBrackets.PageDisclosure : sealed class
+  ctor()
+  property Boolean InitiallyOpen { get; init; }
+  property Int32 PageIndex { get; init; }
+  property Rect ContentBounds { get; init; }
+  property Rect ToggleBounds { get; init; }
+  property String AccessibleName { get; init; }
 PeachBrackets.PointerTypes : enum Int32
   Coarse = 1
   Fine = 2

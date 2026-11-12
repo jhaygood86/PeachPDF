@@ -777,6 +777,14 @@ namespace PeachPDF
                 HandleFormFields(document.Composer, annotations, formFieldBuilder, pageBase);
             }
 
+            // A closed <details> a reader can open: its content is drawn into a hidden widget the summary's click shows. Hide actions are not
+            // allowed in the archival and accessibility profiles, so those documents keep the closed page only.
+            if (config.EnableInteractivePdfDetails && config.PdfAConformance == PdfAConformance.None && config.PdfXConformance == PdfXConformance.None
+                && config.PdfUAConformance == PdfUAConformance.None)
+            {
+                await HandleDisclosuresAsync(document.Composer, htmlDocument, pageBase);
+            }
+
             // The -peachpdf-pdf-annotation-* annotations (notes, text marks, shapes, attached-file icons). Unconditional, like the outline: a
             // document that asks for none collects none and adds nothing.
             if (annotations.Annotations.Count > 0)
@@ -914,6 +922,42 @@ namespace PeachPDF
                     continue;
 
                 formFieldBuilder.AddField(composer.Pages[field.PageIndex + pageBase], field);
+            }
+        }
+
+        /// <summary>
+        /// Gives each <c>&lt;details&gt;</c> of the pages that a reader can open or close the widgets that do it: for a closed one a hidden widget holding its opened content and a button over its summary that shows it, for an open one the collapsed page and a button over its summary that shows that.
+        /// </summary>
+        private async Task HandleDisclosuresAsync(PdfComposer composer, HtmlDocument htmlDocument, int pageBase)
+        {
+            if (htmlDocument.Pages.Count == 0)
+                return;
+
+            var first = htmlDocument.Pages[0];
+            IReadOnlyList<PageDisclosure> disclosures;
+            using (var measuring = PdfCanvas.CreateMeasuring(_renderContext, new Size(first.WidthPoints, first.HeightPoints)))
+                disclosures = await htmlDocument.GetDisclosuresAsync(measuring);
+
+            if (disclosures.Count == 0)
+                return;
+
+            var builder = composer.CreateFormBuilder(_renderContext, "PeachPDFDetails");
+            foreach (var disclosure in disclosures)
+            {
+                if (disclosure.PageIndex + pageBase >= composer.Pages.Count)
+                    continue;
+
+                var captured = disclosure;
+                await builder.AddDisclosureAsync(composer.Pages[disclosure.PageIndex + pageBase], new PdfDisclosureDefinition
+                {
+                    ToggleBounds = disclosure.ToggleBounds,
+                    ContentBounds = disclosure.ContentBounds,
+                    PixelsPerPoint = _renderContext.LayoutUnitsPerPoint,
+                    AccessibleName = disclosure.AccessibleName,
+                    PaintContent = canvas => htmlDocument.PaintDisclosureAsync(captured, canvas),
+                    InitiallyOpen = disclosure.InitiallyOpen,
+                    PaintHeading = disclosure.InitiallyOpen ? canvas => htmlDocument.PaintDisclosureHeadingAsync(captured, canvas) : null,
+                });
             }
         }
 

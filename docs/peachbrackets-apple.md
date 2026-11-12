@@ -66,7 +66,7 @@ images decode with the system's codecs when it does; `UseGpu = false` keeps all 
 
 ## Forms and text input
 
-A click or tap on a control does what it does in a browser: a check box toggles, a radio button checks, a reset button resets its form, a submit button raises
+A click or tap on a `<summary>` opens or closes its `<details>`. A click or tap on a control does what it does in a browser: a check box toggles, a radio button checks, a reset button resets its form, a submit button raises
 `FormSubmitting` (or `FormInvalid`), and a drop-down shows its options (a menu on a Mac, an action sheet or popover on iOS). A text field takes the focus with the
 caret where the point was, and the keyboard appears on iOS. In a field the keys do what a text field's keys do: the arrows, Home and End, word moves, Delete,
 Select All, Cut, Copy and Paste, and Return submits a one-line field's form or breaks a line in a text area.

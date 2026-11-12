@@ -43,6 +43,11 @@ namespace PeachBrackets.Html
             dir, menu, pre,
             details, summary, legend,
             hr               { display: block }
+            /* HTML Standard 15.5.4: the first summary child of a details is a list item with a disclosure marker. */
+            details > summary:first-of-type
+                            { display: list-item; list-style: disclosure-closed inside }
+            details[open] > summary:first-of-type
+                            { list-style-type: disclosure-open }
             legend           { padding-inline: 2px }
             foreignObject    { display: block }
             li              { display: list-item }
