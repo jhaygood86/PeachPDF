@@ -175,6 +175,15 @@ namespace PeachDrawing.Core
         public abstract void PushClip(GraphicsPath path);
 
         /// <summary>
+        /// <see cref="PushClip(GraphicsPath)"/> for a clip the caller knows will only have shapes and images drawn inside it, no text. It is popped with
+        /// <see cref="PopClip"/> like any other clip. The clip clips exactly the same; the hint only lets a backend skip work that is there for text drawn
+        /// inside a non-rectangular clip (a backend that blends text against the pixels behind it has to give the clip a surface of its own). Drawing text
+        /// inside such a clip anyway is allowed, but the backend may draw it less well. The default is <see cref="PushClip(GraphicsPath)"/>.
+        /// </summary>
+        /// <param name="path">Path to clip to.</param>
+        public virtual void PushClipAroundShapes(GraphicsPath path) => PushClip(path);
+
+        /// <summary>
         /// Push the clipping region of this Graphics to exclude the given rectangle from the current clipping rectangle.
         /// </summary>
         /// <param name="rect">Rectangle to exclude clipping in.</param>

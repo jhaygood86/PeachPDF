@@ -95,7 +95,28 @@ public sealed partial class Win2dCanvas
     private void DrawImageCore(PeachDrawing.Core.Image image, Rect dest, Rect? part, ImageSampling sampling, float opacity = 1f)
     {
         Guard();
-        DrawSource(Source(image), image.Width, image.Height, dest, part, Interpolation(image, sampling), opacity);
+        if (image is not Win2dImage own || !(image.Width > 0) || !(image.Height > 0))
+        {
+            DrawSource(Source(image), image.Width, image.Height, dest, part, Interpolation(image, sampling), opacity);
+            return;
+        }
+
+        // An image Windows decodes from its encoded bytes is held at the resolution this draw reads (a news thumbnail is a few hundred pixels wide,
+        // its file a few thousand), not at its own: a fraction of the device memory, a cheaper first decode, and no multi-pass reduction on every
+        // paint. A larger draw later (a zoom) decodes it again at the size it then needs and keeps that.
+        var drawStarted = Win2dPaintStatistics.Start();
+        var src = part ?? new Rect(0, 0, image.Width, image.Height);
+        var m = EffectiveTransform;
+        var scaleX = Math.Sqrt((m.M11 * m.M11) + (m.M12 * m.M12));
+        var scaleY = Math.Sqrt((m.M21 * m.M21) + (m.M22 * m.M22));
+        var needed = src.Width > 0 && src.Height > 0 ? Math.Max(dest.Width / src.Width * scaleX, dest.Height / src.Height * scaleY) * DpiScale : 1;
+        var bitmap = own.GetBitmap(_session, Win2dImage.ScaleFor(needed));
+
+        var ratio = bitmap.SizeInPixels.Width / image.Width;
+        var ratioY = bitmap.SizeInPixels.Height / image.Height;
+        Rect? scaledPart = part is { } p ? new Rect(p.X * ratio, p.Y * ratioY, p.Width * ratio, p.Height * ratioY) : null;
+        DrawSource(bitmap, bitmap.SizeInPixels.Width, bitmap.SizeInPixels.Height, dest, scaledPart, Interpolation(image, sampling), opacity);
+        Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.ImageDraw, drawStarted);
     }
 
     /// <inheritdoc />

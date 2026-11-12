@@ -57,6 +57,54 @@ namespace PeachBrackets.Html.Paint
             public List<ClipEntry>? Deferred { get; } = deferred;
         }
 
+        // Per painter (one page, one region): the answer for a fragment, kept because every clip an ancestor pushes around a descendant asks it again.
+        private readonly Dictionary<BoxFragment, bool> _mayDrawText = new(ReferenceEqualityComparer.Instance);
+
+        /// <summary>
+        /// Whether painting <paramref name="fragment"/> (itself and everything under it) could draw text. False only when it provably cannot: every word is
+        /// an image or whitespace, and no box under it is one whose own painter draws text (a form control, an inline SVG or MathML, an iframe, a marker, a
+        /// broken image's alt text). It is what lets a canvas give a rounded clip around a card's picture a cheaper form than one around its caption
+        /// (see <see cref="Canvas.PushClipAroundShapes"/>); a wrong "true" costs a little speed, a wrong "false" costs text quality, so anything not
+        /// understood answers true.
+        /// </summary>
+        private bool FragmentMayDrawText(BoxFragment fragment)
+        {
+            if (_mayDrawText.TryGetValue(fragment, out var known)) return known;
+
+            var mayDraw = false;
+            var painter = Content.FragmentContentPainters.For(fragment.Box);
+            if (painter is not null && !(fragment.Box is CssBoxImage image && image.BrokenImageAlt is null))
+            {
+                mayDraw = true;
+            }
+            else
+            {
+                foreach (var word in fragment.Words)
+                {
+                    if (!word.Word.IsImage && !word.Word.IsSpaces && !word.Word.IsLineBreak)
+                    {
+                        mayDraw = true;
+                        break;
+                    }
+                }
+
+                if (!mayDraw)
+                {
+                    foreach (var child in fragment.Children)
+                    {
+                        if (FragmentMayDrawText(child))
+                        {
+                            mayDraw = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            _mayDrawText[fragment] = mayDraw;
+            return mayDraw;
+        }
+
         /// <summary>
         /// Pushes every clip that applies to <paramref name="fragment"/>: the one its fragment carries and each
         /// deferred clip whose clipping box its containing-block chain passes through.
@@ -74,7 +122,8 @@ namespace PeachBrackets.Html.Paint
                 if (curve is not null) curve = curve with { Rect = new Rect(curve.Rect.X + scrollDx, curve.Rect.Y + scrollDy, curve.Rect.Width, curve.Rect.Height) };
             }
 
-            var canvasClips = RenderUtils.ClipGraphicsByOverflow(g, rect, curve);
+            var mayDrawText = curve is null || FragmentMayDrawText(fragment);
+            var canvasClips = RenderUtils.ClipGraphicsByOverflow(g, rect, curve, mayDrawText);
             var recorded = PushOverflowClip(rect, curve) ? 1 : 0;
 
             List<ClipEntry>? deferred = null;
@@ -97,7 +146,7 @@ namespace PeachBrackets.Html.Paint
                         if (entryCurve is not null) entryCurve = entryCurve with { Rect = new Rect(entryCurve.Rect.X + entryDx, entryCurve.Rect.Y + entryDy, entryCurve.Rect.Width, entryCurve.Rect.Height) };
                     }
 
-                    canvasClips += RenderUtils.ClipGraphicsByOverflow(g, entryRect, entryCurve);
+                    canvasClips += RenderUtils.ClipGraphicsByOverflow(g, entryRect, entryCurve, entryCurve is null || FragmentMayDrawText(fragment));
                     if (PushOverflowClip(entryRect, entryCurve)) recorded++;
                     (deferred ??= []).Add(entry);
                 }
@@ -198,6 +247,7 @@ namespace PeachBrackets.Html.Paint
 
             foreach (var child in fragment.Children)
             {
+                PaintStatistics.Add(ref PaintStatistics.EscapeCheckNodes);
                 if (child.Box.Position.Value is PositionMode.Absolute or PositionMode.Fixed
                     && !DomUtils.IsOnClippingChainOf(child.Box, clipper))
                 {

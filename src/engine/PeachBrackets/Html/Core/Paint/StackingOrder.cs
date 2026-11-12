@@ -150,6 +150,7 @@ namespace PeachBrackets.Html.Paint
         {
             foreach (var childFragment in fragment.Children)
             {
+                PaintStatistics.Add(ref PaintStatistics.HoistSearchNodes);
                 var childBox = childFragment.Box;
 
                 if (childBox.IsMarkerPseudoElement) continue;

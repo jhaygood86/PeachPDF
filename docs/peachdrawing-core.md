@@ -105,7 +105,9 @@ canvas.PopTransform();
 ```
 
 - **State stacks.** `PushClip`/`PopClip` (a rectangle, or a `PushClip(GraphicsPath)` for a non-rectangular
-  region such as an SVG `clip-path`), `PushClipExclude` (subtract a rectangle from the current clip),
+  region such as an SVG `clip-path`; `PushClipAroundShapes(GraphicsPath)` is the same clip for content you know draws only
+  shapes and images, no text, which a backend that gives a clip around text a surface of its own can then skip),
+  `PushClipExclude` (subtract a rectangle from the current clip),
   `PushTransform`/`PopTransform` (a `System.Numerics.Matrix3x2`, composed before/with the current
   transform), and `PushBlendMode`/`PopBlendMode` (`PaintBlendMode`, the 16 PDF 32000-1 §11.3.5 separable
   and non-separable modes, the same set CSS Compositing and Blending Level 1's `mix-blend-mode` uses) are

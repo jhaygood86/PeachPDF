@@ -56,6 +56,7 @@ public sealed partial class Win2dCanvas
         _queueBounds = _queue.Count == 0
             ? bounds
             : (Math.Min(_queueBounds.Left, bounds.Left), Math.Min(_queueBounds.Top, bounds.Top), Math.Max(_queueBounds.Right, bounds.Item3), Math.Max(_queueBounds.Bottom, bounds.Item4));
+        _textRunsQueued++;
         _queue.Add(new QueuedText(run, color, key, cacheable, bgrStripes));
     }
 
@@ -112,6 +113,19 @@ public sealed partial class Win2dCanvas
         if (_queue.Count == 0)
             return;
 
+        var paintStarted = Win2dPaintStatistics.Start();
+        try
+        {
+            FlushQueuedText();
+        }
+        finally
+        {
+            Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextFlush, paintStarted);
+        }
+    }
+
+    private void FlushQueuedText()
+    {
         var items = _queue.ToArray();
         _queue.Clear();
         if (_lcdTarget is not { } target || _disposed)
