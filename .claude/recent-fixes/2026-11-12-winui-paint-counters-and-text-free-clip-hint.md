@@ -26,3 +26,13 @@ descendant, not from box shadows (a count by caller proved that; the huge exclus
 
 **Evidence.** Engine 19,715, PeachBrackets 1,198, PeachPDF 1,922 (+9 skipped), Win2D 299, Core 169 pass (net10.0). Not done: diff-coverage gate, net11.0 run, painting
 tiles ahead of the viewport (the larger fix), the remaining ~2,500 text-free-looking surface clips from other call sites.
+
+## Idle painting ahead of the viewport (same day)
+
+`HtmlView` now paints 256 px bands into a scratch render target while it is idle (120 ms after the last scroll step, 400 ms after a load, 40 ms between bands), nearest the
+viewport first and at most 16 bands (4,096 px) either side (`HtmlViewLogic.NextWarmBand`, `HtmlView.Warm.cs`), so text masks and image bitmaps are cached before the scroll
+reaches them. Steady-drag region painting on Ars went 380 ms -> 127-154 ms (70 -> 23-28 ms/Mpx); wheel and fling were already at their warm cost and did not change.
+**Trade-off, measured:** the work is moved, not removed, and a band that holds many images costs up to ~75 ms (512 px bands cost up to 170 ms), so a user who starts
+scrolling during a warm can still wait one band. It stops for a document with transparency, viewport-mode backgrounds, a restyle in progress or a lost device.
+**Found on the way, not fixed:** in one run with the real mouse over the window, `pointer state` (hover restyle) took 955-1558 ms on the Ars page - a far larger hitch than any
+paint; the in-place restyle is evidently not covering it there.

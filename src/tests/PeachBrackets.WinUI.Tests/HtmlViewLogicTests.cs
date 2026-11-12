@@ -76,4 +76,36 @@ public class HtmlViewLogicTests
     [InlineData("relative/path.html", false)]
     public void OnlySafeSchemesAreLaunched(string uri, bool expected) =>
         Assert.Equal(expected, HtmlViewLogic.IsLaunchable(uri));
+
+    [Fact]
+    public void ThePageIsPaintedAheadNearestFirst_BelowBeforeAboveAtTheSameDistance()
+    {
+        var warmed = new bool[100];
+        var order = new List<int>();
+        for (var next = HtmlViewLogic.NextWarmBand(100, 50 * HtmlViewLogic.WarmBandHeight + 10, warmed); next >= 0;
+            next = HtmlViewLogic.NextWarmBand(100, 50 * HtmlViewLogic.WarmBandHeight + 10, warmed))
+        {
+            warmed[next] = true;
+            order.Add(next);
+        }
+
+        // The band in view, then 51 and 49, 52 and 48... out to the reach, and nothing beyond it.
+        Assert.Equal([50, 51, 49, 52, 48, 53, 47], order.Take(7));
+        Assert.Equal((2 * HtmlViewLogic.WarmReach) + 1, order.Count);
+        Assert.All(order, band => Assert.InRange(band, 50 - HtmlViewLogic.WarmReach, 50 + HtmlViewLogic.WarmReach));
+    }
+
+    [Fact]
+    public void NothingIsLeftToPaintAheadOnceTheNearbyBandsAreDone_OrWhenThePageIsEmpty()
+    {
+        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(3, 100, [true, true, true]));
+        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(0, 0, []));
+    }
+
+    [Fact]
+    public void AViewportPastTheEndOfThePageIsClampedToItsLastBand()
+    {
+        Assert.Equal(2, HtmlViewLogic.NextWarmBand(3, 1e9, [false, false, false]));
+        Assert.Equal(0, HtmlViewLogic.NextWarmBand(3, -50, [false, false, false]));
+    }
 }

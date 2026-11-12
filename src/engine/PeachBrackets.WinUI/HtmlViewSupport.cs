@@ -77,6 +77,37 @@ internal static class HtmlViewLogic
     /// </summary>
     internal static float TargetExtent(float needed, float kept) => Math.Max(Math.Max(kept, 512f), (float)Math.Ceiling(needed / 512f) * 512f);
 
+    /// <summary>The height (DIPs) of one band painted ahead of the viewport while the view is idle.</summary>
+    internal const double WarmBandHeight = 256;
+
+    /// <summary>How many bands either side of the one in view are painted ahead.</summary>
+    internal const int WarmReach = 16;
+
+    /// <summary>
+    /// The next band to paint ahead of the viewport: the nearest one that has not been, looking at most <see cref="WarmReach"/> bands either side of the
+    /// band holding <paramref name="viewportMiddle"/>, below before above at the same distance (the page is read downward). -1 when there is none.
+    /// </summary>
+    /// <param name="bandCount">how many bands the page has</param>
+    /// <param name="viewportMiddle">the DIP offset of the middle of what is in view</param>
+    /// <param name="warmed">which bands have been painted ahead already</param>
+    internal static int NextWarmBand(int bandCount, double viewportMiddle, IReadOnlyList<bool> warmed)
+    {
+        if (bandCount <= 0)
+            return -1;
+
+        var center = (int)Math.Clamp(Math.Floor(viewportMiddle / WarmBandHeight), 0, bandCount - 1);
+        for (var distance = 0; distance <= WarmReach; distance++)
+        {
+            foreach (var band in new[] { center + distance, center - distance })
+            {
+                if ((uint)band < (uint)bandCount && !warmed[band])
+                    return band;
+            }
+        }
+
+        return -1;
+    }
+
     /// <summary>The regions the surface asked to have painted that lie together: their indexes, and the rectangle that covers them.</summary>
     internal readonly record struct RegionCluster(PeachDrawing.Core.Rect Bounds, IReadOnlyList<int> Members);
 
