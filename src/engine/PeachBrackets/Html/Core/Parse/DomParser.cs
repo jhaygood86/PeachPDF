@@ -3319,6 +3319,9 @@ namespace PeachBrackets.Html.Parse
                     case HtmlConstants.Size:
                         TranslateSize(tag, box, value);
                         break;
+                    case HtmlConstants.Type:
+                        TranslateListType(tag, box, value);
+                        break;
                     case HtmlConstants.Valign:
                         // An unrecognized value must leave the box's already-cascaded vertical-align alone
                         // (issue #642) rather than forcing baseline - CssKeywordOrValueParser.FromCssText
@@ -3338,6 +3341,50 @@ namespace PeachBrackets.Html.Parse
                     case HtmlConstants.Width:
                         box.Width = TranslateLength(value);
                         break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Maps the <c>type</c> attribute of <c>ol</c>, <c>ul</c> and <c>li</c> to <c>list-style-type</c>
+        /// (HTML Standard rendering, Lists): <c>1</c>/<c>a</c>/<c>A</c>/<c>i</c>/<c>I</c> on <c>ol</c> and <c>li</c>
+        /// (case-sensitive), <c>disc</c>/<c>circle</c>/<c>square</c> on <c>ul</c> and <c>li</c> (ASCII case-insensitive).
+        /// An unrecognized value leaves the box alone.
+        /// </summary>
+        private static void TranslateListType(HtmlTag tag, CssBox box, string value)
+        {
+            var isOl = tag.Name.Equals("ol", StringComparison.OrdinalIgnoreCase);
+            var isUl = tag.Name.Equals("ul", StringComparison.OrdinalIgnoreCase);
+            var isLi = tag.Name.Equals(HtmlConstants.Li, StringComparison.OrdinalIgnoreCase);
+            if (!isOl && !isUl && !isLi) return;
+
+            if (isOl || isLi)
+            {
+                var numbering = value switch
+                {
+                    "1" => "decimal",
+                    "a" => "lower-alpha",
+                    "A" => "upper-alpha",
+                    "i" => "lower-roman",
+                    "I" => "upper-roman",
+                    _ => null
+                };
+                if (numbering is not null)
+                {
+                    box.ListStyleType = numbering;
+                    return;
+                }
+            }
+
+            if (isUl || isLi)
+            {
+                foreach (var bullet in new[] { "disc", "circle", "square" })
+                {
+                    if (value.Equals(bullet, StringComparison.OrdinalIgnoreCase))
+                    {
+                        box.ListStyleType = bullet;
+                        return;
+                    }
                 }
             }
         }

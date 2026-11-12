@@ -221,6 +221,7 @@ namespace PeachBrackets.Html.Utils
         //        public const string title = "title";
         //        public const string type = "type";
         //        public const string usemap = "usemap";
+        public const string Type = "type";
         public const string Valign = "valign";
         //        public const string value = "value";
         //        public const string valuetype = "valuetype";
