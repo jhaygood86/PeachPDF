@@ -312,6 +312,7 @@ namespace PeachBrackets.Html.Dom
             List<double>? hints = null;
             var initialBottom = _flexBox.ActualBottom;
             List<FlexLine> lines;
+            var growIntoMinHeight = false;
 
             for (var attempt = 0; ; attempt++)
             {
@@ -334,6 +335,22 @@ namespace PeachBrackets.Html.Dom
                     int nc = items.Count;
                     mainSize = items.Sum(i => i.HypotheticalMainSize + i.MarginBefore + i.MarginAfter)
                         + (nc > 1 ? mainGapCol * (nc - 1) : 0);
+
+                    // An auto-height column is as tall as its items - unless its `min-height` is taller (CSS Flexbox 1 section 9.2 step 3 clamps
+                    // the container's main size by its min and max). The items then have free space to grow into, so a `flex: 1` item pushes the
+                    // footer after it to the bottom of a `min-height: 100dvh` body. A percentage minimum has nothing to resolve against here.
+                    growIntoMinHeight = false;
+                    if (!_mainAxisIsPhysicalX && CssValueParser.IsValidLength(_flexBox.MinHeight) && !CssValueParser.DependsOnPercentage(_flexBox.MinHeight))
+                    {
+                        var minContent = CssValueParser.ParseLength(_flexBox.MinHeight, 0, _flexBox) + _flexBox.ActualBoxSizeIncludedHeight
+                            - _flexBox.ActualPaddingTop - _flexBox.ActualPaddingBottom
+                            - _flexBox.ActualBorderTopWidth - _flexBox.ActualBorderBottomWidth;
+                        if (minContent > mainSize + 0.01)
+                        {
+                            mainSize = minContent;
+                            growIntoMinHeight = true;
+                        }
+                    }
                 }
 
                 // Phase 3: collect into flex lines
@@ -348,7 +365,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     // Already resolved line by line: each line's own measure is what it resolves against.
                 }
-                else if (!mainSizeIndefinite)
+                else if (!mainSizeIndefinite || growIntoMinHeight)
                 {
                     foreach (var line in lines)
                         await ResolveFlexibleLengths(g, line, mainSize);
@@ -414,7 +431,7 @@ namespace PeachBrackets.Html.Dom
 
                 // Phase 7: justify-content — main-axis positions
                 foreach (var line in lines)
-                    ComputeMainOffsets(line, line.MainSize ?? mainSize, mainSizeIndefinite);
+                    ComputeMainOffsets(line, line.MainSize ?? mainSize, mainSizeIndefinite && !growIntoMinHeight);
 
                 // Phase 8: align-items / align-self — cross-axis positions
                 foreach (var line in lines)
