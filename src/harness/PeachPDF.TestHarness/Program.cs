@@ -3597,6 +3597,39 @@ await SaveShowcaseAsync("paged_media_flex_per_page_reflow", "Paged Media", "Flex
     "A flex container that continues onto a page of a different width sizes each fragment to its own page (CSS Fragmentation 5.1): the columns of a row re-fit as they cross a page boundary, a wrapping row collects its later lines against the measure of the page each lands on, and the container's own frame follows.",
     flexPerPageHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
 
+// ── Grid containers across pages of different widths (#1516) ────────────────
+// The grid counterpart of the flex showcase above: the wide first page has no side margins, so its
+// three 1fr columns are wider than the ones on the narrower pages that follow. Each row is sized against
+// the page it lands on (css-break-3 5.1) and the container's own tinted frame follows.
+var gridPerPageHtml = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+    @page { margin: 14mm 30mm 14mm 12mm; }
+    @page :first { margin-left: 0; margin-right: 0; }
+    body { font: 9pt Arial, sans-serif; margin: 0; color: #1f2937 }
+    h2 { font-size: 11pt; margin: 6pt 0 3pt; }
+    .tiles { display: grid; grid-template-columns: repeat(3, 1fr); background: #ecfdf5; }
+    .tiles > div { height: 52mm; break-inside: avoid; background: #a7f3d0; border: 1px solid #047857;
+                   box-sizing: border-box; padding: 3pt; }
+    </style>
+    </head>
+    <body>
+      <h2>Three 1fr columns: each row uses the width of the page it lands on</h2>
+      <div class="tiles">
+    """ +
+    string.Concat(Enumerable.Range(1, 12).Select(i => $"<div>Tile {i}</div>")) +
+    """
+      </div>
+    </body>
+    </html>
+    """;
+
+await SaveShowcaseAsync("paged_media_grid_per_page_reflow", "Paged Media", "Grid Across Pages of Different Widths",
+    "A grid container that continues onto a page of a different width sizes each row to the page it lands on (CSS Fragmentation 5.1): the `1fr` columns are wider on the full-bleed first page than on the pages after it, and the container's own frame follows.",
+    gridPerPageHtml, new PdfGenerateConfig { PageSize = PageSize.A5 });
+
 // ── Full-bleed page showcase ───────────────────────────────────────────────
 // The headline capability behind layout-affecting per-page margins: a `margin: 0` first
 // page whose content band is the entire physical sheet. The cover plate is sized to the
