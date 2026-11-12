@@ -18,6 +18,7 @@ namespace PeachBrackets.Html.Paint.Content
         private static readonly MarkerFragmentPainter MarkerPainter = new();
         private static readonly FormFieldFragmentPainter FormFieldPainter = new();
         private static readonly ScreenFormControlPainter ScreenFormPainter = new();
+        private static readonly ScreenFormControlPainter StaticFormPainter = new(genericChrome: true);
         private static readonly MeterFragmentPainter MeterPainter = new();
         private static readonly StaticTextAreaPainter StaticTextAreaPainter = new();
 
@@ -44,6 +45,8 @@ namespace PeachBrackets.Html.Paint.Content
             // A text area is not flowed content: its value is drawn by the control, so a static page shows it the way a screen does (an interactive
             // field has its own widget draw the text, and took the arm above).
             CssBoxFormField { IsTextArea: true } => StaticTextAreaPainter,
+            // Likewise an input or select: its value, placeholder, checked state or chosen option is drawn by the control, not flowed content.
+            CssBoxFormField => StaticFormPainter,
             // A progress bar or meter is a plain box with a drawn look, in a PDF as on a screen.
             _ when MeterFragmentPainter.IsMeterLike(box) => MeterPainter,
             _ => null,

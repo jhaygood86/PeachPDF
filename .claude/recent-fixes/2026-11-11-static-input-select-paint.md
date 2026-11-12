@@ -1,0 +1,3 @@
+# Static input/select content painting (#2350)
+
+`FragmentContentPainters.For` routes every non-interactive `CssBoxFormField` that is not a textarea to `ScreenFormControlPainter(genericChrome: true)`. In that mode the generic box paint (background, border, shadow) runs first and the painter only adds the content, so `box-shadow` etc. keep working; a radio skips the generic box because it draws its own round background. Trap: tests that sampled a control's centre for a `:checked` background now hit the glyph, so they sample off-centre. Not done: `<button>` is still a plain box (it flows its text already).
