@@ -12299,6 +12299,13 @@ var gridSubgridHtml = """
       .card .title  { background: #2d3748; }
       .card .body   { background: #4a90d9; }
       .card .footer { background: #718096; }
+
+      /* A padded subgrid keeps its tracks on the parent's lines (the edge items are inset), inherits the parent's line
+         names, and its items size the parent's auto columns. */
+      .named { display: grid; grid-template-columns: [label] auto [value] auto [unit]; justify-content: start; gap: 0; background: #edf2f7; }
+      .named .panel { grid-column: 1 / 3; display: grid; grid-template-columns: subgrid; padding: 6pt 16pt 6pt 24pt; border-left: 4pt solid #2d3748; background: #fff; }
+      .named .panel .lbl { background: #2d3748; grid-column: label / value; }
+      .named .panel .val { background: #4a90d9; grid-column: value / unit; }
     </style>
     </head>
     <body>
@@ -12334,14 +12341,23 @@ var gridSubgridHtml = """
           <div class="cell footer">$40 / mo</div>
         </div>
       </div>
+
+      <h2>Padding, named lines and auto columns</h2>
+      <p class="note">The <code>.panel</code> subgrid has padding and a border, yet its items stay on the parent's lines and the
+      <code>auto</code> columns are as wide as its items need. They are placed with the parent's names, <code>label</code> and
+      <code>value</code>.</p>
+      <div class="named">
+        <div class="panel"><div class="cell lbl">Shipping</div><div class="cell val">Ground, 3 to 5 business days</div></div>
+      </div>
     </body>
     </html>
     """;
 
 await SaveShowcaseAsync("css_grid_subgrid", "Layout", "CSS Grid Subgrid",
     "CSS Grid Level 2 `subgrid`: independent rows adopting the parent's columns (`grid-template-columns: " +
-    "subgrid`) so their cells align, and a card deck adopting the parent's rows (`grid-template-rows: " +
-    "subgrid`) so title/body/footer bands line up across cards — the nested grid adopts its parent's tracks.",
+    "subgrid`) so their cells align, a card deck adopting the parent's rows (`grid-template-rows: " +
+    "subgrid`) so title/body/footer bands line up across cards, and a padded subgrid that keeps its tracks on " +
+    "the parent's lines, inherits its line names and sizes its auto columns — the nested grid adopts its parent's tracks.",
     gridSubgridHtml, new PdfGenerateConfig { PageSize = PageSize.A4 });
 
 // ─── CSS Grid: intrinsic sizing, calc() tracks & baseline alignment (#265) ──────
