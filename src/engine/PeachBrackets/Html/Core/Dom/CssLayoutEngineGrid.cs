@@ -119,9 +119,20 @@ namespace PeachBrackets.Html.Dom
             // Mirrors CssLayoutEngineFlex.Layout's identical short-circuit.
             if (resume is GridBreakToken gridResume)
             {
+                _vertical = _gridBox.WritingMode.Value.IsVertical();
+                await StateContainerFrame(g, resumed: true);
                 await ResumeCommitPass(g, gridResume);
                 return;
             }
+
+            _vertical = _gridBox.WritingMode.Value.IsVertical();
+            await StateContainerFrame(g, resumed: false);
+            await LayoutFresh(g);
+            await StateSpannedFrames(g);
+        }
+
+        private async ValueTask LayoutFresh(Canvas g)
+        {
 
             _vertical = _gridBox.WritingMode.Value.IsVertical();
             _rtl = !_vertical && _gridBox.Direction.Value == DirectionMode.Rtl;
@@ -171,6 +182,11 @@ namespace PeachBrackets.Html.Dom
                     _gridBox.ActualBottom = _gridBox.Location.Y + _gridBox.ActualBoxSizeIncludedHeight;
                 return;
             }
+
+            // An item pinned by an earlier generation's commit pass must be measured from what the author wrote, not from that pin: a generation that
+            // measures it against another page's width would otherwise read its own earlier answer back as authored (see ItemContentCommit.UnpinIfPinned).
+            foreach (var item in items)
+                ItemContentCommit.UnpinIfPinned(item);
 
             var inlineIsIndefinite = _vertical && !hasDefiniteHeight;
             var contentWidth = _vertical
@@ -257,18 +273,21 @@ namespace PeachBrackets.Html.Dom
 
             // ── Column tracks. A subgridded column axis adopts the parent's spanned track sizes directly
             // (positioned from this grid's own client origin so the parent's cell translation lands them on the
-            // parent lines); otherwise size them normally.
+            // parent lines); otherwise size them normally. What the sizing reads - the definitions, the collapsed
+            // auto-fit columns and the items' intrinsic contributions - does not depend on the width the columns are
+            // sized against, so it is gathered once and `SizeColumnsAt` can size them again for another page's measure.
             Track[] columns;
-            if (colSubgrid && subgrid is { ColumnSizes: { } adoptedColumnSizes, ColumnOffsets: { } adoptedColumnOffsets })
+            Track[] rows;
+            IReadOnlyList<GridTrackSize> colDefs = [];
+            var collapsed = new bool[colCount];
+            double[] colMinContent = [], colMaxContent = [];
+            var stretchColumns = false;
+            var columnsAdopted = colSubgrid && subgrid is { ColumnSizes: not null, ColumnOffsets: not null };
+            if (!columnsAdopted)
             {
-                columns = BuildAdoptedTracks(adoptedColumnSizes, adoptedColumnOffsets, InlineOrigin, colCount);
-            }
-            else
-            {
-                var colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
+                colDefs = BuildTrackDefs(explicitColDefs, autoColDefs, colCount);
 
                 // auto-fit collapses any repeated column that ended up with no items in it.
-                var collapsed = new bool[colCount];
                 if (autoFitRange is var (rangeStart, rangeLen) && rangeLen > 0)
                 {
                     var usedCol = new bool[colCount];
@@ -280,7 +299,7 @@ namespace PeachBrackets.Html.Dom
                 }
 
                 // Intrinsic (min/max-content) contributions for auto/min-content/max-content/fit-content columns.
-                var (colMinContent, colMaxContent) =
+                (colMinContent, colMaxContent) =
                     await MeasureColumnIntrinsics(g, placements, colDefs, colCount, contentWidth, columnGap);
 
                 // A vertical grid with an auto height has no inline space to fill: it is as long as its
@@ -288,171 +307,221 @@ namespace PeachBrackets.Html.Dom
                 if (inlineIsIndefinite)
                     contentWidth = MaxContentInlineSize(colDefs, colMaxContent, collapsed, columnGap);
 
-                var stretchColumns = IsStretch(_gridBox.JustifyContent.ToString());
-                columns = SizeColumnTracks(colDefs, contentWidth, columnGap, collapsed,
-                    colMinContent, colMaxContent, stretchColumns);
-                PositionTracks(columns, InlineOrigin, contentWidth, columnGap,
-                    LogicalizePhysicalKeyword(_gridBox.JustifyContent.ToString()));
+                stretchColumns = IsStretch(_gridBox.JustifyContent.ToString());
             }
 
-            // The reflection `direction: rtl` applies is about the content box the tracks end up in: an
-            // inline-grid that shrinks to its tracks is narrower than the box laid out so far.
-            _mirrorRight = _gridBox.ClientRight;
-            if (_rtl && _gridBox.DerivedStyle.ActualDisplay == Keywords.InlineGrid
-                && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
+            Track[] SizeColumnsAt(double width, double gap)
             {
-                _mirrorRight = columns[^1].Position + columns[^1].Size;
+                var sized = SizeColumnTracks(colDefs, width, gap, collapsed, colMinContent, colMaxContent, stretchColumns);
+                PositionTracks(sized, InlineOrigin, width, gap, LogicalizePhysicalKeyword(_gridBox.JustifyContent.ToString()));
+                return sized;
             }
 
-            // A vertical grid whose height was auto is exactly as long as its columns.
-            if (inlineIsIndefinite)
+            // A block-level grid whose rows land on pages of different widths sizes each row's columns against the page the row lands on
+            // (css-break-3 section 5.1: each fragment uses its own fragmentainer's size). Only for columns that depend on the width and were not
+            // adopted or repeated to fit it, and for a grid with no subgrid in it, whose tracks the parent's lines fix.
+            var perPage = !_vertical && !columnsAdopted && !rowSubgrid
+                && _gridBox.HtmlContainer is { UseVariableInlineMeasure: true }
+                && _gridBox.DerivedStyle.ActualDisplay == Keywords.Grid
+                && (colTemplate is null || colTemplate.AutoRepeat == GridAutoRepeatKind.None)
+                && !placements.Any(p => IsSubgridItem(p.Box));
+            List<double>? rowMeasures = null;
+            var columnsByMeasure = new Dictionary<double, (Track[] Columns, double Gap)>();
+            var firstPassBottom = _gridBox.ActualBottom;
+
+            (Track[] Columns, double Gap) ColumnsOf(Placement placement)
             {
-                var gridInline = columns.Sum(t => t.Size) + (colCount > 1 ? columnGap * (colCount - 1) : 0);
-                _gridBox.ActualBottom = _gridBox.ClientTop + gridInline
-                    + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
-            }
+                if (rowMeasures is not { } measures || placement.RowStart >= measures.Count
+                    || Math.Abs(measures[placement.RowStart] - contentWidth) <= 0.01)
+                    return (columns, columnGap);
 
-            if (_vertical) _frame = WritingModeFrame.For(_gridBox);
-
-            // ── Row tracks. A subgridded row axis adopts the parent's spanned row sizes; otherwise size the
-            // explicit/implicit rows to their tallest item (measured at the item's column-span width).
-            Track[] rows;
-            if (rowSubgrid && subgrid is { RowSizes: { } adoptedRowSizes, RowOffsets: { } adoptedRowOffsets })
-            {
-                rows = BuildAdoptedTracks(adoptedRowSizes, adoptedRowOffsets, BlockOrigin, rowCount);
-            }
-            else
-            {
-                // A percentage row track resolves only against a definite container height; against an
-                // indefinite height it behaves as `auto` (content-sized) per §7.2.1 — so demote percentage
-                // rows to auto here rather than seeding them to 0 and leaving them fixed (which collapsed
-                // them). Definite height keeps percentage rows resolving normally.
-                var effectiveRowDefs = hasDefiniteBlock ? explicitRowDefs : [.. explicitRowDefs.Select(PercentToAuto)];
-                var effectiveAutoRowDefs = hasDefiniteBlock ? autoRowDefs : [.. autoRowDefs.Select(PercentToAuto)];
-                var rowDefs = BuildTrackDefs(effectiveRowDefs, effectiveAutoRowDefs, rowCount);
-                rows = new Track[rowCount];
-                for (var r = 0; r < rowCount; r++)
-                    rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteBlock) };
-
-                // Subgrid children are measured separately (below) since their per-row content must feed the
-                // parent tracks; skip them in the normal item-height passes.
-                var normalItems = placements.Where(p => !IsSubgridItem(p.Box)).ToList();
-
-                // Single-row items size their auto row directly. A baseline-aligned item also contributes its
-                // ascent/descent to the row's baseline group extent (CSS Box Alignment 3 §9.3) — grown here,
-                // before PositionTracks fixes every row's final Position below, so AlignRowBaselines' later
-                // within-row shift never needs a second, cascading re-position pass (issue #280).
-                var baselineExtents = new Dictionary<int, (double MaxAscent, double MaxDescent)>();
-                foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
+                var measure = measures[placement.RowStart];
+                if (!columnsByMeasure.TryGetValue(measure, out var cached))
                 {
-                    var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
-                    rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+                    var gap = ParseGap(_gridBox.FlexColumnGap, measure);
+                    columnsByMeasure[measure] = cached = (SizeColumnsAt(measure, gap), gap);
+                }
+                return cached;
+            }
 
-                    if (!_vertical
-                        && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))
-                        && BaselineAlignment.GetItemBaselineOffset(p.Box) is { } ascent)
+            double SpanWidthOf(Placement placement)
+            {
+                var (cols, gap) = ColumnsOf(placement);
+                return ColumnSpanWidth(cols, placement.ColStart, placement.ColSpan, gap);
+            }
+
+            for (var attempt = 0; ; attempt++)
+            {
+                columnsByMeasure.Clear();
+                columns = columnsAdopted && subgrid is { ColumnSizes: { } adoptedColumnSizes, ColumnOffsets: { } adoptedColumnOffsets }
+                    ? BuildAdoptedTracks(adoptedColumnSizes, adoptedColumnOffsets, InlineOrigin, colCount)
+                    : SizeColumnsAt(contentWidth, columnGap);
+
+                // The reflection `direction: rtl` applies is about the content box the tracks end up in: an
+                // inline-grid that shrinks to its tracks is narrower than the box laid out so far.
+                _mirrorRight = _gridBox.ClientRight;
+                if (_rtl && _gridBox.DerivedStyle.ActualDisplay == Keywords.InlineGrid
+                    && !CssValueParser.IsValidLength(_gridBox.Width) && columns.Length > 0)
+                {
+                    _mirrorRight = columns[^1].Position + columns[^1].Size;
+                }
+
+                // A vertical grid whose height was auto is exactly as long as its columns.
+                if (inlineIsIndefinite)
+                {
+                    var gridInline = columns.Sum(t => t.Size) + (colCount > 1 ? columnGap * (colCount - 1) : 0);
+                    _gridBox.ActualBottom = _gridBox.ClientTop + gridInline
+                        + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
+                }
+
+                if (_vertical) _frame = WritingModeFrame.For(_gridBox);
+
+                // ── Row tracks. A subgridded row axis adopts the parent's spanned row sizes; otherwise size the
+                // explicit/implicit rows to their tallest item (measured at the item's column-span width).
+                if (rowSubgrid && subgrid is { RowSizes: { } adoptedRowSizes, RowOffsets: { } adoptedRowOffsets })
+                {
+                    rows = BuildAdoptedTracks(adoptedRowSizes, adoptedRowOffsets, BlockOrigin, rowCount);
+                }
+                else
+                {
+                    // A percentage row track resolves only against a definite container height; against an
+                    // indefinite height it behaves as `auto` (content-sized) per §7.2.1 — so demote percentage
+                    // rows to auto here rather than seeding them to 0 and leaving them fixed (which collapsed
+                    // them). Definite height keeps percentage rows resolving normally.
+                    var effectiveRowDefs = hasDefiniteBlock ? explicitRowDefs : [.. explicitRowDefs.Select(PercentToAuto)];
+                    var effectiveAutoRowDefs = hasDefiniteBlock ? autoRowDefs : [.. autoRowDefs.Select(PercentToAuto)];
+                    var rowDefs = BuildTrackDefs(effectiveRowDefs, effectiveAutoRowDefs, rowCount);
+                    rows = new Track[rowCount];
+                    for (var r = 0; r < rowCount; r++)
+                        rows[r] = new Track { Def = rowDefs[r], Size = ResolveFixedRow(rowDefs[r], hasDefiniteBlock) };
+
+                    // Subgrid children are measured separately (below) since their per-row content must feed the
+                    // parent tracks; skip them in the normal item-height passes.
+                    var normalItems = placements.Where(p => !IsSubgridItem(p.Box)).ToList();
+
+                    // Single-row items size their auto row directly. A baseline-aligned item also contributes its
+                    // ascent/descent to the row's baseline group extent (CSS Box Alignment 3 §9.3) — grown here,
+                    // before PositionTracks fixes every row's final Position below, so AlignRowBaselines' later
+                    // within-row shift never needs a second, cascading re-position pass (issue #280).
+                    var baselineExtents = new Dictionary<int, (double MaxAscent, double MaxDescent)>();
+                    foreach (var p in normalItems.Where(p => p.RowSpan == 1 && !IsFixed(rows[p.RowStart].Def)))
                     {
-                        var descent = natural - ascent;
-                        var (curAscent, curDescent) = baselineExtents.GetValueOrDefault(p.RowStart, (0.0, 0.0));
-                        baselineExtents[p.RowStart] = (Math.Max(curAscent, ascent), Math.Max(curDescent, descent));
+                        var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
+                        rows[p.RowStart].Size = Math.Max(rows[p.RowStart].Size, natural);
+
+                        if (!_vertical
+                            && IsBaselineAlign(ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString()))
+                            && BaselineAlignment.GetItemBaselineOffset(p.Box) is { } ascent)
+                        {
+                            var descent = natural - ascent;
+                            var (curAscent, curDescent) = baselineExtents.GetValueOrDefault(p.RowStart, (0.0, 0.0));
+                            baselineExtents[p.RowStart] = (Math.Max(curAscent, ascent), Math.Max(curDescent, descent));
+                        }
+                    }
+                    foreach (var (rowIndex, (maxAscent, maxDescent)) in baselineExtents)
+                        rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, maxAscent + maxDescent);
+
+                    // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
+                    foreach (var p in normalItems.Where(p => p.RowSpan > 1))
+                    {
+                        var natural = await MeasureItemHeight(g, p.Box, SpanWidthOf(p));
+                        GrowSpannedAutoRows(rows, p, natural, rowGap);
+                    }
+
+                    // Subgrid children: a col-only subgrid is measured as one item (with adopted columns); a
+                    // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
+                    // so the shared tracks size to fit every subgrid.
+                    foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
+                        await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap);
+
+                    var rowContainerSize = hasDefiniteBlock ? BlockContentSize
+                        : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                    if (hasDefiniteBlock && !rowSubgrid && IsStretch(_gridBox.AlignContent.ToString()))
+                        StretchAutoRows(rows, rowContainerSize, rowGap);
+                    PositionTracks(rows, BlockOrigin, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
+
+                    // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
+                    // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
+                    if (rowSubgrid && subgrid is not null)
+                        subgrid.ReportedRowSizes = [.. rows.Take(subgrid.RowCount).Select(t => t.Size)];
+                }
+
+                // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
+                // (defaulting to justify-items/align-items, then to stretch). A subgrid child is given the adopted
+                // track geometry for its subgridded axes so its own items snap to the parent lines.
+                var inlineBaselineItems = new List<(Placement Placement, bool Last)>();
+                foreach (var p in placements)
+                {
+                    var cellX = ColumnsOf(p).Columns[p.ColStart].Position;
+                    var cellWidth = SpanWidthOf(p);
+                    var cellY = rows[p.RowStart].Position;
+                    var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
+                    var justify = LogicalizePhysicalKeyword(
+                        ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
+                    var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
+
+                    // Inline-axis baseline (css-align-3 §9.3): in a horizontal writing mode an item's baseline is
+                    // synthesized from its border box, so a first baseline is the start edge and a last baseline the
+                    // end edge. The item is placed at that edge here; AlignColumnBaselines then lines up the group
+                    // sharing its column.
+                    if (!_vertical && p.ColSpan == 1 && IsBaselineAlign(justify))
+                    {
+                        var last = justify.IndexOf("last", StringComparison.OrdinalIgnoreCase) >= 0;
+                        inlineBaselineItems.Add((p, last));
+                        justify = last ? Keywords.End : Keywords.Start;
+                    }
+
+                    var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
+                    p.Box.SubgridContext = context;
+                    try
+                    {
+                        await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight, justify, align);
+                    }
+                    finally
+                    {
+                        p.Box.SubgridContext = null;
                     }
                 }
-                foreach (var (rowIndex, (maxAscent, maxDescent)) in baselineExtents)
-                    rows[rowIndex].Size = Math.Max(rows[rowIndex].Size, maxAscent + maxDescent);
 
-                // Row-spanning items grow the last auto row they cover if their content exceeds the spanned rows.
-                foreach (var p in normalItems.Where(p => p.RowSpan > 1))
+                // ── Baseline row alignment (CSS Box Alignment §9.3): items in the same row whose used
+                // block-axis alignment is `baseline` were placed start-aligned above; shift each down so all
+                // baseline items in the row share a common first baseline.
+                if (!_vertical)
                 {
-                    var natural = await MeasureItemHeight(g, p.Box, ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap));
-                    GrowSpannedAutoRows(rows, p, natural, rowGap);
+                    AlignRowBaselines(placements);
+                    AlignColumnBaselines(inlineBaselineItems, _rtl);
                 }
 
-                // Subgrid children: a col-only subgrid is measured as one item (with adopted columns); a
-                // row-subgrid child reports its own per-subrow heights, which grow the parent's spanned auto rows
-                // so the shared tracks size to fit every subgrid.
-                foreach (var p in placements.Where(p => IsSubgridItem(p.Box)))
-                    await MeasureSubgridItem(g, p, columns, rows, columnGap, rowGap);
-
-                var rowContainerSize = hasDefiniteBlock ? BlockContentSize
-                    : rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
-                if (hasDefiniteBlock && !rowSubgrid && IsStretch(_gridBox.AlignContent.ToString()))
-                    StretchAutoRows(rows, rowContainerSize, rowGap);
-                PositionTracks(rows, BlockOrigin, rowContainerSize, rowGap, _gridBox.AlignContent.ToString());
-
-                // Report mode: this grid is itself a row-subgrid being measured by its parent — hand back the
-                // per-subrow sizes it just computed (one per adopted row) so the parent can grow its tracks.
-                if (rowSubgrid && subgrid is not null)
-                    subgrid.ReportedRowSizes = [.. rows.Take(subgrid.RowCount).Select(t => t.Size)];
-            }
-
-            // ── Place each item into its (possibly spanned) cell, aligned per justify-self/align-self
-            // (defaulting to justify-items/align-items, then to stretch). A subgrid child is given the adopted
-            // track geometry for its subgridded axes so its own items snap to the parent lines.
-            var inlineBaselineItems = new List<(Placement Placement, bool Last)>();
-            foreach (var p in placements)
-            {
-                var cellX = columns[p.ColStart].Position;
-                var cellWidth = ColumnSpanWidth(columns, p.ColStart, p.ColSpan, columnGap);
-                var cellY = rows[p.RowStart].Position;
-                var cellHeight = RowSpanHeight(rows, p.RowStart, p.RowSpan, rowGap);
-                var justify = LogicalizePhysicalKeyword(
-                    ResolveSelfAlignment(p.Box.JustifySelf.ToString(), _gridBox.JustifyItems.ToString()));
-                var align = ResolveSelfAlignment(p.Box.AlignSelf.ToString(), _gridBox.AlignItems.ToString());
-
-                // Inline-axis baseline (css-align-3 §9.3): in a horizontal writing mode an item's baseline is
-                // synthesized from its border box, so a first baseline is the start edge and a last baseline the
-                // end edge. The item is placed at that edge here; AlignColumnBaselines then lines up the group
-                // sharing its column.
-                if (!_vertical && p.ColSpan == 1 && IsBaselineAlign(justify))
+                // ── Container size when auto.
+                var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
+                if (_vertical)
                 {
-                    var last = justify.IndexOf("last", StringComparison.OrdinalIgnoreCase) >= 0;
-                    inlineBaselineItems.Add((p, last));
-                    justify = last ? Keywords.End : Keywords.Start;
+                    // The rows are stacked along the width: an auto width shrinks to them from the block-end
+                    // edge, keeping the block-start one where the rows were laid against it.
+                    if (!hasDefiniteBlock) CssLayoutEngine.ShrinkAutoWidthTo(_gridBox, _frame, gridHeight);
+                }
+                else if (!hasDefiniteHeight)
+                {
+                    _gridBox.ActualBottom = _gridBox.ClientTop + gridHeight
+                        + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
                 }
 
-                var context = BuildChildSubgridContext(p, columns, rows, adoptRows: true);
-                p.Box.SubgridContext = context;
-                try
-                {
-                    await PlaceItemInCell(g, p.Box, cellX, cellY, cellWidth, cellHeight, justify, align);
-                }
-                finally
-                {
-                    p.Box.SubgridContext = null;
-                }
-            }
+                // ── The break points between rows are real ones now that the items sit where they will
+                // finally sit - see RelocateRowsAcrossFragmentainers. Run *after* the container has been
+                // sized from its tracks, because that sizing reads the track sizes rather than the boxes and
+                // so would overwrite the displacement this adds.
+                //
+                // A vertical grid is not fragmented along its rows (they run across the page, not down it) and
+                // is kept whole instead - see MonolithicContent.IsUnresumableVerticalGrid.
+                if (!_vertical) RelocateRowsAcrossFragmentainers(placements);
 
-            // ── Baseline row alignment (CSS Box Alignment §9.3): items in the same row whose used
-            // block-axis alignment is `baseline` were placed start-aligned above; shift each down so all
-            // baseline items in the row share a common first baseline.
-            if (!_vertical)
-            {
-                AlignRowBaselines(placements);
-                AlignColumnBaselines(inlineBaselineItems, _rtl);
-            }
+                if (!perPage || attempt >= MaxPerPageAttempts) break;
 
-            // ── Container size when auto.
-            var gridHeight = rows.Sum(t => t.Size) + (rowCount > 1 ? rowGap * (rowCount - 1) : 0);
-            if (_vertical)
-            {
-                // The rows are stacked along the width: an auto width shrinks to them from the block-end
-                // edge, keeping the block-start one where the rows were laid against it.
-                if (!hasDefiniteBlock) CssLayoutEngine.ShrinkAutoWidthTo(_gridBox, _frame, gridHeight);
-            }
-            else if (!hasDefiniteHeight)
-            {
-                _gridBox.ActualBottom = _gridBox.ClientTop + gridHeight
-                    + _gridBox.ActualPaddingBottom + _gridBox.ActualBorderBottomWidth;
-            }
+                rowMeasures = await LandingMeasures(g, placements, rowCount, rowMeasures, contentWidth);
+                if (rowMeasures is null) break;
 
-            // ── The break points between rows are real ones now that the items sit where they will
-            // finally sit - see RelocateRowsAcrossFragmentainers. Run *after* the container has been
-            // sized from its tracks, because that sizing reads the track sizes rather than the boxes and
-            // so would overwrite the displacement this adds.
-            //
-            // A vertical grid is not fragmented along its rows (they run across the page, not down it) and
-            // is kept whole instead - see MonolithicContent.IsUnresumableVerticalGrid.
-            if (!_vertical) RelocateRowsAcrossFragmentainers(placements);
+                _gridBox.ActualBottom = firstPassBottom;
+            }
 
             // ── Item content commit pass: once every item sits at its truly final position (after
             // relocation, not merely after cell placement), lay each row's items' content out for real,
@@ -472,6 +541,93 @@ namespace PeachBrackets.Html.Dom
                 var contentRight = columns[^1].Position + columns[^1].Size;
                 _gridBox.ActualRight = contentRight + _gridBox.ActualPaddingRight + _gridBox.ActualBorderRightWidth;
             }
+        }
+
+        private const int MaxPerPageAttempts = 3;
+
+        /// <summary>
+        /// The measure - the content width a container starting at <paramref name="top"/> would have - of the fragmentainer that top falls in.
+        /// </summary>
+        private ValueTask<double> MeasureAt(Canvas g, double top) =>
+            CssLayoutEngine.GetBoxWidth(g, _gridBox, top + HtmlContainerInt.PageBoundaryEpsilon);
+
+        /// <summary>
+        /// The measure of the page each row actually landed on, or null when every row already has the measure it was sized against.
+        /// </summary>
+        private async ValueTask<List<double>?> LandingMeasures(
+            Canvas g, List<Placement> placements, int rowCount, List<double>? used, double startMeasure)
+        {
+            var container = _gridBox.HtmlContainer!;
+            var landing = new List<double>(rowCount);
+            var settled = true;
+
+            for (var row = 0; row < rowCount; row++)
+            {
+                var inRow = placements.Where(p => p.RowStart == row).ToList();
+                var measure = startMeasure;
+                if (inRow.Count > 0)
+                {
+                    var top = inRow.Min(p => p.Box.Location.Y);
+                    measure = await MeasureAt(g, container.PageTopOf(container.SlotStartingAt(top)));
+                }
+
+                landing.Add(measure);
+                var sizedAgainst = used is not null && row < used.Count ? used[row] : startMeasure;
+                if (Math.Abs(measure - sizedAgainst) > 0.01) settled = false;
+            }
+
+            return settled ? null : landing;
+        }
+
+        /// <summary>
+        /// States the container's own border box for each fragmentainer it spans beyond the first, when that fragmentainer's measure differs
+        /// (css-break-3 section 5.1). The container has one <see cref="CssBox.ActualRight"/>, so a later fragment's frame is a per-slot delta from it
+        /// (<see cref="HtmlContainerInt.RecordInlineFrame"/>), looked up when the fragment is materialized.
+        /// </summary>
+        private async ValueTask StateSpannedFrames(Canvas g)
+        {
+            if (_gridBox.HtmlContainer is not { UseVariableInlineMeasure: true } container) return;
+            if (_gridBox.DerivedStyle.ActualDisplay != Keywords.Grid || _vertical) return;
+
+            var startSlot = container.SlotStartingAt(_gridBox.Location.Y);
+            var endSlot = container.SlotEndingAt(_gridBox.ActualBottom);
+            if (endSlot <= startSlot) return;
+
+            var startWidth = await CssLayoutEngine.GetBoxWidth(g, _gridBox);
+            for (var slot = startSlot + 1; slot <= endSlot; slot++)
+            {
+                var top = container.PageTopOf(slot) + HtmlContainerInt.PageBoundaryEpsilon;
+                var delta = await CssLayoutEngine.GetBoxWidth(g, _gridBox, top) - startWidth;
+
+                if (Math.Abs(delta) > 0.01)
+                    container.RecordInlineFrame(_gridBox, slot, _gridBox.Bounds.X, _gridBox.Bounds.Width + delta);
+            }
+        }
+
+        /// <summary>
+        /// A fresh pass decides every fragmentainer's frame again, so what an earlier layout stated for this container is dropped; a resumed one
+        /// states the frame of the fragmentainer it resumes into against the frame the container was laid out with.
+        /// </summary>
+        private async ValueTask StateContainerFrame(Canvas g, bool resumed)
+        {
+            if (_gridBox.HtmlContainer is not { UseVariableInlineMeasure: true } container) return;
+            if (_gridBox.DerivedStyle.ActualDisplay != Keywords.Grid) return;
+
+            if (!resumed)
+            {
+                container.ClearInlineFramesUnder(_gridBox);
+                return;
+            }
+
+            if (container.CurrentFragmentainer is not { } filling) return;
+
+            var top = filling.ResumeContentTop;
+            var slot = container.SlotStartingAt(top);
+            container.ClearInlineFrame(_gridBox, slot);
+
+            var slotFrameWidth = await CssLayoutEngine.GetBoxWidth(g, _gridBox, top) + _gridBox.ActualBoxSizeIncludedWidth;
+            if (Math.Abs(slotFrameWidth - _gridBox.Bounds.Width) > 0.01)
+                container.RecordInlineFrame(_gridBox, slot, _gridBox.Bounds.X, slotFrameWidth);
         }
 
         // ─── Placement ──────────────────────────────────────────────────────────────
