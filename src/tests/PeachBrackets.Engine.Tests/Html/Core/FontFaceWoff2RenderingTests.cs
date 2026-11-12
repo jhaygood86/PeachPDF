@@ -68,5 +68,36 @@ p {{ width: 300px; }}
             var pdfCanvasFont = paragraph!.ActualFont;
             Assert.Equal("Inter Medium", pdfCanvasFont.Typeface!.FamilyName);
         }
+
+        // CSS Fonts 4 4.3.1: format() keywords are ASCII case-insensitive, and a variable font's container is named by the same keyword plus
+        // "-variations". A site that writes format("woff2-variations") (Fontsource's output) had its font dropped and fell back to a default face.
+        [Theory]
+        [InlineData("woff2-variations")]
+        [InlineData("WOFF2")]
+        [InlineData(" woff2-VARIATIONS ")]
+        public async Task FontFaceFormatKeyword_VariationsAndCase_StillLoadsTheFont(string format)
+        {
+            var html = $@"<!DOCTYPE html>
+<html><head><style>
+@font-face {{ font-family: 'InterFormatTest'; src: url('data:font/woff2;base64,{GetWoff2Base64()}') format('{format}'); }}
+body {{ font-family: 'InterFormatTest', serif; font-size: 14pt; }}
+</style></head>
+<body><p>Hello WOFF2</p></body>
+</html>";
+
+            var renderContext = new HtmlRenderContext();
+            var container = new HtmlContainerInt(renderContext);
+            await container.SetHtml(html, null);
+
+            var size = new Size(595, 842);
+            container.PageSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+            container.MaxSize = PeachBrackets.Utilities.Utils.ToPixels(size, 1.0);
+
+            using var graphics = PdfCanvas.CreateMeasuring(renderContext, size);
+            await container.PerformLayout(graphics);
+
+            var paragraph = FindByTag(container.Root!, "p");
+            Assert.Equal("Inter Medium", paragraph!.ActualFont.Typeface!.FamilyName);
+        }
     }
 }

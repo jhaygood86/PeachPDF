@@ -172,6 +172,31 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.True(items[1].Location.Y < items[2].Location.Y);
         }
 
+        // ─── An auto-height column grows no item below its content ───────────────
+
+        [Theory]
+        [InlineData("flex:1")]
+        [InlineData("flex-grow:1")]
+        [InlineData("flex:1 1 0px")]
+        public async Task AColumnOfAutoHeight_IsAsTallAsAGrowingItemsContent(string itemFlex)
+        {
+            // `body { display:flex; flex-direction:column }` with `main { flex:1 }` is the sticky-footer idiom: with nothing to grow into, the
+            // item was counted 0 high, the container ended under the header, and the footer was drawn on top of the item's content.
+            var html = Wrap($@"
+                <div id='col' style='display:flex; flex-direction:column; width:200pt;'>
+                    <div id='head' style='height:20pt;'></div>
+                    <div id='grow' class='item' style='{itemFlex}'><div style='height:300pt;'></div></div>
+                    <div id='foot' style='height:30pt;'></div>
+                </div>");
+            var (root, _) = await BuildAndLayout(html);
+            var grow = DomUtils.GetBoxById(root, "grow")!;
+            var foot = DomUtils.GetBoxById(root, "foot")!;
+            Assert.Equal(300, grow.ActualBottom - grow.Location.Y, 0.5);
+            Assert.Equal(20, grow.Location.Y - DomUtils.GetBoxById(root, "head")!.Location.Y, 0.5);
+            Assert.True(foot.Location.Y >= grow.ActualBottom - 0.5, $"footer at {foot.Location.Y} overlaps the item ending at {grow.ActualBottom}");
+            Assert.True(DomUtils.GetBoxById(root, "col")!.ActualBottom >= foot.ActualBottom - 0.5);
+        }
+
         // ─── flex-grow ───────────────────────────────────────────────────────────
 
         [Fact]

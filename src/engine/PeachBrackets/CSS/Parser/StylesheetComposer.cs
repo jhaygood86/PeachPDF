@@ -1374,6 +1374,56 @@ namespace PeachBrackets.Css
         /// </summary>
         private static string ResolveNestedSelector(string prelude, string parentText)
         {
+            // Each selector of a list is relative on its own (CSS Nesting 1 section 2.1): in `& h1, h2` the second is `& h2`, not a bare `h2`
+            // that would match everywhere. Split on the commas that separate selectors - not those inside a string, parentheses or brackets.
+            var parts = new List<string>();
+            var depth = 0;
+            var quote = '\0';
+            var start = 0;
+
+            for (var i = 0; i < prelude.Length; i++)
+            {
+                var c = prelude[i];
+
+                if (quote != '\0')
+                {
+                    if (c == '\\')
+                        i++;
+                    else if (c == quote)
+                        quote = '\0';
+                    continue;
+                }
+
+                switch (c)
+                {
+                    case '"' or '\'':
+                        quote = c;
+                        break;
+                    case '\\':
+                        i++;
+                        break;
+                    case '(' or '[':
+                        depth++;
+                        break;
+                    case ')' or ']':
+                        depth--;
+                        break;
+                    case ',' when depth == 0:
+                        parts.Add(prelude[start..i]);
+                        start = i + 1;
+                        break;
+                }
+            }
+
+            if (parts.Count == 0)
+                return ResolveNestedComplexSelector(prelude, parentText);
+
+            parts.Add(prelude[start..]);
+            return string.Join(", ", parts.Select(part => ResolveNestedComplexSelector(part, parentText)));
+        }
+
+        private static string ResolveNestedComplexSelector(string prelude, string parentText)
+        {
             var trimmed = prelude.Trim();
             var parentIs = ":is(" + (string.IsNullOrEmpty(parentText) ? "*" : parentText) + ")";
 

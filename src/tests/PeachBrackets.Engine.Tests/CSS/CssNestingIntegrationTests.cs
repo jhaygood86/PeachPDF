@@ -213,6 +213,34 @@ public class CssNestingIntegrationTests
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
+    [Fact]
+    public async Task EachSelectorOfANestedList_IsRelativeToTheParent()
+    {
+        // CSS Nesting 1 2.1: in `& a, span` the bare `span` is `& span`, not a rule for every span in the document. A site's
+        // `.pagination { & a, span { text-align: center } }` centered every span on the page.
+        var html = Html(
+            ".pagination { & a, span { color: #0000ff; } } .pagination { & b, i, u { color: #00ff00; } }",
+            "<p id='outside'><span id='out'>x</span><i id='outi'>y</i></p><ul class='pagination'><li><span id='in'>1</span><a id='ina'>2</a><i id='ini'>3</i></li></ul>");
+        var root = await BuildRoot(html);
+        Assert.Equal("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "in")!.Color);
+        Assert.Equal("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "ina")!.Color);
+        Assert.Equal("rgb(0, 255, 0)", DomUtils.GetBoxById(root, "ini")!.Color);
+        Assert.NotEqual("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "out")!.Color);
+        Assert.NotEqual("rgb(0, 255, 0)", DomUtils.GetBoxById(root, "outi")!.Color);
+    }
+
+    [Fact]
+    public async Task ACommaInsideAFunctionOrString_DoesNotSplitTheNestedList()
+    {
+        var html = Html(
+            ".box { &:is(.a, .b), [data-x=\"p,q\"] { color: #0000ff; } }",
+            "<div class='box a' id='one'>x</div><div class='box' id='two'><span id='s' data-x='p,q'>y</span></div><div class='box' id='three'>z</div>");
+        var root = await BuildRoot(html);
+        Assert.Equal("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "one")!.Color);
+        Assert.Equal("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "s")!.Color);
+        Assert.NotEqual("rgb(0, 0, 255)", DomUtils.GetBoxById(root, "three")!.Color);
+    }
+
     private static string Html(string css, string body) =>
         $"<!DOCTYPE html><html><head><style>{css}</style></head><body>{body}</body></html>";
 

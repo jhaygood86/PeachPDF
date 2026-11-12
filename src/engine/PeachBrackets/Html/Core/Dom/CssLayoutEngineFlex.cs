@@ -836,6 +836,13 @@ namespace PeachBrackets.Html.Dom
             // NaturalMainSize = what PerformLayout actually produced (used to detect resize need)
             double naturalMain2 = _mainAxisIsPhysicalX ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
 
+            // An item that grows and was given a zero basis (`flex: 1 1 0px`) in a column of auto height is still floored at its content height by
+            // `min-height: auto` (CSS Flexbox 1 section 4.5): the container is as tall as its items, so nothing else would size it.
+            if (mainSizeIndefinite && !_mainAxisIsPhysicalX && hypothetical < naturalMain2 && ParseFloat(box.FlexGrow) > 0
+                && string.Equals(box.MinHeight, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                && box.Overflow.Value == Css.Overflow.Visible && !box.IsImage)
+                hypothetical = naturalMain2;
+
             return new FlexItem(box, naturalMain2, hypothetical);
         }
 
