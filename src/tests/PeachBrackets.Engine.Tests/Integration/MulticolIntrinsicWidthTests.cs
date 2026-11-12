@@ -31,6 +31,15 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         [Fact]
+        public async Task AnInlineBlock_WithColumnsAndAutoWidth_ShrinkWrapsItsColumns()
+        {
+            var width = await WidthOfIdAsync(
+                "<div id='f' style='display:inline-block;columns:2;column-gap:7.5pt'>" + Block + Block + "</div>");
+
+            Assert.Equal(157.5, width, 0.01);
+        }
+
+        [Fact]
         public async Task TwoColumns_AreTwiceTheColumnPlusTheGap()
         {
             var box = await FloatAsync("columns:2;column-gap:7.5pt", Block + Block);

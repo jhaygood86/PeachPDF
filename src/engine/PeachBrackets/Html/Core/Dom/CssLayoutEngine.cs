@@ -3441,7 +3441,7 @@ namespace PeachBrackets.Html.Dom
             // decoration comes back off at the end — the same subtraction the plain auto branch
             // makes, and a no-op under box-sizing: border-box.
             if (box is { Width: Keywords.Auto, Position.Value: not (PositionMode.Absolute or PositionMode.Fixed) }
-                && box.IsFloated)
+                && (box.IsFloated || (box.EstablishesMultiColumnContext && box.DerivedStyle.ActualDisplay == Keywords.InlineBlock)))
             {
                 var fit = Math.Max(await GetFitContentWidth(g, box, width), await GetMinContentWidth(g, box));
                 width = fit - box.ActualBoxSizeIncludedWidth;
