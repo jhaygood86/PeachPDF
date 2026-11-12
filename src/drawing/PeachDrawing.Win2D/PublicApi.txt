@@ -51,6 +51,7 @@ PeachDrawing.Win2D.Win2dCanvas : sealed class
   method virtual Void PushBlendMode(PaintBlendMode mode)
   method virtual Void PushClip(GraphicsPath path)
   method virtual Void PushClip(Rect rect)
+  method virtual Void PushClipAroundShapes(GraphicsPath path)
   method virtual Void PushClipExclude(Rect rect)
   method virtual Void PushTransform(Matrix3x2 matrix)
   method virtual Void ReturnPreviousSmoothingMode(Object prevMode)

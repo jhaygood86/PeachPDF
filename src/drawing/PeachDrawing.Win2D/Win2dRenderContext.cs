@@ -156,6 +156,11 @@ public class Win2dRenderContext : RenderContext, IDisposable
 
     private Win2dLcdScratch? _lcdScratch;
 
+    private Win2dSurfacePool? _surfacePool;
+
+    /// <summary>The render targets geometry clips draw into, kept between paints.</summary>
+    internal Win2dSurfacePool SurfacePool => _surfacePool ??= new Win2dSurfacePool(Counts);
+
     /// <summary>The scratch render targets the GPU text blend draws its layers into, made on first use.</summary>
     internal Win2dLcdScratch LcdScratch => _lcdScratch ??= new Win2dLcdScratch(Counts);
 
@@ -285,6 +290,7 @@ public class Win2dRenderContext : RenderContext, IDisposable
         directWrite?.Dispose();
         _textBitmaps?.Clear();
         _lcdScratch?.Clear();
+        _surfacePool?.Clear();
         TextMasks.Clear();
         GlyphMasks.Clear();
         ownedDevice?.Dispose();

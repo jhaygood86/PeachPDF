@@ -37,4 +37,109 @@ public class ImageDownscaleTests
         // And it is the same line all the way down, not a few sampled rows of it.
         Assert.InRange(Enumerable.Range(0, 40).Max(x => scene.Px(x, 5).R), brightest - 2, brightest + 2);
     }
+
+    [Fact]
+    public void An_image_drawn_small_is_held_small_and_decoded_again_when_drawn_larger()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 400, 400);
+        using var image = Assert.IsType<Win2dImage>(context.ImageFromStream(new MemoryStream(StripePng())));
+
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40));
+        Assert.InRange(image.BitmapScale, 1.0 / 64, 0.1);
+
+        // A draw that needs fewer pixels keeps what it has; one that needs more decodes the image again at the size it reads.
+        var small = image.BitmapScale;
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 20, 20));
+        Assert.Equal(small, image.BitmapScale);
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 400, 400));
+        Assert.True(image.BitmapScale > small);
+        Assert.True(image.BitmapScale <= 1);
+    }
+
+    [Fact]
+    public void A_part_of_an_image_drawn_from_a_reduced_bitmap_is_the_same_part()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 40, 40);
+        using var image = Assert.IsType<Win2dImage>(context.ImageFromStream(new MemoryStream(StripePng())));
+
+        // The white line is at x 1000..1002 of 2000: the right half of the image has none of it, the left half none either, the middle strip all of it.
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40), new Rect(900, 0, 200, 2000));
+        Assert.True(image.BitmapScale < 1);
+        Assert.True(Enumerable.Range(0, 40).Max(x => scene.Px(x, 20).R) > 3, "the line is in the part and was lost");
+
+        using var other = new Scene(context, 40, 40);
+        other.Canvas.DrawImage(image, new Rect(0, 0, 40, 40), new Rect(1200, 0, 200, 2000));
+        Assert.True(Enumerable.Range(0, 40).Max(x => other.Px(x, 20).R) <= 3, "the line is not in the part but was drawn");
+    }
+
+    [Theory]
+    [InlineData(1.0)]
+    [InlineData(0.9)]
+    [InlineData(0.6)]
+    [InlineData(0.5)]
+    [InlineData(0.3)]
+    [InlineData(0.2)]
+    [InlineData(0.05)]
+    public void The_scale_kept_for_a_draw_has_its_resolution_and_no_more_than_a_fifth_over(double needed)
+    {
+        var scale = Win2dImage.ScaleFor(needed);
+        Assert.InRange(scale, needed, Math.Min(1, needed * 1.19) + 1e-9);
+    }
+
+    [Fact]
+    public void The_scale_kept_is_never_below_a_sixty_fourth()
+    {
+        Assert.Equal(1.0 / 64, Win2dImage.ScaleFor(0.001));
+        Assert.Equal(1.0, Win2dImage.ScaleFor(3));
+    }
+
+    private static byte[] Jpeg(int size)
+    {
+        var raster = new RasterRenderContext();
+        using var canvas = raster.CreateCanvas(size, size);
+        canvas.DrawRectangle(raster.GetSolidBrush(PaintColor.FromArgb(255, 200, 30, 30)), 0, 0, size, size);
+        canvas.DrawRectangle(raster.GetSolidBrush(PaintColor.FromArgb(255, 255, 255, 255)), size / 4, size / 4, size / 2, size / 2);
+        using var stream = new MemoryStream();
+        canvas.Save(stream, "jpeg", new PeachImage.Formats.Jpeg.JpegEncoderOptions());
+        return stream.ToArray();
+    }
+
+    [Fact]
+    public void AJpegDrawnSmall_IsDecodedSmallByWindowsAndDrawsTheSamePicture()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 40, 40);
+        using var image = Assert.IsType<Win2dImage>(context.ImageFromStream(new MemoryStream(Jpeg(1600))));
+
+        scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40));
+
+        Assert.True(image.BitmapScale < 0.1, $"{image.BitmapScale}");
+
+        // The white square is the middle half of the picture, in the middle of what was drawn; the border is its red.
+        var middle = scene.Px(20, 20);
+        var edge = scene.Px(2, 2);
+        Assert.True(middle.R > 240 && middle.G > 240 && middle.B > 240, $"{middle}");
+        Assert.True(edge.R > 170 && edge.G < 80, $"{edge}");
+    }
+
+    [Fact]
+    public void AJpegThatOpensButCannotBeDecodedAtASmallerSize_StillDrawsWithoutThrowing()
+    {
+        using var context = Win2dRenderContext.CreateSoftware();
+        context.PixelsPerPoint = 1;
+        using var scene = new Scene(context, 40, 40);
+        var whole = Jpeg(1600);
+
+        // The header and a part of the picture: it opens, and what it holds cannot all be read.
+        using var image = context.ImageFromStream(new MemoryStream(whole.AsSpan(0, whole.Length / 3).ToArray()));
+
+        var thrown = Record.Exception(() => scene.Canvas.DrawImage(image, new Rect(0, 0, 40, 40)));
+
+        Assert.Null(thrown);
+    }
 }

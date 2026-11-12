@@ -181,6 +181,93 @@ public class InteractionStateTests
         Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
     }
 
+    [Theory]
+    [InlineData("<a id=link href='#'>hover me</a><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg>",
+        "a:hover + svg .fill")]
+    [InlineData("<a id=link href='#'><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg></a>",
+        "a:hover .fill")]
+    public async Task AHoverRuleReachingAShapeInsideAnInlineSvg_IsAppliedInPlaceAndRepaintsTheGraphic(string body, string rule)
+    {
+        // A page full of icons restyled by `a:hover .icon` used to load the whole document again on every hover (about a second on a news front page).
+        var (context, document, measuring) = await LoadAsync(
+            body,
+            $"<style>body {{ display: flex }} a {{ width: 40px; height: 40px }} .fill {{ fill: rgb(0,0,255) }} {rule} {{ fill: rgb(255,0,0) }}</style>");
+        var (x, y) = Center(document, "link");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.True(entered.Incremental, "the change loaded the document again");
+        Assert.NotEmpty(entered.DirtyRegions);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).R);
+
+        var left = await document.ClearPointerStateAsync(measuring);
+        Assert.True(left.Incremental, "ending the hover loaded the document again");
+        Assert.NotEmpty(left.DirtyRegions);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
+
+        // And again: the graphic is built from the same elements each time.
+        await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).R);
+    }
+
+    [Fact]
+    public async Task AHoverThatChangesABoxAndAShapeInsideAnInlineSvgAtOnce_IsAppliedInPlace()
+    {
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><svg id=icon width='40' height='40' viewBox='0 0 40 40'><rect width='40' height='40' class='fill'/></svg></a>",
+            "<style>body { display: flex } a { display: block; width: 40px; height: 40px; background: rgb(0,255,0) } a:hover { background: rgb(255,255,0) } .fill { fill: rgb(0,0,255) } a:hover .fill { fill: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.True(entered.Incremental, "the change loaded the document again");
+        Assert.NotEmpty(entered.DirtyRegions);
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).R);
+
+        var left = await document.ClearPointerStateAsync(measuring);
+        Assert.True(left.Incremental, "ending the hover loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "icon")).B);
+    }
+
+    [Fact]
+    public async Task AHoverOnAnInlineThatTheLoadMadeABlockBecauseItHoldsOne_IsStillAppliedInPlace()
+    {
+        // An `a` around a block is made a block after the cascade, and cascading it again alone says inline: that is not the hover's doing,
+        // and used to send every hover over a card link on a news front page through a full load.
+        var (context, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><div style='width: 40px; height: 40px'></div></a>",
+            "<style>a { background: rgb(0,0,255) } a:hover { background: rgb(255,0,0) }</style>");
+        var (x, y) = Center(document, "link");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.True(entered.Incremental, "the change loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).R);
+
+        var left = await document.ClearPointerStateAsync(measuring);
+        Assert.True(left.Incremental, "ending the hover loaded the document again");
+        Assert.Equal(255, (await PixelAtAsync(context, document, "link")).B);
+    }
+
+    [Fact]
+    public async Task AHoverThatChangesTheLayoutOfABoxAfterTheLoadCorrectedIt_StillLoadsTheDocumentAgain()
+    {
+        // The same box, but the hover itself changes its size: the corrected values it keeps must not hide that.
+        var (_, document, measuring) = await LoadAsync(
+            "<a id=link href='#'><div style='height: 40px'></div></a>",
+            "<style>a { background: rgb(0,0,255) } a:hover { background: rgb(255,0,0); padding-left: 30px }</style>");
+        var (x, y) = Center(document, "link");
+
+        var entered = await document.SetPointerStateAsync(0, x, y, pressed: false, measuring);
+
+        Assert.True(entered.Applied, entered.Reason);
+        Assert.False(entered.Incremental);
+    }
+
     [Fact]
     public async Task AHoverOnAnElementNoRuleReachingAnInlineSvgCanMatch_KeepsTheFastPath()
     {

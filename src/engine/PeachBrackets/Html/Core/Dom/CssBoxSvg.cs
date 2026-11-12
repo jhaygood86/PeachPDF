@@ -40,6 +40,10 @@ namespace PeachBrackets.Html.Dom
 
         // The graphic's children, kept when a clock plays it so the scene graph can be built again for each moment (they are dropped from Boxes in between).
         private List<CssBox>? _retained;
+
+        // The children the scene graph was built from, kept when a rule that reads hover/focus state styles an element inside it (`a:hover .icon`): a change of
+        // that state builds the graphic again from them (RebuildForState) instead of the whole document being loaded again.
+        private List<CssBox>? _stateBoxes;
         private SmilSet? _smil;
         private double? _cssAnimationEnd;
         private double? _builtAt;
@@ -161,6 +165,9 @@ namespace PeachBrackets.Html.Dom
 
             ForcedColorsAdjuster.RecolorSvg(this, _document);
 
+            // Known only now: whether a rule that reads state matched an element of it is noted while the graphic is built.
+            if (HasSvgInnerStatefulCandidates) _stateBoxes = _retained ?? [.. Boxes];
+
             // The parser builds a real (generic) CssBox for every SVG child element so
             // SvgTreeBuilder can read tag names/attributes off them - but once the scene graph above
             // is built, those boxes must not stick around: the base CssBox layout/paint pipeline
@@ -169,6 +176,32 @@ namespace PeachBrackets.Html.Dom
             // background/border/content positioning. Clearing them makes this box a true leaf (one
             // phantom word, no children), exactly like CssBoxImage.
             Boxes.Clear();
+        }
+
+        /// <summary>Whether <see cref="RebuildForState"/> can build this graphic again: it has an element a rule that reads hover or focus state styles, and its children were kept.</summary>
+        internal bool CanRebuildForState => _stateBoxes is not null && _document is not null;
+
+        /// <summary>
+        /// Builds the graphic again under the current interaction state, from the children it was built from. What an element of it matches is read afresh, so the
+        /// caller raises <see cref="HtmlContainerInt.StyleGeneration"/> first (the matched declarations are kept for the generation they were read in).
+        /// </summary>
+        internal void RebuildForState()
+        {
+            if (_stateBoxes is null || _document is null || HtmlContainer is not { } container) return;
+
+            Boxes.AddRange(_stateBoxes);
+            try
+            {
+                var document = SvgTreeBuilder.Build(new CssBoxSvgSourceNode(this), container.RenderContext, ActualColor, _prefetchedImages,
+                    fontPaletteValues: container.FontPaletteValues, fontFeatureValues: container.FontFeatureValues);
+                document.IsTimeVarying = _retained is not null;
+                ForcedColorsAdjuster.RecolorSvg(this, document);
+                _document = document;
+            }
+            finally
+            {
+                Boxes.Clear();
+            }
         }
 
         /// <summary>The SMIL animation elements of this graphic, or null when it has none (or nothing plays it).</summary>

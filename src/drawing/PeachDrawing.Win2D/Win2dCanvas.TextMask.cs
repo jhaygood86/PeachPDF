@@ -106,9 +106,11 @@ public sealed partial class Win2dCanvas
 
         // Shaped, hinted and rasterized once for a run at this place on the pixel grid; drawn again (as a view does for the strip it scrolls into
         // sight) it comes from the cache. The part of a run outside what can be seen is cut off.
+        var maskStarted = Win2dPaintStatistics.Start();
         var mask = _context.TextMasks.Get(_context, str, font, letterSpacing, _ppp, scaleX, scaleY,
             (point.X * scaleX) + (transform.M31 * dpiScale), (point.Y * scaleY) + (transform.M32 * dpiScale), palette, features, lcd ? 3 : 1, limit,
             out var maskKey, out var whole);
+        Win2dPaintStatistics.Stop(Win2dPaintStatistics.Counter.TextMask, maskStarted);
         if (mask is not { } run)
             return false;
 

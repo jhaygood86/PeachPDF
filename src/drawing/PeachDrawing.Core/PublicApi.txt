@@ -83,6 +83,7 @@ PeachDrawing.Core.Canvas : abstract class
   method virtual Void DrawStringInRect(String str, Font font, PaintColor color, Rect rect, BoxAlignment horizontal, BoxAlignment vertical, String logicalText = null)
   method virtual Void PopAntiAlias()
   method virtual Void PushAntiAlias(Boolean enabled)
+  method virtual Void PushClipAroundShapes(GraphicsPath path)
   property Boolean FlattensTransparency { get; }
   property Boolean HasNativeLayerEffects { get; }
   property Boolean InvisibleText { get; set; }

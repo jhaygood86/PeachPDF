@@ -36,6 +36,8 @@ internal sealed class Win2dGlyphMaskCache
     private readonly LinkedList<Entry> _order = new();
     private long _bytes;
 
+    internal long ByteCount => _bytes;
+
     internal int Hits { get; private set; }
 
     internal int Misses { get; private set; }

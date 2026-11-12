@@ -138,8 +138,9 @@ namespace PeachBrackets.Html.Updates
             // inside it (`a:hover .icon`, `a:hover + svg .icon`) cannot be restyled in place. When a rule that reads the state could match differently because of the
             // element whose state changed, wherever it sits, leave it to a full load. html and body are always among the changed and say nothing: a rule on them
             // reaches the SVG through the page's own boxes.
-            if (HasStatefulSvgRuleReaching(root, changed))
-                return Fail("The state changed on an element that a rule reading it styles an inline SVG's elements through, which the fast path does not restyle.");
+            var svgsToRebuild = new List<CssBoxSvg>();
+            if (!TryCollectStatefulSvgsReached(root, changed, svgsToRebuild))
+                return Fail("The state changed on an element that a rule reading it styles an inline SVG's elements through, and that graphic cannot be built again in place.");
 
             var roots = new List<CssBox>();
             try
@@ -172,7 +173,14 @@ namespace PeachBrackets.Html.Updates
             }
 
             if (roots.Count == 0)
-                return new Outcome(true, null, []);
+            {
+                if (svgsToRebuild.Count == 0)
+                    return new Outcome(true, null, []);
+
+                // Only graphics changed: they are built again, and the places they are drawn are painted again.
+                container.StyleGeneration++;
+                return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, RebuildGraphics(svgsToRebuild), fragmentainers));
+            }
 
             // A root under another root is restyled with it.
             var rootSet = new HashSet<CssBox>(roots);
@@ -201,8 +209,51 @@ namespace PeachBrackets.Html.Updates
             foreach (var box in boxes)
                 oldStyles[box] = (box.ComputedStyle, PaintExtent.Of(box));
 
+            // Cascading a box again does not redo what the load did to it after the cascade: an inline that holds blocks is made a block, an absolutely positioned
+            // image is wrapped and left static in its wrapper, a flex item under a display: contents box is blockified when it is lifted. Run on its own the cascade
+            // would take those back and every such box would look changed. So the cascade is run under the old state first, and only what differs between the two
+            // runs is the state's doing; a box keeps what it has for every area the two runs agree on.
+            var baseline = new Dictionary<CssBox, ComputedStyle>(boxes.Count);
+            container.Interaction = before;
+            try
+            {
+                foreach (var box in roots)
+                    DomParser.RecascadeForState(container, box);
+
+                foreach (var box in boxes)
+                    baseline[box] = box.ComputedStyle;
+            }
+            finally
+            {
+                container.Interaction = after;
+            }
+
             foreach (var box in roots)
                 DomParser.RecascadeForState(container, box);
+
+            var deltaParser = new CssValueParser(container.RenderContext);
+            foreach (var box in boxes)
+            {
+                var (kept, underOldState, underNewState) = (oldStyles[box].Style, baseline[box], box.ComputedStyle);
+
+                // The text areas hold paint (color, shadows, decoration) beside layout (line-height, tab-size...), and what a box inherits through the boxes the
+                // load added around it differs between a cascade run alone and the load's. They are not taken as a whole: each property the state changed is set
+                // on the style the box already has.
+                var changedText = !EqualityComparer<TextArea>.Default.Equals(underOldState.Text, underNewState.Text)
+                    || !EqualityComparer<TextDecorationArea>.Default.Equals(underOldState.TextDecoration, underNewState.TextDecoration)
+                    ? ChangedProperties(box, underOldState, underNewState)
+                    : null;
+
+                box.AdoptComputedStyle(StateDelta(kept, underOldState, underNewState));
+                if (changedText is not null)
+                {
+                    foreach (var (name, value) in changedText)
+                    {
+                        if (value is not null)
+                            CssUtils.SetPropertyValue(deltaParser, box, name, value);
+                    }
+                }
+            }
 
             var extents = new Dictionary<CssBox, ExtentChange>();
             var stackingChanged = false;
@@ -246,6 +297,10 @@ namespace PeachBrackets.Html.Updates
             // declarations, see CssBoxSvgSourceNode) is stale now.
             container.StyleGeneration++;
 
+            // A graphic a state rule reaches is built from its elements again, under the new state, and painted again where it is.
+            foreach (var graphic in RebuildGraphics(svgsToRebuild))
+                extents[graphic.Key] = graphic.Value;
+
             return new Outcome(true, null, StyleUpdater.DirtyRegionsForExtents(container, extents, fragmentainers));
         }
 
@@ -260,7 +315,11 @@ namespace PeachBrackets.Html.Updates
 
         // Whether a rule that reads the state and was a candidate for an element inside an inline SVG could match differently because an element whose state
         // changed (other than html and body) is the one its state compound matches, wherever that element sits relative to the SVG.
-        private static bool HasStatefulSvgRuleReaching(CssBox root, HashSet<int> changed)
+        /// <summary>
+        /// Collects into <paramref name="reached"/> the inline SVGs an element whose state changed can restyle an element of through a rule that reads state.
+        /// False when one of them cannot be built again in place, which leaves the change to a full load.
+        /// </summary>
+        private static bool TryCollectStatefulSvgsReached(CssBox root, HashSet<int> changed, List<CssBoxSvg> reached)
         {
             var svgs = new List<CssBox>();
             var changedBoxes = new List<CssBox>();
@@ -270,14 +329,39 @@ namespace PeachBrackets.Html.Updates
             {
                 foreach (var selector in svg.SvgInnerStatefulSelectors!)
                 {
+                    var reaches = false;
                     foreach (var box in changedBoxes)
                     {
-                        if (CssData.StateCompoundCouldMatch(selector, box)) return true;
+                        if (CssData.StateCompoundCouldMatch(selector, box))
+                        {
+                            reaches = true;
+                            break;
+                        }
                     }
+
+                    if (!reaches) continue;
+
+                    if (svg is not CssBoxSvg graphic || !graphic.CanRebuildForState) return false;
+
+                    if (!reached.Contains(graphic)) reached.Add(graphic);
+                    break;
                 }
             }
 
-            return false;
+            return true;
+        }
+
+        // Builds each graphic again and says where it paints, as the extents the dirty regions are made from.
+        private static Dictionary<CssBox, ExtentChange> RebuildGraphics(List<CssBoxSvg> graphics)
+        {
+            var extents = new Dictionary<CssBox, ExtentChange>();
+            foreach (var graphic in graphics)
+            {
+                graphic.RebuildForState();
+                extents[graphic] = new ExtentChange(0, 0, false, false, Matrix3x2.Identity, Matrix3x2.Identity);
+            }
+
+            return extents;
         }
 
         private static void CollectSvgsAndChanged(CssBox box, HashSet<int> changed, List<CssBox> svgs, List<CssBox> changedBoxes)
@@ -325,6 +409,61 @@ namespace PeachBrackets.Html.Updates
         }
 
         // Says why the box's new style cannot be kept (null when it can), and which properties differ.
+        // The properties whose value reads back differently under the two styles, with the value under the second.
+        private static List<(string Name, string? Value)> ChangedProperties(CssBox box, ComputedStyle first, ComputedStyle second)
+        {
+            var current = box.ComputedStyle;
+            Dictionary<string, string?> before, after;
+            try
+            {
+                box.AdoptComputedStyle(first);
+                before = ReadAll(box);
+                box.AdoptComputedStyle(second);
+                after = ReadAll(box);
+            }
+            finally
+            {
+                box.AdoptComputedStyle(current);
+            }
+
+            var changed = new List<(string, string?)>();
+            foreach (var (name, value) in after)
+            {
+                if (!before.TryGetValue(name, out var previous) || !string.Equals(previous, value, StringComparison.Ordinal))
+                    changed.Add((name, value));
+            }
+
+            return changed;
+        }
+
+        // The style a box has after a change of state: the style the new state cascades to in every area that differs from what the old state cascades to,
+        // and what the box already has everywhere else (the two text areas always: see the caller).
+        private static ComputedStyle StateDelta(ComputedStyle current, ComputedStyle underOldState, ComputedStyle underNewState)
+        {
+            static T Pick<T>(T have, T before, T after) => EqualityComparer<T>.Default.Equals(before, after) ? have : after;
+
+            return new ComputedStyle
+            {
+                CustomProperties = CustomPropertiesEqual(underOldState.CustomProperties, underNewState.CustomProperties) ? current.CustomProperties : underNewState.CustomProperties,
+                Border = Pick(current.Border, underOldState.Border, underNewState.Border),
+                VisualEffects = Pick(current.VisualEffects, underOldState.VisualEffects, underNewState.VisualEffects),
+                GeneratedContent = Pick(current.GeneratedContent, underOldState.GeneratedContent, underNewState.GeneratedContent),
+                BoxModel = Pick(current.BoxModel, underOldState.BoxModel, underNewState.BoxModel),
+                Break = Pick(current.Break, underOldState.Break, underNewState.Break),
+                Pagination = Pick(current.Pagination, underOldState.Pagination, underNewState.Pagination),
+                Background = Pick(current.Background, underOldState.Background, underNewState.Background),
+                DisplayPositioning = Pick(current.DisplayPositioning, underOldState.DisplayPositioning, underNewState.DisplayPositioning),
+                Table = Pick(current.Table, underOldState.Table, underNewState.Table),
+                Text = current.Text,
+                TextDecoration = current.TextDecoration,
+                Font = Pick(current.Font, underOldState.Font, underNewState.Font),
+                List = Pick(current.List, underOldState.List, underNewState.List),
+                Flex = Pick(current.Flex, underOldState.Flex, underNewState.Flex),
+                Grid = Pick(current.Grid, underOldState.Grid, underNewState.Grid),
+                MultiColumn = Pick(current.MultiColumn, underOldState.MultiColumn, underNewState.MultiColumn),
+            };
+        }
+
         private static string? Classify(CssBox box, ComputedStyle old, out HashSet<string> names, out bool transformFlip, out List<(string Property, string? Old, string? New)> changes)
         {
             names = [with(StringComparer.OrdinalIgnoreCase)];
@@ -339,7 +478,7 @@ namespace PeachBrackets.Html.Updates
             // that hold anything but paint must be equal, and in the ones that hold paint beside other things only the fields of the paint-only
             // properties may differ.
             if (!LayoutAreasEqual(old, current))
-                return $"A style area that holds more than paint changed on <{box.HtmlTag?.Name ?? "box"}>.";
+                return $"A style area that holds more than paint changed on <{box.HtmlTag?.Name ?? "box"}> ({ChangedLayoutAreas(old, current)}; {ChangedPropertyNames(box, old, current)}).";
 
             // The old style, read back the way the new one is.
             Dictionary<string, string?> oldValues;
@@ -439,6 +578,76 @@ namespace PeachBrackets.Html.Updates
             property.Equals("visibility", StringComparison.OrdinalIgnoreCase) && value is not null && value.Trim().Equals("collapse", StringComparison.OrdinalIgnoreCase);
 
         private static bool IsNone(string? value) => string.IsNullOrEmpty(value) || value.Equals("none", StringComparison.OrdinalIgnoreCase);
+
+        // The properties whose value reads back differently (those the registry can read), for the same reason.
+        private static string ChangedPropertyNames(CssBox box, ComputedStyle old, ComputedStyle current)
+        {
+            Dictionary<string, string?> before;
+            box.AdoptComputedStyle(old);
+            try
+            {
+                before = ReadAll(box);
+            }
+            finally
+            {
+                box.AdoptComputedStyle(current);
+            }
+
+            var names = new List<string>();
+            foreach (var (name, value) in ReadAll(box))
+            {
+                if (!before.TryGetValue(name, out var previous) || !string.Equals(previous, value, StringComparison.Ordinal))
+                    names.Add($"{name}: {previous} -> {value}");
+            }
+
+            return names.Count == 0 ? "no registry property differs" : string.Join(", ", names);
+        }
+
+        // The names of the areas LayoutAreasEqual finds different, for the reason a change is not applied in place.
+        private static string ChangedLayoutAreas(ComputedStyle a, ComputedStyle b)
+        {
+            var names = new List<string>();
+            void Check(bool equal, string name)
+            {
+                if (!equal) names.Add(name);
+            }
+
+            Check(a.GeneratedContent.Equals(b.GeneratedContent), "content");
+            Check(a.BoxModel.Equals(b.BoxModel), "box model");
+            Check(a.Break.Equals(b.Break), "break");
+            Check(a.Pagination.Equals(b.Pagination), "pagination");
+            Check(a.DisplayPositioning.Equals(b.DisplayPositioning), "display/position");
+            Check(a.Table.Equals(b.Table), "table");
+            Check(a.Font.Equals(b.Font), "font");
+            Check(a.List.Equals(b.List), "list");
+            Check(a.Flex.Equals(b.Flex), "flex");
+            Check(a.Grid.Equals(b.Grid), "grid");
+            Check(a.MultiColumn.Equals(b.MultiColumn with { ColumnRuleColor = a.MultiColumn.ColumnRuleColor }), "multicol");
+            Check(a.Background.Equals(b.Background with { BackgroundColor = a.Background.BackgroundColor }), "background");
+            Check(a.Border.Equals(b.Border with
+            {
+                BorderTopColor = a.Border.BorderTopColor,
+                BorderRightColor = a.Border.BorderRightColor,
+                BorderBottomColor = a.Border.BorderBottomColor,
+                BorderLeftColor = a.Border.BorderLeftColor,
+                BoxShadow = a.Border.BoxShadow,
+                OutlineColor = a.Border.OutlineColor,
+                OutlineStyle = a.Border.OutlineStyle,
+                OutlineWidth = a.Border.OutlineWidth,
+                OutlineOffset = a.Border.OutlineOffset,
+            }), "border");
+            Check(a.VisualEffects.Equals(b.VisualEffects with
+            {
+                Opacity = a.VisualEffects.Opacity,
+                Transform = a.VisualEffects.Transform,
+                Translate = a.VisualEffects.Translate,
+                Rotate = a.VisualEffects.Rotate,
+                Scale = a.VisualEffects.Scale,
+                Filter = a.VisualEffects.Filter,
+                MixBlendMode = a.VisualEffects.MixBlendMode,
+            }), "visual effects");
+            return string.Join(", ", names);
+        }
 
         private static bool LayoutAreasEqual(ComputedStyle a, ComputedStyle b) =>
             a.GeneratedContent.Equals(b.GeneratedContent) && a.BoxModel.Equals(b.BoxModel) && a.Break.Equals(b.Break) && a.Pagination.Equals(b.Pagination)

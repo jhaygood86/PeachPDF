@@ -166,7 +166,9 @@ namespace PeachBrackets.Html.Paint
 #if DEBUG
             TracePage(fragmentainer, pageClip);
 #endif
+            var statsStarted = PaintStatistics.Start();
             var reach = MeasurePaintReach(g, fragmentainer.Root, pageClip);
+            var reachMs = PaintStatistics.Enabled ? PaintStatistics.MillisecondsSince(statsStarted) : 0;
             if (reach.Outline > 0 || reach.MarkerLeft > 0)
             {
                 // The page's ordinary content clip starts at the content-area edge. An outline is
@@ -194,6 +196,8 @@ namespace PeachBrackets.Html.Paint
             PaintFragment(g, fragmentainer.Root);
 
             g.PopClip();
+            if (PaintStatistics.Enabled)
+                PaintStatistics.Report(reachMs, PaintStatistics.MillisecondsSince(statsStarted));
         }
 
         /// <summary>
@@ -211,6 +215,7 @@ namespace PeachBrackets.Html.Paint
 
         private static PaintReach MeasurePaintReach(Canvas g, BoxFragment fragment, Rect pageClip)
         {
+            PaintStatistics.Add(ref PaintStatistics.ReachNodes);
             var outline = fragment.Lines.Count > 0
                 ? OutlineDrawHandler.OutwardReach(g, fragment.Box)
                 : 0;
@@ -415,6 +420,7 @@ namespace PeachBrackets.Html.Paint
         /// </summary>
         internal void PaintFragment(Canvas g, BoxFragment fragment)
         {
+            PaintStatistics.Add(ref PaintStatistics.FragmentsEntered);
             PeachBrackets.Utilities.StackGuard.Ensure();
 
             var box = fragment.Box;
@@ -1444,7 +1450,7 @@ namespace PeachBrackets.Html.Paint
                     return;
                 }
 
-                pushedClips += RenderUtils.ClipGraphicsByOverflow(g, entry.Rect, entry.Curve);
+                pushedClips += RenderUtils.ClipGraphicsByOverflow(g, entry.Rect, entry.Curve, entry.Curve is null || FragmentMayDrawText(fragment));
                 if (PushOverflowClip(entry.Rect, entry.Curve)) recordedClips++;
             }
 

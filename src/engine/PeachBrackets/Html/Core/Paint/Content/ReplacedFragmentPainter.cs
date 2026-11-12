@@ -34,7 +34,9 @@ namespace PeachBrackets.Html.Paint.Content
             var rect = fragment.PrimaryRect;
 
             var (overflowClip, overflowClipCurve) = painter.OverflowClipOf(g, fragment);
-            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve);
+
+            // The clip around a loaded picture holds a background, a border, the picture and an outline: no text, which a canvas can use to leave out what a clip around text costs it.
+            var clipsPushed = RenderUtils.ClipGraphicsByOverflow(g, overflowClip, overflowClipCurve, overflowClipCurve is null || painter.FragmentMayDrawText(fragment));
             var overflowClipRecorded = painter.PushOverflowClip(overflowClip, overflowClipCurve);
 
             // A replaced element is monolithic (css-break-3 §2 - see MonolithicContent.IsReplaced, which
