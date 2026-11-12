@@ -64,6 +64,12 @@ public sealed partial class Win2dCanvas
         if (!(width > 0) || !(height > 0) || !(dest.Width > 0) || !(dest.Height > 0) || !(src.Width > 0) || !(src.Height > 0))
             return;
 
+        // Bilinear reads four texels of the block each output pixel covers, which is fine for a small reduction and breaks thin strokes up when
+        // the source is much larger than where it is drawn (a 4000 px logo shown 100 px wide). The cubic mode pre-filters a reduction, so every
+        // source pixel counts, as it does when a browser shrinks an image.
+        if (interpolation == CanvasImageInterpolation.Linear && Math.Min(dest.Width / src.Width, dest.Height / src.Height) * Math.Max(Math.Abs(EffectiveTransform.M11), Math.Abs(EffectiveTransform.M22)) < 0.5)
+            interpolation = CanvasImageInterpolation.HighQualityCubic;
+
         NoteDrawn(dest.X, dest.Y, dest.X + dest.Width, dest.Y + dest.Height);
         var saved = _session.Transform;
         try
