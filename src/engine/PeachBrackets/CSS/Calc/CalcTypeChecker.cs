@@ -68,21 +68,58 @@ namespace PeachBrackets.Css
                 }
 
                 case CallCalcNode call:
-                {
-                    CalcCategory? combined = null;
-                    foreach (var argument in call.Arguments)
-                    {
-                        var category = Check(argument);
-                        if (category is null) return null;
-                        combined = combined is null ? category : Combine(combined, category);
-                        if (combined is null) return null;
-                    }
-
-                    return combined;
-                }
+                    return CheckCall(call);
 
                 default:
                     return null;
+            }
+        }
+
+        private static CalcCategory? CheckCall(CallCalcNode call)
+        {
+            CalcCategory? combined = null;
+            foreach (var argument in call.Arguments)
+            {
+                var category = Check(argument);
+                if (category is null) return null;
+                combined = combined is null ? category : Combine(combined, category);
+                if (combined is null) return null;
+            }
+
+            if (combined is null) return null;
+
+            // Lengths and percentages mix; an angle, time or resolution only stands with its own kind.
+            var value = combined.Value;
+            if (value != CalcCategory.Number && (value & ~CalcCategory.LengthPercentage) != 0
+                && value is not (CalcCategory.Angle or CalcCategory.Time or CalcCategory.Resolution))
+                return null;
+
+            switch (call.Name)
+            {
+                // round(A) and round(A, B) with B omitted are only defined for a Number A.
+                case FunctionNames.Round when call.Arguments.Count == 1 && combined != CalcCategory.Number:
+                    return null;
+
+                // The Number-only functions take (and give) a plain number.
+                case FunctionNames.Pow or FunctionNames.Sqrt or FunctionNames.Log or FunctionNames.Exp:
+                    return combined == CalcCategory.Number ? CalcCategory.Number : null;
+
+                case FunctionNames.Sign:
+                    return CalcCategory.Number;
+
+                // sin()/cos()/tan() take a number (radians) or an angle.
+                case FunctionNames.Sin or FunctionNames.Cos or FunctionNames.Tan:
+                    return combined is CalcCategory.Number or CalcCategory.Angle ? CalcCategory.Number : null;
+
+                case FunctionNames.Asin or FunctionNames.Acos or FunctionNames.Atan:
+                    return combined == CalcCategory.Number ? CalcCategory.Angle : null;
+
+                // atan2() takes two values of one type (numbers, lengths, percentages...).
+                case FunctionNames.Atan2:
+                    return CalcCategory.Angle;
+
+                default:
+                    return combined;
             }
         }
 
@@ -121,20 +158,20 @@ namespace PeachBrackets.Css
 
         private static double? FoldCallNumber(CallCalcNode call)
         {
+            // Only functions that can yield a Number: the same-type ones over Number arguments, the
+            // Number-only ones, and sin/cos/tan/sign, which also accept an angle (folded to radians).
+            var takesAnyType = call.Name is FunctionNames.Sign or FunctionNames.Sin or FunctionNames.Cos or FunctionNames.Tan;
+            if (call.Name is FunctionNames.Asin or FunctionNames.Acos or FunctionNames.Atan or FunctionNames.Atan2) return null;
+
             var values = new List<double>(call.Arguments.Count);
             foreach (var argument in call.Arguments)
             {
-                var value = FoldNumber(argument);
+                var value = FoldNumber(argument) ?? (takesAnyType ? CalcSerializer.FoldAngle(argument) : null);
                 if (value is null) return null;
                 values.Add(value.Value);
             }
 
-            if (call.Name.Isi(FunctionNames.Min)) return values.Min();
-            if (call.Name.Isi(FunctionNames.Max)) return values.Max();
-            if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                return values[0] > values[2] ? values[2] : Math.Clamp(values[1], values[0], values[2]);
-
-            return null;
+            return CalcMath.Apply(call.Name, call.Option, values);
         }
 
         private static CalcCategory? Combine(CalcCategory? left, CalcCategory? right)

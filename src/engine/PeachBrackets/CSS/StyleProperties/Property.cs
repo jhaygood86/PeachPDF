@@ -25,7 +25,7 @@ namespace PeachBrackets.Css
         internal bool TrySetValue(TokenValue newTokenValue)
         {
             var tokenValue = newTokenValue ?? TokenValue.Initial;
-            var converter = AllowsVarSubstitution && tokenValue.ContainsFunction(FunctionNames.Var) ? Converters.Any : Converter;
+            var converter = AllowsVarSubstitution && SubstitutionFunctions.InTokens(tokenValue) ? Converters.Any : Converter;
             var value = converter.Convert(tokenValue);
 
             if (value == null) return false;

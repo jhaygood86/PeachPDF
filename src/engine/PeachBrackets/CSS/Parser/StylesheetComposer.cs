@@ -1183,7 +1183,7 @@ namespace PeachBrackets.Css
                             // Example 2: "margin: 5px !important; text-align:center; margin-left: 3px;";
                             if (sourceProperty is ShorthandProperty shorthandProperty)
                             {
-                                if (shorthandProperty.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+                                if (SubstitutionFunctions.InTokens(shorthandProperty.DeclaredValue.Original))
                                 {
                                     // A var() reference can't be split into per-longhand slices at parse time —
                                     // the referenced custom property's value is only known per-element, at cascade

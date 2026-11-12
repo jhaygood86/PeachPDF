@@ -174,7 +174,7 @@ namespace PeachBrackets.Html.Parse
 
         private static bool IsValidLengthCore(string value)
         {
-            if (IsCalcFunction(value)) return true;
+            if (IsCalcFunction(value) || CalcSizeValue.IsCalcSize(value)) return true;
 
             // Defer to the same CSS-OM length/percentage grammar already used at cascade time
             // (ValueExtensions.ToDistance, which every *Property converter - HeightProperty,

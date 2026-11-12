@@ -2070,6 +2070,30 @@ namespace PeachBrackets.Html
             if (FormStateSelectors.Handles(name))
                 return node is CssBox formBox && FormStateSelectors.Matches(name, formBox);
 
+            // :dir(ltr | rtl) (Selectors 4 §8.1) matches by the element's directionality: its own dir attribute (a dir="auto" or <bdi> was
+            // already resolved to ltr or rtl by the pre-pass, DomParser.ResolveAutoDirectionality), else its parent's, and ltr at the root.
+            if (name.StartsWith(PseudoClassNames.Dir + "(", StringComparison.OrdinalIgnoreCase))
+            {
+                var wanted = name[(PseudoClassNames.Dir.Length + 1)..^1].Trim();
+                var isLtr = wanted.Equals(Keywords.Ltr, StringComparison.OrdinalIgnoreCase);
+                if (node?.TagName is null || (!isLtr && !wanted.Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase))) return false;
+
+                return IsRightToLeft(node) != isLtr;
+            }
+
+            return false;
+        }
+
+        private static bool IsRightToLeft(ICssDomNode node)
+        {
+            for (var current = node; current is not null; current = current.Parent)
+            {
+                var dir = current.GetAttribute(HtmlConstants.Dir);
+                if (dir is null) continue;
+                if (dir.Equals(Keywords.Rtl, StringComparison.OrdinalIgnoreCase)) return true;
+                if (dir.Equals(Keywords.Ltr, StringComparison.OrdinalIgnoreCase)) return false;
+            }
+
             return false;
         }
 

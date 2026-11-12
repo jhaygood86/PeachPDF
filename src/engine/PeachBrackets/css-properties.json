@@ -2482,7 +2482,7 @@
     {
       "name": "width",
       "inherited": false,
-      "cssom": {"converter": "Converters.AutoLengthOrPercentOrStretchConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -2509,7 +2509,7 @@
     {
       "name": "max-width",
       "inherited": false,
-      "cssom": {"converter": "Converters.OptionalLengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": [
         "length",
@@ -2531,7 +2531,7 @@
     {
       "name": "min-width",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -2553,7 +2553,7 @@
     {
       "name": "height",
       "inherited": false,
-      "cssom": {"converter": "Converters.AutoLengthOrPercentOrStretchConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.AutoSizeConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",
@@ -2580,7 +2580,7 @@
     {
       "name": "max-height",
       "inherited": false,
-      "cssom": {"converter": "Converters.OptionalLengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.OptionalSizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "none",
       "cssDataType": [
         "length",
@@ -2602,7 +2602,7 @@
     {
       "name": "min-height",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentOrStretchConverter", "animatable": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.SizeConverter", "animatable": true, "registryAnimatable": true},
       "initialValue": "auto",
       "cssDataType": [
         "length",

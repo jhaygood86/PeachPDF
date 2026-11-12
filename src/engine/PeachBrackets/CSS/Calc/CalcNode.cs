@@ -107,14 +107,18 @@ namespace PeachBrackets.Css
         public CalcNode Right { get; }
     }
 
-    /// <summary>A <c>min()</c>, <c>max()</c>, or <c>clamp()</c> call over its comma-separated arguments.</summary>
+    /// <summary>A calc-family function call (<c>min()</c>, <c>round()</c>, <c>sin()</c>...) over its comma-separated arguments.</summary>
     internal sealed class CallCalcNode : CalcNode
     {
-        public CallCalcNode(string name, IReadOnlyList<CalcNode> arguments)
+        public CallCalcNode(string name, IReadOnlyList<CalcNode> arguments, string? option = null)
         {
             Name = name;
             Arguments = arguments;
+            Option = option;
         }
+
+        /// <summary>The leading keyword argument (<c>round()</c>'s rounding strategy), or <c>null</c>.</summary>
+        public string? Option { get; }
 
         public string Name { get; }
         public IReadOnlyList<CalcNode> Arguments { get; }

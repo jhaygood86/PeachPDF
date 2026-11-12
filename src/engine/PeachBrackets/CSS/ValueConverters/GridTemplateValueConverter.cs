@@ -66,7 +66,7 @@ namespace PeachBrackets.Css
         {
             if (CssGlobalKeywords.TryParse(value, out var keyword))
                 return CssProperty<GridTemplate>.Global(keyword);
-            if (value.Contains("var(", StringComparison.OrdinalIgnoreCase))
+            if (SubstitutionFunctions.InText(value))
                 return CssProperty<GridTemplate>.Unresolved(value);
             // `none` is the property's initial value (CssDefaults seeds every non-grid box with it, and
             // it's one of the two properties the cascade-defaulting skip in DomParser.CascadeApplyStyles

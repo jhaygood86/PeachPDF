@@ -445,7 +445,7 @@ namespace PeachBrackets.Html.Animation
         /// <summary>Substitutes <c>var()</c> in a keyframe value against the box's custom properties; null when it cannot be resolved.</summary>
         private static string? ResolveVariables(CssValueParser valueParser, CssBox? box, string value)
         {
-            if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0) return value;
+            if (!SubstitutionFunctions.InText(value)) return value;
 
             // A standalone SVG has no box to read custom properties from: a keyframe that needs one is left out.
             if (box is null) return null;

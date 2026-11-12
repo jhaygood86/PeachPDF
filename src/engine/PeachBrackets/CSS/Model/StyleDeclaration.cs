@@ -286,7 +286,7 @@ namespace PeachBrackets.Css
 
         private void SetShorthand(ShorthandProperty shorthand)
         {
-            if (shorthand.DeclaredValue.Original.ContainsFunction(FunctionNames.Var))
+            if (SubstitutionFunctions.InTokens(shorthand.DeclaredValue.Original))
             {
                 // A var() reference can't be split into per-longhand slices here — the referenced custom
                 // property's value is only known per-element, at cascade time. Keep the shorthand

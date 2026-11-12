@@ -177,6 +177,15 @@ namespace PeachBrackets.Css
             return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4);
         }
 
+        /// <summary>
+        /// WCAG 2 relative luminance of an sRGB colour given as 8-bit channels (0 for black, 1 for white).
+        /// Alpha plays no part: it is the declared colour that is judged, not whatever it is composited over.
+        /// </summary>
+        public static double RelativeLuminance(byte red, byte green, byte blue) =>
+            0.2126 * Linearize(red / 255.0) + 0.7152 * Linearize(green / 255.0) + 0.0722 * Linearize(blue / 255.0);
+
+        public static double RelativeLuminance(Color color) => RelativeLuminance(color.R, color.G, color.B);
+
         private static double Delinearize(double c)
         {
             c = Math.Clamp(c, 0, 1);

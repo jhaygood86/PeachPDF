@@ -3375,6 +3375,7 @@ namespace PeachBrackets.Html.Dom
         public static async ValueTask<double> GetBoxWidth(Canvas g, CssBox box, double? blockTop = null)
         {
             box.ResolveStretchSizes();
+            await box.ResolveCalcSizeWidthsAsync(g, blockTop);
 
             // Keyed off `blockTop` - the border-box top the frame placing this box has just decided on, not
             // the box's own Location.Y, which on the pass that places it still holds whatever position an

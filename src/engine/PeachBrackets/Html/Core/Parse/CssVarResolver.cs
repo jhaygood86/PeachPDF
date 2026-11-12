@@ -63,7 +63,7 @@ namespace PeachBrackets.Html.Parse
         /// </summary>
         internal static VarResolution Substitute(ICssDomNode node, string value, Dictionary<string, string> resolvedCache, HashSet<string> resolving, HashSet<string> cyclic, VarContext? context = null)
         {
-            if (value.IndexOf("var(", StringComparison.OrdinalIgnoreCase) < 0)
+            if (!NeedsSubstitution(value))
                 return new VarResolution(true, value);
 
             var sb = new StringBuilder();
@@ -91,6 +91,38 @@ namespace PeachBrackets.Html.Parse
 
                     i = callEnd;
                 }
+                else if (TryMatchCall(value, i, EnvCall, out var envArgs, out var envEnd))
+                {
+                    // env(<name>, <fallback>?): the user-agent environment variables. A paged document has no
+                    // safe area, title bar or on-screen keyboard, so every defined name is its initial 0px.
+                    var (envName, envFallback) = SplitFirstTopLevelComma(value, envArgs, envEnd - 1);
+                    if (IsEnvironmentVariable(envName))
+                    {
+                        sb.Append("0px");
+                    }
+                    else if (envFallback != null)
+                    {
+                        var fallbackResult = Substitute(node, envFallback, resolvedCache, resolving, cyclic, context);
+                        if (!fallbackResult.Success) return new VarResolution(false, null);
+                        sb.Append(fallbackResult.Value);
+                    }
+                    else
+                    {
+                        return new VarResolution(false, null);
+                    }
+
+                    i = envEnd;
+                }
+                else if (TryMatchCall(value, i, SiblingIndexCall, out var indexArgs, out var indexEnd) && IsBlank(value, indexArgs, indexEnd - 1))
+                {
+                    sb.Append(SiblingPosition(node).Index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    i = indexEnd;
+                }
+                else if (TryMatchCall(value, i, SiblingCountCall, out var countArgs, out var countEnd) && IsBlank(value, countArgs, countEnd - 1))
+                {
+                    sb.Append(SiblingPosition(node).Count.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    i = countEnd;
+                }
                 else if (value[i] is '"' or '\'')
                 {
                     var quoteEnd = SkipQuotedString(value, i);
@@ -105,6 +137,55 @@ namespace PeachBrackets.Html.Parse
             }
 
             return new VarResolution(true, sb.ToString());
+        }
+
+        private const string EnvCall = "env(";
+        private const string SiblingIndexCall = "sibling-index(";
+        private const string SiblingCountCall = "sibling-count(";
+
+        /// <summary>
+        /// Whether a declaration value holds a function that is substituted as text at computed-value time
+        /// (<c>var()</c>, <c>env()</c>, <c>sibling-index()</c>, <c>sibling-count()</c>).
+        /// </summary>
+        internal static bool NeedsSubstitution(string value) =>
+            value.Contains("var(", StringComparison.OrdinalIgnoreCase) ||
+            value.Contains(EnvCall, StringComparison.OrdinalIgnoreCase) ||
+            value.Contains("sibling-", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Whether <paramref name="value"/> uses <c>sibling-index()</c> or <c>sibling-count()</c>, which make a style depend on the element's position.</summary>
+        internal static bool UsesSiblingPosition(string value) =>
+            value.Contains(SiblingIndexCall, StringComparison.OrdinalIgnoreCase) ||
+            value.Contains(SiblingCountCall, StringComparison.OrdinalIgnoreCase);
+
+        private static bool IsEnvironmentVariable(string name) => name.ToLowerInvariant() is
+            "safe-area-inset-top" or "safe-area-inset-right" or "safe-area-inset-bottom" or "safe-area-inset-left" or
+            "safe-area-max-inset-top" or "safe-area-max-inset-right" or "safe-area-max-inset-bottom" or "safe-area-max-inset-left" or
+            "titlebar-area-x" or "titlebar-area-y" or "titlebar-area-width" or "titlebar-area-height" or
+            "keyboard-inset-top" or "keyboard-inset-right" or "keyboard-inset-bottom" or "keyboard-inset-left" or
+            "keyboard-inset-width" or "keyboard-inset-height";
+
+        private static bool IsBlank(string value, int start, int end)
+        {
+            for (var i = start; i < end; i++)
+                if (!char.IsWhiteSpace(value[i])) return false;
+            return true;
+        }
+
+        /// <summary>The 1-based index of <paramref name="node"/> among its parent's element children, and how many there are.</summary>
+        private static (int Index, int Count) SiblingPosition(ICssDomNode node)
+        {
+            if (node.Parent is not { } parent) return (1, 1);
+
+            var index = 0;
+            var count = 0;
+            foreach (var child in parent.Children)
+            {
+                if (child.TagName is null) continue;
+                count++;
+                if (index == 0 && child.Equals(node)) index = count;
+            }
+
+            return index == 0 ? (1, Math.Max(count, 1)) : (index, count);
         }
 
         /// <summary>
@@ -191,16 +272,25 @@ namespace PeachBrackets.Html.Parse
         /// matching close paren. On success, <paramref name="argsStart"/> is the index of the first argument
         /// character and <paramref name="callEnd"/> is the index just past the closing paren.
         /// </summary>
-        private static bool TryMatchVarCall(string value, int start, out int argsStart, out int callEnd)
+        private static bool TryMatchVarCall(string value, int start, out int argsStart, out int callEnd) =>
+            TryMatchCall(value, start, "var(", out argsStart, out callEnd);
+
+        /// <summary>
+        /// <see cref="TryMatchVarCall"/> for any function whose name (with its open paren) is <paramref name="prefix"/>.
+        /// A match must start a function name, so <c>xenv(</c> is not an <c>env(</c> call.
+        /// </summary>
+        private static bool TryMatchCall(string value, int start, string prefix, out int argsStart, out int callEnd)
         {
             argsStart = 0;
             callEnd = 0;
 
-            if (start + 4 > value.Length) return false;
-            if (string.Compare(value, start, "var(", 0, 4, StringComparison.OrdinalIgnoreCase) != 0) return false;
+            var length = prefix.Length;
+            if (start + length > value.Length) return false;
+            if (string.Compare(value, start, prefix, 0, length, StringComparison.OrdinalIgnoreCase) != 0) return false;
+            if (start > 0 && (char.IsLetterOrDigit(value[start - 1]) || value[start - 1] is '-' or '_')) return false;
 
             var depth = 1;
-            var i = start + 4;
+            var i = start + length;
             while (i < value.Length)
             {
                 var c = value[i];
@@ -216,7 +306,7 @@ namespace PeachBrackets.Html.Parse
                     depth--;
                     if (depth == 0)
                     {
-                        argsStart = start + 4;
+                        argsStart = start + length;
                         callEnd = i + 1;
                         return true;
                     }

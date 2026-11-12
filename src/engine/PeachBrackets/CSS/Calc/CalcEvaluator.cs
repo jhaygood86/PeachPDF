@@ -182,31 +182,12 @@ namespace PeachBrackets.Css
                         values.Add(value.Value);
                     }
 
-                    if (call.Name.Isi(FunctionNames.Min)) return Min(values);
-                    if (call.Name.Isi(FunctionNames.Max)) return Max(values);
-                    if (call.Name.Isi(FunctionNames.Clamp) && values.Count == 3)
-                        return values[0] > values[2] ? values[2] : Math.Clamp(values[1], values[0], values[2]);
-
-                    return null;
+                    return CalcMath.Apply(call.Name, call.Option, values);
                 }
 
                 default:
                     return null;
             }
-        }
-
-        private static double Min(List<double> values)
-        {
-            var result = values[0];
-            for (var i = 1; i < values.Count; i++) if (values[i] < result) result = values[i];
-            return result;
-        }
-
-        private static double Max(List<double> values)
-        {
-            var result = values[0];
-            for (var i = 1; i < values.Count; i++) if (values[i] > result) result = values[i];
-            return result;
         }
     }
 }

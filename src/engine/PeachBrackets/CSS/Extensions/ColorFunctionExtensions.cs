@@ -87,7 +87,27 @@ namespace PeachBrackets.Css
             if (name.Equals(FunctionNames.DeviceCmyk, StringComparison.OrdinalIgnoreCase))
                 return ParseDeviceCmyk(args);
 
+            if (name.Equals(FunctionNames.ContrastColor, StringComparison.OrdinalIgnoreCase))
+                return ParseContrastColor(args);
+
             return null;
+        }
+
+        // ── contrast-color(<color>) ──────────────────────────────────────────────
+        // https://www.w3.org/TR/css-color-5/#contrast-color - white or black, whichever has the higher WCAG 2 contrast ratio with the operand
+        // (a tie goes to white). The operand is any colour, so contrast-color(light-dark(...)) and nested colour functions resolve first.
+        private static Color? ParseContrastColor(IEnumerable<Token> args)
+        {
+            var operand = args.Where(token => token.Type != TokenType.Whitespace).ToList();
+            if (operand.Count == 0 || operand.Any(token => token.Type == TokenType.Comma)) return null;
+
+            var color = ResolveColor(operand, wantOklab: false, out _);
+            if (color is null) return null;
+
+            var luminance = ColorSpaceMath.RelativeLuminance(color.Value);
+            var againstWhite = 1.05 / (luminance + 0.05);
+            var againstBlack = (luminance + 0.05) / 0.05;
+            return againstWhite >= againstBlack ? new Color(255, 255, 255, 255) : new Color(0, 0, 0, 255);
         }
 
         // ── light-dark(<color>, <color>) ─────────────────────────────────────────
