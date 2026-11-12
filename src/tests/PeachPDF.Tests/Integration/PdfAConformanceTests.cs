@@ -303,7 +303,7 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task AccessibleConformance_ImageWithoutAlt_GetsEmptyAlt()
+        public async Task AccessibleConformance_ImageWithoutAlt_IsAnArtifact()
         {
             const string tinyPngBase64 =
                 "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -320,10 +320,9 @@ namespace PeachPDF.Tests.Integration
 
             var file = result.Inspect();
             var documentElement = Assert.Single(file.StructureChildren(file.StructureTreeRoot!));
-            var figure = Assert.Single(file.StructureChildren(documentElement));
 
-            Assert.Equal("/Figure", figure.Name("/S"));
-            Assert.Equal(string.Empty, figure.Text("/Alt"));
+            // A decorative picture has no text alternative, so it is an artifact rather than a Figure.
+            Assert.Empty(file.StructureChildren(documentElement));
         }
 
         [Theory]

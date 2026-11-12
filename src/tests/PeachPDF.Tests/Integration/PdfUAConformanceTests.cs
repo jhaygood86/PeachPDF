@@ -111,14 +111,14 @@ namespace PeachPDF.Tests.Integration
         }
 
         [Fact]
-        public async Task EveryFigureHasAlternativeText_DecorativeOnesEmpty()
+        public async Task EveryFigureHasAlternativeText_DecorativeImagesAreArtifacts()
         {
             const string gif = "data:image/gif;base64,R0lGODlhAQABAAAAACw=";
             var (document, _) = await RenderAsync(
-                $"<html lang='en'><head><title>T</title></head><body><img src='{gif}' alt='Described'><img src='{gif}'></body></html>", Config(PdfUAConformance.UA1));
+                $"<html lang='en'><head><title>T</title></head><body><img src='{gif}' alt='Described'><img src='{gif}' alt=''><img src='{gif}'></body></html>", Config(PdfUAConformance.UA1));
 
-            var figures = document.Inspect().StructureRoot.SelectMany(All).Where(e => e.StructureType == "/Figure").Select(e => e.AlternateText).OrderBy(t => t, StringComparer.Ordinal).ToArray();
-            Assert.Equal(["", "Described"], figures);
+            var figures = document.Inspect().StructureRoot.SelectMany(All).Where(e => e.StructureType == "/Figure").Select(e => e.AlternateText).ToArray();
+            Assert.Equal(["Described"], figures);
         }
 
         static System.Collections.Generic.IEnumerable<StructElem> All(StructElem element) =>

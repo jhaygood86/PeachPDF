@@ -101,6 +101,11 @@ namespace PeachBrackets.Html.Handlers
             if (tagType == PdfTagType.Artifact)
                 return StructureTagClassification.Artifact;
 
+            // An <img> with an empty or missing alternative is decorative (HTML: no text alternative, assistive technology skips it); a Figure
+            // without /Alt fails PDF/UA, so it is an artifact instead.
+            if (tagType == PdfTagType.Figure && box is CssBoxImage && string.IsNullOrEmpty(AltFor(box)))
+                return StructureTagClassification.Artifact;
+
             var structureType = CanonicalName(tagType);
 
             // A division that holds nothing but inline content is a paragraph of text (see ClassifyAuto).
