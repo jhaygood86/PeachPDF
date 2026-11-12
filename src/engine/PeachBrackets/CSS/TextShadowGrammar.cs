@@ -37,7 +37,7 @@ namespace PeachBrackets.Css
         /// </summary>
         internal static List<ShadowLayer> TryParse(IReadOnlyList<Token> tokens)
         {
-            var significant = BoxShadowGrammar.NormalizeHexColorTokens(tokens.Where(t => t.Type != TokenType.Whitespace).ToArray());
+            var significant = BoxShadowGrammar.NormalizeHexColorTokens(tokens);
 
             if (significant.Count == 0) return null;
 

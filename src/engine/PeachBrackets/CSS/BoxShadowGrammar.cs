@@ -47,7 +47,7 @@ namespace PeachBrackets.Css
         /// </summary>
         internal static List<ShadowLayer> TryParse(IReadOnlyList<Token> tokens)
         {
-            var significant = NormalizeHexColorTokens(tokens.Where(t => t.Type != TokenType.Whitespace).ToArray());
+            var significant = NormalizeHexColorTokens(tokens);
 
             if (significant.Count == 0) return null;
 
@@ -186,13 +186,30 @@ namespace PeachBrackets.Css
             {
                 var token = tokens[i];
 
-                if (token is { Type: TokenType.Delim, Data: "#" } && i + 1 < tokens.Count
-                    && tokens[i + 1].Type is TokenType.Number or TokenType.Dimension
-                    && IsHexColor(tokens[i + 1].ToValue()))
+                // Whitespace is dropped here (not by the caller) because it is what tells a hex color's
+                // adjacent pieces from the next, separate component.
+                if (token.Type == TokenType.Whitespace) continue;
+
+                if (token is { Type: TokenType.Delim, Data: "#" })
                 {
-                    result.Add(Token.NewKeyword(TokenType.Hash, tokens[i + 1].ToValue().AsMemory(), token.Position));
-                    i++;
-                    continue;
+                    // The tokenizer splits a digit-leading hex at every digit/letter boundary
+                    // (#4a90d9 -> 4a, 90d, 9), so glue the directly adjacent pieces back together.
+                    var hex = new System.Text.StringBuilder();
+                    var j = i + 1;
+
+                    while (j < tokens.Count && hex.Length < 8
+                        && tokens[j].Type is TokenType.Number or TokenType.Dimension or TokenType.Ident or TokenType.Hash)
+                    {
+                        hex.Append(tokens[j].Type == TokenType.Hash ? tokens[j].Data.ToString() : tokens[j].ToValue());
+                        j++;
+                    }
+
+                    if (hex.Length > 0 && IsHexColor(hex.ToString().AsSpan()))
+                    {
+                        result.Add(Token.NewKeyword(TokenType.Hash, hex.ToString().AsMemory(), token.Position));
+                        i = j - 1;
+                        continue;
+                    }
                 }
 
                 result.Add(token);
