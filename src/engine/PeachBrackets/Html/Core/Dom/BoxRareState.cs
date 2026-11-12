@@ -24,6 +24,7 @@ namespace PeachBrackets.Html.Dom
     {
         internal bool _tableFixed;
         internal LogicalDeclarationOrder? LogicalOrder;
+        internal bool KeepLogicalOrder;
         internal CssImage? ContentImage;
         internal bool HasPendingTargetPageContent;
         internal CssBox? DomParentBox;

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using PeachBrackets.Css;
 using PeachBrackets.Html.Parse;
 using PeachBrackets.Html.Utils;
@@ -145,6 +146,8 @@ namespace PeachBrackets.Html.Dom
         {
             if (IsLogicalBoxModelName(propName))
             {
+                // A declaration deferred for its var() was stamped where it was written (StampDeferredLogicalOrder); applying it later must not move it.
+                if (_rare is { KeepLogicalOrder: true }) return;
                 _rare ??= new BoxRareState();
                 (_rare.LogicalOrder ??= new LogicalDeclarationOrder()).Stamp(propName);
             }
@@ -152,6 +155,30 @@ namespace PeachBrackets.Html.Dom
             {
                 order.Stamp(propName);
             }
+        }
+
+        /// <summary>
+        /// Stamps the logical longhands of a declaration whose application is deferred (its value uses <c>var()</c>) at the point in the cascade where
+        /// it was written, so a physical declaration written after it still outranks it once it is applied: `p { margin-block: 0 var(--s) }` and
+        /// then `.f p { margin: 0 }` leaves the margin 0, as the same rules without the variable do.
+        /// </summary>
+        internal void StampDeferredLogicalOrder(string propName)
+        {
+            var names = PropertyFactory.Instance.IsShorthand(propName) ? PropertyFactory.Instance.CreateLonghandsFor(propName).Select(l => l.Name) : [propName];
+            foreach (var name in names)
+            {
+                if (!IsLogicalBoxModelName(name)) continue;
+                _rare ??= new BoxRareState();
+                (_rare.LogicalOrder ??= new LogicalDeclarationOrder()).Stamp(name);
+            }
+        }
+
+        /// <summary>Applies the deferred declarations with the stamps they were given when written; see <see cref="StampDeferredLogicalOrder"/>.</summary>
+        internal void KeepLogicalDeclarationOrder(bool keep)
+        {
+            if (!keep && _rare is null) return;
+            _rare ??= new BoxRareState();
+            _rare.KeepLogicalOrder = keep;
         }
 
         private static bool IsLogicalBoxModelName(string propName) =>

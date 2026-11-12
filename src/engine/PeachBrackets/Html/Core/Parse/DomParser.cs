@@ -3039,6 +3039,7 @@ namespace PeachBrackets.Html.Parse
                 {
                     // Overwrites any earlier pending entry for this name (last write wins).
                     pendingVarProperties[prop.Name] = value;
+                    box.StampDeferredLogicalOrder(prop.Name);
                     continue;
                 }
 
@@ -3161,6 +3162,9 @@ namespace PeachBrackets.Html.Parse
                 .OrderBy(entry => pendingVarProperties.OrderOf(entry.Key))
                 .ToList();
 
+            box.KeepLogicalDeclarationOrder(true);
+            try
+            {
             foreach (var (name, rawValue) in entries)
             {
                 var position = pendingVarProperties.OrderOf(name);
@@ -3173,6 +3177,11 @@ namespace PeachBrackets.Html.Parse
 
                 if (only is not null)
                     pendingVarProperties.Remove(name);
+            }
+            }
+            finally
+            {
+                box.KeepLogicalDeclarationOrder(false);
             }
         }
 

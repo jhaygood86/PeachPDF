@@ -22,6 +22,43 @@ namespace PeachBrackets.Engine.Tests.Integration
             return (FindById(root, "a")!.ActualBoxSizingWidth, FindById(root, "b")!.ActualBoxSizingWidth);
         }
 
+        [Theory]
+        [InlineData("flex-wrap:wrap", 0)]
+        [InlineData("flex-wrap:nowrap", 0)]
+        [InlineData("flex-wrap:wrap;gap:4pt 16pt", 16)]
+        public async Task AWrappingFlexRowThatIsAnItemIsAsWideAsItsItemsSideBySide(string legalStyle, double gap)
+        {
+            // The site-footer shape: `justify-content: space-between; flex-wrap: wrap` around a link and a wrapping row of a paragraph and a link.
+            // The inner row's flex base size is its max-content, every item on one line, so it fits beside the link and does not wrap.
+            var (root, _) = await LayoutAsync(Wrap(
+                "<div style='display:flex;flex-wrap:wrap;justify-content:space-between;width:600pt'>" +
+                "<div style='width:100pt;height:10pt'></div>" +
+                $"<div id='legal' style='display:flex;{legalStyle}'><p id='p' style='margin:0'>(c) 2026 Ballentine Pointe Homeowners Association, Inc. All Rights Reserved.</p><a id='a'>Privacy Policy</a></div></div>"));
+
+            var legal = FindById(root, "legal")!;
+            var p = FindById(root, "p")!;
+            var a = FindById(root, "a")!;
+
+            Assert.True(p.Location.Y == a.Location.Y, $"wrapped: legal {legal.ActualBoxSizingWidth} p {p.ActualBoxSizingWidth} at {p.Location.X},{p.Location.Y} a {a.ActualBoxSizingWidth} at {a.Location.X},{a.Location.Y}");
+            Assert.True(legal.ActualBoxSizingWidth >= p.ActualBoxSizingWidth + a.ActualBoxSizingWidth + gap - 0.5, $"legal {legal.ActualBoxSizingWidth}pt, p {p.ActualBoxSizingWidth}pt, a {a.ActualBoxSizingWidth}pt");
+        }
+
+        [Theory]
+        [InlineData("<a id='h' style='display:inline-block'><img id='i' style='display:block;width:40pt;height:54pt' src='data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw=='></a>")]
+        [InlineData("<a id='h' style='display:inline-block'><span id='i' style='display:block;width:40pt;height:54pt'></span></a>")]
+        public async Task ABlockLevelBoxInAnInlineBlockSitsOnTheBaselineWithTheStrutBelowIt(string content)
+        {
+            // A logo link, `<a>` an inline-block around a block-level image: the block has no line box, so the inline-block rests on its bottom edge
+            // and the line keeps the descent of its strut under it (Chrome: 79px around a 72px image at 16px/1.6). Without it the logo touched
+            // the header's bottom border.
+            var (root, _) = await LayoutAsync(Wrap($"<div id='c' style='font:12pt/1.6 sans-serif'>{content}</div>"));
+
+            var container = FindById(root, "c")!;
+            var image = FindById(root, "i")!;
+
+            Assert.True(container.ActualBottom - image.ActualBottom > 3, $"only {container.ActualBottom - image.ActualBottom}pt below the block");
+        }
+
         [Fact]
         public async Task ANonShrinkingItemBesideAGrowerWithALongWordIsRaisedToItsAutomaticMinimum()
         {

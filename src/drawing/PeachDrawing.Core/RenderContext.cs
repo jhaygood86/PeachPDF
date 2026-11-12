@@ -314,7 +314,19 @@ namespace PeachDrawing.Core
             // for a local FileUriNetworkLoader font this is a FileStream, and leaving it open keeps a handle
             // on the file - which locks it on Windows (a real bug, and it broke temp-file cleanup in tests).
             using var fontStream = resourceStream.ResourceStream;
-            return await AddFontFromStream(fontFamilyName, fontStream, format, descriptors, unicodeRanges);
+            return await AddFontFromStream(fontFamilyName, fontStream, NormalizeFontFormat(format), descriptors, unicodeRanges);
+        }
+
+        // CSS Fonts 4 §4.3.1 names a variable font's container by the same format() keyword plus "-variations" (woff2-variations, truetype-variations, ...):
+        // the bytes are the same container, which the loader reads the same way, and format() keywords are ASCII case-insensitive. A backend's
+        // AddFontFromStream compares against the plain keywords, so this reduces the hint to one of those; any other keyword is passed on as written.
+        private static string? NormalizeFontFormat(string? format)
+        {
+            if (format is null)
+                return null;
+
+            var keyword = format.Trim().ToLowerInvariant();
+            return keyword.EndsWith("-variations", StringComparison.Ordinal) ? keyword[..^"-variations".Length] : keyword;
         }
 
         /// <summary>Registers a locally-installed font face under <paramref name="fontFamilyName"/>, matching a CSS <c>@font-face</c> rule's <c>local()</c> source.</summary>

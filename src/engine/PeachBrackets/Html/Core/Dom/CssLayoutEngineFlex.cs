@@ -312,6 +312,7 @@ namespace PeachBrackets.Html.Dom
             List<double>? hints = null;
             var initialBottom = _flexBox.ActualBottom;
             List<FlexLine> lines;
+            var growIntoMinHeight = false;
 
             for (var attempt = 0; ; attempt++)
             {
@@ -334,6 +335,22 @@ namespace PeachBrackets.Html.Dom
                     int nc = items.Count;
                     mainSize = items.Sum(i => i.HypotheticalMainSize + i.MarginBefore + i.MarginAfter)
                         + (nc > 1 ? mainGapCol * (nc - 1) : 0);
+
+                    // An auto-height column is as tall as its items - unless its `min-height` is taller (CSS Flexbox 1 section 9.2 step 3 clamps
+                    // the container's main size by its min and max). The items then have free space to grow into, so a `flex: 1` item pushes the
+                    // footer after it to the bottom of a `min-height: 100dvh` body. A percentage minimum has nothing to resolve against here.
+                    growIntoMinHeight = false;
+                    if (!_mainAxisIsPhysicalX && CssValueParser.IsValidLength(_flexBox.MinHeight) && !CssValueParser.DependsOnPercentage(_flexBox.MinHeight))
+                    {
+                        var minContent = CssValueParser.ParseLength(_flexBox.MinHeight, 0, _flexBox) + _flexBox.ActualBoxSizeIncludedHeight
+                            - _flexBox.ActualPaddingTop - _flexBox.ActualPaddingBottom
+                            - _flexBox.ActualBorderTopWidth - _flexBox.ActualBorderBottomWidth;
+                        if (minContent > mainSize + 0.01)
+                        {
+                            mainSize = minContent;
+                            growIntoMinHeight = true;
+                        }
+                    }
                 }
 
                 // Phase 3: collect into flex lines
@@ -348,7 +365,7 @@ namespace PeachBrackets.Html.Dom
                 {
                     // Already resolved line by line: each line's own measure is what it resolves against.
                 }
-                else if (!mainSizeIndefinite)
+                else if (!mainSizeIndefinite || growIntoMinHeight)
                 {
                     foreach (var line in lines)
                         await ResolveFlexibleLengths(g, line, mainSize);
@@ -414,7 +431,7 @@ namespace PeachBrackets.Html.Dom
 
                 // Phase 7: justify-content — main-axis positions
                 foreach (var line in lines)
-                    ComputeMainOffsets(line, line.MainSize ?? mainSize, mainSizeIndefinite);
+                    ComputeMainOffsets(line, line.MainSize ?? mainSize, mainSizeIndefinite && !growIntoMinHeight);
 
                 // Phase 8: align-items / align-self — cross-axis positions
                 foreach (var line in lines)
@@ -602,7 +619,7 @@ namespace PeachBrackets.Html.Dom
                     var item = items[next];
                     var itemMain = await LineBreakingSize(g, item) + item.MarginBefore + item.MarginAfter;
 
-                    if (current.Count > 0 && used + mainGap + itemMain > measure) break;
+                    if (current.Count > 0 && used + mainGap + itemMain > measure + FitSlack(current.Count)) break;
 
                     if (current.Count > 0) used += mainGap;
                     current.Add(item);
@@ -836,10 +853,24 @@ namespace PeachBrackets.Html.Dom
             // NaturalMainSize = what PerformLayout actually produced (used to detect resize need)
             double naturalMain2 = _mainAxisIsPhysicalX ? box.ActualBoxSizingWidth : box.ActualBoxSizingHeight;
 
+            // An item that grows and was given a zero basis (`flex: 1 1 0px`) in a column of auto height is still floored at its content height by
+            // `min-height: auto` (CSS Flexbox 1 section 4.5): the container is as tall as its items, so nothing else would size it.
+            if (mainSizeIndefinite && !_mainAxisIsPhysicalX && hypothetical < naturalMain2 && ParseFloat(box.FlexGrow) > 0
+                && string.Equals(box.MinHeight, Keywords.Auto, StringComparison.OrdinalIgnoreCase)
+                && box.Overflow.Value == Css.Overflow.Visible && !box.IsImage)
+                hypothetical = naturalMain2;
+
             return new FlexItem(box, naturalMain2, hypothetical);
         }
 
         // ─── Phase 3: line collection ─────────────────────────────────────────────
+
+        /// <summary>
+        /// The room an item may overrun a line by and still count as fitting. An item's hypothetical size carries a sub-pixel epsilon of its own
+        /// (see <see cref="MeasureItem"/>), so a row that is itself an item of another flex container, sized from the sum of its items, is
+        /// short of them by one epsilon per item and wrapped its last item for nothing - the page's footer, `© ... Reserved.` over `Privacy Policy`.
+        /// </summary>
+        private static double FitSlack(int itemsOnLine) => 0.01 * (itemsOnLine + 1);
 
         private async ValueTask<List<FlexLine>> CollectLines(Canvas g, List<FlexItem> items, double mainSize)
         {
@@ -855,7 +886,7 @@ namespace PeachBrackets.Html.Dom
             {
                 double itemMain = await LineBreakingSize(g, item)
                     + item.MarginBefore + item.MarginAfter;
-                if (current.Count > 0 && used + mainGap + itemMain > mainSize)
+                if (current.Count > 0 && used + mainGap + itemMain > mainSize + FitSlack(current.Count))
                 {
                     lines.Add(new FlexLine(current));
                     current = [];
