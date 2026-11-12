@@ -99,6 +99,15 @@ namespace PeachBrackets.Html.Dom
             // own (possibly much earlier) Location.Y.
             var containerWidth = await CssLayoutEngine.GetBoxWidth(g, columnsBox, boxTop);
 
+            // A table cell's width is the table algorithm's decision (css-tables-3 §3), already written as the cell's
+            // right edge before its content is laid out. Resolved like a block against the containing block, it came
+            // out as nothing - the row is the containing block, with no width of its own - so every column was zero
+            // wide and the cell painted none of its content (#2342).
+            if (columnsBox.PositionAssignedByEngine && columnsBox.DerivedStyle.ActualDisplay == Keywords.TableCell)
+            {
+                containerWidth = Math.Max(0, columnsBox.ActualRight - columnsBox.Location.X - columnsBox.ActualBoxSizeIncludedWidth);
+            }
+
             // The container is a formatting context root, so it keeps clear of the floats beside it (CSS 2.1 §9.5)
             // instead of laying its columns under them: left to the line flow a float pushed the lines inside a
             // column past every column's extent, where nothing claimed them and the words were lost. When too little
