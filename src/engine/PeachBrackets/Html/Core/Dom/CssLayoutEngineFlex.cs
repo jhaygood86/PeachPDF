@@ -619,7 +619,7 @@ namespace PeachBrackets.Html.Dom
                     var item = items[next];
                     var itemMain = await LineBreakingSize(g, item) + item.MarginBefore + item.MarginAfter;
 
-                    if (current.Count > 0 && used + mainGap + itemMain > measure) break;
+                    if (current.Count > 0 && used + mainGap + itemMain > measure + FitSlack(current.Count)) break;
 
                     if (current.Count > 0) used += mainGap;
                     current.Add(item);
@@ -865,6 +865,13 @@ namespace PeachBrackets.Html.Dom
 
         // ─── Phase 3: line collection ─────────────────────────────────────────────
 
+        /// <summary>
+        /// The room an item may overrun a line by and still count as fitting. An item's hypothetical size carries a sub-pixel epsilon of its own
+        /// (see <see cref="MeasureItem"/>), so a row that is itself an item of another flex container, sized from the sum of its items, is
+        /// short of them by one epsilon per item and wrapped its last item for nothing - the page's footer, `© ... Reserved.` over `Privacy Policy`.
+        /// </summary>
+        private static double FitSlack(int itemsOnLine) => 0.01 * (itemsOnLine + 1);
+
         private async ValueTask<List<FlexLine>> CollectLines(Canvas g, List<FlexItem> items, double mainSize)
         {
             if (!_isWrap)
@@ -879,7 +886,7 @@ namespace PeachBrackets.Html.Dom
             {
                 double itemMain = await LineBreakingSize(g, item)
                     + item.MarginBefore + item.MarginAfter;
-                if (current.Count > 0 && used + mainGap + itemMain > mainSize)
+                if (current.Count > 0 && used + mainGap + itemMain > mainSize + FitSlack(current.Count))
                 {
                     lines.Add(new FlexLine(current));
                     current = [];

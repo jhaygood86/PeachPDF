@@ -13,3 +13,11 @@ Not done: a percentage `min-height` has no basis here and still sizes the column
 ## The dark-scheme logo was never chosen
 
 The site's logo is `<a><picture><source media="(prefers-color-scheme: dark)" ...><img></picture></a>` and its reset has `img { display: block }`. A block `<img>` inside the inline `<picture>` inside the inline `<a>` is the block-in-inline correction's case, which leaves the content-less `<source>` boxes in front of the picture box (siblings under the `<a>`), not inside it. `ResponsiveImageSelector.EnumerateSources` only looked inside the picture, found no sources and fell to the `<img src>`. It now also takes the `<source>` boxes directly before the picture. The same markup without `display: block` was always fine, which is why a bare `<picture>` test passed. Found by bisecting the CSS down to that one rule.
+
+## Header and footer wrapped where Chrome keeps one row
+
+Both were a wrapping flex row (`.nav-list`, `.site-footer__legal`: `flex-wrap: wrap; gap`) that is itself an item of another flex row. Its flex base size is its max-content, the sum of its items, but each item's own hypothetical size carries a sub-pixel epsilon (`MeasureItem` adds 0.01 so the same words do not wrap again), so the row came out one epsilon per item short of them and `CollectLines` wrapped its last item for nothing. `FitSlack` lets a line overrun by the epsilons it holds. The footer paragraph also sat 8px high: `p { margin-block: 0 var(--space-4) }` is deferred for its `var()` and applied after every plain declaration, so it beat the later, more specific `.site-footer p { margin: 0 }`. A deferred logical longhand is now stamped in `LogicalDeclarationOrder` where it was written (`StampDeferredLogicalOrder`) and keeps that stamp when it is applied.
+
+## Large reductions on the Win2D canvas
+
+`DrawImage` used `CanvasImageInterpolation.Linear` (bilinear) at any scale, so a 4252px logo drawn 100px wide read 4 texels per output pixel and its thin strokes came out dotted. A reduction under 0.5 now uses the cubic mode, which pre-filters. Chrome showed the smooth result for the same file.
