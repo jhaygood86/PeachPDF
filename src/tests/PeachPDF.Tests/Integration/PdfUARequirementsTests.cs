@@ -159,6 +159,52 @@ namespace PeachPDF.Tests.Integration
             Assert.Equal(0, depth);
         }
 
+        [Theory]
+        [InlineData(PdfUAConformance.UA1)]
+        [InlineData(PdfUAConformance.UA2)]
+        public async Task PaintedBackgroundsAndShadows_AreArtifacts_NotUntaggedContent(PdfUAConformance level)
+        {
+            const string html = """
+                <html lang='en'><head><title>T</title><style>
+                body{background:#eef} p{background:#eee} th{background:#ccc} span{background:#ffa}
+                div{box-shadow:2px 2px 3px #888;background:#cfc}
+                </style></head><body>
+                <p>shaded <span>inline</span></p><div>box</div>
+                <table><tr><th scope='col'>H</th></tr><tr><td>c</td></tr></table>
+                </body></html>
+                """;
+            var config = new PdfGenerateConfig
+            {
+                PageSize = PageSize.A4,
+                PdfUAConformance = level,
+                CompressContentStreams = false,
+                Metadata = new PdfDocumentMetadata { CreationDate = DateTimeOffset.UtcNow },
+            };
+            var document = await new PdfGenerator().GeneratePdf(html, config);
+            using var stream = new MemoryStream();
+            document.Save(stream);
+            var file = PdfFile.Parse(stream.ToArray());
+
+            var depth = 0;
+            var fills = 0;
+            foreach (var line in file.ContentText(file.Pages[0]).Split('\n'))
+            {
+                var operation = line.TrimEnd('\r');
+                if (operation.EndsWith("BDC") || operation.EndsWith("BMC"))
+                    depth++;
+                else if (operation == "EMC")
+                    depth--;
+                else if (operation is "f" or "f*" or "F" or "B" or "b" or "S" or "s")
+                {
+                    fills++;
+                    Assert.True(depth > 0, "A painted fill is neither tagged content nor an artifact.");
+                }
+            }
+
+            Assert.True(fills >= 5);
+            Assert.Equal(0, depth);
+        }
+
         [Fact]
         public async Task UA2_NamesThePdf20StructureNamespace_OnTheRootAndOnEveryElement()
         {

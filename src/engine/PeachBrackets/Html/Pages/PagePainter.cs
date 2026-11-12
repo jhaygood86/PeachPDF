@@ -198,6 +198,9 @@ namespace PeachBrackets.Html.Pages
                 var bleed = extras.BleedPt * _renderContext.LayoutUnitsPerPoint;
                 using var darkCanvasLease = Lease();
                 Canvas darkCanvasGraphics = darkCanvasLease;
+                using var darkCanvasArtifact = _container.StructureTagBuilder is { IsInMarkedContent: false } darkTags
+                    ? darkTags.OpenArtifact(darkCanvasGraphics)
+                    : null;
                 darkCanvasGraphics.DrawRectangle(darkCanvasGraphics.GetSolidBrush(darkCanvas), -bleed, -bleed, sheetRect.Width + (2 * bleed), sheetRect.Height + (2 * bleed));
             }
 
@@ -214,6 +217,9 @@ namespace PeachBrackets.Html.Pages
                     ? new Rect(-bleedUnits, -bleedUnits, sheetRect.Width + (2 * bleedUnits), sheetRect.Height + (2 * bleedUnits))
                     : sheetRect;
                 using var canvasGraphics = Lease();
+                using var canvasArtifact = _container.StructureTagBuilder is { IsInMarkedContent: false } canvasTags
+                    ? canvasTags.OpenArtifact(canvasGraphics)
+                    : null;
                 FragmentPainter.PaintCanvasBackground(canvasGraphics, canvasBackgroundBox, canvasRect);
             }
 

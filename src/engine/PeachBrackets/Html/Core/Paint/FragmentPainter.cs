@@ -830,6 +830,15 @@ namespace PeachBrackets.Html.Paint
             return ancestors is null ? null : builder.OpenPhantomAncestors(ancestors);
         }
 
+        /// <summary>
+        /// Opens an artifact around pure decoration (a background) in a tagged document, unless tagging is suppressed or the
+        /// drawing already lands inside a marked-content sequence (which cannot nest). Null when nothing needs opening.
+        /// </summary>
+        private IDisposable? OpenDecorationArtifact(Canvas g, CssBox box) =>
+            !_taggingSuppressed && box.HtmlContainer?.StructureTagBuilder is { IsInMarkedContent: false } builder
+                ? builder.OpenArtifact(g)
+                : null;
+
         private void PaintTaggedContent(Canvas g, BoxFragment fragment, IStructureTagSink? builder)
         {
             var box = fragment.Box;
@@ -1027,7 +1036,10 @@ namespace PeachBrackets.Html.Paint
                     PaintBackdropFilter(g, fragment, geometry);
 
                 if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
-                    PaintBoxShadows(g, box, geometry, inset: false);
+                {
+                    using (OpenDecorationArtifact(g, box))
+                        PaintBoxShadows(g, box, geometry, inset: false);
+                }
 
                 // filter: drop-shadow() paints at the same point box-shadow's own outset layers do -
                 // behind the box's background (CSS Backgrounds & Borders 3 §5's ordering, which this
@@ -1043,7 +1055,11 @@ namespace PeachBrackets.Html.Paint
                 if (!box.SuppressOwnBackgroundPaint && IsTableTrack(box))
                 {
                     // A table box has one rectangle per page; the guard only keeps the areas from being painted once per rectangle.
-                    if (i == 0) PaintTrackBackgroundOverItsCells(g, fragment, geometry);
+                    if (i == 0)
+                    {
+                        using (HasBackground(box) ? OpenDecorationArtifact(g, box) : null)
+                            PaintTrackBackgroundOverItsCells(g, fragment, geometry);
+                    }
                 }
                 else if (!box.SuppressOwnBackgroundPaint)
                 {
@@ -1051,8 +1067,14 @@ namespace PeachBrackets.Html.Paint
                     // keeps it out of the space beside this rectangle - which belongs to other content.
                     if (geometry.NeedsClip) g.PushClip(geometry.ClipRect);
 
-                    if (i == 0) PaintTrackBackgroundsBeneathCell(g, fragment);
-                    PaintBackground(g, box, geometry, GetFirstLineStyleForRect(lines[i].Line), fragment);
+                    // The fill is drawn, not content: an artifact in a tagged document.
+                    var firstLineStyle = GetFirstLineStyleForRect(lines[i].Line);
+                    var paintsBackground = HasBackground(firstLineStyle ?? box) || (i == 0 && HasTrackBackgroundsBeneathCell(g, fragment));
+                    using (paintsBackground ? OpenDecorationArtifact(g, box) : null)
+                    {
+                        if (i == 0) PaintTrackBackgroundsBeneathCell(g, fragment);
+                        PaintBackground(g, box, geometry, firstLineStyle, fragment);
+                    }
 
                     if (geometry.NeedsClip) g.PopClip();
                 }
@@ -1060,7 +1082,10 @@ namespace PeachBrackets.Html.Paint
                 // Inset shadows paint AFTER (over) the background, clipped to the padding box. See the
                 // outset call above for why this is gated on SuppressOwnBorderPaint too.
                 if (!box.SuppressOwnBorderPaint && BoxDecorationGeometry.HasBoxShadow(box))
-                    PaintBoxShadows(g, box, geometry, inset: true);
+                {
+                    using (OpenDecorationArtifact(g, box))
+                        PaintBoxShadows(g, box, geometry, inset: true);
+                }
 
                 // For multi-page tables, draw the outer bottom border at the page-break Y on
                 // intermediate pages (instead of at the rectangle's bottom, which is off-page).

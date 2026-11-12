@@ -102,6 +102,10 @@ namespace PeachBrackets.Html.Paint
             }
         }
 
+        /// <summary>Whether <see cref="PaintTrackBackgroundsBeneathCell"/> would paint anything under <paramref name="fragment"/>.</summary>
+        private bool HasTrackBackgroundsBeneathCell(Canvas g, BoxFragment fragment) =>
+            TrackBackgroundsFor(g) is { } backgrounds && backgrounds.TracksByCell.TryGetValue(fragment, out var tracks) && tracks.Count > 0;
+
         /// <summary>The track backgrounds of the tree being painted, or null where there is none.</summary>
         private TrackBackgrounds? TrackBackgroundsFor(Canvas g)
         {
