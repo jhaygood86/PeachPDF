@@ -136,8 +136,7 @@ namespace PeachBrackets.Css
         {
             arguments = null;
 
-            var normalized = BoxShadowGrammar.NormalizeHexColorTokens(
-                [.. argumentTokens.Where(t => t.Type != TokenType.Whitespace)]);
+            var normalized = BoxShadowGrammar.NormalizeHexColorTokens(argumentTokens);
 
             if (!BoxShadowGrammar.TryClassify(normalized, allowInset: false, out _, out var lengths, out var colorTokens))
                 return false;

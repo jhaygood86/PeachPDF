@@ -64,6 +64,19 @@ namespace PeachBrackets.Engine.Tests.CSS
         }
 
         [Theory]
+        [InlineData("0 0 0 5px #4a90d9", "#4a90d9")]
+        [InlineData("0 0 0 5px #1a2b3c", "#1a2b3c")]
+        [InlineData("0 0 0 5px #4090d9", "#4090d9")]
+        [InlineData("0 0 0 5px #4a90d9ff", "#4a90d9ff")]
+        [InlineData("0 0 0 5px #0000ff", "#0000ff")]
+        [InlineData("0 0 0 5px #123e56", "#123e56")]
+        public void DigitLeadingSixDigitHex_KeepsEveryDigit(string value, string expected)
+        {
+            var layer = Assert.Single(Parse(value));
+            Assert.Equal(expected, layer.Color);
+        }
+
+        [Theory]
         [InlineData("2px 2px red", "red")]
         [InlineData("2px 2px #fff", "#fff")]        // letter-leading hex (Hash token)
         [InlineData("2px 2px #08f", "#08f")]        // digit-leading short hex (Delim + dimension)

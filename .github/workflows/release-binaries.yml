@@ -2,13 +2,9 @@ name: Release Binaries
 
 # Builds the NativeAOT `peachpdf` CLI for each platform and attaches the archives to the GitHub
 # Release. The "Publish NuGet Package" workflow triggers this explicitly (via workflow_dispatch) right
-# after it creates the release — a release created with the default GITHUB_TOKEN does not cascade-fire
-# other workflows' `release` triggers, so the `release: published` trigger below only covers a release
-# published by hand through the GitHub UI. It can also be run manually via workflow_dispatch against an
-# existing tag.
+# after it creates the release (a release created with the default GITHUB_TOKEN does not cascade-fire
+# other workflows' `release` triggers). It runs only via workflow_dispatch, against an existing tag.
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
@@ -45,8 +41,8 @@ jobs:
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
-          11.0.x
-          10.0.x
+            11.0.x
+            10.0.x
 
       # NativeAOT on Linux needs a C toolchain and zlib to link the native binary.
       - name: Install native toolchain (Linux)
@@ -57,7 +53,7 @@ jobs:
         id: meta
         shell: bash
         run: |
-          TAG="${{ github.event.release.tag_name || inputs.tag }}"
+          TAG="${{ inputs.tag }}"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
 
