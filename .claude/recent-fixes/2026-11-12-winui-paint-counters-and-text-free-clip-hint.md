@@ -75,3 +75,17 @@ watermarks (the remaining ~100 MB GPU above the no-clip experiment); the region 
 **Replaced pictures.** `ReplacedFragmentPainter` now gives the clip it pushes around a loaded `<img>` the same no-text hint. It does not move the Ars counts (surface clips 4,854 -> 4,822 per run, 2,111 still holding no text), so
 the rest of those are not picture clips; the counters cannot say which painter pushes them (a count by caller is the next thing to add). With warming off the 34 slow cold paints still total about 1.2 s: text masks 27%,
 text flushes 20%, surface clips 20%, images 18%. Load time on Ars (layout 1.5 s, cascade 0.6 s, fetch 4.4 s summed over 186 requests) is a separate piece of work from scrolling.
+
+## Page load is mostly the JIT, not the engine (same day)
+
+A sampling trace of the live load could not say where the CPU went (the sampler put 22% on an unrelated thread-pool frame; see [the earlier note on sampling profiles lying](2026-11-10-performance-optimizations-measured-not-guessed.md)),
+so the page was made repeatable instead: the HTML with its four style sheets inlined, no fonts, no image sources (width/height kept), loaded and laid out in a loop in a console app.
+**First run in a process 1.6 s, steady state 0.28-0.34 s**: about 1.3 s of the cold load is JIT, which is what flex layout and cascade matching were charged with.
+- ReadyToRun publish: 1.6 -> 0.85 s. Tiered PGO off: 1.6 -> 1.37 s (R2R 0.84 -> 0.80). `TieredCompilation=0` is slower (1.95 s).
+- `HtmlDocument.WarmUpAsync()` (public, once per process, one task for every caller, never throws): a small flex/grid/table/svg/text document loaded, laid out and painted on a thread-pool thread. With
+  600 ms to run in the same load went 1.65 -> 1.03 s on the JIT build and 0.85 -> 0.81 s on R2R. `HtmlView`'s constructor calls it (`PEACH_NO_ENGINE_WARMUP=1` turns that off); on the live Ars page, six interleaved runs each,
+  load to loaded median ~2.7 s with it against ~3.5 s without (network noise is large; the direction held in every pair but one).
+- Still JIT-compiled in a ReadyToRun run: 2,302 methods, nearly all generic instantiations over our own enums and structs (`List<T>`, `Dictionary<K,V>`, `EqualityComparer<T>`/`EnumEqualityComparer<T>`, `ValueTask<T>` async builders)
+  that crossgen cannot precompile outside the framework's version bubble (see [keyword maps stop jitting at startup](2026-10-13-keyword-maps-stop-jitting-at-startup.md)); that is the next place a startup gain is, not flex layout or the cascade.
+- The demo sets `<TieredPGO>false</TieredPGO>`; the guidance for hosts is in docs/peachbrackets.md ("The first document is slow").
+Not done: a startup warm-up for `PdfGenerator` (print paths differ), and trimming the generic instantiations above.

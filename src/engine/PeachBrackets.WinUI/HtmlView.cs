@@ -79,6 +79,10 @@ public sealed partial class HtmlView : UserControl
     /// <summary>Creates a view with nothing in it.</summary>
     public HtmlView()
     {
+        // The first document is mostly JIT time; this compiles what it will use while it is still being fetched (once per process, on a thread-pool thread).
+        if (Environment.GetEnvironmentVariable("PEACH_NO_ENGINE_WARMUP") is not { Length: > 0 })
+            _ = HtmlDocument.WarmUpAsync();
+
         IsTabStop = true;
         _canvas.HorizontalAlignment = HorizontalAlignment.Left;
         _canvas.VerticalAlignment = VerticalAlignment.Top;

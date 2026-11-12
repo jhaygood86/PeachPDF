@@ -90,7 +90,7 @@ public class HtmlViewLogicTests
         }
 
         // The band in view, then 51 and 49, 52 and 48... out to the reach, and nothing beyond it.
-        Assert.Equal([50, 51, 49, 52, 48, 53, 47], order.Take(7));
+        Assert.Equal(new[] { 50, 51, 49, 52, 48, 53, 47 }, order.Take(7));
         Assert.Equal((2 * HtmlViewLogic.WarmReach) + 1, order.Count);
         Assert.All(order, band => Assert.InRange(band, 50 - HtmlViewLogic.WarmReach, 50 + HtmlViewLogic.WarmReach));
     }
@@ -98,14 +98,14 @@ public class HtmlViewLogicTests
     [Fact]
     public void NothingIsLeftToPaintAheadOnceTheNearbyBandsAreDone_OrWhenThePageIsEmpty()
     {
-        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(3, 100, [true, true, true]));
-        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(0, 0, []));
+        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(3, 100, new[] { true, true, true }));
+        Assert.Equal(-1, HtmlViewLogic.NextWarmBand(0, 0, Array.Empty<bool>()));
     }
 
     [Fact]
     public void AViewportPastTheEndOfThePageIsClampedToItsLastBand()
     {
-        Assert.Equal(2, HtmlViewLogic.NextWarmBand(3, 1e9, [false, false, false]));
-        Assert.Equal(0, HtmlViewLogic.NextWarmBand(3, -50, [false, false, false]));
+        Assert.Equal(2, HtmlViewLogic.NextWarmBand(3, 1e9, new[] { false, false, false }));
+        Assert.Equal(0, HtmlViewLogic.NextWarmBand(3, -50, new[] { false, false, false }));
     }
 }

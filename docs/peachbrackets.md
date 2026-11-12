@@ -603,6 +603,20 @@ their addresses first and can fetch them all at once; `HostResourceLoader.Prefet
 cache, so the requests that follow are answered from memory. `HtmlView` does this for you; a host with its own render context implements the interface
 the same way, or ignores it, and nothing changes.
 
+## The first document is slow: start-up time
+
+Most of the first document's time is the .NET JIT compiler, not the engine's own work: a news front page that loads and lays out in about 0.3 s once the code is warm
+takes about 1.6 s the first time in a process that is not compiled ahead of time. Three things change that, in the order they are worth doing:
+
+- **Compile ahead of time** when you publish the application (`PublishReadyToRun`, or Native AOT as the `peachpdf` command-line tool is): the same first load took about 0.85 s.
+- **`HtmlDocument.WarmUpAsync()`** runs a small document through load, layout and painting on a thread-pool thread, once per process, and returns the same task to every caller. Call it
+  when the application starts, or before it fetches the first page, so the compilation happens while the network is busy: the first load above fell from about 1.65 s to about 1.03 s
+  when it had a few hundred milliseconds to run in. An application that is compiled ahead of time gains little from it, and `HtmlView` calls it for you.
+- **`<TieredPGO>false</TieredPGO>`** in the application's project file turns off the extra instrumentation the runtime puts into code it compiles first, which a program that lives for a
+  few seconds never gets back: about 15% off the first load.
+
+The figures are for one machine and one page; measure on yours (a loop that loads the same document repeatedly shows the warm cost, one process per run the cold one).
+
 ## Timing a load
 
 The load pipeline reports where its time goes as [`Activity`](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.activity) spans of

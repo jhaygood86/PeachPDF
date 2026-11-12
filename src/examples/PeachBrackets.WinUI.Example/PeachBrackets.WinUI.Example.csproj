@@ -10,6 +10,8 @@
 		<Platforms>x64;ARM64</Platforms>
 		<Platform Condition="'$(Platform)' == 'AnyCPU'">x64</Platform>
 		<RuntimeIdentifier>win-x64</RuntimeIdentifier>
+		<!-- A demo that lives for seconds never gets back the instrumentation tiered PGO adds to code it compiles first: about 15% off the first load. -->
+		<TieredPGO>false</TieredPGO>
 		<DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
 		<IsPackable>false</IsPackable>
 		<EnableMsixTooling>true</EnableMsixTooling>
