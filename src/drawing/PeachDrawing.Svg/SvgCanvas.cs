@@ -42,7 +42,10 @@ public sealed partial class SvgCanvas : Canvas
         _ppp = pixelsPerPoint > 0 ? pixelsPerPoint : 1.0;
         _options = options;
         _isTile = isTile;
+        _surface = initialClip;
     }
+
+    private readonly Rect _surface;
 
     /// <inheritdoc/>
     public override double PixelsPerPoint => _ppp;
@@ -248,7 +251,34 @@ public sealed partial class SvgCanvas : Canvas
     public override void PushClip(Rect rect)
     {
         _clipStack.Push(rect);
-        PushClipShape($"<rect x=\"{N(rect.X)}\" y=\"{N(rect.Y)}\" width=\"{N(rect.Width)}\" height=\"{N(rect.Height)}\"/>");
+        var written = ClampToSurface(rect);
+        PushClipShape($"<rect x=\"{N(written.X)}\" y=\"{N(written.Y)}\" width=\"{N(written.Width)}\" height=\"{N(written.Height)}\"/>");
+    }
+
+    /// <summary>
+    /// Cuts <paramref name="rect"/> (in the coordinates the canvas has now) to the surface, which is all that is ever visible: a caller that
+    /// laid a document out on a far taller sheet than it keeps would otherwise leave a clip many times the size of the document. Only done
+    /// while the transform is a translation and scale (a rotated surface is not a rectangle in these coordinates); a clip that does not meet
+    /// the surface at all is left as it was, since nothing it clips can be seen.
+    /// </summary>
+    private Rect ClampToSurface(Rect rect)
+    {
+        const float tolerance = 1e-6f;
+        if (Math.Abs(_ctm.M12) > tolerance || Math.Abs(_ctm.M21) > tolerance || !_ctm.TryInvert(out var inverse))
+            return rect;
+
+        var a = Vector2.Transform(new Vector2((float)_surface.Left, (float)_surface.Top), inverse);
+        var b = Vector2.Transform(new Vector2((float)_surface.Right, (float)_surface.Bottom), inverse);
+        var left = Math.Max(rect.Left, Math.Min(a.X, b.X));
+        var top = Math.Max(rect.Top, Math.Min(a.Y, b.Y));
+        var right = Math.Min(rect.Right, Math.Max(a.X, b.X));
+        var bottom = Math.Min(rect.Bottom, Math.Max(a.Y, b.Y));
+
+        // Float math on the surface corners must not nibble at a clip that already lies inside it.
+        if (right <= left || bottom <= top || (left <= rect.Left + 1e-3 && top <= rect.Top + 1e-3 && right >= rect.Right - 1e-3 && bottom >= rect.Bottom - 1e-3))
+            return rect;
+
+        return new Rect(Math.Max(left, rect.Left), Math.Max(top, rect.Top), right - left, bottom - top);
     }
 
     /// <inheritdoc/>
