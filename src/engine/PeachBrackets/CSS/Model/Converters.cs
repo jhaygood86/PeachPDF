@@ -708,7 +708,16 @@ namespace PeachBrackets.Css
             var flexShrink = FlexGrowShrinkConverter.WithFallback(1).For(PropertyNames.FlexShrink);
             var flexBasis = FlexBasisConverter.WithFallback(0).For(PropertyNames.FlexBasis);
 
-            return new FlexNoneConverter().Or(WithOrder(flexGrow, flexShrink, flexBasis).OrGlobalValue());
+            // A CSS-wide keyword (css-cascade 4 §7.3) stands for the whole shorthand, so it must reach all three longhands as itself.
+            // Tried after the three-part order, `initial` was taken by the first longhand and the other two got their omitted-value
+            // fallbacks (shrink 1, basis 0), so `flex: initial` gave a basis of 0 instead of the initial `auto` (CSS Flexbox 1 §7.1).
+            var globalKeyword = new IdentifierValueConverter<object?>(Keywords.Inherit, null)
+                .Or(Keywords.Initial)
+                .Or(Keywords.Revert)
+                .Or(Keywords.RevertLayer)
+                .Or(Keywords.Unset);
+
+            return new FlexNoneConverter().Or(globalKeyword).Or(WithOrder(flexGrow, flexShrink, flexBasis));
         });
 
         #endregion

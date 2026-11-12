@@ -1,4 +1,4 @@
-# Per-page horizontal reflow is scoped to block content, multicol, tables and flex — not grid
+# Per-page horizontal reflow is scoped to block content, multicol, tables, flex and grid rows
 
 **Per-page horizontal reflow (issue #143) is scoped to ordinary in-flow block-level content.** The
 width seam (`CssLayoutEngine.GetBoxWidth`/`LineContentRightOf` → `HtmlContainerInt.PageContentRightOf`,
@@ -160,4 +160,4 @@ What is left, and why each is not a flex deviation to fix here:
   That is not flex-specific: an ordinary block with `width: 300pt; margin: 0 auto` does the same, because auto
   margins resolve against the containing block's single width (`CssLayoutEngine.FreeInlineSpace`). Tracked with
   the block case as [#1518](https://github.com/jhaygood86/PeachPDF/issues/1518).
-- Grid: [#1516](https://github.com/jhaygood86/PeachPDF/issues/1516).
+**Also no longer a gap** (#1516): a block-level grid container that continues across pages of different measures sizes its frame and each row to the page the row lands on. `CssLayoutEngineGrid.Layout` gathers what column sizing reads once (definitions, collapsed columns, intrinsic contributions), then sizes, places and relocates the rows in a loop (at most `MaxPerPageAttempts`): `ColumnsOf` gives each row the columns of the measure it was last found to land on (`LandingMeasures`, seeded by where relocation put it) until none changes; the container's frame is stated per slot (`StateContainerFrame`, `StateSpannedFrames`, `HtmlContainerInt.RecordInlineFrame`) and items are unpinned (`ItemContentCommit.UnpinIfPinned`) as for flex. Not done: a row whose items continue onto a page of another measure keeps the column sizes it started with, as Chromium does for flex (Prince re-fits); `repeat(auto-fill|auto-fit, ...)` (the column count depends on the measure), subgrids and vertical grids use one measure; a row-spanning item takes the measure of its first row.
