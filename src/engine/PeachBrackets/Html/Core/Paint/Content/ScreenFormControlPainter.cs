@@ -21,6 +21,18 @@ namespace PeachBrackets.Html.Paint.Content
     /// </remarks>
     internal sealed class ScreenFormControlPainter : IFragmentContentPainter
     {
+        // A static page (neither a host's live control nor an interactive field) keeps the box as any other box is painted - background, border,
+        // shadow - and this painter only adds what the control shows inside it.
+        private readonly bool _genericChrome;
+
+        public ScreenFormControlPainter(bool genericChrome = false) => _genericChrome = genericChrome;
+
+        private void Chrome(Canvas g, CssBox box, Rect rect)
+        {
+            if (!_genericChrome)
+                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+        }
+
         public void Paint(FragmentPainter painter, Canvas g, BoxFragment fragment)
         {
             var box = (CssBoxFormField)fragment.Box;
@@ -31,18 +43,22 @@ namespace PeachBrackets.Html.Paint.Content
                 return;
             }
 
+            var isRadio = !box.HtmlTag!.Name.Equals("select", StringComparison.OrdinalIgnoreCase) && box.GetAttribute("type", "text").Equals("radio", StringComparison.OrdinalIgnoreCase);
+            if (_genericChrome && !isRadio && !box.IsTextArea)
+                painter.PaintBoxContent(g, fragment);
+
             var tag = box.HtmlTag!.Name;
             var type = box.GetAttribute("type", "text").ToLowerInvariant();
             var disabled = box.HtmlTag.HasAttribute("disabled");
 
             if (tag.Equals("select", StringComparison.OrdinalIgnoreCase))
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 PaintSelect(g, box, rect);
             }
             else if (type == "checkbox")
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 FormFieldChrome.PaintCheckboxGlyph(g, box, rect, box.HtmlTag.HasAttribute("checked"));
             }
             else if (type == "radio")
@@ -52,7 +68,7 @@ namespace PeachBrackets.Html.Paint.Content
             }
             else if (type is "button" or "submit" or "reset")
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 var label = box.GetAttribute("value", string.Empty);
                 if (label.Length == 0)
                     label = type switch { "submit" => "Submit", "reset" => "Reset", _ => string.Empty };
@@ -60,7 +76,7 @@ namespace PeachBrackets.Html.Paint.Content
             }
             else if (type == "range")
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 PaintRange(g, box, rect);
             }
             else if (type is "hidden" or "image")
@@ -69,29 +85,29 @@ namespace PeachBrackets.Html.Paint.Content
             }
             else if (type == "color")
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 PaintColorSwatch(g, box, rect);
             }
             else if (type == "file")
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 PaintFileChooser(g, box, rect, disabled);
             }
             else if (type is "date" or "time" or "datetime-local" or "month" or "week" && box.GetAttribute("value", string.Empty).Length == 0)
             {
                 // A date or time field with no value shows the shape its value would take, in the placeholder's color.
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 var style = box.ResolvedPlaceholderStyle ?? box;
                 PaintText(g, box, rect, DateTimeHint(type), centered: false, style.ActualColor, disabled);
             }
             else if (box.IsTextArea)
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 PaintTextArea(g, box, rect, box.GetAttribute("value", string.Empty), disabled);
             }
             else
             {
-                FormFieldChrome.PaintBorderAndBackground(g, box, rect);
+                Chrome(g, box, rect);
                 var rawValue = box.GetAttribute("value", string.Empty);
                 var value = DisplayText(box, rawValue);
 

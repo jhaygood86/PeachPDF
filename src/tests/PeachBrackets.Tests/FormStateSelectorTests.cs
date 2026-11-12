@@ -23,11 +23,11 @@ public class FormStateSelectorTests
         return (await TestDocument.PaintAsync(context, document), document);
     }
 
-    // The color in the middle of an element.
+    // The color near the top-left of an element's middle band, clear of a control's drawn glyph (check mark, dot) and of the text inside it.
     private static (byte R, byte G, byte B, byte A) Middle((RasterCanvas Canvas, HtmlDocument Document) page, string id)
     {
         var bounds = page.Document.GetElementBounds(id)!.Value;
-        return TestDocument.Pixel(page.Canvas, (int)(bounds.X + (bounds.Width / 2)), (int)(bounds.Y + (bounds.Height / 2)));
+        return TestDocument.Pixel(page.Canvas, (int)(bounds.X + (bounds.Width * 0.1)), (int)(bounds.Y + (bounds.Height / 2)));
     }
 
     private static bool IsRed((byte R, byte G, byte B, byte A) p) => p is { R: > 200, G: < 60, B: < 60 };
@@ -45,7 +45,8 @@ public class FormStateSelectorTests
 
         Assert.True(IsRed(Middle(page, "a")));
         Assert.False(IsRed(Middle(page, "b")));
-        Assert.True(IsRed(Middle(page, "c")));
+        var cb = page.Document.GetElementBounds("c")!.Value;
+        Assert.True(IsRed(TestDocument.Pixel(page.Canvas, (int)(cb.X + (cb.Width / 2)), (int)(cb.Y + (cb.Height * 0.12)))));
         Assert.False(IsRed(Middle(page, "d")));
         Assert.False(IsRed(Middle(page, "e")));
     }

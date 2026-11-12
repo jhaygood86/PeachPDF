@@ -567,7 +567,9 @@ namespace PeachBrackets.Engine.Tests.Integration
             var g = new TestRecordingGraphics();
             FragmentPaintHarness.PaintBox(container, f, g);
 
-            Assert.Empty(g.Log.OfType<TestRecordingGraphics.DrawLineCall>());
+            // The control draws its own dropdown arrow, but no decoration line runs across it.
+            var control = f.Rectangles.Values.Single();
+            Assert.DoesNotContain(g.Log.OfType<TestRecordingGraphics.DrawLineCall>(), line => line.X2 - line.X1 >= control.Width * 0.3);
         }
 
         [Fact]

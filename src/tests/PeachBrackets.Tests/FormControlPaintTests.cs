@@ -45,6 +45,21 @@ public class FormControlPaintTests
     }
 
     [Fact]
+    public async Task AStaticPageShowsValuesCheckedStateAndSelectedOptionToo()
+    {
+        const string body = "<input value='HHHH' style='left:10pt;top:10pt;width:150pt;height:30pt;font-size:20pt;color:rgb(0,0,0)'>"
+            + "<input type=checkbox checked style='left:10pt;top:60pt;width:40pt;height:40pt;accent-color:red'>"
+            + "<input type=checkbox style='left:100pt;top:60pt;width:40pt;height:40pt;accent-color:red'>"
+            + "<select style='left:10pt;top:110pt;width:150pt;height:30pt;font-size:20pt'><option>HHHH<option selected>IIII</select>";
+        var canvas = await PaintAsync(body, paintControls: false);
+
+        Assert.True(InkCount(canvas, 14, 14, 140, 22, IsDark) > 40, "the value is drawn");
+        Assert.True(InkCount(canvas, 10, 60, 40, 40, IsRed) > 20, "the check mark is drawn");
+        Assert.Equal(0, InkCount(canvas, 100, 60, 40, 40, IsRed));
+        Assert.True(InkCount(canvas, 14, 114, 100, 22, IsDark) > 10, "the chosen option is drawn");
+    }
+
+    [Fact]
     public async Task ACheckedRadioShowsItsDot()
     {
         const string body = "<input type=radio checked style='left:10pt;top:10pt;width:40pt;height:40pt;accent-color:red'>";
@@ -108,17 +123,6 @@ public class FormControlPaintTests
         var canvas = await TestDocument.PaintAsync(context, document);
 
         Assert.True(InkCount(canvas, 14, 14, 140, 22, IsDark) > 40, "the value is drawn although the field is also collected");
-    }
-
-    [Fact]
-    public async Task WithoutTheOptionAControlIsTheBoxItAlwaysWas()
-    {
-        const string body = "<input type=checkbox checked style='left:10pt;top:10pt;width:40pt;height:40pt;accent-color:red'>"
-            + "<input value='HHHH' style='left:10pt;top:60pt;width:150pt;height:30pt;font-size:20pt'>";
-        var canvas = await PaintAsync(body, paintControls: false);
-
-        Assert.Equal(0, InkCount(canvas, 10, 10, 40, 40, IsRed));
-        Assert.Equal(0, InkCount(canvas, 14, 64, 140, 22, IsDark));
     }
 
     [Fact]
