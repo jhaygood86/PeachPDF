@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- A small desktop app with a PeachBrackets.Avalonia HtmlView: open an HTML file, or run it with the smoke option and a file to load a page, report what the view and document say, and exit. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <TargetFrameworks />
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\views\PeachBrackets.Avalonia\PeachBrackets.Avalonia.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,75 @@
+PeachBrackets.Avalonia.HtmlAnimationEventsEventArgs : sealed class
+  property IReadOnlyList<AnimationEventInfo> Events { get; }
+PeachBrackets.Avalonia.HtmlFormInvalidEventArgs : sealed class
+  property IReadOnlyList<ValidationProblem> Problems { get; }
+PeachBrackets.Avalonia.HtmlFormSubmittingEventArgs : sealed class
+  property FormSubmission Submission { get; }
+PeachBrackets.Avalonia.HtmlLinkActivatedEventArgs : sealed class
+  property Boolean Cancel { get; set; }
+  property String Destination { get; }
+  property String Uri { get; }
+PeachBrackets.Avalonia.HtmlLoadFailedEventArgs : sealed class
+  property Exception Exception { get; }
+PeachBrackets.Avalonia.HtmlPageClickedEventArgs : sealed class
+  property Double X { get; }
+  property Double Y { get; }
+  property Int32 PageIndex { get; }
+PeachBrackets.Avalonia.HtmlView : sealed class
+  ctor()
+  event EventHandler ContentHeightChanged
+  event EventHandler DocumentLoaded
+  event EventHandler FocusChanged
+  event EventHandler ScrollChanged
+  event EventHandler ZoomChanged
+  event EventHandler<HtmlAnimationEventsEventArgs> AnimationEvents
+  event EventHandler<HtmlFormInvalidEventArgs> FormInvalid
+  event EventHandler<HtmlFormSubmittingEventArgs> FormSubmitting
+  event EventHandler<HtmlLinkActivatedEventArgs> LinkActivated
+  event EventHandler<HtmlLoadFailedEventArgs> DocumentFailed
+  event EventHandler<HtmlPageClickedEventArgs> PageClicked
+  field static DirectProperty<HtmlView, Double> ContentHeightProperty
+  field static StyledProperty<Boolean> AllowNetworkAccessProperty
+  field static StyledProperty<Boolean> AnimationsEnabledProperty
+  field static StyledProperty<Boolean> IsLayoutSynchronousProperty
+  field static StyledProperty<Boolean> IsZoomEnabledProperty
+  field static StyledProperty<Color> PageBackgroundProperty
+  field static StyledProperty<Color> SelectionColorProperty
+  field static StyledProperty<Double> DocumentMarginProperty
+  field static StyledProperty<HtmlViewScrollMode> ScrollModeProperty
+  field static StyledProperty<String> HtmlProperty
+  field static StyledProperty<String> UserStyleSheetProperty
+  field static StyledProperty<Uri> DocumentBaseUriProperty
+  field static StyledProperty<Uri> SourceProperty
+  method Boolean ScrollToElement(String elementId)
+  method Void ApplyUpdate(UpdateResult result)
+  method Void CopySelection()
+  method Void SelectAll()
+  method Void SetZoom(Double zoom, Point? focus = null)
+  method virtual Void Render(DrawingContext context)
+  property AccessibilityNode FocusedNode { get; }
+  property Boolean AllowNetworkAccess { get; set; }
+  property Boolean AnimationsEnabled { get; set; }
+  property Boolean IsLayoutSynchronous { get; set; }
+  property Boolean IsZoomEnabled { get; set; }
+  property Color PageBackground { get; set; }
+  property Color SelectionColor { get; set; }
+  property Double ContentHeight { get; }
+  property Double DocumentMargin { get; set; }
+  property Double Zoom { get; }
+  property FontSet FontSet { get; set; }
+  property HtmlDocument Document { get; }
+  property HtmlViewScrollMode ScrollMode { get; set; }
+  property InputCapabilities Input { get; set; }
+  property String Html { get; set; }
+  property String SelectedText { get; }
+  property String UserStyleSheet { get; set; }
+  property Uri DocumentBaseUri { get; set; }
+  property Uri Source { get; set; }
+PeachBrackets.Avalonia.HtmlViewFonts : static class
+  method static TypefaceFamily AddData(ReadOnlyMemory<Byte> data, AddOptions options = null)
+  method static TypefaceFamily AddFile(String path, AddOptions options = null)
+  method static TypefaceFamily AddStream(Stream stream, AddOptions options = null)
+  property static FontSet Shared { get; }
+PeachBrackets.Avalonia.HtmlViewScrollMode : enum Int32
+  Auto = 0
+  Disabled = 1

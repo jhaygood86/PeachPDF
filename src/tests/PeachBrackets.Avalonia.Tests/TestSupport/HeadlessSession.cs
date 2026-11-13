@@ -22,9 +22,15 @@ internal static class HeadlessSession
 {
     private static readonly Lazy<HeadlessUnitTestSession> Session = new(() => HeadlessUnitTestSession.StartNew(typeof(TestApp)));
 
-    public static Task Run(Func<Task> body) => Session.Value.Dispatch(body, CancellationToken.None);
+    // The Func<Task<T>> overload of Dispatch keeps the dispatcher running until the body finishes; the Func<T> overload would hand back the body's task
+    // unawaited, and a failing body would pass unnoticed.
+    public static Task Run(Func<Task> body) => Session.Value.Dispatch<int>(async () =>
+    {
+        await body();
+        return 0;
+    }, CancellationToken.None);
 
-    public static Task<T> Run<T>(Func<Task<T>> body) => Session.Value.Dispatch(body, CancellationToken.None);
+    public static Task<T> Run<T>(Func<Task<T>> body) => Session.Value.Dispatch<T>(body, CancellationToken.None);
 
     /// <summary>Opens a window of the given size holding a view that has loaded <paramref name="html"/>.</summary>
     public static async Task<(Window Window, HtmlView View)> ShowAsync(string html, double width = 400, double height = 300, Action<HtmlView>? configure = null)
@@ -55,7 +61,8 @@ internal static class HeadlessSession
         using var buffer = bitmap.Lock();
         var bytes = new byte[4];
         System.Runtime.InteropServices.Marshal.Copy(buffer.Address + (y * buffer.RowBytes) + (x * 4), bytes, 0, 4);
-        // The headless bitmap is BGRA.
-        return (bytes[2], bytes[1], bytes[0]);
+        // The channel order is the bitmap's own: Skia's headless bitmaps are RGBA on some platforms and BGRA on others.
+        var bgra = bitmap.Format == global::Avalonia.Platform.PixelFormat.Bgra8888;
+        return bgra ? (bytes[2], bytes[1], bytes[0]) : (bytes[0], bytes[1], bytes[2]);
     }
 }
