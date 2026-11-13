@@ -41,7 +41,8 @@ namespace PeachBrackets.Css
                 {Keywords.Capitalize, TextTransform.Capitalize},
                 {Keywords.Uppercase, TextTransform.Uppercase},
                 {Keywords.Lowercase, TextTransform.Lowercase},
-                {Keywords.FullWidth, TextTransform.FullWidth}
+                {Keywords.FullWidth, TextTransform.FullWidth},
+                {Keywords.FullSizeKana, TextTransform.FullSizeKana}
             }.Freeze();
         public static readonly KeywordMap<TextAlignLast> TextAlignmentsLast =
             new KeywordMap<TextAlignLast>(StringComparer.OrdinalIgnoreCase)

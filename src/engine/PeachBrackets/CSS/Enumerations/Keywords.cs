@@ -134,6 +134,7 @@
         public const string Uppercase = "uppercase";
         public const string Lowercase = "lowercase";
         public const string FullWidth = "full-width";
+        public const string FullSizeKana = "full-size-kana";
         public const string Baseline = "baseline";
         public const string Sub = "sub";
         public const string Super = "super";

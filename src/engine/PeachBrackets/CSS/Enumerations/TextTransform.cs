@@ -6,6 +6,7 @@ namespace PeachBrackets.Css
         Capitalize,
         Uppercase,
         Lowercase,
-        FullWidth
+        FullWidth,
+        FullSizeKana
     }
 }

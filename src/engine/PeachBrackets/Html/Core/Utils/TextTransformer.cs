@@ -52,10 +52,33 @@ namespace PeachBrackets.Html.Utils
                         chars[i] = ToFullWidth(chars[i]);
                     return new string(chars);
                 }
+                case TextTransform.FullSizeKana:
+                {
+                    var chars = text.ToCharArray();
+                    for (var i = 0; i < chars.Length; i++)
+                        chars[i] = ToFullSizeKana(chars[i]);
+                    return new string(chars);
+                }
                 default:
                     return text;
             }
         }
+
+        /// <summary>
+        /// <c>full-size-kana</c> (CSS Text 3 section 2.1): a small kana becomes the full-size kana it is a small form of (hiragana, katakana, the katakana
+        /// phonetic extensions and the half-width katakana). Every other character is returned unchanged.
+        /// </summary>
+        public static char ToFullSizeKana(char c) => c switch
+        {
+            'ぁ' => 'あ', 'ぃ' => 'い', 'ぅ' => 'う', 'ぇ' => 'え', 'ぉ' => 'お', 'っ' => 'つ', 'ゃ' => 'や', 'ゅ' => 'ゆ', 'ょ' => 'よ', 'ゎ' => 'わ',
+            'ゕ' => 'か', 'ゖ' => 'け',
+            'ァ' => 'ア', 'ィ' => 'イ', 'ゥ' => 'ウ', 'ェ' => 'エ', 'ォ' => 'オ', 'ッ' => 'ツ', 'ャ' => 'ヤ', 'ュ' => 'ユ', 'ョ' => 'ヨ', 'ヮ' => 'ワ',
+            'ヵ' => 'カ', 'ヶ' => 'ケ',
+            'ㇰ' => 'ク', 'ㇱ' => 'シ', 'ㇲ' => 'ス', 'ㇳ' => 'ト', 'ㇴ' => 'ヌ', 'ㇵ' => 'ハ', 'ㇶ' => 'ヒ', 'ㇷ' => 'フ', 'ㇸ' => 'ヘ', 'ㇹ' => 'ホ',
+            'ㇺ' => 'ム', 'ㇻ' => 'ラ', 'ㇼ' => 'リ', 'ㇽ' => 'ル', 'ㇾ' => 'レ', 'ㇿ' => 'ロ',
+            'ｧ' => 'ｱ', 'ｨ' => 'ｲ', 'ｩ' => 'ｳ', 'ｪ' => 'ｴ', 'ｫ' => 'ｵ', 'ｯ' => 'ﾂ', 'ｬ' => 'ﾔ', 'ｭ' => 'ﾕ', 'ｮ' => 'ﾖ',
+            _ => c,
+        };
 
         /// <summary>Applies <c>capitalize</c> to <paramref name="text"/>, threading word-start state in
         /// from (and back out to) <paramref name="atWordStart"/> - lets a caller apply this across
