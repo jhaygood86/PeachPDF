@@ -46,6 +46,23 @@ namespace PeachBrackets.Engine.Tests.Integration
         }
 
         /// <summary>
+        /// Content wider than a declared width overflows the box; it does not widen the box, so what follows the box on the line starts
+        /// where the declared width ends. A zero width is a declared width, not the absence of one.
+        /// </summary>
+        [Theory]
+        [InlineData("0", 20.0)]
+        [InlineData("5pt", 25.0)]
+        public async Task ContentWiderThanTheDeclaredWidthOverflowsWithoutAdvancingTheLine(string width, double itemLeft)
+        {
+            var (root, _) = await LayoutAsync(Wrap(
+                $"<div id='line' style='width:400pt'><span id='box' style='display:inline-block;width:{width}'>wwwwwwwwww</span>item</div>"));
+            var item = Descendants(FindById(root, "line")!).SelectMany(b => b.Words).Single(w => w.Text.Trim() == "item");
+
+            // Page margins are 20pt, so the box starts at 20 and the item follows its declared width.
+            Assert.Equal(itemLeft, item.Left, 3);
+        }
+
+        /// <summary>
         /// ...and that rectangle survives into the fragment tree, which is what paint reads. Stated on a
         /// box with a border, since one with no decoration at all has zero height and so contributes no
         /// printable content for a fragment to carry.

@@ -5034,9 +5034,14 @@ namespace PeachBrackets.Html.Dom
             // Zero for an auto width, where the content's own advance is all there is.
             var contentWidth = box.AvailableWidth;
 
-            if (usedContentWidth < contentWidth)
+            // A declared width (zero included) is the box's width: content wider than it overflows the box rather than widening it
+            // (css 2.1 §10.3.9), so the line advances by the declared width alone.
+            var declaredWidth = CssValueParser.IsValidLength(box.Width) && !CssValueParser.DependsOnPercentage(box.Width);
+
+            if (declaredWidth || usedContentWidth < contentWidth)
             {
                 coordinates.CurrentX = startX + contentWidth;
+                if (declaredWidth) usedContentWidth = Math.Min(usedContentWidth, contentWidth);
             }
 
             var leadingSpacing = box.ActualBorderLeftWidth + box.ActualPaddingLeft;
@@ -5045,7 +5050,9 @@ namespace PeachBrackets.Html.Dom
             coordinates.Line.AtomicInlineRight = Math.Max(coordinates.Line.AtomicInlineRight,
                 startX + Math.Max(usedContentWidth, contentWidth) + trailingSpacing + box.ActualMarginRight);
 
-            if (coordinates.WordOrdinal != startOrdinal) return;
+            // A box that placed words has the rectangle of its words (which overflow a width narrower than they are); one with a declared width
+            // is as wide as that width whatever its words do.
+            if (coordinates.WordOrdinal != startOrdinal && !declaredWidth) return;
 
             coordinates.Line.Rectangles[box] = new Rect(
                 startX - leadingSpacing,
