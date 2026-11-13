@@ -457,15 +457,6 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         bool hasKids = HasChildren;
         if (_parent is not null || hasKids)
         {
-            ////// Everything done in PrepareForSave
-            ////if (_parent == null)
-            ////{
-            ////    // This is the outline dictionary (the root)
-            ////}
-            ////else
-            ////{
-            ////    // This is an outline item dictionary
-            ////}
             base.WriteObject(writer);
         }
     }
@@ -485,24 +476,12 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
         public const string Type = "/Type";
 
         // Outline and outline item are combined
-        ///// <summary>
-        ///// (Required if there are any open or closed outline entries; must be an indirect reference)
-        ///// An outline item dictionary representing the first top-level item in the outline.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Dictionary)]
         //public const string First = "/First";
         //
-        ///// <summary>
-        ///// (Required if there are any open or closed outline entries; must be an indirect reference)
-        ///// An outline item dictionary representing the last top-level item in the outline.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Dictionary)]
         //public const string Last = "/Last";
         //
-        ///// <summary>
-        ///// (Required if the document has any open outline entries) The total number of open items at all
-        ///// levels of the outline. This entry should be omitted if there are no open outline items.
-        ///// </summary>
         //[PdfKey(PdfKeyType.Integer)]
         //public const string Count = "/Count";
 

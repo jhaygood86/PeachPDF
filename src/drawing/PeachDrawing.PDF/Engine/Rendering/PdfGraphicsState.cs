@@ -489,9 +489,6 @@ internal sealed class PdfGraphicsState
 
     public Matrix3x2 WorldTransform = Matrix3x2.Identity;
 
-    ///// <summary>
-    ///// The world transform in PDF world space.
-    ///// </summary>
 
     public void AddTransform(Matrix3x2 value)
     {

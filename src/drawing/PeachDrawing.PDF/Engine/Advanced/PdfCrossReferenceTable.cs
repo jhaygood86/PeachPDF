@@ -203,9 +203,6 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
         //CheckConsistence();
     }
 
-    ///// <summary>
-    ///// The garbage collector for PDF objects.
-    ///// </summary>
 
     /// <summary>
     /// Calculates the transitive closure of the specified PdfObject, i.e. all indirect objects

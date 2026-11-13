@@ -59,10 +59,6 @@ internal sealed class PdfOutlineCollection : PdfObject, IList<PdfOutline>
         if (outline.DestinationPage is not null && !ReferenceEquals(Owner, outline.DestinationPage.Owner))
             throw new ArgumentException("Destination page must belong to this document.");
 
-        //// TODO check the parent problems...
-        ////outline.Document = Owner;
-        ////outline.Parent = _parent;
-        ////Owner._irefTable.Add(outline);
 
         AddToOutlinesTree(outline);
         _outlines.Add(outline);

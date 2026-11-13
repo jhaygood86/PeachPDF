@@ -77,9 +77,6 @@ internal sealed class PdfTilingPattern : PdfDictionaryWithContentStream
         Elements.SetInteger("/Length", Stream.Length);
     }
 
-    ///// <summary>
-    ///// Setups the shading pattern from the specified brush.
-    ///// </summary>
 
     /// <summary>
     /// Common keys for all streams.

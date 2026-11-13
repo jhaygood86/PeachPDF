@@ -593,9 +593,6 @@ internal partial class PdfDictionary
             _elements[key] = value;
         }
 
-        ///// <summary>
-        ///// Returns the indirect object if the value of the specified key is a PdfReference.
-        ///// </summary>
 
         /// <summary>
         /// Gets the PdfObject with the specified key, or null, if no such object exists. If the key refers to
@@ -744,9 +741,6 @@ internal partial class PdfDictionary
             throw new NotImplementedException();
         }
 
-        ///// <summary>
-        ///// Determines whether the dictionary contains the specified name.
-        ///// </summary>
 
         /// <summary>
         /// Determines whether the dictionary contains the specified name.

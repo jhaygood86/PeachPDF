@@ -31,8 +31,6 @@ internal sealed partial class PdfImage : PdfXObject
         _targetWidth = targetWidth;
         _targetHeight = targetHeight;
 
-        ////// TODO: identify multiple used images. If the image already exists use the same XRef.
-        ////_defaultName = PdfImageTable.NextImageName;
 
         switch (_image.Format.Guid.ToString("B").ToUpper())
         {

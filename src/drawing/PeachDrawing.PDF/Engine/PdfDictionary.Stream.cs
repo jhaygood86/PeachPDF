@@ -110,9 +110,6 @@ internal partial class PdfDictionary
             return PdfEncoders.LatinOneByteEncoding.GetString(_value, 0, _value.Length);
         }
 
-        ///// <summary>
-        ///// Converts a raw encoded string into a byte array.
-        ///// </summary>
 
         /// <summary>
         /// Common keys for all streams.

@@ -87,7 +87,6 @@ internal sealed class PdfPage : PdfDictionary, IContentStream
     /// </summary>
     public void Close()
     {
-        //// Close renderer, if any
         //if (_content.pdfRenderer != null)
         //  _content.pdfRenderer.endp.Close();
         _closed = true;

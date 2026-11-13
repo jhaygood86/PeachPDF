@@ -102,45 +102,21 @@ internal sealed class PdfNameDictionary : PdfDictionary
         [PdfKey("1.2", PdfKeyType.NameTree | PdfKeyType.Optional)]
         public const string Dests = "/Dests";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping name strings to annotation appearance streams
-        ///// (see Section 8.4.4, “Appearance Streams”).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string AP = "/AP";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping name strings to document-level JavaScript actions
-        ///// (see “JavaScript Actions” on page 709).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string JavaScript = "/JavaScript";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping name strings to visible pages for use in interactive forms
-        ///// (see Section 8.6.5, “Named Pages”).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string Pages = "/Pages";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping name strings to invisible (template) pages for use in
-        ///// interactive forms (see Section 8.6.5, “Named Pages”).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string Templates = "/Templates";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping digital identifiers to Web Capture content sets
-        ///// (see Section 10.9.3, “Content Sets”).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string IDS = "/IDS";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.3) A name tree mapping uniform resource locators (URLs) to Web Capture content sets
-        ///// (see Section 10.9.3, “Content Sets”).
-        ///// </summary>
         //[PdfKey("1.3", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string URLS = "/URLS";
 
@@ -151,17 +127,9 @@ internal sealed class PdfNameDictionary : PdfDictionary
         [PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]
         public const string EmbeddedFiles = "/EmbeddedFiles";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.4) A name tree mapping name strings to alternate presentations
-        ///// (see Section 9.4, “Alternate Presentations”).
-        ///// </summary>
         //[PdfKey("1.4", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string AlternatePresentations = "/AlternatePresentations";
 
-        ///// <summary>
-        ///// (Optional; PDF 1.5) A name tree mapping name strings (which must have Unicode encoding) to
-        ///// rendition objects (see Section 9.1.2, “Renditions”).
-        ///// </summary>
         //[PdfKey("1.5", PdfKeyType.NameTree | PdfKeyType.Optional)]
         //public const string Renditions = "/Renditions";
 

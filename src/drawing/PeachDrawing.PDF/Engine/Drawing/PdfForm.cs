@@ -77,19 +77,7 @@ internal class PdfForm : PdfRasterImage, IContentStream
     public PdfForm(PdfDocument document, Size size)
         : this(document, new Rect(0, 0, size.Width, size.Height))
     {
-        ////if (size.width < 1 || size.height < 1)
-        ////  throw new ArgumentNullException("size", "The size of the PdfForm is to small.");
-        ////// I must tie the PdfForm to a document immediately, because otherwise I would have no place where
-        ////// to store the resources.
-        ////if (document == null)
-        ////  throw new ArgumentNullException("document", "An PdfForm template must be associated with a document.");
 
-        ////_formState = FormState.Created;
-        ////_document = document;
-        ////pdfForm = new PdfFormXObject(document, this);
-        ////templateSize = size;
-        ////PdfRectangle rect = new PdfRectangle(new PaintPoint(), size);
-        ////pdfForm.Elements.SetRectangle(PdfFormXObject.Keys.BBox, rect);
     }
 
     /// <summary>
