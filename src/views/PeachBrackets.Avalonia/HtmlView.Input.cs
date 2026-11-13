@@ -302,7 +302,7 @@ public sealed partial class HtmlView
             case Key.Left:
                 ScrollKey(-step, 0);
                 break;
-            case Key.PageDown or Key.Space:
+            case Key.PageDown or Key.Space when e.Key != Key.Space || !IsEditingField:
                 ScrollKey(0, page);
                 break;
             case Key.PageUp:
