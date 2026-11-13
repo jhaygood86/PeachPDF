@@ -79,6 +79,16 @@ public class RenderedBehaviorTests
         "<table style='border-spacing:0;table-layout:fixed;width:120px'><tr><td style='padding:0;width:60px;background:rgb(0,128,0)'></td><td></td></tr></table>");
 
     [Fact]
+    public Task ACanvasIsA300By150BoxUnlessItsAttributesSayOtherwise() => AssertSameAsync(
+        "<canvas style='background:rgb(0,128,0)'></canvas>",
+        "<div style='display:inline-block;width:300px;height:150px;background:rgb(0,128,0)'></div>", width: 320, height: 160);
+
+    [Fact]
+    public Task ACanvasTakesItsSizeFromItsAttributes() => AssertSameAsync(
+        "<canvas width=40 height=30 style='background:rgb(0,128,0)'></canvas>",
+        "<div style='display:inline-block;width:40px;height:30px;background:rgb(0,128,0)'></div>");
+
+    [Fact]
     public Task AFormHasNoDefaultMargin() => AssertSameAsync(
         "<div style='font-size:16px'>a<form>x</form>b</div>",
         "<div style='font-size:16px'>a<form style='margin:0'>x</form>b</div>");
