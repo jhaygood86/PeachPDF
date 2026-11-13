@@ -97,7 +97,7 @@ internal sealed partial class WptRenderer(string wptRoot) : IReftestRenderer
         return new RNetworkResponse(new MemoryStream(bytes), new Dictionary<string, string[]> { ["Content-Type"] = [ContentType(path)] });
     }
 
-    private static string ContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    internal static string ContentType(string path) => Path.GetExtension(path).ToLowerInvariant() switch
     {
         ".css" => "text/css",
         ".png" => "image/png",

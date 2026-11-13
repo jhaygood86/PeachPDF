@@ -466,6 +466,52 @@ namespace PeachPDF.SourceGenerators.Tests
         }
 
         [Fact]
+        public void Emits_KeywordOrValue_Validation_That_Rejects_A_Negative_Length_For_A_NonNegative_Length_Or_Normal_Property()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "column-gap", "inherited": false, "initialValue": "auto",
+                      "cssDataType": { "type": "keyword-or-value", "enumType": "AutoKeyword", "keywordMap": "Map.AutoKeywords",
+                        "fallback": "AutoKeyword.Auto", "valueType": "nonnegative-length" },
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains(
+                "private static bool Validate_ColumnGap(CssValueParser parser, string value) => " +
+                "Map.AutoKeywords.ContainsKey(value) || global::PeachBrackets.Html.Parse.CssValueParser.TryParseLengthOrCalc(value, out _) && " +
+                "global::PeachBrackets.Html.Parse.CssValueParser.IsValidNonNegativeLength(value);",
+                generated);
+        }
+
+        [Fact]
+        public void Emits_A_NonNegative_Length_Validator_For_The_Plain_Data_Type()
+        {
+            var json = """
+                {
+                  "properties": [
+                    { "name": "padding-top", "inherited": false, "initialValue": "0", "cssDataType": "nonnegative-length",
+                      "html": { "propertyPath": "Transform", "csharpDataType": "string", "area": "VisualEffectsArea" } }
+                  ]
+                }
+                """;
+
+            var result = GeneratorTestHost.Run(json, StubSources.MinimalCssBoxAndSvgElement);
+
+            var generated = result.Results.Single().GeneratedSources
+                .Single(s => s.HintName == "CssPropertyRegistry.g.cs").SourceText.ToString();
+
+            Assert.Contains("global::PeachBrackets.Html.Parse.CssValueParser.IsValidNonNegativeLength(value)", generated);
+        }
+
+        [Fact]
         public void Emits_KeywordOrValue_Validation_And_Storage_For_A_Length_Or_Unitless_Or_Normal_Property()
         {
             var json = """
