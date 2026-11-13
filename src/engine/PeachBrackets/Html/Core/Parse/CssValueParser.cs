@@ -897,11 +897,14 @@ namespace PeachBrackets.Html.Parse
                 return GetActualBorderWidth(Keywords.Medium, b);
             }
 
+            // thin, medium and thick are 1px, 3px and 5px (css-backgrounds-3 §4.2, the values every browser uses), in the layout unit like any other px.
+            var unitsPerPx = Length.PointsPerPx * (b.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0);
+
             return borderValue switch
             {
-                Keywords.Thin => 1f,
-                Keywords.Medium => 2f,
-                Keywords.Thick => 4f,
+                Keywords.Thin => Length.Thin.Value * unitsPerPx,
+                Keywords.Medium => Length.Medium.Value * unitsPerPx,
+                Keywords.Thick => Length.Thick.Value * unitsPerPx,
                 _ => SnapBorderWidth(Math.Abs(ParseLength(borderValue, 1, b)), b.HtmlContainer?.SnapBorderWidthsToCssPixels == true, b.HtmlContainer?.RenderContext?.LayoutUnitsPerPoint ?? 1.0)
             };
         }

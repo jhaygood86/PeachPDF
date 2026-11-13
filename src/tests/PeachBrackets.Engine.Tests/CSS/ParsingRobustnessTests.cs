@@ -103,11 +103,22 @@ namespace PeachBrackets.Engine.Tests.CSS
         }
 
         [Theory]
+        [InlineData("thin", 0.75)]
+        [InlineData("medium", 2.25)]
+        [InlineData("thick", 3.75)]
+        public async Task TheBorderWidthKeywords_AreOneThreeAndFivePixels(string keyword, double expectedPoints)
+        {
+            var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<style>#b {{ border-top: {keyword} solid black }}</style><div id='b'>x</div>"));
+
+            Assert.Equal(expectedPoints, LayoutHarness.FindById(root, "b")!.ActualBorderTopWidth, 3);
+        }
+
+        [Theory]
         [InlineData("border-top: 6pt solid black", 6)]
         [InlineData("border-top: 6pt solid black; border-top-width: 4pt", 4)]
-        // The invalid declaration is dropped. (It used to be folded to its absolute value, 4pt; it is the initial `medium`, 2pt, here: whether it should keep
+        // The invalid declaration is dropped. (It used to be folded to its absolute value, 4pt; it is the initial `medium`, 3px (2.25pt), here: whether it should keep
         // the 6pt before it is not what this pins.)
-        [InlineData("border-top-style: solid; border-top-width: -4pt", 2)]
+        [InlineData("border-top-style: solid; border-top-width: -4pt", 2.25)]
         public async Task ANegativeBorderWidth_IsInvalid_AndIsNotFoldedToItsAbsoluteValue(string declarations, double expected)
         {
             var (root, _) = await LayoutHarness.LayoutAsync(LayoutHarness.Wrap($"<style>#b {{ {declarations} }}</style><div id='b'>x</div>"));
