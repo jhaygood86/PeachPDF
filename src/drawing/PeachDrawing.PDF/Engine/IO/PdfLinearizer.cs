@@ -36,7 +36,7 @@ internal static class PdfLinearizer
 {
     // An integer of the width the trailer's /Prev is written with, replaced by the real value once the layout is known.
     const int PrevPlaceholder = int.MaxValue;
-    const string PrevPlaceholderText = "2147483647";
+    static ReadOnlySpan<byte> PrevPlaceholderText => "2147483647"u8;
 
     sealed class Sections
     {
@@ -246,7 +246,7 @@ internal static class PdfLinearizer
         foreach (var r in sections.FirstPage.Concat(later).Concat(sections.OpenDocument).Append(sections.Catalog))
             bytes[r] = Serialize(r, security);
 
-        var header = Scratch(w => w.WriteFileHeader(document));
+        var header = PdfWriter.ToBytes(w => w.WriteFileHeader(document));
 
         // Sizes first, with offsets of zero: nothing here depends on the value of an offset, only on its width.
         var zeros = new Offsets();
@@ -351,19 +351,7 @@ internal static class PdfLinearizer
     }
 
     static byte[] Serialize(PdfReference iref, PdfAes256SecurityHandler? security)
-    {
-        using var stream = new MemoryStream();
-        var writer = new PdfWriter(stream) { Encryption = security };
-        iref.Value.WriteObject(writer);
-        return stream.ToArray();
-    }
-
-    static byte[] Scratch(Action<PdfWriter> write)
-    {
-        using var stream = new MemoryStream();
-        write(new PdfWriter(stream));
-        return stream.ToArray();
-    }
+        => PdfWriter.ToBytes(w => iref.Value.WriteObject(w), security);
 
     static string D10(long value) => value.ToString("D10", CultureInfo.InvariantCulture);
 
@@ -372,50 +360,56 @@ internal static class PdfLinearizer
     static byte[] LinearizationDictionary(int number, Offsets o, int pageCount) => Ascii(string.Create(CultureInfo.InvariantCulture,
         $"{number} 0 obj\n<< /Linearized 1 /L {D10(o.Length)} /H [ {D10(o.HintOffset)} {D10(o.HintLength)} ] /O {D10(o.FirstPageObject)} /E {D10(o.EndOfFirstPage)} /N {D10(pageCount)} /T {D10(o.MainXrefFirstEntry)} >>\nendobj\n"));
 
-    static string XrefEntry(long offset) => string.Create(CultureInfo.InvariantCulture, $"{offset:D10} 00000 n \n");
-
     /// <summary>The first-page cross-reference section and its trailer, which names the main section by offset and is the one the file's last <c>startxref</c> finds.</summary>
     static byte[] FirstPageXref(PdfDocument document, int size, int first, long[] offsets, long mainXrefOffset)
     {
-        var table = new StringBuilder();
-        table.Append("xref\n").Append(first.ToString(CultureInfo.InvariantCulture)).Append(' ').Append(offsets.Length.ToString(CultureInfo.InvariantCulture)).Append('\n');
-        foreach (var offset in offsets)
-            table.Append(XrefEntry(offset));
-        table.Append("trailer\n");
-
         var trailer = document._trailer;
         trailer.Elements.SetInteger("/Size", size);
         trailer.Elements["/Prev"] = new PdfInteger(PrevPlaceholder);
-        byte[] dictionary;
+        byte[] section;
         try
         {
-            dictionary = Scratch(w => trailer.WriteObject(w));
+            section = PdfWriter.ToBytes(w =>
+            {
+                w.WriteRaw(string.Create(CultureInfo.InvariantCulture, $"xref\n{first} {offsets.Length}\n"));
+                foreach (var offset in offsets)
+                    w.WriteRaw(PdfCrossReferenceTable.InUseEntry(offset));
+                w.WriteRaw("trailer\n");
+                trailer.WriteObject(w);
+                w.WriteEof(0);
+            });
         }
         finally
         {
             trailer.Elements.Remove("/Prev");
         }
 
-        var text = Encoding.Latin1.GetString(dictionary).Replace(PrevPlaceholderText, D10(mainXrefOffset), StringComparison.Ordinal);
-        return Ascii(table + text + "startxref\n0\n%%EOF\n");
+        // The placeholder is as wide as the real value, so it is overwritten in place.
+        var at = section.AsSpan().IndexOf(PrevPlaceholderText);
+        if (at < 0)
+            throw new InvalidOperationException("The first-page trailer lost its /Prev placeholder.");
+        Encoding.ASCII.GetBytes(D10(mainXrefOffset), section.AsSpan(at));
+        return section;
     }
 
     /// <summary>The main cross-reference section, covering the objects before the first-page section, and the last <c>startxref</c> of the file.</summary>
     static byte[] MainXref(PdfDocument document, int count, long[] offsets, long firstXrefOffset)
     {
-        var table = new StringBuilder();
-        table.Append("xref\n0 ").Append(count.ToString(CultureInfo.InvariantCulture)).Append('\n');
-        table.Append("0000000000 65535 f \n");
-        for (var i = 1; i < count; i++)
-            table.Append(XrefEntry(offsets[i]));
-        table.Append("trailer\n");
-
         var trailer = new PdfDictionary(document);
         trailer.Elements.SetInteger("/Size", count);
         if (document._trailer.Elements["/ID"] is { } id)
             trailer.Elements["/ID"] = id;
-        var dictionary = Encoding.Latin1.GetString(Scratch(w => trailer.WriteObject(w)));
-        return Ascii(table + dictionary + string.Create(CultureInfo.InvariantCulture, $"startxref\n{firstXrefOffset}\n%%EOF\n"));
+
+        return PdfWriter.ToBytes(w =>
+        {
+            w.WriteRaw(string.Create(CultureInfo.InvariantCulture, $"xref\n0 {count}\n"));
+            w.WriteRaw(PdfCrossReferenceTable.FreeListHeadEntry);
+            for (var i = 1; i < count; i++)
+                w.WriteRaw(PdfCrossReferenceTable.InUseEntry(offsets[i]));
+            w.WriteRaw("trailer\n");
+            trailer.WriteObject(w);
+            w.WriteEof(firstXrefOffset);
+        });
     }
 
     // ---------------------------------------------------------------------------------------------------- hint tables

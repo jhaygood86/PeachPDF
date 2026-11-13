@@ -23,6 +23,19 @@ internal sealed class PdfWriter
         _stream = pdfStream;
     }
 
+    /// <summary>
+    /// Runs <paramref name="write"/> against a writer over a fresh memory stream and returns what it wrote. Used where a piece of the file has
+    /// to be measured or placed before it is written (the linearized layout) rather than streamed out in order.
+    /// </summary>
+    /// <param name="write">writes the piece</param>
+    /// <param name="security">the handler that encrypts strings and streams in indirect objects, or <see langword="null"/> for none</param>
+    internal static byte[] ToBytes(Action<PdfWriter> write, PdfAes256SecurityHandler? security = null)
+    {
+        using var stream = new MemoryStream();
+        write(new PdfWriter(stream) { Encryption = security });
+        return stream.ToArray();
+    }
+
     public void Close(bool closeUnderlyingStream)
     {
         if (_stream is not null && closeUnderlyingStream)
