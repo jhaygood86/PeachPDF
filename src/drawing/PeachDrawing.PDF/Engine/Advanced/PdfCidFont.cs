@@ -42,7 +42,7 @@ internal sealed class PdfCidFont : PdfFont
         : base(document)
     { }
 
-    public PdfCidFont(PdfDocument document, PdfFontDescriptor fontDescriptor, TypefaceFont font)
+    public PdfCidFont(PdfDocument document, PdfFontDescriptor fontDescriptor)
         : base(document)
     {
         Elements.SetName(Keys.Type, "/Font");

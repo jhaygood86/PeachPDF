@@ -37,20 +37,6 @@ internal sealed class PdfFontTable : PdfResourceTable
         return pdfFont;
     }
 
-    /// <summary>
-    /// Tries to gets a PdfFont from the font dictionary.
-    /// Returns null if no such PdfFont exists.
-    /// </summary>
-    public PdfFont TryGetFont(string idName)
-    {
-        Debug.Assert(false);
-        //FontSelector selector = new FontSelector(idName);
-        string selector = null;
-        PdfFont pdfFont;
-        _fonts.TryGetValue(selector, out pdfFont);
-        return pdfFont;
-    }
-
     internal static string ComputeKey(Typeface typeface)
     {
         // Include the font source's content hash, not just its internal FullFaceName: two DIFFERENT

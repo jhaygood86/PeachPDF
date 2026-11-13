@@ -103,7 +103,7 @@ internal sealed partial class PdfGraphics : IDisposable
         ArgumentNullException.ThrowIfNull(font);
         ArgumentNullException.ThrowIfNull(stringFormat);
 
-        Size size = FontHelper.MeasureString(text, font, PdfStringFormats.SharedDefault, features ?? ShapeSettings.Default);
+        Size size = FontHelper.MeasureString(text, font, features ?? ShapeSettings.Default);
         return size;
     }
 

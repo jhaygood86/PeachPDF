@@ -168,7 +168,7 @@ public class PdfRenderContext : RenderContext
         var isItalic = (fontStyle & PaintFontStyle.Italic) == PaintFontStyle.Italic;
 
         var match = _fontSet.MatchOrFallback(family, QueryFor(weight, stretch, isItalic, null, size, obliqueSkewSinus, variations));
-        return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+        return CreatePdfCanvasFont(size, Restrict(match, style), obliqueSkewSinus);
     }
 
     /// <summary>
@@ -209,7 +209,7 @@ public class PdfRenderContext : RenderContext
         return synthesis == match.Synthesis ? match : match with { Synthesis = synthesis };
     }
 
-    private PdfCanvasFont CreatePdfCanvasFont(double size, PaintFontStyle fontStyle, TypefaceMatch match, double? obliqueSkewSinus)
+    private PdfCanvasFont CreatePdfCanvasFont(double size, TypefaceMatch match, double? obliqueSkewSinus)
     {
         // A face with a slant axis draws the oblique itself, so the renderer must not shear it as well.
         if (obliqueSkewSinus is not null && match.Typeface.Axes.Any(a => a.Tag == AxisTags.Slant))
@@ -235,7 +235,7 @@ public class PdfRenderContext : RenderContext
             return null;
         }
 
-        return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+        return CreatePdfCanvasFont(size, Restrict(match, style), obliqueSkewSinus);
     }
 
     /// <inheritdoc />
@@ -252,7 +252,7 @@ public class PdfRenderContext : RenderContext
             if (!fallbackFamily.TryMatch(QueryFor(weight, stretch, isItalic, codepoint, size, obliqueSkewSinus, variations), out var match))
                 return null;
 
-            return CreatePdfCanvasFont(size, fontStyle, Restrict(match, style), obliqueSkewSinus);
+            return CreatePdfCanvasFont(size, Restrict(match, style), obliqueSkewSinus);
         }
         catch
         {

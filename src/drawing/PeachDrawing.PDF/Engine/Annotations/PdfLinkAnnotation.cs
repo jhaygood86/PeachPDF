@@ -129,7 +129,6 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
 
     internal override void WriteObject(PdfWriter writer)
     {
-        PdfPage? dest = null;
         //pdf.AppendFormat(CultureInfo.InvariantCulture,
         //  "{0} 0 obj\n<<\n/Type/Annot\n/Subtype/Link\n" +
         //  "/Rect[{1} {2} {3} {4}]\n/BS<</Type/Border>>\n/Border[0 0 0]\n/C[0 0 0]\n",
@@ -158,7 +157,7 @@ internal sealed class PdfLinkAnnotation : PdfAnnotation
                 if (destIndex > Owner.PageCount)
                     destIndex = Owner.PageCount;
                 destIndex--;
-                dest = Owner.Pages[destIndex];
+                PdfPage dest = Owner.Pages[destIndex];
                 //pdf.AppendFormat("/Dest[{0} 0 R/XYZ null null 0]\n", dest.ObjectId);
                 Elements[Keys.Dest] = new PdfLiteral("[{0} 0 R/XYZ null null 0]", dest.ObjectNumber);
                 break;

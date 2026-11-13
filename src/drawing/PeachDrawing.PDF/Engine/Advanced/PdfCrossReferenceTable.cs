@@ -207,13 +207,7 @@ internal sealed class PdfCrossReferenceTable  // Must not be derive from PdfObje
     /// Calculates the transitive closure of the specified PdfObject, i.e. all indirect objects
     /// recursively reachable from the specified object, in the order they are discovered.
     /// </summary>
-    public PdfReference[] TransitiveClosure(PdfObject pdfObject) => TransitiveClosure(pdfObject, short.MaxValue);
-
-    /// <summary>
-    /// Calculates the transitive closure of the specified PdfObject. The depth is kept for compatibility: the walk
-    /// has never been limited by it.
-    /// </summary>
-    public PdfReference[] TransitiveClosure(PdfObject pdfObject, int depth)
+    public PdfReference[] TransitiveClosure(PdfObject pdfObject)
     {
         var seen = new HashSet<PdfReference>();
         var found = new List<PdfReference>();

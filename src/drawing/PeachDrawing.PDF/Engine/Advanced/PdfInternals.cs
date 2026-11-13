@@ -160,16 +160,7 @@ internal sealed class PdfInternals
     /// </summary>
     public PdfObject[] GetClosure(PdfObject obj)
     {
-        return GetClosure(obj, int.MaxValue);
-    }
-
-    /// <summary>
-    /// Returns an array containing the specified object as first element follows by its transitive
-    /// closure limited by the specified number of iterations.
-    /// </summary>
-    public PdfObject[] GetClosure(PdfObject obj, int depth)
-    {
-        PdfReference[] references = _document._irefTable.TransitiveClosure(obj, depth);
+        PdfReference[] references = _document._irefTable.TransitiveClosure(obj);
         int count = references.Length + 1;
         PdfObject[] objects = new PdfObject[count];
         objects[0] = obj;

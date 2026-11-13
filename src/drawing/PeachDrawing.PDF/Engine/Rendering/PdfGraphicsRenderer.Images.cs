@@ -43,7 +43,7 @@ internal sealed partial class PdfGraphicsRenderer
             PdfForm form = (PdfForm)image;
             form.Finish();
 
-            PdfFormXObject pdfForm = Owner.FormTable.GetForm(form);
+            Owner.FormTable.GetForm(form);
 
             double cx = width / image.PointWidth;
             double cy = height / image.PointHeight;
@@ -89,7 +89,7 @@ internal sealed partial class PdfGraphicsRenderer
             PdfForm form = (PdfForm)image;
             form.Finish();
 
-            PdfFormXObject pdfForm = Owner.FormTable.GetForm(form);
+            Owner.FormTable.GetForm(form);
 
             double cx = width / image.PointWidth;
             double cy = height / image.PointHeight;

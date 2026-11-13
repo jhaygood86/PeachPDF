@@ -163,10 +163,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         if (!CanModify)
             throw new InvalidOperationException("The document cannot be modified.");
 
-        string message = "";
-        if (!CanSave(ref message))
-            throw new InvalidOperationException(message);
-
         PdfWriter? writer = null;
         try
         {
@@ -267,7 +263,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
             writer.WriteRaw("trailer\n");
             _trailer.Elements.SetInteger("/Size", count + 1);
             _trailer.WriteObject(writer);
-            writer.WriteEof(this, startxref);
+            writer.WriteEof(startxref);
 
         }
         finally
@@ -313,14 +309,6 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         _irefTable.Renumber();
     }
 
-    /// <summary>
-    /// Determines whether the document can be saved.
-    /// </summary>
-    public bool CanSave(ref string message)
-    {
-        return true;
-    }
-
     internal bool HasVersion(string version)
     {
         return string.Compare(Catalog.Version, version) >= 0;
@@ -334,7 +322,7 @@ internal sealed class PdfDocument : PdfObject, IDisposable
         get
         {
             if (_options is null)
-                _options = new PdfDocumentOptions(this);
+                _options = new PdfDocumentOptions();
             return _options;
         }
     }

@@ -135,20 +135,5 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
             }
         }
 
-        [Fact]
-        public void CanSave_AlwaysReturnsTrue()
-        {
-            // CanSave is currently a stub ("return true;" unconditionally) regardless of page
-            // count or any other document state -- this documents that as-is behavior rather
-            // than the page-count validation its name might suggest.
-            var doc = new PdfDocument();
-            string message = "";
-
-            Assert.True(doc.CanSave(ref message));
-
-            doc.AddPage();
-
-            Assert.True(doc.CanSave(ref message));
-        }
     }
 }

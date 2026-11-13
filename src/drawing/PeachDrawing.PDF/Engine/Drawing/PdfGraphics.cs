@@ -35,7 +35,7 @@ internal sealed partial class PdfGraphics : IDisposable
         if (page.Owner.IsReadOnly)
             throw new InvalidOperationException("Cannot create PdfGraphics for a page of a document that cannot be modified. Use PdfDocumentOpenMode.Modify.");
 
-        _gsStack = new GraphicsStateStack(this);
+        _gsStack = new GraphicsStateStack();
         if (options == PdfPageAppendMode.Replace)
             page.Contents.Elements.Clear();
 
@@ -50,7 +50,7 @@ internal sealed partial class PdfGraphics : IDisposable
 
     PdfGraphics(Size size)
     {
-        _gsStack = new GraphicsStateStack(this);
+        _gsStack = new GraphicsStateStack();
         _pageSize = new Size(size.Width, size.Height);
 
         Initialize();
@@ -66,7 +66,7 @@ internal sealed partial class PdfGraphics : IDisposable
         _form = form;
         form.AssociateGraphics(this);
 
-        _gsStack = new GraphicsStateStack(this);
+        _gsStack = new GraphicsStateStack();
         _drawGraphics = false;
         if (form.Owner is not null)
             _renderer = new PdfGraphicsRenderer(form, this);

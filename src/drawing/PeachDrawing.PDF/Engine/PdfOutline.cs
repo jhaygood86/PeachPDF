@@ -386,7 +386,7 @@ internal sealed class PdfOutline : PdfDictionary  // Reference: 8.2.2 Document O
 
     PdfArray CreateDestArray()
     {
-        PdfArray? dest = null;
+        PdfArray? dest;
         switch (PageDestinationType)
         {
             // [page /XYZ left top zoom]

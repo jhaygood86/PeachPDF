@@ -26,7 +26,7 @@ internal sealed class PdfType0Font : PdfFont
 
         FontDescriptor = new PdfFontDescriptor(document, font.Typeface);
         _characterMapInfo = new CharacterMapInfo(font.Typeface);
-        _descendantFont = new PdfCidFont(document, FontDescriptor, font);
+        _descendantFont = new PdfCidFont(document, FontDescriptor);
         _descendantFont.CharacterMapInfo = _characterMapInfo;
 
         // Create ToUnicode map

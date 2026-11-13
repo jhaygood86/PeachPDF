@@ -35,9 +35,6 @@ internal sealed partial class PdfGraphics : IDisposable
 
         CheckFormConsistency(image);
 
-        double width = image.PointWidth;
-        double height = image.PointHeight;
-
         if (_renderer is not null)
             _renderer.DrawImage(image, x, y, image.PointWidth, image.PointHeight);
         //image.Width * 72 / image.HorizontalResolution,

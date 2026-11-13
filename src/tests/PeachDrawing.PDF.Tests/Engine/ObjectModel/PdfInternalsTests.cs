@@ -117,18 +117,6 @@ namespace PeachPDF.Tests.PdfEngineTests.ObjectModel
         }
 
         [Fact]
-        public void GetClosure_WithDepth_IncludesRootObjectFirst()
-        {
-            var doc = new PdfDocument();
-            var dict = new PdfDictionary();
-            doc.Internals.AddObject(dict);
-
-            var closure = doc.Internals.GetClosure(dict, 1);
-
-            Assert.Same(dict, closure[0]);
-        }
-
-        [Fact]
         public void WriteObject_WritesToStream()
         {
             var doc = new PdfDocument();

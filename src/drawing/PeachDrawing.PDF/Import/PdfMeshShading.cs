@@ -64,7 +64,7 @@ internal static class PdfMeshShading
         }
 
         // A function maps a colour parameter through a lookup table; otherwise the components are converted directly.
-        var lut = function is null ? null : BuildLut(function, space, alpha, decode[4], decode[5]);
+        var lut = function is null ? null : BuildLut(function, space, alpha);
 
         Vertex ToVertex(double x, double y, double[] c)
         {
@@ -338,7 +338,7 @@ internal static class PdfMeshShading
 
     // ------------------------------------------------------------ rasterizing
 
-    static (byte R, byte G, byte B, byte A)[] BuildLut(PdfFunction function, PdfColorSpace space, double alpha, double t0, double t1)
+    static (byte R, byte G, byte B, byte A)[] BuildLut(PdfFunction function, PdfColorSpace space, double alpha)
     {
         var lut = new (byte, byte, byte, byte)[256];
         double d0 = function.DomainStart, d1 = function.DomainEnd;

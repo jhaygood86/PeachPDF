@@ -236,7 +236,7 @@ sealed class PdfObjectCopier
         if (isWidget)
         {
             _placedWidgets.Add(clone);
-            RegisterFieldRoot(annotation, clone);
+            RegisterFieldRoot(annotation);
         }
 
         return clone.RequiredReference;
@@ -338,7 +338,7 @@ sealed class PdfObjectCopier
 
     static bool IsDangling(PdfArray destination) => destination.Elements[0] is PdfNull;
 
-    void RegisterFieldRoot(PdfDictionary sourceWidget, PdfDictionary widget)
+    void RegisterFieldRoot(PdfDictionary sourceWidget)
     {
         var sourceRoot = sourceWidget;
         for (var depth = 0; depth < 32 && _source.Resolve(sourceRoot.GetRaw("Parent")) is PdfDictionary parent; depth++)

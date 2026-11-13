@@ -19,16 +19,6 @@ internal sealed class PdfFormXObject : PdfXObject, IContentStream
         Elements.SetName(Keys.Subtype, "/Form");
     }
 
-    internal PdfFormXObject(PdfDocument thisDocument, PdfForm form)
-        : base(thisDocument)
-    {
-        // BUG: form is not used
-        Elements.SetName(Keys.Type, "/XObject");
-        Elements.SetName(Keys.Subtype, "/Form");
-
-        //if (form.IsTemplate)
-        //{ }
-    }
 
     /// <summary>
     /// Gets the PdfResources object of this form.
