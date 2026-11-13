@@ -75,7 +75,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var root = await BuildAndLayout(Wrap("<ol reversed>" + items + "</ol>"));
 
-            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text;
+            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text!;
 
             Assert.Equal([a, b, c, d], [Marker("a"), Marker("b"), Marker("c"), Marker("d")]);
         }
@@ -89,7 +89,7 @@ namespace PeachBrackets.Engine.Tests.Integration
                 "<style>ol { counter-reset: reversed(foo) } li { counter-increment: foo -1 } li::marker { content: counter(foo) \". \" }</style>" +
                 "<ol><li id='a'>a</li><li id='b'>b</li><li id='c'>c</li></ol>"));
 
-            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text;
+            string Marker(string id) => ((CssBoxMarker)FindById(root, id)!.Boxes.Single(x => x.IsMarkerPseudoElement)).Text!;
 
             Assert.Equal(["3. ", "2. ", "1. "], [Marker("a"), Marker("b"), Marker("c")]);
         }

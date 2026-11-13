@@ -56,7 +56,7 @@ namespace PeachBrackets.Engine.Tests.Integration
         {
             var (root, _) = await LayoutAsync(Wrap(
                 $"<div id='line' style='width:400pt'><span id='box' style='display:inline-block;width:{width}'>wwwwwwwwww</span>item</div>"));
-            var item = Descendants(FindById(root, "line")!).SelectMany(b => b.Words).Single(w => w.Text.Trim() == "item");
+            var item = Descendants(FindById(root, "line")!).SelectMany(b => b.Words).Single(w => w.Text?.Trim() == "item");
 
             // Page margins are 20pt, so the box starts at 20 and the item follows its declared width.
             Assert.Equal(itemLeft, item.Left, 3);
