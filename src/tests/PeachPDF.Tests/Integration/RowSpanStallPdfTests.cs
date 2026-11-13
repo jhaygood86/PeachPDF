@@ -1,4 +1,4 @@
-using PeachPDF.Tests.TestSupport;
+﻿using PeachPDF.Tests.TestSupport;
 
 namespace PeachPDF.Tests.Integration
 {
@@ -14,16 +14,21 @@ namespace PeachPDF.Tests.Integration
     {
         private const string Document =
             "<!doctype html><html><head><style>@page{size:300pt 160pt;margin:20pt}body{margin:0;font:12pt '{0}'}th{padding:0;line-height:20pt}table{border-spacing:0}</style></head><body>" +
-            "<table><thead><tr><th>w1</th></tr></thead><tbody><tr><td rowspan='4'><table><tbody><tr><td rowspan='3'>" +
-            "<div style='float:right;width:60%;margin:0 0 6pt 0;height:86pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table></body></html>";
+            "{open}<table><thead><tr><th>w1</th></tr></thead><tbody><tr><td rowspan='4'><table><tbody><tr><td rowspan='3'>" +
+            "<div style='float:right;width:60%;margin:0 0 6pt 0;height:86pt'></div>w2</td></tr></tbody></table></td></tr></tbody></table>{close}</body></html>";
 
-        [Fact]
-        public async Task AStalledRowSpanTable_FinishesInsteadOfRunningToThePassCap()
+        // The table alone, and inside the containers whose break tokens the driver compares as well: flex (row and column) and grid.
+        [Theory]
+        [InlineData("", "")]
+        [InlineData("<div style='display:flex'>", "</div>")]
+        [InlineData("<div style='display:flex;flex-direction:column'>", "</div>")]
+        [InlineData("<div style='display:grid'>", "</div>")]
+        public async Task AStalledRowSpanTable_FinishesInsteadOfRunningToThePassCap(string open, string close)
         {
             var generator = new PdfGenerator();
             await using (var stream = File.OpenRead(BundledFonts.LiberationSans))
                 await generator.AddFontFromStream(stream);
-            var html = Document.Replace("{0}", TypefaceFixtures.FamilyNameOf(BundledFonts.LiberationSans));
+            var html = Document.Replace("{0}", TypefaceFixtures.FamilyNameOf(BundledFonts.LiberationSans)).Replace("{open}", open).Replace("{close}", close);
 
             // Run off the test's own thread so that a regression fails here, after a minute, rather than hanging the run.
             var render = Task.Run(() => generator.GeneratePdf(html, PageSize.A4));
