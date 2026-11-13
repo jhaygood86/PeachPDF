@@ -9485,6 +9485,88 @@ namespace PeachBrackets.Html.Dom
                 or Keywords.Grid or Keywords.InlineGrid;
 
         /// <summary>
+        /// The intrinsic width of a wrapping flex column with a definite height (css-flexbox-1 §9.9.1): the items are broken into lines (columns)
+        /// at that height, and the container is as wide as its lines side by side, plus the gaps between them. Only for items whose main size is
+        /// definite (a length <c>flex-basis</c>, or a <c>height</c>); content-sized items would need a layout to know where the lines break, and
+        /// the caller then measures the container as it always did.
+        /// </summary>
+        /// <returns>whether <paramref name="box"/> is such a container and every item's main size is known</returns>
+        private static bool TryMeasureFlexColumnWrapWidth(Canvas g, CssBox box, out double min, out double max)
+        {
+            min = max = 0;
+
+            if (box.DerivedStyle.ActualDisplay is not (Keywords.Flex or Keywords.InlineFlex)
+                || box.FlexDirection.Value is not (Css.FlexDirection.Column or Css.FlexDirection.ColumnReverse)
+                || box.FlexWrap.Value is Css.FlexWrap.NoWrap
+                || box.WritingMode.Value.IsVertical()
+                || !CssValueParser.IsValidLength(box.Height) || box.Height.EndsWith('%')
+                || box.Boxes.Count == 0)
+            {
+                return false;
+            }
+
+            var contentHeight = CssValueParser.ParseLength(box.Height, 0, box) + box.ActualBoxSizeIncludedHeight
+                - (box.ActualPaddingTop + box.ActualPaddingBottom + box.ActualBorderTopWidth + box.ActualBorderBottomWidth);
+            var rowGap = box.FlexRowGap.Value is { IsValue: true, Value: { } rowGapLength } ? CssValueParser.ParseLength(rowGapLength, 0, box) : 0;
+            var columnGap = box.FlexColumnGap.Value is { IsValue: true, Value: { } columnGapLength } ? CssValueParser.ParseLength(columnGapLength, 0, box) : 0;
+
+            var lines = 0;
+            double lineWidth = 0, lineUsed = 0, total = 0;
+            var itemsOnLine = 0;
+
+            foreach (var item in box.Boxes)
+            {
+                if (item.DerivedStyle.ActualDisplay == Keywords.None || item.IsExcludedFromFlow) continue;
+
+                var basis = item.FlexBasis.Value;
+                double mainSize;
+                if (basis.IsValue && basis.Value is not { IsCalc: false, Length: { Type: Length.Unit.Percent } })
+                    mainSize = CssValueParser.ParseLength(basis.Value!.Value, 0, item) + item.ActualBoxSizeIncludedHeight;
+                else if (CssValueParser.IsValidLength(item.Height) && !item.Height.EndsWith('%'))
+                    mainSize = CssValueParser.ParseLength(item.Height, 0, item) + item.ActualBoxSizeIncludedHeight;
+                else
+                    return false;
+
+                mainSize += item.ActualMarginTop + item.ActualMarginBottom;
+
+                item.GetMinMaxWidth(g, out var itemMin, out var itemMax);
+                if (CssValueParser.IsValidLength(item.Width) && !item.Width.EndsWith('%'))
+                {
+                    var declared = CssValueParser.ParseLength(item.Width, 0, item) + item.ActualBoxSizeIncludedWidth;
+                    itemMin = Math.Max(itemMin, declared);
+                    itemMax = Math.Max(itemMax, declared);
+                }
+
+                var margins = item.ActualMarginLeft + item.ActualMarginRight;
+                min = Math.Max(min, itemMin + margins);
+
+                // The item starts the next line when it does not fit after what is on this one (a line always holds at least one).
+                var needed = lineUsed + (itemsOnLine > 0 ? rowGap : 0) + mainSize;
+                if (itemsOnLine > 0 && needed > contentHeight + 0.01)
+                {
+                    total += lineWidth;
+                    lines++;
+                    lineWidth = 0;
+                    lineUsed = 0;
+                    itemsOnLine = 0;
+                    needed = mainSize;
+                }
+
+                lineUsed = needed;
+                lineWidth = Math.Max(lineWidth, itemMax + margins);
+                itemsOnLine++;
+            }
+
+            if (itemsOnLine == 0 && lines == 0) return false;
+
+            total += lineWidth;
+            lines += itemsOnLine > 0 ? 1 : 0;
+            max = total + columnGap * Math.Max(0, lines - 1);
+            return true;
+        }
+
+
+        /// <summary>
         /// Whether this box lays its children out along a horizontal flex line, so their
         /// intrinsic widths ADD UP instead of competing for "widest line wins".
         ///
@@ -9758,6 +9840,14 @@ namespace PeachBrackets.Html.Dom
                 // space. Left stale, the epilogue below would take a real gap back off - reached
                 // by an inline-level flex row on a line that is not reset before it, i.e. under
                 // white-space: nowrap (which inherits, so the row need not declare it).
+                trailingSpace = 0;
+            }
+            else if (TryMeasureFlexColumnWrapWidth(g, box, out var columnWrapMin, out var columnWrapMax))
+            {
+                // A wrapping flex column of a definite height is its lines side by side, so its intrinsic width is the sum of their widths, not the
+                // widest item the flat walk would stop at.
+                maxSum += columnWrapMax;
+                UpdateMinWidth(ref min, ref minDecoration, columnWrapMin, paddingSum);
                 trailingSpace = 0;
             }
             else if (box.DerivedStyle.ActualDisplay is Keywords.Grid or Keywords.InlineGrid && box.Boxes.Count > 0

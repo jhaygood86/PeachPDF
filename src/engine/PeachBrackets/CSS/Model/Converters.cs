@@ -667,9 +667,13 @@ namespace PeachBrackets.Css
 
         // width/height and their min/max: a length, a percentage, auto/none, stretch or calc-size(). (flex-basis keeps the narrower converters above.)
         // CSS Sizing 3: these take <length-percentage [0,∞]>, so a negative value is invalid.
-        public static readonly IValueConverter AutoSizeConverter = NonNegativeLengthOrPercentConverter.OrAuto().OrStretch().Or(CalcSizeConverter);
-        public static readonly IValueConverter OptionalSizeConverter = NonNegativeLengthOrPercentConverter.OrNone().OrStretch().Or(CalcSizeConverter);
-        public static readonly IValueConverter SizeConverter = NonNegativeLengthOrPercentConverter.OrStretch().Or(CalcSizeConverter);
+        // The intrinsic-size keywords are the same sizes as the calc-size() of that basis (CalcSizeValue reads them as such).
+        private static IValueConverter OrIntrinsicKeywords(this IValueConverter converter) =>
+            converter.Or(Keywords.MinContent).Or(Keywords.MaxContent).Or(Keywords.FitContent);
+
+        public static readonly IValueConverter AutoSizeConverter = NonNegativeLengthOrPercentConverter.OrAuto().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
+        public static readonly IValueConverter OptionalSizeConverter = NonNegativeLengthOrPercentConverter.OrNone().OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
+        public static readonly IValueConverter SizeConverter = NonNegativeLengthOrPercentConverter.OrStretch().OrIntrinsicKeywords().Or(CalcSizeConverter);
         public static readonly IValueConverter LengthOrPercentOrNormalConverter = LengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter NonNegativeLengthOrPercentOrNormalConverter = NonNegativeLengthOrPercentConverter.Or(Keywords.Normal);
         public static readonly IValueConverter OptionalPercentOrFractionConverter = PercentOrFractionConverter.OrDefault(1f);
