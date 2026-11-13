@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Threading.Tasks;
 using static PeachBrackets.Engine.Tests.TestSupport.LayoutHarness;
 
@@ -125,6 +126,51 @@ namespace PeachBrackets.Engine.Tests.Integration
             Assert.Equal(300, await WidthOfAsync(body, "t"), 0.05);
             Assert.Equal(45, await WidthOfAsync(body, "a"), 0.05);
             Assert.Equal(255, await WidthOfAsync(body, "b"), 0.05);
+        }
+
+        [Fact]
+        public async Task AColumnRaisedToItsContentNeverTakesTheWidthOfAnotherBelowItsOwnContent()
+        {
+            // The table is 300px but the first column's content cannot shrink below 400px, so the table is wider than asked and every column stays
+            // at the width its content needs: 20px of content and 1px of padding either side for the second, however the spanning row sits.
+            var spanFirst = $"<table id='t' style='width:300px'><tr><td colspan='2'>a</td></tr><tr><td id='a'>{Block(400)}</td><td id='b'>{Block(20)}</td></tr></table>";
+            var spanLast = $"<table id='t' style='width:300px'><tr><td id='a'>{Block(400)}</td><td id='b'>{Block(20)}</td></tr><tr><td colspan='2'>a</td></tr></table>";
+
+            foreach (var body in new[] { spanFirst, spanLast })
+            {
+                Assert.Equal(301.5, await WidthOfAsync(body, "a"), 0.05);
+                Assert.Equal(16.5, await WidthOfAsync(body, "b"), 0.05);
+            }
+        }
+
+        [Fact]
+        public async Task ColumnsOfATableNarrowerThanItsContentDoNotOverlapWhenARowSpansThem()
+        {
+            // Three columns and a fourth that asked for 25%, with the spanning cell in the first row: each column is as wide as the content it cannot
+            // shrink below, so no cell is squeezed to nothing and the cells of the second row follow one another.
+            var body = $"<table id='t' style='width:300px'><tr><td colspan='3'>{Block(400)}</td><td id='p' style='width:25%'>{Block(400)}</td></tr>" +
+                       $"<tr><td id='c1'>{Block(10)}</td><td id='c2'>{Block(400)}</td><td id='c3'>{Block(10)}</td><td>{Block(10)}</td></tr></table>";
+
+            var (root, _) = await LayoutAsync(Wrap(body));
+            var cells = new[] { "c1", "c2", "c3" }.Select(id => FindById(root, id)!).ToArray();
+            for (var i = 0; i < cells.Length; i++)
+                Assert.True(cells[i].ActualRight - cells[i].Location.X >= 9, $"c{i + 1} was squeezed to {cells[i].ActualRight - cells[i].Location.X:F1}pt");
+            for (var i = 1; i < cells.Length; i++)
+                Assert.True(cells[i].Location.X >= cells[i - 1].ActualRight - 0.05, $"c{i + 1} overlaps c{i}");
+        }
+
+        [Theory]
+        [InlineData("float:left")]
+        [InlineData("display:inline-block")]
+        [InlineData("position:absolute")]
+        public async Task ANestedTablesDeclaredCellWidthIsItsPreferredWidthWhereTheTableShrinksToFit(string wrapperStyle)
+        {
+            // Chrome: the outer cell is 90px, the nested table's cell 82px (the declared 80px and 1px of padding either side), whether the table sits in
+            // a float, an inline block or an absolutely positioned box. Only the width the cell cannot shrink below ignores a declared width.
+            var body = $"<div style='{wrapperStyle}'><table border='1'><tr><td id='o'><table><tr><td id='i' width='80'>{Content20}</td></tr></table></td><td>t</td></tr></table></div><div style='clear:both'>z</div>";
+
+            Assert.Equal(67.5, await WidthOfAsync(body, "o"), 0.05);
+            Assert.Equal(61.5, await WidthOfAsync(body, "i"), 0.05);
         }
     }
 }
