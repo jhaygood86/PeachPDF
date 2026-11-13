@@ -248,6 +248,9 @@ namespace PeachBrackets.Html.Dom
 
         private double[]? _columnMinWidths;
 
+        // Which columns a cell or <col> gave a width of their own, as CalculateColumnWidths left them: the rest are the ones that give width back first.
+        private bool[]? _columnWidthDeclared;
+
         /// <summary>Cache for <see cref="CollapsedColumnCount"/>.</summary>
         private int? _collapsedColumnCount;
 
@@ -788,6 +791,7 @@ namespace PeachBrackets.Html.Dom
             else
             {
                 var availCellSpace = CalculateColumnWidths();
+                _columnWidthDeclared = Array.ConvertAll(_columnWidths!, width => !double.IsNaN(width));
 
                 DetermineMissingColumnWidths(availCellSpace);
 
@@ -2439,7 +2443,11 @@ namespace PeachBrackets.Html.Dom
                         // browser's by exactly its padding plus border, and handed the difference to
                         // whichever column was auto. Zero under border-box, where the declared size
                         // already covers them.
-                        len += CellInlineSizeExcludes(cell);
+                        //
+                        // A percentage is the exception: a browser takes a percentage cell width as the
+                        // cell's whole (border-box) share of the grid, so 50% beside an unsized cell
+                        // splits the table evenly whatever padding either has.
+                        if (!new CssLength(CellInlineSize(cell)).IsPercentage) len += CellInlineSizeExcludes(cell);
 
                         var colspan = GetColSpan(cell);
                         len /= Convert.ToSingle(colspan);
@@ -2932,15 +2940,26 @@ namespace PeachBrackets.Html.Dom
                 // toward zero. This loop's only job is to grow a column toward maxFullWidths when there is
                 // real spare room; it must never shrink one below the content-based width already computed
                 // above it.
-                if (availCellSpace > occupiedSpace)
+                //
+                // The surplus is shared equally among the columns that can still grow and what one of them cannot take (it reached its maximum) is shared
+                // again among the rest, until it is used or none can grow: a single pass gave each column a share of what was left and never offered
+                // what a capped column left behind to the others, so a table with room for every column's maximum came out narrower than its content
+                // (a column of 67.5pt beside a 6.7pt one laid out at 45pt in 74pt of room).
+                for (var pass = 0; pass < _columnWidths.Length && availCellSpace - occupiedSpace > 0.001; pass++)
                 {
+                    var growable = 0;
+                    for (var i = 0; i < _columnWidths.Length; i++)
+                        if (maxFullWidths[i] > _columnWidths[i]) growable++;
+                    if (growable == 0) break;
+
+                    var share = (availCellSpace - occupiedSpace) / growable;
                     for (var i = 0; i < _columnWidths.Length; i++)
                     {
                         if (!(maxFullWidths[i] > _columnWidths[i])) continue;
 
                         var temp = _columnWidths[i];
-                        _columnWidths[i] = Math.Min(_columnWidths[i] + (availCellSpace - occupiedSpace) / Convert.ToSingle(_columnWidths.Length - i), maxFullWidths[i]);
-                        occupiedSpace = occupiedSpace + _columnWidths[i] - temp;
+                        _columnWidths[i] = Math.Min(_columnWidths[i] + share, maxFullWidths[i]);
+                        occupiedSpace += _columnWidths[i] - temp;
                     }
                 }
             }
@@ -3025,7 +3044,7 @@ namespace PeachBrackets.Html.Dom
             // the table itself has no explicit height (GetAvailableTableWidth never set _widthSpecified)
             // and nothing up the containing-block chain is height-definite, there is nothing to shrink
             // toward.
-            if (_isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock))
+            if (HasNoDefiniteExtentToShrinkToward)
                 return;
 
             var curCol = 0;
@@ -3139,10 +3158,18 @@ namespace PeachBrackets.Html.Dom
             //Get the minimum length
             GetColumnsMinMaxWidthByContent(false, out var minFullWidths, out _);
 
+            var raised = false;
             for (var i = 0; i < _columnWidths!.Length; i++)
             {
+                if (_columnWidths[i] < minFullWidths[i]) raised = true;
                 _columnWidths[i] = Math.Max(_columnWidths[i], minFullWidths[i]);
             }
+
+            // A column raised to its minimum took that width from nowhere: the table was already sized to fit without it (a percentage column
+            // narrower than its content, say), so the unsized columns give it back, down to the width their own content cannot shrink below,
+            // as they would have had the column started at its minimum.
+            if (raised)
+                TakeExcessFromUndeclaredColumns(minFullWidths);
 
             foreach (var row in _allRows)
             {
@@ -3163,6 +3190,41 @@ namespace PeachBrackets.Html.Dom
 
                 }
             }
+        }
+
+        /// <summary>
+        /// Whether a vertical table has no definite height to fit its columns to (see <see cref="ShrinkColumnsToFitAvailableWidth"/>'s remarks), in which
+        /// case <see cref="GetAvailableTableWidth"/> is only a placeholder and nothing may be squeezed toward it.
+        /// </summary>
+        private bool HasNoDefiniteExtentToShrinkToward =>
+            _isVertical && !_widthSpecified && !CssLayoutEngine.IsHeightDefinite(_tableBox.ContainingBlock);
+
+        /// <summary>
+        /// Takes what the table is wider than it may be from the columns no cell or <c>&lt;col&gt;</c> gave a width, in proportion to how much each has
+        /// above its own minimum, so a column that asked for a share (<c>width: 20%</c>) keeps it while the unsized ones absorb the squeeze.
+        /// </summary>
+        /// <param name="minimums">The width each column's content cannot shrink below (<see cref="GetColumnsMinMaxWidthByContent"/>'s minimums); no column is taken below it.</param>
+        private void TakeExcessFromUndeclaredColumns(double[] minimums)
+        {
+            if (_columnWidthDeclared is not { } declared || declared.Length != _columnWidths!.Length || HasNoDefiniteExtentToShrinkToward) return;
+
+            var excess = GetWidthSumExcludingCollapsedColumnWidths() - GetAvailableTableWidth();
+            if (!(excess > 0)) return;
+
+            var spare = new double[_columnWidths.Length];
+            var spareTotal = 0d;
+            for (var i = 0; i < spare.Length; i++)
+            {
+                if (declared[i] || i >= minimums.Length || IsColumnCollapsed(i)) continue;
+                spare[i] = Math.Max(0, _columnWidths[i] - minimums[i]);
+                spareTotal += spare[i];
+            }
+
+            if (!(spareTotal > 0)) return;
+
+            var take = Math.Min(excess, spareTotal);
+            for (var i = 0; i < spare.Length; i++)
+                _columnWidths[i] -= take * (spare[i] / spareTotal);
         }
 
         /// <summary>
@@ -7706,7 +7768,10 @@ namespace PeachBrackets.Html.Dom
 
             if (spanned.Count == 0) return;
 
-            var shortfall = required - total;
+            // The cell's width is the spanned columns plus the border-spacing between them (a cell with
+            // colspan 2 fills the gap too), so that spacing is room the cell already has: only what is
+            // left of its need after both is a shortfall.
+            var shortfall = required - total - GetInteriorSpacing(col, colSpan);
             if (shortfall <= 0) return;
 
             foreach (var index in spanned)
