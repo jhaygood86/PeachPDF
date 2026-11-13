@@ -85,6 +85,11 @@ namespace PeachBrackets.Css
 
         public static IValueConverter Any = new AnyValueConverter();
 
+        // CSS Box 4 padding: <length-percentage [0,∞]> - a negative value is invalid and the declaration is dropped.
+        public static readonly IValueConverter NonNegativeLengthOrPercentConverter =
+            new StructValueConverter<Length>(ValueExtensions.ToNonNegativeDistance)
+                .Or(new CalcValueConverter(CalcCategory.LengthPercentage));
+
         public static readonly IValueConverter LengthOrPercentConverter =
             new StructValueConverter<Length>(ValueExtensions.ToDistance)
                 .Or(new CalcValueConverter(CalcCategory.LengthPercentage));

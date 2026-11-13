@@ -2350,9 +2350,9 @@
     {
       "name": "padding-bottom",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingBottom",
         "invalidates": "InvalidatePaddingBottom",
@@ -2363,9 +2363,9 @@
     {
       "name": "padding-left",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingLeft",
         "invalidates": "InvalidatePaddingLeft",
@@ -2376,9 +2376,9 @@
     {
       "name": "padding-right",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingRight",
         "invalidates": "InvalidatePaddingRight",
@@ -2389,9 +2389,9 @@
     {
       "name": "padding-top",
       "inherited": false,
-      "cssom": {"converter": "Converters.LengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
+      "cssom": {"converter": "Converters.NonNegativeLengthOrPercentConverter", "animatable": true, "unitless": true, "registryAnimatable": true},
       "initialValue": "0",
-      "cssDataType": "length",
+      "cssDataType": { "type": "cssom-grammar", "member": "PeachBrackets.Css.Converters.NonNegativeLengthOrPercentConverter.Convert" },
       "html": {
         "propertyPath": "PaddingTop",
         "invalidates": "InvalidatePaddingTop",
